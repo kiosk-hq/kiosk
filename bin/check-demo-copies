@@ -2039,13 +2039,22 @@ end
 # that ought to happen instead (T-119) would arrive as a red build demanding a
 # dozen re-declarations.
 #
-# TAKEN, shared/identical at head: `script/binding_flow.rb` 16/16,
-# `script/pay_window.rb` 19/15 (the four that differ are `reserve!`,
-# `payment_state`, `cart_for` and `settlements_for` — booking_id against
-# reservation_id, a room-night against a scooter-minute),
+# TAKEN — every `:per_demo` path that passes it, which is THIRTEEN of the
+# seventeen and 74 of the 110 shared names. Shared/identical at head:
+# `script/binding_flow.rb` 16/16, `script/pay_window.rb` 19/15 (the four that
+# differ are `reserve!`, `payment_state`, `cart_for` and `settlements_for` —
+# booking_id against reservation_id, a room-night against a scooter-minute),
 # `spec/wire_arguments_spec.rb` 8/7 (T-145; the odd one is each demo's own
 # fixture DAY), `script/pow_flow.rb` 7/6, `script/prove_broker_boot.rb` 5/3,
-# `script/register_flow.rb` 4/4.
+# `app/operations/wire_arguments.rb` 4/3 (T-120's original path),
+# `app/operations/request_kyc_operation.rb` 4/2, `script/register_flow.rb` 4/4,
+# `app/services/prove_trust.rb` 3/2, and four paths contributing one unit each —
+# `app/models/booking.rb`, `app/models/user.rb`,
+# `app/controllers/home_controller.rb`, `app/operations/operation_result.rb`.
+# The last three of those hold nothing today: their single shared unit is a
+# same-name-different-body declaration. What they buy is DISCOVERY over seven
+# copies of shipped code each, which is where the next method quietly shared by
+# the fleet — the K-792 promotion signal — has to show up.
 #
 # LEFT ALONE, and this is where the largest single group is:
 # `script/redteam_suite.rb` shares 25 names across seven copies and only 6 have
@@ -2058,12 +2067,26 @@ end
 # honest order is T-119 first, after which the path becomes cheap. Same reading
 # for `script/isolation_flow.rb` (8/4) and `script/schema_flow.rb` (3/2).
 #
+# AND ONE PATH THE HANDLE CANNOT REACH, stated here rather than left to be
+# discovered: `app/models/cart_mandate.rb` has three copies and ZERO units,
+# because what its copies share is a `scope :referencing, ->` — a DSL call, and
+# FRAGMENT_START matches a `def` or a constant assignment. Adding it would
+# declare a coverage that does not exist. Any `:per_demo` path whose shared code
+# is written in a DSL is invisible to this rule, and that is a property of the
+# handle, not of the path.
+#
 # A hundred declarations with a hundred reasoned `why:` lines is still a manifest
 # nobody would read, and a manifest nobody reads is how «declared» stops meaning
-# «reasoned about». The criterion above is what keeps this at 63 entries rather
+# «reasoned about». The criterion above is what keeps this at 74 entries rather
 # than 110, and it is a judgement about VALUE — not a budget.
 FRAGMENT_PATHS = %w[
+  app/controllers/home_controller.rb
+  app/models/booking.rb
+  app/models/user.rb
+  app/operations/operation_result.rb
+  app/operations/request_kyc_operation.rb
   app/operations/wire_arguments.rb
+  app/services/prove_trust.rb
   spec/wire_arguments_spec.rb
   script/binding_flow.rb
   script/pay_window.rb
@@ -2546,6 +2569,102 @@ FRAGMENTS = {
   "script/register_flow.rb#ISSUER"    => { rule: :code, ships: DEVICE_GRANT, why: DRIVER_ENV },
   "script/register_flow.rb#post_json" => { rule: :code, ships: DEVICE_GRANT, why: WIRE_PAIR },
   "script/register_flow.rb#get_json"  => { rule: :code, ships: DEVICE_GRANT, why: WIRE_PAIR },
+
+  # ── the shipped per-demo files (T-136) ────────────────────────────────────
+  #
+  # Lower unit counts than the drivers and higher stakes: these are files an
+  # operator copies, so a shared unit here is shared PRODUCT code. Where the
+  # file-level `why:` above already carries the argument, these entries point at
+  # it instead of restating it — a second copy of a reason is a second thing to
+  # keep true.
+  "app/services/prove_trust.rb#issuer" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "The issuer both operators verify the broker's attestations against, defaulted to the " \
+           "same hosted URL. A one-sided edit does not fail the demo it lands in — it fails the " \
+           "OTHER one, at signature verification, which reads like a crypto problem and is a " \
+           "wiring problem.",
+  },
+  "app/services/prove_trust.rb#broker_url" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "Where both operators send an intake, same default and same env override. There is one " \
+           "broker (`kiosk-demo-prove`), so two operators addressing two URLs is a demo that " \
+           "cannot be run end to end.",
+  },
+  "app/services/prove_trust.rb#operator_id" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, EACH OPERATOR NAMING ITSELF to the shared broker — which is the whole point " \
+           "of the field. If these two ever agree, one demo is intaking as the other.",
+  },
+  "app/operations/request_kyc_operation.rb#MAX_OUTSTANDING_REQUESTS" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "K-586's per-principal cap on OPEN broker intakes — three, the same number for the same " \
+           "reason in both, and the only 429 in the fleet. It is quoted in the refusal hint below " \
+           "it, so the two copies agreeing is what stops one demo promising a limit it does not " \
+           "apply.",
+  },
+  "app/operations/request_kyc_operation.rb#outstanding_for_current_principal" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "The count that cap is applied to: PENDING rows scoped by `owned_by_current_principal`, " \
+           "i.e. by the transaction GUC rather than by an argument. The scoping is the load-bearing " \
+           "half — a copy that counted globally would refuse one principal for another's queue.",
+  },
+  "app/operations/request_kyc_operation.rb#REQUESTED_CLAIMS" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "The one thing an operator must decide for itself, and the file-level entry above states " \
+           "the argument in full: `age_over_18` for a bottle of wine, `age_over_18` plus " \
+           "`licence_category:A` for a motorcycle. Declared here so the unit rule records it as a " \
+           "decision rather than reporting it as drift.",
+  },
+  "app/operations/request_kyc_operation.rb#call" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, AND THE COPIES DIFFER BY ONE WORD — measured: getgrocery refuses «too many " \
+           "AGE verifications are already open», skooti «too many verifications», because skooti " \
+           "asks for a licence category as well and «age» would be wrong there. Everything else in " \
+           "these ~35 lines is line-for-line identical, so this is declared `:per_demo` for a real " \
+           "reason and is a convergence candidate at the same time: if the two sentences ever " \
+           "agree, this entry fails and asks whether the whole method should be shared.",
+  },
+  "app/models/booking.rb#CONFIRMED" => {
+    rule:  :code,
+    ships: %w[atablefor hoteling],
+    why:   "`\"confirmed\"` — the status STRING both demos write and read back, atablefor through a " \
+           "`confirmed` scope and hoteling through its LIVE pair. A row's status is data an " \
+           "operator's own queries match on, so two demos spelling it differently would be two " \
+           "different answers to «is this booked», which is exactly the question a payment window " \
+           "asks.",
+  },
+  "app/models/user.rb#public_name" => {
+    rule:  :per_demo,
+    ships: %w[atablefor tudu],
+    why:   "SAME NAME, EACH DEMO'S OWN NOUN: the fallback handle for an account with no display " \
+           "name is `diner-<12 hex>` on a restaurant origin and `member-<12 hex>` on a to-do one. " \
+           "The digest and the truncation are identical; only the word a human would recognise " \
+           "differs, which is the right thing to differ and the wrong thing to discover by diffing.",
+  },
+  "app/controllers/home_controller.rb#index" => {
+    rule:  :per_demo,
+    ships: %w[atablefor getgrocery hoteling philslist prove skooti stylish],
+    why:   "Seven landing pages, seven bodies — this is the ONE unit those seven files share, and " \
+           "each demo's home page is that storefront's own. Declared so the path is under the " \
+           "discovery rule at all: a helper that appears in two of these seven controllers is a " \
+           "thing to notice, and until this entry nothing would have.",
+  },
+  "app/operations/operation_result.rb#STATUSES" => {
+    rule:  :per_demo,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:   "The five different status maps the file-level entry above enumerates and argues for — " \
+           "a code an app never produces has no business having a mapping. Declared here for the " \
+           "same reason as home_controller's `index`: it puts a file whose shared half was already " \
+           "PROMOTED into kiosk-server (K-792) under the discovery rule, so the next method that " \
+           "grows in all seven copies is a failure rather than a discovery.",
+  },
 }.freeze
 
 # One unit = EVERY `def` of that name in the file (endless or not, singleton or

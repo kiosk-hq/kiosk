@@ -31,6 +31,13 @@
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
 #   bundle exec ruby script/pow_flow.rb
 #
+# THE PARAMETERS ARE THE SERVER'S, NOT THIS DRIVER'S. Every solve below is
+# driven by the challenge the origin issued, so this file works unchanged at
+# either level of KIOSK_POW_DIFFICULTY — toy `low` (n=96 k=5, the default) or
+# the shipped `high` (n=168 k=7). It reports the served `params` back to
+# `rake demo:pow`, which asserts them against the level it asked for, so the
+# toll a run pays is a fact off the wire rather than a banner (T-110).
+#
 # Requirements:
 #   - The server must be running with KIOSK_POW_DEMO=1.
 #   - python3 with numpy: pip install numpy
@@ -178,4 +185,9 @@ puts JSON.generate(
   bad_proof_count:         bad_proof_count,
   other_bad_proof_count:   other_bad_proof_count,
   availability_rows:       rows.size,
+  # THE PARAMETERS THE WIRE ACTUALLY SERVED (T-110), so `rake demo:pow`'s
+  # verdict can assert which toll was paid instead of printing what it hoped
+  # for. Read off the challenge rather than from config: it follows an operator
+  # override or a per-identity policy that a config read cannot see.
+  challenge_params:        challenges.first["params"],
 )

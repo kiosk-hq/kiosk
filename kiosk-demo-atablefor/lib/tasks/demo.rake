@@ -7,6 +7,7 @@
 #   rake demo:book         boots the server, runs script/book_flow.rb (no-human table booking),
 #                          asserts the confirmed booking, tears down
 #   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs script/pow_flow.rb (402→solve→200)
+#                          at TOY params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
 #   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
 #   rake demo:backoff      count-based PoW backoff (solve once → next N calls free →
 #                          re-challenge; sets KIOSK_POW_BACKOFF_DEMO=3 — the value
@@ -244,7 +245,25 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server with KIOSK_POW_DEMO=1, run script/pow_flow.rb (402→solve.py→200 + wrong-nonce→403)."
+  desc <<~DESC
+    Query-toll PoW demo (KIOSK_POW_DEMO=1): 402 → solve.py → 200, wrong nonce → 403.
+
+    RUNS AT TOY PARAMETERS BY DEFAULT — Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s
+    `low`. That is a sub-second solve, which is what keeps this task runnable in
+    CI and on a laptop, and it is NOT the toll a real operator charges.
+
+    To exercise the SHIPPED parameters — n=168 k=7, kiosk-pow-equihash's own
+    default and what the hosted atablefor serves:
+
+      KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow
+
+    Budget ~10 s and ~1.3 GiB of RSS PER PROOF (bench/README.md, measured on one
+    M-series laptop core), and this flow solves four. The task prints the (n, k)
+    it actually ran at, at boot and again beside its verdict, so a recording can
+    never leave a viewer guessing which toll they watched being paid (T-110).
+
+    Requires python3 + numpy.
+  DESC
   task :pow do
     # Requirement: python3 with numpy (the equihash solver is vectorised).
     # Install with: pip install numpy
@@ -253,6 +272,26 @@ namespace :demo do
       abort "numpy not found. Install with: pip install numpy\n" \
             "Then re-run: bundle exec rake demo:pow"
     end
+
+    # ── The toll this run pays, DERIVED and then PRINTED (T-110) ──────────────
+    #
+    # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
+    # this repo, and until now it pinned nothing about the parameters: it set
+    # `KIOSK_POW_DEMO=1` and nothing else, so it always ran at `PowDifficulty`'s
+    # `low` default while the shipped kiosk-pow-equihash default — and the
+    # hosted deploy — are n=168 k=7. Nothing anywhere demonstrated end to end
+    # that an assistant can pay the toll a real operator charges, and a reader
+    # watching this task had no way to tell which of the two they were seeing.
+    #
+    # Both halves are fixed here and neither costs a gate: the ambient
+    # `KIOSK_POW_DIFFICULTY` is now FORWARDED to the server this task spawns
+    # (it was being dropped, so setting it did nothing), and the pair is read
+    # off {PowDifficulty} — the same module the initializer reads — rather than
+    # typed here, then printed at boot and beside the verdict. The default is
+    # unchanged, so CI and a bare `rake demo:pow` cost exactly what they did.
+    require File.expand_path("../../app/services/pow_difficulty.rb", __dir__)
+    pow_level  = PowDifficulty.level
+    pow_params = PowDifficulty.params
 
     require "resolv"
 
@@ -268,6 +307,15 @@ namespace :demo do
     kiosk_issuer = server_url
 
     puts "\n── Starting atablefor (PoW demo) on #{server_url} ──"
+    puts "  toll: Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
+         "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == PowDifficulty::DEFAULT ? ", the default" : ""})"
+    if PowDifficulty.high?
+      puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
+           "Expect ~10 s and ~1.3 GiB per proof; this flow solves four."
+    else
+      puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
+           "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
+    end
 
     # ONE owner for the toy counter's location (K-711, K-785). The server and
     # the driver are two processes that never meet; this task spawns both, so
@@ -281,9 +329,13 @@ namespace :demo do
     FileUtils.rm_f(bad_proof_db)
 
     env_vars = {
-      "KIOSK_ISSUER"        => kiosk_issuer,
-      "KIOSK_POW_DEMO"      => "1",
-      "KIOSK_BAD_PROOF_DB"  => bad_proof_db,
+      "KIOSK_ISSUER"           => kiosk_issuer,
+      "KIOSK_POW_DEMO"         => "1",
+      "KIOSK_BAD_PROOF_DB"     => bad_proof_db,
+      # Forwarded, not defaulted: `spawn` with an env Hash still inherits the
+      # parent's environment, but naming it here is what makes the server's
+      # level and the level printed above the SAME read (T-110).
+      "KIOSK_POW_DIFFICULTY"   => pow_level,
     }
     server_pid = spawn(
       env_vars,
@@ -327,8 +379,25 @@ namespace :demo do
     result = atablefor_run_flow(flow_rb, env)
 
     # ── Assertions ──
-    puts "\n── PoW assertions ──"
+    puts "\n── PoW assertions (Equihash n=#{pow_params[:n]} k=#{pow_params[:k]}, " \
+         "KIOSK_POW_DIFFICULTY=#{pow_level}) ──"
     failures = []
+
+    # WHICH TOLL WAS ACTUALLY PAID (T-110), asserted off the WIRE rather than
+    # printed off this task's own read. A banner naming the parameters is a
+    # claim; the challenge the server issued is evidence, and it is what follows
+    # an operator override or a policy this task cannot see. Without this the
+    # opt-in path could silently keep running at `low` and the recording would
+    # still say `high`.
+    served_params = result["challenge_params"].is_a?(Hash) ? result["challenge_params"] : {}
+    if served_params["n"].to_i == pow_params[:n] && served_params["k"].to_i == pow_params[:k]
+      puts "  ✓  toll served at the level asked for: n=#{served_params["n"]} k=#{served_params["k"]}" \
+           "#{PowDifficulty.high? ? " — the SHIPPED parameters" : " (toy; KIOSK_POW_DIFFICULTY=high for n=168 k=7)"}"
+    else
+      failures << "the wire served n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}, " \
+                  "but KIOSK_POW_DIFFICULTY=#{pow_level} asks for n=#{pow_params[:n]} k=#{pow_params[:k]}"
+      puts "  ✗  toll parameters — served #{served_params.inspect}, wanted #{pow_params.inspect}"
+    end
 
     if result["http_challenge"] == 402
       puts "  ✓  query challenged: HTTP 402 (pow_required)"
@@ -371,7 +440,12 @@ namespace :demo do
     end
 
     if failures.empty?
-      puts "\n  All PoW assertions passed."
+      puts "\n  All PoW assertions passed at Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
+           "(KIOSK_POW_DIFFICULTY=#{pow_level})."
+      unless PowDifficulty.high?
+        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow` " \
+             "runs the same flow at the shipped n=168 k=7."
+      end
     else
       puts "\n  FAILED:"
       failures.each { |f| puts "    - #{f}" }

@@ -74,7 +74,9 @@ bin/rails demo:binding     # a diner signs in (Devise), links their assistant, a
 bin/rails demo:isolation   # cross-tenant denial (an operator's booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery; asserts `pay` is absent
-bin/rails demo:pow         # Equihash PoW gate (prices reservation-scalping at the door)
+bin/rails demo:pow         # Equihash PoW gate (prices reservation-scalping at the door).
+                           # TOY params by default (n=96 k=5); KIOSK_POW_DIFFICULTY=high
+                           # runs it at the shipped n=168 k=7 (~10 s, ~1.3 GiB per proof)
 bin/rails demo:backoff     # count-based PoW backoff: solve once → the next 3 calls are free → the 4th is challenged again
 bin/rails demo:reputation  # anti-scalping: PoW cost drops as a real booking history accrues
 bin/rails demo:walkthrough # curl-driven tour of the wire surface

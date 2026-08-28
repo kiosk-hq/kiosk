@@ -175,10 +175,13 @@ jobs:
             # demo:pow was opted out for years as "the heavy anti-scalping
             # toll... excluded on every demo", and that reason was never
             # measured (K-790, subsuming K-841). The weight is a property of
-            # KIOSK_POW_DIFFICULTY=high, which the HOSTED deploy sets and which
-            # neither this workflow nor the task exports — the task spawns its
-            # server with KIOSK_POW_DEMO=1 and nothing else, so CI gets the
-            # `low` default (n=96 k=5). MEASURED at head: 2.7 s end to end
+            # KIOSK_POW_DIFFICULTY=high, which the HOSTED deploy sets and
+            # which this workflow does not. Since T-110 the task FORWARDS the
+            # ambient KIOSK_POW_DIFFICULTY to the server it spawns (it used to
+            # drop it, so the opt-in was unreachable) and asserts the served
+            # (n, k) off the wire — which changes nothing here, because nothing
+            # in this job sets it, so CI still gets the `low` default
+            # (n=96 k=5). MEASURED at head: 2.7 s end to end
             # INCLUDING its own server boot, i.e. cheaper than demo:book, which
             # this job already runs. That makes it the third exclusion whose
             # stated reason described a configuration CI does not use, after
@@ -310,8 +313,11 @@ jobs:
             # drops the database, which is what clears it — do not reorder them.
             # demo:pow carried the same unmeasured "heavy catalog toll"
             # opt-out as atablefor's, and the same correction applies (K-790):
-            # nothing here exports KIOSK_POW_DIFFICULTY, so CI runs the `low`
-            # default (n=96 k=5). MEASURED at head: 3.7 s end to end INCLUDING
+            # nothing in this job sets KIOSK_POW_DIFFICULTY, so CI runs the
+            # `low` default (n=96 k=5) — the task forwards whatever is ambient
+            # since T-110 and asserts the served (n, k) off the wire, which is
+            # what makes the opt-in path real without moving this cost.
+            # MEASURED at head: 3.7 s end to end INCLUDING
             # its own reseed and server boot. It is the only task that boots
             # the KIOSK_POW_DEMO=1 branch of this demo's initializer (:61,
             # :274) as a walkthrough, and getgrocery's only valid-solve->200 /

@@ -1118,6 +1118,52 @@ jobs:
       - name: Gems, constraints and the skill pin share the protocol's MAJOR.MINOR
         run: ./bin/check-version-parity
 
+  # A Keep-a-Changelog file answers each kind ONCE per release — everything
+  # added since the last release under one `### Added`, everything fixed under
+  # one `### Fixed` — because a reader who has found the heading they want stops
+  # looking. K-1015 found kiosk-server's [Unreleased] carrying seven subsection
+  # headings for four kinds and merged them, and merged the one sibling that
+  # shared the shape.
+  #
+  # It came back in three days: kiosk-redteam grew a SECOND `### Added` at the
+  # top of the same release, twice, because a new heading above the old one
+  # looks exactly like the correct edit and nothing asked the question. That is
+  # the argument for a gate rather than another repair wave.
+  #
+  # bin/check-changelog asks it over `git ls-files '*CHANGELOG.md'`, and while
+  # it is there it holds the CORPUS: every tracked changelog must be the
+  # repository record at the root, a gem package record (all fourteen gemspecs
+  # put CHANGELOG.md in `spec.files` and in `changelog_uri`, so it ships inside
+  # the package), or one of the two declared per-demo courtesy records — and a
+  # gem directory without one fails. That is where "which file does a changelog
+  # line go in" is written down (K-1159): the root record, always.
+  #
+  # Its --self-test is a step of its own, for the reason the publication-paths
+  # job gives: a corpus scan that came out empty exits 0 and reads exactly like
+  # a clean tree, so the guard proves it is red on a plant of every arm before
+  # its green run means anything. Stdlib Ruby only: no bundle, no services, no
+  # database, ~1 s for both steps.
+  changelog-structure:
+    name: changelogs answer each kind once (bin/check-changelog)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every arm, and non-vacuous here
+        run: ./bin/check-changelog --self-test
+
+      - name: One subsection per kind per release, and every changelog declared
+        run: ./bin/check-changelog
+
   # Production-boot smoke — the guard for the prod-only bug class that the
   # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422
   # eager-load Zeitwerk crash, K-436 missing governance columns → manage-page

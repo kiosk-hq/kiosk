@@ -1,0 +1,643 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-changelog -- structural gate on every changelog this repository tracks
+# (T-115; the class it prevents is K-1015).
+#
+# WHY THIS EXISTS, and why the reason is stronger than the row that asked for it.
+# A Keep-a-Changelog file has ONE subsection per kind per release: everything
+# added since the last release goes under one `### Added`, everything fixed
+# under one `### Fixed`. That is not decoration -- it is the only thing that
+# makes the file readable as an answer to "what changed", because a reader who
+# has found `### Fixed` stops looking. K-1015 found `kiosk-server/CHANGELOG.md`
+# carrying SEVEN subsection headings for four kinds and merged them, and merged
+# the one sibling that shared the shape.
+#
+# It came back in three days. MEASURED at head while this script was being
+# written: `kiosk-redteam/CHANGELOG.md` carried `### Added` at line 7 AND at
+# line 36 inside a single `## [Unreleased]`, because two later waves each opened
+# a fresh `### Added` at the top of the file rather than appending to the one
+# already there. Neither wave was careless in any way a reviewer could see -- a
+# new heading at the top of a changelog looks exactly like the correct edit --
+# and nothing anywhere asked the question. That is the whole argument for a
+# gate rather than another repair wave, and the repair the gate demanded is in
+# the same commit that introduced it.
+#
+# WHERE A CHANGELOG LINE GOES, which had to be settled before this script could
+# enumerate anything (K-1159). Two of the eight demos ship a CHANGELOG.md and
+# six do not, so "one line in the touched repository's CHANGELOG.md" resolved to
+# a different file depending on which demo was edited, and nothing recorded
+# which was intended. It is settled here, in the direction the evidence points:
+#
+#   * The REPOSITORY record is `CHANGELOG.md` at the root. A demo is a DIRECTORY
+#     in this repository, not a repository and not a package, so a significant
+#     change anywhere -- engine, gem, demo, deploy runbook -- gets its line
+#     here. This is the target of the one-line rule, always.
+#   * A GEM record is `<gem>/CHANGELOG.md`, and it is REQUIRED of every gem,
+#     because it is not a courtesy: all fourteen gemspecs list `CHANGELOG.md` in
+#     `spec.files` and set `metadata["changelog_uri"]` to it, so that file is
+#     inside the published package and is what a reader who installed the gem
+#     and never saw this repository has. A package with its own version needs
+#     its own release record.
+#   * A DEMO record is OPTIONAL and is declared. Two exist; they are kept
+#     because this project does not rewrite published history, and they are
+#     declared below with the reason, so a third cannot appear -- and neither of
+#     the two can vanish -- without someone saying why.
+#
+# The three roles are DERIVED from the tree at run time, not listed: root, or a
+# directory that ships a gemspec, or an entry in the manifest below. So the next
+# gem does not have to be remembered, and a changelog that fits none of the
+# three is a failure rather than a shrug.
+#
+# WHAT IT CHECKS. Six arms, over `git ls-files` in the repository this script
+# lives in -- what ships is what git carries. STRUCTURE ONLY. Entry text,
+# entry ordering, the order the kinds appear in, and the old ordinals inside
+# entries are all deliberately out of scope: this repository keeps changelog
+# entries' original numbers on purpose (K-646), and a gate that reflows prose
+# would fight that decision.
+#
+#   CL-1  At most one subsection heading of each Keep-a-Changelog kind
+#         (Added/Changed/Deprecated/Removed/Fixed/Security) per release section.
+#   CL-2  At most one subsection heading of ANY other name per release section.
+#         Same defect, one level out: `### Out of scope for first release` twice
+#         splits a reader's answer exactly as `### Added` twice does.
+#   CL-3  At most one release section of a given name per file.
+#   CL-4  No subsection heading outside a release section. This one also keeps
+#         the PARSER honest: a `###` with no `##` above it would otherwise be
+#         silently ungrouped, and a heading nothing groups is a heading nothing
+#         compares.
+#   CL-5  Every tracked changelog is the repository record, a gem package
+#         record, or a declared courtesy record.
+#   CL-6  Every directory that ships a gemspec has a changelog, because that
+#         file is inside the package it publishes.
+#
+# WHAT IT CANNOT SEE, stated because an over-claimed gate is worse than none. It
+# does not read a single entry: an entry filed under the wrong kind, an entry
+# that describes the change's content rather than its intent, a change that got
+# no entry at all, and a duplicate entry under one correct heading are all
+# invisible here. Two release sections whose names merely DIFFER (`## [0.2.0]`
+# and `## [0.2]`) are two sections to this script, not a repeat. Headings inside
+# fenced code blocks are skipped, and the fence tracker is a line scan: an
+# unbalanced fence in a changelog will hide the headings after it.
+#
+# This script is unique to this repository -- there is no twin to hold, so
+# nothing here digests a sibling copy.
+#
+# USAGE
+#   bin/check-changelog              # check this repository, exit 0/1
+#   bin/check-changelog --self-test  # prove it is red on a plant of every arm
+#
+# Stdlib only: no bundle, no services, no database, no network.
+
+require "open3"
+require "fileutils"
+require "rbconfig"
+require "tmpdir"
+
+SELF_PATH = File.realpath(__FILE__)
+REPO      = File.dirname(File.dirname(SELF_PATH))
+
+KINDS = %w[Added Changed Deprecated Removed Fixed Security].freeze
+
+# >>> ARM TABLE -- BEGIN
+#
+# Every failure this gate can report is declared here with the shape that
+# produces it, and `plant` is what the self-test does to a throwaway repository
+# to make that arm fire. An arm without a way to demonstrate it cannot be added,
+# which is the property that keeps the self-test from drifting into a subset.
+ARMS = [
+  {
+    id: "CL-1",
+    what: "a repeated Keep-a-Changelog subsection kind inside one release section",
+    repair: "merge the two blocks under the first heading of that kind, keeping every entry",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ## [Unreleased]
+
+        ### Added
+
+        - the first thing.
+
+        ### Fixed
+
+        - a thing that was wrong.
+
+        ### Added
+
+        - the second thing, filed where the first reader will never look.
+      MD
+    },
+  },
+  {
+    id: "CL-2",
+    what: "a repeated subsection heading inside one release section",
+    repair: "merge the two blocks under the first heading with that name, keeping every entry",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ## [Unreleased]
+
+        ### Out of scope for first release
+
+        - one thing deferred.
+
+        ### Out of scope for first release
+
+        - another thing deferred, in a second list nobody will find.
+      MD
+    },
+  },
+  {
+    id: "CL-3",
+    what: "a repeated release section in one file",
+    repair: "merge the two sections, keeping every subsection and every entry",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ## [Unreleased]
+
+        ### Added
+
+        - the first thing.
+
+        ## [Unreleased]
+
+        ### Fixed
+
+        - a thing filed in a second copy of the same release.
+      MD
+    },
+  },
+  {
+    id: "CL-4",
+    what: "a subsection heading that no release section contains",
+    repair: "put the subsection under the release section it belongs to",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ### Added
+
+        - an entry belonging to no release at all.
+
+        ## [Unreleased]
+
+        - a release with nothing under it.
+      MD
+    },
+  },
+  {
+    id: "CL-5",
+    what: "a tracked changelog that is neither the repository record, nor a gem package " \
+          "record, nor a declared courtesy record",
+    repair: "put the line in the repository record instead, or declare this file in the " \
+            "COURTESY manifest with the reason it exists",
+    plant: lambda { |dir|
+      write(dir, "deploy/CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n- a record nobody declared.\n")
+    },
+  },
+  {
+    id: "CL-6",
+    what: "a gem directory with no changelog, although its gemspec publishes one",
+    repair: "add <gem>/CHANGELOG.md; it is inside the package and is what an installer reads",
+    plant: lambda { |dir|
+      write(dir, "kiosk-gadget/kiosk-gadget.gemspec", "Gem::Specification.new { |s| s.name = \"kiosk-gadget\" }\n")
+    },
+  },
+].freeze
+# <<< ARM TABLE -- END
+
+# COURTESY MANIFEST. The two per-demo changelogs, each with the reason it is
+# there, because an undeclared exemption is how a rule becomes a habit. Every
+# run prints how many files each entry covered, so an entry that has stopped
+# carrying weight is visible rather than assumed: a listed file that is no
+# longer tracked reports 0 and fails.
+COURTESY = [
+  {
+    path: "kiosk-demo-atablefor/CHANGELOG.md",
+    why: "written when the demo was reshaped from a date-offset-seeded single restaurant into a " \
+         "finite aggregator, before the rule above was settled. Kept rather than folded upward " \
+         "because a changelog is an append-only record of the tree as it was, and deleting one " \
+         "destroys that record to tidy a directory. It is NOT where a line about this demo goes.",
+  },
+  {
+    path: "kiosk-demo-prove/CHANGELOG.md",
+    why: "this demo is the odd one out by design -- an issuer that mounts none of the four verbs " \
+         "and is not a Kiosk operator -- and its two entries are about the broker's own security " \
+         "model rather than about this repository. Kept for the same append-only reason, and it " \
+         "is likewise not the target of the one-line rule.",
+  },
+].freeze
+
+def write(dir, rel, body)
+  abs = File.join(dir, rel)
+  FileUtils.mkdir_p(File.dirname(abs))
+  File.write(abs, body)
+end
+
+# ── parsing ──────────────────────────────────────────────────────────────────
+
+Heading = Struct.new(:level, :text, :line)
+
+# Markdown ATX headings outside fenced code. The fence tracker remembers WHICH
+# marker opened the fence so a `~~~` cannot close a ``` block; the header states
+# that an unbalanced fence hides what follows it, which is the honest limit of a
+# line scan.
+def headings(path)
+  out   = []
+  fence = nil
+  File.readlines(path, chomp: true).each_with_index do |line, i|
+    if (m = line.match(/\A {0,3}(`{3,}|~{3,})/))
+      marker = m[1][0]
+      if fence.nil?
+        fence = marker
+      elsif fence == marker
+        fence = nil
+      end
+      next
+    end
+    next if fence
+    next unless (m = line.match(/\A(\#{1,6})[ \t]+(.+?)[ \t]*\z/))
+
+    out << Heading.new(m[1].length, m[2].strip, i + 1)
+  end
+  out
+end
+
+def normalise_heading(text)
+  text.downcase.gsub(/\s+/, " ").strip
+end
+
+def canonical_kind(text)
+  KINDS.find { |k| normalise_heading(text) == k.downcase }
+end
+
+# ── the corpus ───────────────────────────────────────────────────────────────
+
+def tracked(root, *pathspec)
+  out, err, status = Open3.capture3("git", "-C", root, "ls-files", "-z", *pathspec)
+  raise "git ls-files failed in #{root}: #{err}" unless status.success?
+
+  out.split("\0").reject(&:empty?)
+end
+
+def corpus(root)
+  changelogs = tracked(root, "*CHANGELOG.md")
+  gem_dirs   = tracked(root, "*.gemspec").map { |p| File.dirname(p) }.uniq.sort
+  [changelogs, gem_dirs]
+end
+
+def role_of(rel, gem_dirs, covered)
+  return :repository if rel == "CHANGELOG.md"
+  return :gem        if gem_dirs.include?(File.dirname(rel))
+
+  entry = COURTESY.find { |c| c[:path] == rel }
+  return nil unless entry
+
+  covered[rel] += 1
+  :courtesy
+end
+
+# ── scanning ─────────────────────────────────────────────────────────────────
+
+def scan(root)
+  findings   = []
+  covered    = Hash.new(0)
+  roles      = Hash.new(0)
+  releases   = 0
+  subsects   = 0
+
+  changelogs, gem_dirs = corpus(root)
+
+  changelogs.each do |rel|
+    role = role_of(rel, gem_dirs, covered)
+    if role.nil?
+      arm = arm_for("CL-5")
+      findings << { path: rel, line: 1, id: arm[:id], what: arm[:what], repair: arm[:repair] }
+      next
+    end
+    roles[role] += 1
+
+    release      = nil
+    seen_release = {}
+    seen_sub     = {}
+
+    headings(File.join(root, rel)).each do |h|
+      case h.level
+      when 2
+        releases += 1
+        key = normalise_heading(h.text)
+        if seen_release.key?(key)
+          arm = arm_for("CL-3")
+          findings << {
+            path: rel, line: h.line, id: arm[:id], repair: arm[:repair],
+            what: "release section `#{h.text}` reopened; it is already open at line #{seen_release[key]}",
+          }
+        else
+          seen_release[key] = h.line
+        end
+        release  = h.text
+        seen_sub = {}
+      when 3
+        subsects += 1
+        if release.nil?
+          arm = arm_for("CL-4")
+          findings << { path: rel, line: h.line, id: arm[:id], repair: arm[:repair],
+                        what: "subsection `#{h.text}` sits above every release section" }
+          next
+        end
+
+        key  = normalise_heading(h.text)
+        kind = canonical_kind(h.text)
+        if seen_sub.key?(key)
+          arm = arm_for(kind ? "CL-1" : "CL-2")
+          findings << {
+            path: rel, line: h.line, id: arm[:id], repair: arm[:repair],
+            what: "`### #{h.text}` appears twice under `## #{release}` " \
+                  "(already at line #{seen_sub[key]})",
+          }
+        else
+          seen_sub[key] = h.line
+        end
+      end
+    end
+  end
+
+  gem_dirs.each do |dir|
+    next if changelogs.include?(File.join(dir, "CHANGELOG.md"))
+
+    arm = arm_for("CL-6")
+    findings << { path: "#{dir}/CHANGELOG.md", line: 0, id: arm[:id], what: arm[:what],
+                  repair: arm[:repair] }
+  end
+
+  COURTESY.each do |entry|
+    next if covered[entry[:path]].positive?
+
+    findings << {
+      path: entry[:path], line: 0, id: "CL-5",
+      what: "declared as a courtesy record, but git does not track it",
+      repair: "drop the COURTESY entry if the file was removed on purpose, or restore the file",
+    }
+  end
+
+  { findings: findings, covered: covered, roles: roles, files: changelogs.length,
+    gems: gem_dirs.length, releases: releases, subsections: subsects }
+end
+
+def arm_for(id)
+  ARMS.find { |a| a[:id] == id } || raise("unknown arm #{id}")
+end
+
+# ── modes ────────────────────────────────────────────────────────────────────
+
+def report(result, quiet:)
+  unless quiet
+    r = result[:roles]
+    puts "check-changelog: #{result[:files]} tracked changelog(s) -- " \
+         "#{r[:repository]} repository record, #{r[:gem]} gem package record(s) " \
+         "for #{result[:gems]} gem(s), #{r[:courtesy]} declared courtesy record(s)"
+    puts "  #{result[:releases]} release section(s), #{result[:subsections]} subsection heading(s)"
+    COURTESY.each do |entry|
+      puts format("  courtesy %-42s covered %d", entry[:path], result[:covered][entry[:path]])
+    end
+  end
+
+  if result[:findings].empty?
+    unless quiet
+      puts
+      puts "check-changelog: OK -- every release section answers each kind once, and every tracked " \
+           "changelog has a declared role."
+      puts "(Structure only: this reads no entry. See the header for what it cannot see.)"
+    end
+    return 0
+  end
+
+  $stdout.flush
+  warn ""
+  warn "check-changelog: FAIL -- #{result[:findings].length} structural defect(s)."
+  result[:findings].sort_by { |f| [f[:path], f[:line]] }.each do |f|
+    where = f[:line].positive? ? "#{f[:path]}:#{f[:line]}" : f[:path]
+    warn "  #{where}: [#{f[:id]}] #{f[:what]}"
+    warn "      repair: #{f[:repair]}"
+  end
+  1
+end
+
+def run_check(quiet: false)
+  report(scan(REPO), quiet: quiet)
+end
+
+# ── self-test ────────────────────────────────────────────────────────────────
+#
+# PROVING NON-VACUITY IS HALF THE POINT. A corpus scan whose file set came out
+# empty exits 0 and reads exactly like a clean repository. So this builds a
+# throwaway repository carrying one of every shape that must stay GREEN, plants
+# each arm's own example into it in turn, and asserts the guard goes red UNDER
+# THAT ARM'S ID and names the file -- then that it comes back green when the
+# plant is removed. Finally it measures the real tree, because a fixture proves
+# the logic and says nothing about what this repository actually holds.
+
+# >>> GREEN FIXTURES -- BEGIN
+#
+# Shapes that must NOT fire. Each is a real form that ships here today: the
+# bullet-list repository record with no release sections at all, a full
+# Keep-a-Changelog gem record with every kind once plus non-canonical
+# subsections, a courtesy record, and -- the one that is not obvious -- a
+# release section containing a FENCED BLOCK that itself contains headings,
+# which a scan without a fence tracker reports as three repeats.
+GREEN = {
+  "CHANGELOG.md" => <<~MD,
+    # Changelog
+
+    Significant changes only: one line per change.
+
+    - 2026-01-02: **something changed.** Intent: it says why.
+  MD
+  "kiosk-widget/kiosk-widget.gemspec" => "Gem::Specification.new { |s| s.name = \"kiosk-widget\" }\n",
+  "kiosk-widget/CHANGELOG.md" => <<~MD,
+    # Changelog
+
+    ## [Unreleased]
+
+    ### Changed
+
+    - one changed thing.
+
+    ### Added
+
+    - one added thing, and a fenced example that is not a heading:
+
+      ```markdown
+      ## [Unreleased]
+      ### Added
+      ### Added
+      ```
+
+    ### Deprecated
+
+    - one deprecation.
+
+    ### Removed
+
+    - one removal.
+
+    ### Fixed
+
+    - one fix.
+
+    ### Security
+
+    - one security note.
+
+    ### Out of scope for first release
+
+    - one deferral.
+
+    ## [0.1.0]
+
+    ### Added
+
+    - the same kind again, in a DIFFERENT release, which is the correct shape.
+  MD
+  "kiosk-demo-atablefor/CHANGELOG.md" => "# Changelog\n\n## Unreleased\n\n- a courtesy record.\n",
+  "kiosk-demo-prove/CHANGELOG.md" => "# Changelog\n\n- a courtesy record.\n",
+}.freeze
+# <<< GREEN FIXTURES -- END
+
+def build_fixture(dir)
+  FileUtils.mkdir_p(File.join(dir, "bin"))
+  script = File.join(dir, "bin", File.basename(SELF_PATH))
+  File.write(script, File.binread(SELF_PATH))
+  File.chmod(0o755, script)
+  GREEN.each { |rel, body| write(dir, rel, body) }
+  _, err, st = Open3.capture3("git", "-C", dir, "init", "-q")
+  raise "git init failed: #{err}" unless st.success?
+end
+
+def stage(dir)
+  _, err, st = Open3.capture3("git", "-C", dir, "add", "-A")
+  raise "git add failed: #{err}" unless st.success?
+end
+
+def run_guard_in(dir)
+  Open3.capture3(RbConfig.ruby, File.join(dir, "bin", File.basename(SELF_PATH)))
+end
+
+def self_test_fixture(failures)
+  Dir.mktmpdir("check-changelog") do |dir|
+    build_fixture(dir)
+    stage(dir)
+
+    out, err, st = run_guard_in(dir)
+    if st.exitstatus.zero?
+      puts "  green tree: exit 0 with every legitimate shape present -- OK"
+    else
+      failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
+    end
+    unless out.include?("subsection heading(s)")
+      failures << "the guard printed no subsection count, so non-vacuity cannot be read off it"
+    end
+
+    keep = GREEN.keys.to_h { |rel| [rel, File.binread(File.join(dir, rel))] }
+
+    ARMS.each do |arm|
+      arm[:plant].call(dir)
+      stage(dir)
+      out2, err2, st2 = run_guard_in(dir)
+      combined = "#{out2}#{err2}"
+      if st2.exitstatus.zero?
+        failures << "planting #{arm[:id]} did not turn the guard red"
+      elsif !combined.include?("[#{arm[:id]}]")
+        failures << "#{arm[:id]}'s plant fired, but not under its own id:\n#{combined}"
+      else
+        puts "  plant #{arm[:id]}: exit #{st2.exitstatus}, reported by id -- OK"
+      end
+
+      # Restore from the bytes captured BEFORE the plant, and delete whatever the
+      # plant created, rather than re-editing the fixture back into shape.
+      Dir.glob(File.join(dir, "**", "*"), File::FNM_DOTMATCH).each do |abs|
+        next unless File.file?(abs)
+
+        rel = abs.delete_prefix("#{dir}/")
+        next if rel.start_with?(".git/", "bin/")
+        next if keep.key?(rel)
+
+        File.delete(abs)
+      end
+      keep.each { |rel, body| File.write(File.join(dir, rel), body) }
+      stage(dir)
+    end
+
+    # The one arm whose plant is a DELETION rather than an addition: a declared
+    # courtesy record that git no longer tracks must fail, or the manifest is a
+    # list of hopes.
+    File.delete(File.join(dir, "kiosk-demo-prove/CHANGELOG.md"))
+    stage(dir)
+    out3, err3, st3 = run_guard_in(dir)
+    combined3 = "#{out3}#{err3}"
+    if st3.exitstatus.zero?
+      failures << "removing a declared courtesy record did not turn the guard red"
+    elsif !combined3.include?("kiosk-demo-prove/CHANGELOG.md")
+      failures << "the missing courtesy record was not named:\n#{combined3}"
+    else
+      puts "  plant CL-5 (declared record deleted): exit #{st3.exitstatus}, named -- OK"
+    end
+    keep.each { |rel, body| write(dir, rel, body) }
+    stage(dir)
+
+    _, _, st4 = run_guard_in(dir)
+    failures << "the fixture tree did not return to exit 0 after the plants" unless st4.exitstatus.zero?
+  end
+end
+
+def run_self_test
+  failures = []
+  self_test_fixture(failures)
+
+  result = scan(REPO)
+  if result[:files] < 10
+    failures << "the real tree found #{result[:files]} changelog(s) -- the file set is empty or nearly so"
+  end
+  if result[:releases] < 10
+    failures << "the real tree found #{result[:releases]} release section(s) -- the section arms are vacuous here"
+  end
+  if result[:subsections] < 20
+    failures << "the real tree found #{result[:subsections]} subsection heading(s) -- the kind arms are vacuous here"
+  end
+  puts "  real tree: #{result[:files]} changelog(s), #{result[:releases]} release section(s), " \
+       "#{result[:subsections]} subsection heading(s) -- non-vacuous"
+
+  status = report(result, quiet: true)
+  failures << "the guard is not green over this repository (exit #{status})" unless status.zero?
+  puts "  real tree: check exits #{status}"
+
+  if failures.empty?
+    puts
+    puts "check-changelog --self-test: OK -- red on a plant of every arm, green on every legitimate " \
+         "shape including headings inside a fence, and non-vacuous over this repository."
+    return 0
+  end
+
+  $stdout.flush
+  warn ""
+  warn "check-changelog --self-test: FAIL"
+  failures.each { |f| warn "  #{f}" }
+  1
+end
+
+# ── entry point ──────────────────────────────────────────────────────────────
+
+code =
+  case ARGV[0]
+  when nil           then run_check
+  when "--self-test" then run_self_test
+  else
+    warn "usage: check-changelog [--self-test]"
+    2
+  end
+exit code

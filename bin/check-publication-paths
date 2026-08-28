@@ -100,7 +100,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "27ee48cfd1a7ab02afd8153bf60d601361a3e85946f5328e42c469e5a3614a0c"
+TWIN_DIGEST = "99b4f92c57a2cf311e7686b292ac536c220ff9a4c5b3fb6cf0fd9af0f24526d9"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -193,7 +193,13 @@ ALLOW = [
     arms: :sec,
     why: "an identifier followed by a section marker names a part of THAT document, not of the " \
          "protocol. Also applied over the two-line join, because the identifier and the marker wrap " \
-         "apart in practice.",
+         "apart in practice. NARROWED to the shape that reason describes: the id must stand on its " \
+         "own and must not be attributed to our specification in the same breath, because an id used " \
+         "as an ADJECTIVE (`the pre-K-851 §11.6`) is a date on a citation of OURS, not the name of " \
+         "the document being cited. That was this entry's ONLY live suppression in either repository " \
+         "before the narrowing, so it now suppresses nothing here and is kept exercised by the " \
+         "self-test instead -- the shape it exempts is legitimate and reappears the moment anyone " \
+         "cites a decision record's own section.",
     match: nil,
   },
   {
@@ -426,7 +432,37 @@ def scan_repo(index, index_note)
           suppressed["AL-3"] += 1
           next
         end
-        if befores.any? { |b| b =~ /(?:ADR|K|T)-\d+\s*\z/ }
+        # ...and AL-4 is narrowed the same way and for the same reason (K-1158).
+        # Two clauses, and only the second one fires anywhere at head:
+        #
+        #   * `!ours` is the clause above, verbatim: an id followed by an explicit
+        #     attribution to OUR specification is a citation of OUR section that
+        #     merely stands behind an id, and it must not inherit the id's
+        #     exemption. Nothing in either repository is written that way today.
+        #     It is here because the join arm makes the shape reachable, and
+        #     because two neighbouring exemptions with the same hazard should not
+        #     differ by which of them was written first.
+        #   * the id must not be GLUED INTO A LONGER WORD, which is what the
+        #     lookbehind says. This entry exists because an id followed by a
+        #     section marker (`ADR-0023 §Decision 4`, and the numbered form of
+        #     the same thing) names a section OF THAT DECISION RECORD -- there
+        #     the marker is genuinely part of the identifier, which is why the
+        #     example in the table above is written without a number: spelling
+        #     one here would make this paragraph the entry's only live
+        #     suppression, and an exemption whose sole customer is its own
+        #     explanation is indistinguishable from a dead one.
+        #     `the pre-K-851 §11.6` is not that shape at all:
+        #     `pre-K-851` is an adjective meaning "as it read before K-851", and
+        #     the section it dates is the PUBLISHED specification's. MEASURED
+        #     before this clause: that one comment line was AL-4's only
+        #     suppression across both repositories, so the entry's entire live
+        #     effect was the one citation it had no business exempting. Nothing
+        #     was hidden by it -- §11.6 resolves, and now that the citation is
+        #     checked rather than exempted it is checked and it passes -- but an
+        #     exemption doing work its own reason does not describe is exactly how
+        #     an allow-list rots into a switch-off, which is the failure the
+        #     per-entry suppression counts exist to make visible.
+        if !ours && befores.any? { |b| b =~ /(?<![A-Za-z0-9-])(?:ADR|K|T)-\d+\s*\z/ }
           suppressed["AL-4"] += 1
           next
         end
@@ -611,6 +647,14 @@ GREEN_FIXTURES = {
     "  # {RescheduleDeliveryOperation}. No call signature in the prose: ADR-0023",
     "  # §12.9 puts the arguments, and which are optional, in `input_schema`.",
   ],
+  # The same exemption unwrapped. Both forms are needed: AL-4 turns on what sits
+  # immediately before the id, and the join arm computes that from a different
+  # string than the same-line arm does, so an exemption proved in one form is not
+  # proved in the other. `§99.9` resolves to nothing, so this file is green only
+  # for as long as AL-4 fires on it.
+  "lib/identifier_same_line.rb" => [
+    "# The declared reach is ADR-0023 §99.9 and nothing in this tree restates it.",
+  ],
   "lib/public_cites.rb" => [
     "# §3.6 binds the whole mount; §3.7.4 relaxes a 200; §5.5, §6.3, §8.1, §8.3,",
     "# §10, §15.2 and §15.4 all resolve and are correct.",
@@ -632,10 +676,25 @@ GREEN_FIXTURES = {
                  PATTERNS.flat_map { |pat| pat[:example] },
 }.freeze
 
-# Shapes that MUST fire, beyond the one example each table entry carries.
-RED_EXTRA = {
-  "SEC-1" => ["lib/dangling.rb", ["# per §99.9 the wire is additive"]],
-}.freeze
+# Shapes that MUST fire, beyond the one example each table entry carries. A list
+# and not a map, because one id can need several: the three below are all SEC-1
+# and none of them implies the others.
+RED_EXTRA = [
+  ["SEC-1", "lib/dangling.rb", ["# per §99.9 the wire is additive"]],
+  # AL-4 NARROWED (K-1158). An id used as an adjective DATES a citation of OUR
+  # section; it does not name the document being cited, so the citation has to be
+  # resolved like any other. Before the narrowing both of these were exempt and
+  # this fixture tree would have been green with two dangling section numbers in
+  # it -- which is the whole finding, because the live site the narrowing was
+  # written for cites a number that DOES resolve and therefore hid nothing.
+  # Same-line and wrapped, because the two arms build the text before the marker
+  # from different strings.
+  ["SEC-1", "lib/id_adjective.rb",
+   ["# the pre-K-851 §99.9 read that as \"confirmed unpaid\" and re-signed."]],
+  ["SEC-1", "lib/id_adjective_wrapped.rb",
+   ["# reconciles: are there settlements for this cart? NO -- the pre-K-851",
+    "# §99.9 read that as \"confirmed unpaid\" and blessed a fresh chain."]],
+].freeze
 # <<< SELF-TEST FIXTURES -- END
 
 def plant(dir, rel, lines)
@@ -689,7 +748,7 @@ def run_self_test
     # exemption stopped firing the tree would redden -- and reading the
     # per-entry suppression counts back says WHICH entry did the work.
     counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
-    { "AL-1" => 1, "AL-2" => 1, "AL-3" => 3, "AL-4" => 1 }.each do |id, want|
+    { "AL-1" => 1, "AL-2" => 1, "AL-3" => 3, "AL-4" => 2 }.each do |id, want|
       got = counted[id].to_i
       if got < want
         failures << "#{id} suppressed #{got} on the fixture tree, expected at least #{want} -- its " \
@@ -700,7 +759,7 @@ def run_self_test
     end
 
     cases = PATTERNS.map { |p| [p[:id], "lib/plant_#{p[:id].downcase.tr('-', '_')}.rb", p[:example]] }
-    cases += RED_EXTRA.map { |id, (rel, lines)| [id, rel, lines] }
+    cases += RED_EXTRA.map { |id, rel, lines| [id, rel, lines] }
 
     cases.each do |id, rel, lines|
       plant(dir, rel, lines)

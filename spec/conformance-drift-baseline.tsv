@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-28 at 78cd37a1
-# 633 anchors.
+# recorded: 2026-08-28 at 4cca1f78
+# 643 anchors.
 e2e/assistant.sh	7e10b403edbedbeb	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	32ea9a773eca7bad	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
@@ -142,7 +142,10 @@ e2e/schema_conformance.rb	852a9ec4f000cd05	and the same schema REFUSES a broken 
 e2e/schema_conformance.rb	50fbcfc0c7048b7b	example_params satisfies its own input_schema
 e2e/schema_conformance.rb	c9936a1f1b23196e	example_row satisfies its own output_schema
 e2e/schema_conformance.rb	24b3e620bb972912	published examples (the loop is not empty)
+e2e/schema_conformance.rb	8b59ab5575f22015	the #{defn} mandate's claims
 e2e/schema_conformance.rb	20f833377d225b00	the Kiosk-PoW header this origin ACCEPTED
+e2e/schema_conformance.rb	3e732c0e75b6693a	the pay REQUEST body
+e2e/schema_conformance.rb	d37e42b8b5d62e4e	the settlement this origin answered
 kiosk-demo-atablefor/app/controllers/home_controller.rb	41b6be8a099ddb63	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	e0c84228969a0be8	def reservations
 kiosk-demo-atablefor/app/views/home/index.html.erb	202945c715920bc0	The href is the VERSIONED cut this operator pins, read from
@@ -279,6 +282,8 @@ kiosk-server/spec/kiosk/server/auth_challenge_store_spec.rb	00ca6d2a40ee5d57	re-
 kiosk-server/spec/kiosk/server/auth_challenge_store_spec.rb	0212c2eb33a5c366	rejects a non-matching nonce without consuming the live one
 kiosk-server/spec/kiosk/server/auth_challenge_store_spec.rb	9cee81f3cb60f92a	rejects an expired challenge
 kiosk-server/spec/kiosk/server/auth_controller_402_spec.rb	cdd641e2eb2e7a36	register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	95218080a37280f5	delegates to LinkCode.redeem and returns the register-shaped 201
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	0fcc83f774448c01	mints a single-use link code for the signed-in account holder (201)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	8b5a466f899f7a38	carries the caller's role through to the re-issued token
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	1197c777b5722aa9	returns 400 bad_request when public_key is absent
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	e29d89caaea177f3	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
@@ -419,7 +424,6 @@ kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	563ca7dac8a571
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	ca808df2a4e6833e	reads the kyc_attributes table, joined to a LIVE agents row
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	87681fbbcf946331	returns true when kyc_verified_at is not null
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	dceab49391f2193f	verifies a valid attestation and returns claims
-kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	3349244dd3b52adc	accepts explicit schema override
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	2ecb2ea2ec21da8d	declares no value column at all — presence of the row IS the grant
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	51f0ddfd2092d7e5	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1fd1234019a674a1	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
@@ -449,6 +453,7 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	863d6cd9e9adab60	raises NotFoun
 kiosk-server/spec/kiosk/server/link_code_spec.rb	2b50d6cdf330dcdb	raises Unauthenticated on a failed proof and does NOT consume the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	08ab6fcb63af8d2a	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	40e8f7ef465e3bc2	refuses to redeem a claim-flow device_code (kinds do not cross)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09b95f53bbe50180	describe "non-positive amounts" do
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a6d3377919a11606	rejects (403, not 500) when the agent has no registered payment key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa7e23ecc2013a0	rejects a JWS signed by an unknown key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	49b77ccebf04fec3	rejects a cart missing currency (absent)
@@ -460,15 +465,20 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bedb55fc898602dd	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	cc6d01605da3dcf8	rejects a cart whose line_items are not an array
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	fcbe54e7e82d1fad	rejects a cart whose line_items array is EMPTY
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	30964dc3593ff161	rejects a cart whose total exceeds the intent cap
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	23bea68dd398610d	rejects a cart with a NEGATIVE total_amount_cents (the launder vector)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b1262dc1ef21241d	rejects a cart with a ZERO total_amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e66074b91c67f023	rejects a mandate with no exp claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	173906d912854e90	rejects a mandate with no iat claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e2993d9c790a8dc5	rejects a mandate with no id claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	30b498d256cea5e5	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ebb6830a0786b327	rejects a payment whose amount_cents does not match the cart total
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e57a5da710d0e867	rejects a payment with a NEGATIVE amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d70c3ab347193a1e	rejects a wrong issuer
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0c553937af679654	rejects an effectively non-expiring mandate (exp beyond the max lifetime)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	14ae0711adf6346d	rejects an intent missing cap_amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c829014357f7fa22	rejects an intent missing currency (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	4b55773d8c614b47	rejects an intent with a NEGATIVE cap_amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ae1ab812ce1be0d4	rejects an intent with a ZERO cap_amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2ddea7596bc97d5e	rejects when agent_id in the payload does not match the authenticated identity
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	85c9a7fe2f174b50	rejects when user_id in the payload does not match the authenticated identity
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2d12783b72e256a3	returns a CartMandate bound to the intent with total within cap

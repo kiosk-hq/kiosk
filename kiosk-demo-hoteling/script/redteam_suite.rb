@@ -604,7 +604,8 @@ end
 #                  check_in, check_out        (DATE_SHAPES)
 #   availability   property_id, check_in, check_out (the string spellings a
 #                  query can express, plus the two BRACKET spellings)
-#   search_hotels  min_stars, max_price_cents (junk + out-of-range integers)
+#   search_hotels  min_stars, max_price_cents (junk + out-of-range integers +
+#                                              one past int4, T-125)
 #                  neighbourhood, amenity     (off-enum strings)
 #
 # An argument NOT in that list is not covered here — say so by extending the
@@ -700,12 +701,27 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #     string through `Integer(v, 10)` and the handler re-reads it through
     #     {WireArguments.integer}, which is the same call (K-1025; they used to
     #     be read with `.to_s.to_i`, so `abc` was a floor of 0 and `1.5` a floor
-    #     of 1 and the DECLARATION was the whole refusal). The RANGE — 1..5,
-    #     >= 0 — is the schema's alone; no handler line re-checks it. WATCHED
-    #     FAIL, run and restored: drop `min_stars`' declared `type` and the four
-    #     SHAPE probes below (`abc`, `true`, `1.5`, `0x10`) stay 400 off the
-    #     second layer, while `0` and `9` answer 200 — `minimum`/`maximum` stop
-    #     applying to a value that is no longer declared a number.
+    #     of 1 and the DECLARATION was the whole refusal). The POLICY range —
+    #     `min_stars` 1..5, `max_price_cents` >= 0 — is the schema's alone; no
+    #     handler line re-checks it, and none should: those are house rules, not
+    #     facts about a column. WATCHED FAIL, run and restored: drop `min_stars`'
+    #     declared `type` and the four SHAPE probes below (`abc`, `true`, `1.5`,
+    #     `0x10`) stay 400 off the second layer, while `0` and `9` answer 200 —
+    #     `minimum`/`maximum` stop applying to a value that is no longer declared
+    #     a number.
+    #   * MAGNITUDE is the third axis and it IS re-checked in the handler
+    #     (T-125): both filters now pass `max: WireArguments::MAX_INT4`, so a
+    #     value past PostgreSQL `integer` is a typed 400 from the schema layer
+    #     AND from the guard behind it. Before that it was safe by coincidence —
+    #     `min_stars` only because its descriptor declares `maximum: 5` (it
+    #     reaches `stars.gteq(…)`, which RAISES `ActiveModel::RangeError` casting
+    #     the comparison), and `max_price_cents` only because
+    #     {Property.from_price_cents} is an `Arel::Nodes::Grouping` carrying no
+    #     int4 type, one denormalisation away from the same 500. WATCHED FAIL,
+    #     run and restored: drop the `maximum:` from `max_price_cents`' descriptor
+    #     AND the `max:` from its call site and the BEYOND_INT4 probe below comes
+    #     back 200 with rows, which is this beat's whole point — a filter the
+    #     origin could not represent, answered as though it had.
     #   * the two ENUMS are still one layer: `neighbourhood` and `amenity` are
     #     read with a bare `.to_s` and fed to a `where`/`offering`, so the
     #     schema's `enum` is the only thing that refuses an off-list value.
@@ -713,11 +729,12 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # Which is precisely why all four need a standing probe: a filter that
     # silently matched nothing would answer `200 []` — «no hotel is like that»
     # in reply to a question the origin never understood.
-    %w[abc true 0 9 1.5 0x10].each do |v|
+    beyond_int4 = 2_147_483_648 # one past PostgreSQL `integer`
+    %W[abc true 0 9 1.5 0x10 #{beyond_int4}].each do |v|
       refused "search_hotels min_stars=#{v.inspect}",
               client.query(a, name: "search_hotels", min_stars: v)
     end
-    %w[abc true -1 1.5].each do |v|
+    %W[abc true -1 1.5 #{beyond_int4}].each do |v|
       refused "search_hotels max_price_cents=#{v.inspect}",
               client.query(a, name: "search_hotels", max_price_cents: v)
     end

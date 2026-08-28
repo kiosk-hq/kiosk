@@ -542,8 +542,10 @@ namespace :demo do
       BLOCKED  MalformedUuidArg      — junk booking_id → typed 400, no SQL internals, never a 500
       BLOCKED  HostileArgShapes      — every hostile SHAPE on the integer and date arguments
                                        (boolean, array, object, junk integer, unparseable
-                                       and out-of-horizon date) → typed 400, never a 500
-                                       and never a wrong answer served as 200 (K-773)
+                                       and out-of-horizon date), plus MAGNITUDE — a filter
+                                       one past PostgreSQL `integer` (T-125) → typed 400,
+                                       never a 500 and never a wrong answer served as 200
+                                       (K-773, K-1047)
       BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
       BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are the ordinary 404
                                        an authenticated caller gets, 401 without a bearer

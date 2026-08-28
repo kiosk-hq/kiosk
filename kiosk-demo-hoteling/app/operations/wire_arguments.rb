@@ -20,12 +20,68 @@ module WireArguments
 
   module_function
 
+  # PostgreSQL `integer` — the width of every column a value out of {#integer}
+  # is compared against or stored in: `properties.stars`, the cheapest-rate
+  # cents `max_price_cents` filters on, and `bookings.total_cents`.
+  #
+  # THE BOUND IS THE COLUMN'S AND NOT A POLICY (K-968's rule): it refuses
+  # exactly what cannot be REPRESENTED and invents no star ceiling and no
+  # nightly-rate ceiling. Named MAX_INT4 rather than for any one of those
+  # columns because three of them share it, and because the two sibling demos'
+  # guards carry the same constant under the same name — the three helpers
+  # converge here even though their coercions deliberately do not (getgrocery
+  # and atablefor use {whole_number} for arguments that reach them with no
+  # decoder in front; hoteling's integers arrive as query strings).
+  MAX_INT4 = 2_147_483_647
+
+  # @param max [Integer, nil] the ceiling this argument's column can hold; nil
+  #   for a value that reaches no column at all.
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   #
   # `Integer(str, 10)` and not `.to_i`: `.to_i` answers 0 for "abc", turning a
   # typo into a much quieter wrong answer than a 400. Base 10 is explicit so
   # "0x10" is refused rather than read as 16; surrounding space is tolerated.
-  def integer(raw, field:, hint:)
+  #
+  # SHAPE, THEN MAGNITUDE — and the second arm is T-125, the axis this helper
+  # did not have while both its siblings did. It is HARDENING and closes no
+  # present defect: MEASURED at head inside this bundle, hoteling was safe from
+  # K-1047's class by a COINCIDENCE of its call sites rather than by anything
+  # written here.
+  #
+  #   * `min_stars` reaches `Property.arel_table[:stars].gteq(min_stars)`, which
+  #     is the RAISING shape — `gteq(2**31)` → `ActiveModel::RangeError:
+  #     2147483648 is out of range for ActiveModel::Type::Integer with limit 4
+  #     bytes` — and was safe only because its descriptor declares `maximum: 5`
+  #     and schema validation is unconditional for queries as well as actions.
+  #   * `max_price_cents` had NO declared maximum and reaches
+  #     `Property.from_price_cents.lteq(max_price_cents)`, which does not raise
+  #     — but only because {Property.from_price_cents} is an
+  #     `Arel::Nodes::Grouping` wrapping a correlated subquery and therefore
+  #     carries no int4 type, so the literal is inlined into the SQL. Denormalise
+  #     that cheapest-rate subquery into a real int4 column — an ordinary
+  #     performance move — and the identical query becomes a 500.
+  #
+  # A guard that holds only while a descriptor elsewhere holds is not a second
+  # layer at all (the K-1020/K-1025/K-1027 argument, three demos deep), so the
+  # ceiling is asked HERE and mirrored in the descriptor rather than left to it.
+  #
+  # WHO OMITS `max:`, and why — because an omission nobody reasoned about is how
+  # `max_price_cents` got here. `limit` reaches no column (it becomes `.limit()`
+  # and is CLAMPED into 1..HOTELING_SEARCH_MAX), and its description publishes
+  # that every integer `limit` is adjusted rather than refused. `property_id`
+  # and `room_type_id` reach ActiveRecord as EQUALITY predicates, where an
+  # out-of-range value is absorbed — MEASURED: `Property.where(id: 2**31).first`
+  # → nil, no raise — and answers the `404 not_found` spec §9.1's second branch
+  # asks for; a ceiling here would turn that into a 400 that also published the
+  # column's width. It is the COMPARISON that casts, which is the same line
+  # atablefor's `party_size` beat draws for the same reason.
+  #
+  # There is deliberately no `min:` to match: no argument on this surface has a
+  # floor that is this guard's to enforce. `min_stars`' 1 and `max_price_cents`'
+  # 0 are POLICY the descriptor declares, a negative id equality-matches nothing
+  # and `limit` clamps — so a `min:` keyword would be a parameter nothing passes
+  # and no probe exercises.
+  def integer(raw, field:, hint:, max: nil)
     return [nil, missing(field)] if raw.blank?
 
     value = begin
@@ -33,11 +89,18 @@ module WireArguments
     rescue ArgumentError, TypeError
       nil
     end
-    return [value, nil] unless value.nil?
+    if value.nil?
+      return [nil, OperationResult.refused(
+        code:    "bad_request",
+        message: "#{field} #{raw.to_s.inspect} is not an integer",
+        hint:    hint,
+      )]
+    end
+    return [value, nil] if max.nil? || value <= max
 
     [nil, OperationResult.refused(
       code:    "bad_request",
-      message: "#{field} #{raw.to_s.inspect} is not an integer",
+      message: "#{field} must be <= #{max} — got #{value}",
       hint:    hint,
     )]
   end
@@ -166,16 +229,19 @@ module WireArguments
   # argument a client simply got wrong. THE BOUND IS THE COLUMN'S, NOT A POLICY:
   # it refuses exactly what cannot be REPRESENTED and invents no booking horizon.
   #
+  # The ceiling is {MAX_INT4}, declared once at the top of this module: it is the
+  # SAME column width `min_stars` and `max_price_cents` are bounded by, and two
+  # constants of one value in one file is the drift this demo has already paid
+  # for elsewhere (T-125).
+  #
   # @return [OperationResult, nil] a refusal, or nil when the total fits
-  MAX_TOTAL_CENTS = 2_147_483_647 # PostgreSQL `integer`
-
   def priceable_total(total_cents, nights)
-    return nil if total_cents <= MAX_TOTAL_CENTS
+    return nil if total_cents <= MAX_INT4
 
     OperationResult.refused(
       code:    "bad_request",
       message: "a #{nights}-night stay totals #{total_cents} cents, more than this operator can " \
-               "book in one reservation (max #{MAX_TOTAL_CENTS})",
+               "book in one reservation (max #{MAX_INT4})",
       hint:    "book a shorter stay — check_in and check_out are the first night and the " \
                "checkout day, so their distance is the number of nights charged.",
     )

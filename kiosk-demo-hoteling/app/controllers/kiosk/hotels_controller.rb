@@ -244,7 +244,10 @@ class Kiosk::HotelsController < ActionController::API
                    enum: NEIGHBOURHOOD_POOL,
                    description: "Exact Istanbul area name.",
                  },
-                 max_price_cents: { type: "integer", minimum: 0, description: "Cheapest room ≤ this, EUR cents." },
+                 max_price_cents: {
+                   type: "integer", minimum: 0, maximum: WireArguments::MAX_INT4,
+                   description: "Cheapest room ≤ this, EUR cents.",
+                 },
                  min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
                  amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
                },
@@ -312,6 +315,13 @@ class Kiosk::HotelsController < ActionController::API
     # INTEGER `limit` is adjusted into 1..HOTELING_SEARCH_MAX and never refused.
     # A non-integer is not «a value outside that range» — it is not a page size
     # at all, and the engine in front of this line already answers it 400.
+    #
+    # SO `limit` TAKES NO `max:` (T-125), and that is a decision rather than an
+    # omission: it is the one integer on this surface that reaches no COLUMN —
+    # it becomes `.limit()`, bounded by construction two lines below — and
+    # refusing a `limit` of 2**31 would contradict the sentence above, which the
+    # descriptor publishes. The two FILTERS below take one, because each is
+    # compared against a 4-byte `integer` column.
     limit = HOTELING_SEARCH_PAGE
     if params[:limit].present?
       requested, refusal = WireArguments.integer(params[:limit], field: "limit",
@@ -336,7 +346,8 @@ class Kiosk::HotelsController < ActionController::API
     scope = scope.where(neighbourhood: params[:neighbourhood].to_s) if params[:neighbourhood].present?
     if params[:min_stars].present?
       min_stars, refusal = WireArguments.integer(params[:min_stars], field: "min_stars",
-                                                                     hint: HINT_SEARCH_MIN_STARS)
+                                                                     hint: HINT_SEARCH_MIN_STARS,
+                                                                     max:  WireArguments::MAX_INT4)
       return render_refusal(refusal) if refusal
 
       scope = scope.where(Property.arel_table[:stars].gteq(min_stars))
@@ -345,7 +356,8 @@ class Kiosk::HotelsController < ActionController::API
     if params[:max_price_cents].present?
       max_price_cents, refusal = WireArguments.integer(params[:max_price_cents],
                                                        field: "max_price_cents",
-                                                       hint:  HINT_SEARCH_MAX_PRICE)
+                                                       hint:  HINT_SEARCH_MAX_PRICE,
+                                                       max:   WireArguments::MAX_INT4)
       return render_refusal(refusal) if refusal
 
       scope = scope.where(Property.from_price_cents.lteq(max_price_cents))

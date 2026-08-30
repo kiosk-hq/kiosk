@@ -30,12 +30,13 @@ module Kiosk
         # would nil-coerce to 0 in the verify_cart cap comparison, making that
         # comparison vacuous; reject it here, before any .to_i.
         require_amount!(payload, :cap_amount_cents)
-        require_currency!(payload)
+        # CANONICAL, not the raw bytes (K-1251) — see `require_currency!`.
+        currency = require_currency!(payload)
 
         Kiosk::Mandate::IntentMandate.new(
           id: payload[:id], user_id: payload[:user_id], agent_id: payload[:agent_id],
           issuer: payload[:iss], scope: payload[:scope],
-          cap_amount_cents: payload[:cap_amount_cents], currency: payload[:currency],
+          cap_amount_cents: payload[:cap_amount_cents], currency: currency,
           expires_at: Time.at(payload[:exp]),
           created_at: Time.at(payload[:iat]),
           raw_jws: raw_jws,
@@ -56,13 +57,19 @@ module Kiosk
         # would nil-coerce to 0 below, so a payment omitting it would "match" a
         # 0-cent cart and persist a 0-cent row; reject before any .to_i.
         require_amount!(payload, :amount_cents)
-        require_currency!(payload)
+        currency = require_currency!(payload)
 
         unless payload[:cart_mandate_id] == cart.id
           raise Errors::Forbidden.new("payment not bound to the cart")
         end
+        # Both sides are CANONICAL here: `cart.currency` came out of
+        # `verify_cart`, which ran this same guard. Comparing the raw payload
+        # byte-for-byte against it would refuse `"EUR"` against an `"eur"` cart
+        # — one code spelled two ways — while still letting the two spellings
+        # open two spending-cap tallies, which is the K-1251 defect from the
+        # other end.
         unless payload[:amount_cents].to_i == cart.total_amount_cents.to_i &&
-               payload[:currency] == cart.currency
+               currency == cart.currency
           raise Errors::Forbidden.new("payment amount/currency does not match cart")
         end
 
@@ -70,7 +77,7 @@ module Kiosk
           id: payload[:id], cart_mandate_id: payload[:cart_mandate_id],
           user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
           payment_method: payload[:payment_method],
-          amount_cents: payload[:amount_cents], currency: payload[:currency],
+          amount_cents: payload[:amount_cents], currency: currency,
           expires_at: Time.at(payload[:exp]),
           created_at: Time.at(payload[:iat]),
           raw_jws: raw_jws,
@@ -86,14 +93,14 @@ module Kiosk
         # in verify_payment's amount match, making both vacuous and persisting a
         # 0-cent cart row; reject before any .to_i.
         require_amount!(payload, :total_amount_cents)
-        require_currency!(payload)
+        currency = require_currency!(payload)
         require_line_items!(payload)
 
         cart = Kiosk::Mandate::CartMandate.new(
           id: payload[:id], intent_mandate_id: payload[:intent_mandate_id],
           user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
           line_items: payload[:line_items], total_amount_cents: payload[:total_amount_cents],
-          currency: payload[:currency],
+          currency: currency,
           expires_at: Time.at(payload[:exp]),
           created_at: Time.at(payload[:iat]),
           raw_jws: raw_jws,
@@ -231,16 +238,51 @@ module Kiosk
       # ONLY WHAT THE SPEC ALREADY SAYS IS ENFORCED HERE. The published schema
       # types this member `string`, so a non-String is refused; and an empty or
       # all-blank string is not a code under any reading of the ISO 4217 that same
-      # schema names. The DOMAIN is deliberately NOT closed — whether "eur", "EUR"
-      # and "Euro" are one code, three codes, or one code and two refusals is a
-      # rule nothing in the spec states, and minting an allow-list here would be
-      # this guard writing wire rather than enforcing it. That question is T-153,
-      # and the cap-tally consequence of leaving it open is K-1251.
+      # schema names. The DOMAIN is deliberately NOT closed — whether "US" or
+      # "Euro" names anything is a rule nothing in the spec states, and minting an
+      # allow-list here would be this guard writing wire rather than enforcing it.
+      # That question is K-1252.
+      #
+      # K-1251: IT RETURNS THE CANONICAL FORM, AND THE RETURN VALUE IS THE POINT.
+      # What this guard used to hand back was `nil`, and every caller then built
+      # its mandate out of the RAW payload bytes. Those bytes are the key §11.5's
+      # spending-cap tally is scoped by (`Executor#settled_total_cents`), so
+      # `"eur"` and `"EUR"` were TWO tallies for one currency and an assistant
+      # that alternated the spelling between chains collected the cap TWICE — the
+      # residue of K-551, which scoped a currency-BLIND sum by the currency string
+      # and left "a string is not a currency" standing. `" eur "` did the same
+      # thing more quietly, because the emptiness test below already strips and
+      # the identity test did not.
+      #
+      # SO THE FOLD BELONGS HERE, AT THE BOUNDARY WHERE AN UNTRUSTED SIGNED
+      # PAYLOAD BECOMES A VERIFIED VALUE OBJECT — not at the query. A query-side
+      # fold would leave non-canonical bytes in the operator's own tables and
+      # oblige every future reader to remember it; canonicalising once, here, makes
+      # the §11.2 comparisons, the persisted rows, the PSP call and the tally all
+      # key on the same value BY CONSTRUCTION. (`settled_total_cents` folds its
+      # column too, and that is not a second mechanism: it reaches rows written
+      # BEFORE this guard existed, which no boundary can retro-fit.)
+      #
+      # LOWER case is the canonical form, and it is not a coin toss. Stripe is the
+      # only shipped PSP adapter and `kiosk-pay-stripe` passes `cart_mandate.currency`
+      # straight into `PaymentIntent.create`; the vendored client documents that
+      # parameter, and the value it reads back, as «Three-letter ISO currency code,
+      # in lowercase». Lower case is also what 148 of the 158 currency literals in
+      # this repository already say, and what the specification's own worked
+      # example prints.
+      #
+      # WHAT THIS IS NOT. It does not decide whether an operator's currency domain
+      # admits two spellings — §11.1 leaves that to the operator and still does.
+      # It decides that WHEN it admits them, they are one currency: §11.5 obliges
+      # the operator to refuse a `pay` that would push the settled total past the
+      # cap, and a tally keyed on raw bytes computes a total that is not the total.
       #
       # `Errors::Forbidden`, not `BadRequest`, because `currency` is one of the
       # seven limbs of the mandate carve-out (§9.1, §11.1): a mandate that does not
       # carry what a mandate must carry has authorised nothing. The two mandate
       # checks that answer 400 are named in §9.1 and neither is this one.
+      #
+      # @return [String] the canonical currency — trimmed and lower-cased
       def require_currency!(payload)
         value = payload[:currency]
         if value.nil?
@@ -250,13 +292,27 @@ module Kiosk
           )
         end
 
-        return if value.is_a?(String) && !value.strip.empty?
+        return canonical_currency(value) if value.is_a?(String) && !value.strip.empty?
 
         raise Errors::Forbidden.new(
           "mandate currency must be a non-empty string",
           hint: "currency was #{value.inspect} — send the currency code this mandate is " \
                 "denominated in (spec §11.1: an ISO 4217 code)",
         )
+      end
+
+      # The canonical spelling of a currency, and the ONE definition of it in the
+      # engine — `Executor#settled_total_cents` calls this rather than carrying a
+      # second copy, so the tally can never fold differently from the boundary
+      # that fills its column. PUBLIC on purpose: an operator whose own code reads
+      # `settlements.currency` needs the same fold and should not have to re-derive
+      # it. Non-String and blank inputs are the caller's problem — `require_currency!`
+      # has already refused them by the time this runs.
+      #
+      # @param value [String] a currency as it was spelled
+      # @return [String] the same currency, trimmed and lower-cased
+      def canonical_currency(value)
+        value.to_s.strip.downcase
       end
 
       # Reject a timestamp claim that is not a number (Integer/Float NumericDate),

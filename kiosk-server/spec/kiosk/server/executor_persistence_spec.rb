@@ -355,6 +355,96 @@ RSpec.describe Kiosk::Server::Executor do
       end
     end
 
+    # ── Two spellings of one code are ONE tally and ONE cap (K-1251) ───────
+    #
+    # THE BUG, STATED AS THE TEST. `settled_total_cents` keyed the sum on the
+    # RAW currency bytes, and `currency` is a column the ASSISTANT populates
+    # from its own signed mandate. So `"eur"` and `"EUR"` were two tallies for
+    # one currency, and an assistant that alternated the spelling between
+    # chains collected the cap TWICE. K-551 scoped a currency-BLIND sum by the
+    # currency string; a string is not a currency, and this is that residue.
+    #
+    # Driven against a REAL Postgres because the fold is in the SQL: a
+    # FakeConnection would assert the text and not the answer. The rows here
+    # are written with the non-canonical spelling ON PURPOSE — a row already in
+    # the table from before the boundary canonicalised its input is exactly the
+    # case the query-side fold exists for.
+    describe "spelling is not identity (K-1251)" do
+      # A whole trail of its own, so two settlements can coexist under
+      # `UNIQUE (cart_mandate_id)`.
+      def settle(currency:, cents:)
+        i = intent.with(id: "intent-#{SecureRandom.hex(6)}", currency: currency)
+        c = cart.with(id: "cart-#{SecureRandom.hex(6)}", intent_mandate_id: i.id,
+                      currency: currency, total_amount_cents: cents)
+        intent_row = executor.send(:persist_intent_mandate, i)
+        cart_row   = executor.send(:persist_cart_mandate, c, intent_row_id: intent_row)
+        executor.send(:persist_settlement, cart_row_id: cart_row, cart: c,
+                      settled: { psp_reference: "pi_#{SecureRandom.hex(4)}",
+                                 settled_amount_cents: cents })
+        c
+      end
+
+      it "tallies an EUR settlement under eur" do
+        settle(currency: "EUR", cents: 2500)
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
+                                                   currency: "eur")).to eq(2500)
+      end
+
+      it "tallies a padded ' EUR ' settlement under eur" do
+        settle(currency: " EUR ", cents: 700)
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
+                                                   currency: "eur")).to eq(700)
+      end
+
+      it "sums both spellings into ONE tally" do
+        settle(currency: "eur", cents: 3000)
+        settle(currency: "EUR", cents: 2500)
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
+                                                   currency: "eur")).to eq(5500)
+      end
+
+      it "canonicalises the ASKED currency too, so an EUR cart reads the eur history" do
+        settle(currency: "eur", cents: 3000)
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
+                                                   currency: "EUR")).to eq(3000)
+      end
+
+      # The positive control: folding CASE must not fold two different codes.
+      it "still keeps usd out of the eur tally" do
+        settle(currency: "eur", cents: 3000)
+        settle(currency: "USD", cents: 4000)
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
+                                                   currency: "eur")).to eq(3000)
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
+                                                   currency: "usd")).to eq(4000)
+      end
+
+      # THE ONE THE ROW IS ABOUT: spend under one spelling, then the other,
+      # against a single configured cap. Pre-fix the second charge saw a tally
+      # of 3000 against a 5000 cap and went through; the assistant had spent
+      # 5500 under a cap of 5000.
+      it "hits ONE cap across both spellings" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
+        settle(currency: "eur", cents: 3000)
+        settle(currency: "EUR", cents: 2500)
+
+        over = cart.with(id: "cart-#{SecureRandom.hex(6)}", currency: "eur",
+                         total_amount_cents: 1)
+        expect { executor.send(:enforce_spending_cap!, over) }
+          .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
+      end
+
+      it "still admits a charge that fits under the combined tally" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
+        settle(currency: "eur", cents: 3000)
+        settle(currency: "EUR", cents: 1000)
+
+        ok = cart.with(id: "cart-#{SecureRandom.hex(6)}", currency: "EUR",
+                       total_amount_cents: 900)
+        expect { executor.send(:enforce_spending_cap!, ok) }.not_to raise_error
+      end
+    end
+
     # ── The settled replay (K-850), driven end to end ──────────────────────
     #
     # WHY IT IS HERE and not only in executor_spec.rb. The whole behaviour is a

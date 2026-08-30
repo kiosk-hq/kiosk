@@ -174,11 +174,94 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         expect(m.currency).to eq("eur")
       end
 
-      # The domain is NOT closed here, and this example says so out loud.
-      it "still accepts a string outside ISO 4217 — the domain is T-153, not this guard" do
+      # THE DOMAIN IS STILL NOT CLOSED, and this example says so out loud —
+      # but the boundary it pins MOVED on 2026-08-30 (K-1251/T-153), so it now
+      # states both halves rather than only the refusal that does not happen.
+      # WHAT IS SETTLED: two spellings of ONE code are one currency, and the
+      # guard returns the canonical form (trimmed, lower-cased) that the §11.2
+      # comparisons, the persisted rows and the §11.5 tally are all keyed on.
+      # WHAT IS STILL OPEN: whether a syntactically-valid string that names no
+      # ISO 4217 code is refused. "Euro" is not a code and is still accepted —
+      # as "euro". Tightening THAT is a decision (K-1252), and this example is
+      # what makes the tightening visible instead of silent.
+      it "still accepts a string outside ISO 4217, canonicalised — the domain is K-1252, not this guard" do
         odd = intent_payload.merge(currency: "Euro")
-        expect { described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
+        m = nil
+        expect { m = described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
           .not_to raise_error
+        expect(m.currency).to eq("euro")
+      end
+    end
+
+    # ── Case and whitespace are NOT identity (K-1251) ────────────────────
+    #
+    # THE DEFECT THIS BLOCK PINS. The spending-cap tally of §11.5 is keyed on
+    # the currency string, so before the boundary canonicalised it an assistant
+    # that alternated `"eur"` and `"EUR"` between chains got a FRESH cap for
+    # each spelling — the cap the operator published was not the cap it
+    # enforced. Both spellings are live in this repository, so the input was
+    # never hypothetical. The domain stays open (T-153); what closed is the
+    # question of whether two spellings of ONE code are one currency.
+    describe "currency is canonicalised at the boundary (K-1251)" do
+      it "downcases an intent currency" do
+        m = described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: "EUR")),
+                                          identity: identity)
+        expect(m.currency).to eq("eur")
+      end
+
+      it "strips surrounding whitespace off an intent currency" do
+        m = described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: "  eur ")),
+                                          identity: identity)
+        expect(m.currency).to eq("eur")
+      end
+
+      it "canonicalises a cart currency" do
+        c = described_class.verify_cart(raw_jws: sign(cart_payload.merge(currency: "EUR")),
+                                        identity: identity, intent: intent)
+        expect(c.currency).to eq("eur")
+      end
+
+      it "canonicalises a payment currency" do
+        p = described_class.verify_payment(raw_jws: sign(payment_payload.merge(currency: "EUR")),
+                                           identity: identity, cart: cart_mandate)
+        expect(p.currency).to eq("eur")
+      end
+
+      # The §11.2 comparisons run on the canonical values, so a chain that
+      # spells one code two ways is ONE currency rather than a 403. The spec
+      # leaves case-sensitivity to the operator (§11.1); this is the operator's
+      # rule, taken here so the comparison and the tally key agree.
+      it "accepts an EUR cart under an eur intent (one currency, not a mismatch)" do
+        upper_intent = described_class.verify_intent(
+          raw_jws: sign(intent_payload.merge(currency: "EUR")), identity: identity,
+        )
+        expect {
+          described_class.verify_cart(raw_jws: sign(cart_payload), identity: identity,
+                                      intent: upper_intent)
+        }.not_to raise_error
+      end
+
+      it "accepts an EUR payment against an eur cart" do
+        expect {
+          described_class.verify_payment(raw_jws: sign(payment_payload.merge(currency: "EUR")),
+                                         identity: identity, cart: cart_mandate)
+        }.not_to raise_error
+      end
+
+      # The positive control the two examples above need: folding CASE must not
+      # fold two genuinely different codes together. K-551's cross-currency
+      # guard still holds.
+      it "still rejects a usd cart under an eur intent cap" do
+        usd = cart_payload.merge(currency: "usd")
+        expect { described_class.verify_cart(raw_jws: sign(usd), identity: identity, intent: intent) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+      end
+
+      it "still rejects a USD payment against an eur cart" do
+        usd = payment_payload.merge(currency: "USD")
+        expect {
+          described_class.verify_payment(raw_jws: sign(usd), identity: identity, cart: cart_mandate)
+        }.to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
       end
     end
 

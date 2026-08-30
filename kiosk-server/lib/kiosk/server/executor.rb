@@ -675,7 +675,9 @@ module Kiosk
         window_days = Kiosk.configuration.spending_cap_window_days
         # K-551: scope the tally to the cart's currency — summing cents across
         # currencies is meaningless (4999 USD is not within a 5000 EUR cap) and
-        # a cross-currency sum could erode the cap.
+        # a cross-currency sum could erode the cap. K-1251: the SCOPE is the
+        # currency, not the spelling of it — `settled_total_cents` canonicalises
+        # both the value it is handed and the column it reads.
         spent = settled_total_cents(agent_id: identity.agent_id, window_days: window_days,
                                     currency: cart.currency)
         return if spent + cart.total_amount_cents.to_i <= cap.to_i
@@ -692,9 +694,29 @@ module Kiosk
       # under the open SessionContext. Scoping by currency keeps the tally
       # comparable to a same-currency cap (K-551) — cents are not fungible across
       # currencies. Returns cents (0 when the agent has settled nothing).
+      #
+      # K-551 SCOPED THE SUM BY THE CURRENCY STRING, AND A STRING IS NOT A
+      # CURRENCY (K-1251). `settlements.currency` is written from the cart
+      # mandate, which the ASSISTANT signs, so byte equality made `"eur"` and
+      # `"EUR"` two tallies for one currency: alternate the spelling between
+      # chains and the cap is collected twice. §11.5 obliges the operator to
+      # refuse a `pay` that would push the settled TOTAL past the cap, and a
+      # split tally is not the total.
+      #
+      # BOTH SIDES ARE FOLDED, and the two folds are not redundant. The BIND is
+      # folded because a caller may hand over a cart the verifier never
+      # canonicalised. The COLUMN is folded for rows written BEFORE
+      # `MandateVerifier#require_currency!` began canonicalising its input —
+      # those are already on disk in whatever case they arrived in, and no
+      # boundary can reach back for them. New rows are canonical by
+      # construction, so the column fold is a legacy accommodation rather than
+      # the mechanism; it is deliberately NOT the place the invariant lives.
+      # It costs nothing in plan terms either: `settlements` carries indexes on
+      # `user_id` and `cart_mandate_id` only, so this predicate was never
+      # index-served.
       def settled_total_cents(agent_id:, window_days:, currency:)
         schema = Kiosk.configuration.schema
-        binds  = [agent_id, currency]
+        binds  = [agent_id, MandateVerifier.canonical_currency(currency)]
         # The window is a STATEMENT SHAPE, not a value: with no window there is
         # no predicate at all, so that stays a branch on the SQL text. The
         # number of days is a third BIND (`make_interval(days => $3)` rather
@@ -708,7 +730,7 @@ module Kiosk
         sql = <<~SQL
           SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
           FROM #{schema}.settlements
-          WHERE agent_id = $1 AND currency = $2 #{window}
+          WHERE agent_id = $1 AND lower(btrim(currency)) = $2 #{window}
         SQL
         connection.exec_query(sql, "Kiosk settled total", binds).to_a.first.fetch("total").to_i
       end

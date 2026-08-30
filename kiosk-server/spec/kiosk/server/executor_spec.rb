@@ -967,7 +967,9 @@ RSpec.describe Kiosk::Server::Executor do
         sql, name, binds = last_statement
 
         expect(name).to eq("Kiosk settled total")
-        expect(sql).to  include("WHERE agent_id = $1 AND currency = $2")
+        # K-1251: the predicate folds the COLUMN, for settlement rows written
+        # before the mandate boundary canonicalised what fills it.
+        expect(sql).to  include("WHERE agent_id = $1 AND lower(btrim(currency)) = $2")
         expect(sql).not_to include("settled_at")
         expect(binds).to eq(["a-1", "eur"])
       end
@@ -982,6 +984,15 @@ RSpec.describe Kiosk::Server::Executor do
         expect(sql).to include("AND settled_at >= now() - make_interval(days => $3)")
         expect(sql).not_to include("7")
         expect(binds).to eq(["a-1", "eur", 7])
+      end
+
+      # K-1251: the BIND is folded too, so a caller that hands over a cart the
+      # verifier never canonicalised still reads the same tally.
+      it "canonicalises the currency it binds" do
+        executor.send(:settled_total_cents, agent_id: "a-1", window_days: nil, currency: " EUR ")
+        _sql, _name, binds = last_statement
+
+        expect(binds).to eq(["a-1", "eur"])
       end
     end
   end

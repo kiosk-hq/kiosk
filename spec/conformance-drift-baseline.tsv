@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-30 at e856f664
-# 1608 anchors.
+# recorded: 2026-08-30 at 32999c70
+# 1615 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -1041,11 +1041,12 @@ kiosk-server/lib/kiosk/server/executor.rb	3c5e73f6645586cf	        raise Errors:
 kiosk-server/lib/kiosk/server/executor.rb	368fca4ec88eee36	      # Kiosk::Event type is gone, and the stub only ever raised a raw
 kiosk-server/lib/kiosk/server/executor.rb	e9a81c5aa9758799	      # `events` was removed long before: it was never a capability, the
 kiosk-server/lib/kiosk/server/executor.rb	7c224f50bece7db5	      VERBS = %i[query run pay].freeze
-kiosk-server/lib/kiosk/server/executor.rb	94d1750ad1f3b84a	      def enforce_spending_cap!(cart)
+kiosk-server/lib/kiosk/server/executor.rb	63c64d64e09cb831	      def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	30651b2675cbe5e2	THERE USED TO BE A SECOND CONSTANT, `POLICY_VERBS`, which was this list
 kiosk-server/lib/kiosk/server/executor.rb	7c224f50bece7db5	VERBS = %i[query run pay].freeze
+kiosk-server/lib/kiosk/server/executor.rb	3da93fa4385ec1dd	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
 kiosk-server/lib/kiosk/server/executor.rb	42ac42af07b19b9d	`GET <endpoint>/schema` public — it resolves no identity, and an
-kiosk-server/lib/kiosk/server/executor.rb	94d1750ad1f3b84a	def enforce_spending_cap!(cart)
+kiosk-server/lib/kiosk/server/executor.rb	63c64d64e09cb831	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	7650144dd2d52240	RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	8300e07d877e59d3	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	1748afe12d8ea210	      def mark_kyc_verified!(agent_id, attributes: {})
@@ -1067,6 +1068,7 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	661d34d5d2e3d0f4	        retur
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	371aa40a3c86f179	      MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	c50ed2b2ac58cd4a	    #   * All of `id, user_id, agent_id, iss, iat, exp` are REQUIRED (presence
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	2fa45caabfd7a24b	    # must reference the presented intent and stay within its cap.
+kiosk-server/lib/kiosk/server/mandate_verifier.rb	360cda9509150627	@return [String] the canonical currency — trimmed and lower-cased
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	dbaa26e3ec32b2f6	carry is not authorisation, and the assistant learns the same way for
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	de8fd258eb96920a	mandate currency must be a non-empty string
 kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	7703aaed802e10cc	client_id parameter required
@@ -1275,6 +1277,10 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	e21e6b08ebc0127e	names every code 
 kiosk-server/spec/kiosk/server/errors_spec.rb	3b5258bf940350e2	never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)
 kiosk-server/spec/kiosk/server/errors_spec.rb	321654d7f8414eae	refuses a code outside the closed vocabulary
 kiosk-server/spec/kiosk/server/errors_spec.rb	55dec33aa6fe8705	refuses to exist without one — a 405 with no Allow is not a 405
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	3131d0a11c82e8c4	hits ONE cap across both spellings
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	61a93b7bfe60bb22	is currency-scoped (K-551): a different currency tallies zero
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	187227feb9ef56d0	spelling is not identity (K-1251)
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	28a63cfee6c1f80c	still keeps usd out of the eur tally
 kiosk-server/spec/kiosk/server/executor_spec.rb	8a4d1c373d0beafc	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
 kiosk-server/spec/kiosk/server/executor_spec.rb	1a523de85363be70	charges once and replays the ORIGINAL settlement the second time (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	9eacd4592d123f25	does not answer a settled replay with an error at all (K-850)
@@ -1288,6 +1294,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	1655208c7741a4a1	raises PaymentS
 kiosk-server/spec/kiosk/server/executor_spec.rb	0a72bf352aa17998	raises Unauthenticated when identity is nil
 kiosk-server/spec/kiosk/server/executor_spec.rb	7142d5a0a148e49b	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
 kiosk-server/spec/kiosk/server/executor_spec.rb	75193d64e9bc3e9b	refuses a settled cart id re-presented with different bytes (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	ddce8a4d949d725e	scopes the settled-total tally to the cart's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	4bdaf061f6c90a2c	still answers 409 conflict when the re-presented chain never settled
 kiosk-server/spec/kiosk/server/executor_spec.rb	91c8be7d6eb1c048	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	abba5ffaa11481ff	verifies the trail, captures, and returns the full settlement payload
@@ -1405,7 +1412,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	85c9a7fe2f174b50	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2d12783b72e256a3	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	43b10ecec11237ba	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09d46de3c18d0835	returns an IntentMandate for a valid agent-signed JWS
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8aefd3fbe25e0ad6	still accepts a string outside ISO 4217 — the domain is T-153, not this guard
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b081609a334a1ec0	still accepts a string outside ISO 4217, canonicalised — the domain is K-1252, not this guard
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	b5211118a4a7bdba	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	2b703368c1a3da30	refuses an undeclared role the same way — the value is never consulted
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	1f1371db4a8a1cd5	refuses the OAuth-standard `scope` spelling too

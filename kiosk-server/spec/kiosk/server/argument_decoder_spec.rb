@@ -170,6 +170,33 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
         .to include("min_stars")
     end
 
+    # §8.1 item 8 — THE QUERY HALF OF A PUBLISHED ASYMMETRY (K-1029), and the
+    # case `4.5` above does NOT cover: `4.5` is not an integer under any
+    # reading, so it would be refused even by a decoder that took the loose
+    # one. `2.0` is the value the two halves of the wire genuinely disagree
+    # about — draft 2020-12 defines `integer` by VALUE, so a JSON body's
+    # `{"party_size": 2.0}` IS a valid integer and an action takes it, while a
+    # query string is TEXT and the declared type is the grammar its spelling
+    # must match. Phil decided 2026-08-30 that this strictness is right and
+    # that a field which may legitimately be fractional must DECLARE itself
+    # `number` instead. Both halves are pinned so neither can drift back into
+    # the other: the body half is kiosk-demo-atablefor's
+    # `WHOLE-VALUED FLOAT BODY` probe in `script/redteam_suite.rb`.
+    it "refuses a WHOLE-VALUED float where an integer is declared — 2.0 is not an integer LITERAL" do
+      e = refusal("party_size=2.0", schema(party_size: { type: "integer" }))
+      expect(e.message).to include("party_size")
+      expect(e.http_status).to eq(400)
+      expect(e.code).to eq("bad_request")
+      expect(e.hint).to include("a JSON integer literal")
+    end
+
+    it "refuses the same whole-valued float spelling on a RESERVED integer name — limit=20.0" do
+      # `limit` is coerced from the reserved default (§8.1 item 6), not from a
+      # declaration, so it reaches `to_integer` by a different route and is
+      # worth its own pin: a loosened decoder would open both at once.
+      expect(refusal("limit=20.0", schema({})).message).to include("limit")
+    end
+
     it "refuses a non-number where a number is declared" do
       expect(refusal("rate=cheap", schema(rate: { type: "number" })).message).to include("rate")
     end

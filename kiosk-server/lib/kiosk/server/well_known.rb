@@ -505,10 +505,16 @@ module Kiosk
             and names the same fact. Some codes add members of their own, such
             as the `challenges` array on a `402 pow_required`.
           - The claim ceremony's OAuth endpoints use the OAuth error shape
-            `{ error, error_description }` with the RFC 8628 vocabulary:
-            `authorization_pending`, `slow_down`, `expired_token`,
-            `access_denied`, `invalid_grant`, `invalid_client` — a
-            documented exception, and the only one.
+            `{ error, error_description }` — a documented exception, and the
+            only one. The vocabulary is closed at eight. Six describe the
+            ceremony (RFC 8628 §3.5): `authorization_pending`, `slow_down`,
+            `expired_token`, `access_denied`, `invalid_grant`,
+            `invalid_client`. Two are request-level (RFC 6749 §5.2):
+            `invalid_request` — a required parameter absent or malformed, or
+            one the request must not carry, such as a `role`/`scope` on the
+            device-authorization call — and `unsupported_grant_type` for any
+            grant but the device-code one. Everything answers `400` except
+            `invalid_client`, which answers `401`.
 
           ## Revocation
 

@@ -480,9 +480,17 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to include("https://api.acme.example/kiosk/auth/unlink")
     end
 
+    # K-1248: the vocabulary is EIGHT, not six. This document recited the six
+    # RFC 8628 polling codes while the engine's own controllers also emit
+    # `invalid_request` (four call sites) and `unsupported_grant_type` — and spec
+    # §6.1 step 1 REQUIRES the first of those for a `role`/`scope` parameter, so
+    # the short list contradicted the section it was copied from. An assistant
+    # reading this file to learn how a refusal is shaped has a branch it cannot
+    # take if the list is short, which is the same defect a soft enum would be.
     it "documents the OAuth error vocabulary as the one exception" do
       %w[authorization_pending slow_down expired_token access_denied
-         invalid_grant invalid_client].each do |code|
+         invalid_grant invalid_client invalid_request
+         unsupported_grant_type].each do |code|
         expect(body).to include(code)
       end
     end

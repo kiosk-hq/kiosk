@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1615 anchors.
+# 1618 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -327,6 +327,7 @@ kiosk-demo-atablefor/script/pow_flow.rb	abort "expected bad_proof_count >= 1 for
 kiosk-demo-atablefor/script/pow_flow.rb	rc_challenge, resp_challenge = availability_once
 kiosk-demo-atablefor/script/pow_flow.rb	rc_served, resp_served = availability_once(proofs)
 kiosk-demo-atablefor/script/pow_flow.rb	rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad_nonce }])
+kiosk-demo-atablefor/script/redteam_suite.rb	record(results, "WholeValuedFloatBody",
 kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected no challenge (n2=nil) after 2 bookings — principal must be proven. Got n2=#{n2}"
 kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected proof count to drop after a booking: n1=#{n1} not < n0=#{n0}" unless n1 < n0
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
@@ -1179,8 +1180,10 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	keeps Rack's last-wins f
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	keeps cursor an opaque string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	names the ACTION remedy in the hint rather than only refusing
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	recovers an integer
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a WHOLE-VALUED float where an integer is declared — 2.0 is not an integer LITERAL
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a name used as both scalar and array in one query string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses an EMPTY value where a scalar type is declared
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses the same whole-valued float spelling on a RESERVED integer name — limit=20.0
 kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	mints a nonce and records it with a TTL, consumable exactly once
 kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	raises Unauthenticated on replay (single-use)
 kiosk-server/spec/kiosk/server/auth_challenge_store_spec.rb	consumes a live, matching challenge exactly once (single-use)

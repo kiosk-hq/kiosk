@@ -403,7 +403,25 @@ jobs:
             # Watched fail: restore the pre-guard coercion (`Integer(raw.to_s
             # .strip, 10)` → `raw.to_s.to_i`) and drop the `max:` arm — 15
             # assertions go red and the task exits 1.
-            tasks: demo:wire_args_spec demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse
+            # demo:spending_cap is the ONLY thing in the fleet that exercises
+            # `config.spending_cap` at all (T-154). The seam was configured
+            # NOWHERE until this task — `Executor#enforce_spending_cap!` returns
+            # at its first line without it — so the K-1251 fix, a cap an
+            # assistant could defeat by alternating the capitalisation of its
+            # currency, had a gem suite behind it and nothing that boots. hoteling
+            # hosts it because it is one of the three origins that can settle and
+            # the only one of those whose PSP is an in-process stub, so the task
+            # needs no stripe-mock: one register toll, two reserves, three /pay,
+            # ~9 s including its own reseed.
+            # Watched fail: plant the pre-K-1251 currency handling (the verifier
+            # returns the raw string, the tally binds it byte-equal) and the
+            # over-cap "EUR" charge SETTLES — http_pay_over_cap goes 403 → 200,
+            # kiosk.settlements holds "EUR" beside "eur", exit 1. Or, the plant
+            # the row itself names: raise the seeded cap above the charge and the
+            # same assertion goes red with the cap-arithmetic control beside it.
+            # It goes with demo:search and demo:browse at the end: `task
+            # spending_cap: :setup` reseeds.
+            tasks: demo:wire_args_spec demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse demo:spending_cap
             # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
             # single Kiosk-PoW header, which is the multi-proof half of the
             # retry that getgrocery's flat one-proof toll never reaches.

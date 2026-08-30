@@ -209,6 +209,26 @@ Kiosk.configure do |c|
   # USE time (confirm_booking Gate-1), not here.
   c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
 
+  # ── Per-assistant spending cap (T-154) ───────────────────────────────────
+  # The batteries-included seam: read the cap from `kiosk.agents
+  # .spending_cap_cents`, the nullable column every demo's identity migration
+  # already declares. Null means uncapped, so this line changes nothing for any
+  # assistant nobody has capped — including every one the other tasks in this
+  # demo register — and `demo:spending_cap` is where a cap is actually written
+  # and the control actually bites.
+  #
+  # IT IS HERE RATHER THAN NOWHERE BECAUSE «NOWHERE» WAS THE STATE OF THE WHOLE
+  # FLEET, AND THAT COST SOMETHING. `Executor#enforce_spending_cap!` returns at
+  # its first line when this is unset, so until this line existed no demo and
+  # no e2e origin exercised the control at all — which is precisely what let
+  # K-1251 sit unseen: a cap the assistant could defeat by alternating the
+  # capitalisation of its currency, live for any operator who configured the
+  # seam and for nobody here. hoteling is the host because it is one of the
+  # three origins that can actually settle (kiosk-demo-stylish reasons its way
+  # to the opposite conclusion for the opposite reason — it configures no
+  # `payment_provider`, so a `pay` there is refused before a cart exists).
+  c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
+
   # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
   if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
     c.reputation_policy = HotelingBrowsePolicy.new(EQUIHASH_BROWSE_PARAMS)

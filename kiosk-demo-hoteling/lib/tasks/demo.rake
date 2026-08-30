@@ -11,6 +11,9 @@
 #   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
 #                        booking chain), asserts happy path + negative gate, then runs
 #                        script/pay_window.rb in-process (K-853 capture-anchored paid state)
+#   rake demo:spending_cap the per-assistant spending cap: a spend under it settles,
+#                        one that would cross it is 403 spending_cap_exceeded, and two
+#                        spellings of one currency hit ONE cap (T-154, K-1251)
 #   rake demo:isolation  adversarial cross-tenant isolation test
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam)
 #   rake demo:schema     self-discovery proof — verifies the schema verb over HTTP
@@ -337,6 +340,173 @@ namespace :demo do
     puts "\n── Assertions ──"
     if failures.empty?
       puts "  All assertions passed."
+    else
+      puts "  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+end
+
+namespace :demo do
+  # ── demo:spending_cap ───────────────────────────────────────────────────────
+  desc <<~DESC
+    The per-assistant spending cap, and the one property that makes it a cap
+    rather than a suggestion (T-154, from K-1251).
+
+    Boots hoteling, registers ONE assistant through the real Equihash toll,
+    reserves two stays so the operator has QUOTED both totals, writes a cap ONE
+    CENT below their sum into `kiosk.agents.spending_cap_cents` — the column
+    `Kiosk::Server::ColumnSpendingCap` reads and the manage-assistants page
+    writes — and then drives four assertions:
+
+      SETTLES   the first stay, spelled "eur", is under the cap
+      REFUSED   the second, spelled "EUR", would cross it: 403
+                spending_cap_exceeded, with NO settlement row written
+      FOLDED    that refusal IS the K-1251 regression detector. A byte-scoped
+                tally sees an empty history for "EUR" and lets the charge
+                through; only a tally that folds the spelling counts it against
+                the same cap
+      CONTROL   raise the cap by one cent and the SAME "EUR" chain settles, so
+                the refusal cannot be read as "this operator rejects EUR" — and
+                both settlement rows are stored canonical, lower-case
+
+    Until this task existed the control was configured NOWHERE in the fleet:
+    `Executor#enforce_spending_cap!` returns at its first line without
+    `config.spending_cap`, so the fix for K-1251 had a gem suite behind it and
+    nothing that boots. Exits 1 on any assertion.
+  DESC
+  task spending_cap: :setup do
+    require "resolv"
+    require "net/http"
+    require "uri"
+    require "json"
+    require "shellwords"
+
+    port = ENV.fetch("PORT", "3003")
+    log  = "/tmp/kiosk-hoteling-spending-cap.log"
+    db   = "kiosk_hoteling_development"
+
+    host = begin
+      addr = begin
+        Resolv.getaddress("hoteling.demo.kiosk.tech")
+      rescue Resolv::ResolvError
+        ""
+      end
+      addr == "127.0.0.1" ? "hoteling.demo.kiosk.tech" : "127.0.0.1"
+    end
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+    flow_rb      = File.expand_path("../../script/spending_cap_flow.rb", __dir__)
+    failures     = []
+
+    puts "\n── Starting hoteling (spending cap) on #{server_url} ──"
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    begin
+      ready = false
+      40.times do
+        begin
+          res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+          if res.code.to_i == 200
+            ready = true
+            break
+          end
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
+
+      env_str = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+                "HOTELING_DB=#{db.shellescape}"
+      result  = hoteling_run_flow(flow_rb, env_str)
+
+      check = lambda do |label, actual, expected|
+        if actual == expected
+          puts "  OK  #{label} == #{expected.inspect}"
+        else
+          failures << "#{label} expected #{expected.inspect}, got #{actual.inspect}"
+          puts "  FAIL  #{label} expected #{expected.inspect}, got #{actual.inspect}"
+        end
+      end
+
+      check.call("http_register", result["http_register"], 201)
+
+      # The cap is derived from the operator's own two quotes, so assert the
+      # arithmetic the whole beat rests on rather than trusting the driver: the
+      # first stay must fit under the cap and the two together must not. A seed
+      # change that made either false would leave every assertion below green
+      # while proving nothing.
+      t1  = result["first_total_cents"].to_i
+      t2  = result["second_total_cents"].to_i
+      cap = result["cap_cents"].to_i
+      if t1.positive? && t2.positive? && t1 <= cap && (t1 + t2) > cap
+        puts "  OK  the cap is a real boundary: #{t1} fits under #{cap}, #{t1}+#{t2} does not"
+      else
+        failures << "cap arithmetic: t1=#{t1} t2=#{t2} cap=#{cap} — the beat below proves nothing"
+        puts "  FAIL  cap arithmetic t1=#{t1} t2=#{t2} cap=#{cap}"
+      end
+
+      check.call("http_pay_under_cap", result["http_pay_under_cap"], 200)
+
+      # THE ROW THIS TASK EXISTS FOR. 403 and the published code, not merely a
+      # refusal: an assistant branches on `code`, and any other 4xx here would
+      # mean the charge was stopped by something that is not the cap.
+      check.call("http_pay_over_cap", result["http_pay_over_cap"], 403)
+      check.call("pay_over_cap_code", result["pay_over_cap_code"], "spending_cap_exceeded")
+
+      # And the SAME chain settles once the cap allows it — so the refusal was
+      # the cap and not the spelling.
+      check.call("http_pay_after_raise", result["http_pay_after_raise"], 200)
+
+      # ── psql ground truth ──────────────────────────────────────────────
+      #
+      # Anchored to THIS run's principal, the way demo:book's are (K-862): the
+      # driver registers a fresh agent every run, so a DB-wide count would pass
+      # on a previous run's rows.
+      user_id = result["user_id"]
+      settled = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.settlements WHERE user_id = '#{user_id}'" 2>&1`.strip
+      check.call("kiosk.settlements rows for this run's principal", settled.to_i, 2)
+
+      # The refusal wrote NOTHING — the cap is checked inside phase 1, before
+      # any mandate row is persisted and before the irreversible capture. Two
+      # settlements above and two cart mandates here: a third cart mandate
+      # would mean the refused chain got as far as being written down.
+      carts = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.cart_mandates WHERE user_id = '#{user_id}'" 2>&1`.strip
+      check.call("kiosk.cart_mandates rows for this run's principal", carts.to_i, 2)
+
+      # THE BOUNDARY HALF OF K-1251, on disk: one chain was signed "eur" and the
+      # other "EUR", and both rows must read the canonical spelling. This is
+      # what makes the tally's fold a legacy accommodation rather than the
+      # mechanism — new rows are canonical by construction.
+      currencies = `psql -X -d #{db} -tAc "SELECT DISTINCT currency FROM kiosk.settlements WHERE user_id = '#{user_id}' ORDER BY 1" 2>&1`.strip
+      check.call("kiosk.settlements currencies for this run's principal", currencies, "eur")
+
+      # The same fact as the assistant sees it: the `pay` answer echoes the
+      # canonical value, so a sender that wrote "EUR" is answered "eur" (K-1257).
+      check.call("the pay answer's currency after an \"EUR\" chain",
+                 result["pay_after_raise_currency"], "eur")
+    ensure
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    puts "\n── Assertions ──"
+    if failures.empty?
+      puts "  All spending-cap assertions passed."
     else
       puts "  FAILED assertions:"
       failures.each { |f| puts "    - #{f}" }

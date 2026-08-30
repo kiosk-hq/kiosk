@@ -76,6 +76,7 @@ bin/rails demo:isolation   # cross-tenant denial (a booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery over the schema verb
 bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
+bin/rails demo:spending_cap # the per-assistant spending cap: a stay under it settles, one that would cross it is `403 spending_cap_exceeded` with nothing written — and the two are spelled "eur" and "EUR" on purpose, because two spellings of one ISO 4217 code are ONE tally (K-1251). The operator's cap is written into `kiosk.agents.spending_cap_cents`, the column `ColumnSpendingCap` reads
 ```
 
 **Every task above that touches the database reseeds first.** Each of them except
@@ -108,6 +109,7 @@ assertions cannot go ungated and unexplained.
 | `demo:wire_args_spec` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:book` | yes |  |
+| `demo:spending_cap` | yes |  |
 | `demo:isolation` | yes |  |
 | `demo:redteam` | yes |  |
 | `demo:schema` | yes |  |

@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1625 anchors.
+# 1627 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -460,6 +460,7 @@ kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
+kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/lib/tasks/demo.rake	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task book: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task isolation: :setup do
@@ -477,6 +478,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	…and the refusal NAMES THE VALID VALUE
 kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the impossible price returns
 kiosk-demo-hoteling/script/pay_window.rb	RoomHold.where(user_id: USER_ID).delete_all
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
+kiosk-demo-hoteling/script/spending_cap_flow.rb	makes it a cap rather than a suggestion
 kiosk-demo-philslist/README.md	# philslist — Kiosk reference demo (NON-COMMERCE)
 kiosk-demo-philslist/README.md	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-philslist/README.md	**not only for commerce**: it exercises the full query + action + `schema` +

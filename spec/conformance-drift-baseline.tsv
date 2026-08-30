@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at 26b10fc4
-# 1618 anchors.
+# recorded: 2026-08-31 at 9bcfd5d1 (working tree: 1 cited file(s) modified)
+# 1622 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -1284,6 +1284,9 @@ kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	3131d0a11c82e8c4	hit
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	61a93b7bfe60bb22	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	187227feb9ef56d0	spelling is not identity (K-1251)
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	28a63cfee6c1f80c	still keeps usd out of the eur tally
+kiosk-server/spec/kiosk/server/executor_spec.rb	23e7c8e0af2f0193	answers `eur` to a chain already signed `eur`, which is the only case where the bytes match
+kiosk-server/spec/kiosk/server/executor_spec.rb	2df559f5aa57a699	answers `eur` to a chain signed `  EUR ` throughout
+kiosk-server/spec/kiosk/server/executor_spec.rb	05f39ad64501e6c9	answers `eur` to a chain signed `EUR` throughout
 kiosk-server/spec/kiosk/server/executor_spec.rb	8a4d1c373d0beafc	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
 kiosk-server/spec/kiosk/server/executor_spec.rb	1a523de85363be70	charges once and replays the ORIGINAL settlement the second time (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	9eacd4592d123f25	does not answer a settled replay with an error at all (K-850)
@@ -1379,6 +1382,7 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	2b50d6cdf330dcdb	raises Unauthe
 kiosk-server/spec/kiosk/server/link_code_spec.rb	08ab6fcb63af8d2a	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	40e8f7ef465e3bc2	refuses to redeem a claim-flow device_code (kinds do not cross)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d17f24b1e78838e4	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c5068505002643b9	canonicalises a cart currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09b95f53bbe50180	describe "non-positive amounts" do
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a6d3377919a11606	rejects (403, not 500) when the agent has no registered payment key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa7e23ecc2013a0	rejects a JWS signed by an unknown key

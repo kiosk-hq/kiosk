@@ -996,4 +996,74 @@ RSpec.describe Kiosk::Server::Executor do
       end
     end
   end
+
+# ── §11.3: the currency `pay` ANSWERS with is the OPERATOR's (K-1257) ────
+#
+# WHY THIS IS ITS OWN BLOCK RATHER THAN AN EXAMPLE IN `verb :pay` ABOVE.
+# That block stubs `MandateVerifier.verify_*`, so the object the executor
+# echoes is one the spec handed it, already lower-cased. Composing "the
+# verifier folds" (mandate_verifier_spec) with "the executor echoes
+# `cart.currency`" (above) is an INFERENCE about two files, and the sentence
+# §11.3 now states normatively is about the byte a third party reads off the
+# wire. So this runs the REAL verifier on a really-signed chain and looks at
+# the answer.
+describe "the currency a `pay` answers with (§11.3, K-1257)" do
+  let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
+  let(:issuer)     { "https://demo.example" }
+  let(:identity)   { build_identity(agent_id: "agent-1", user_id: "u-1") }
+  let(:future)     { (Time.now + 600).to_i }
+  let(:connection) { FakeConnection.new }
+
+  before do
+    Kiosk.reset!
+    Kiosk.configure { |c| c.issuer = issuer }
+    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+      .to receive(:agent_payment_key).with("agent-1").and_return(agent_key.public_key)
+    allow(Kiosk::Server::SessionContext).to receive(:open) { |**_kw, &blk| blk.call }
+    allow_any_instance_of(described_class).to receive(:persist_intent_mandate).and_return("intent-row")
+    allow_any_instance_of(described_class).to receive(:persist_cart_mandate).and_return("cart-row")
+    allow_any_instance_of(described_class).to receive(:persist_payment_mandate).and_return("pay-row")
+    allow_any_instance_of(described_class).to receive(:persist_settlement).and_return("s-1")
+    allow_any_instance_of(described_class).to receive(:settled_replay).and_return(nil)
+    Kiosk.configuration.payment_provider = instance_double(
+      "PSP",
+      capture: { psp_reference: "pi_1", settled_amount_cents: 1599, settled_at: Time.now },
+      setup_required?: false,
+    )
+  end
+
+  def sign(payload) = JWT.encode(payload, agent_key, "RS256")
+
+  def chain(currency)
+    base = { iss: issuer, agent_id: "agent-1", user_id: "u-1", exp: future, iat: Time.now.to_i }
+    { intent_mandate_jws: sign(base.merge(id: "intent-1", scope: "groceries",
+                                          cap_amount_cents: 5000, currency: currency)),
+      cart_mandate_jws: sign(base.merge(id: "cart-1", intent_mandate_id: "intent-1",
+                                        line_items: [{ sku: "pizza", qty: 1 }],
+                                        total_amount_cents: 1599, currency: currency)),
+      payment_mandate_jws: sign(base.merge(id: "pay-1", cart_mandate_id: "cart-1",
+                                           payment_method: "pm_card_visa",
+                                           amount_cents: 1599, currency: currency)) }
+  end
+
+  def answered(currency)
+    described_class.call(kind: :pay, args: chain(currency),
+                         identity: identity, connection: connection).payload[:currency]
+  end
+
+  it "answers `eur` to a chain signed `EUR` throughout" do
+    expect(answered("EUR")).to eq("eur")
+  end
+
+  it "answers `eur` to a chain signed `  EUR ` throughout" do
+    expect(answered("  EUR ")).to eq("eur")
+  end
+
+  # The already-canonical case is here so the two above cannot be read as
+  # "the answer is always eur because the fixture says eur": this one is the
+  # control, and it is the only one where the answer equals the input bytes.
+  it "answers `eur` to a chain already signed `eur`, which is the only case where the bytes match" do
+    expect(answered("eur")).to eq("eur")
+  end
+end
 end

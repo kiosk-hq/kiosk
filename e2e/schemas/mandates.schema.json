@@ -67,7 +67,7 @@
         "settlement_id": { "type": "string" },
         "psp_reference": { "type": "string" },
         "settled_amount_cents": { "type": "integer", "minimum": 1, "description": "The captured amount; equals the cart total. MUST be positive: a settlement exists only for a completed capture, and every mandate amount is already positive." },
-        "currency": { "type": "string", "minLength": 1, "description": "The currency of the capture; echoes the cart's." }
+        "currency": { "type": "string", "minLength": 1, "description": "The currency of the capture: the cart's currency in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling the assistant signed (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." }
       }
     }
   }

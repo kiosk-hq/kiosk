@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1618 anchors.
+# 1622 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1282,6 +1282,9 @@ kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	hits ONE cap across 
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spelling is not identity (K-1251)
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	still keeps usd out of the eur tally
+kiosk-server/spec/kiosk/server/executor_spec.rb	answers `eur` to a chain already signed `eur`, which is the only case where the bytes match
+kiosk-server/spec/kiosk/server/executor_spec.rb	answers `eur` to a chain signed `  EUR ` throughout
+kiosk-server/spec/kiosk/server/executor_spec.rb	answers `eur` to a chain signed `EUR` throughout
 kiosk-server/spec/kiosk/server/executor_spec.rb	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
 kiosk-server/spec/kiosk/server/executor_spec.rb	charges once and replays the ORIGINAL settlement the second time (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	does not answer a settled replay with an error at all (K-850)
@@ -1377,6 +1380,7 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on a fai
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses to redeem a claim-flow device_code (kinds do not cross)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	canonicalises a cart currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	describe "non-positive amounts" do
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects (403, not 500) when the agent has no registered payment key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a JWS signed by an unknown key

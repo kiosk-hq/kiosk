@@ -16,8 +16,9 @@
 # WHAT IT DOES. It is handed the bytes the e2e assistant has already made this
 # origin produce — the discovery document, the catalog, four problem documents
 # across four codes (one of them carrying live PoW challenges), the pay request
-# and the settlement it answered — and validates each against the PUBLISHED
-# schema for it, under draft 2020-12.
+# and the settlement it answered, and every wire object of Sections 5 and 6
+# (T-152) — and validates each against the PUBLISHED schema for it, under draft
+# 2020-12.
 #
 # THE SCHEMAS ARE VENDORED, and that was a fork in the road: they live in the
 # kiosk.tech repo and this harness lives here, so joining them needs either a
@@ -396,6 +397,186 @@ begin
   ok "kyc.schema.json compiles (no live KYC bytes on this origin — see the demos)"
 rescue StandardError => e
   bad "kyc.schema.json compiles", e.message
+end
+
+# ── 8. §5 and §6 — the auth and binding planes (T-152) ──────────────────────
+#
+# auth.schema.json and binding.schema.json shipped with T-149 and were vendored
+# beside the other six the same day, so this file LOADED and COMPILED them from
+# the moment they existed — and validated nothing against them. That is K-822's
+# own defect one layer on: the pair of artefacts sat in the same process and
+# never met. `fixtures/auth_wire_capture.rb` runs both ceremonies against this
+# still-booted origin and writes down what went over the wire, request bodies
+# included; every one of the THIRTEEN `$defs` those two documents publish is
+# validated below against the bytes this origin produced for it, each paired
+# with a mutated copy the same schema must refuse.
+#
+# WHAT IS NOT HERE, and it is not an omission: the two /oauth/* REQUESTS are
+# form-encoded rather than JSON, so no JSON Schema is their oracle and none
+# exists to run (T-149, K-1248; binding.schema.json's own description and §17
+# both say so). The driver still sends them — that is how the answers below
+# come to exist — but there is nothing to validate them against. `unlink`'s
+# 204 is the other one: §6.3 gives it no body at all, which is asserted here as
+# a length rather than as a schema.
+auth_capture = ENV["AUTH_CAPTURE"]
+if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
+  auth = JSON.parse(File.read(auth_capture))
+  A = "#{B}/auth.schema.json"
+  BI = "#{B}/binding.schema.json"
+
+  # §5.1 — the challenge this origin issued for a real key.
+  conforms("GET /auth/challenge", A, auth.fetch("challenge"),
+           pointer: "#/$defs/challenge") do |doc|
+    doc.delete("exp")  # required: a challenge with no expiry is not short-lived
+    doc
+  end
+
+  # §5.2 — the payload of the `signed` JWS this origin ACCEPTED. `aud` is the
+  # origin binding, and dropping it is the difference between a proof and a
+  # relayable one.
+  conforms("the possession proof this origin accepted", A, auth.fetch("possession_proof"),
+           pointer: "#/$defs/possessionProof") do |doc|
+    doc.delete("aud")
+    doc
+  end
+
+  # §5.3 — the login body, which is register's body member for member.
+  conforms("the POST /auth/login body", A, auth.fetch("credential_request"),
+           pointer: "#/$defs/credentialRequest") do |doc|
+    doc.delete("signed")  # a public key with no proof is an assertion, not a credential
+    doc
+  end
+
+  # §5.3 — the tolled 201.
+  conforms("the POST /auth/register 201", A, auth.fetch("registration"),
+           pointer: "#/$defs/registration") do |doc|
+    doc.delete("access_token")
+    doc
+  end
+
+  # §5.4 — what the operator put INSIDE the token it minted. `actor` is a
+  # `const`, and it is the one member that says this is a Kiosk access token
+  # rather than some other JWT the same key signed.
+  conforms("the access token's claims", A, auth.fetch("access_token_claims"),
+           pointer: "#/$defs/accessTokenClaims") do |doc|
+    doc["actor"] = "human"
+    doc
+  end
+
+  # §5.3 and §5.5 — login's answer and revoke's answer are ONE object, and the
+  # two arms carry different controls on purpose: `required` on one side,
+  # `type` on the other, so neither half of the `$def` is taken on trust.
+  conforms("the POST /auth/login 200", A, auth.fetch("token_login"),
+           pointer: "#/$defs/token") do |doc|
+    doc.delete("access_token")
+    doc
+  end
+  conforms("the POST /auth/revoke 200 — the SAME object (K-1249)", A, auth.fetch("token_revoke"),
+           pointer: "#/$defs/token") do |doc|
+    doc["access_token"] = 1  # a compact JWT is a string
+    doc
+  end
+
+  # §6.2 — the human's link code, minted on a real Devise session.
+  conforms("the POST /auth/link 201", BI, auth.fetch("link_code"),
+           pointer: "#/$defs/linkCode") do |doc|
+    doc["expires_in"] = "900"  # seconds, an integer — not the string spelling
+    doc
+  end
+
+  conforms("the POST /auth/claim body", BI, auth.fetch("claim_request"),
+           pointer: "#/$defs/claimRequest") do |doc|
+    doc.delete("code")  # without the code this is a bare register
+    doc
+  end
+
+  # §6.2 — the claim answer, whose `$def` is a CROSS-FILE `$ref` into
+  # auth.schema.json's `registration`. The control therefore breaks a member
+  # that only the REFERENCED document declares: if the `$ref` were not followed
+  # the mutation would pass and this line would be proving nothing.
+  conforms("the POST /auth/claim 201", BI, auth.fetch("claim_response"),
+           pointer: "#/$defs/claimResponse") do |doc|
+    doc.delete("user_id")
+    doc
+  end
+
+  # §6.1 step 1 — all six members are REQUIRED here, which is narrower than RFC
+  # 8628 makes them, so `interval` is the control: an operator porting a stock
+  # device-grant answer is exactly who this refusal is for.
+  conforms("the POST /oauth/device_authorization 200", BI, auth.fetch("device_authorization"),
+           pointer: "#/$defs/deviceAuthorization") do |doc|
+    doc.delete("interval")
+    doc
+  end
+
+  # §6.1 — the two OAuth refusals, the one place on this wire that is not an
+  # RFC 9457 problem document. The first is the clause `oauthError` was widened
+  # for: §6.1 step 1 requires `invalid_request` for a `role` parameter, and an
+  # enum written from the section's own closing list of six could not say it.
+  conforms("the /oauth/device_authorization refusal of a `role` parameter", BI,
+           auth.fetch("oauth_error_role_refused"), pointer: "#/$defs/oauthError") do |doc|
+    doc["error"] = "role_not_allowed"  # the vocabulary is CLOSED at eight
+    doc
+  end
+  conforms("the /oauth/token refusal of an unknown grant_type", BI,
+           auth.fetch("oauth_error_unsupported_grant"), pointer: "#/$defs/oauthError") do |doc|
+    doc.delete("error")
+    doc
+  end
+
+  # The `error` VALUES, which no schema can pin to an endpoint: the enum says
+  # the vocabulary is closed, not which member each refusal owes.
+  if auth.dig("oauth_error_role_refused", "error") == "invalid_request"
+    ok "…and the role refusal is `invalid_request`, the code §6.1 step 1 names"
+  else
+    bad "the role refusal is `invalid_request`",
+        "got #{auth.dig("oauth_error_role_refused", "error").inspect}"
+  end
+  if auth.dig("oauth_error_unsupported_grant", "error") == "unsupported_grant_type"
+    ok "…and an unknown grant_type is `unsupported_grant_type`"
+  else
+    bad "an unknown grant_type is `unsupported_grant_type`",
+        "got #{auth.dig("oauth_error_unsupported_grant", "error").inspect}"
+  end
+
+  # §6.1 step 3 — the answer to the poll that COMPLETED the ceremony, after a
+  # real human approved on the real verify page.
+  conforms("the POST /oauth/token 200 (the completed device grant)", BI,
+           auth.fetch("device_token_response"), pointer: "#/$defs/deviceTokenResponse") do |doc|
+    doc["token_type"] = "bearer"  # `const` "Bearer" — the spelling is the contract
+    doc
+  end
+
+  # §6.3 — the unlink body. Its RESPONSE has no schema because it has no body,
+  # which is asserted right after as the length it must be.
+  conforms("the POST /auth/unlink body", BI, auth.fetch("unlink_request"),
+           pointer: "#/$defs/unlinkRequest") do |doc|
+    doc["agent_id"] = 42
+    doc
+  end
+  if auth["unlink_status"] == 204 && auth["unlink_body_len"].to_i.zero?
+    ok "…and /auth/unlink answered 204 with no body at all (§6.3, K-870)"
+  else
+    bad "/auth/unlink answered 204 with no body at all",
+        "status=#{auth["unlink_status"].inspect} body_len=#{auth["unlink_body_len"].inspect}"
+  end
+
+  # The `$ref` claim itself, stated as an assertion rather than left to be
+  # inferred from two arms that both passed: §6.2 says the claim answer is the
+  # register answer «byte-for-byte the same shape», which is why the schema
+  # refers rather than restates. Two objects that both validate could still
+  # differ — one may carry a member the open root permits.
+  if auth.fetch("claim_response").keys.sort == auth.fetch("registration").keys.sort
+    ok "…and the claim 201 carries exactly the register 201's members (§6.2's `$ref`, not a coincidence)"
+  else
+    bad "the claim 201 carries exactly the register 201's members",
+        "claim=#{auth.fetch("claim_response").keys.sort.inspect} " \
+        "register=#{auth.fetch("registration").keys.sort.inspect}"
+  end
+else
+  bad "the §5/§6 auth and binding wire objects were validated",
+      "AUTH_CAPTURE (#{auth_capture.inspect}) is missing — auth_wire_capture.rb did not write " \
+      "the ceremonies' bytes, so auth.schema.json and binding.schema.json checked nothing"
 end
 
 puts "\n  pass: #{PASS.size}\n  fail: #{FAIL.size}"

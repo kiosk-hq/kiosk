@@ -75,8 +75,8 @@ Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failur
 e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
-├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes (K-822)
-├── schemas/                                # vendored copies of five of the six published normative schemas (pow.schema.json is vendored in kiosk-server instead; `bin/check-spec-schemas` holds all six against the originals)
+├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes (K-822), §5/§6 included (T-152)
+├── schemas/                                # vendored copies of seven of the eight published normative schemas (pow.schema.json is vendored in kiosk-server instead; `bin/check-spec-schemas` holds all eight against the originals)
 ├── mise.toml                               # pins the Ruby the harness runs on
 ├── README.md                               # this file
 └── fixtures/                               # files copied into the generated app
@@ -92,6 +92,7 @@ e2e/
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
+    ├── auth_wire_capture.rb                 # the §5/§6 ceremonies driven for their BYTES: kiosk-pop (challenge → tolled register → login → revoke), link → claim → unlink, and the device grant with a real verify-page approval — written to AUTH_CAPTURE for schema_conformance.rb (T-152)
     ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
     ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Handler`, `kind :query`: the salons verb
     ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller (K-921)

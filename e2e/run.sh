@@ -459,6 +459,31 @@ fi
 
 ok "all assertions passed"
 
+# ─── the §5/§6 ceremonies, driven for their BYTES (T-152) ───────────────────
+#
+# auth.schema.json and binding.schema.json have been vendored beside the other
+# six since T-149, and until now nothing produced a byte for them to judge.
+# This driver runs kiosk-pop (challenge → register → login → revoke) and both
+# binding directions (link → claim → unlink, and the RFC 8628 device grant with
+# a real human approving on the real verify page) and writes down the requests
+# and the answers; the schema step below validates all thirteen objects.
+#
+# AFTER the assistant, not before: the ceremonies mint a third agent for alice,
+# rebind it twice and deactivate it, and every assertion about alice and bob is
+# already made by this point. The audit-sink row counts are taken later still,
+# so this driver's residue cannot be read as the sink's.
+log "drive the §5/§6 auth and binding ceremonies (for their live bytes)"
+AUTH_CAPTURE="$TMP_DIR/auth-capture.json"
+auth_capture_out=$( SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
+                      KIOSK_ISSUER="$KIOSK_ISSUER" \
+                      HUMAN_EMAIL="alice@example.com" \
+                      HUMAN_PASSWORD="e2e-demo-password" \
+                      SOLVE_PY="$SOLVE_PY" \
+                      AUTH_CAPTURE="$AUTH_CAPTURE" \
+                      bundle exec ruby "$FIXTURES/auth_wire_capture.rb" ) \
+  || fail "the §5/§6 ceremonies did not complete"
+ok "auth + binding wire bytes captured: $auth_capture_out"
+
 # ─── the published schemas, against the bytes just served ───────────────────
 #
 # K-822 / spec §16.3 anchor 1. The assistant above asserts field by field, in
@@ -474,6 +499,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        TOKEN="$ALICE_AGENT_TOKEN" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
+       AUTH_CAPTURE="$AUTH_CAPTURE" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
   log "schema conformance failed — last 40 lines of server log:"
   tail -40 /tmp/kiosk-e2e-server.log

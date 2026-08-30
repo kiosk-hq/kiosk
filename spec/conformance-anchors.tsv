@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1622 anchors.
+# 1625 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -209,6 +209,7 @@ e2e/assistant.sh	…the catalog is the body itself
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	…while the same request with a bad token is still 401
+e2e/fixtures/auth_wire_capture.rb	THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT (T-152).
 e2e/fixtures/bookings_controller.rb	      "WHERE user_id = kiosk.current_user_id() " \
 e2e/fixtures/bookings_controller.rb	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	# controller may declare BOTH kinds (K-921): `my_appointments` is a query
@@ -236,11 +237,13 @@ e2e/schema_conformance.rb	GET /kiosk/schema
 e2e/schema_conformance.rb	and the same schema REFUSES a broken copy of those very bytes
 e2e/schema_conformance.rb	example_params satisfies its own input_schema
 e2e/schema_conformance.rb	example_row satisfies its own output_schema
+e2e/schema_conformance.rb	no control mutation given
 e2e/schema_conformance.rb	published examples (the loop is not empty)
 e2e/schema_conformance.rb	the #{defn} mandate's claims
 e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	the pay REQUEST body
 e2e/schema_conformance.rb	the settlement this origin answered
+e2e/schema_conformance.rb	§5 and §6 — the auth and binding planes (T-152)
 e2e/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 e2e/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-all/README.md	`kiosk-all` declares runtime dependencies on the two production data-plane gems:

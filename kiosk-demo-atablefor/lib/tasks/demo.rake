@@ -1333,6 +1333,13 @@ namespace :demo do
                                     booking_id are a typed 400 carrying no
                                     runtime vocabulary — never a 500, never a
                                     wrong answer served as 200 (K-773, K-1027, K-1028)
+      BLOCKED  WholeValuedFloatBody — the two halves of one wire disagree about
+                                    `2.0` ON PURPOSE (spec Section 8.1 item 8):
+                                    `?party_size=2.0` on a query is a typed 400,
+                                    while `{"party_size": 2.0}` on the action
+                                    books a party of TWO. The only beat here
+                                    that asserts an ACCEPTANCE, so the accepted
+                                    half cannot drift away unpinned (K-1029)
       BLOCKED  DeviceGrantRoleSelfSelection — the shared kiosk-redteam beat:
                                     the binding ceremony's unauthenticated
                                     opening request refuses `role`/`scope` at a

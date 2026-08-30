@@ -604,9 +604,20 @@ NONSTRING  = [true, false, [], {}, [1], { "a" => 1 }, nil, 20260826].freeze
 # `"2.0"` IS ON THIS LIST AND IS NOT ON book_table's, and the asymmetry is the
 # wire's rather than this beat's: a JSON `2.0` is a valid `integer` to
 # json_schemer and books a party of two through the action, while the query
-# decoder's `Integer(v, 10)` refuses the STRING `"2.0"` outright. Measured, and
-# probed here so that it stays measured — the two halves of the wire are allowed
-# to differ, but not silently.
+# decoder's `Integer(v, 10)` refuses the STRING `"2.0"` outright.
+#
+# «ALLOWED TO DIFFER» USED TO BE THIS COMMENT'S OWN ASSERTION AND NOTHING BACKED
+# IT (K-1029). It is now PUBLISHED behaviour — spec Section 8.1 item 8 and the
+# narrative specification say a query parameter declared `integer` takes an
+# integer LITERAL and nothing else, while a body field declared `integer` takes
+# any JSON number whose value is whole, and that the difference is intentional.
+# Phil decided it on 2026-08-30: the strict query half is right, and a field that
+# may legitimately be fractional must DECLARE itself `number` rather than
+# `integer`. Both halves are pinned so neither can drift into the other — the
+# query half twice (this probe, and kiosk-server's
+# `refuses a WHOLE-VALUED float where an integer is declared` unit example) and
+# the body half by the {WholeValuedFloatBody} beat below, which asserts on a
+# booted origin that the action ACCEPTS what this line asserts the query refuses.
 QUERY_JUNK = ["abc", "true", "1.5", "0x10", "", "2.0"].freeze
 
 # `supplied:` is what this probe put on the wire, and it is what stops the
@@ -735,6 +746,55 @@ record(results, "HostileArgShapes",
        "CONTROLS book→#{rc_shape_book} cancel→#{rc_shape_cancel} availability→#{rc_shape_avail}/" \
        "#{rc_shape_avail == 200 ? Array(shape_avail).size : 0} rows " \
        "(want a typed 400 for every probe, never a 5xx and never a 200, and three live controls)")
+
+# ── WholeValuedFloatBody — the OTHER half of the published asymmetry (K-1029) ─
+#
+# THE ONLY BEAT IN THIS FILE WHOSE ASSERTION IS THAT SOMETHING IS ACCEPTED, and
+# that is the point: every probe above pins a refusal, so a wire that refused
+# EVERYTHING would satisfy them. Spec Section 8.1 item 8 publishes an asymmetry
+# with two sides, and a one-sided pin is how the accepted side drifts away
+# unnoticed — which is exactly what K-1029 found, with the QUERY_JUNK comment
+# above asserting «allowed to differ» and nothing anywhere backing the «allowed».
+#
+# THE PAIR, on ONE booted origin, in one beat so the two cannot be read apart:
+#   * `?party_size=2.0` on `availability` (a query) is `400 bad_request` naming
+#     the parameter — a query string is text, so the declared `integer` is the
+#     GRAMMAR the spelling must match and `2.0` is not an integer literal;
+#   * `{"party_size": 2.0}` on `book_table` (an action) is `200` and books a
+#     party of TWO — a JSON body is already typed, draft 2020-12 decides
+#     `integer` by VALUE, and {WireArguments.whole_number} agrees with it on
+#     purpose rather than reaching for `is_a?(Integer)`.
+# `2.5` is not an integer on either half; INT_SHAPES' `1.5` above is that case,
+# so it is not repeated here.
+#
+# VACUITY GUARDS, because both halves can pass for the wrong reason: the body
+# probe checks that the bytes really carried a JSON FLOAT (`"party_size":2.0`,
+# not `2`), so a future refactor that quietly sends an Integer cannot leave the
+# beat green on a question it stopped asking; and it checks the ANSWER echoed
+# `party_size` as the Integer 2, so "accepted" means "read as two" rather than
+# merely "not refused".
+#
+# WATCHED FAIL, run and restored: replace {WireArguments.whole_number}'s Float
+# arm with `is_a?(Integer)` — the strict reading of `integer`, i.e. the body half
+# behaving like the query half — and this beat alone goes red, `book_table`
+# answering 400 «party_size must be a whole number >= 1 — got 2.0».
+float_body_json = JSON.generate({ party_size: 2.0 })
+rc_fq, body_fq  = get_json("/kiosk/availability", { party_size: "2.0" }, bearer(TOKEN_A))
+float_slot      = open_slot
+rc_fb, body_fb  = book_slot(TOKEN_A, float_slot, party_size: 2.0)
+query_half_ok   = rc_fq == 400 && body_fq["code"] == "bad_request"
+body_half_ok    = rc_fb == 200 && body_fb["party_size"] == 2 &&
+                  !body_fb["booking_id"].to_s.empty?
+sent_a_float    = float_body_json.include?('"party_size":2.0')
+post_json("/kiosk/cancel_booking", { booking_id: body_fb["booking_id"] }, bearer(TOKEN_A)) if body_half_ok
+record(results, "WholeValuedFloatBody",
+       query_half_ok && body_half_ok && sent_a_float,
+       "query ?party_size=2.0 → #{rc_fq}/#{body_fq['code'].inspect}; " \
+       "body {\"party_size\": 2.0} → #{rc_fb}/party_size=#{body_fb['party_size'].inspect} " \
+       "booking_id=#{body_fb['booking_id'].inspect}" \
+       "#{sent_a_float ? '' : ' [PROBE VACUOUS: the request body did not carry a JSON float]'} " \
+       "(want 400 on the query half and a party of TWO on the body half — " \
+       "spec Section 8.1 item 8, and it is INTENTIONAL that they differ)")
 
 # ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
 #

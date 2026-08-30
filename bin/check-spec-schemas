@@ -17,9 +17,16 @@
 #
 # THE COPIES
 #
-#   e2e/schemas/*.schema.json                       (five: discovery, problem,
+#   e2e/schemas/*.schema.json                       (seven: discovery, problem,
 #                                                    schema-descriptor,
-#                                                    mandates, kyc)
+#                                                    mandates, kyc, auth,
+#                                                    binding -- the last two
+#                                                    arrived with T-149, which
+#                                                    gave Sections 5 and 6 of
+#                                                    the formal spec the schemas
+#                                                    its published conformance
+#                                                    anchor had been claiming
+#                                                    for them)
 #   kiosk-server/lib/kiosk/server/schemas/pow.schema.json  (the sixth — vendored
 #                                                    long before this check, for
 #                                                    RequestValidation's own use)
@@ -50,6 +57,8 @@ COPIES = {
   File.join(REPO, "e2e/schemas/schema-descriptor.schema.json") => "schema-descriptor.schema.json",
   File.join(REPO, "e2e/schemas/mandates.schema.json")          => "mandates.schema.json",
   File.join(REPO, "e2e/schemas/kyc.schema.json")               => "kyc.schema.json",
+  File.join(REPO, "e2e/schemas/auth.schema.json")              => "auth.schema.json",
+  File.join(REPO, "e2e/schemas/binding.schema.json")           => "binding.schema.json",
   File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/pow.schema.json") => "pow.schema.json",
 }.freeze
 

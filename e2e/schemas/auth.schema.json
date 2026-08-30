@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/auth.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed -- bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
+  "title": "Kiosk registration and login (kiosk-pop)",
+  "description": "The wire objects of Section 5. kiosk-pop is a proof-of-possession challenge-response, not OAuth: the caller proves it holds the private key matching a public key it presents, and the operator answers with a short-lived access token. Every object here is transcribed from Section 5's own tables and sentences -- where the section states a type or a presence, this file states the same one, and where it states neither, no member is invented. The roots are OPEN, as they are in every schema here but the catalog's: these objects say what MUST be present and what a present member must look like, not that a future minor version may add nothing.",
+  "$defs": {
+    "challenge": {
+      "type": "object",
+      "description": "Section 5.1 -- the answer to GET <endpoint>/auth/challenge?public_key=<url-encoded PEM>. Single-use and short-lived; the nonce is worthless to anyone without the matching private key, which is why the endpoint is unauthenticated.",
+      "required": [
+        "challenge",
+        "exp"
+      ],
+      "properties": {
+        "challenge": {
+          "type": "string",
+          "description": "The server-issued nonce to sign. It becomes the `nonce` claim of the possession proof.",
+          "minLength": 1
+        },
+        "exp": {
+          "type": "integer",
+          "description": "Unix expiry of the challenge."
+        }
+      }
+    },
+    "possessionProof": {
+      "type": "object",
+      "description": "Section 5.2 -- the decoded payload of `signed`, a compact RS256 JWS. This is the object the register, login, claim and device-grant token calls all carry. It is a PAYLOAD, not a request body: the wire carries the compact serialisation, and this schema describes what a verifier reads out of it.",
+      "required": [
+        "aud",
+        "nonce",
+        "jti"
+      ],
+      "properties": {
+        "aud": {
+          "type": "string",
+          "description": "ORIGIN-BINDING, and the reason a relayed proof is worthless. MUST be the origin the AI assistant dialed (Section 15.1); the operator rejects any other `aud`."
+        },
+        "nonce": {
+          "type": "string",
+          "description": "The `challenge` from Section 5.1. Single-use and server-TTL-bounded."
+        },
+        "jti": {
+          "type": "string",
+          "description": "A unique id."
+        },
+        "pub": {
+          "type": "string",
+          "description": "OPTIONAL. RFC 7638 thumbprint of the public key; verified only when present."
+        },
+        "iat": {
+          "type": "integer",
+          "description": "OPTIONAL and informational only -- the server-issued `nonce` is the authoritative freshness bound, so an operator MUST NOT rely on this claim for freshness."
+        }
+      }
+    },
+    "credentialRequest": {
+      "type": "object",
+      "description": "Section 5.3 -- the body of POST /auth/register and POST /auth/login. Register also accepts an optional proof-of-work proof, which rides in the `Kiosk-PoW` request HEADER (Sections 5.5 and 10.1) and never in this body, so that the signed bytes are identical on the retry.",
+      "required": [
+        "public_key",
+        "signed"
+      ],
+      "properties": {
+        "public_key": {
+          "type": "string",
+          "description": "The AI assistant's public key, PEM-encoded. An AI assistant SHOULD generate a fresh keypair per operator origin (Section 15.3)."
+        },
+        "signed": {
+          "type": "string",
+          "description": "The possession proof of Section 5.2, as a compact RS256 JWS. Its decoded payload is `#/$defs/possessionProof`."
+        }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "description": "Section 5.3 -- the 201 answer to POST /auth/register. Registering an already-known key answers 409 conflict instead (use login). This is also the 201 answer to POST /auth/claim (Section 6.2), which is why `#/$defs/claimResponse` in binding.schema.json refers here rather than restating it.",
+      "required": [
+        "agent_id",
+        "user_id",
+        "access_token"
+      ],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "description": "The acting agent id. Stable across a rebind (Section 6.3)."
+        },
+        "user_id": {
+          "type": "string",
+          "description": "The identity the key maps to. An operator MUST map a known key to the same `user_id` so a saved payment card survives across sessions."
+        },
+        "access_token": {
+          "type": "string",
+          "description": "The access token, a compact RS256 JWT. Its claims are `#/$defs/accessTokenClaims`."
+        }
+      }
+    },
+    "token": {
+      "type": "object",
+      "description": "Section 5.3 -- the 200 answer to POST /auth/login. An unknown key answers 404 not_found instead (register first).",
+      "required": [
+        "access_token"
+      ],
+      "properties": {
+        "access_token": {
+          "type": "string",
+          "description": "The access token, a compact RS256 JWT. Its claims are `#/$defs/accessTokenClaims`."
+        }
+      }
+    },
+    "accessTokenClaims": {
+      "type": "object",
+      "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part RS256 JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, presented as `Authorization: Bearer`.",
+      "required": [
+        "sub",
+        "agent_id",
+        "actor",
+        "iss",
+        "aud",
+        "iat",
+        "nbf",
+        "exp",
+        "jti"
+      ],
+      "properties": {
+        "sub": {
+          "type": "string",
+          "description": "The identity's `user_id`."
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "The acting agent id."
+        },
+        "actor": {
+          "const": "agent",
+          "description": "Always the string \"agent\". A token minted for anything else is not a Kiosk access token."
+        },
+        "role": {
+          "type": "string",
+          "description": "OPTIONAL operator-assigned role, and the type is the rule: Section 5.4 requires it to be OMITTED rather than null when absent, so `null` is not a permitted value here. NO endpoint accepts a client-requested role -- not registration, not the claim body, not the device-authorization request (Section 6.1) -- and where an operator sources it from a configured identity provider it comes INDIRECTLY, from the approving human's role at either binding ceremony (Section 6)."
+        },
+        "iss": {
+          "type": "string",
+          "description": "The operator issuer."
+        },
+        "aud": {
+          "description": "The operator issuer. A string, or the array spelling RFC 7519 permits.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "iat": {
+          "type": "integer",
+          "description": "Issued-at. Also what the revoked-before watermark of Section 15.4 is compared against."
+        },
+        "nbf": {
+          "type": "integer",
+          "description": "Not-before."
+        },
+        "exp": {
+          "type": "integer",
+          "description": "Expiry. Default lifetime is 1 hour; the durable credential is the private key, not the token."
+        },
+        "jti": {
+          "type": "string",
+          "description": "Unique token id."
+        }
+      }
+    }
+  }
+}

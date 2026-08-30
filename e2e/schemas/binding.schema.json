@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/binding.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed -- bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
+  "title": "Kiosk account binding -- claim and link",
+  "description": "The wire objects of Section 6, the one-time ceremonies that bind an AI assistant to a human's EXISTING operator account. Two directions: claim, which the assistant starts (an RFC 8628 device grant), and link, a Kiosk extension the human starts. Both require BOTH human approval AND a valid possession proof; a failed proof binds nothing (Section 15.8). WHAT IS NOT HERE, and Section 17 says the same thing: the two /oauth/* REQUESTS are form-encoded rather than JSON, so a JSON Schema is not the oracle for them, and the /oauth/* error body is the OAuth wire's, whose code vocabulary this document does not yet state completely.",
+  "$defs": {
+    "deviceAuthorization": {
+      "type": "object",
+      "description": "Section 6.1 step 1 -- the answer to POST <endpoint>/oauth/device_authorization. The REQUEST is form-encoded (`client_id` and `public_key`, and NOTHING ELSE that speaks to authorisation) and so has no schema here. All six members are REQUIRED because Section 6.1 enumerates all six as returned; note that RFC 8628 itself makes `verification_uri_complete` and `interval` optional, so this is the narrower of the two contracts and an operator porting an existing device-grant answer must widen it.",
+      "required": [
+        "device_code",
+        "user_code",
+        "verification_uri",
+        "verification_uri_complete",
+        "expires_in",
+        "interval"
+      ],
+      "properties": {
+        "device_code": {
+          "type": "string",
+          "description": "The opaque code the AI assistant polls with. Never shown to the human."
+        },
+        "user_code": {
+          "type": "string",
+          "description": "The short code the human types at the verification page."
+        },
+        "verification_uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "The operator's session-authenticated approval page (Section 15.8), which names the access the approval hands over."
+        },
+        "verification_uri_complete": {
+          "type": "string",
+          "format": "uri",
+          "description": "The same page with the `user_code` already carried, so the human does not have to type it."
+        },
+        "expires_in": {
+          "type": "integer",
+          "description": "Seconds until the authorization expires."
+        },
+        "interval": {
+          "type": "integer",
+          "description": "Seconds the AI assistant waits between polls. A poll that arrives sooner may be answered `slow_down`."
+        }
+      }
+    },
+    "deviceTokenResponse": {
+      "type": "object",
+      "description": "Section 6.1 step 3 -- the success answer to POST <endpoint>/oauth/token. The REQUEST is form-encoded and so has no schema here; note also that `signed` is REQUIRED only on the poll that COMPLETES the ceremony, which is a state-dependent rule no JSON Schema can carry. The bound principal (`user_id`, `agent_id`) rides in the access token's claims, not in this body.",
+      "required": [
+        "access_token",
+        "token_type",
+        "expires_in"
+      ],
+      "properties": {
+        "access_token": {
+          "type": "string",
+          "description": "The access token. Its claims are auth.schema.json#/$defs/accessTokenClaims."
+        },
+        "token_type": {
+          "const": "Bearer",
+          "description": "Always \"Bearer\"."
+        },
+        "expires_in": {
+          "type": "integer",
+          "description": "Seconds until the access token expires."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Present when -- and ONLY when -- the binding carries a role, and the type is the rule: it is omitted rather than null when there is none, so `null` is not a permitted value here. This is RFC 6749 Section 5.1's scope actually GRANTED, which here is the approving human's role and NEVER an echo of a requested one, since no role may be requested (Section 6.1 step 1). An operator whose identity system reports no role for that human omits the member, and an AI assistant MUST NOT treat its absence as an error."
+        }
+      }
+    },
+    "linkCode": {
+      "type": "object",
+      "description": "Section 6.2 -- the 201 answer to POST <endpoint>/auth/link, called on the operator's own session by the signed-in human. 201 rather than 200 because the call MINTS a redeemable single-use credential.",
+      "required": [
+        "link_code",
+        "expires_in"
+      ],
+      "properties": {
+        "link_code": {
+          "type": "string",
+          "description": "A long opaque token, paste-grade -- the human hands it to their AI assistant. Stored hashed, single-use, short-TTL and attempt-capped (Section 6.3)."
+        },
+        "expires_in": {
+          "type": "integer",
+          "description": "Seconds until the link code expires."
+        }
+      }
+    },
+    "claimRequest": {
+      "type": "object",
+      "description": "Section 6.2 -- the body of POST <endpoint>/auth/claim, which redeems a link code. The possession proof is REQUIRED, so a leaked code alone can never bind a key its holder does not control.",
+      "required": [
+        "code",
+        "public_key",
+        "signed"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The `link_code` the human handed over."
+        },
+        "public_key": {
+          "type": "string",
+          "description": "The AI assistant's public key, PEM-encoded."
+        },
+        "signed": {
+          "type": "string",
+          "description": "The possession proof of Section 5.2, as a compact RS256 JWS."
+        }
+      }
+    },
+    "claimResponse": {
+      "$ref": "https://kiosk.tech/spec/schemas/auth.schema.json#/$defs/registration",
+      "description": "Section 6.2 -- the 201 answer to POST <endpoint>/auth/claim. Byte-for-byte the register answer's shape, which is why it refers to it rather than restating it: a key the operator has never seen becomes a linked assistant account, a key that already had one is rebound, and the response is deliberately INDISTINGUISHABLE between those cases and from an idempotent re-bind (Section 6.3)."
+    },
+    "unlinkRequest": {
+      "type": "object",
+      "description": "Section 6.3 -- the body of POST <endpoint>/auth/unlink, called on the operator's own session. The response is 204 No Content and carries no body at all, which is why no response object appears here.",
+      "required": [
+        "agent_id"
+      ],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "description": "The bound AI assistant to deactivate. Its tokens stop verifying and /auth/login answers 404 (Section 15.4)."
+        }
+      }
+    }
+  }
+}

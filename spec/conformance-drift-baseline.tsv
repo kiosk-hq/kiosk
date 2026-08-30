@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-28 at ed049467
-# 1589 anchors.
+# recorded: 2026-08-30 at e856f664
+# 1608 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -243,6 +243,8 @@ e2e/schema_conformance.rb	8b59ab5575f22015	the #{defn} mandate's claims
 e2e/schema_conformance.rb	20f833377d225b00	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	3e732c0e75b6693a	the pay REQUEST body
 e2e/schema_conformance.rb	d37e42b8b5d62e4e	the settlement this origin answered
+e2e/schemas/auth.schema.json	2538ee59823fb28a	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
+e2e/schemas/binding.schema.json	507893a531cffe79	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-all/README.md	38e41bce797bf1bb	`kiosk-all` declares runtime dependencies on the two production data-plane gems:
 kiosk-all/README.md	dd036f6c1ff54d53	`kiosk-all` does **not** pull in `kiosk-rls`.
 kiosk-all/README.md	038c31fbc1bfbefc	`kiosk-all` does **not** pull in any adapter gem.
@@ -991,6 +993,7 @@ kiosk-server/lib/kiosk/server/auth_controller.rb	6176a7ebb7d95339	LinkCode.mint(
 kiosk-server/lib/kiosk/server/auth_controller.rb	d6d6dbe8a6ba4bd0	POST /kiosk/auth/register  { public_key, signed }
 kiosk-server/lib/kiosk/server/auth_controller.rb	18f1d9a0a7746114	def link
 kiosk-server/lib/kiosk/server/auth_controller.rb	2155b2d4b207d2e1	pow    = PowGate.proofs_from_header(
+kiosk-server/lib/kiosk/server/auth_controller.rb	d7c437ddab4d6e1e	respond({ access_token: token }, :ok)
 kiosk-server/lib/kiosk/server/auth_controller.rb	fd5c7e0bad800361	result = AgentRegistration.call(
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	0fddc2e68e36ca51	class ColumnSpendingCap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	3f2c54a66408a579	        @skill_url ||= "https://kiosk.tech/skill-v
@@ -1000,6 +1003,7 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	d6020afee4687f9d	      
 kiosk-server/lib/kiosk/server/configuration_extension.rb	4df3ff73260304cf	def default_signing_key
 kiosk-server/lib/kiosk/server/configuration_extension.rb	2d9ab5bb17ae3a33	encoded = ENV["KIOSK_SIGNING_KEY_B64"]
 kiosk-server/lib/kiosk/server/configuration_extension.rb	4b50083aeb687b89	pem = ENV["KIOSK_SIGNING_KEY_PEM"]
+kiosk-server/lib/kiosk/server/device_code_grant.rb	4484b8090e2ba688	device_code parameter required
 kiosk-server/lib/kiosk/server/discovery_controller.rb	272ecf3cb018c693	    #   GET /.well-known/api-catalog           → RFC 9727 linkset of the wire
 kiosk-server/lib/kiosk/server/discovery_controller.rb	0434ce3bca0471a8	    #   GET /agents.txt                        → text/plain agents.txt v1.0
 kiosk-server/lib/kiosk/server/discovery_controller.rb	fb0d51432560ffb0	    # Discovery surface — one controller, six discovery documents, all
@@ -1030,6 +1034,7 @@ kiosk-server/lib/kiosk/server/errors.rb	5a44e08d78e5fd59	CODE        = "spending
 kiosk-server/lib/kiosk/server/errors.rb	9a736ac717133d5d	PROBLEM_CONTENT_TYPE = "application/problem+json"
 kiosk-server/lib/kiosk/server/errors.rb	53c014fce2eef01d	PROBLEM_TYPE_BASE = "https://kiosk.tech/problems/"
 kiosk-server/lib/kiosk/server/errors.rb	b8bc3898f87e81a6	TITLES = {
+kiosk-server/lib/kiosk/server/errors.rb	2f93b8c14ec18007	class Forbidden < Base
 kiosk-server/lib/kiosk/server/errors.rb	4bd57f76567a6a62	class PowRequired < Base
 kiosk-server/lib/kiosk/server/executor.rb	7d7d211b6b7eb97c	            enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	3c5e73f6645586cf	        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
@@ -1062,6 +1067,13 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	661d34d5d2e3d0f4	        retur
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	371aa40a3c86f179	      MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	c50ed2b2ac58cd4a	    #   * All of `id, user_id, agent_id, iss, iat, exp` are REQUIRED (presence
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	2fa45caabfd7a24b	    # must reference the presented intent and stay within its cap.
+kiosk-server/lib/kiosk/server/mandate_verifier.rb	dbaa26e3ec32b2f6	carry is not authorisation, and the assistant learns the same way for
+kiosk-server/lib/kiosk/server/mandate_verifier.rb	de8fd258eb96920a	mandate currency must be a non-empty string
+kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	7703aaed802e10cc	client_id parameter required
+kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	244cfedb70e56a9e	is not accepted here — an assistant does not choose its own role.
+kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	2d38faabc6dfe524	public_key parameter required
+kiosk-server/lib/kiosk/server/oauth_token_controller.rb	5ca500d64e279297	grant_type required
+kiosk-server/lib/kiosk/server/oauth_token_controller.rb	2a0860bb31bbb41a	only the device_code grant is served here — 
 kiosk-server/lib/kiosk/server/pop_verifier.rb	4774a5da85eae7ed	issuer = Kiosk.configuration.issuer
 kiosk-server/lib/kiosk/server/pop_verifier.rb	6d2129499b64ea67	required_claims: %w[aud nonce jti]
 kiosk-server/lib/kiosk/server/pow_gate.rb	724fa2e69b13c676	            # :bad_params (K-541) joins them deliberately: a challenge naming
@@ -1118,7 +1130,7 @@ kiosk-server/lib/kiosk/server/well_known.rb	5f907ae0a27ad875	def self.agent_conf
 kiosk-server/lib/kiosk/server/well_known.rb	b9cc9eae9200e24b	def self.agents_json(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	1208ed7a6e19f468	def self.agents_txt(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	5501dc52e7dc19c0	def self.api_catalog(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	52a37d2932d6fbcd	def self.auth_md(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	41999575b6365168	def self.auth_md(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	f2cbbb357956dc42	def self.build(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/wire_controller.rb	8b05aaed37814ca4	PowGate.gate(
 kiosk-server/lib/kiosk/server/wire_controller.rb	536d8490d34743d3	Wire response (JSON): success is the handler's payload VERBATIM
@@ -1356,6 +1368,7 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	863d6cd9e9adab60	raises NotFoun
 kiosk-server/spec/kiosk/server/link_code_spec.rb	2b50d6cdf330dcdb	raises Unauthenticated on a failed proof and does NOT consume the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	08ab6fcb63af8d2a	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	40e8f7ef465e3bc2	refuses to redeem a claim-flow device_code (kinds do not cross)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d17f24b1e78838e4	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09b95f53bbe50180	describe "non-positive amounts" do
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a6d3377919a11606	rejects (403, not 500) when the agent has no registered payment key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa7e23ecc2013a0	rejects a JWS signed by an unknown key
@@ -1364,6 +1377,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	db39c4a88fa0fce2	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	1e603148f5a79050	rejects a cart missing total_amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d6a005e440f00829	rejects a cart not bound to the intent
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a47988e24430ff90	rejects a cart priced in a different currency than the intent cap (4999 USD vs 5000 EUR cap)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e3a13b41cab58937	rejects a cart whose currency is an EMPTY string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bedb55fc898602dd	rejects a cart whose line_items are explicitly null
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	cc6d01605da3dcf8	rejects a cart whose line_items are not an array
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	fcbe54e7e82d1fad	rejects a cart whose line_items array is EMPTY
@@ -1373,13 +1387,17 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b1262dc1ef21241d	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e66074b91c67f023	rejects a mandate with no exp claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	173906d912854e90	rejects a mandate with no iat claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e2993d9c790a8dc5	rejects a mandate with no id claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	933d0c9837b99be6	rejects a numeric-string exp as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	30b498d256cea5e5	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ebb6830a0786b327	rejects a payment whose amount_cents does not match the cart total
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e57a5da710d0e867	rejects a payment with a NEGATIVE amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2e9d62fd37f8c92e	rejects a string iat as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d70c3ab347193a1e	rejects a wrong issuer
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0c553937af679654	rejects an effectively non-expiring mandate (exp beyond the max lifetime)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	14ae0711adf6346d	rejects an intent missing cap_amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c829014357f7fa22	rejects an intent missing currency (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	46a3c5774b0cf200	rejects an intent whose currency is NOT A STRING
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	7f67e9fd3c72c17d	rejects an intent whose currency is an EMPTY string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	4b55773d8c614b47	rejects an intent with a NEGATIVE cap_amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ae1ab812ce1be0d4	rejects an intent with a ZERO cap_amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2ddea7596bc97d5e	rejects when agent_id in the payload does not match the authenticated identity
@@ -1387,6 +1405,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	85c9a7fe2f174b50	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2d12783b72e256a3	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	43b10ecec11237ba	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09d46de3c18d0835	returns an IntentMandate for a valid agent-signed JWS
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8aefd3fbe25e0ad6	still accepts a string outside ISO 4217 — the domain is T-153, not this guard
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	b5211118a4a7bdba	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	2b703368c1a3da30	refuses an undeclared role the same way — the value is never consulted
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	1f1371db4a8a1cd5	refuses the OAuth-standard `scope` spelling too
@@ -1535,8 +1554,8 @@ kiosk-server/spec/kiosk/server/well_known_spec.rb	7514949088c25b1f	carries the a
 kiosk-server/spec/kiosk/server/well_known_spec.rb	7dfaa079dd21bffe	computes the endpoint as base_url + mount_path
 kiosk-server/spec/kiosk/server/well_known_spec.rb	830bf02000b71123	describe ".agents_txt" do
 kiosk-server/spec/kiosk/server/well_known_spec.rb	0143f9cfd991fc6e	describe ".api_catalog" do
-kiosk-server/spec/kiosk/server/well_known_spec.rb	571252a307176e28	describe ".auth_md" do
-kiosk-server/spec/kiosk/server/well_known_spec.rb	9faa1d0e99cfab8e	documents the OAuth error vocabulary as the one exception
+kiosk-server/spec/kiosk/server/well_known_spec.rb	a25ec766b0dec0ba	describe ".auth_md" do
+kiosk-server/spec/kiosk/server/well_known_spec.rb	3171412636b9619d	documents the OAuth error vocabulary as the one exception
 kiosk-server/spec/kiosk/server/well_known_spec.rb	680f69e867b051a8	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
 kiosk-server/spec/kiosk/server/well_known_spec.rb	a25fe6e55d948822	keeps both service-desc members — the operations are added, not swapped in
 kiosk-server/spec/kiosk/server/well_known_spec.rb	5cd3de3609436967	keeps the pre-binding auth keys first and byte-identical (additive-only rule)

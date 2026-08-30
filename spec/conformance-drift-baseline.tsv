@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at 14f166f2
-# 1625 anchors.
+# recorded: 2026-08-31 at 385e732a
+# 1627 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -462,6 +462,7 @@ kiosk-demo-hoteling/config/initializers/kiosk.rb	fb3696cce43b8185	  c.registrati
 kiosk-demo-hoteling/config/initializers/kiosk.rb	bd9021e2c4fb13dc	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail
 kiosk-demo-hoteling/config/initializers/kiosk.rb	80044787b554ec9a	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-hoteling/config/initializers/kiosk.rb	9c90068ad83f3ff6	c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
+kiosk-demo-hoteling/config/initializers/kiosk.rb	21a0b3b9b427d4ea	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/lib/tasks/demo.rake	f1416eb32542a093	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
 kiosk-demo-hoteling/lib/tasks/demo.rake	b3850dac6b1589ca	  task book: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	1147bfade07e1bfb	  task isolation: :setup do
@@ -479,6 +480,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	7129171f74a5a791	…and the refusal NAME
 kiosk-demo-hoteling/lib/tasks/demo.rake	27ab46997b5f3cf2	…control: the same filter without the impossible price returns
 kiosk-demo-hoteling/script/pay_window.rb	97567db5aa4aac36	RoomHold.where(user_id: USER_ID).delete_all
 kiosk-demo-hoteling/script/redteam_suite.rb	985411f1a0ec8d01	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
+kiosk-demo-hoteling/script/spending_cap_flow.rb	39ccab68e70ce1e2	makes it a cap rather than a suggestion
 kiosk-demo-philslist/README.md	a8f2a64e1240394f	# philslist — Kiosk reference demo (NON-COMMERCE)
 kiosk-demo-philslist/README.md	e25066c5b37afd39	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-philslist/README.md	3bf260233e33d246	**not only for commerce**: it exercises the full query + action + `schema` +

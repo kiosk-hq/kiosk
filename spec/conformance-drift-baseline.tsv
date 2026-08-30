@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at 9bcfd5d1 (working tree: 1 cited file(s) modified)
-# 1622 anchors.
+# recorded: 2026-08-31 at 14f166f2
+# 1625 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -78,7 +78,7 @@ e2e/README.md	0ac41d4649e62f05	Path C removes raw SQL entirely
 e2e/README.md	3a4ff15181eacbb7	Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) runs locally and in CI.
 e2e/README.md	a778b9d854e1c12c	That a page's cursor rides in an RFC 8288 `Link` header is asserted only as an OpenAPI DECLARATION here
 e2e/README.md	90f78e4898e2c41d	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
-e2e/README.md	bba4251dadd4fcf5	└── fixtures/                               # files copied into the generated app
+e2e/README.md	5c0e973cbf87f58a	└── fixtures/                               # files copied into the generated app
 e2e/assistant.sh	7e10b403edbedbeb	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	32ea9a773eca7bad	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	df32739f504cd6ff	# composite body shape left at all. `POST /kiosk/{query,run}` do not exist;
@@ -211,6 +211,7 @@ e2e/assistant.sh	f047baf98c83c9b2	…the catalog is the body itself
 e2e/assistant.sh	f616315f74fab8eb	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	b993275ea6622f13	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	387cf424f11b420f	…while the same request with a bad token is still 401
+e2e/fixtures/auth_wire_capture.rb	320c65b7cb4f54a1	THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT (T-152).
 e2e/fixtures/bookings_controller.rb	d7df057b523220ff	      "WHERE user_id = kiosk.current_user_id() " \
 e2e/fixtures/bookings_controller.rb	30ed27acbc6cfcd6	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	c68618e9ae257453	# controller may declare BOTH kinds (K-921): `my_appointments` is a query
@@ -238,11 +239,13 @@ e2e/schema_conformance.rb	a919e7231bf0e04c	GET /kiosk/schema
 e2e/schema_conformance.rb	852a9ec4f000cd05	and the same schema REFUSES a broken copy of those very bytes
 e2e/schema_conformance.rb	50fbcfc0c7048b7b	example_params satisfies its own input_schema
 e2e/schema_conformance.rb	c9936a1f1b23196e	example_row satisfies its own output_schema
+e2e/schema_conformance.rb	29d40ed0d9f0e4f6	no control mutation given
 e2e/schema_conformance.rb	24b3e620bb972912	published examples (the loop is not empty)
 e2e/schema_conformance.rb	8b59ab5575f22015	the #{defn} mandate's claims
 e2e/schema_conformance.rb	20f833377d225b00	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	3e732c0e75b6693a	the pay REQUEST body
 e2e/schema_conformance.rb	d37e42b8b5d62e4e	the settlement this origin answered
+e2e/schema_conformance.rb	2c99e10730210e04	§5 and §6 — the auth and binding planes (T-152)
 e2e/schemas/auth.schema.json	2538ee59823fb28a	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 e2e/schemas/binding.schema.json	507893a531cffe79	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-all/README.md	38e41bce797bf1bb	`kiosk-all` declares runtime dependencies on the two production data-plane gems:

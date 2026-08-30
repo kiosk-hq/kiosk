@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1591 anchors.
+# 1595 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1030,6 +1030,7 @@ kiosk-server/lib/kiosk/server/errors.rb	CODE        = "spending_cap_exceeded"
 kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_CONTENT_TYPE = "application/problem+json"
 kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_TYPE_BASE = "https://kiosk.tech/problems/"
 kiosk-server/lib/kiosk/server/errors.rb	TITLES = {
+kiosk-server/lib/kiosk/server/errors.rb	class Forbidden < Base
 kiosk-server/lib/kiosk/server/errors.rb	class PowRequired < Base
 kiosk-server/lib/kiosk/server/executor.rb	            enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
@@ -1062,6 +1063,7 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	        return if payload[:exp
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	      MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	    #   * All of `id, user_id, agent_id, iss, iat, exp` are REQUIRED (presence
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	    # must reference the presented intent and stay within its cap.
+kiosk-server/lib/kiosk/server/mandate_verifier.rb	carry is not authorisation, and the assistant learns the same way for
 kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.configuration.issuer
 kiosk-server/lib/kiosk/server/pop_verifier.rb	required_claims: %w[aud nonce jti]
 kiosk-server/lib/kiosk/server/pow_gate.rb	            # :bad_params (K-541) joins them deliberately: a challenge naming
@@ -1373,9 +1375,11 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart with a ZE
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no exp claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no iat claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no id claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a numeric-string exp as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment whose amount_cents does not match the cart total
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment with a NEGATIVE amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a string iat as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a wrong issuer
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an effectively non-expiring mandate (exp beyond the max lifetime)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent missing cap_amount_cents (absent, not 0)

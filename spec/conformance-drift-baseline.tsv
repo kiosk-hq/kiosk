@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-30 at 32999c70
-# 1615 anchors.
+# recorded: 2026-08-31 at 26b10fc4
+# 1618 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -329,6 +329,7 @@ kiosk-demo-atablefor/script/pow_flow.rb	c11a63829b566d2e	abort "expected bad_pro
 kiosk-demo-atablefor/script/pow_flow.rb	c230151dded37abc	rc_challenge, resp_challenge = availability_once
 kiosk-demo-atablefor/script/pow_flow.rb	cd8d5df6088527de	rc_served, resp_served = availability_once(proofs)
 kiosk-demo-atablefor/script/pow_flow.rb	86c1289d99c690e9	rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad_nonce }])
+kiosk-demo-atablefor/script/redteam_suite.rb	fca64b1d1df3855e	record(results, "WholeValuedFloatBody",
 kiosk-demo-atablefor/script/reputation_flow.rb	95e808e9f4deef92	abort "expected no challenge (n2=nil) after 2 bookings — principal must be proven. Got n2=#{n2}"
 kiosk-demo-atablefor/script/reputation_flow.rb	4385edb5511a2a0a	abort "expected proof count to drop after a booking: n1=#{n1} not < n0=#{n0}" unless n1 < n0
 kiosk-demo-getgrocery/README.md	777a26ce52f7148b	Grocery delivery demo operator for Kiosk.
@@ -1181,8 +1182,10 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	77de8ed8e5f81932	keeps R
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	491d5c01690d69ed	keeps cursor an opaque string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	2d10fbd27dbe6678	names the ACTION remedy in the hint rather than only refusing
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	5f4b9f169f1f69a8	recovers an integer
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	07bf608dd0773143	refuses a WHOLE-VALUED float where an integer is declared — 2.0 is not an integer LITERAL
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	db6c8fb6d938e748	refuses a name used as both scalar and array in one query string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	098c1b91375215a7	refuses an EMPTY value where a scalar type is declared
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	c304aa28aad46010	refuses the same whole-valued float spelling on a RESERVED integer name — limit=20.0
 kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	ac0b65bbc27f1785	mints a nonce and records it with a TTL, consumable exactly once
 kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	5cd94c3f1d195a42	raises Unauthenticated on replay (single-use)
 kiosk-server/spec/kiosk/server/auth_challenge_store_spec.rb	2c7416b101e8d3de	consumes a live, matching challenge exactly once (single-use)

@@ -8,10 +8,7 @@
     "challenge": {
       "type": "object",
       "description": "Section 5.1 -- the answer to GET <endpoint>/auth/challenge?public_key=<url-encoded PEM>. Single-use and short-lived; the nonce is worthless to anyone without the matching private key, which is why the endpoint is unauthenticated.",
-      "required": [
-        "challenge",
-        "exp"
-      ],
+      "required": ["challenge", "exp"],
       "properties": {
         "challenge": {
           "type": "string",
@@ -27,11 +24,7 @@
     "possessionProof": {
       "type": "object",
       "description": "Section 5.2 -- the decoded payload of `signed`, a compact RS256 JWS. This is the object the register, login, claim and device-grant token calls all carry. It is a PAYLOAD, not a request body: the wire carries the compact serialisation, and this schema describes what a verifier reads out of it.",
-      "required": [
-        "aud",
-        "nonce",
-        "jti"
-      ],
+      "required": ["aud", "nonce", "jti"],
       "properties": {
         "aud": {
           "type": "string",
@@ -58,10 +51,7 @@
     "credentialRequest": {
       "type": "object",
       "description": "Section 5.3 -- the body of POST /auth/register and POST /auth/login. Register also accepts an optional proof-of-work proof, which rides in the `Kiosk-PoW` request HEADER (Sections 5.5 and 10.1) and never in this body, so that the signed bytes are identical on the retry.",
-      "required": [
-        "public_key",
-        "signed"
-      ],
+      "required": ["public_key", "signed"],
       "properties": {
         "public_key": {
           "type": "string",
@@ -76,11 +66,7 @@
     "registration": {
       "type": "object",
       "description": "Section 5.3 -- the 201 answer to POST /auth/register. Registering an already-known key answers 409 conflict instead (use login). This is also the 201 answer to POST /auth/claim (Section 6.2), which is why `#/$defs/claimResponse` in binding.schema.json refers here rather than restating it.",
-      "required": [
-        "agent_id",
-        "user_id",
-        "access_token"
-      ],
+      "required": ["agent_id", "user_id", "access_token"],
       "properties": {
         "agent_id": {
           "type": "string",
@@ -98,10 +84,8 @@
     },
     "token": {
       "type": "object",
-      "description": "Section 5.3 -- the 200 answer to POST /auth/login. An unknown key answers 404 not_found instead (register first).",
-      "required": [
-        "access_token"
-      ],
+      "description": "Section 5.3 -- the 200 answer to POST /auth/login. An unknown key answers 404 not_found instead (register first). It is ALSO the 200 answer to POST /auth/revoke (Section 5.5), which is the same object, member for member: revoking stamps a per-identity watermark and hands back a token issued after it, so the caller is not signed out by its own call, and neither `user_id` nor `agent_id` appears because revocation changes neither. Section 5.5 said only that the call 'returns a fresh token' and named no member until 2026-08-30, which is why this `$def` did not point here (K-1249, and K-870 before it, when unlink shipped an undocumented body for four months).",
+      "required": ["access_token"],
       "properties": {
         "access_token": {
           "type": "string",
@@ -112,17 +96,7 @@
     "accessTokenClaims": {
       "type": "object",
       "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part RS256 JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, presented as `Authorization: Bearer`.",
-      "required": [
-        "sub",
-        "agent_id",
-        "actor",
-        "iss",
-        "aud",
-        "iat",
-        "nbf",
-        "exp",
-        "jti"
-      ],
+      "required": ["sub", "agent_id", "actor", "iss", "aud", "iat", "nbf", "exp", "jti"],
       "properties": {
         "sub": {
           "type": "string",
@@ -147,34 +121,14 @@
         "aud": {
           "description": "The operator issuer. A string, or the array spelling RFC 7519 permits.",
           "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "minItems": 1
-            }
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
           ]
         },
-        "iat": {
-          "type": "integer",
-          "description": "Issued-at. Also what the revoked-before watermark of Section 15.4 is compared against."
-        },
-        "nbf": {
-          "type": "integer",
-          "description": "Not-before."
-        },
-        "exp": {
-          "type": "integer",
-          "description": "Expiry. Default lifetime is 1 hour; the durable credential is the private key, not the token."
-        },
-        "jti": {
-          "type": "string",
-          "description": "Unique token id."
-        }
+        "iat": { "type": "integer", "description": "Issued-at. Also what the revoked-before watermark of Section 15.4 is compared against." },
+        "nbf": { "type": "integer", "description": "Not-before." },
+        "exp": { "type": "integer", "description": "Expiry. Default lifetime is 1 hour; the durable credential is the private key, not the token." },
+        "jti": { "type": "string", "description": "Unique token id." }
       }
     }
   }

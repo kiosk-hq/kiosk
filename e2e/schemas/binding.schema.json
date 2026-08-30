@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/binding.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed -- bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
   "title": "Kiosk account binding -- claim and link",
-  "description": "The wire objects of Section 6, the one-time ceremonies that bind an AI assistant to a human's EXISTING operator account. Two directions: claim, which the assistant starts (an RFC 8628 device grant), and link, a Kiosk extension the human starts. Both require BOTH human approval AND a valid possession proof; a failed proof binds nothing (Section 15.8). WHAT IS NOT HERE, and Section 17 says the same thing: the two /oauth/* REQUESTS are form-encoded rather than JSON, so a JSON Schema is not the oracle for them, and the /oauth/* error body is the OAuth wire's, whose code vocabulary this document does not yet state completely.",
+  "description": "The wire objects of Section 6, the one-time ceremonies that bind an AI assistant to a human's EXISTING operator account. Two directions: claim, which the assistant starts (an RFC 8628 device grant), and link, a Kiosk extension the human starts. Both require BOTH human approval AND a valid possession proof; a failed proof binds nothing (Section 15.8). WHAT IS NOT HERE, and Section 17 says the same thing: the two /oauth/* REQUESTS are form-encoded rather than JSON, so a JSON Schema is not the oracle for them. The /oauth/* error RESPONSE is here -- it was not until 2026-08-30, because the vocabulary Section 6.1 stated was short of the one its own step 1 requires, and an enum written from an incomplete list refuses conforming answers.",
   "$defs": {
     "deviceAuthorization": {
       "type": "object",
@@ -48,11 +48,7 @@
     "deviceTokenResponse": {
       "type": "object",
       "description": "Section 6.1 step 3 -- the success answer to POST <endpoint>/oauth/token. The REQUEST is form-encoded and so has no schema here; note also that `signed` is REQUIRED only on the poll that COMPLETES the ceremony, which is a state-dependent rule no JSON Schema can carry. The bound principal (`user_id`, `agent_id`) rides in the access token's claims, not in this body.",
-      "required": [
-        "access_token",
-        "token_type",
-        "expires_in"
-      ],
+      "required": ["access_token", "token_type", "expires_in"],
       "properties": {
         "access_token": {
           "type": "string",
@@ -72,13 +68,34 @@
         }
       }
     },
+    "oauthError": {
+      "type": "object",
+      "description": "Section 6.1 -- the error answer of BOTH /oauth/* endpoints, and the one place on this wire that is not an RFC 9457 problem document. The vocabulary is CLOSED at eight: six ceremony-state codes from RFC 8628 Section 3.5 and two request-level codes from RFC 6749 Section 5.2. The two request-level ones are not decoration -- Section 6.1 step 1 REQUIRES `invalid_request` for a `scope` or `role` parameter on the device-authorization request, which is why this schema could not exist while the section's own closing list named only six. The STATUS is 400 for every code except `invalid_client`, which is 401; no schema can carry that, so it is stated in Section 6.1 and here.",
+      "required": ["error"],
+      "properties": {
+        "error": {
+          "enum": [
+            "authorization_pending",
+            "slow_down",
+            "expired_token",
+            "access_denied",
+            "invalid_grant",
+            "invalid_client",
+            "invalid_request",
+            "unsupported_grant_type"
+          ],
+          "description": "The OAuth error code. A closed vocabulary: an operator MUST NOT emit anything outside it, or an AI assistant polling this ceremony has a branch it cannot take."
+        },
+        "error_description": {
+          "type": "string",
+          "description": "OPTIONAL human-readable detail. An AI assistant branches on `error` and never on this string."
+        }
+      }
+    },
     "linkCode": {
       "type": "object",
       "description": "Section 6.2 -- the 201 answer to POST <endpoint>/auth/link, called on the operator's own session by the signed-in human. 201 rather than 200 because the call MINTS a redeemable single-use credential.",
-      "required": [
-        "link_code",
-        "expires_in"
-      ],
+      "required": ["link_code", "expires_in"],
       "properties": {
         "link_code": {
           "type": "string",
@@ -93,11 +110,7 @@
     "claimRequest": {
       "type": "object",
       "description": "Section 6.2 -- the body of POST <endpoint>/auth/claim, which redeems a link code. The possession proof is REQUIRED, so a leaked code alone can never bind a key its holder does not control.",
-      "required": [
-        "code",
-        "public_key",
-        "signed"
-      ],
+      "required": ["code", "public_key", "signed"],
       "properties": {
         "code": {
           "type": "string",
@@ -120,9 +133,7 @@
     "unlinkRequest": {
       "type": "object",
       "description": "Section 6.3 -- the body of POST <endpoint>/auth/unlink, called on the operator's own session. The response is 204 No Content and carries no body at all, which is why no response object appears here.",
-      "required": [
-        "agent_id"
-      ],
+      "required": ["agent_id"],
       "properties": {
         "agent_id": {
           "type": "string",

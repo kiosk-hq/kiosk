@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1595 anchors.
+# 1608 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -991,6 +991,7 @@ kiosk-server/lib/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity
 kiosk-server/lib/kiosk/server/auth_controller.rb	POST /kiosk/auth/register  { public_key, signed }
 kiosk-server/lib/kiosk/server/auth_controller.rb	def link
 kiosk-server/lib/kiosk/server/auth_controller.rb	pow    = PowGate.proofs_from_header(
+kiosk-server/lib/kiosk/server/auth_controller.rb	respond({ access_token: token }, :ok)
 kiosk-server/lib/kiosk/server/auth_controller.rb	result = AgentRegistration.call(
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	class ColumnSpendingCap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= "https://kiosk.tech/skill-v
@@ -1000,6 +1001,7 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capa
 kiosk-server/lib/kiosk/server/configuration_extension.rb	def default_signing_key
 kiosk-server/lib/kiosk/server/configuration_extension.rb	encoded = ENV["KIOSK_SIGNING_KEY_B64"]
 kiosk-server/lib/kiosk/server/configuration_extension.rb	pem = ENV["KIOSK_SIGNING_KEY_PEM"]
+kiosk-server/lib/kiosk/server/device_code_grant.rb	device_code parameter required
 kiosk-server/lib/kiosk/server/discovery_controller.rb	    #   GET /.well-known/api-catalog           → RFC 9727 linkset of the wire
 kiosk-server/lib/kiosk/server/discovery_controller.rb	    #   GET /agents.txt                        → text/plain agents.txt v1.0
 kiosk-server/lib/kiosk/server/discovery_controller.rb	    # Discovery surface — one controller, six discovery documents, all
@@ -1064,6 +1066,12 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	      MAX_MANDATE_LIFETIME_SEC
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	    #   * All of `id, user_id, agent_id, iss, iat, exp` are REQUIRED (presence
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	    # must reference the presented intent and stay within its cap.
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	carry is not authorisation, and the assistant learns the same way for
+kiosk-server/lib/kiosk/server/mandate_verifier.rb	mandate currency must be a non-empty string
+kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	client_id parameter required
+kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	is not accepted here — an assistant does not choose its own role.
+kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	public_key parameter required
+kiosk-server/lib/kiosk/server/oauth_token_controller.rb	grant_type required
+kiosk-server/lib/kiosk/server/oauth_token_controller.rb	only the device_code grant is served here — 
 kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.configuration.issuer
 kiosk-server/lib/kiosk/server/pop_verifier.rb	required_claims: %w[aud nonce jti]
 kiosk-server/lib/kiosk/server/pow_gate.rb	            # :bad_params (K-541) joins them deliberately: a challenge naming
@@ -1358,6 +1366,7 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	raises NotFound for an unknown 
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on a failed proof and does NOT consume the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses to redeem a claim-flow device_code (kinds do not cross)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	describe "non-positive amounts" do
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects (403, not 500) when the agent has no registered payment key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a JWS signed by an unknown key
@@ -1366,6 +1375,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart missing l
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart missing total_amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart not bound to the intent
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart priced in a different currency than the intent cap (4999 USD vs 5000 EUR cap)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose currency is an EMPTY string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose line_items are explicitly null
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose line_items are not an array
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose line_items array is EMPTY
@@ -1384,6 +1394,8 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a wrong issuer
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an effectively non-expiring mandate (exp beyond the max lifetime)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent missing cap_amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent missing currency (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent whose currency is NOT A STRING
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent whose currency is an EMPTY string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent with a NEGATIVE cap_amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an intent with a ZERO cap_amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects when agent_id in the payload does not match the authenticated identity
@@ -1391,6 +1403,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects when user_id in 
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns an IntentMandate for a valid agent-signed JWS
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	still accepts a string outside ISO 4217 — the domain is T-153, not this guard
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses an undeclared role the same way — the value is never consulted
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses the OAuth-standard `scope` spelling too

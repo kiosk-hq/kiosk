@@ -126,6 +126,62 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
+    # K-1250. Presence was the WHOLE check until 2026-08-30, and presence is not
+    # the constraint: §11.2 compares the three mandates' currencies to EACH OTHER
+    # and never to a domain, so `""` on intent, cart and payment is internally
+    # consistent all the way through the chain, reaches the PSP as the currency of
+    # a real charge, and becomes the key the spending-cap tally is scoped by
+    # (Executor#settled_total_cents). A non-String does the same and additionally
+    # binds a type the NOT NULL currency column is not.
+    #
+    # `Forbidden` BY CLASS, not by message: `currency` is one of the seven limbs of
+    # the §9.1 mandate carve-out, so a silent move to `BadRequest` must redden here
+    # (SPEC-184/SPEC-185 draw that boundary and neither 400 check is this one).
+    #
+    # WHAT IS DELIBERATELY NOT ASSERTED is the domain — "US" and "Euro" are still
+    # accepted, because no document states an allow-list and inventing one in the
+    # verifier would be writing wire rather than enforcing it (T-153, K-1251). The
+    # last example below pins that on purpose, so a later allow-list is a decision
+    # someone takes rather than a silent tightening.
+    describe "malformed currency (K-1250)" do
+      it "rejects an intent whose currency is an EMPTY string" do
+        empty = intent_payload.merge(currency: "")
+        expect { described_class.verify_intent(raw_jws: sign(empty), identity: identity) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+      end
+
+      it "rejects an intent whose currency is all whitespace" do
+        blank = intent_payload.merge(currency: "   ")
+        expect { described_class.verify_intent(raw_jws: sign(blank), identity: identity) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+      end
+
+      it "rejects an intent whose currency is NOT A STRING" do
+        numeric = intent_payload.merge(currency: 5)
+        expect { described_class.verify_intent(raw_jws: sign(numeric), identity: identity) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+      end
+
+      it "answers 403, not 400 — currency is inside the §9.1 mandate carve-out" do
+        empty = intent_payload.merge(currency: "")
+        expect { described_class.verify_intent(raw_jws: sign(empty), identity: identity) }
+          .to raise_error { |e| expect(e.class::HTTP_STATUS).to eq(403) }
+      end
+
+      # The positive control: the guard is not a blanket refuser.
+      it "accepts a well-formed currency" do
+        m = described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity)
+        expect(m.currency).to eq("eur")
+      end
+
+      # The domain is NOT closed here, and this example says so out loud.
+      it "still accepts a string outside ISO 4217 — the domain is T-153, not this guard" do
+        odd = intent_payload.merge(currency: "Euro")
+        expect { described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
+          .not_to raise_error
+      end
+    end
+
     it "rejects when user_id in the payload does not match the authenticated identity" do
       bad = intent_payload.merge(user_id: "u-999")
       expect { described_class.verify_intent(raw_jws: sign(bad), identity: identity) }
@@ -207,6 +263,23 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     it "rejects a cart missing currency (absent)" do
       no_cur = cart_payload.reject { |k, _| k == :currency }
       expect { described_class.verify_cart(raw_jws: sign(no_cur), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+    end
+
+    # K-1250 on the CART limb, and the cart is where the vacuity is easiest to
+    # see: `cart.currency != intent.currency` is the only currency check §11.2
+    # performs, and `"" != "eur"` is TRUE, so an empty cart currency is caught by
+    # the guard rather than by the binding rule. The intent here is well-formed
+    # ("eur"), so nothing but `require_currency!` can be what refuses this.
+    it "rejects a cart whose currency is an EMPTY string" do
+      empty = cart_payload.merge(currency: "")
+      expect { described_class.verify_cart(raw_jws: sign(empty), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+    end
+
+    it "rejects a cart whose currency is NOT A STRING" do
+      numeric = cart_payload.merge(currency: 5)
+      expect { described_class.verify_cart(raw_jws: sign(numeric), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 

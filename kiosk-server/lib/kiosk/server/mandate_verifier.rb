@@ -213,12 +213,49 @@ module Kiosk
       # omitting it, the cap guard (`nil != nil` → false) and the
       # verify_payment match (`nil == nil` → true) both pass vacuously, then the
       # NOT NULL currency column 500s after partial persist (same class as the missing-amount case).
+      #
+      # K-1250: PRESENCE WAS THE WHOLE CHECK, AND PRESENCE IS NOT THE CONSTRAINT.
+      # `{currency: ""}` and `{currency: 5}` both passed this guard. Nothing
+      # downstream closed it either, and that is the part worth writing down: the
+      # §11.2 rules compare the three mandates' currencies to EACH OTHER
+      # (`cart.currency != intent.currency`, `payment.currency == cart.currency`)
+      # and never to a domain, so `""` on all three is internally consistent the
+      # whole way through the chain. It then reaches the PSP as the `currency` of a
+      # real charge (`kiosk-pay-stripe`'s `currency: cart_mandate.currency`) and
+      # becomes the key `Executor#settled_total_cents` scopes the spending-cap
+      # tally by (`WHERE agent_id = $1 AND currency = $2`, K-551). A non-String
+      # does the same and additionally binds a type that column is not. Mandates
+      # arrive as signed JWS payloads and are never validated against
+      # `mandates.schema.json`, so the schema was not the missing check either.
+      #
+      # ONLY WHAT THE SPEC ALREADY SAYS IS ENFORCED HERE. The published schema
+      # types this member `string`, so a non-String is refused; and an empty or
+      # all-blank string is not a code under any reading of the ISO 4217 that same
+      # schema names. The DOMAIN is deliberately NOT closed — whether "eur", "EUR"
+      # and "Euro" are one code, three codes, or one code and two refusals is a
+      # rule nothing in the spec states, and minting an allow-list here would be
+      # this guard writing wire rather than enforcing it. That question is T-153,
+      # and the cap-tally consequence of leaving it open is K-1251.
+      #
+      # `Errors::Forbidden`, not `BadRequest`, because `currency` is one of the
+      # seven limbs of the mandate carve-out (§9.1, §11.1): a mandate that does not
+      # carry what a mandate must carry has authorised nothing. The two mandate
+      # checks that answer 400 are named in §9.1 and neither is this one.
       def require_currency!(payload)
-        return unless payload[:currency].nil?
+        value = payload[:currency]
+        if value.nil?
+          raise Errors::Forbidden.new(
+            "mandate missing required currency field",
+            hint: "currency is a required AP2 mandate field",
+          )
+        end
+
+        return if value.is_a?(String) && !value.strip.empty?
 
         raise Errors::Forbidden.new(
-          "mandate missing required currency field",
-          hint: "currency is a required AP2 mandate field",
+          "mandate currency must be a non-empty string",
+          hint: "currency was #{value.inspect} — send the currency code this mandate is " \
+                "denominated in (spec §11.1: an ISO 4217 code)",
         )
       end
 

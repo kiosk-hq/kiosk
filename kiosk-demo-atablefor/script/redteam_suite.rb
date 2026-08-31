@@ -48,6 +48,11 @@
 #     which argument; it does not claim more than it probes. It ALSO carries a
 #     control on its own oracle (T-121): a neighborhood value that spells three
 #     of the leak strings must be BLOCKED, never a BREACH on its own echo.
+#   WholeValuedFloatBody — the ONE beat here that asserts an ACCEPTANCE: the
+#     two halves of the wire disagree about `2.0` ON PURPOSE (spec §8.1 item
+#     8), so `?party_size=2.0` on the availability QUERY is a typed 400 while
+#     `{"party_size": 2.0}` on the book_table ACTION books a party of TWO —
+#     and a one-sided battery is how the accepted half drifts (K-1029)
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,

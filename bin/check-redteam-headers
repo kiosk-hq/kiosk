@@ -1,0 +1,545 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-redteam-headers -- a demo's PROSE restatements of its red-team beat list,
+# diffed against the beats that demo's suite actually registers (T-078, T-105).
+#
+# WHY IT EXISTS, from what happened rather than from principle. K-709 and K-710
+# were this defect twice: six driver headers told the reader registration carried
+# no PoW while each solved one a few dozen lines below, and five redteam-suite
+# headers disagreed with the scenarios beneath them -- stylish's naming a beat
+# that did not exist and omitting three that did. Both were fixed by hand
+# (0e5087a, 59bdac7, 5e4151f), and the class came back TWICE more: philslist's
+# `RetiredWire`/`MethodMismatch` arrived with the per-verb cutover and the header
+# was never updated (K-901), and the 2026-08-26 wave found a `verified` K-710
+# carrying a verification sentence that had itself gone false. Every one of those
+# repairs was a hand-kept list corrected by hand, and every gate stayed green
+# throughout, because nothing in this repository reads a beat name in prose.
+#
+# THE COMPARISON INPUT IS A FOURTH PAIR, WHICH IS WHY THIS IS A SIBLING SCRIPT.
+# bin/check-demo-derivations states the boundary the guards in this directory are
+# divided on -- «the boundary is the comparison INPUT» -- and names the three that
+# existed: bin/check-ci-tasks compares ci.yml against each demo's rake tasks,
+# bin/check-demo-copies compares demo files against EACH OTHER, and it itself
+# compares a demo's before-after.md against that demo's own producers. This one
+# compares a demo's redteam PROSE -- the suite header, the `demo:redteam` rake
+# `desc`, the README battery section -- against that demo's own suite
+# REGISTRATIONS. It was not folded into check-demo-derivations because that file
+# is bound to one document (`DOC = "before-after.md"`) and to one carrier (a
+# fenced block with an HTML `<!-- derived: ... -->` comment above it); a Ruby
+# comment header and a heredoc `desc` can carry neither, so folding it in would
+# mean a second parser and a second corpus inside a file whose name and header
+# are about narrative derivation.
+#
+# ── WHAT IS DERIVED AND WHAT IS DECLARED ─────────────────────────────────────
+#
+# The beat set is DERIVED once per demo, from the suite, and every rule below
+# compares a document against THAT. There is no list of beat names in this file
+# and there must never be one: a hand-kept inventory is the thing this guard
+# exists to replace. The demo set is derived too -- `kiosk-demo-*/script/
+# redteam_suite.rb` by glob -- so an eighth demo that grows a suite is covered
+# with no edit here.
+#
+# The two harnesses are NOT the same shape (T-119) and the extractors say so.
+# THREE demos drive `Kiosk::Redteam::Scenario` subclasses through the gem's
+# `Runner` from a `scenarios = [...]` array; FOUR are flat procedural scripts
+# with a local `record(results, "Name", ...)` helper; skooti is BOTH, and runs
+# nine further beats as bare lambdas whose names exist nowhere machine-readable
+# except its own summary `puts`. So four extractors, each named, and a suite that
+# matches none of them is a LOUD failure rather than a short list quietly
+# compared to a short list:
+#
+#   E1  the framework registry -- entries of the top-level `scenarios = [...]`
+#   E2  the procedural helper  -- `record(results, "Name", ...)`
+#   E3  the shared gem beat inside a procedural suite -- `record(results,
+#       <var>.name, ...)`, resolved through `<var> = ...::Name.new`
+#   E4  out-of-registry local beats -- the summary's `BLOCKED  ✓ Name` lines
+#
+# ── THE RULES, AND WHICH KIND EACH ONE IS ────────────────────────────────────
+#
+# R1  ENUMERATION (derivation). Every suite yields a non-empty beat set through
+#     the extractors above, and every `record(results, ...)` call and every
+#     `scenarios = [...]` entry is in a form one of them reads. UNPARSEABLE IS
+#     RED: a beat this guard cannot see is a beat no rule below can protect.
+#
+# R2  HEADER COVERAGE (coverage). A suite header that DECLARES its list complete
+#     -- the literal «each must be BLOCKED», which is the files' own existing
+#     wording and not a marker invented here -- must name every registered beat.
+#     Headers that say «Headline scenarios» instead are a selection by their own
+#     words and are not held to this.
+#
+# R3  HEADER NAMES ARE REAL (ban). Every list ENTRY in any suite header -- the
+#     `#   Name  — gloss` shape -- must be a registered beat. This is the arm
+#     that would have caught stylish's `CustomerCannotSelfSelectOwnerAtBinding`,
+#     a scenario the header named and the file did not have.
+#
+# R4  DESC COVERAGE (coverage). Every registered beat is named somewhere in that
+#     demo's `demo:redteam` rake `desc`. Text, not table: tudu writes its list as
+#     a prose sentence and the other six as a `BLOCKED  Name` column, and the
+#     rule holds for both because it asks only whether the name is there.
+#
+# R5  DESC NAMES ARE REAL (ban). Every `BLOCKED|SKIPPED|BREACH  Name` entry in a
+#     `demo:redteam` desc must be a registered beat.
+#
+# R6  README COVERAGE (coverage). A README section headed for the battery --
+#     a heading whose text matches /redteam|adversarial/i -- must name every
+#     registered beat. The SCOPE IS DERIVED FROM THE HEADING, not from a list in
+#     this file: at the time of writing exactly two READMEs carry one, and a
+#     third that grows one is covered without an edit.
+#
+# LISTS, NEVER COUNTS. The 2026-08-26 wave that last repaired this class DELETED
+# the totals from two rake descs rather than correcting them, on the ground that
+# both suites print their count at runtime, so a count in a `desc` is redundant
+# and independently rottable. This guard therefore diffs SETS OF NAMES and never
+# compares a number to a number.
+#
+# ── WHAT IT DOES NOT COVER, stated plainly ───────────────────────────────────
+#
+# * A README naming a beat that does not exist. R3 and R5 hold that direction for
+#   the two sites where the class actually occurred; doing it for a README needs
+#   CamelCase-token classification over free-form Markdown, which is a heuristic,
+#   and a heuristic that misfires here gets switched off rather than fixed.
+# * Whether a beat's GLOSS is true. Every rule here is about a NAME being present
+#   or absent. A header entry that names a real beat and describes the wrong
+#   attack is invisible to this file, and always will be.
+# * The FLOW drivers' sibling class (K-707's hardcoded literals, K-711's
+#   independently declared paths), which T-078 records as not mechanically
+#   checkable the same way and which stays a fix rather than a guard.
+#
+# ── IN-BAND VACUITY, and the polarity is deliberate (K-1262) ─────────────────
+#
+# Two of the six rules are BANS, and for a ban «this rule matched something» is
+# backwards: a ban whose violations match nothing is the ban being OBEYED. So
+# their liveness is asserted on the DECLARATIONS instead -- on the extractors
+# still finding entries to judge. Every run reports, and fails on:
+#
+#   * a demo whose derived beat set is empty (R1)
+#   * no header anywhere declaring «each must be BLOCKED» (R2 would cover nothing)
+#   * zero header list entries across the fleet (R3 could not bite)
+#   * zero desc entries across the fleet (R5 could not bite)
+#   * a README battery section that names fewer than three beats (R6's scope
+#     detector has found a heading over something that is not a beat list)
+#
+# A README that names at least half the suite's beats WITHOUT carrying such a
+# heading is REPORTED, not failed: that is the shape of a beat list whose heading
+# was renamed out of the rule's reach, and printing it is how the derived scope
+# is stopped from silently shrinking.
+#
+# Usage:
+#   bin/check-redteam-headers              # exit 1 on any mismatch
+#   bin/check-redteam-headers --list       # print each demo's derived beat set
+#   bin/check-redteam-headers --self-test  # fixtures: every rule, red and green
+
+require "fileutils"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+
+# ── Extraction ───────────────────────────────────────────────────────────────
+
+# E1 + E2 + E3 + E4. Returns [names, problems]; `problems` is R1's loud half.
+def suite_beats(src)
+  names    = []
+  problems = []
+
+  # E1 — the framework registry.
+  if (m = src.match(/^scenarios = \[\n(.*?)^\]\s*$/m))
+    m[1].lines.each do |line|
+      body = line.split("#", 2).first.to_s.strip
+      next if body.empty?
+
+      if (e = body.match(/\A(?:[A-Z][A-Za-z0-9]*::)*([A-Z][A-Za-z0-9]*)\.new\b/))
+        names << e[1]
+      else
+        problems << "an entry of `scenarios = [...]` is not a `Name.new` this guard can read: #{body.inspect}"
+      end
+    end
+  end
+
+  # E2 + E3 — the procedural helper, literal and resolved-variable forms.
+  src.scan(/(?<!def )\brecord\(\s*results,\s*(.{0,60}?)[,\n]/m) do |(arg)|
+    arg = arg.strip
+    if (lit = arg.match(/\A"([A-Za-z0-9]+)"\z/))
+      names << lit[1]
+    elsif (var = arg.match(/\A([a-z_][a-z0-9_]*)\.name\z/))
+      assigned = src[/^#{Regexp.escape(var[1])}\s*=\s*(?:[A-Z][A-Za-z0-9]*::)*([A-Z][A-Za-z0-9]*)\.new/, 1]
+      if assigned
+        names << assigned
+      else
+        problems << "`record(results, #{arg}, ...)` names its beat through a variable this guard " \
+                    "cannot resolve to a `Name.new` assignment"
+      end
+    else
+      problems << "`record(results, #{arg.inspect}, ...)` is neither a string literal nor a resolvable " \
+                  "`<var>.name` — this beat cannot be enumerated, so no rule here protects it"
+    end
+  end
+
+  # E4 — beats that run outside any registry and are named only by the summary.
+  src.scan(/BLOCKED\s+✓\s+([A-Z][A-Za-z0-9]*)\b/) { names << Regexp.last_match(1) }
+
+  [names.uniq.sort, problems]
+end
+
+# A document NAMES a beat when the name stands on its own: `include?` would let
+# a renamed `CrossOwnerEditt` satisfy a rule about `CrossOwnerEdit`, which is the
+# rename case K-710 recorded twice.
+def mentions?(text, name)
+  text.match?(/(?<![A-Za-z0-9_])#{Regexp.escape(name)}(?![A-Za-z0-9_])/)
+end
+
+# The leading comment block: every line from the top that is a comment or blank,
+# stopping at the first line of code.
+def header_block(src)
+  out = []
+  src.lines.each do |l|
+    break unless l.start_with?("#") || l.strip.empty?
+
+    out << l
+  end
+  out.join
+end
+
+# A header LIST ENTRY: `#   Name  — gloss`, optionally behind the `C2`-style tag
+# hoteling and skooti put on their headline beats.
+def header_entries(header)
+  header.scan(/^#\s{2,}(?:C\d+\s+)?([A-Z][A-Za-z0-9]{3,})[ \t]*(?:\(.*?\))?[ \t]*(?:—|–|-{1,2})[ \t]/).flatten.uniq
+end
+
+# The `desc` heredoc that belongs to `task redteam:` — the LAST one before it.
+def redteam_desc(rake_src)
+  i = rake_src.index(/^\s*task redteam[: ]/)
+  return nil unless i
+
+  body = nil
+  rake_src[0...i].scan(/desc <<~(\w+)\n(.*?)\n[ \t]*\1[ \t]*$/m) { body = Regexp.last_match(2) }
+  body
+end
+
+def desc_entries(desc)
+  desc.scan(/^\s*(?:BLOCKED|SKIPPED|BREACH)\s+([A-Z][A-Za-z0-9]{3,})\b/).flatten.uniq
+end
+
+# The README's battery section: a heading naming the red team, up to the next
+# heading at the same or a higher level.
+def readme_battery_section(md)
+  lines = md.lines
+  start = lines.index { |l| l =~ /\A(\#{1,6})\s.*(redteam|adversarial)/i }
+  return nil unless start
+
+  level = lines[start][/\A\#+/].length
+  body  = []
+  lines[(start + 1)..].each do |l|
+    break if l =~ /\A(\#{1,6})\s/ && Regexp.last_match(1).length <= level
+
+    body << l
+  end
+  body.join
+end
+
+# ── The check ────────────────────────────────────────────────────────────────
+
+Report = Struct.new(:failures, :notes, :stats, keyword_init: true)
+
+def check(root)
+  failures = []
+  notes    = []
+  stats    = []
+
+  suites = Dir.glob(File.join(root, "kiosk-demo-*", "script", "redteam_suite.rb")).sort
+  if suites.empty?
+    failures << "no kiosk-demo-*/script/redteam_suite.rb found under #{root} — this guard is reading nothing"
+    return Report.new(failures:, notes:, stats:)
+  end
+
+  declaring_headers = 0
+  header_entry_total = 0
+  desc_entry_total   = 0
+  readme_sections    = 0
+
+  suites.each do |suite_path|
+    dir  = File.dirname(File.dirname(suite_path))
+    demo = File.basename(dir)
+    src  = File.read(suite_path)
+
+    beats, problems = suite_beats(src)
+    problems.each { failures << "#{demo}: #{_1} [R1]" }
+    if beats.empty?
+      failures << "#{demo}: no beat name could be derived from script/redteam_suite.rb — the extractors " \
+                  "read nothing, so every rule below would pass on an empty set [R1]"
+      next
+    end
+
+    header  = header_block(src)
+    entries = header_entries(header)
+    header_entry_total += entries.length
+
+    # R3 — a header may not name a beat the suite does not register.
+    (entries - beats).each do |ghost|
+      failures << "#{demo}: script/redteam_suite.rb's header lists #{ghost}, which the file does not " \
+                  "register — the header names a beat that does not run [R3]"
+    end
+
+    # R2 — a header that declares its list complete must be complete.
+    if header.include?("each must be BLOCKED")
+      declaring_headers += 1
+      missing = beats.reject { mentions?(header, _1) }
+      unless missing.empty?
+        failures << "#{demo}: script/redteam_suite.rb's header says «each must be BLOCKED» and does not " \
+                    "name #{missing.join(', ')} — a reader of that list does not learn the beat runs [R2]"
+      end
+    end
+
+    rake_path = File.join(dir, "lib", "tasks", "demo.rake")
+    unless File.exist?(rake_path)
+      failures << "#{demo}: has script/redteam_suite.rb but no lib/tasks/demo.rake [R4]"
+      next
+    end
+
+    desc = redteam_desc(File.read(rake_path))
+    if desc.nil?
+      failures << "#{demo}: lib/tasks/demo.rake has no `desc` heredoc before `task redteam:` — the second " \
+                  "copy of the beat list is unreadable, so nothing holds it [R4]"
+    else
+      d_entries = desc_entries(desc)
+      desc_entry_total += d_entries.length
+
+      # R5 — the desc may not name a beat the suite does not register.
+      (d_entries - beats).each do |ghost|
+        failures << "#{demo}: demo:redteam's desc lists #{ghost}, which script/redteam_suite.rb does not " \
+                    "register [R5]"
+      end
+
+      # R4 — every registered beat is named in the desc.
+      d_missing = beats.reject { mentions?(desc, _1) }
+      unless d_missing.empty?
+        failures << "#{demo}: demo:redteam's desc does not name #{d_missing.join(', ')} — an operator " \
+                    "reading `rake -D` is told a smaller battery runs than does [R4]"
+      end
+    end
+
+    readme_path = File.join(dir, "README.md")
+    section = File.exist?(readme_path) ? readme_battery_section(File.read(readme_path)) : nil
+    named   = section ? beats.count { mentions?(section, _1) } : 0
+    if section
+      readme_sections += 1
+      if named < 3
+        failures << "#{demo}: README.md has a battery heading whose section names #{named} beat(s) — the " \
+                    "heading has been put over something that is not a beat list, so R6 is watching " \
+                    "nothing here [R6-vacuity]"
+      else
+        r_missing = beats.reject { mentions?(section, _1) }
+        unless r_missing.empty?
+          failures << "#{demo}: README.md's battery section does not name #{r_missing.join(', ')} [R6]"
+        end
+      end
+    elsif File.exist?(readme_path)
+      whole = File.read(readme_path)
+      hits  = beats.count { mentions?(whole, _1) }
+      if hits * 2 >= beats.length
+        notes << "#{demo}: README.md names #{hits} of #{beats.length} beats but carries no battery heading, " \
+                 "so R6 does not reach it — a heading matching /redteam¦adversarial/i would put it back in scope"
+      end
+    end
+
+    stats << format("  %-24s beats %2d  header-entries %2d%s  desc-entries %2d  readme %s",
+                    demo, beats.length, entries.length,
+                    header.include?("each must be BLOCKED") ? " (declares complete)" : "                    ",
+                    desc ? desc_entries(desc).length : 0,
+                    section ? "section names #{named}" : "no battery heading")
+  end
+
+  # In-band vacuity. Coverage rules answer for themselves; the two BANS cannot,
+  # so their liveness is asserted on the extractors that feed them (K-1262).
+  if declaring_headers.zero?
+    failures << "no suite header contains «each must be BLOCKED» — R2 is covering nothing, in any demo " \
+                "[R2-vacuity]"
+  end
+  if header_entry_total.zero?
+    failures << "the header list-entry extractor found no entries in any suite — R3 is a ban that cannot " \
+                "bite [R3-vacuity]"
+  end
+  if desc_entry_total.zero?
+    failures << "the desc entry extractor found no entries in any demo:redteam desc — R5 is a ban that " \
+                "cannot bite [R5-vacuity]"
+  end
+  if readme_sections.zero?
+    failures << "no README carries a battery heading — R6 is covering nothing [R6-vacuity]"
+  end
+
+  Report.new(failures:, notes:, stats:)
+end
+
+# ── --self-test ──────────────────────────────────────────────────────────────
+#
+# An arm per rule plus a vacuity arm per rule, against a THROWAWAY COPY of the
+# real suites rather than against a synthetic idiom this guard would then be the
+# only reader of: the extractors have to bind to the shapes the demos actually
+# use, and a fixture written to match the extractor proves the extractor matches
+# the fixture. Two synthetic arms remain, for R1, because the unreadable
+# registration forms they plant do not exist in the tree by construction.
+
+CORPUS_GLOBS = [
+  "kiosk-demo-*/script/redteam_suite.rb",
+  "kiosk-demo-*/lib/tasks/demo.rake",
+  "kiosk-demo-*/README.md",
+].freeze
+
+def fixture_root(dir)
+  CORPUS_GLOBS.each do |g|
+    Dir.glob(File.join(ROOT, g)).each do |src|
+      rel = src.delete_prefix("#{ROOT}/")
+      dst = File.join(dir, rel)
+      FileUtils.mkdir_p(File.dirname(dst))
+      FileUtils.cp(src, dst)
+    end
+  end
+  dir
+end
+
+def edit(path, from, to)
+  s = File.read(path)
+  raise "self-test fixture: #{from.inspect} not found in #{path}" unless s.include?(from)
+
+  File.write(path, s.sub(from, to))
+end
+
+def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+  arms     = []
+  failures = []
+
+  # Each arm names the rule TAG it must be answered by, not merely a string that
+  # appears in some message: an arm that goes red for a different rule than the
+  # one it was written for is a green arm proving nothing, and two of these did
+  # exactly that on the day they were written.
+  run = lambda do |name, tag, &setup|
+    Dir.mktmpdir("redteam-headers-selftest") do |dir|
+      root = fixture_root(dir)
+      setup.call(root)
+      rep = check(root)
+      arms << name
+      if tag.nil?
+        failures << "#{name}: expected GREEN, got: #{rep.failures.first}" unless rep.failures.empty?
+      elsif rep.failures.empty?
+        failures << "#{name}: expected RED [#{tag}], stayed GREEN"
+      elsif rep.failures.none? { _1.include?("[#{tag}]") }
+        failures << "#{name}: went red, but no failure carries [#{tag}] — first was: #{rep.failures.first}"
+      end
+    end
+  end
+
+  run.call("GREEN — the tree as it stands", nil) { nil }
+
+  # R1 — ENUMERATION. Both halves are loud by design: a registration this guard
+  # cannot read is a beat no later rule protects.
+  run.call("R1 — a `record` whose beat name is an unresolvable expression", "R1") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         'record(results, "CrossTenantRead"', "record(results, beat_name_from_somewhere")
+  end
+  run.call("R1 — a `scenarios = [...]` entry that is not a `Name.new`", "R1") do |root|
+    edit(File.join(root, "kiosk-demo-hoteling/script/redteam_suite.rb"),
+         "  PastStay.new,", "  build_a_beat(:past_stay),")
+  end
+  run.call("R1-vacuity — a suite from which no beat can be derived at all", "R1") do |root|
+    p = File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb")
+    File.write(p, File.read(p).gsub(/(?<!def )\brecord\(\s*results,/, "noop("))
+  end
+
+  # R2 — HEADER COVERAGE, a coverage rule, plus the declaration that scopes it.
+  run.call("R2 — a declaring header that drops an entry for a beat that runs", "R2") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         "#   InviteCodeReplay      — an already-used invite code is rejected → 403\n", "")
+  end
+  run.call("R2-vacuity — no header anywhere declares its list complete", "R2-vacuity") do |root|
+    Dir.glob(File.join(root, "kiosk-demo-*/script/redteam_suite.rb")).each do |p|
+      File.write(p, File.read(p).gsub("each must be BLOCKED", "each is worth a look"))
+    end
+  end
+
+  # R3 — the header BAN. Its liveness is asserted on the EXTRACTOR, never on the
+  # violations: a ban whose violations match nothing is the ban being obeyed
+  # (K-1262).
+  run.call("R3 — a header entry naming a beat that does not run", "R3") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         "# Standard scenarios (each must be BLOCKED):\n",
+         "# Standard scenarios (each must be BLOCKED):\n#   GhostBeatName    — an attack nobody wrote\n")
+  end
+  run.call("R3-vacuity — the header entry extractor finds nothing in any suite", "R3-vacuity") do |root|
+    Dir.glob(File.join(root, "kiosk-demo-*/script/redteam_suite.rb")).each do |p|
+      s = File.read(p)
+      head, rest = s.split("\nrequire ", 2)
+      File.write(p, "#{head.gsub(/^#[ \t]{2,}/, '# ')}\nrequire #{rest}")
+    end
+  end
+
+  # R4 / R5 — the rake desc, both directions.
+  run.call("R4 — a desc that stops naming a beat that runs", "R4") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
+         "MalformedUuidArg (400)", "a junk uuid (400)")
+  end
+  run.call("R5 — a desc entry naming a beat that does not run", "R5") do |root|
+    edit(File.join(root, "kiosk-demo-hoteling/lib/tasks/demo.rake"),
+         "      BLOCKED  PastStay", "      BLOCKED  GhostDescBeat\n      BLOCKED  PastStay")
+  end
+  run.call("R5-vacuity — the desc entry extractor finds nothing in any demo", "R5-vacuity") do |root|
+    Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/demo.rake")).each do |p|
+      File.write(p, File.read(p).gsub(/^([ \t]*)(?:BLOCKED|SKIPPED|BREACH)([ \t]+[A-Z])/) { "#{$1}listed#{$2}" })
+    end
+  end
+
+  # R6 — the README battery section, its coverage and its DERIVED scope.
+  run.call("R6 — a battery section that renames a beat out from under itself", "R6") do |root|
+    edit(File.join(root, "kiosk-demo-philslist/README.md"), "`CrossOwnerEdit`", "`CrossOwnerEditt`")
+  end
+  run.call("R6-vacuity — a battery heading over something that is not a beat list", "R6-vacuity") do |root|
+    p = File.join(root, "kiosk-demo-tudu/README.md")
+    s = File.read(p)
+    i = s.index(/^\#{1,6}[ \t].*adversarial/i)
+    j = s.index(/^\#{1,6}[ \t]/, i + 1)
+    File.write(p, "#{s[0...i]}### Adversarial battery (`rake demo:redteam`)\n\nNothing to see.\n\n#{s[j..]}")
+  end
+  run.call("R6-scope — no README carries a battery heading any more", "R6-vacuity") do |root|
+    Dir.glob(File.join(root, "kiosk-demo-*/README.md")).each do |p|
+      File.write(p, File.read(p).lines.map { |l|
+        l =~ /\A\#{1,6}[ \t].*(redteam|adversarial)/i ? "### Attack battery\n" : l
+      }.join)
+    end
+  end
+
+  if failures.empty?
+    puts "check-redteam-headers --self-test: OK — #{arms.length} arm(s), one per rule plus its vacuity arm, " \
+         "each planted into a throwaway copy of the REAL suites and answered by the rule tag it was " \
+         "written for:"
+    arms.each { puts "  #{_1}" }
+    exit 0
+  end
+
+  warn "\ncheck-redteam-headers --self-test FAILED (#{failures.length} of #{arms.length} arm(s)):\n"
+  failures.each { warn "  x #{_1}" }
+  exit 1
+end
+
+self_test if ARGV.include?("--self-test")
+
+report = check(ROOT)
+
+if ARGV.include?("--list")
+  puts report.stats
+  exit 0
+end
+
+report.notes.each { puts "check-redteam-headers NOTE: #{_1}" }
+
+if report.failures.empty?
+  puts report.stats
+  puts "check-redteam-headers: OK — every registered beat is named where its demo restates the list, and " \
+       "no restatement names a beat that does not run."
+  exit 0
+end
+
+warn "\ncheck-redteam-headers FAILED (#{report.failures.length}):\n"
+report.failures.each { warn "  x #{_1}" }
+warn "\nThe beat set is DERIVED from each suite's own registrations; the header, the demo:redteam desc and " \
+     "the README battery section are RESTATEMENTS of it. Repair the restatement, never the derivation — " \
+     "and if a beat was renamed, all three move together (K-709, K-710, T-078)."
+exit 1

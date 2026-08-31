@@ -1137,6 +1137,55 @@ jobs:
       - name: check-demo-derivations self-test
         run: ./bin/check-demo-derivations --self-test
 
+  # Does every place a demo restates its red-team beat list still agree with the
+  # beats that demo's suite actually registers? (T-078, and T-105/K-901, which
+  # commissioned the same script from the same files without naming each other)
+  #
+  # K-709 and K-710 were this defect: six driver headers told the reader
+  # registration carried no PoW while each solved one a few dozen lines below,
+  # and five suite headers disagreed with the scenarios beneath them — stylish's
+  # naming a beat that did not exist and omitting three that did. Both were
+  # repaired by hand, and the class came back twice more: philslist's
+  # RetiredWire/MethodMismatch arrived with the per-verb cutover and the header
+  # was never updated, and the 2026-08-26 wave found a `verified` K-710 carrying
+  # a verification sentence that had itself gone false. Every one of those
+  # repairs corrected a hand-kept list by hand, and every gate stayed green
+  # throughout, because nothing in this repository read a beat name in prose. It
+  # does now — and the hour it was written it found two live omissions, one in
+  # atablefor's header and one in tudu's README.
+  #
+  # A separate job for the reason bin/check-demo-derivations gives above: the
+  # boundary between these checks is the comparison INPUT, and this one compares
+  # a demo's redteam PROSE — the suite header, the demo:redteam rake desc, the
+  # README battery section — against that demo's own suite REGISTRATIONS.
+  # Stdlib Ruby only: no bundle, no services, no database.
+  redteam-beat-lists:
+    name: redteam prose names the beats that run (bin/check-redteam-headers)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every restatement of a beat list agrees with the suite that runs it
+        run: ./bin/check-redteam-headers
+
+      # Its own step, for the reason the sibling self-tests are: two of the six
+      # rules are BANS, and a ban's violation set is EMPTY when the tree is
+      # healthy, so an extractor broken by an edit leaves the bare run at exit 0
+      # and says nothing. The vacuity arms assert liveness on the DECLARATIONS —
+      # that the extractors still find entries to judge — rather than on the
+      # violations, which is the polarity K-1262 established.
+      - name: check-redteam-headers self-test
+        run: ./bin/check-redteam-headers --self-test
+
   # Does the deploy runbook's edge-rate-limit check still work? (K-976)
   #
   # deploy/Caddyfile ships its per-IP backstop COMMENTED, and it has to: a

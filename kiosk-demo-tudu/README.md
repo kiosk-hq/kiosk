@@ -99,7 +99,10 @@ to Alice reads the seeded household's roster: display names only, and no
 account address anywhere in the body — headless accounts read as an opaque
 `member-<hex>` derived from the account UUID, never from an address) and
 `ChosenNameNeverTheAddress` (a visitor signs up with a display name and the
-list page names them by it).
+list page names them by it). Plus `DeviceGrantRoleSelfSelection`, the shared
+`kiosk-redteam` beat every demo runs: the account-binding ceremony's
+unauthenticated opening request refuses `role`/`scope` at a DECLARED value
+as well as an invented one, while the role-less request still opens it.
 
 ### Not-only-commerce proof (`rake demo:schema`)
 

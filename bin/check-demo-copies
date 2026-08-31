@@ -33,13 +33,13 @@
 # to end «folding them together would put two unrelated invariants behind one
 # exit code and one --write contract», and the reason does not survive its own
 # file. MEASURED from the `# ── … ──` banners below: this script now enforces
-# EIGHTEEN independent invariants behind exactly one exit code and one --write
+# NINETEEN independent invariants behind exactly one exit code and one --write
 # contract — seventeen when that sentence was written, plus T-120's fragment
-# rule. Read as a rule about COUNT, the sentence argued for splitting this file
-# eighteen ways. It was never about count.
+# rule and K-1262's partial-convergence rule. Read as a rule about COUNT, the
+# sentence argued for splitting this file nineteen ways. It was never about count.
 #
-# The eighteen share the manifest, the discovery pass and the normalisation, so
-# eighteen scripts would re-declare the demo corpus eighteen times — which is
+# The nineteen share the manifest, the discovery pass and the normalisation, so
+# nineteen scripts would re-declare the demo corpus nineteen times — which is
 # precisely the drift this file exists to stop. What a sibling may not share is
 # its INPUT: a script that compares two different pairs of things cannot tell a
 # reader which pair disagreed, and no amount of output formatting fixes that,
@@ -66,7 +66,17 @@
 #                find out. A path here may still have individual METHODS and
 #                CONSTANTS held in lockstep — see the T-120 fragment rule below,
 #                which exists because «not compared» was letting shared units
-#                grow inside these files with nothing watching them.
+#                grow inside these files with nothing watching them. And since
+#                K-1262 the claim is CHECKED rather than taken: any SUBSET of the
+#                copies that agrees once comments and whitespace are normalised
+#                away must be declared in the entry's `agree:` map, as
+#                `:lockstep` (one artefact, hand-copied — and then held) or
+#                `:coincidence` (unrelated reasons, capped). Three of
+#                `script/schema_flow.rb`'s seven copies were one file at 37
+#                normalised lines under an entry that said each asserted its own
+#                demo's verbs, and nothing at either granularity could see it:
+#                the fragment rule's tripwire needed UNANIMITY, so two of three
+#                converging fired nothing, and the file level had no tripwire.
 #
 # `ships:` is the OTHER declaration a copy set can carry, and it answers a
 # question `except:` cannot: WHICH demos are supposed to have the file at all.
@@ -202,6 +212,35 @@ KYC_SHIPS =
   "was reviewed: a THIRD demo growing a copy would spread a surface already decided against, " \
   "and a copy DISAPPEARING is the T-062 migration itself, which must move this declaration in " \
   "the same wave rather than let it rot."
+
+# The two pairs of `app/operations/operation_result.rb` copies that AGREE, and
+# the reason each pair does (K-1262). Written once because the same two groups
+# are declared twice — on the file entry, whose copies agree whole, and on the
+# `#STATUSES` unit entry inside it — and two copies of a reason drift.
+OPERATION_RESULT_AGREE = {
+  %w[getgrocery skooti] => {
+    rule: :coincidence,
+    why:  "THE COINCIDENCE THIS ENTRY HAS ARGUED SINCE K-792, NOW DECLARED INSTEAD OF ONLY " \
+          "DESCRIBED. Both maps carry the same five codes ending in `kyc_required` and " \
+          "`quota_exceeded` — and they carry them for unrelated reasons: getgrocery gates alcohol, " \
+          "skooti gates a motorcycle licence, and each arrived at its own set by asking which " \
+          "refusals ITS verbs can make. `:coincidence` rather than `:lockstep` precisely because " \
+          "«even the one match today would be a coincidence to enshrine»: holding these two in " \
+          "lockstep would make a legitimate divergence — one origin adding a refusal the other " \
+          "cannot make — read as drift. What IS held is the membership: a THIRD demo landing on the " \
+          "same five codes is not an accident twice over, and the pair ceasing to agree drops this " \
+          "group in the same commit.",
+  },
+  %w[philslist tudu] => {
+    rule: :coincidence,
+    why:  "THE SHORTEST MAPS IN THE FLEET, AT THE SAME TWO CODES, FOR DIFFERENT REASONS. philslist " \
+          "lists `bad_request` and `forbidden` and deliberately has NO `not_found`, so a listing " \
+          "that does not exist and one that belongs to somebody else answer the same 403 and " \
+          "cross-owner probing cannot enumerate ids; tudu lists the same two because a to-do list " \
+          "its owner can always see has no third refusal to make. Same pair of codes, two unrelated " \
+          "arguments — the same shape as the getgrocery/skooti pair above and declared the same way.",
+  },
+}.freeze
 
 PROVE_SKELETON =
   "prove is a smaller API-only Rails app generated on its own; its whole skeleton differs from " \
@@ -619,7 +658,12 @@ COPIES = {
           "declare its own STATUSES (the base ships an empty map on purpose), and must define NO " \
           "methods at all — a file that may hold only a subclass line and a constant has nowhere " \
           "for uncompared behaviour to hide. Option B as filed on K-792 (teach this check a " \
-          "partial-compare rule) was NOT taken and must not be reinstated as the answer.",
+          "partial-compare rule) was NOT taken and must not be reinstated as the answer — and the " \
+          "`agree:` map below is not it. B carved a REGION out of each file and held the rest; this " \
+          "names the two SUBSETS whose whole copies happen to agree, holds neither, and leaves the " \
+          "sentence above («even the one match today would be a coincidence to enshrine») true " \
+          "rather than quietly reversed (K-1262).",
+    agree: OPERATION_RESULT_AGREE,
   },
 
   # ── db/migrate — output of kiosk-server's install generator ────────────────
@@ -698,7 +742,29 @@ COPIES = {
   # so the shared names are on the record as deliberate rather than as seven
   # copies nobody compared.
   "script/schema_flow.rb" => {
-    rule: :per_demo, why: "asserts THAT demo's declared capabilities and verb set.",
+    rule:  :per_demo,
+    why:   "asserts THAT demo's declared capabilities and verb set — TRUE OF FOUR OF THE SEVEN " \
+           "COPIES, and the other three are declared below rather than left implied (K-1262). " \
+           "getgrocery, hoteling, skooti and stylish each drive their own catalogue and assert " \
+           "their own verbs, at 46, 48, 59 and 23 normalised lines; atablefor, philslist and tudu " \
+           "are ONE driver at 37 normalised lines and one digest.",
+    agree: {
+      %w[atablefor philslist tudu] => {
+        rule: :lockstep,
+        why:  "ONE DISCOVERY DRIVER AT THREE PATHS, AND NOTHING IN IT IS PER-DEMO. It GETs " \
+              "`/kiosk/schema`, `/.well-known/kiosk.json`, `/agents.json` and `/agents.txt` with NO " \
+              "credential and emits one JSON line; the per-demo part — which capabilities and which " \
+              "verbs that line must carry — lives entirely in each demo's `demo:schema` rake task, " \
+              "which is where it belongs. The three copies differ only in the operator's name in a " \
+              "comment, the port in a usage line and the alignment of one hash. Held rather than " \
+              "recorded, because the load-bearing half is an ABSENCE that a one-sided edit would " \
+              "restore without failing anything: sending no Authorization header IS the T-094 " \
+              "assertion that `schema` is public, and a copy that quietly re-added a Bearer token " \
+              "would still pass its own demo while proving the opposite of what it claims. " \
+              "Converging the other four is not the answer and is not proposed — their assertions " \
+              "really are their own.",
+      },
+    },
   },
   "script/isolation_flow.rb" => {
     rule: :per_demo, why: "asserts cross-agent isolation over THAT demo's own rows.",
@@ -966,6 +1032,182 @@ def code_digest(path) = Digest::SHA256.hexdigest(code_norm(File.read(path)))
 
 def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 
+# ── A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262) ─────
+#
+# `:per_demo` means NOT COMPARED. Until 2026-08-31 the only thing anywhere in
+# this file that noticed a `:per_demo` subject whose copies had stopped
+# differing was the fragment rule's UNANIMITY tripwire one level down, and it
+# fires when ALL held copies of a declared unit agree — only then. MEASURED by
+# plant while T-146 was being built: converging TWO of
+# `app/models/cart_mandate.rb`'s three `scope :referencing` copies onto a third
+# left this script at EXIT 0; converging all three reddened it. At FILE level
+# there was no tripwire at all, in either shape. So the state the manifest is
+# LEAST able to describe — most of a group agreeing while one copy still
+# differs — was invisible at both granularities, and that is precisely the state
+# that means somebody hand-copied something.
+#
+# MEASURED at head over all 17 `:per_demo` paths, each path's copies grouped by
+# the SHA256 of its {code_norm}: exactly TWO paths have a group of two or more,
+# the same two the T-147 measurement found.
+#
+#   * `script/schema_flow.rb` — atablefor, philslist and tudu at 37 normalised
+#     lines each, one digest. One driver, hand-copied three times, under an
+#     entry whose own words were «asserts THAT demo's declared capabilities and
+#     verb set»: true of the other four copies (46, 48, 59 and 23 normalised
+#     lines) and untrue of these three.
+#   * `app/operations/operation_result.rb` — two pairs, 9 and 3 normalised
+#     lines, whose entry had already argued them out loud as coincidences.
+#
+# Those two are the whole reason the declaration has TWO KINDS rather than one:
+#
+#   rule: :lockstep    — these copies are ONE artefact that happens to live at N
+#                        paths. They are HELD: a copy edited alone fails here,
+#                        which is what turns 37 unwatched lines into watched
+#                        ones. This is the answer for a hand-copied file.
+#   rule: :coincidence — they agree today for unrelated reasons, and holding
+#                        them would enshrine an accident. NOT held as a promise
+#                        — but the group's MEMBERSHIP is: a demo JOINING it, or
+#                        the group ceasing to agree, fails and the declaration
+#                        is updated in the same commit. Both kinds are therefore
+#                        checked exactly as hard; what differs is the DIAGNOSIS
+#                        the next reader is handed, and the cap below.
+#
+# THE CAP IS THE ONE SUBSTANTIVE DIFFERENCE, and it is there because otherwise
+# `:coincidence` would be a free way to switch this rule off — which is the
+# undeclared-exclusion shape K-1262 belongs to. A `:coincidence` group may not
+# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines. MEASURED at head: the
+# live coincidences are 9 and 3 normalised lines at file level and 7, 1 and 1 at
+# unit level; the one lockstep group is 37. Twelve sits above every accident
+# this tree actually contains and far below the one artefact, and above it «they
+# happen to agree» stops being a credible reading of hand-copied code.
+#
+# THIS IS NOT K-792's OPTION B, which the `app/operations/operation_result.rb`
+# entry forbids by name and which must stay forbidden. That was «compare every
+# copy EXCEPT a named REGION of the file» — a partial COMPARISON, carving a
+# region out of a file and holding the rest. This is a partial CONVERGENCE:
+# whole copies, normalised whole, with the SUBSETS that agree named. No region
+# is carved out of anything, and the entry's own argument — that the seven
+# STATUSES maps are five different sets and even the one match is a coincidence
+# to enshrine — is what the `:coincidence` kind exists to let it keep saying.
+#
+# ALL COPIES AGREEING IS NOT DECLARABLE, in either kind. That is not a partial
+# convergence, it is a `:code` entry nobody has written yet, and it is reported
+# as one — the rule the unit level has had since T-120, now at both levels.
+AGREE_RULES = %i[lockstep coincidence].freeze
+AGREE_COINCIDENCE_MAX_LINES = 12
+
+# `bodies` is demo => normalised source; `declared` is the entry's `agree:` map,
+# keyed by a demo list. Appends to `errors` and returns the number of declared
+# groups it CONFIRMED against the tree — which the summary prints, so a rule that
+# has stopped finding anything shows up as a number rather than as silence.
+def agree_check(label, what, bodies, declared, errors)
+  declared = (declared || {}).to_h { |demos, spec| [demos.sort, spec] }
+  groups   = bodies.group_by { |_demo, norm| norm }
+                   .values.select { |g| g.size >= 2 }
+                   .to_h { |g| [g.map(&:first).sort, g.first[1]] }
+
+  declared.each do |demos, spec|
+    if demos.size < 2
+      errors << "#{label}: `agree:` declares #{demos.inspect} — an agreement is two copies or more " \
+                "(K-1262)."
+      next
+    end
+    absent = demos - bodies.keys
+    unless absent.empty?
+      errors << "#{label}: `agree:` names #{absent.join(', ')}, which no longer contributes a " \
+                "compared #{what} here. Update the declared set — a group that names a copy which is " \
+                "gone is the record turning back into an assumption (K-1262)."
+    end
+    errors << "#{label}: `agree:` entry [#{demos.join(',')}] carries no `why:` (K-1262)." \
+      if spec[:why].to_s.strip.empty?
+    next if AGREE_RULES.include?(spec[:rule])
+
+    errors << "#{label}: `agree:` entry [#{demos.join(',')}] has unknown `rule: " \
+              "#{spec[:rule].inspect}` — the choice is `:lockstep` (one artefact, hand-copied, and " \
+              "therefore HELD) or `:coincidence` (they agree today for unrelated reasons, recorded " \
+              "and capped at #{AGREE_COINCIDENCE_MAX_LINES} normalised lines) (K-1262)."
+  end
+
+  widened = {}
+  declared.each_key do |demos|
+    next if groups.key?(demos)
+
+    bigger = groups.keys.find { |g| (demos - g).empty? }
+    widened[demos] = bigger if bigger
+  end
+
+  confirmed = 0
+  groups.each do |demos, norm|
+    if demos.size == bodies.size
+      errors << "#{label}: declared `:per_demo` — genuinely different #{what}s sharing a name — but " \
+                "ALL #{bodies.size} copies now agree once comments and whitespace are normalised " \
+                "away (#{norm.lines.size} line(s)). That is not a partial convergence to declare in " \
+                "`agree:`, it is a `:code` entry nobody has written: either declare it `:code` and " \
+                "hold them there, or one copy lost what made it different (T-120, K-1262)."
+      next
+    end
+    if (declared_key = widened.key(demos))
+      joined = demos - declared_key
+      errors << "#{label}: `agree:` declares [#{declared_key.join(',')}] and #{joined.join(', ')} " \
+                "#{joined.size == 1 ? 'has' : 'have'} since joined — the agreeing group is now " \
+                "[#{demos.join(',')}], #{norm.lines.size} normalised line(s). A demo joining a group " \
+                "of copies that already agree is a NEW copy of something already hand-copied: widen " \
+                "the declaration and re-argue it, or give that copy back what made it its own " \
+                "(K-1262)."
+      next
+    end
+    unless declared.key?(demos)
+      # A declared group that has SHRUNK reports itself below, with the remedy
+      # that fits (propagate the edit, or drop the group). Reporting its
+      # surviving subset here as well would hand the next reader the WRONG
+      # remedy — "declare [atablefor,tudu]" — for the same one-sided edit.
+      next if declared.keys.any? { |d| (demos - d).empty? && !groups.key?(d) }
+
+      errors << "#{label}: [#{demos.join(',')}] — #{demos.size} of #{bodies.size} copies — agree once " \
+                "comments and whitespace are normalised away (#{norm.lines.size} normalised line(s)), " \
+                "and nothing declares it. `:per_demo` means the copies are compared to NOTHING, so a " \
+                "SUBSET that has quietly become one hand-copied #{what} is held by nothing while the " \
+                "entry reads as #{bodies.size} per-demo implementations. Declare it in this entry's " \
+                "`agree:` map — `:lockstep` if it is one artefact (then it is HELD), `:coincidence` " \
+                "if they agree for unrelated reasons (then it is capped at " \
+                "#{AGREE_COINCIDENCE_MAX_LINES} normalised lines) — with the reason (K-1262)."
+      next
+    end
+
+    confirmed += 1
+    spec = declared[demos]
+    next unless spec[:rule] == :coincidence && norm.lines.size > AGREE_COINCIDENCE_MAX_LINES
+
+    errors << "#{label}: `agree:` calls [#{demos.join(',')}] a `:coincidence`, but what they agree on " \
+              "is #{norm.lines.size} normalised lines and the cap is #{AGREE_COINCIDENCE_MAX_LINES}. " \
+              "At that size «they happen to agree» is not a credible reading of hand-copied code, and " \
+              "an uncapped `:coincidence` is a free way to switch this rule off. Declare `:lockstep` " \
+              "and hold them, or converge the rest and make the whole entry `:code` (K-1262)."
+  end
+
+  declared.each do |demos, spec|
+    next if groups.key?(demos) || widened.key?(demos)
+    next if (demos - bodies.keys).any?
+
+    actual = bodies.select { |d, _| demos.include?(d) }
+                   .group_by { |_d, norm| norm }
+                   .values.map { |g| "[#{g.map(&:first).sort.join(',')}]" }.sort.join(" ")
+    errors << if spec[:rule] == :lockstep
+                "#{label}: `agree:` holds [#{demos.join(',')}] in lockstep — ONE #{what}, hand-copied " \
+                  "— and they no longer agree: #{actual}. Propagate the edit to every copy in the " \
+                  "group, or, if the divergence is real, drop the group from `agree:` in the same " \
+                  "commit and say what made them diverge (K-1262)."
+              else
+                "#{label}: `agree:` records [#{demos.join(',')}] as a `:coincidence` and the " \
+                  "coincidence has ended: #{actual}. Nothing is broken — drop the group from " \
+                  "`agree:`, because a declaration that no longer describes the tree is the record " \
+                  "turning back into an assumption (K-1262)."
+              end
+  end
+
+  confirmed
+end
+
 # What the install generator would write today. `options` is the name the
 # templates reference (the generator's Thor options hash); binding hands it to
 # the ERB, so `<%= options[:schema].inspect %>` renders exactly as it does in
@@ -1070,6 +1312,11 @@ end
 errors = []
 short = ->(demo) { demo.delete_prefix("kiosk-demo-") }
 
+# Declared `agree:` groups CONFIRMED against the tree this run, over both
+# granularities. See the K-1262 banner above {agree_check} for the vacuity arm
+# this number exists to feed.
+agree_groups = 0
+
 # ── Undeclared and stale manifest entries ────────────────────────────────────
 (dups.keys - COPIES.keys).sort.each do |rel|
   copies = dups[rel]
@@ -1144,8 +1391,16 @@ COPIES.each do |rel, entry|
     errors << "#{rel}: stale `except:` entry for #{demo} — that demo does not ship this file" \
       unless present.include?(demo)
   end
+  if entry[:agree] && entry[:rule] != :per_demo
+    errors << "#{rel}: `agree:` names the copies of an UNCOMPARED entry that have converged; this " \
+              "entry is `:#{entry[:rule]}`, so every copy is already compared against every other " \
+              "one and the map records nothing. Drop it (K-1262)."
+  end
+
   if entry[:rule] == :per_demo
     errors << "#{rel}: :per_demo entries are not compared, so `except:` means nothing here" if excepted.any?
+    agree_groups += agree_check(rel, "file", copies.to_h { |demo, path| [short.(demo), code_norm(File.read(path))] },
+                                entry[:agree], errors)
     next
   end
 
@@ -2152,10 +2407,12 @@ FRAGMENT_EXCLUDED = {
     "identical, and its `get_json` carries the same six-body split T-119 exists to remove.",
   "script/schema_flow.rb" =>
     "Same argument again, smallest of the three: 3 shared names over seven copies, 2 identical, " \
-    "`get_json` with three distinct bodies. NOTE, and it is a live finding rather than part of " \
-    "this reason: three of the seven copies (atablefor, philslist, tudu) are CODE-IDENTICAL whole " \
-    "files at 37 normalised lines each, which the `:per_demo` entry's own words do not admit — " \
-    "K-1262.",
+    "`get_json` with three distinct bodies. THE OTHER HALF OF THIS PATH IS NO LONGER UNHELD, and " \
+    "not by the fragment rule: three of the seven copies (atablefor, philslist, tudu) are " \
+    "CODE-IDENTICAL WHOLE FILES at 37 normalised lines each, which the `:per_demo` entry's own " \
+    "words did not admit, and they are now declared `:lockstep` in that entry's `agree:` map and " \
+    "held there (K-1262). This exclusion therefore costs the FOUR remaining copies' shared units, " \
+    "not seven.",
 }.freeze
 
 # The demo sets and the reasons several fragment entries share, stated once so N
@@ -2784,6 +3041,17 @@ FRAGMENTS = {
   "app/models/user.rb#has_many" => {
     rule:  :per_demo,
     ships: %w[atablefor hoteling philslist skooti stylish tudu],
+    agree: {
+      %w[atablefor hoteling] => {
+        rule: :coincidence,
+        why:  "`has_many :bookings, dependent: :destroy` in both, and the entry's own `why:` below " \
+              "already says why: a restaurant table and a hotel room are both BOOKED, so two " \
+              "unrelated products spell one line identically. One line, no arguments that differ, " \
+              "nothing to hold — and holding it would make hoteling adding a second association a " \
+              "red build (K-1262). The membership is what is checked: a third demo joining this " \
+              "pair means three owners now spell their rows the same way, which is worth a look.",
+      },
+    },
     why:   "SAME MACRO, EACH DEMO'S OWN ROWS: bookings, reservations, appointments, listings, " \
            "lists and memberships. atablefor and hoteling happen to spell it identically because " \
            "both own `bookings`; philslist and tudu carry an explicit `foreign_key`/`inverse_of` " \
@@ -2861,6 +3129,7 @@ FRAGMENTS = {
            "thing to notice, and until this entry nothing would have.",
   },
   "app/operations/operation_result.rb#STATUSES" => {
+    agree: OPERATION_RESULT_AGREE,
     rule:  :per_demo,
     ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
     why:   "The five different status maps the file-level entry above enumerates and argues for — " \
@@ -3169,13 +3438,10 @@ FRAGMENTS.each do |id, entry|
                 "HELD with its siblings (K-1263)."
     end
   when :per_demo
-    groups = held.group_by { |_demo, src| src }
-    next if groups.size > 1
-
-    errors << "#{id}: declared `:per_demo` — a shared NAME with genuinely different bodies — but " \
-              "its #{held.size} copies now agree byte-for-byte once comments are normalised away. " \
-              "Either they converged, in which case declare it `:code` and hold them there, or " \
-              "one copy lost what made it different (T-120)."
+    # Not «are they ALL the same» any more: any SUBSET that agrees is a
+    # hand-copied unit nothing compares, and the unanimous case is the one
+    # branch of that (K-1262).
+    agree_groups += agree_check(id, "unit", held, entry[:agree], errors)
   else
     errors << "#{id}: unknown `rule: #{entry[:rule].inspect}` — the fragment rule understands " \
               ":code and :per_demo only (T-120)."
@@ -3204,6 +3470,35 @@ if FRAGMENTS.any? && fragment_comparisons.zero?
   errors << "check-demo-copies: the T-120 fragment rule declares #{FRAGMENTS.size} unit(s) and " \
             "compared NONE of them — the units have moved out of #{FRAGMENT_PATHS.join(', ')}, and " \
             "a lockstep rule with nothing to compare passes everything."
+end
+
+# VACUITY FOR THE PARTIAL-CONVERGENCE RULE (K-1262), AND IT IS DELIBERATELY NOT
+# «THE PATTERN MUST MATCH SOMETHING».
+#
+# That arm is right for a rule that LOOKS for a thing and wrong for a rule that
+# FORBIDS one. `agree:`'s discovery half is a ban — no undeclared group of
+# agreeing copies inside a `:per_demo` entry — and a ban whose violations match
+# nothing is the ban being obeyed, which is the state this repository wants to be
+# in. Requiring an undeclared group to exist would require the defect to exist.
+#
+# So the liveness is asserted on the DECLARATIONS instead, through exactly the
+# machinery the ban uses: every declared group is re-derived from the tree by the
+# same grouping pass, and the count of groups CONFIRMED that way is checked
+# against the count declared. If the grouping stops running — a `next` in the
+# wrong place, a normaliser that returns nothing, an entry key that stops being
+# read — nothing is grouped, so nothing is undeclared, so the ban passes silently.
+# It cannot pass silently AND confirm a declared group at the same time. This is
+# the EARLIER_WIRES lesson applied to a rule of the opposite polarity: what must
+# be alive is the measurement, not the offence.
+declared_agree_groups = COPIES.sum { |_, e| (e[:agree] || {}).size } +
+                        FRAGMENTS.sum { |_, e| (e[:agree] || {}).size }
+if declared_agree_groups.positive? && agree_groups.zero?
+  errors << "check-demo-copies: the manifest declares #{declared_agree_groups} `agree:` group(s) of " \
+            "converged `:per_demo` copies and this run CONFIRMED none of them against the tree. " \
+            "Every declared group is re-derived by the same grouping pass that catches an " \
+            "UNDECLARED one, so zero confirmations means that pass stopped running — and a " \
+            "convergence tripwire that groups nothing reports no partial convergence, ever, while " \
+            "exiting 0 (K-1262)."
 end
 
 # VACUITY, TWO ARMS, BOTH T-146.
@@ -4379,6 +4674,8 @@ if errors.empty?
        "#{fragment_copies_compared} compared copies with #{fragment_exceptions_live} declared " \
        "exception(s), the rest declared " \
        "same-name-different-body; #{fragment_dsl_ids.size} reached only by the class-macro handle, " \
+       "#{agree_groups} declared convergence group(s) of `:per_demo` copies confirmed against the " \
+       "tree over both granularities, " \
        "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason)"
   exit 0
 end

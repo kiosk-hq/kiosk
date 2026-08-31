@@ -73,6 +73,10 @@
           ],
           "description": "REQUIRED. JSON Schema (draft 2020-12) for what this verb RETURNS. With no response envelope, this is the ONLY machine-readable statement of the result shape: what a query's rows look like, or what an action's object contains. A query's is an ARRAY schema whether or not the verb paginates -- a paginated page carries its cursor in an RFC 8288 Link header, not in the body -- so a paginating verb declares one shape, not a two-branch union. It must describe what the verb actually renders -- a success body that does not satisfy it is an operator-side defect, not a permitted variation."
         },
+        "params": {
+          "description": "FORBIDDEN. `false` refuses the key outright: the retired 0.3 free-form hint object was WITHDRAWN from the wire in 0.4 (Section 8.3), and a catalog that still publishes one -- including the `null` every 0.3 origin published -- is not conformant. This declaration is narrow ON PURPOSE. It forbids exactly the withdrawn key and says nothing about any other member: whether a descriptor may carry operator-defined members at all is UNSETTLED (K-1278), and closing the whole object here would answer that question by accident. Contrast the ROOT, which IS closed and says so above.",
+          "not": {}
+        },
         "example_params": {
           "description": "OPTIONAL example params object an AI assistant can copy verbatim as a starting call for this verb. It ILLUSTRATES input_schema and is not the contract: where the two disagree, the schema is right."
         },

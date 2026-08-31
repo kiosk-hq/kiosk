@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at b4ed6cdc
-# 1637 anchors.
+# recorded: 2026-08-31 at cc180d5e (working tree: 1 cited file(s) modified)
+# 1638 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -800,6 +800,7 @@ kiosk-pow-equihash/README.md	f42c6ae69f89cd1c	memory-bandwidth-bound). What it b
 kiosk-pow-equihash/README.md	d70898c673939bde	never accepted a real proof
 kiosk-pow-equihash/README.md	7e95f2970a52994e	no amortization
 kiosk-pow-equihash/README.md	6c7eba898cb2e4b4	not cancel. Rubbish indices are rejected without a single hash (0.012 ms
+kiosk-pow-equihash/README.md	299fb5b575ab6a1b	origin actually charges rather than beside the gem's default.
 kiosk-pow-equihash/README.md	d0c8d6d77a68b78d	pip install numpy          # REQUIRED — see performance note below
 kiosk-pow-equihash/README.md	c211993e6205a066	prices _throughput_, not latency
 kiosk-pow-equihash/README.md	d70898c673939bde	so the bug was latent, and equihash never accepted a real proof at the

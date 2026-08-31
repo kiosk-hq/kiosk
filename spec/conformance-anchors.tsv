@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1633 anchors.
+# 1636 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -177,7 +177,9 @@ e2e/assistant.sh	register-pow: code pow_required
 e2e/assistant.sh	register-pow: minted token wire → 200
 e2e/assistant.sh	register-pow: no-proof → 402
 e2e/assistant.sh	register-pow: role pinned customer
+e2e/assistant.sh	register-pow: served (n,k) IS the configured pair
 e2e/assistant.sh	register-pow: solve+proof → registered
+e2e/assistant.sh	register-pow: the expected (n,k) was READ from the initializer
 e2e/assistant.sh	reserved limit/cursor accepted → 200
 e2e/assistant.sh	salon name is Combette
 e2e/assistant.sh	schema publishes {queries, actions} and nothing else
@@ -223,6 +225,7 @@ e2e/fixtures/pay_flow.rb	pay_request = { intent_mandate_jws: JWT.encode(intent, 
 e2e/fixtures/pay_flow.rb	pay_request = { intent_mandate_jws: JWT.encode(intent, key, "RS256"),
 e2e/fixtures/pay_flow.rb	scope: "food", cap_amount_cents: cap_amount_cents, currency: "eur", exp: now + 600, iat: now }
 e2e/fixtures/pay_flow.rb	trail (intent → cart → payment) bound to that principal, and pays
+e2e/fixtures/register_pow_flow.rb	challenge_params = Array(reg_noproof[
 e2e/run.sh	  fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
 e2e/run.sh	bundle exec rails db:create db:migrate db:seed RAILS_ENV=development \
 e2e/run.sh	bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null

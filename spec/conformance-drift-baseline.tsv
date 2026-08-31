@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at a91cce79 (working tree: 11 cited file(s) modified)
-# 1633 anchors.
+# recorded: 2026-08-31 at e8cdc520 (working tree: 2 cited file(s) modified)
+# 1636 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -179,7 +179,9 @@ e2e/assistant.sh	296cc8a8da7d3020	register-pow: code pow_required
 e2e/assistant.sh	c85a037c585530c2	register-pow: minted token wire → 200
 e2e/assistant.sh	83cb3cf0d792a0b7	register-pow: no-proof → 402
 e2e/assistant.sh	eb77fdb8c475fee3	register-pow: role pinned customer
+e2e/assistant.sh	8f1344bb51c91c9d	register-pow: served (n,k) IS the configured pair
 e2e/assistant.sh	d6440cc5cecd3f3a	register-pow: solve+proof → registered
+e2e/assistant.sh	afb6dc3bfc23fc7c	register-pow: the expected (n,k) was READ from the initializer
 e2e/assistant.sh	5227abc963e74bf4	reserved limit/cursor accepted → 200
 e2e/assistant.sh	a8664229f3a352f9	salon name is Combette
 e2e/assistant.sh	0c6932c1c6dfda08	schema publishes {queries, actions} and nothing else
@@ -225,6 +227,7 @@ e2e/fixtures/pay_flow.rb	738bd3bdbaaf8bf0	pay_request = { intent_mandate_jws: JW
 e2e/fixtures/pay_flow.rb	738bd3bdbaaf8bf0	pay_request = { intent_mandate_jws: JWT.encode(intent, key, "RS256"),
 e2e/fixtures/pay_flow.rb	435e7ba75a6f0cc4	scope: "food", cap_amount_cents: cap_amount_cents, currency: "eur", exp: now + 600, iat: now }
 e2e/fixtures/pay_flow.rb	eb5811156bc9cba5	trail (intent → cart → payment) bound to that principal, and pays
+e2e/fixtures/register_pow_flow.rb	7dbc003a68e1ebbf	challenge_params = Array(reg_noproof[
 e2e/run.sh	1b616a4bdfea9ead	  fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
 e2e/run.sh	b3e8eb187449ca58	bundle exec rails db:create db:migrate db:seed RAILS_ENV=development \
 e2e/run.sh	6a1a554583c77e95	bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null

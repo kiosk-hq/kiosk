@@ -927,6 +927,33 @@ reg_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER
 assert "register-pow: no-proof → 402"          "$(echo "$reg_out" | jq -r '.no_proof_status')"        "402"
 assert "register-pow: code pow_required"       "$(echo "$reg_out" | jq -r '.no_proof_code')"          "pow_required"
 assert "register-pow: 1 challenge issued"      "$(echo "$reg_out" | jq -r '.challenges_len')"         "1"
+
+# ─── HOW BIG the toll is, asserted off the wire (T-122) ──────────────────────
+#
+# The count above has been read off the 402 since it was written; the SIZE never
+# was. Every statement this harness made about the register toll's (n, k) was a
+# comment — three of them, all true, all unable to notice a retune (K-1039). The
+# server now has to say it: `challenge_params_nk` is `challenges[0].params`
+# joined `n:k`, off the same 402 the count comes from.
+#
+# THE EXPECTED PAIR IS READ, NOT TYPED. Typing `96:5` here would put a fourth
+# hand-kept copy of the constant in the file K-1039 cleaned, and this assertion
+# would then hold two hand edits in agreement rather than the server to its own
+# configuration. It is extracted from the initializer that CONFIGURES the gate,
+# so what is proven is that the origin publishes the toll this harness asked for
+# — which a config read cannot show, because it never leaves the config.
+reg_pow_expected=$(
+  sed -n 's/^E2E_REGISTRATION_POW_PARAMS[[:space:]]*=[[:space:]]*{[[:space:]]*n:[[:space:]]*\([0-9][0-9]*\)[[:space:]]*,[[:space:]]*k:[[:space:]]*\([0-9][0-9]*\)[[:space:]]*}.*/\1:\2/p' \
+      "$FIXTURES/initializer_kiosk.rb"
+)
+# The vacuity arm, and it guards the READING rather than the comparison: if the
+# constant is renamed, reformatted or deleted, `sed` prints nothing and the
+# comparison below would hold "" against "" the moment the server also stopped
+# publishing params. This fails first, and says which half broke.
+assert "register-pow: the expected (n,k) was READ from the initializer" \
+       "$(printf '%s' "$reg_pow_expected" | grep -cE '^[0-9]+:[0-9]+$')"                             "1"
+assert "register-pow: served (n,k) IS the configured pair" \
+       "$(echo "$reg_out" | jq -r '.challenge_params_nk')"    "$reg_pow_expected"
 assert "register-pow: solve+proof → registered" "$(echo "$reg_out" | jq -r '.with_proof_registered')" "true"
 assert "register-pow: role pinned customer"    "$(echo "$reg_out" | jq -r '.role')"                   "customer"
 assert "register-pow: minted token wire → 200" "$(echo "$reg_out" | jq -r '.wire_status')"            "200"

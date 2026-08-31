@@ -783,6 +783,24 @@ jobs:
       # copy, never `git checkout -- <path>`: during a fix wave that restores to
       # HEAD and takes uncommitted work with it.
       #
+      # A HAZARD NOW FAILS THIS STEP (T-132). A leftover column that is NOT NULL
+      # with no DEFAULT, on a table head still declares, used to be a printed
+      # note; it is a live 500 waiting for a box of that vintage and it exits 1.
+      # A leftover on a table head has RETIRED is not that and never was — the
+      # verdict now reads the difference off head's own structure.sql — and the
+      # accepted ones are declared in the script's ACCEPTED_LEFTOVERS with the
+      # ledger row that made each acceptable, so the escape hatch is a
+      # declaration somebody wrote down rather than a flag.
+      #
+      # MEASURED 2026-08-31 for that flip, on kiosk-demo-tudu, from a cp backup:
+      # delete 20260827000002_drop_kiosk_settlement_raw_jws.rb (K-1086's repair)
+      # and run `--since 2026-08-11` — exit 1 naming
+      # `HAZARD column|kiosk.settlements.raw_jws (text NO -)`, where the same
+      # tree under the PREVIOUS revision of the script exits 0 with seven HAZARD
+      # note lines. The `--since` is load-bearing in that recipe: the default
+      # window starts after the last fleet rebuild and holds one vintage per
+      # demo, which is also why a clean tree replays 8 times here and not 52.
+      #
       # COST: ~4-8 s per demo here (34 s for all eight on one laptop core),
       # because the bundle and the postgres service are already up and the whole
       # job is sharded by demo. Cheap enough to run on every push, which is the

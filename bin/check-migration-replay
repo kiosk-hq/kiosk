@@ -49,15 +49,41 @@
 # were deleted. Comparing named objects — columns with type/nullability/default,
 # indexes, constraints, functions — drops both without hiding anything else.
 #
-# MISSING IS A FAILURE; EXTRA IS A NOTE. The defect class is "the code SELECTs
-# something the deployed database has not got", which is always an ABSENCE. A
-# leftover object — a table whose creating migration was later retired, say —
-# never returns HTTP 500, and it is on every real box forever, so failing on it
-# would only teach people to switch the gate off. Extras are printed; pass
-# `--strict` to fail on them too. One kind of extra is called out separately as
-# a HAZARD rather than a leftover: a column the replay keeps that is NOT NULL
-# with no DEFAULT, because head's INSERTs do not name it and Postgres will
-# refuse every one of them.
+# MISSING IS A FAILURE; A PLAIN EXTRA IS A NOTE; A HAZARD IS A FAILURE (T-132).
+# The defect class is "the code SELECTs something the deployed database has not
+# got", which is always an ABSENCE. A leftover object — a table whose creating
+# migration was later retired, say — never returns HTTP 500, and it is on every
+# real box forever, so failing on it would only teach people to switch the gate
+# off. Plain extras are therefore printed; pass `--strict` to fail on them too.
+#
+# ONE KIND OF EXTRA IS NOT HARMLESS AND SINCE T-132 IT FAILS BY DEFAULT: a
+# leftover column that is NOT NULL with no DEFAULT, ON A TABLE HEAD STILL
+# DECLARES. Head's INSERTs do not name the column, so Postgres refuses every one
+# of them — that is a live 500 waiting for a box of that vintage, the same
+# severity as a MISSING object and the mirror of it (K-1086 shipped the DROP
+# that repairs the worked example). The escape hatch is a DECLARATION, not a
+# flag: ACCEPTED_LEFTOVERS below, where every entry carries the ledger row that
+# made it acceptable. A flag can be turned off for a run; a declaration has to
+# be written down and reviewed.
+#
+# RETIRED IS NOT THE SAME AS LIVE, AND THE VERDICT NOW KNOWS THE DIFFERENCE
+# (T-132, from K-1082's fix-ref). The HAZARD line used to read «every INSERT
+# into that table is refused on a box of that vintage», which is literally true
+# and connotatively far too strong for a table head has retired: `kiosk.actions`
+# and `kiosk.action_log` were retired by K-828 and survive on every pre-retirement
+# box forever, because retiring a migration does not drop what it made — and
+# NOTHING at head inserts into them, so there is no INSERT to be refused.
+# Measured on the 2026-08-11 window, six of the six distinct HAZARD objects are
+# those two tables. Failing the build on that would teach exactly the scroll-past
+# reflex that carries the next real hazard past a reader, so it is not a hazard
+# here at all: it is reported as RETIRED, with the reason, and never fails
+# without `--strict`.
+#
+# THE RETIRED/LIVE SPLIT IS DERIVED, NOT LISTED. A leftover's table is LIVE if
+# head's own `db/structure.sql` declares it — which is exactly the reference
+# catalogue this check has already built, so no list can go stale. If head's
+# canonical schema has no such table, head cannot write to it: every gate,
+# every box and every fresh install build from that file.
 #
 # IDENTITY IS COMPARED STRICTLY, DEFINITION IS COMPARED BY KIND, and the reason
 # is measured rather than cautious. An object that exists under the same name in
@@ -88,9 +114,10 @@
 #   bin/check-migration-replay kiosk-demo-tudu      # one demo
 #   bin/check-migration-replay --since 2026-08-20   # narrower window
 #   bin/check-migration-replay --list               # show baselines, run nothing
-#   bin/check-migration-replay --strict             # extras fail too
+#   bin/check-migration-replay --strict             # plain extras fail too
 #
-# Exits 0 clean, 1 on any aborted replay or missing object. Needs Postgres and a
+# Exits 0 clean, 1 on any aborted replay, missing object, or undeclared HAZARD.
+# Needs Postgres and a
 # psql >= 17 (the committed structure.sql files are PG17-format), plus each
 # demo's bundle.
 
@@ -108,6 +135,76 @@ ROOT = File.expand_path("..", __dir__)
 # first provisioned 2026-08-11 (deploy/box-prep-2026-08-11.sh); the reset resets
 # this window. See "HOW FAR BACK" above before changing it.
 FLEET_SCHEMA_BASELINE = "2026-08-28"
+
+# ── The leftovers that are ACCEPTED, and the row that made each one so (T-132)
+#
+# A leftover object is one the replay keeps and head's `db/structure.sql` does
+# not declare. Most of them are the accepted consequence of a terminal decision:
+# a table or a column was retired, the migration that made it was retired with
+# it, and neither the DROP nor a rebuild ever reached a box that already had it.
+# Nothing reads or writes them, and they are on those boxes forever.
+#
+# THEY ARE DECLARED HERE RATHER THAN MERELY TOLERATED, and that is the whole
+# point of the entry (K-1086's fix-ref, carried forward as T-132). Tolerated,
+# they were 139 note lines nobody read, `--strict` was unusable, and a NEW
+# leftover arrived indistinguishable from them. Declared, each one names the
+# LEDGER ROW that makes it acceptable, so the list cannot grow without somebody
+# writing down why — and anything not on it is either a note the run prints or,
+# for the NOT NULL-with-no-DEFAULT case on a live table, a red build.
+#
+# TWO KEY SHAPES:
+#   * a bare `schema.table` accepts EVERY leftover object on that table — the
+#     right scope when the whole table was retired, because its columns, its
+#     indexes and its constraints all went with it and enumerating twenty-one of
+#     them would be twenty-one places to keep in step;
+#   * a full `kind|schema.table.name` accepts ONE object on a table head still
+#     declares.
+# Both are checked against the tree on every run: a table-scoped entry whose
+# table head DECLARES again, or an object-scoped entry head declares again, is a
+# stale declaration and fails. An entry that matched nothing in the window is
+# NOT a failure — see the reach line in the summary for why.
+ACCEPTED_LEFTOVERS = {
+  "kiosk.actions" => {
+    row: "K-828",
+    why: "the 0.3 action catalogue, retired whole. Its creating migration was retired with it, so a " \
+         "box provisioned before the retirement keeps the table and no later migration drops it. " \
+         "Nothing at head names it: it is absent from every demo's db/structure.sql, which is what " \
+         "the retired/live split below reads.",
+  },
+  "kiosk.action_log" => {
+    row: "K-828",
+    why: "the 0.3 action catalogue's audit table, retired in the same decision and surviving for the " \
+         "same reason. Five of its columns are NOT NULL with no DEFAULT, which is what used to be " \
+         "reported as a HAZARD; there is no INSERT to refuse, because head has no such table.",
+  },
+  "column|kiosk.agents.kyc_attributes" => {
+    row: "K-656",
+    why: "the jsonb blob the KYC attributes were kept in before they became rows in kiosk.kyc_attributes. " \
+         "The column is nullable, so it walls nothing; the TABLE is live, which is why this entry is " \
+         "object-scoped rather than table-scoped.",
+  },
+}.freeze
+
+# The `schema.table` an object identity belongs to. Identities are
+# `schema.table.name` for columns, indexes and constraints; a function's is
+# `schema.name(args)`, which has no table and simply never matches a table key.
+def table_of(key)
+  key.split("|", 2).last.to_s.split(".")[0, 2].join(".")
+end
+
+# Object-scoped first, then table-scoped. `accepted_key` is which DECLARATION
+# excused the object — reported, so a reader can see which entry is doing the
+# work rather than only that something did.
+def accepted_key(key)
+  return key if ACCEPTED_LEFTOVERS.key?(key)
+
+  table = table_of(key)
+  table if ACCEPTED_LEFTOVERS.key?(table)
+end
+
+def accepted_leftover(key)
+  ACCEPTED_LEFTOVERS[accepted_key(key)]
+end
 
 # Named objects only — never row contents, never physical ordering. Each row is
 # `kind|identity|definition`: the identity is what must EXIST, the definition is
@@ -235,6 +332,24 @@ notes    = []
 replays  = 0
 started  = Time.now
 
+# Every `schema.table` head declares, accumulated across the demos replayed, and
+# the number of leftovers each ACCEPTED_LEFTOVERS entry actually excused. Both
+# are reported: the first is what the retired/live split is derived from, the
+# second is the only thing that distinguishes a live declaration from a dead one.
+live_tables       = []
+reference_objects = []
+accepted_reach    = Hash.new(0)
+
+# The declaration's own shape, checked here rather than trusted: an entry with
+# no ledger row is the thing this list exists to prevent — a leftover accepted
+# because somebody typed it in.
+ACCEPTED_LEFTOVERS.each do |key, entry|
+  failures << "ACCEPTED_LEFTOVERS[#{key.inspect}] carries no `row:` — every accepted leftover names " \
+              "the ledger row that made it acceptable, or the list is a place to hide things" \
+    unless entry[:row].to_s.match?(/\A[KT]-\d+\z/)
+  failures << "ACCEPTED_LEFTOVERS[#{key.inspect}] carries no `why:` reason" if entry[:why].to_s.strip.empty?
+end
+
 demos.each do |demo|
   structure_path = File.join(ROOT, demo, "db", "structure.sql")
   tracked        = File.read(structure_path)
@@ -329,32 +444,128 @@ demos.each do |demo|
                rendered.map { "      RENDERED #{_1}\n        replay #{replayed[_1]}\n        tree   #{reference[_1]}\n" }.join
     end
 
-    hazards = extra.select { hazard?(_1, replayed[_1]) }
-    unless hazards.empty?
-      message = "#{demo}: #{baseline[:label]} — #{hazards.length} leftover NOT NULL column(s) with no " \
-                "DEFAULT: head's INSERTs do not name them, so every INSERT into that table is refused " \
-                "on a box of that vintage:\n" +
-                hazards.map { "      HAZARD   #{_1}  (#{replayed[_1]})\n" }.join
-      options[:strict] ? failures << message : notes << message
+    # RETIRED vs LIVE, read off the reference catalogue this run already built
+    # rather than off a list: a table head still declares is one whose columns
+    # are in `reference`. See "THE RETIRED/LIVE SPLIT IS DERIVED" above.
+    live_tables.concat(reference.keys.filter_map { table_of(_1) if _1.start_with?("column|") })
+    live_tables.uniq!
+    reference_objects.concat(reference.keys)
+    reference_objects.uniq!
+
+    buckets = Hash.new { |h, k| h[k] = [] }
+    extra.each do |key|
+      retired  = !live_tables.include?(table_of(key))
+      declared = accepted_leftover(key)
+      accepted_reach[accepted_key(key)] += 1 if declared
+      verdict =
+        if hazard?(key, replayed[key]) && !retired then :hazard
+        elsif retired                              then :retired
+        else                                            :leftover
+        end
+      buckets[[verdict, !declared.nil?]] << key
     end
 
-    leftovers = extra - hazards
-    next if leftovers.empty?
+    # (1) THE ONE FATAL EXTRA: a wall on a table head still writes to, undeclared.
+    hazards = buckets[[:hazard, false]]
+    unless hazards.empty?
+      failures << "#{demo}: #{baseline[:label]} — #{hazards.length} leftover NOT NULL column(s) with " \
+                  "no DEFAULT on a table head STILL DECLARES: head's INSERTs do not name them, so any " \
+                  "INSERT into that table is refused on a box of that vintage. Ship a NEW migration " \
+                  "that DROPs the column (K-1086 is the worked example, and the symmetry rule is in " \
+                  "kiosk-server's schema_definitions.rb), or declare it in ACCEPTED_LEFTOVERS with the " \
+                  "ledger row that makes it acceptable:\n" +
+                  hazards.map { "      HAZARD   #{_1}  (#{replayed[_1]})\n" }.join
+    end
 
-    message = "#{demo}: #{baseline[:label]} — #{leftovers.length} leftover object(s) the replay keeps " \
-              "and structure.sql does not declare (an absence 500s, a leftover does not):\n" +
-              leftovers.map { "      EXTRA    #{_1}\n" }.join
-    options[:strict] ? failures << message : notes << message
+    # (2) The same wall, declared. Printed with its row so the declaration is
+    #     visible on every run rather than only in the source.
+    declared_hazards = buckets[[:hazard, true]]
+    unless declared_hazards.empty?
+      notes << "#{demo}: #{baseline[:label]} — #{declared_hazards.length} NOT NULL leftover(s) with no " \
+               "DEFAULT, DECLARED in ACCEPTED_LEFTOVERS:\n" +
+               declared_hazards.map { "      DECLARED #{_1}  (#{accepted_leftover(_1)[:row]})\n" }.join
+    end
+
+    # (3) A leftover on a table head has retired. NOT a hazard however NOT NULL
+    #     it is: there is no INSERT to refuse, because head has no such table.
+    %w[declared undeclared].each do |state|
+      keys = buckets[[:retired, state == "declared"]]
+      next if keys.empty?
+
+      tables  = keys.map { table_of(_1) }.uniq.sort
+      message = "#{demo}: #{baseline[:label]} — #{keys.length} leftover object(s) on #{tables.length} " \
+                "table(s) head has RETIRED (#{tables.join(', ')}): head's db/structure.sql does not " \
+                "declare #{tables.length == 1 ? 'it' : 'them'} at all, so nothing inserts into " \
+                "#{tables.length == 1 ? 'it' : 'them'} and there is no INSERT to be refused. Retiring " \
+                "a migration does not drop what it made, so #{tables.length == 1 ? 'this table' : 'these tables'} " \
+                "survive#{tables.length == 1 ? 's' : ''} on every box of that vintage forever" +
+                (state == "declared" ? " (declared: #{keys.map { accepted_leftover(_1)[:row] }.uniq.join(', ')})" : "") +
+                ":\n" + keys.map { "      RETIRED  #{_1}\n" }.join
+      state == "declared" || !options[:strict] ? notes << message : failures << message
+    end
+
+    # (4) Everything else the replay keeps: an absence 500s, a leftover does not.
+    %w[declared undeclared].each do |state|
+      keys = buckets[[:leftover, state == "declared"]]
+      next if keys.empty?
+
+      message = "#{demo}: #{baseline[:label]} — #{keys.length} leftover object(s) the replay keeps and " \
+                "structure.sql does not declare (an absence 500s, a leftover does not)" +
+                (state == "declared" ? ", DECLARED in ACCEPTED_LEFTOVERS" : "") + ":\n" +
+                keys.map { state == "declared" ? "      DECLARED #{_1}  (#{accepted_leftover(_1)[:row]})\n" : "      EXTRA    #{_1}\n" }.join
+      state == "declared" || !options[:strict] ? notes << message : failures << message
+    end
   end
 end
 
 exit 0 if options[:list]
+
+# A DECLARATION THAT NO LONGER DESCRIBES THE TREE. A table-scoped entry is a
+# statement that head has retired the table; an object-scoped one that head no
+# longer declares the object. Either coming BACK makes the entry a lie that
+# silently accepts a live object, so it is checked against the same reference
+# catalogues the split is derived from — never against a remembered list.
+unless options[:list] || live_tables.empty?
+  ACCEPTED_LEFTOVERS.each_key do |key|
+    if key.include?("|")
+      next unless reference_objects.include?(key)
+
+      failures << "ACCEPTED_LEFTOVERS declares #{key} a leftover, and head's db/structure.sql declares " \
+                  "it again — the object is back, so the entry now excuses something live. Drop it."
+    else
+      next unless live_tables.include?(key)
+
+      failures << "ACCEPTED_LEFTOVERS declares the whole of #{key} retired, and head's db/structure.sql " \
+                  "declares that table — every leftover on a LIVE table is now excused by this entry, " \
+                  "including a NOT NULL wall. Drop it, or narrow it to the objects that are really gone."
+    end
+  end
+end
 
 elapsed = (Time.now - started).round(1)
 
 unless notes.empty?
   puts "\ncheck-migration-replay NOTES (not failures):\n"
   notes.each { puts "  - #{_1}" }
+end
+
+# THE REACH OF THE DECLARATION, PRINTED EVERY RUN. An allow-list nobody reaches
+# looks exactly like an allow-list that is holding something, and this one is
+# reached ZERO times in the default window on purpose: the fleet was rebuilt on
+# FLEET_SCHEMA_BASELINE, so no vintage in the window still carries the retired
+# tables. That is a fact about the window, not about the entries, and widening
+# the window with `--since` brings them back — which is the only way to see them
+# work. It is a NOTE and not a failure for exactly that reason: making it fatal
+# would demand the defect exist. (`--since 2026-08-11`, the pre-rebuild window,
+# measured 2026-08-31: 22 distinct leftover objects, all three entries reached,
+# zero undeclared.)
+unless ACCEPTED_LEFTOVERS.empty? || options[:list]
+  reached = ACCEPTED_LEFTOVERS.keys.count { accepted_reach[_1].positive? }
+  detail  = ACCEPTED_LEFTOVERS.map { |k, e| "#{k} (#{e[:row]}) x#{accepted_reach[k]}" }.join(", ")
+  puts "\ncheck-migration-replay: ACCEPTED_LEFTOVERS — #{ACCEPTED_LEFTOVERS.size} declared, " \
+       "#{reached} reached in this window [#{detail}]. Zero reached is expected while the window " \
+       "starts after the last fleet rebuild; it is never a failure, because a declaration can only " \
+       "be exercised by the defect it declares."
 end
 
 if failures.empty?

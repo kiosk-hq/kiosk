@@ -2009,8 +2009,8 @@ end
 #
 # WHICH PATHS ARE IN, AND THE RULE THE NEXT ONE IS JUDGED BY (T-136, T-145).
 # Seventeen manifest paths are `:per_demo`. Running the extractor below over all
-# seventeen at head finds **114 unit NAMES shared by two or more copies**, of
-# which **72** also have identical bodies once comments and whitespace are
+# seventeen at head finds **124 unit NAMES shared by two or more copies**, of
+# which **76** also have identical bodies once comments and whitespace are
 # normalised away. Both readings are stated because they answer different
 # questions: discovery fires on a shared NAME whatever the bodies do, and only
 # the narrower number is what a lockstep rule can actually hold. Re-measured for
@@ -2039,8 +2039,8 @@ end
 # that ought to happen instead (T-119) would arrive as a red build demanding a
 # dozen re-declarations.
 #
-# TAKEN — every `:per_demo` path that passes it, which is THIRTEEN of the
-# seventeen and 78 of the 114 shared names. Shared/identical at head:
+# TAKEN — every `:per_demo` path that passes it, which is FOURTEEN of the
+# seventeen and 88 of the 124 shared names. Shared/identical at head:
 # `script/binding_flow.rb` 16/16, `script/pay_window.rb` 19/15 (the four that
 # differ are `reserve!`, `payment_state`, `cart_for` and `settlements_for` —
 # booking_id against reservation_id, a room-night against a scooter-minute),
@@ -2048,14 +2048,17 @@ end
 # fixture DAY), `script/pow_flow.rb` 7/6, `script/prove_broker_boot.rb` 9/4 (T-147 split four
 # per-operator units out of `with_broker` so the other 54 lines could be held),
 # `app/operations/wire_arguments.rb` 4/3 (T-120's original path),
-# `app/operations/request_kyc_operation.rb` 4/2, `script/register_flow.rb` 4/4,
-# `app/services/prove_trust.rb` 3/2, and four paths contributing one unit each —
-# `app/models/booking.rb`, `app/models/user.rb`,
-# `app/controllers/home_controller.rb`, `app/operations/operation_result.rb`.
-# The last three of those hold nothing today: their single shared unit is a
-# same-name-different-body declaration. What they buy is DISCOVERY over seven
-# copies of shipped code each, which is where the next method quietly shared by
-# the fleet — the K-792 promotion signal — has to show up.
+# `app/operations/request_kyc_operation.rb` 5/3, `script/register_flow.rb` 4/4,
+# `app/services/prove_trust.rb` 3/2, `app/models/booking.rb` 3/1,
+# `app/models/cart_mandate.rb` 3/2 and `app/models/user.rb` 3/0 (T-146 — all
+# nine of those units are class macros, and every one of them was invisible
+# until the handle learned to read a class body),
+# `app/controllers/home_controller.rb` 3/1 and
+# `app/operations/operation_result.rb` 1/0. That last one holds nothing today:
+# its single shared unit is a same-name-different-body declaration. What it
+# buys is DISCOVERY over seven copies of shipped code, which is where the next
+# method quietly shared by the fleet — the K-792 promotion signal — has to show
+# up.
 #
 # LEFT ALONE, and this is where the largest single group is:
 # `script/redteam_suite.rb` shares 25 names across seven copies and only 6 have
@@ -2068,21 +2071,29 @@ end
 # honest order is T-119 first, after which the path becomes cheap. Same reading
 # for `script/isolation_flow.rb` (8/4) and `script/schema_flow.rb` (3/2).
 #
-# AND ONE PATH THE HANDLE CANNOT REACH, stated here rather than left to be
-# discovered: `app/models/cart_mandate.rb` has three copies and ZERO units,
-# because what its copies share is a `scope :referencing, ->` — a DSL call, and
-# FRAGMENT_START matches a `def` or a constant assignment. Adding it would
-# declare a coverage that does not exist. Any `:per_demo` path whose shared code
-# is written in a DSL is invisible to this rule, and that is a property of the
-# handle, not of the path.
+# THE PATH THE HANDLE COULD NOT REACH, AND WHAT IT COST (T-146).
+# `app/models/cart_mandate.rb` has three copies and, until 2026-08-31, ZERO
+# units — because what they share is a `scope :referencing, ->`, a `has_many`
+# and a `self.table_name`, and FRAGMENT_START matched a `def` or a constant.
+# The path was left OUT of FRAGMENT_PATHS and the only record of that was this
+# paragraph, which is the defect: an exclusion nothing checks reads exactly
+# like coverage. Both halves are closed. The handle now takes its start points
+# from the PARSE TREE as well (see class_macro_starts below), which found TEN
+# shared units the `def`-or-constant handle had never seen — three in
+# cart_mandate.rb, two each in booking.rb, user.rb and home_controller.rb, one
+# in request_kyc_operation.rb — and moved the fleet-wide count from 114/72 to
+# 124/76. And every `:per_demo` path is now either in FRAGMENT_PATHS or named
+# in FRAGMENT_EXCLUDED with a reason, with a path that shares NOTHING reported
+# by name rather than counted as a file this rule holds.
 #
 # A hundred declarations with a hundred reasoned `why:` lines is still a manifest
 # nobody would read, and a manifest nobody reads is how «declared» stops meaning
-# «reasoned about». The criterion above is what keeps this at 78 entries rather
-# than 114, and it is a judgement about VALUE — not a budget.
+# «reasoned about». The criterion above is what keeps this at 88 entries rather
+# than 124, and it is a judgement about VALUE — not a budget.
 FRAGMENT_PATHS = %w[
   app/controllers/home_controller.rb
   app/models/booking.rb
+  app/models/cart_mandate.rb
   app/models/user.rb
   app/operations/operation_result.rb
   app/operations/request_kyc_operation.rb
@@ -2095,6 +2106,36 @@ FRAGMENT_PATHS = %w[
   script/prove_broker_boot.rb
   script/register_flow.rb
 ].freeze
+
+# AND THE PATHS THAT ARE NOT IN IT, DECLARED (T-146).
+#
+# THIS LIST EXISTS BECAUSE ITS ABSENCE WAS THE DEFECT. `app/models/cart_mandate.rb`
+# was left out of FRAGMENT_PATHS because the handle could not see a `scope`, and
+# the only record of that was a paragraph in this file's header — so a path
+# contributing NOTHING looked exactly like a path that had been checked. Every
+# `:per_demo` entry in COPIES is now either in FRAGMENT_PATHS or named here with
+# a reason, and the check below fails on a path in neither, on an entry for a
+# path that is not `:per_demo`, on an entry that is also in FRAGMENT_PATHS, and
+# on a blank reason. An undeclared exclusion is the thing this rule is about.
+FRAGMENT_EXCLUDED = {
+  "script/redteam_suite.rb" =>
+    "THE LARGEST GROUP IN THE CORPUS AND DELIBERATELY OUT UNTIL T-119 LANDS. 25 unit names shared " \
+    "across seven copies, only 6 with identical bodies: `get_json` alone has SIX distinct bodies " \
+    "over the seven demos, which IS T-119's finding — the two red-team harnesses are a rewrite " \
+    "apart. Discovery is all-or-nothing per path, so taking it would mean declaring the other 19 " \
+    "as settled `:per_demo` variants, freezing the split into this manifest and turning T-119's " \
+    "convergence into a red build demanding a dozen re-declarations. The 6 identical units are " \
+    "worth holding; the honest order is T-119 first, after which this path becomes cheap.",
+  "script/isolation_flow.rb" =>
+    "Same argument as redteam_suite.rb, one size down: 8 shared names over seven copies, 4 " \
+    "identical, and its `get_json` carries the same six-body split T-119 exists to remove.",
+  "script/schema_flow.rb" =>
+    "Same argument again, smallest of the three: 3 shared names over seven copies, 2 identical, " \
+    "`get_json` with three distinct bodies. NOTE, and it is a live finding rather than part of " \
+    "this reason: three of the seven copies (atablefor, philslist, tudu) are CODE-IDENTICAL whole " \
+    "files at 37 normalised lines each, which the `:per_demo` entry's own words do not admit — " \
+    "K-1262.",
+}.freeze
 
 # The demo sets and the reasons several fragment entries share, stated once so N
 # copies of a sentence cannot drift apart — the same device as KYC_SHIPS and
@@ -2667,6 +2708,103 @@ FRAGMENTS = {
            "reason and is a convergence candidate at the same time: if the two sentences ever " \
            "agree, this entry fails and asks whether the whole method should be shared.",
   },
+  # ── the DSL units the T-146 handle made visible ───────────────────────────
+  #
+  # Every one of these is a class-body macro, which `FRAGMENT_START` could not
+  # see until 2026-08-31. They are declared here for the same reason every other
+  # entry is: `:per_demo` means compared to nothing, and a shared `scope` or a
+  # shared association is exactly as hand-copied as a shared `def`.
+  "app/models/cart_mandate.rb#self.table_name" => {
+    rule:  :code,
+    ships: %w[getgrocery hoteling skooti],
+    why:   "`kiosk.cart_mandates` — the ENGINE's table, named by three demos that only read it. " \
+           "The engine owns the write, so a copy that names a different table is a demo reading a " \
+           "table kiosk-server never fills, and its `referencing` scope below then answers «no " \
+           "settled cart» to every question. This is the T-146 example unit: three copies, " \
+           "byte-identical, and invisible to the handle until it learned to read a class body.",
+  },
+  "app/models/cart_mandate.rb#has_many" => {
+    rule:  :code,
+    ships: %w[getgrocery hoteling skooti],
+    why:   "`has_many :settlements, dependent: nil, inverse_of: :cart_mandate` — identical in all " \
+           "three. `dependent: nil` is the load-bearing half: the rows belong to the ENGINE, so a " \
+           "copy that grows a `:destroy` would have a demo delete kiosk-server's settlement " \
+           "records, and it would do it in one demo only.",
+  },
+  "app/models/cart_mandate.rb#scope" => {
+    rule:  :per_demo,
+    ships: %w[getgrocery hoteling skooti],
+    why:   "SAME NAME, EACH DEMO'S OWN KEY: `scope :referencing` keys the jsonb containment on " \
+           "`order_id`, `booking_id` and `reservation_id` respectively — the line item each " \
+           "operator's settled cart actually names. The Arel node and the `@>` operator are " \
+           "identical; only the key differs, and it must. If these three ever agree, one demo is " \
+           "asking whether a cart references another demo's row.",
+  },
+  "app/models/user.rb#devise" => {
+    rule:  :per_demo,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:   "SAME MACRO, AND SIX OF THE SEVEN AGREE — `devise :database_authenticatable` — while " \
+           "tudu alone adds `:registerable`, because it is the one demo whose humans sign " \
+           "themselves up. That 6/1 split is why this is `:per_demo` and not `:code`: the rule " \
+           "compares all held copies against each other and has no per-copy exception at this " \
+           "level, so declaring `:code` would fail on tudu and pinning `ships:` to the six would " \
+           "fail on tudu as a stray. The six are therefore NOT held, which is a gap this entry " \
+           "states rather than hides (K-1263).",
+  },
+  "app/models/user.rb#has_many" => {
+    rule:  :per_demo,
+    ships: %w[atablefor hoteling philslist skooti stylish tudu],
+    why:   "SAME MACRO, EACH DEMO'S OWN ROWS: bookings, reservations, appointments, listings, " \
+           "lists and memberships. atablefor and hoteling happen to spell it identically because " \
+           "both own `bookings`; philslist and tudu carry an explicit `foreign_key`/`inverse_of` " \
+           "pair because their owning column is not `user_id`. Nothing here should be shared — " \
+           "declared so the association SET is under the discovery rule, which is what notices a " \
+           "seventh demo growing one.",
+  },
+  "app/models/booking.rb#belongs_to" => {
+    rule:  :per_demo,
+    ships: %w[atablefor hoteling],
+    why:   "SAME MACRO, EACH DEMO'S OWN PARENTS — `user`/`restaurant`/`restaurant_table` against " \
+           "`user`/`property`/`room_type`. One unit rather than three (the head is the handle), " \
+           "so what is compared is the whole association SET in file order: an association DROPPED " \
+           "in one copy is the drift this rule exists for, and a per-association name would report " \
+           "it as a unit that merely stopped being shared.",
+  },
+  "app/models/booking.rb#scope" => {
+    rule:  :per_demo,
+    ships: %w[atablefor hoteling],
+    why:   "SAME MACRO, DIFFERENT SETS: atablefor declares `confirmed` and " \
+           "`owned_by_current_principal`; hoteling declares `live`, `owned_by_current_principal` " \
+           "and `overlapping`, the last being the room-night predicate its EXCLUDE constraint " \
+           "mirrors. `owned_by_current_principal` is the isolation predicate every owner-scoped " \
+           "read goes through and the two spellings differ only in the table they name, which is " \
+           "the right thing to differ.",
+  },
+  "app/controllers/home_controller.rb#helper_method" => {
+    rule:  :per_demo,
+    ships: %w[atablefor philslist],
+    why:   "SAME MACRO, EACH ORIGIN'S OWN NOUN: `board_diner_name` against `board_poster_name` — " \
+           "the public handle a shared board prints for a row's owner. The pair it exposes is per " \
+           "demo; that the macro is CALLED at all is not, and a copy that stops exposing its " \
+           "helper renders a board with no names.",
+  },
+  "app/controllers/home_controller.rb#layout" => {
+    rule:  :code,
+    ships: %w[philslist stylish],
+    why:   "`layout false` in both — these two landing pages render their own complete HTML rather " \
+           "than sitting inside the application layout. A copy that loses the line does not fail: " \
+           "it renders a page nested inside a second `<html>`, which is the kind of break that " \
+           "reaches a viewer and no assertion.",
+  },
+  "app/operations/request_kyc_operation.rb#private_class_method" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "`private_class_method :outstanding_for_current_principal` — the visibility half of the " \
+           "K-586 intake cap, identical in both. The method itself is declared just below; this " \
+           "line is what keeps it off the class's public surface, and losing it in one copy makes " \
+           "the two demos' operations answer different APIs while every test still passes.",
+  },
+
   "app/models/booking.rb#CONFIRMED" => {
     rule:  :code,
     ships: %w[atablefor hoteling],
@@ -2731,22 +2869,136 @@ FRAGMENTS = {
 FRAGMENT_START = /\A\s*(?:def\s+(?:self\.)?([a-z_][A-Za-z0-9_]*[?!=]?)|([A-Z][A-Za-z0-9_]*)\s*=[^=~>])/
 FRAGMENT_MAX_LINES = 200
 
-def fragment_units(path)
-  lines = File.readlines(path)
-  units = Hash.new { |h, k| h[k] = +"" }
-  unreadable = []
-  lines.each_index do |i|
-    m = lines[i].match(FRAGMENT_START) or next
+# THE SECOND HANDLE: A CLASS-BODY MACRO (T-146).
+#
+# `FRAGMENT_START` above is a `def` or a constant, and that made every unit
+# written in a DSL invisible. MEASURED, and this is the row's own example:
+# `app/models/cart_mandate.rb` ships in getgrocery, hoteling and skooti, its
+# three copies share a `scope :referencing`, a `has_many :settlements` and a
+# `self.table_name` — and the extractor found ZERO units in all three. The path
+# was therefore left OUT of FRAGMENT_PATHS rather than declared, so nothing in
+# the manifest recorded that it contributed nothing. That is the defect: the
+# exclusion read like coverage.
+#
+# THE HANDLE IS DERIVED, NOT LISTED, and that is the whole design. An earlier
+# draft of this declared a vocabulary of macro heads — `scope`, `validates`,
+# `has_many` — which is the hand-kept inventory this repository has been wrong
+# about four times (K-863, K-1213, K-1227, K-1232): a head nobody thought of is
+# invisible, and a head that stops occurring reads as coverage forever. So the
+# start points come from the PARSE TREE instead: every statement in a `class` or
+# `module` body that is a bare method call — `scope :x, -> {...}`,
+# `has_many :y`, `devise :database_authenticatable`, `layout false` — plus every
+# `self.<attr> = …` assignment. A macro this repository has never used before is
+# reached the day it is written, with no edit here.
+#
+# THE NAME IS THE HEAD ALONE, not the head and its first argument. `belongs_to`
+# in atablefor's booking.rb is ONE unit holding all three associations in file
+# order, exactly as `capture` is one unit holding both PSP stubs' definitions
+# (T-136, the concatenation rule above). That is deliberate: an association
+# DELETED in one copy is the drift this rule exists for, and a per-argument name
+# would report it as a unit that simply stopped being shared.
+#
+# WHAT IT STILL CANNOT SEE, stated because an over-claimed handle is this rule's
+# own recurring defect: a macro called at the top level of a file rather than in
+# a class or module body; a macro generated by another macro; a `def` created by
+# `define_method`; and any shared code that is neither a definition nor a
+# class-body statement. The vacuity arm below is the only thing that can tell
+# you the handle has stopped finding anything at all.
+def class_macro_starts(node, out = [])
+  return out unless node.is_a?(Array)
 
-    name = m[1] || m[2]
-    src = (i...[i + FRAGMENT_MAX_LINES, lines.size].min).lazy
-                                                        .map { |j| lines[i..j].join }
-                                                        .find { |cand| !Ripper.sexp(cand).nil? }
-    src ? units[name] << src : unreadable << "#{name} (line #{i + 1})"
+  unless %i[class module].include?(node[0])
+    node.each { |child| class_macro_starts(child, out) if child.is_a?(Array) }
+    return out
   end
-  [units.to_h, unreadable]
+
+  body = node.last
+  stmts = (body.is_a?(Array) && body[0] == :bodystmt) ? (body[1] || []) : []
+  stmts.each do |stmt|
+    next unless stmt.is_a?(Array)
+
+    head =
+      case stmt[0]
+      when :command          then stmt[1]
+      when :method_add_arg   then stmt[1].is_a?(Array) && stmt[1][0] == :fcall ? stmt[1][1] : nil
+      when :method_add_block then stmt[1].is_a?(Array) && stmt[1][0] == :command ? stmt[1][1] : nil
+      when :assign           then nil
+      end
+    out << [head[2][0] - 1, head[1]] if head.is_a?(Array) && head[0] == :@ident
+
+    if stmt[0] == :assign && (t = stmt[1]).is_a?(Array) && t[0] == :field &&
+       t[1].is_a?(Array) && t[1][0] == :var_ref && t[1][1].is_a?(Array) && t[1][1][1] == "self" &&
+       t.last.is_a?(Array) && t.last[0] == :@ident
+      out << [t.last[2][0] - 1, "self.#{t.last[1]}"]
+    end
+
+    class_macro_starts(stmt, out)
+  end
+  out
 end
 
+# A unit's start points, by line index. Both handles feed the same growth loop,
+# and `FRAGMENT_START` wins a line the two would both claim (there is no such
+# line today — a `def` is not a class-body macro call — but the precedence has
+# to be stated rather than left to hash ordering).
+def fragment_starts(src)
+  starts = {}
+  macro = {}
+  sexp = Ripper.sexp(src)
+  class_macro_starts(sexp).each { |(i, name)| starts[i] = macro[i] = name } if sexp
+  src.lines.each_with_index do |line, i|
+    m = line.match(FRAGMENT_START) or next
+
+    starts[i] = m[1] || m[2]
+    macro.delete(i)
+  end
+  [starts, macro.values.uniq, sexp.nil?]
+end
+
+# => [units, unreadable, dsl_names] — `dsl_names` is what the T-146 handle
+# contributed and nothing else would have found, which is what the vacuity arm
+# below counts.
+def fragment_units(path)
+  src = File.read(path)
+  lines = src.lines
+  units = Hash.new { |h, k| h[k] = +"" }
+  unreadable = []
+  starts, dsl_names, whole_file_unparsable = fragment_starts(src)
+  unreadable << "the file itself, so the DSL handle saw no class body at all" if whole_file_unparsable
+  starts.keys.sort.each do |i|
+    name = starts[i]
+    unit = (i...[i + FRAGMENT_MAX_LINES, lines.size].min).lazy
+                                                         .map { |j| lines[i..j].join }
+                                                         .find { |cand| !Ripper.sexp(cand).nil? }
+    unit ? units[name] << unit : unreadable << "#{name} (line #{i + 1})"
+  end
+  [units.to_h, unreadable, dsl_names]
+end
+
+# Every `:per_demo` path is IN the fragment rule or declared OUT of it (T-146).
+per_demo_paths = COPIES.select { |_rel, e| e[:rule] == :per_demo }.keys
+(per_demo_paths - FRAGMENT_PATHS - FRAGMENT_EXCLUDED.keys).sort.each do |rel|
+  errors << "#{rel}: declared `:per_demo` in COPIES — compared to NOTHING — but named neither in " \
+            "FRAGMENT_PATHS nor in FRAGMENT_EXCLUDED. Take it, or say why the shared units inside " \
+            "it are not worth holding. An undeclared exclusion reads exactly like coverage, which " \
+            "is how `app/models/cart_mandate.rb` contributed nothing for as long as it did (T-146)."
+end
+FRAGMENT_EXCLUDED.each do |rel, why|
+  errors << "#{rel}: FRAGMENT_EXCLUDED entry carries no reason (T-146)." if why.to_s.strip.empty?
+  if FRAGMENT_PATHS.include?(rel)
+    errors << "#{rel}: named in BOTH FRAGMENT_PATHS and FRAGMENT_EXCLUDED — a path is either " \
+              "walked by the fragment rule or declared out of it, not both (T-146)."
+  elsif COPIES[rel].nil?
+    errors << "#{rel}: declared in FRAGMENT_EXCLUDED, but COPIES has no entry for it — the " \
+              "exclusion is for a path this check does not know about (T-146)."
+  elsif COPIES[rel][:rule] != :per_demo
+    errors << "#{rel}: declared in FRAGMENT_EXCLUDED, but the manifest now compares it whole " \
+              "(`rule: #{COPIES[rel][:rule].inspect}`), so there is nothing for the fragment rule " \
+              "to be excluded from. Drop the entry (T-146)."
+  end
+end
+
+fragment_dsl_ids = {} # "path#unit" reached ONLY by the T-146 class-macro handle
 fragment_sources = Hash.new { |h, k| h[k] = {} } # "path#unit" => demo => source
 FRAGMENT_PATHS.each do |rel|
   entry = COPIES[rel]
@@ -2767,7 +3019,8 @@ FRAGMENT_PATHS.each do |rel|
     path = File.join(dir, rel)
     next unless File.exist?(path)
 
-    units, unreadable = fragment_units(path)
+    units, unreadable, dsl_names = fragment_units(path)
+    dsl_names.each { |name| fragment_dsl_ids["#{rel}##{name}"] = true }
     unless unreadable.empty?
       errors << "#{demo}: #{rel} — the fragment rule could not read #{unreadable.join(', ')} back " \
                 "as valid Ruby within #{FRAGMENT_MAX_LINES} lines, so it compared NOTHING for " \
@@ -2857,6 +3110,40 @@ if FRAGMENTS.any? && fragment_comparisons.zero?
   errors << "check-demo-copies: the T-120 fragment rule declares #{FRAGMENTS.size} unit(s) and " \
             "compared NONE of them — the units have moved out of #{FRAGMENT_PATHS.join(', ')}, and " \
             "a lockstep rule with nothing to compare passes everything."
+end
+
+# VACUITY, TWO ARMS, BOTH T-146.
+#
+# The first is the one this row was filed for. `app/models/cart_mandate.rb` sat
+# OUTSIDE FRAGMENT_PATHS because the extractor found zero units in all three of
+# its copies, and the only record of that was a paragraph of header prose — a
+# path contributing nothing looked exactly like a path that had been checked.
+# Inside the list the same silence is worse, because the summary counts the path.
+# So a declared path that shares NOTHING is named.
+FRAGMENT_PATHS.each do |rel|
+  shared = fragment_sources.count { |id, per_demo| id.start_with?("#{rel}#") && per_demo.size >= 2 }
+  next if shared.positive?
+
+  errors << "#{rel}: named in FRAGMENT_PATHS, and the extractor finds NO unit shared by two or " \
+            "more of its copies — so this path contributes nothing and the summary counts it as a " \
+            "file the fragment rule holds. Either its copies stopped sharing anything, in which " \
+            "case move it to FRAGMENT_EXCLUDED with that as the reason, or the handle cannot see " \
+            "what they share, in which case say which construct and fix the handle (T-146)."
+end
+
+# The second is the EARLIER_WIRES arm: a rule whose pattern matches nothing in
+# this repository must fail rather than pass. The class-macro handle was added
+# because a `scope` shared by three demos was invisible; if it ever stops
+# finding a class body at all — a Ripper change, a walker that stops matching a
+# node shape — every DSL unit silently leaves the corpus and the summary drops
+# by a number nobody is watching.
+if fragment_dsl_ids.empty?
+  errors << "check-demo-copies: the T-146 class-macro handle found NO class-body macro in any " \
+            "copy of the #{FRAGMENT_PATHS.size} declared `:per_demo` path(s). It was added " \
+            "because `app/models/cart_mandate.rb`'s three copies share a `scope`, a `has_many` " \
+            "and a `self.table_name` and the `def`-or-constant handle saw none of them, so zero " \
+            "means the handle has stopped working rather than that the tree has changed. A rule " \
+            "whose pattern matches nothing must fail, not pass."
 end
 
 # -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
@@ -3475,7 +3762,8 @@ if errors.empty?
        "#{fragment_comparisons} shared-unit cop#{fragment_comparisons == 1 ? 'y' : 'ies'} declared " \
        "in #{FRAGMENTS.size} unit(s) inside #{FRAGMENT_PATHS.size} `:per_demo` file(s) " \
        "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} held in lockstep, the rest declared " \
-       "same-name-different-body)"
+       "same-name-different-body; #{fragment_dsl_ids.size} reached only by the class-macro handle, " \
+       "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason)"
   exit 0
 end
 

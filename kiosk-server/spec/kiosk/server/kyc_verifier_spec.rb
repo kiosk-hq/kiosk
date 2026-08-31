@@ -153,11 +153,32 @@ RSpec.describe Kiosk::Server::KycVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
-    it "raises Errors::Forbidden when kyc_public_key is not configured" do
+    # T-158: `module_not_served` (501), not `forbidden` (403). An origin with no
+    # `kyc_public_key` serves no KYC at all — an ORIGIN-WIDE fact, true of an
+    # anonymous caller too — while `forbidden` is glossed "authenticated, but
+    # this identity may not do this". That mis-fit is what K-1207 measured and
+    # what Phil's decision «A» split into its own code.
+    it "raises Errors::ModuleNotServed when kyc_public_key is not configured" do
       Kiosk.configure { |c| c.kyc_public_key = nil }
       raw_jws = sign_kyc(valid_payload)
       expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /kyc_public_key/)
+        .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /does not serve the KYC module/)
+    end
+
+    it "puts module_not_served/501 on the wire for it, and names the module in detail" do
+      Kiosk.configure { |c| c.kyc_public_key = nil }
+      raw_jws = sign_kyc(valid_payload)
+      begin
+        described_class.verify(raw_jws: raw_jws, identity: identity)
+      rescue Kiosk::Server::Errors::ModuleNotServed => e
+        expect(e.code).to        eq("module_not_served")
+        expect(e.http_status).to eq(501)
+        expect(e.to_problem[:type]).to   eq("https://kiosk.tech/problems/module_not_served")
+        expect(e.to_problem[:detail]).to include("KYC")
+        # It is NOT a Forbidden: an assistant that branches on `forbidden` must
+        # not catch this, which is the whole point of the split.
+        expect(e).not_to be_a(Kiosk::Server::Errors::Forbidden)
+      end
     end
 
     # ─── I1: KYC level check ──────────────────────────────────────────────

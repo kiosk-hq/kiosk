@@ -426,11 +426,16 @@ RSpec.describe Kiosk::Server::OpenApi do
       declare_query("salons")
       statuses = document.dig(:paths, "/salons", :get, :responses).keys - ["200"]
 
-      expect(statuses).to eq(%w[400 401 402 403 404 409 429 500])
+      # 501 arrived with T-158's `module_not_served` and it is DERIVED, not
+      # typed: the document reads {Errors::CODES}, so widening the vocabulary
+      # widened this list without anyone editing the generator. A verb at an
+      # origin that serves no payment or KYC really can answer 501, so the
+      # declaration is true of the operation it is attached to.
+      expect(statuses).to eq(%w[400 401 402 403 404 409 429 500 501])
       expect(statuses).not_to include("405")
       expect(document.dig(:components, :responses).keys)
         .to eq(%w[problem400 problem401 problem402 problem403 problem404
-                  problem409 problem429 problem500])
+                  problem409 problem429 problem500 problem501])
     end
 
     it "serves problems under the RFC 9457 media type, with the CLOSED vocabulary as the code enum" do

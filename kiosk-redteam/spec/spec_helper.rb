@@ -31,18 +31,23 @@ PROBLEM_STATUS = {
   "rls_denied"             => 403,
   "spending_cap_exceeded"  => 403,
   "kyc_required"           => 403,
+  "verb_not_found"         => 404,
   "not_found"              => 404,
   "method_not_allowed"     => 405,
   "conflict"               => 409,
   "quota_exceeded"         => 429,
   "action_failed"          => 500,
   "internal_error"         => 500,
+  "module_not_served"      => 501,
 }.freeze
 
 # The ONE code a bare status carries by itself (Errors::STATUS_CODES), widened
 # with the two 5xx/502/503 shapes a crashing origin renders. 402 is deliberately
 # absent from the server's table — three codes share it — so a stub that means a
-# 402 must name which one.
+# 402 must name which one. 404 carries TWO codes since T-158 and stays mapped to
+# `not_found` here for the same reason the server's table does: `verb_not_found`
+# comes from the registry lookup, never from a bare status, so a stub meaning it
+# names it.
 STATUS_DEFAULT_CODE = {
   400 => "bad_request",
   401 => "unauthenticated",

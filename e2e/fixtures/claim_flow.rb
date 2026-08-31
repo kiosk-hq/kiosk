@@ -174,7 +174,16 @@ results[:held_token_after_unlink] = rc
 rc, = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{fresh_token}" })
 results[:same_second_token_after_unlink] = rc
 
-rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
-results[:login_after_unlink] = rc
+# T-158: the CODE, not only the status. A key the origin no longer knows is
+# spec §9.1 rule 2 -- an argument ADDRESSING something absent -- so it is
+# `not_found` and specifically NOT `verb_not_found`, which is the other 404 in
+# the vocabulary and means an unregistered verb NAME. This is the only place in
+# the harness that reaches an addressed-thing-absent 404 through a real
+# possession proof, so it is where the second of the three T-158 codes is
+# exercised on a booted origin.
+rc, login_body = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
+results[:login_after_unlink]      = rc
+results[:login_after_unlink_code] = login_body.is_a?(Hash) ? login_body["code"] : nil
+results[:login_after_unlink_type] = login_body.is_a?(Hash) ? login_body["type"] : nil
 
 puts JSON.generate(results)

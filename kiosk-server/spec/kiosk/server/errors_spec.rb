@@ -13,12 +13,14 @@ RSpec.describe Kiosk::Server::Errors do
         "rls_denied"             => 403,
         "spending_cap_exceeded"  => 403,
         "kyc_required"           => 403,
+        "verb_not_found"         => 404,
         "not_found"              => 404,
         "method_not_allowed"     => 405,
         "conflict"               => 409,
         "quota_exceeded"         => 429,
         "action_failed"          => 500,
         "internal_error"         => 500,
+        "module_not_served"      => 501,
       )
     end
 
@@ -38,6 +40,30 @@ RSpec.describe Kiosk::Server::Errors do
     it "never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)" do
       expect(described_class::STATUS_CODES).not_to have_key(402)
       expect(described_class::STATUS_CODES).not_to have_key(500)
+    end
+
+    # T-158. 501 is the third deliberate absence and it is absent for a
+    # DIFFERENT reason from the other two: `module_not_served` is the only code
+    # at 501, so there is nothing to guess between — it is unmapped because it
+    # is a claim about the ORIGIN's module set that a raise from inside a
+    # handler cannot establish, and Rails maps ActionController::NotImplemented
+    # to 501 meaning something else. Without this assertion the next reader
+    # "completes" the table by the rule the other two obey.
+    it "does not map 501 — module_not_served is not a status a handler raise can mean" do
+      expect(described_class::STATUS_CODES).not_to have_key(501)
+      expect(described_class::CODES["module_not_served"]).to eq(501)
+      expect(described_class::CODES.values.count(501)).to eq(1)
+    end
+
+    # T-158 split 404 in two, so this status now has two codes where the rule
+    # above would predict an absence. It stays mapped because only ONE of the
+    # two is reachable from a Rails-native raise: `verb_not_found` comes out of
+    # the registry lookup before any handler is entered, so the only 404 a
+    # handler's RecordNotFound can mean is the addressed-thing-absent one.
+    it "still maps 404 to not_found, the only 404 a handler raise can mean" do
+      expect(described_class::STATUS_CODES[404]).to eq("not_found")
+      expect(described_class::CODES.values.count(404)).to eq(2)
+      expect(described_class::STATUS_CODES.values).not_to include("verb_not_found")
     end
 
     it "maps every status to a vocabulary code" do
@@ -83,6 +109,8 @@ RSpec.describe Kiosk::Server::Errors do
       Kiosk::Server::Errors::SpendingCapExceeded => ["spending_cap_exceeded", 403],
       Kiosk::Server::Errors::KycRequired     => ["kyc_required",    403],
       Kiosk::Server::Errors::NotFound        => ["not_found",       404],
+      Kiosk::Server::Errors::VerbNotFound    => ["verb_not_found",  404],
+      Kiosk::Server::Errors::ModuleNotServed => ["module_not_served", 501],
       Kiosk::Server::Errors::ActionFailed    => ["action_failed",   500],
     }.each do |klass, (code, http_status)|
       it "#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}" do
@@ -117,6 +145,15 @@ RSpec.describe Kiosk::Server::Errors do
     it "refuses a code outside the closed vocabulary" do
       expect { described_class::WireError.new("x", code: "out_of_stock") }
         .to raise_error(ArgumentError, /unknown wire code "out_of_stock"/)
+    end
+
+    # T-158 widened the vocabulary, and a widened closed set is where near-miss
+    # spellings get in. These are the two a porter would actually write.
+    it "refuses a plausible near-miss of a T-158 member" do
+      expect { described_class::WireError.new("x", code: "module_not_found") }
+        .to raise_error(ArgumentError, /unknown wire code "module_not_found"/)
+      expect { described_class::WireError.new("x", code: "unknown_verb") }
+        .to raise_error(ArgumentError, /unknown wire code "unknown_verb"/)
     end
 
     it "rescues as Base, like every wire error" do
@@ -233,6 +270,8 @@ RSpec.describe Kiosk::Server::Errors do
        Kiosk::Server::Errors::SpendingCapExceeded,
        Kiosk::Server::Errors::KycRequired,
        Kiosk::Server::Errors::NotFound,
+       Kiosk::Server::Errors::VerbNotFound,
+       Kiosk::Server::Errors::ModuleNotServed,
        Kiosk::Server::Errors::ActionFailed].each do |klass|
         begin
           raise klass, "x"

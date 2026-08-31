@@ -37,10 +37,11 @@ module Kiosk
       # this table are the problem document's flat top-level member, which is
       # what the paragraph four lines above already says and what this comment
       # contradicted until K-1095. The closed vocabulary: these
-      # fifteen codes ARE the spec's "Error vocabulary" table — narrative
+      # seventeen codes ARE the spec's "Error vocabulary" table — narrative
       # (specification.html), formal (protocol.md §9) and `problem.schema.json`
-      # all carry the same fifteen, `payment_failed` among them since
-      # kiosk.tech a2f4089 and `method_not_allowed` since 0.4 (T-068 slice 2).
+      # all carry the same seventeen, `payment_failed` among them since
+      # kiosk.tech a2f4089, `method_not_allowed` since 0.4 (T-068 slice 2), and
+      # `verb_not_found` + `module_not_served` since T-158.
       # Not a superset of the published table and not a subset of it; the two
       # are the same list, and a schema-validating client rejects anything
       # else. Adding a code here is a WIRE change: spec first (rule 1).
@@ -52,6 +53,31 @@ module Kiosk
       # verb" and RFC 9110 §15.5.6 already has a status for it. Slice 1
       # answered it `404 not_found` with a hint because adding to a closed
       # vocabulary is spec-first; slice 2 is the spec change.
+      #
+      # THREE CODES ANSWER "IT IS NOT HERE", AND THAT IS T-158 (K-1207, Phil's
+      # decision «A», 2026-08-31). `not_found` used to carry all three at once,
+      # and `code` is the ONE field the spec tells an assistant to branch on, so
+      # an assistant told «not found» for a hotel nobody has re-read the
+      # catalogue and retried — right for one of the three, a wasted round trip
+      # and a wrong report to the human for the others:
+      #
+      #   * `verb_not_found` (404) — no verb by that NAME is registered here.
+      #     Raised by {Queries}/{Actions} when the registry has no entry, BEFORE
+      #     any handler runs. Recovery: re-read the catalogue.
+      #   * `not_found` (404) — the verb exists and an ARGUMENT addressed
+      #     something absent (spec §9.1 rule 2). Recovery: none; say so.
+      #   * `module_not_served` (501) — this ORIGIN does not serve the optional
+      #     module the path reaches. Recovery: fall back to what you would do at
+      #     an operator that never offered it.
+      #
+      # The first two share 404 on purpose — the spec argues it: one 404's target
+      # resource is the verb's own path, the other's is the entity an argument
+      # named, and this table already puts four codes on 403 and three on 402 for
+      # the same reason. `module_not_served` is 501 because the path is PUBLISHED
+      # and correct (§4.3 requires all six auth URLs of an operator that serves
+      # no binding at all), so a 404 there would be a false statement about the
+      # URL — and RFC 9110 §15.6.2 is the status for "does not support the
+      # functionality required to fulfill the request".
       CODES = {
         "bad_request"            => 400,
         "unauthenticated"        => 401,
@@ -62,12 +88,14 @@ module Kiosk
         "rls_denied"             => 403,
         "spending_cap_exceeded"  => 403,
         "kyc_required"           => 403,
+        "verb_not_found"         => 404,
         "not_found"              => 404,
         "method_not_allowed"     => 405,
         "conflict"               => 409,
         "quota_exceeded"         => 429,
         "action_failed"          => 500,
         "internal_error"         => 500,
+        "module_not_served"      => 501,
       }.freeze
 
       # RFC 9457 `title` per code — "a short, human-readable summary of the
@@ -86,12 +114,14 @@ module Kiosk
         "rls_denied"             => "Row-level security denied the statement",
         "spending_cap_exceeded"  => "Spending cap exceeded",
         "kyc_required"           => "KYC attestation required",
+        "verb_not_found"         => "No such verb",
         "not_found"              => "Not found",
         "method_not_allowed"     => "Method not allowed",
         "conflict"               => "State conflict",
         "quota_exceeded"         => "Quota exceeded",
         "action_failed"          => "Action failed",
         "internal_error"         => "Internal error",
+        "module_not_served"      => "Module not served",
       }.freeze
 
       # The RFC 9457 `type` namespace. A problem document's `type` is
@@ -135,6 +165,21 @@ module Kiosk
       #   500 — action_failed vs internal_error is the same ambiguity, and an
       #         unhandled exception must keep its {Executor} `action_failed`
       #         wrap.
+      #   501 — `module_not_served` is a claim about the ORIGIN's module set,
+      #         and a raise from inside a handler cannot establish it: by the
+      #         time a handler runs, the module IS being served. Rails maps
+      #         `ActionController::NotImplemented` to 501 and that means
+      #         something else entirely, so this status is NOT mapped and an
+      #         operator meaning `module_not_served` raises it by name.
+      #
+      # 404 IS PRESENT EVEN THOUGH TWO CODES SHARE IT, and that is not an
+      # oversight in the rule above (T-158). Only ONE of the two is reachable
+      # from a Rails-native raise: `verb_not_found` comes from the registry
+      # lookup in {Queries}/{Actions}, which raises its own class before any
+      # handler is entered, so the only 404 a handler's `RecordNotFound` can
+      # mean is the addressed-thing-is-absent `not_found` — which is exactly
+      # what a lookup miss IS. 402 and 500 are ambiguous at the raise site;
+      # 404 is not.
       # 422 answers `bad_request`: Rails' validation-failure status, one wire
       # code (the canonical status stays 400 — {CODES} decides what is
       # rendered).
@@ -148,7 +193,7 @@ module Kiosk
         422 => "bad_request",
         429 => "quota_exceeded",
       }.freeze
-      # Cap on how many registered names a not-found hint enumerates before it
+      # Cap on how many registered names a verb-not-found hint enumerates before it
       # truncates with "…". Keeps the problem document small on a large surface
       # while still naming enough for an assistant to spot a near-miss typo.
       MAX_HINT_NAMES = 20
@@ -158,7 +203,7 @@ module Kiosk
       # exactly one of the two words this vocabulary has.
       HINT_PLURALS = { "query" => "queries", "action" => "actions" }.freeze
 
-      # Builds the `hint` for a NotFound raised on an unknown query/action name.
+      # Builds the `hint` for a {VerbNotFound} raised on an unknown query/action name.
       # Names the available names for that verb so an assistant that mistyped
       # (`listings` for `browse_listings`) can recover WITHOUT first fetching the
       # schema, and always appends the schema pointer for the full descriptions.
@@ -308,9 +353,30 @@ module Kiosk
         HTTP_STATUS = 403
       end
 
-      # DUPLICATE of a bare 404. Unknown table, unknown Action name.
+      # DUPLICATE of a bare 404. An ARGUMENT addressed a resource that does not
+      # exist -- spec §9.1 rule 2. Since T-158 this is the whole of what it
+      # means: the unknown-VERB-NAME half moved to {VerbNotFound} below, because
+      # an assistant recovers from the two differently and `code` is the only
+      # field the spec lets it branch on.
       class NotFound < Base
         CODE        = "not_found"
+        HTTP_STATUS = 404
+      end
+
+      # No verb by that NAME is registered at this origin (T-158, K-1207). The
+      # path's last segment matched nothing in either registry, so nothing about
+      # what this operator can DO has been established -- a different verb may
+      # well do the thing the caller wanted, which is why this is not
+      # {NotFound}. `hint` carries the registered names
+      # ({Errors.unknown_name_hint}), so a mistyped `listings` for
+      # `browse_listings` self-corrects without a catalogue round-trip.
+      #
+      # WIRE-ONLY by the T-054 test even though 404 is a bare status: the status
+      # alone cannot name it, because the OTHER 404 in this vocabulary is what a
+      # bare 404 means ({STATUS_CODES}). Raised only by {Queries}/{Actions},
+      # before any handler is entered.
+      class VerbNotFound < Base
+        CODE        = "verb_not_found"
         HTTP_STATUS = 404
       end
 
@@ -452,6 +518,33 @@ module Kiosk
         # served since the cutover — so the client can solve them without a
         # second round-trip.
         def extensions = { challenges: challenges }
+      end
+
+      # This ORIGIN does not serve the OPTIONAL MODULE the request reaches
+      # (T-158, K-1207) -- account binding (spec §6), payment (§11) or KYC
+      # (§12). HTTP 501, and the spec argues the status at length: the path is
+      # PUBLISHED and correct -- §4.3 requires all six auth URLs even of an
+      # operator that serves no binding -- so a 404 would be a false statement
+      # about the URL, and it would put this case back on the same status as the
+      # two genuine 404s, recreating the ambiguity the T-158 split removed. No
+      # 4xx means it: `forbidden` is identity-scoped while this refusal is
+      # ORIGIN-WIDE and true of an anonymous caller too, `410 Gone` asserts the
+      # capability once existed, `405` is method-scoped. RFC 9110 §15.6.2 is the
+      # status for "does not support the functionality required to fulfill the
+      # request", and makes it cacheable by default -- right, because this is a
+      # property of the origin rather than of the request.
+      #
+      # `message` NAMES THE MODULE: it becomes the problem document's `detail`,
+      # and it is the only thing distinguishing "no binding here" from "no
+      # payments here" to a human reading the answer.
+      #
+      # NOT a misconfiguration report. {ConfigurationError} below is for a
+      # feature the operator INTENDED to serve and wired up wrong; this is the
+      # wire's answer for a capability the origin simply does not offer, and a
+      # caller cannot tell an operator's intent from the outside anyway.
+      class ModuleNotServed < Base
+        CODE        = "module_not_served"
+        HTTP_STATUS = 501
       end
 
       # Misconfiguration of the Kiosk::Server integration — raised at

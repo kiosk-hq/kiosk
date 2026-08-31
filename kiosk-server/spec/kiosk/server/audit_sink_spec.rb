@@ -242,7 +242,7 @@ RSpec.describe Kiosk::Server::AuditSink do
 
       it "emits NOTHING for a name no registry knows — nothing was invoked" do
         expect { run!(name: "no_such_action") }
-          .to raise_error(Kiosk::Server::Errors::NotFound)
+          .to raise_error(Kiosk::Server::Errors::VerbNotFound)
 
         expect(events).to be_empty
       end

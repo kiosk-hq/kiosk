@@ -282,9 +282,13 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # be at any other name. Every retired-wire beat in the fleet dialled WITH a
 # bearer, so seven suites' prose said the 404 flatly while nothing anywhere
 # tested the anonymous case the sentence was wrong about.
+#
+# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
+# `run` are NAMES nobody registered, and the vocabulary now reserves
+# `not_found` for an argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
   rc_r, body_r = post_json("/kiosk/#{name}", { name: "salons" }, ALICE.bearer)
-  [rc_r == 404 && body_r["code"] == "not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
+  [rc_r == 404 && body_r["code"] == "verb_not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
 end
 retired_anon = %w[query run].map do |name|
   rc_a, body_a = post_json("/kiosk/#{name}", { name: "salons" })
@@ -292,7 +296,7 @@ retired_anon = %w[query run].map do |name|
 end
 record(results, "RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
        "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
-       "(want 404/\"not_found\" with a bearer, 401/\"unauthenticated\" without)")
+       "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
 # The resource EXISTS; answering 404 would be a lie about it, and a caller that

@@ -64,7 +64,7 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       hide_const("SpecReloadableController")
 
       expect { execute(:query, { name: "reloadable" }) }
-        .to raise_error(Kiosk::Server::Errors::NotFound, /is not loaded/)
+        .to raise_error(Kiosk::Server::Errors::VerbNotFound, /is not loaded/)
     end
   end
 

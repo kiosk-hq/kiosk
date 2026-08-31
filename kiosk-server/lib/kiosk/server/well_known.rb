@@ -504,9 +504,21 @@ module Kiosk
             `pow_required`, …); `type` is `https://kiosk.tech/problems/<code>`
             and names the same fact. Some codes add members of their own, such
             as the `challenges` array on a `402 pow_required`.
+          - Three codes say "it is not here" and they mean three different
+            things. `404 verb_not_found` — no verb by that NAME is registered
+            here; `hint` lists the ones that are, so re-read the catalogue and
+            call something that exists. `404 not_found` — the verb is real and
+            an ARGUMENT addressed something absent; the answer is final, so
+            stop. `501 module_not_served` — this origin does not serve that
+            optional module at all (binding, payment, KYC); do not retry, and
+            fall back to what you would do at an operator that never offered
+            it.
           - The claim ceremony's OAuth endpoints use the OAuth error shape
             `{ error, error_description }` — a documented exception, and the
-            only one. The vocabulary is closed at eight. Six describe the
+            only one, with a single carve-out: an origin that does not serve
+            binding at all answers `501 module_not_served` there as an ordinary
+            problem document, because none of the OAuth codes means it. The
+            OAuth vocabulary is closed at eight. Six describe the
             ceremony (RFC 8628 §3.5): `authorization_pending`, `slow_down`,
             `expired_token`, `access_denied`, `invalid_grant`,
             `invalid_client`. Two are request-level (RFC 6749 §5.2):

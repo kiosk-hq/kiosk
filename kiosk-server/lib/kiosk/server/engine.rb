@@ -304,7 +304,7 @@ module Kiosk
         # has exactly ONE wire surface and exactly one conformance surface.
         # What a caller still speaking 0.3 actually meets is the constrained
         # per-verb pair at the bottom of this table (`NAME_SEGMENT` matches
-        # both names): `404 not_found` as an `application/problem+json`
+        # both names): `404 verb_not_found` as an `application/problem+json`
         # document whose `hint` names the verbs this origin DOES register —
         # the same answer any unregistered name gets, which is the honest
         # one, because `query` and `run` are now just names nobody declared

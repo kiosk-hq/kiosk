@@ -29,7 +29,7 @@ RSpec.describe Kiosk::Server::Queries do
       declare_query("listing_detail")
 
       expect { described_class.fetch("listings") }
-        .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
+        .to raise_error(Kiosk::Server::Errors::VerbNotFound) { |e|
           expect(e.message).to include("listings")
           # names an available query so a near-miss typo is recoverable...
           expect(e.hint).to include("browse_listings")
@@ -44,7 +44,7 @@ RSpec.describe Kiosk::Server::Queries do
       30.times { |i| declare_query(format("q%02d", i)) }
 
       expect { described_class.fetch("nope") }
-        .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
+        .to raise_error(Kiosk::Server::Errors::VerbNotFound) { |e|
           expect(e.hint).to include("q00")
           expect(e.hint).to include("q19")
           expect(e.hint).not_to include("q20") # capped

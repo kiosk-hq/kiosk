@@ -797,7 +797,7 @@ namespace :demo do
       BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
                                        absent) is rejected; kyc_status stays pending
       BLOCKED  RetiredWire           — POST /kiosk/query and POST /kiosk/run are the
-                                       ordinary 404 not_found an authenticated caller gets,
+                                       ordinary 404 verb_not_found an authenticated caller gets,
                                        and 401 unauthenticated without a bearer: the 0.3
                                        pair was DELETED, so no privileged endpoint and no
                                        second conformance surface remain

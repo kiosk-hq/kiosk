@@ -121,7 +121,7 @@ SURFACE = [
 # The 0.3 multiplexed pair, dialed WITH a Bearer token (T-074 = A). Anonymous
 # these two answer `401`, exactly like every other single-segment path under
 # the mount — which proves nothing about whether the old wire is still there.
-# Authenticated, the answer is the per-verb wire's ordinary `404 not_found`
+# Authenticated, the answer is the per-verb wire's ordinary `404 verb_not_found`
 # for a name nobody registered, and that is the cut.
 AUTHENTICATED = [
   ["POST", "/kiosk/query"],

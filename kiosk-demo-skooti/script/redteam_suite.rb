@@ -54,7 +54,7 @@
 #
 # And two beats that are only expressible after the 0.4 cutover (T-074 = A):
 #   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
-#                        404 / not_found an AUTHENTICATED caller gets, and
+#                        404 / verb_not_found an AUTHENTICATED caller gets, and
 #                        401 / unauthenticated without a bearer (auth precedes
 #                        verb dispatch; both are probed): the multiplexed pair
 #                        was DELETED, so there is no privileged endpoint left,
@@ -1138,12 +1138,16 @@ end
 # bearer, so seven suites' prose said the 404 flatly while nothing anywhere
 # tested the anonymous case the sentence was wrong about.
 #
+# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
+# `run` are NAMES nobody registered, and the vocabulary now reserves
+# `not_found` for an argument that ADDRESSED something absent.
+#
 # A
 # deprecation shim here would be exactly that second surface — and it is the one
 # an attacker would reach for, because it took the verb name from the BODY.
 retired_wire = lambda do
   probes = %w[query run].flat_map do |name|
-    [[true, 404, "not_found", ""], [false, 401, "unauthenticated", " (anon)"]]
+    [[true, 404, "verb_not_found", ""], [false, 401, "unauthenticated", " (anon)"]]
       .map do |bearer, want_status, want_code, tag|
       res, body = raw_wire.call(:post, "/kiosk/#{name}", { name: "scooters_available" },
                                 bearer: bearer)
@@ -1156,7 +1160,7 @@ retired_wire = lambda do
   if probes.all? { |ok, _| ok }
     { blocked: true,
       detail:  "the 0.3 multiplexed pair is gone: #{probes.map(&:last).join(", ")} " \
-               "(an ordinary not_found to an authenticated caller, 401 to anyone else, " \
+               "(an ordinary verb_not_found to an authenticated caller, 401 to anyone else, " \
                "with no compatibility payload)" }
   else
     { blocked: false,

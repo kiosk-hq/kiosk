@@ -301,7 +301,19 @@ module Kiosk
         # about the request is looked at, and the least informative answer
         # stops winning.
         provider = Kiosk.configuration.payment_provider
-        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
+        # `module_not_served` (501) and not `forbidden` (403) since T-158. The
+        # paragraph above already says why this guard runs first -- "whether
+        # this origin does payments at all is a fact about the ORIGIN" -- and
+        # that is the sentence that names the code: `forbidden` means
+        # "authenticated, but this identity may not do this", while this refusal
+        # is origin-wide and true of every caller. `capabilities` drops `pay`
+        # for the same origin, so the discovery document and the wire now agree.
+        if provider.nil?
+          raise Errors::ModuleNotServed.new(
+            "this operator does not serve the payment module",
+            hint: "`pay` is absent from this origin's capabilities; hand the transaction to your human",
+          )
+        end
 
         # Payment is agent-only: the AP2 mandate chain is signed by the agent's
         # payment key. A non-agent principal (e.g. a web/mobile user_idp session,

@@ -33,7 +33,7 @@
       "description": "RFC 9457 detail: the human-readable, incident-specific message. Optional; dropped when there is nothing to say."
     },
     "code": {
-      "description": "Extension member, and THE CONTRACT: the closed, stable error vocabulary. An AI assistant branches on this, never on the HTTP status alone (four codes share 403 and three share 402) and never on the presence of a response header.",
+      "description": "Extension member, and THE CONTRACT: the closed, stable error vocabulary. An AI assistant branches on this, never on the HTTP status alone (four codes share 403, three share 402, and two share 404) and never on the presence of a response header. The two 404s are the split of Section 9: verb_not_found means no verb by that NAME is registered here (re-read the catalogue), not_found means the verb exists and an argument ADDRESSED something absent (stop and say so). module_not_served is the third of that family and is 501, because the published path is correct and the whole capability is absent.",
       "enum": [
         "bad_request",
         "unauthenticated",
@@ -41,6 +41,7 @@
         "rls_denied",
         "kyc_required",
         "spending_cap_exceeded",
+        "verb_not_found",
         "not_found",
         "method_not_allowed",
         "conflict",
@@ -49,12 +50,13 @@
         "payment_failed",
         "quota_exceeded",
         "action_failed",
-        "internal_error"
+        "internal_error",
+        "module_not_served"
       ]
     },
     "hint": {
       "type": "string",
-      "description": "Extension member: an optional remediation pointer (e.g. the known query names on a not_found, the method a verb wanted on a method_not_allowed). On kyc_required and payment_failed it is the field that says what to do next."
+      "description": "Extension member: an optional remediation pointer (e.g. the registered verb names on a verb_not_found, the method a verb wanted on a method_not_allowed). On kyc_required and payment_failed it is the field that says what to do next."
     },
     "challenges": {
       "type": "array",

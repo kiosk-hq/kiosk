@@ -127,7 +127,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     [
       [500, "internal_error", "a crash"],
       [502, "internal_error", "a bad gateway"],
-      [404, "not_found",      "a query name that never resolved"],
+      [404, "verb_not_found", "a query name that never resolved"],
       [402, "pow_required",   "a toll that fired before any policy ran"],
       [403, "forbidden",      "a query refused outright to its own principal"],
     ].each do |status, code, why|

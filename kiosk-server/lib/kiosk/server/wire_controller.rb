@@ -34,7 +34,7 @@ module Kiosk
     # `POST <endpoint>/run` — 0.3's multiplexed pair — were DELETED at the 0.4
     # cutover (T-074 = A): no dedicated route is drawn for either name and no
     # tombstone stands in for one, so both fall through to {VerbController}
-    # and answer the ordinary `404 not_found` problem document — hint and all
+    # and answer the ordinary `404 verb_not_found` problem document — hint and all
     # — that any unregistered verb name gets (K-1112). One wire, one
     # conformance surface.
     #

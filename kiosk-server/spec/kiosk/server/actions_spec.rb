@@ -25,7 +25,7 @@ RSpec.describe Kiosk::Server::Actions do
       declare_action("cancel_order")
 
       expect { described_class.fetch("order") }
-        .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
+        .to raise_error(Kiosk::Server::Errors::VerbNotFound) { |e|
           expect(e.message).to include("order")
           # names an available action so a near-miss typo is recoverable...
           expect(e.hint).to include("place_order")

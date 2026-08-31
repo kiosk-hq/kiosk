@@ -191,7 +191,7 @@ RSpec.describe "the registries' #unregister" do
 
     expect(Kiosk::Server::Queries.unregister("gone")).to be_a(Kiosk::Server::Queries::Entry)
     expect(Kiosk::Server::Queries.known).to be_empty
-    expect { Kiosk::Server::Queries.fetch("gone") }.to raise_error(Kiosk::Server::Errors::NotFound)
+    expect { Kiosk::Server::Queries.fetch("gone") }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
   end
 
   it "is a no-op for a name that was never registered" do

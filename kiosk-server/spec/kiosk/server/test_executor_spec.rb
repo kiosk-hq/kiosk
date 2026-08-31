@@ -189,10 +189,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(result).to eq("pong" => "hi")
     end
 
-    it "raises Errors::NotFound for an unregistered action (via Actions.fetch)" do
+    it "raises Errors::VerbNotFound for an unregistered action (via Actions.fetch)" do
       expect {
         executor.with_identity(identity) { executor.run_action(:missing, {}) }
-      }.to raise_error(Kiosk::Server::Errors::NotFound)
+      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
   end
 

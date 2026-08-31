@@ -109,9 +109,9 @@ module Kiosk
 
         def fetch(name)
           entry = registry.fetch(name.to_s) do
-            raise Errors::NotFound.new(
+            raise Errors::VerbNotFound.new(
               "Unknown query: #{name.inspect}",
-              hint: not_found_hint(name),
+              hint: verb_not_found_hint(name),
             )
           end
           entry.handler
@@ -130,9 +130,9 @@ module Kiosk
         # gone from every descriptor this implementation serves.
         def describe(name)
           entry = registry.fetch(name.to_s) do
-            raise Errors::NotFound.new(
+            raise Errors::VerbNotFound.new(
               "Unknown query: #{name.inspect}",
-              hint: not_found_hint(name),
+              hint: verb_not_found_hint(name),
             )
           end
           # A slot may be a PROC (K-922) — a schema derived from the operator's
@@ -182,7 +182,7 @@ module Kiosk
         # an assistant that mistyped a name (`listings` for `browse_listings`)
         # can self-correct WITHOUT a schema round-trip. The names are already
         # public via GET .../schema, so listing them here leaks nothing new.
-        def not_found_hint(name)
+        def verb_not_found_hint(name)
           Errors.unknown_name_hint(name, "query", registry.keys.sort)
         end
 

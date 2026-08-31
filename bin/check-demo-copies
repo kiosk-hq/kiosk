@@ -2528,7 +2528,7 @@ prose_units.each do |unit|
   errors << "#{unit[:label]}: #{unit[:rel]} names #{hits.map(&:inspect).join(', ')} in CODE — the " \
             "0.3 wire vocabulary protocol 0.4 deleted (K-1088). No DEDICATED route is drawn " \
             "for `query` or `run` (T-074 = A): both names fall through to the per-verb pair and " \
-            "answer the ordinary `404 not_found` problem document, hint and all, that any " \
+            "answer the ordinary `404 verb_not_found` problem document, hint and all, that any " \
             "unregistered verb name gets (K-1112). `capabilities` publishes MODULE names " \
             "(schema/queries/actions/pay) since T-095, so this string is false however a reader " \
             "takes it — and it is a LIVE response body, not a comment. Name what " \
@@ -2594,7 +2594,7 @@ demos.each do |dir|
     errors << "#{label}: #{rel} names #{hits.map(&:inspect).join(', ')} in the file, which is SERVED whole — " \
               "retired 0.3 vocabulary (K-1090). No DEDICATED route is drawn for `query` or " \
               "`run` (T-074 = A): both names fall through to the per-verb pair and answer the " \
-              "ordinary `404 not_found` problem document, hint and all, that any unregistered " \
+              "ordinary `404 verb_not_found` problem document, hint and all, that any unregistered " \
               "verb name gets (K-1112). `capabilities` publishes MODULE names since T-095, and an " \
               "error is a FLAT RFC 9457 problem document under `application/problem+json`, not " \
               "an «envelope» (K-808). PublicExceptions serves this page to every assistant that " \

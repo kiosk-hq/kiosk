@@ -644,7 +644,7 @@ class RetiredWire < Kiosk::Redteam::Scenario
     a = register_principal(client, name: "redteam-retired-a", profile:)
 
     results = RETIRED.flat_map do |name|
-      [[a.token, 404, "not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
+      [[a.token, 404, "verb_not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
         .map do |token, want_status, want_code, tag|
         uri     = URI("#{BASE_URL}/kiosk/#{name}")
         headers = { "Content-Type" => "application/json" }

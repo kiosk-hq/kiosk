@@ -21,8 +21,8 @@ module Kiosk
     # this is the ONLY way to reach an operator verb, `POST <endpoint>/query`
     # and `POST <endpoint>/run` included (T-074 = A): no dedicated route is
     # drawn for either name, so both fall through to the per-verb pair below
-    # and answer `404 not_found` — an ordinary problem document whose `hint`
-    # names the registered verbs — because nobody declared a verb called
+    # and answer `404 verb_not_found` — an ordinary problem document whose
+    # `hint` names the registered verbs — because nobody declared a verb called
     # `query` or `run` (K-1112).
     #
     # ── Where the routes come from, and the design delta it carries ──────
@@ -50,7 +50,7 @@ module Kiosk
     # ── Order of the gates, and why it is not the first draft's ──────────
     #
     #   1. identity            401  IdentityResolution
-    #   2. the verb exists     404  the registry (with the name-hint)
+    #   2. the verb exists     404  the registry (`verb_not_found` + name-hint)
     #      …or wrong method    405  the OTHER registry, carrying `Allow:`
     #   3. the arguments       400  ArgumentDecoder + the declared input_schema
     #   4. the toll            402  PowGate, via WireController#execute_wire
@@ -118,14 +118,18 @@ module Kiosk
       # The verb's published descriptor, or a refusal that says something
       # useful — and the two refusals are deliberately DIFFERENT STATUSES.
       #
-      # A name nobody registered is `404 not_found` with the registry's own
-      # hint, which lists the registered names so a mistyped `listings` for
-      # `browse_listings` self-corrects without a schema round-trip.
+      # A name nobody registered is `404 verb_not_found` with the registry's
+      # own hint, which lists the registered names so a mistyped `listings` for
+      # `browse_listings` self-corrects without a schema round-trip. It is NOT
+      # `not_found`: since T-158 that code means an ARGUMENT addressed something
+      # absent (spec §9.1 rule 2), and an assistant recovers from the two
+      # differently — re-read the catalogue, versus tell the human it is not
+      # there.
       #
       # A name registered as the OTHER KIND is `405 method_not_allowed` with
-      # `Allow:` naming the method the verb does accept. The resource EXISTS —
-      # answering 404 would be a lie about it, and RFC 9110 §15.5.6 already
-      # has the status for exactly this. It discloses nothing: `GET
+      # `Allow:` naming the method the verb does accept. The verb EXISTS —
+      # answering a 404 of either kind would be a lie about it, and RFC 9110
+      # §15.5.6 already has the status for exactly this. It discloses nothing: `GET
       # <endpoint>/schema` publishes every name and its kind to ANYONE, so a
       # 405 tells a caller only what it could have read first.
       def descriptor_for!(command, name)
@@ -143,8 +147,8 @@ module Kiosk
           )
         end
 
-        # Not registered as either: let the registry raise its own NotFound,
-        # whose hint names what IS registered for this kind.
+        # Not registered as either: let the registry raise its own
+        # VerbNotFound, whose hint names what IS registered for this kind.
         registry.describe(name)
       end
 

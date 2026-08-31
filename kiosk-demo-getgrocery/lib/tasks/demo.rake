@@ -1213,7 +1213,7 @@ namespace :demo do
                                         delivery_date, delivery_address and order_id →
                                         typed 400, never a 500 (K-773)
       BLOCKED  RetiredWire            — POST /kiosk/query and POST /kiosk/run answer the
-                                        ordinary 404 not_found an AUTHENTICATED caller gets,
+                                        ordinary 404 verb_not_found an AUTHENTICATED caller gets,
                                         and 401 unauthenticated without a bearer (auth
                                         precedes verb dispatch); the 0.3 pair was DELETED
                                         (T-074 = A), leaving no second conformance surface

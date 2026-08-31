@@ -174,7 +174,12 @@ module Kiosk
 
         @controller.constantize
       rescue NameError
-        raise Errors::NotFound.new(
+        # `verb_not_found` and not `not_found` since T-158: the vocabulary now
+        # reserves `not_found` for an ARGUMENT that addressed something absent,
+        # and nothing was addressed here. It stays a 404 rather than becoming a
+        # 500 -- the decision {#gate!} below records -- and the caller's move is
+        # the `verb_not_found` move: stop calling this name.
+        raise Errors::VerbNotFound.new(
           "#{@kind} #{@wire_name.inspect} is registered to #{@controller}, which is not loaded",
           hint: "the handler class was renamed or removed; restart the server after moving it",
         )
@@ -188,7 +193,7 @@ module Kiosk
         return if controller.respond_to?(:action_methods) &&
                   controller.action_methods.include?(@method_name)
 
-        raise Errors::NotFound.new(
+        raise Errors::VerbNotFound.new(
           "#{@kind} #{@wire_name.inspect} is no longer dispatchable",
           hint: "#{controller_name || controller}##{@method_name} is not a public controller action",
         )

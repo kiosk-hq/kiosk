@@ -123,7 +123,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       # Anonymous, these answer 401 like every other single-segment path under
       # the mount, which proves nothing. WITH a Bearer token the per-verb wire
       # gets past its first gate and answers what it answers for any name
-      # nobody declared — `404 not_found`, as an RFC 9457 problem document,
+      # nobody declared — `404 verb_not_found`, as an RFC 9457 problem document,
       # with no tombstone and no hint that a wire ever lived there.
       ["POST /kiosk/query (bearer)", "POST /kiosk/run (bearer)"].each do |request_line|
         res = probe("mounted", request_line)
@@ -131,7 +131,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
         expect(res["headers"]["content-type"]).to include("application/problem+json")
 
         body = JSON.parse(res["body"])
-        expect(body["code"]).to eq("not_found")
+        expect(body["code"]).to eq("verb_not_found")
         expect(body).not_to have_key("ok")
         expect(body).not_to have_key("error")
       end

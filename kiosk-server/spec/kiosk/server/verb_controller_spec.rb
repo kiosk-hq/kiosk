@@ -120,10 +120,10 @@ RSpec.describe Kiosk::Server::VerbController do
       status, body = call_verb(:get, "frobnicate")
       expect(status).to eq(404)
       expect(last_headers["Content-Type"]).to include("application/problem+json")
-      expect(body[:type]).to   eq("https://kiosk.tech/problems/not_found")
-      expect(body[:title]).to  eq("Not found")
+      expect(body[:type]).to   eq("https://kiosk.tech/problems/verb_not_found")
+      expect(body[:title]).to  eq("No such verb")
       expect(body[:status]).to eq(404)
-      expect(body[:code]).to   eq("not_found")
+      expect(body[:code]).to   eq("verb_not_found")
       expect(body[:hint]).to   include("salons")
     end
   end
@@ -592,16 +592,16 @@ RSpec.describe Kiosk::Server::VerbController do
     it "answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one" do
       # The sharpest statement of the cut. The path still resolves, but it
       # resolves through the SAME constrained per-verb pair every other name
-      # goes through, and answers the ordinary `not_found` problem document
+      # goes through, and answers the ordinary `verb_not_found` problem document
       # naming what IS registered. There is no privileged 0.3 endpoint left
       # here — `query` is now just a name an operator has not used.
       status, body, headers = call_verb(:post, "query", body: JSON.generate(name: "salons"))
 
       expect(status).to eq(404)
       expect(headers["Content-Type"]).to include("application/problem+json")
-      expect(body[:type]).to   eq("https://kiosk.tech/problems/not_found")
+      expect(body[:type]).to   eq("https://kiosk.tech/problems/verb_not_found")
       expect(body[:status]).to eq(404)
-      expect(body[:code]).to   eq("not_found")
+      expect(body[:code]).to   eq("verb_not_found")
       # Not the 0.3 envelope, and not a hint that the old wire moved: the
       # answer is indistinguishable from any other unregistered action.
       expect(body).not_to have_key(:ok)
@@ -614,7 +614,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
       expect(status).to eq(404)
       expect(headers["Content-Type"]).to include("application/problem+json")
-      expect(body[:code]).to eq("not_found")
+      expect(body[:code]).to eq("verb_not_found")
       expect(body).not_to have_key(:ok)
     end
 

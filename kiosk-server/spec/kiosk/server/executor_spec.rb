@@ -70,11 +70,11 @@ RSpec.describe Kiosk::Server::Executor do
       }.to raise_error(Kiosk::Server::Errors::BadRequest, /name/)
     end
 
-    it "raises NotFound when the query isn't registered" do
+    it "raises VerbNotFound when the query isn't registered" do
       expect {
         described_class.call(kind: :query, args: {}, name: "missing",
                              identity: identity, connection: connection)
-      }.to raise_error(Kiosk::Server::Errors::NotFound)
+      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
 
     it "lets Kiosk::Server::Errors raised inside the query propagate unchanged" do
@@ -172,11 +172,11 @@ RSpec.describe Kiosk::Server::Executor do
       }.to raise_error(Kiosk::Server::Errors::BadRequest, /name/)
     end
 
-    it "raises NotFound when the action isn't registered" do
+    it "raises VerbNotFound when the action isn't registered" do
       expect {
         described_class.call(kind: :run, args: {}, name: "missing",
                              identity: identity, connection: connection)
-      }.to raise_error(Kiosk::Server::Errors::NotFound)
+      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
 
     it "lets Kiosk::Server::Errors raised inside the action propagate unchanged" do
@@ -563,10 +563,28 @@ RSpec.describe Kiosk::Server::Executor do
       }.to raise_error(Kiosk::Server::Errors::BadRequest, /payment_mandate_jws/)
     end
 
-    it "raises Forbidden when no payment_provider is configured" do
+    # T-158: `module_not_served` (501), not `forbidden` (403). "This origin does
+    # not do payments" is a fact about the ORIGIN and is true of every caller,
+    # while `forbidden` is glossed "authenticated, but this identity may not do
+    # this" — the mis-fit K-1207 measured and Phil's decision «A» split.
+    it "raises ModuleNotServed when no payment_provider is configured" do
       Kiosk.configuration.payment_provider = nil
       expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /payment_provider/)
+        .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /payment module/)
+    end
+
+    it "puts module_not_served/501 on the wire for it, not a 403" do
+      Kiosk.configuration.payment_provider = nil
+      begin
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      rescue Kiosk::Server::Errors::ModuleNotServed => e
+        expect(e.code).to        eq("module_not_served")
+        expect(e.http_status).to eq(501)
+        expect(e.to_problem[:type]).to eq("https://kiosk.tech/problems/module_not_served")
+        # `detail` NAMES the module — the only thing separating "no payments
+        # here" from "no KYC here" to a reader of the answer.
+        expect(e.to_problem[:detail]).to include("payment")
+      end
     end
 
     # K-800: THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO. `pay` is drawn on every
@@ -574,13 +592,15 @@ RSpec.describe Kiosk::Server::Executor do
     # payment_provider "answers it with the wire's own 403" — but the three
     # mandate guards used to run first, so an empty POST at a payment-free
     # origin came back `400 args.intent_mandate_jws required`: an instruction to
-    # sign three mandates, from an origin that could never settle them. The
+    # sign three mandates, from an origin that could never settle them. (The
+    # code the route comment calls "the wire's own 403" is `module_not_served`
+    # at 501 since T-158; the ORDER this example is about is unchanged.) The
     # example sends NO arguments at all, which is exactly the case the old order
     # got wrong.
-    it "answers a payment-free origin with the 403 even when NO mandates are sent (K-800)" do
+    it "answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)" do
       Kiosk.configuration.payment_provider = nil
       expect { described_class.call(kind: :pay, args: {}, identity: identity, connection: connection) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /no payment_provider configured/)
+        .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /does not serve the payment module/)
     end
 
     # ── Replay: the mandate chain IS the idempotency key (K-739) ───────────

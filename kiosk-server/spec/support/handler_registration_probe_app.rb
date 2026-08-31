@@ -102,12 +102,12 @@ def snapshot
     "capabilities" => Kiosk.configuration.capabilities,
     "browse_fetches" => begin
       Kiosk::Server::Queries.fetch("probe_browse").class.name
-    rescue Kiosk::Server::Errors::NotFound => e
+    rescue Kiosk::Server::Errors::VerbNotFound => e
       "NotFound: #{e.hint}"
     end,
     "added_fetches" => begin
       Kiosk::Server::Queries.fetch("probe_added").class.name
-    rescue Kiosk::Server::Errors::NotFound => e
+    rescue Kiosk::Server::Errors::VerbNotFound => e
       "NotFound: #{e.hint}"
     end,
   }

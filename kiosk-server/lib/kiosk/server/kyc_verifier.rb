@@ -18,7 +18,8 @@ module Kiosk
     # minted for another operator is rejected at the WIRE, not merely by a
     # demo's own callback), `sub` matches the authenticated identity (compared
     # as String on both sides so a bigint-PK host works), and not expired.
-    # Raises `Errors::Forbidden` on any failure.
+    # Raises `Errors::Forbidden` on any verification failure, and
+    # `Errors::ModuleNotServed` when this origin serves no KYC at all.
     #
     # NAMED ANONYMIZED ATTRIBUTES: the attestation MAY carry an `attributes`
     # object of `{name: true}` booleans (e.g. `{"age_over_18": true,
@@ -36,14 +37,24 @@ module Kiosk
       # @param raw_jws  [String]          compact JWS string
       # @param identity [Kiosk::Identity] the authenticated principal
       # @return [Hash] symbol-keyed payload claims on success
-      # @raise [Errors::Forbidden] on any verification failure
+      # @raise [Errors::Forbidden]       on any verification failure
+      # @raise [Errors::ModuleNotServed] when no `kyc_public_key` is configured,
+      #   i.e. this origin does not serve the KYC module at all
       def verify(raw_jws:, identity:)
         config = Kiosk.configuration
         key    = config.kyc_public_key
 
-        raise Errors::Forbidden.new(
-          "kyc_public_key not configured",
-          hint: "Set Kiosk.configuration.kyc_public_key to the KYC provider's RSA public key",
+        # `module_not_served` (501) and not `forbidden` (403) since T-158: this
+        # refusal is a fact about the ORIGIN, not about the caller's identity.
+        # `forbidden` is glossed "authenticated, but this identity may not do
+        # this" and this one is true of every caller including an anonymous
+        # one, which is exactly the mis-fit K-1207 measured. `detail` names the
+        # module because that is the only thing separating "no KYC here" from
+        # "no payments here" to a reader of the answer.
+        raise Errors::ModuleNotServed.new(
+          "this operator does not serve the KYC module",
+          hint: "no KYC attestation is accepted at this origin; retrying will not help. " \
+                "An operator that means to serve KYC sets Kiosk.configuration.kyc_public_key.",
         ) if key.nil?
 
         payload, = ::JWT.decode(

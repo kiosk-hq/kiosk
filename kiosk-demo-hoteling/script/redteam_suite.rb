@@ -26,7 +26,7 @@
 #
 # And two beats that are only expressible after the 0.4 cutover (T-074 = A):
 #   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
-#                        404 / not_found an AUTHENTICATED caller gets, and
+#                        404 / verb_not_found an AUTHENTICATED caller gets, and
 #                        401 / unauthenticated without a bearer (auth precedes
 #                        verb dispatch; both are probed): the multiplexed pair
 #                        was DELETED, so there is no privileged endpoint left,
@@ -884,7 +884,7 @@ class RetiredWire < Kiosk::Redteam::Scenario
     a = register_principal(client, name: "redteam-retired-wire", profile:)
 
     probes = %w[query run].flat_map do |name|
-      [[a, 404, "not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
+      [[a, 404, "verb_not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
         .map do |principal, want_status, want_code, tag|
         res, body = raw(principal, :post, "/kiosk/#{name}", { name: "properties" })
         [res.code.to_i == want_status && body["code"] == want_code,

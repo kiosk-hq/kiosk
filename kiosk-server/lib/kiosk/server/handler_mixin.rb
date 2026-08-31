@@ -519,8 +519,11 @@ module Kiosk
         # not serve.
         #
         # THE BODY IS A FLAT RFC 9457 PROBLEM DOCUMENT (K-1092), built by
-        # {Errors::NotFound} itself so it cannot drift from the one the wire
-        # renders. This render is CLIENT-FACING and nothing re-wraps it: the
+        # {Errors::VerbNotFound} itself so it cannot drift from the one the
+        # wire renders. `verb_not_found` and not `not_found` since T-158: the
+        # caller dialed a path that is not a wire verb path at all, so nothing
+        # was ADDRESSED, and the hint below tells it to call the verb's own
+        # route -- which is precisely the `verb_not_found` recovery. This render is CLIENT-FACING and nothing re-wraps it: the
         # guard returns early under sub-dispatch, so it only ever fires on a
         # route the operator drew straight at a handler controller, where there
         # is a machine on the other end and no human page in sight. It answered
@@ -537,7 +540,7 @@ module Kiosk
         def kiosk_require_wire_dispatch!
           return if request.env.key?(HandlerDispatch::DISPATCH_KEY)
 
-          problem = Kiosk::Server::Errors::NotFound.new(
+          problem = Kiosk::Server::Errors::VerbNotFound.new(
             "Kiosk handlers are reachable through the Kiosk wire only",
             hint: "call the verb's own route — " \
                   "GET #{Kiosk.configuration.mount_path}/<query-name> or " \

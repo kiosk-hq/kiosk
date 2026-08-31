@@ -328,7 +328,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
 
     it "never lets a wire name reach an undeclared method" do
       expect { execute(:run, { name: "place" }) }
-        .to raise_error(Kiosk::Server::Errors::NotFound, /Unknown action/)
+        .to raise_error(Kiosk::Server::Errors::VerbNotFound, /Unknown action/)
     end
   end
 
@@ -685,10 +685,10 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       expect(status).to eq(404)
       expect(content_type).to start_with(Kiosk::Server::Errors::PROBLEM_CONTENT_TYPE)
       expect(problem).to include(
-        "type"   => "https://kiosk.tech/problems/not_found",
-        "title"  => "Not found",
+        "type"   => "https://kiosk.tech/problems/verb_not_found",
+        "title"  => "No such verb",
         "status" => 404,
-        "code"   => "not_found",
+        "code"   => "verb_not_found",
       )
       expect(problem["detail"]).to match(/Kiosk wire only/)
       expect(problem["hint"]).to match(%r{<query-name>})
@@ -832,7 +832,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       klass.send(:private, :vanishing)
 
       expect { execute(:query, { name: "vanishing" }) }
-        .to raise_error(Kiosk::Server::Errors::NotFound, /no longer dispatchable/)
+        .to raise_error(Kiosk::Server::Errors::VerbNotFound, /no longer dispatchable/)
     end
   end
 end

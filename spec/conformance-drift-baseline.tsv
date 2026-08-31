@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at 2b7481e3
-# 1643 anchors.
+# recorded: 2026-08-31 at df16d303 (working tree: 38 cited file(s) modified) -- T-158 not_found split
+# 1661 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -89,6 +89,7 @@ e2e/assistant.sh	0731d564311068f6	GET /kiosk/schema is unenveloped
 e2e/assistant.sh	d08f704fb9117cd3	GET an action → 405
 e2e/assistant.sh	f6b390050e638ef1	GET at an action's path → 405
 e2e/assistant.sh	0e42a2b846f5fe80	If-None-Match on the digest → 304
+e2e/assistant.sh	fc5ed1c45af6f66d	KYC at an origin that serves no KYC → 501
 e2e/assistant.sh	2cb1d4a638ff83d5	Kiosk-API-Version is MAJOR.MINOR.PATCH
 e2e/assistant.sh	0c6e61a6e86b5b4a	Kiosk-API-Version present
 e2e/assistant.sh	bc7d2b93abf90689	Kiosk-Min-Client is a version, and it is advertised
@@ -113,6 +114,7 @@ e2e/assistant.sh	8828ef7892c3b853	all three version headers on all 19 mount rout
 e2e/assistant.sh	cde0ddb3a718eb34	an action declares no pagination headers
 e2e/assistant.sh	3414347124974678	an ancient client is SERVED, not refused — the floor is advisory
 e2e/assistant.sh	495ef79de3304b32	an unhandled 500 UNDER the mount is a 500
+e2e/assistant.sh	99bf673820488b64	an unregistered NAME and an unserved MODULE answer differently
 e2e/assistant.sh	ed89efb6f3b589b6	api-catalog advertises it as a service-desc
 e2e/assistant.sh	0a416c3fbc34fac4	api-catalog hyperlinks $verb_name, unauthenticated
 e2e/assistant.sh	925c895ed1752035	api-catalog → 200
@@ -142,9 +144,11 @@ e2e/assistant.sh	2a1b3270ce906612	binding: token bound to the human
 e2e/assistant.sh	5f5e9e3953bd6731	binding: token role is the approver's
 e2e/assistant.sh	f3a3396abdde3394	binding: unlink → 204 (no body)
 e2e/assistant.sh	4eb6f08faf943420	binding: wire verb as bound account
+e2e/assistant.sh	d6dcf51d33158d14	binding: …and the code is not_found
+e2e/assistant.sh	071974087eeebe97	binding: …type names it
 e2e/assistant.sh	dc02931f1a65a16a	bob: 1 appointment exists
 e2e/assistant.sh	35dbfa8f87dfa9b2	bob: does NOT see alice's row
-e2e/assistant.sh	e99aede408bef43f	code is the branch point
+e2e/assistant.sh	99d383c2b61c96cf	code is the branch point
 e2e/assistant.sh	9531e3cc8978ad14	db: 1 cart_mandate
 e2e/assistant.sh	d50ffe8fb3a8dd1b	db: 1 intent_mandate
 e2e/assistant.sh	b594bfbf72a637c6	db: 1 payment_mandate
@@ -192,12 +196,14 @@ e2e/assistant.sh	bd4514200645ffd1	the body is a bare array
 e2e/assistant.sh	62baa4b1702a1abb	the body is the action's object
 e2e/assistant.sh	ca77b6e308979ec0	the descriptor's description travels verbatim
 e2e/assistant.sh	0682d7fb66bc44a9	the reserved parameters are form/explode:true
-e2e/assistant.sh	1eacc168e9be11fc	title is the code's, not the incident's
-e2e/assistant.sh	aef4c37a89a00e7b	type names the code
+e2e/assistant.sh	ca9aa46036927ae6	the three 'it is not here' answers are three DIFFERENT codes
+e2e/assistant.sh	0a42f5cb5e6f9f47	title is the code's, not the incident's
+e2e/assistant.sh	4da174e155a6e6cd	type names the code
 e2e/assistant.sh	44966e689e87b8e5	…a query is advertised GET
 e2e/assistant.sh	ba604e7462629406	…a stale ?v= still answers the CURRENT catalogue, short-lived
 e2e/assistant.sh	2260fca65574498f	…an action is advertised POST
 e2e/assistant.sh	89ed2eaaaec56fa7	…and NO Link header, because there is no next page
+e2e/assistant.sh	ff53dce362c1da79	…and NOT forbidden
 e2e/assistant.sh	1aec2e6ba0769424	…and kiosk.json itself expires quickly
 e2e/assistant.sh	29b59cbcac7e5cd4	…and links the catalog at its versioned url
 e2e/assistant.sh	efb81ff034c053fb	…and neither does the operator's own 500 — same exception path
@@ -205,9 +211,12 @@ e2e/assistant.sh	69e443dba65ee078	…and never a 402: the toll went with the gat
 e2e/assistant.sh	22d22b6da7976dbb	…and the boot digest IS the ETag
 e2e/assistant.sh	2eea990187664411	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	651f65938444bd59	…and the route loop actually ran
-e2e/assistant.sh	e0c4574d461e9876	…as an ordinary not_found
+e2e/assistant.sh	58c1efa4baa857d7	…as an ordinary verb_not_found
+e2e/assistant.sh	bf26ab5af609ddfb	…as verb_not_found too
 e2e/assistant.sh	6bca2bfea6562cb2	…by \$ref into components.headers
+e2e/assistant.sh	992754f67571b9b3	…code is module_not_served
 e2e/assistant.sh	5430ff9821a1659a	…coded method_not_allowed
+e2e/assistant.sh	abe144a08e285d82	…detail names the module
 e2e/assistant.sh	ddd8021a01baccbc	…public, one minute at the bare path
 e2e/assistant.sh	f047baf98c83c9b2	…the catalog is the body itself
 e2e/assistant.sh	f616315f74fab8eb	…while a ROOT discovery surface carries none of them
@@ -1012,7 +1021,7 @@ kiosk-server/lib/kiosk/server/auth_controller.rb	2155b2d4b207d2e1	pow    = PowGa
 kiosk-server/lib/kiosk/server/auth_controller.rb	d7c437ddab4d6e1e	respond({ access_token: token }, :ok)
 kiosk-server/lib/kiosk/server/auth_controller.rb	fd5c7e0bad800361	result = AgentRegistration.call(
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	0fddc2e68e36ca51	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	b5ce9fb3fbefdf4d	        @skill_url ||= "https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	2d29e605d8665ef8	        @skill_url ||= "https://kiosk.tech/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	      attr_accessor :spending_cap_window_days
 kiosk-server/lib/kiosk/server/configuration_extension.rb	d6020afee4687f9d	      def computed_capabilities
@@ -1034,7 +1043,7 @@ kiosk-server/lib/kiosk/server/engine.rb	662cf956a2efce89	          next unless K
 kiosk-server/lib/kiosk/server/engine.rb	9c726f7b2e2ce672	        # `schema` is one of the TWO routes under this mount that resolve no
 kiosk-server/lib/kiosk/server/engine.rb	a7cdbbcceca00b37	        get  "schema", to: "wire#schema"
 kiosk-server/lib/kiosk/server/engine.rb	ef4cfed46b0db3f5	      initializer "kiosk-server.root_discovery_routes" do |app|
-kiosk-server/lib/kiosk/server/engine.rb	fc341abaa8f85dd0	      routes do
+kiosk-server/lib/kiosk/server/engine.rb	a3247a072d552c2f	      routes do
 kiosk-server/lib/kiosk/server/engine.rb	50f42baf3e7c5621	#   mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/lib/kiosk/server/engine.rb	9f745cce77f298d6	get  "/:kiosk_verb", to: "verb#show",
 kiosk-server/lib/kiosk/server/engine.rb	85cb93bd318cb71d	get  "oauth/device/verify",        to: "device_verify#show"
@@ -1044,16 +1053,18 @@ kiosk-server/lib/kiosk/server/engine.rb	1e1534c7d247d149	get "/.well-known/kiosk
 kiosk-server/lib/kiosk/server/engine.rb	99088349c770e7a0	get "/agents.txt",  to: "kiosk/server/discovery#agents_txt"
 kiosk-server/lib/kiosk/server/engine.rb	5aae507473aae2be	get "openapi.json", to: "open_api#show"
 kiosk-server/lib/kiosk/server/engine.rb	d65e5e832661680a	post "/:kiosk_verb", to: "verb#create",
+kiosk-server/lib/kiosk/server/errors.rb	19acdd40e2a6377f	      class ModuleNotServed < Base
 kiosk-server/lib/kiosk/server/errors.rb	e070c807ebc099bd	"pow_required"           => 402,
 kiosk-server/lib/kiosk/server/errors.rb	6ef6f8f38312f8be	"spending_cap_exceeded"  => 403,
 kiosk-server/lib/kiosk/server/errors.rb	5a44e08d78e5fd59	CODE        = "spending_cap_exceeded"
 kiosk-server/lib/kiosk/server/errors.rb	9a736ac717133d5d	PROBLEM_CONTENT_TYPE = "application/problem+json"
 kiosk-server/lib/kiosk/server/errors.rb	53c014fce2eef01d	PROBLEM_TYPE_BASE = "https://kiosk.tech/problems/"
-kiosk-server/lib/kiosk/server/errors.rb	b8bc3898f87e81a6	TITLES = {
+kiosk-server/lib/kiosk/server/errors.rb	94c5416e228c5779	TITLES = {
 kiosk-server/lib/kiosk/server/errors.rb	2f93b8c14ec18007	class Forbidden < Base
+kiosk-server/lib/kiosk/server/errors.rb	f9da55fd908ddc8c	class NotFound < Base
 kiosk-server/lib/kiosk/server/errors.rb	4bd57f76567a6a62	class PowRequired < Base
+kiosk-server/lib/kiosk/server/executor.rb	42cc1b9544ca1c47	            "this operator does not serve the payment module",
 kiosk-server/lib/kiosk/server/executor.rb	7d7d211b6b7eb97c	            enforce_spending_cap!(cart)
-kiosk-server/lib/kiosk/server/executor.rb	3c5e73f6645586cf	        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 kiosk-server/lib/kiosk/server/executor.rb	368fca4ec88eee36	      # Kiosk::Event type is gone, and the stub only ever raised a raw
 kiosk-server/lib/kiosk/server/executor.rb	e9a81c5aa9758799	      # `events` was removed long before: it was never a capability, the
 kiosk-server/lib/kiosk/server/executor.rb	7c224f50bece7db5	      VERBS = %i[query run pay].freeze
@@ -1074,7 +1085,7 @@ kiosk-server/lib/kiosk/server/kyc_verifier.rb	dc11626e46c20883	    #     iat: <u
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	6e6a78d483ec1eb3	    # NAMED ANONYMIZED ATTRIBUTES: the attestation MAY carry an `attributes`
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	70428f273e854fcb	    # configured `kyc_audience` (OPERATOR-BINDING — a claim the KYC provider
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	e62470c9c7770aec	def verified_attributes(raw)
-kiosk-server/lib/kiosk/server/kyc_verifier.rb	0e16fad4b778b83a	def verify(raw_jws:, identity:)
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	0b9d6d0b7b5bd9d9	def verify(raw_jws:, identity:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	baf4660cd19a542e	if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/link_code.rb	621515cf85ce5aef	        # `requested_role:` carries what was stamped at MINT, from the human's
 kiosk-server/lib/kiosk/server/link_code.rb	be6c2dc79a10ad56	      # `requested_role:` IS A MISNOMER HERE AND EVERYWHERE (K-1126): nothing
@@ -1131,7 +1142,7 @@ kiosk-server/lib/kiosk/server/verb_controller.rb	75447fd197e9d422	    # SUCCESS 
 kiosk-server/lib/kiosk/server/verb_controller.rb	02ca33cf9e509c70	    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
 kiosk-server/lib/kiosk/server/verb_controller.rb	8009875ad8aab383	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
 kiosk-server/lib/kiosk/server/verb_controller.rb	02ca33cf9e509c70	THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
-kiosk-server/lib/kiosk/server/verb_controller.rb	a351c27aef449a2a	class VerbController < WireController
+kiosk-server/lib/kiosk/server/verb_controller.rb	012d3b37f736f16c	class VerbController < WireController
 kiosk-server/lib/kiosk/server/verb_controller.rb	76786e042ef2cc4f	def serve(command)
 kiosk-server/lib/kiosk/server/verb_controller.rb	82ad7b8f46d3298b	descriptor = descriptor_for!(command, name)
 kiosk-server/lib/kiosk/server/verb_controller.rb	6642936cf55eebbc	the reserved plane above wins
@@ -1148,7 +1159,7 @@ kiosk-server/lib/kiosk/server/well_known.rb	5f907ae0a27ad875	def self.agent_conf
 kiosk-server/lib/kiosk/server/well_known.rb	b9cc9eae9200e24b	def self.agents_json(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	1208ed7a6e19f468	def self.agents_txt(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	5501dc52e7dc19c0	def self.api_catalog(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	41999575b6365168	def self.auth_md(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	0adab9d259dba5ce	def self.auth_md(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	f2cbbb357956dc42	def self.build(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/wire_controller.rb	8b05aaed37814ca4	PowGate.gate(
 kiosk-server/lib/kiosk/server/wire_controller.rb	536d8490d34743d3	Wire response (JSON): success is the handler's payload VERBATIM
@@ -1262,7 +1273,7 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	476f6d480386f9cf	it 
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	30782f34975ea667	returns 200 application/json byte-identical to WellKnown.build_json
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	1769d6be53ccb2b1	returns 200 application/linkset+json (RFC 9727) with a non-empty item list
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	476f6d480386f9cf	serves the three pointer documents public, one minute
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	0a715660bc5277b0	RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	13996d6638162bcd	RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	8891ec012aefd504	a routing 404 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	182467a6ea997ea2	an unhandled 500 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	c7ba319b4eb7d4e0	leaves the ROOT-served discovery documents bare — they are outside the mount
@@ -1285,16 +1296,19 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	729ad69c70e41ac8	carries a handler
 kiosk-server/spec/kiosk/server/errors_spec.rb	3790c0ac51b14be9	carries the PoW challenges as a TOP-LEVEL extension member
 kiosk-server/spec/kiosk/server/errors_spec.rb	51484d5f50f8ab61	carries the method the verb DOES accept, as the header RFC 9110 makes mandatory
 kiosk-server/spec/kiosk/server/errors_spec.rb	f7704c70684db114	carries the vocabulary code TWICE: as the type URI and as the branch point
+kiosk-server/spec/kiosk/server/errors_spec.rb	b091eec987f7cfdb	does not map 501 — module_not_served is not a status a handler raise can mean
 kiosk-server/spec/kiosk/server/errors_spec.rb	5e702cf7a673100e	drops a nil hint and never emits `instance`
 kiosk-server/spec/kiosk/server/errors_spec.rb	625d7d153332e7c6	each agrees with the CODES table on both code and status
-kiosk-server/spec/kiosk/server/errors_spec.rb	abdc72e4c5900d82	every Kiosk::Server::Errors::* subclass rescues as Base
-kiosk-server/spec/kiosk/server/errors_spec.rb	4107c82ffce6b53f	is exactly the spec's closed `code` table
+kiosk-server/spec/kiosk/server/errors_spec.rb	3be2b34674468b49	every Kiosk::Server::Errors::* subclass rescues as Base
+kiosk-server/spec/kiosk/server/errors_spec.rb	61f5c4bf7ad49531	is exactly the spec's closed `code` table
 kiosk-server/spec/kiosk/server/errors_spec.rb	ebdc64fc6a1d9236	maps every status to a vocabulary code
 kiosk-server/spec/kiosk/server/errors_spec.rb	deaf7a55c662068d	mints one problem type URI per code and nothing else
 kiosk-server/spec/kiosk/server/errors_spec.rb	e21e6b08ebc0127e	names every code in TITLES — a problem document without a title is not one
 kiosk-server/spec/kiosk/server/errors_spec.rb	3b5258bf940350e2	never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)
 kiosk-server/spec/kiosk/server/errors_spec.rb	321654d7f8414eae	refuses a code outside the closed vocabulary
+kiosk-server/spec/kiosk/server/errors_spec.rb	e44cd7589b369d18	refuses a plausible near-miss of a T-158 member
 kiosk-server/spec/kiosk/server/errors_spec.rb	55dec33aa6fe8705	refuses to exist without one — a 405 with no Allow is not a 405
+kiosk-server/spec/kiosk/server/errors_spec.rb	8ab36028e3857b5d	still maps 404 to not_found, the only 404 a handler raise can mean
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	3131d0a11c82e8c4	hits ONE cap across both spellings
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	61a93b7bfe60bb22	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	187227feb9ef56d0	spelling is not identity (K-1251)
@@ -1302,6 +1316,7 @@ kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	28a63cfee6c1f80c	sti
 kiosk-server/spec/kiosk/server/executor_spec.rb	23e7c8e0af2f0193	answers `eur` to a chain already signed `eur`, which is the only case where the bytes match
 kiosk-server/spec/kiosk/server/executor_spec.rb	2df559f5aa57a699	answers `eur` to a chain signed `  EUR ` throughout
 kiosk-server/spec/kiosk/server/executor_spec.rb	05f39ad64501e6c9	answers `eur` to a chain signed `EUR` throughout
+kiosk-server/spec/kiosk/server/executor_spec.rb	31837228fe50bbb9	answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)
 kiosk-server/spec/kiosk/server/executor_spec.rb	8a4d1c373d0beafc	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
 kiosk-server/spec/kiosk/server/executor_spec.rb	1a523de85363be70	charges once and replays the ORIGINAL settlement the second time (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	9eacd4592d123f25	does not answer a settled replay with an error at all (K-850)
@@ -1311,6 +1326,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	c58448d0423b06d0	maps a non-retr
 kiosk-server/spec/kiosk/server/executor_spec.rb	1736550781f386b3	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
 kiosk-server/spec/kiosk/server/executor_spec.rb	f0e5747dce78bcd3	omits `next` when a paginating handler signals the last page (Page with nil cursor)
 kiosk-server/spec/kiosk/server/executor_spec.rb	297e9a15db7c2770	per-assistant spending cap
+kiosk-server/spec/kiosk/server/executor_spec.rb	390243e5366dbac3	puts module_not_served/501 on the wire for it, not a 403
 kiosk-server/spec/kiosk/server/executor_spec.rb	1655208c7741a4a1	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
 kiosk-server/spec/kiosk/server/executor_spec.rb	0a72bf352aa17998	raises Unauthenticated when identity is nil
 kiosk-server/spec/kiosk/server/executor_spec.rb	7142d5a0a148e49b	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
@@ -1319,7 +1335,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	ddce8a4d949d725e	scopes the sett
 kiosk-server/spec/kiosk/server/executor_spec.rb	4bdaf061f6c90a2c	still answers 409 conflict when the re-presented chain never settled
 kiosk-server/spec/kiosk/server/executor_spec.rb	91c8be7d6eb1c048	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	abba5ffaa11481ff	verifies the trail, captures, and returns the full settlement payload
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	a0bade033608a944	404s a request that did not come through the Kiosk wire
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	2ad12e44d732bd48	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	e4dbba26aeac131d	carries a 403 code a bare status cannot name (rls_denied)
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	69174aa32395352d	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	d331ba0131db2461	gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one
@@ -1377,14 +1393,15 @@ kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1565f878e7347dc6	accepts an 
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	2763248156237a56	defaults kyc_audience to the operator issuer when not explicitly set
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6c24135fdd48472f	drops any non-true attribute value (no truthy-but-not-true grants)
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a9aac01826d08dd4	on a bigint-PK host (Integer identity, String attestation sub)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	cd5629aafef9a4b1	puts module_not_served/501 on the wire for it, and names the module in detail
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	89f8cea4862abd6c	raises Errors::Forbidden for a tampered / wrong-key signature
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	b5a852aa6f22ddea	raises Errors::Forbidden for an expired attestation
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	f9de7b0ad63aee85	raises Errors::Forbidden when attributes is not an object
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	011d55747ba8434a	raises Errors::Forbidden when aud does not match this operator's kyc_audience
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	7c7528f209ea01d8	raises Errors::Forbidden when kyc_public_key is not configured
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	d2827021acdfedb4	raises Errors::Forbidden when the aud claim is absent
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	60fb5a47168a1980	raises Errors::Forbidden when the iss does not match kyc_issuer
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4f5db1e63a297c17	raises Errors::Forbidden when the sub does not match identity.user_id
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1c18f084910fd8fd	raises Errors::ModuleNotServed when kyc_public_key is not configured
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	75f146ca2679d507	returns an empty attribute set for a bare binary attestation (backward-compat)
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1c334fc1483579e4	returns claims hash for a valid attestation
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1f8248dce0d0d902	returns the granted named boolean attributes (String-keyed)
@@ -1543,15 +1560,16 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	e009b1dd5629c4d1	moves wh
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	41afaa75214bbc66	moves when the mount path moves
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	fd6617b2d95cce1f	moves when the skill pin is re-issued
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	40c84227c92a410d	NOT on a refusal: a 4xx keeps the wire's own policy
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	37d9502e674420a9	a query is a GET at its own path
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a6b9510367c5fbf2	a query is a GET at its own path
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	464baa139cfe6441	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	d13fc578888ff55a	an action is a POST at its own path
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	0743e7b66c4998d3	an operator MAY relax a 200's cache policy from a handler (§3.7.4)
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	36b62c41733a1d85	answers 401 before it will say whether the verb exists
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	70859fb31c4ad157	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f57d62269e4301b5	answers POST <endpoint>/run the same way — one unregistered name among others
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1990385fdea010f3	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	8bfac07accd5ce96	answers POST <endpoint>/run the same way — one unregistered name among others
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	682c8c14dffa700f	answers a GET at an ACTION's name 405, with Allow: POST
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	304cdc5783b92f11	answers a POST at a QUERY's name 405, with Allow: GET
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	264055b5b79f0c88	answers an unknown name a problem document, naming what IS registered
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1d50bb92f84cc9c8	answers with the handler's object VERBATIM — no `value` wrapper
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	0196fb4a8e1d9469	answers with the handler's payload VERBATIM — a bare array, no envelope
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	c7ba5b42571546ae	carries the cache policy every wire response must carry

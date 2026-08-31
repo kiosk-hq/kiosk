@@ -13,7 +13,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `POST /kiosk/book_appointment` reaches the origin's named Action and answers that handler's own JSON object
 - Handler controllers declared with `include Kiosk::Handler` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
 - ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over the wire (K-921)
-- Errors are RFC 9457 problem documents — `application/problem+json`, `type`/`title`/`status`/`code`/`hint`, the branch point a FLAT top-level `code` — with the right HTTP status (unknown verb name → 404 `not_found`, missing/garbage token → 401 `unauthenticated`)
+- Errors are RFC 9457 problem documents — `application/problem+json`, `type`/`title`/`status`/`code`/`hint`, the branch point a FLAT top-level `code` — with the right HTTP status (unknown verb name → 404 `verb_not_found`, an argument addressing nothing → 404 `not_found`, missing/garbage token → 401 `unauthenticated`)
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
 - The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration
 - `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)

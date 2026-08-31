@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at e8cdc520 (working tree: 2 cited file(s) modified)
-# 1636 anchors.
+# recorded: 2026-08-31 at b4ed6cdc
+# 1637 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -1011,7 +1011,7 @@ kiosk-server/lib/kiosk/server/auth_controller.rb	2155b2d4b207d2e1	pow    = PowGa
 kiosk-server/lib/kiosk/server/auth_controller.rb	d7c437ddab4d6e1e	respond({ access_token: token }, :ok)
 kiosk-server/lib/kiosk/server/auth_controller.rb	fd5c7e0bad800361	result = AgentRegistration.call(
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	0fddc2e68e36ca51	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3f2c54a66408a579	        @skill_url ||= "https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	b5ce9fb3fbefdf4d	        @skill_url ||= "https://kiosk.tech/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	      attr_accessor :spending_cap_window_days
 kiosk-server/lib/kiosk/server/configuration_extension.rb	d6020afee4687f9d	      def computed_capabilities
@@ -1161,11 +1161,11 @@ kiosk-server/spec/kiosk/server/account_binding_spec.rb	c0d5082154066a2e	fires as
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	03d62180c19d4cfb	registers a linked assistant account under the holder's user_id
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	b2ce5818b79964a8	remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	afa874fae09fe00d	watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)
-kiosk-server/spec/kiosk/server/actions_spec.rb	4ed0dcce5db01647	OMITS the extension keys entirely when they are not declared
-kiosk-server/spec/kiosk/server/actions_spec.rb	9c79b53b0dc174b2	always publishes params as nil — retired by ADR-0023, no macro declares it
+kiosk-server/spec/kiosk/server/actions_spec.rb	e6508c8babfb701a	OMITS the extension keys entirely when they are not declared
 kiosk-server/spec/kiosk/server/actions_spec.rb	75ad30d2d64729f9	carries the declared description into the descriptor
 kiosk-server/spec/kiosk/server/actions_spec.rb	5904987547b3a9cd	carries the declared schemas and examples into the descriptor
-kiosk-server/spec/kiosk/server/actions_spec.rb	58d765b00caecd31	leaves description nil when the verb opted in with another macro
+kiosk-server/spec/kiosk/server/actions_spec.rb	edf0d851c4a45dd8	does not publish params at all — the slot left the wire (T-085)
+kiosk-server/spec/kiosk/server/actions_spec.rb	c7b0ed701ec729ab	leaves description nil when the verb opted in with another macro
 kiosk-server/spec/kiosk/server/actions_spec.rb	e1ac5b5c9b639604	returns all descriptors sorted by name
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	fff1742d09a4a9cc	carries the `actor` claim through verification into the resolved Identity
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	5037581a1884819b	keeps an earlier token valid after a second is minted for the same agent
@@ -1322,7 +1322,7 @@ kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	a0bade033608a944	404s a req
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	e4dbba26aeac131d	carries a 403 code a bare status cannot name (rls_denied)
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	69174aa32395352d	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	d331ba0131db2461	gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	f5068abbc0721156	omits params — retired by ADR-0023, and the mixin has no macro for it
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	919bafb210c707bc	omits params — the slot left the wire (ADR-0023 retired it, T-085 removed it)
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	68f151b3815373fb	refuses a declaration with no input_schema
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	1e82f696b30a3a93	refuses a declaration with no output_schema
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	0620c5ed8c53411e	refuses a reach outside the four the spec names
@@ -1446,6 +1446,7 @@ kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	8eb74db203f5c684	is N
 kiosk-server/spec/kiosk/server/open_api_spec.rb	cdf6e976219b532f	HOISTS a `$defs` into components and follows every pointer to it
 kiosk-server/spec/kiosk/server/open_api_spec.rb	f5572652dfc117db	publishes the `output_schema` VERBATIM as the 200 body
 kiosk-server/spec/kiosk/server/open_api_spec.rb	12bc5ccb3bdba118	references the `input_schema` component rather than inlining it
+kiosk-server/spec/kiosk/server/open_api_spec.rb	73242d1cc8a9f0c3	slot on the descriptor component (T-085)
 kiosk-server/spec/kiosk/server/page_spec.rb	eb37e59078396fae	.encode_offset / .decode_offset round-trip
 kiosk-server/spec/kiosk/server/page_spec.rb	27c86314af019a92	decodes a malformed cursor to the default rather than raising
 kiosk-server/spec/kiosk/server/page_spec.rb	e6e5865121cc34d2	decodes a nil/empty cursor to the default (first page)
@@ -1496,10 +1497,10 @@ kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	c595bb86f19ac137	leaves 
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	6eff3bbefa43b5e6	rejects a replay claimed on a DIFFERENT database connection
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	9389fe048d059417	rejects a replay claimed through a second, independent store instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	a2b4adca47ffd737	returns true the first time and false after
-kiosk-server/spec/kiosk/server/queries_spec.rb	16c50e8905a28678	OMITS the extension keys entirely when they are not declared
-kiosk-server/spec/kiosk/server/queries_spec.rb	b873adf9d2b07486	always publishes params as nil — retired by ADR-0023, no macro declares it
+kiosk-server/spec/kiosk/server/queries_spec.rb	7436a62297152786	OMITS the extension keys entirely when they are not declared
 kiosk-server/spec/kiosk/server/queries_spec.rb	525ff7017c896c21	carries the declared description into the descriptor
 kiosk-server/spec/kiosk/server/queries_spec.rb	8a5f4b404bd9bb17	carries the declared schemas and examples into the descriptor
+kiosk-server/spec/kiosk/server/queries_spec.rb	4516d574f8578368	does not publish params at all — the slot left the wire (T-085)
 kiosk-server/spec/kiosk/server/queries_spec.rb	58e384a3c1d323c0	emits only the extension keys that were declared
 kiosk-server/spec/kiosk/server/queries_spec.rb	71cba247cbb8e6c4	returns all descriptors sorted by name
 kiosk-server/spec/kiosk/server/registration_pow_spec.rb	879ced21e5f7d67e	      Kiosk.configure { |c| c.registration_difficulty = 20 }

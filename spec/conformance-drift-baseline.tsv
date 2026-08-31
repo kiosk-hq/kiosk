@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at 385e732a
+# recorded: 2026-08-31 at d98f3407
 # 1627 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
@@ -578,14 +578,14 @@ kiosk-demo-skooti/config/initializers/kiosk.rb	fb3696cce43b8185	c.registration_p
 kiosk-demo-skooti/config/routes.rb	51f7235e6dda1c97	post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 kiosk-demo-skooti/lib/tasks/demo.rake	18ffe02543c93448	  task :rideflow do
 kiosk-demo-skooti/lib/tasks/demo.rake	fad38093f615157c	  task isolation: :setup do
-kiosk-demo-skooti/lib/tasks/demo.rake	bcc3795b2b5222f1	  task kyc: :setup do
-kiosk-demo-skooti/lib/tasks/demo.rake	d8a588b64508557d	  task redteam: :setup do
+kiosk-demo-skooti/lib/tasks/demo.rake	59bec1a6b9cc18b4	  task kyc: :setup do
+kiosk-demo-skooti/lib/tasks/demo.rake	b0fc02bf1d82beff	  task redteam: :setup do
 kiosk-demo-skooti/lib/tasks/demo.rake	6e0bf44decaffaed	A1 403 hint points to request_kyc (agent can discover the path)
 kiosk-demo-skooti/lib/tasks/demo.rake	94a21c36bb772ca9	A1 rent_motorcycle without KYC → 403 kyc_required
 kiosk-demo-skooti/lib/tasks/demo.rake	21e2ba24ac647123	C2 Gate 0 fails CLOSED on it — rent_motorcycle back to 403 kyc_required for an agent that HAD passed
 kiosk-demo-skooti/lib/tasks/demo.rake	ebef5f39c79310e8	task :kat do
 kiosk-demo-skooti/lib/tasks/demo.rake	18ffe02543c93448	task :rideflow do
-kiosk-demo-skooti/lib/tasks/demo.rake	bcc3795b2b5222f1	task kyc: :setup do
+kiosk-demo-skooti/lib/tasks/demo.rake	59bec1a6b9cc18b4	task kyc: :setup do
 kiosk-demo-skooti/script/lock_sim.rb	965e96426e3803cf	  def unlock(token:, now:)
 kiosk-demo-skooti/script/pay_window.rb	c1574a6b5dfd7f3d	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
 kiosk-demo-skooti/script/pay_window.rb	73ad5d63ab7afbcd	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have

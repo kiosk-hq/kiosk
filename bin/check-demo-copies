@@ -125,8 +125,12 @@
 # Ruby set only (see MAGIC_COMMENTS): prose stays ignored, `# frozen_string_literal`
 # does not. `:identical` needs nothing here — byte equality already covers it.
 #
-# Stdlib only (digest + ripper + erb), no bundle, no database, ~0.2 s on a bare
-# checkout — the same profile as bin/check-ci-tasks.
+# Stdlib only (digest + ripper + erb), no bundle, no database. MEASURED at head
+# 2026-08-31: ~1.0 s on a warm checkout, of which about two thirds is the T-117
+# citation rule building its ~700-file constant index. It was ~0.2 s — the same
+# profile as bin/check-ci-tasks — before that rule existed, and the cost is
+# recorded here rather than in a commit message because the next rule that wants
+# to walk a tree should know what the last one spent.
 #
 # Usage:
 #   bin/check-demo-copies          # check
@@ -3394,6 +3398,520 @@ if initializer_demos.zero? && errors.empty?
             "nothing passes everything."
 end
 
+# ── The e2e harness's fixtures, paired with the demo files they came from ────
+#    (T-118, generalising the hand-written arms of K-504/K-699, K-1009/K-1011
+#    and K-1021)
+#
+# WHY THIS EXISTS, AND WHY IT IS A SCAN ROOT RATHER THAN A SIXTH SPECIAL CASE.
+# `SCAN_ROOTS` walks `kiosk-demo-*` and nothing else, so no path under
+# `e2e/fixtures/` has ever entered the `found` map and no COPIES rule could
+# apply to one. That is defensible on its face — the e2e harness is not a demo,
+# and the header's «paths that exist in two or more demos» is exactly what the
+# lockstep rule does. It is indefensible in what it produced: FIVE hand-written
+# arms reach into that directory one file at a time (the two initializer rules,
+# the run.sh-derived initializer set, the application_controller prose rule and
+# the framework-prose routes corpus), written by four different fixers, each of
+# whom had to discover for themselves that the discovery loop could not get
+# there. The cost is not the unguarded surface — it is that EVERY new rule
+# silently costs a second implementation, and a fixer who does not know that
+# ships a rule that passes vacuously on the harness.
+#
+# WHAT WAS ACTUALLY UNGUARDED, MEASURED at head rather than assumed. Of the 22
+# `e2e/fixtures/*.rb`, EIGHT have a demo counterpart they agree with:
+# `salon.rb` is BYTE-IDENTICAL to stylish's `app/models/salon.rb`; `stub_psp.rb`
+# is byte-identical to skooti's and comment-identical to hoteling's;
+# `devise_initializer.rb` is comment-identical to all seven demos'
+# `config/initializers/devise.rb`; `create_users.rb` and
+# `add_devise_columns_to_users.rb` to all seven demos' copies of those
+# migrations; `create_salons_and_appointments.rb` to stylish's. Seven more share
+# a basename with a demo file and have diverged. Nothing asked which of the two
+# any of them was.
+#
+# THE PAIRING IS DERIVED, NOT LISTED — that is the half that makes this a scan
+# root rather than a longer manifest. `e2e/run.sh` already says where each
+# fixture is installed, in fifteen `cp "$FIXTURES/…" <dest>` lines, and that
+# destination IS the demo-relative path to compare against. So an entry needs no
+# `pairs:` at all unless run.sh does not install the file (six fixtures are run
+# in place with `ruby "$FIXTURES/…"`, one is appended into the generated
+# environment files) or unless the installed path exists in no demo. A fixture
+# that MOVES in run.sh moves here with it, and a fixture that stops being
+# installed is reported rather than skipped — the same property K-1011 bought
+# for the two initializers, one directory wide.
+#
+# THE RULES ARE THE MANIFEST'S OWN, one level over: `:identical`, `:code` and
+# `:per_demo` mean here exactly what they mean for two demo copies, and
+# `:per_demo` carries the same convergence tripwire the fragment rule does — a
+# fixture declared a deliberate variant that has quietly become comment-identical
+# to every demo copy is reported, because that is a copy nobody decided to make.
+# `pairs: nil` is the fourth state and the one this wave is about: it declares
+# that a fixture has no demo counterpart, and it is CHECKED — no demo file
+# sharing its basename may be comment-identical to it. An undeclared exclusion
+# is what T-118 was filed about; a declared one that nothing tests is the same
+# thing with better manners.
+E2E_FIXTURES_DIR = "e2e/fixtures"
+E2E_FIXTURE_CP   = /^\s*cp\s+"\$FIXTURES\/(?<fixture>[^"]+)"\s+(?:"(?<quoted>[^"]+)"|(?<bare>\S+))/
+
+# run.sh's `cp` lines, as { fixture basename => demo-relative destination }.
+# A `${ts}`-interpolated migration timestamp becomes a `*`, which is the same
+# handle MIGRATION_PAIRS uses for the same reason: every demo stamps its own.
+def e2e_installed_paths(run_sh_src)
+  run_sh_src.gsub(/\\\n\s*/, " ").each_line.with_object({}) do |line, out|
+    m = E2E_FIXTURE_CP.match(line) or next
+
+    out[m[:fixture]] = (m[:quoted] || m[:bare]).gsub(/\$\{[^}]+\}/, "*")
+  end
+end
+
+E2E_FIXTURES = {
+  # ── installed by run.sh, and the demos agree with them ────────────────────
+  "salon.rb" => {
+    rule: :identical,
+    why:  "BYTE-IDENTICAL to stylish's app/models/salon.rb, and it should be: the harness stages " \
+          "stylish's own domain — salons and appointments — because that is the storefront the " \
+          "e2e wire drives. The one file in this directory where byte equality is the honest rule.",
+  },
+  "stub_psp.rb" => {
+    rule: :code,
+    why:  "The deterministic in-process PSP. Byte-identical to skooti's app/services/stub_psp.rb " \
+          "and comment-identical to hoteling's — one word of header prose apart («E2E test PSP» " \
+          "against «Demo stub PSP»), which is exactly what `:code` exists for. It returns the " \
+          "settlement shape verb_pay expects, so a one-sided edit here makes the harness assert a " \
+          "shape the demos do not produce.",
+  },
+  "devise_initializer.rb" => {
+    rule: :code,
+    why:  "Comment-identical to all seven demos' config/initializers/devise.rb. It is the human " \
+          "IdP's configuration, and the harness's whole point is that the generated app " \
+          "authenticates humans the way a demo does — a fixture that drifts here proves a login " \
+          "flow no operator ships.",
+  },
+  "create_users.rb" => {
+    rule: :code,
+    why:  "The users table kiosk-server's identity tables FK to. Comment-identical to the copy in " \
+          "all seven operator demos, and it must be: the harness proves the install generator " \
+          "against the same starting schema the demos were generated on. Paired by " \
+          "timestamp-stripped basename, the MIGRATION_PAIRS handle, because every demo stamps its " \
+          "own.",
+  },
+  "add_devise_columns_to_users.rb" => {
+    rule: :code,
+    why:  "The Devise login columns on that same table, comment-identical in all seven demos. Same " \
+          "argument and same handle as create_users.rb above.",
+  },
+  "create_salons_and_appointments.rb" => {
+    rule: :code,
+    why:  "stylish's own demo schema, comment-identical to its copy. The harness stages stylish's " \
+          "domain (see salon.rb), so this is that demo's migration rather than a fixture of its own.",
+  },
+
+  # ── installed by run.sh, and legitimately their own ───────────────────────
+  "application_controller.rb" => {
+    rule: :per_demo,
+    why:  "The harness's generated app is `rails new --api`, so this file exists to move it OFF " \
+          "ActionController::API for Devise's sake — a narrower job than a demo's copy, which also " \
+          "carries that demo's own prose about its own wire controllers. Its comments ARE checked, " \
+          "by the K-1021 superclass rule further down, which reads this fixture's controllers off " \
+          "disk exactly as it does a demo's.",
+  },
+  "user.rb" => {
+    rule: :per_demo,
+    why:  "The harness's User is a Devise record with the ONE association its two verbs need; each " \
+          "demo's carries that storefront's rows and its own public-name fallback. Sharing them " \
+          "would mean the harness proving associations no fixture ever loads.",
+  },
+  "appointment.rb" => {
+    rule: :per_demo,
+    why:  "Six lines against stylish's model: the harness needs the table and the belongs_to, not " \
+          "the booking rules stylish's own verbs enforce. The pairing is declared so a THIRD state " \
+          "— the two quietly converging — is reported rather than discovered.",
+  },
+  "bookings_controller.rb" => {
+    rule: :per_demo,
+    why:  "The harness draws a two-verb fixture wire; atablefor's controller of the same name " \
+          "serves that demo's booking verbs against its own arguments and refusals. Same name, " \
+          "different surface, and the tripwire is what says so if they ever agree.",
+  },
+  "routes.rb" => {
+    rule: :per_demo,
+    why:  "The generated app's routes: the Kiosk mount, Devise, and the two fixture verbs. Every " \
+          "demo's is that storefront's own. This file IS held on one axis already — it is in the " \
+          "K-1069 framework-prose corpus below, which binds what its comments say about the " \
+          "framework to what the framework does.",
+  },
+  "seeds.rb" => {
+    rule: :per_demo,
+    why:  "The harness's fixture rows — one salon, its appointments, the human the flow signs in " \
+          "as. A demo's seeds are that storefront's catalogue.",
+  },
+  "initializer_kiosk.rb" => {
+    rule: :per_demo,
+    why:  "The harness's `Kiosk.configure`, and the most-checked file in this directory: the " \
+          "K-504 framework-patch rule and the K-699/K-1009 env-resolution rule both run over it, " \
+          "derived from run.sh by K-1011. `:per_demo` because an initializer names its own " \
+          "handlers, issuer and toll — seven demos and the harness cannot share one.",
+  },
+
+  # ── no demo counterpart, DECLARED (and the declaration is checked) ────────
+  "catalog_controller.rb" => {
+    pairs: nil,
+    why:   "run.sh installs it at app/controllers/kiosk/catalog_controller.rb, which NO demo ships " \
+           "— the fixture wire's read verb has no sibling in the fleet. The check below holds the " \
+           "claim: a demo file of this basename that became comment-identical to this one would " \
+           "be an undeclared copy and is reported.",
+  },
+  "demo_audit_sink.rb" => {
+    pairs: nil,
+    why:   "The K-828 audit-sink callable, written the way an adopter would write it. No demo " \
+           "ships app/services/demo_audit_sink.rb — the demos emit through DemoTelemetry instead, " \
+           "which is a different surface with its own lockstep entry above.",
+  },
+  "environment_kiosk.rb" => {
+    pairs: nil,
+    why:   "Not a file the harness installs at all: run.sh APPENDS it into the generated " \
+           "config/environments/{development,production}.rb, which is why it has no `cp` line. It " \
+           "is the harness's half of ENV-CONFIG-PLACEMENT — the env inputs published as " \
+           "`config.x.kiosk.…` so the initializer can read Rails.configuration instead of ENV.",
+  },
+  "equihash_register.rb" => {
+    pairs: "script/equihash_register.rb",
+    rule:  :per_demo,
+    why:   "Run in place (`ruby \"$FIXTURES/…\"`), so the pairing is declared rather than derived " \
+           "from a `cp`. Seven demos ship a helper of this name and this one is not it: the demos' " \
+           "copy is a `:code` lockstep set with its own manifest entry, while the harness's solves " \
+           "the toll for the e2e assistant against the generated app's own register body. The " \
+           "tripwire is the point — if this one ever becomes comment-identical to the demos', it " \
+           "IS the demos' copy and belongs in that entry.",
+  },
+  "claim_flow.rb" => {
+    pairs: "script/claim_flow.rb",
+    rule:  :per_demo,
+    why:   "Run in place. getgrocery ships a driver of the same name for its own claim ceremony; " \
+           "this one drives the harness's. Declared so the two are on the record as deliberate " \
+           "namesakes rather than as a copy nobody compared.",
+  },
+  "pay_flow.rb" => {
+    pairs: nil,
+    why:   "Run in place, and no demo ships script/pay_flow.rb — the demos' payment beats live in " \
+           "each storefront's own flow driver and in the two `script/pay_window.rb` copies, which " \
+           "are declared above.",
+  },
+  "register_pow_flow.rb" => {
+    pairs: nil,
+    why:   "Run in place. The K-375 PoW-register leg of the e2e golden path; no demo ships a " \
+           "driver of this name (atablefor's and getgrocery's toll beats are `script/pow_flow.rb`, " \
+           "declared above with its units).",
+  },
+  "bind_assistants.rb" => {
+    pairs: nil,
+    why:   "Run in place, in the fixture host's own console: it mints the `agent:u-…:a-…:r-…` " \
+           "bindings the harness's isolation beats need. Nothing in a demo does this — a demo " \
+           "binds through its own wire.",
+  },
+  "auth_wire_capture.rb" => {
+    pairs: nil,
+    why:   "Run in place. The harness's own recorder for the auth wire; the demos publish their " \
+           "recordings through before-after.md instead, which bin/check-demo-derivations holds.",
+  },
+}.freeze
+
+# ── The e2e fixture rule runs (T-118) ────────────────────────────────────────
+e2e_fixture_comparisons = 0
+e2e_fixture_dir = File.join(ROOT, E2E_FIXTURES_DIR)
+e2e_run_sh_path = File.join(ROOT, E2E_RUN_SH)
+if !File.directory?(e2e_fixture_dir) || !File.exist?(e2e_run_sh_path)
+  errors << "check-demo-copies: #{E2E_FIXTURES_DIR}/ or #{E2E_RUN_SH} is gone, so the e2e fixture " \
+            "rule compared NOTHING. The harness moving is a change to make on purpose — move this " \
+            "rule with it rather than letting it inspect an empty directory (T-118)."
+else
+  installed = e2e_installed_paths(File.read(e2e_run_sh_path))
+  if installed.empty?
+    errors << "check-demo-copies: #{E2E_RUN_SH} has no `cp \"$FIXTURES/…\"` lines at all, so every " \
+              "pairing this rule derives is empty. The derivation has broken, not the harness " \
+              "(T-118)."
+  end
+
+  on_disk = Dir[File.join(e2e_fixture_dir, "*.rb")].map { |p| File.basename(p) }.sort
+  (on_disk - E2E_FIXTURES.keys).each do |name|
+    errors << "#{E2E_FIXTURES_DIR}/#{name}: exists but is not declared in E2E_FIXTURES. Say which " \
+              "demo path it was copied from and which rule holds it — or declare `pairs: nil` with " \
+              "the reason it has no counterpart. Five hand-written arms reached into this " \
+              "directory one file at a time before it was a scan root; a new fixture may not " \
+              "arrive unexamined (T-118)."
+  end
+  (E2E_FIXTURES.keys - on_disk).each do |name|
+    errors << "#{E2E_FIXTURES_DIR}/#{name}: declared in E2E_FIXTURES but no longer on disk. Drop " \
+              "the entry (T-118)."
+  end
+
+  (E2E_FIXTURES.keys & on_disk).each do |name|
+    entry = E2E_FIXTURES[name]
+    fixture = File.join(e2e_fixture_dir, name)
+    errors << "#{E2E_FIXTURES_DIR}/#{name}: E2E_FIXTURES entry carries no `why:` reason" if entry[:why].to_s.strip.empty?
+
+    declared_nil = entry.key?(:pairs) && entry[:pairs].nil?
+    spec = entry.key?(:pairs) ? entry[:pairs] : installed[name]
+
+    if spec.nil? && !declared_nil
+      errors << "#{E2E_FIXTURES_DIR}/#{name}: #{E2E_RUN_SH} no longer copies it anywhere, so this " \
+                "rule has no demo path to pair it with and silently compares nothing. Either the " \
+                "fixture is run in place — declare `pairs:` explicitly — or it is dead; declare " \
+                "`pairs: nil` with the reason (T-118)."
+      next
+    end
+
+    if declared_nil
+      # THE DECLARATION IS CHECKED. «No demo counterpart» must stay true: a demo
+      # file of this basename that has become comment-identical to the fixture
+      # is a copy nobody declared, which is the whole class this rule is for.
+      twins = demos.flat_map { |dir| Dir[File.join(dir, "**", name)] }
+                   .reject { |f| f.include?("/.gems/") }
+                   .select { |f| code_digest(f) == code_digest(fixture) }
+      unless twins.empty?
+        errors << "#{E2E_FIXTURES_DIR}/#{name}: declared `pairs: nil` — no demo counterpart — but " \
+                  "#{twins.map { |f| f.delete_prefix("#{ROOT}/") }.sort.join(', ')} " \
+                  "#{twins.size == 1 ? 'is' : 'are'} comment-identical to it. That is a copy, not " \
+                  "an absence: pair it and give it a rule (T-118)."
+      end
+      next
+    end
+
+    rule = entry[:rule]
+    unless %i[identical code per_demo].include?(rule)
+      errors << "#{E2E_FIXTURES_DIR}/#{name}: paired with #{spec} but declares " \
+                "`rule: #{rule.inspect}` — the fixture rule understands :identical, :code and " \
+                ":per_demo, the same three the manifest above uses (T-118)."
+      next
+    end
+
+    copies = demos.each_with_object({}) do |dir, acc|
+      match = spec.include?("*") ? Dir[File.join(dir, spec)].sort.first : File.join(dir, spec)
+      acc[short.(File.basename(dir))] = match if match && File.file?(match)
+    end
+    if copies.empty?
+      errors << "#{E2E_FIXTURES_DIR}/#{name}: paired with `#{spec}`, and NO demo ships that path " \
+                "any more — the pairing is stale, so this fixture is compared to nothing while " \
+                "reading as declared. Re-pair it, or declare `pairs: nil` with the reason (T-118)."
+      next
+    end
+
+    e2e_fixture_comparisons += copies.size
+    case rule
+    when :identical
+      off = copies.reject { |_demo, path| byte_digest(path) == byte_digest(fixture) }
+      next if off.empty?
+
+      errors << "#{E2E_FIXTURES_DIR}/#{name}: declared `:identical` to #{spec}, and " \
+                "#{off.keys.sort.join(', ')} #{off.size == 1 ? 'does' : 'do'} not match it " \
+                "byte-for-byte. The harness and the demo prove the same file; propagate the edit, " \
+                "or say what makes the fixture its own and change the rule (T-118)."
+    when :code
+      off = copies.reject { |_demo, path| code_digest(path) == code_digest(fixture) }
+      next if off.empty?
+
+      errors << "#{E2E_FIXTURES_DIR}/#{name}: declared `:code`-identical to #{spec}, and " \
+                "#{off.keys.sort.join(', ')} #{off.size == 1 ? 'does' : 'do'} not match it once " \
+                "comments and whitespace are normalised away (T-118)."
+    when :per_demo
+      converged = copies.select { |_demo, path| code_digest(path) == code_digest(fixture) }
+      next unless converged.size == copies.size
+
+      errors << "#{E2E_FIXTURES_DIR}/#{name}: declared `:per_demo` against #{spec} — a deliberate " \
+                "variant — but it is now comment-identical to " \
+                "#{copies.size == 1 ? "#{copies.keys.first}'s copy" : "all #{copies.size} demo copies"}. " \
+                "That is a hand-copy nobody decided to make: declare it `:code` and hold it there, " \
+                "or restore what made the harness's version its own (T-118)."
+    end
+  end
+end
+
+if e2e_fixture_comparisons.zero? && E2E_FIXTURES.any?
+  errors << "check-demo-copies: the T-118 fixture rule declares #{E2E_FIXTURES.size} fixture(s) " \
+            "and compared NONE of them against a demo copy. Every pairing has gone `nil` or " \
+            "stale, and a rule with nothing to compare passes everything."
+end
+
+# ── A comment in a compared file may not cite something that is not there ────
+#    (T-117, generalising K-1021 from one sentence to the whole corpus)
+#
+# WHAT `rule: :code` MEANS, AND WHY THAT LEFT FOURTEEN HEADERS UNGUARDED.
+# `:code` compares copies MODULO COMMENTS, so each copy's header may name its
+# own demo — which is the whole point of the rule and is right. It also means
+# every one of those headers is unconstrained BY CONSTRUCTION, and that is how
+# «The Kiosk wire controllers ship their own bases inside kiosk-server» — false
+# of all seven demos — survived in eight copies until a human read it (K-1017).
+# K-1021 closed the class for ONE sentence in ONE file by deriving the answer
+# from disk. Thirteen `:code` paths still had nothing.
+#
+# THE ANSWER IS NOT «COMPARE THE COMMENTS TOO», and it is worth saying why
+# before saying what it is. Comparing them would delete the reason `:code`
+# exists: `app/models/uuid_check.rb`'s header explains that demo's own wire
+# argument, and six identical explanations would each be wrong in five demos.
+# Nor is it thirteen more bespoke arms in K-1021's shape — one derivation per
+# sentence does not generalise, and the fourteenth header would be unguarded
+# again.
+#
+# WHAT IS HELD INSTEAD IS THE PART OF A HEADER THAT IS MECHANICALLY FALSIFIABLE:
+# its CITATIONS. These headers do not merely describe, they point — at files and
+# at code — and a pointer is a claim the tree can answer. Two arms, both derived,
+# no list:
+#
+#   * A SOURCE PATH named in a comment must exist. Same shape and the same
+#     regex family as the K-1093 rule for deploy/env templates, which already
+#     does this for a different corpus. MEASURED at head: 208 citations over the
+#     corpus below, all resolving.
+#   * A `{Constant}` or `{Constant.member}` reference must resolve. This is the
+#     repository's own YARD-ish notation and it is used heavily — MEASURED, 147
+#     citations of 56 distinct names, from `{UuidCheck}` and `{WireArguments}`
+#     to `{Order::SETTLED_CART_REFERENCES_THIS_ROW}` and
+#     `{Reservation.owned_by_current_principal}`. A rename that reaches the code
+#     and not the six comments pointing at it is exactly the drift this file
+#     exists for, one notation over.
+#
+# THE CORPUS IS EVERY `.rb` THE MANIFEST DECLARES, IN EVERY DEMO THAT SHIPS IT,
+# PLUS `e2e/fixtures/` — not just the `:code` paths T-117 named. Restricting it
+# to `:code` would itself be an undeclared exclusion: an `:identical` header can
+# be identically false (this file's own header records that happening), and a
+# `:per_demo` header is as unguarded as a `:code` one. The wider corpus was
+# measured before it was chosen, and it is clean.
+#
+# WHAT THIS DOES NOT DO, stated because an over-claimed prose rule is what
+# K-1021 was filed about. It cannot tell whether a sentence is TRUE — «the verb
+# handlers are ActiveRecord since K-654» names no path and no constant, and
+# nothing mechanical reaches it. It resolves a `{Constant}` by its LAST segment,
+# so `{Kiosk::Server::ArgumentDecoder}` is satisfied by a class named
+# `ArgumentDecoder` anywhere in the index; it does not check the namespace. It
+# resolves a member against any file that defines the constant, not against the
+# right one. And it is blind to a citation written any other way — a bare
+# `UuidCheck` in prose, a path without a directory. It holds the pointers, and
+# says so.
+PROSE_PATH_CITE = %r{(?<![\w./-])(?!/)[a-z][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_.-]+)+\.(?:rb|yml|yaml|erb|sql|py|json|md|txt)\b}
+PROSE_CODE_REF  = /\{([A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*)(?:[.#]([A-Za-z_][A-Za-z0-9_]*[?!]?))?\}/
+# `scope :referencing`, `has_many :settlements`, `attr_reader :psp` — a member a
+# class macro names. Deliberately permissive: this index only ever makes a
+# reference RESOLVE, so a false entry costs a missed catch and never a false
+# alarm, while a missing one would fail a comment that is right.
+PROSE_MACRO_MEMBER = /\A\s*[a-z_][A-Za-z0-9_]*\s+:([A-Za-z_][A-Za-z0-9_]*[?!]?)/
+
+# Where a definition may live: every demo's own code, the harness's fixtures,
+# and every kiosk gem's `lib/` and `spec/`. Built once; ~700 files, ~0.2 s.
+prose_index = []
+demos.each { |dir| %w[app lib script spec db].each { |sub| prose_index.concat(Dir[File.join(dir, sub, "**", "*.rb")]) } }
+prose_index.concat(Dir[File.join(ROOT, "e2e", "**", "*.rb")])
+Dir[File.join(ROOT, "kiosk-*")].select { |d| File.directory?(d) && !File.basename(d).start_with?("kiosk-demo-") }.each do |gem_dir|
+  prose_index.concat(Dir[File.join(gem_dir, "lib", "**", "*.rb")])
+  prose_index.concat(Dir[File.join(gem_dir, "spec", "**", "*.rb")])
+end
+prose_index.uniq!
+
+prose_defines = Hash.new { |h, k| h[k] = [] } # constant's LAST segment => [file, …]
+prose_members = Hash.new { |h, k| h[k] = {} } # file => { member name => true }
+prose_index.each do |path|
+  File.foreach(path) do |line|
+    if (m = line.match(/\A\s*(?:class|module)\s+([A-Z][A-Za-z0-9_:]*)/))
+      prose_defines[m[1].split("::").last] << path
+    end
+    if (m = line.match(FRAGMENT_START))
+      name = m[1] || m[2]
+      prose_members[path][name] = true
+      prose_defines[name] << path if m[2] # a constant is both a definition and a member
+    elsif (m = line.match(PROSE_MACRO_MEMBER))
+      prose_members[path][m[1]] = true
+    end
+  end
+end
+
+# The files whose comments are held: every `.rb` the manifest declares, in every
+# demo that ships it, plus every e2e fixture.
+prose_corpus = []
+demos.each do |dir|
+  COPIES.each_key do |rel|
+    next unless rel.end_with?(".rb")
+
+    Dir[File.join(dir, rel)].sort.each do |path|
+      prose_corpus << [short.(File.basename(dir)), dir, rel, path] if File.file?(path)
+    end
+  end
+end
+Dir[File.join(e2e_fixture_dir, "*.rb")].sort.each do |path|
+  prose_corpus << ["e2e", File.join(ROOT, "e2e"), "#{E2E_FIXTURES_DIR}/#{File.basename(path)}", path]
+end
+
+prose_path_cites = 0
+prose_code_refs  = 0
+e2e_install_targets = File.exist?(e2e_run_sh_path) ? e2e_installed_paths(File.read(e2e_run_sh_path)).values : []
+prose_corpus.each do |(label, own_root, rel, path)|
+  text = comment_prose(path)
+
+  text.scan(PROSE_PATH_CITE) do |cite|
+    prose_path_cites += 1
+    # Four rungs, widest last: the citing file's own root (a demo, or `e2e/`),
+    # the repository root, ONE package directory down (a shared header naming a
+    # sibling demo's file, or a gem's `spec/`), and — for a fixture — a path
+    # run.sh installs into the app it generates, which exists only at run time.
+    next if File.exist?(File.join(own_root, cite)) ||
+            File.exist?(File.join(ROOT, cite)) ||
+            Dir[File.join(ROOT, "*", cite)].any? ||
+            e2e_install_targets.include?(cite)
+
+    errors << "#{label}: #{rel} — a comment cites the source path `#{cite}`, and no file of that " \
+              "name exists in this demo, at the repository root, one package directory down, or " \
+              "among the paths e2e/run.sh installs. `:code` compares copies modulo COMMENTS, so a " \
+              "header that points at a file somebody moved or deleted rots silently in every copy " \
+              "at once — which is how a false sentence lived in eight of them (K-1017/K-1021). " \
+              "Fix the citation or restore the file (T-117)."
+  end
+
+  text.scan(PROSE_CODE_REF) do |(const, member)|
+    prose_code_refs += 1
+    last = const.split("::").last
+    homes = prose_defines[last]
+    if homes.empty?
+      errors << "#{label}: #{rel} — a comment references `{#{const}}`, and no class, module or " \
+                "constant of that name is defined in any demo, in e2e/, or in any kiosk gem's " \
+                "lib/ or spec/. The braces are this repository's notation for a thing in the " \
+                "code, so a name that resolves to nothing is either a rename that did not reach " \
+                "the prose or a thing that was never code — say it in backticks if it is a beat " \
+                "name rather than a constant (T-117)."
+    elsif member && homes.uniq.none? { |home| prose_members[home][member] }
+      errors << "#{label}: #{rel} — a comment references `{#{const}.#{member}}`, and none of the " \
+                "#{homes.uniq.size} file(s) defining `#{last}` defines a `#{member}` — not as a " \
+                "method, a constant, or a name a class macro declares. MEASURED example of this " \
+                "exact shape: skooti's cart_mandate.rb pointed at `{WireArguments.uuid}` where " \
+                "skooti's WireArguments defines `reservation_id` and `missing` and nothing else " \
+                "(K-1264). Fix the reference or restore the member (T-117)."
+    end
+  end
+end
+
+# NON-VACUITY, one arm per pattern. Both of these are rules whose subject set is
+# LIVE — unlike the promise ban in bin/check-demo-derivations, these patterns are
+# supposed to match, and a zero means the extraction broke rather than that the
+# corpus got tidier. EARLIER_WIRES is the standing example of what a silent zero
+# buys: a rule that covered nothing, anywhere, for its whole existence, with
+# nothing saying so.
+if prose_corpus.empty?
+  errors << "check-demo-copies: the T-117 citation rule read NO files — every `.rb` in COPIES has " \
+            "moved, or the fixture directory has. A prose rule with no corpus passes everything."
+else
+  if prose_path_cites.zero?
+    errors << "check-demo-copies: the T-117 citation rule found NO source-path citation in any of " \
+              "the #{prose_corpus.size} compared file(s). There were 208 when it was written, so " \
+              "zero means PROSE_PATH_CITE has stopped matching rather than that the headers " \
+              "stopped pointing at files."
+  end
+  if prose_code_refs.zero?
+    errors << "check-demo-copies: the T-117 citation rule found NO `{Constant}` reference in any " \
+              "of the #{prose_corpus.size} compared file(s). There were 147 when it was written, " \
+              "so zero means PROSE_CODE_REF has stopped matching rather than that the headers " \
+              "stopped pointing at code."
+  end
+  if prose_defines.empty?
+    errors << "check-demo-copies: the T-117 citation rule indexed #{prose_index.size} file(s) and " \
+              "found NO class, module or constant in any of them, so every `{Constant}` reference " \
+              "would resolve against an empty index. The index has broken, not the tree."
+  end
+end
+
 # ── Cross-demo PROSE about the FRAMEWORK (K-1069) ────────────────────────────
 #
 # WHAT WENT WRONG, and it is the only reason this block exists. Three shapes,
@@ -3759,6 +4277,12 @@ if errors.empty?
        "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
        "with its exit-status tail compared in all #{flow_tails.size}, " \
+       "#{prose_path_cites} source-path and #{prose_code_refs} `{Constant}` citation(s) in the " \
+       "comments of #{prose_corpus.size} compared file(s) resolved against the tree, " \
+       "#{E2E_FIXTURES.size} e2e harness fixture(s) declared " \
+       "(#{e2e_fixture_comparisons} comparison(s) against a demo copy, " \
+       "#{E2E_FIXTURES.count { |_, e| e.key?(:pairs) && e[:pairs].nil? }} declared to have no " \
+       "counterpart and checked for one), " \
        "#{fragment_comparisons} shared-unit cop#{fragment_comparisons == 1 ? 'y' : 'ies'} declared " \
        "in #{FRAGMENTS.size} unit(s) inside #{FRAGMENT_PATHS.size} `:per_demo` file(s) " \
        "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} held in lockstep, the rest declared " \

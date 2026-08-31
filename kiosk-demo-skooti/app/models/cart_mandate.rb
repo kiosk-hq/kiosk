@@ -19,8 +19,8 @@ class CartMandate < ApplicationRecord
   #
   # `reservation_id` is CALLER-SUPPLIED, so it is a QUOTED node the adapter
   # escapes rather than an interpolated fragment. It has already passed
-  # {WireArguments.uuid} by the time it gets here; the quoting is what makes
-  # that a defence in depth rather than the only defence. The `::jsonb` cast
+  # {WireArguments.reservation_id} by the time it gets here; the quoting is what
+  # makes that a defence in depth rather than the only defence. The `::jsonb` cast
   # the hand-written SQL carried is gone because Postgres resolves the untyped
   # literal to jsonb from the left operand.
   scope :referencing, lambda { |reservation_id|

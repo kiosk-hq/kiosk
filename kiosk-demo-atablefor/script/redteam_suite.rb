@@ -616,7 +616,7 @@ NONSTRING  = [true, false, [], {}, [1], { "a" => 1 }, nil, 20260826].freeze
 # `integer`. Both halves are pinned so neither can drift into the other — the
 # query half twice (this probe, and kiosk-server's
 # `refuses a WHOLE-VALUED float where an integer is declared` unit example) and
-# the body half by the {WholeValuedFloatBody} beat below, which asserts on a
+# the body half by the `WholeValuedFloatBody` beat below, which asserts on a
 # booted origin that the action ACCEPTS what this line asserts the query refuses.
 QUERY_JUNK = ["abc", "true", "1.5", "0x10", "", "2.0"].freeze
 

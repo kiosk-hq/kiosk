@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at 79cd7c4a
-# 1638 anchors.
+# recorded: 2026-08-31 at 2b7481e3
+# 1643 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -1086,7 +1086,7 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	c50ed2b2ac58cd4a	    #   * All
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	2fa45caabfd7a24b	    # must reference the presented intent and stay within its cap.
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	360cda9509150627	@return [String] the canonical currency — trimmed and lower-cased
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	dbaa26e3ec32b2f6	carry is not authorisation, and the assistant learns the same way for
-kiosk-server/lib/kiosk/server/mandate_verifier.rb	de8fd258eb96920a	mandate currency must be a non-empty string
+kiosk-server/lib/kiosk/server/mandate_verifier.rb	4ff71530d84fef60	mandate currency must be a non-empty string
 kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	7703aaed802e10cc	client_id parameter required
 kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	244cfedb70e56a9e	is not accepted here — an assistant does not choose its own role.
 kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	2d38faabc6dfe524	public_key parameter required
@@ -1396,9 +1396,14 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	863d6cd9e9adab60	raises NotFoun
 kiosk-server/spec/kiosk/server/link_code_spec.rb	2b50d6cdf330dcdb	raises Unauthenticated on a failed proof and does NOT consume the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	08ab6fcb63af8d2a	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	40e8f7ef465e3bc2	refuses to redeem a claim-flow device_code (kinds do not cross)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	cf887b55883bda9d	accepts three letters that name no currency — the shape is the minimum, not the domain
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f3fdb2752dabe9de	answers 403, not 400 — a domain refusal joins the §9.1 mandate carve-out (T-150)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d17f24b1e78838e4	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c5068505002643b9	canonicalises a cart currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09b95f53bbe50180	describe "non-positive amounts" do
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	995aeaaf912efabe	refuses a currency NAME: Euro was accepted as euro until T-159
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	45cc3f6d6a1dfe6c	refuses a two-letter country code: US is not a currency
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d6c787ba5d42429f	refuses the NUMERIC-3 spelling ISO 4217 also publishes
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a6d3377919a11606	rejects (403, not 500) when the agent has no registered payment key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa7e23ecc2013a0	rejects a JWS signed by an unknown key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	49b77ccebf04fec3	rejects a cart missing currency (absent)
@@ -1434,7 +1439,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	85c9a7fe2f174b50	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2d12783b72e256a3	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	43b10ecec11237ba	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09d46de3c18d0835	returns an IntentMandate for a valid agent-signed JWS
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b081609a334a1ec0	still accepts a string outside ISO 4217, canonicalised — the domain is K-1252, not this guard
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d0e0465eebe0eae4	still accepts every currency spelling live in this repository
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	b5211118a4a7bdba	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	2b703368c1a3da30	refuses an undeclared role the same way — the value is never consulted
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	1f1371db4a8a1cd5	refuses the OAuth-standard `scope` spelling too

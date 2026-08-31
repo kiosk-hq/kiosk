@@ -38,6 +38,15 @@
 # rule and K-1262's partial-convergence rule. Read as a rule about COUNT, the
 # sentence argued for splitting this file nineteen ways. It was never about count.
 #
+# THAT NINETEEN IS A COUNT OF BANNERS AND IT MISSES ONE, re-derived 2026-08-31
+# while writing the `--self-test` below, whose coverage table is generated from
+# the same banners and therefore had to ask the question: the K-962
+# lockfile-PLATFORMS parity rule is written with a `# -- … --` banner rather than
+# a `# ── … ──` one, so the derivation cannot see it. It is an independent
+# invariant on the same corpus by every test the others meet. The honest total is
+# TWENTY, the sentence above is left as written because a ledger row cites it, and
+# `--self-test --list` prints all twenty with the arms that cover each.
+#
 # The nineteen share the manifest, the discovery pass and the normalisation, so
 # nineteen scripts would re-declare the demo corpus nineteen times — which is
 # precisely the drift this file exists to stop. What a sibling may not share is
@@ -45,7 +54,7 @@
 # reader which pair disagreed, and no amount of output formatting fixes that,
 # whereas a second invariant over the SAME corpus costs nothing but a section.
 #
-# The cost of holding eighteen behind one exit code is real and is not argued
+# The cost of holding twenty behind one exit code is real and is not argued
 # away here: CI cannot distinguish a failing prose claim from a failing
 # migration pair without reading the output, and `--write` can rewrite copies
 # for a reason the operator did not intend. If that becomes the thing that
@@ -145,12 +154,612 @@
 # Usage:
 #   bin/check-demo-copies          # check
 #   bin/check-demo-copies --list   # print the manifests as tables
+#   bin/check-demo-copies --self-test         # plant a break per invariant in a
+#                                             # throwaway copy and prove each reddens
+#   bin/check-demo-copies --self-test --list  # the coverage table, run nothing
 
 require "digest"
 require "erb"
 require "ripper"
 
 ROOT = File.expand_path("..", __dir__)
+
+# ── --self-test: one planted break per invariant, in a throwaway copy ────────
+#
+# WHY THIS FILE HAS ONE, WHICH IS NOT «EVERY GUARD SHOULD». That principle is
+# explicitly rejected in this workspace — most scripts should not have one — and
+# this section does not lean on it. Two facts about THIS script are the whole
+# argument (K-1267):
+#
+#   * IT CARRIES NINETEEN INDEPENDENT INVARIANTS BEHIND ONE EXIT CODE, and a bare
+#     run answers ONE question about all of them at once: is the tree clean today.
+#     It cannot answer the other one — does arm N still go RED on the break it was
+#     written for. With nineteen of them a single reverted regex takes one
+#     invariant out of service while the exit code stays 0, which is not a
+#     hypothesis: K-1240 measured exactly that, one repository over, where a bare
+#     run stayed green while `--self-test` went red on 22 arms.
+#   * THE PROOF THAT EACH ARM REDDENS WAS BEING THROWN AWAY. Landing K-1262 and
+#     K-1263 took NINE hand-driven plant-and-restore cycles across five demo files
+#     and this script. Every one was a fixture somebody wrote, watched go red, and
+#     deleted; not one was reproducible by the next session. Each arm below is one
+#     of those nine, or a sibling of one, kept.
+#
+# The five VACUITY guards this file already runs on every invocation answer a
+# DIFFERENT question and are not replaced here: «does this rule still have a live
+# subject in the tree in front of you». No fixture can answer that, and no vacuity
+# guard can answer «does the rule still fail on a violation».
+#
+# HOW IT RUNS. `git ls-files --cached --others --exclude-standard` in ROOT, copied
+# into throwaway trees under a mktmpdir; one is checked green as a BASELINE; then
+# each arm plants its break in a tree, runs the COPY of this script from that
+# tree's own `bin/`, asserts exit 1 AND asserts the output names the invariant,
+# then restores each touched file from the pristine original and re-checksums it
+# against ROOT. The re-checksum is not ceremony: a plant is only put back if the
+# bytes match the original again, and «restored» and «restored to something else»
+# are indistinguishable without the digest. Nothing under ROOT is ever written by
+# any of this — the plant lands in the throwaway copy. A plant whose
+# needle no longer occurs is an arm FAILURE, never a pass: a needle that has moved
+# is exactly how an arm stops testing anything while still reading green.
+#
+# TWO KINDS OF ARM, declared per row, because they answer different questions and
+# one of them is easy to get backwards:
+#
+#   :break   — a FAITHFUL MISTAKE, the thing a real session does: a one-sided
+#              edit, a copy appearing where no `ships:` set expects it, an
+#              exception that has gone stale, a claim a sweep dropped from one
+#              document. Four rows plant in the MANIFEST instead of the tree,
+#              because that is where those mistakes are made. None of them is a
+#              syntax error a parser would catch.
+#   :vacuity — the rule's own MECHANISM switched off in the copy of this script,
+#              to prove the in-band vacuity guard watching that mechanism is
+#              itself alive. NOTE THE POLARITY, which is the trap T-129 hit and
+#              K-1262 got right: for a rule that is a BAN — «no undeclared group
+#              of agreeing copies» — «the pattern must match something» is
+#              backwards, because a ban whose violations match nothing is the ban
+#              being obeyed. So these arms switch off the MEASUREMENT and expect
+#              the declaration-liveness guard to fire, never a violation count.
+#
+# WHAT IT DOES NOT COVER, because an over-claimed self-test is worse than none:
+#
+#   * It proves each listed arm reddens on ONE break. It does not enumerate the
+#     breaks an invariant could miss, and a rule with an arm here is not correct
+#     because of it.
+#   * The `:vacuity` arms prove the GUARD fires when its counter reads zero. They
+#     do NOT prove the counter tracks what its name says.
+#   * Fifteen of the twenty rules have an in-band vacuity guard and only four of
+#     those guards have an arm here. `--self-test --list` prints the coverage
+#     table — which rules have an arm, of which kind — derived from this file's
+#     own `# ── … ──` banners rather than from a list, so a rule added later reads
+#     as UNCOVERED rather than as absent.
+#   * The fixture is a copy of the WORKING tree, so an arm is only as meaningful
+#     as the baseline: a red bare run makes this red too, by design, and says so
+#     before it runs anything else.
+#
+# COST, measured 2026-08-31 on this laptop: ~0.2 s to build one tree, ~0.8 s per
+# guard run, four trees in parallel.
+if ARGV.include?("--self-test")
+  require "fileutils"
+  require "open3"
+  require "rbconfig"
+  require "tmpdir"
+
+  SELF_TEST_PROBE_RB =
+    "# frozen_string_literal: true\n\n# A shared helper two demos grew in the same wave.\n" \
+    "class SelfTestProbe\n  def self.call = :ok\nend\n"
+
+  # The K-1088 and K-1090 arms plant in ALL SEVEN copies at once, and that is the
+  # point rather than a shortcut: both rows record seven copies held identical and
+  # identically WRONG, so a one-sided plant would be caught by the lockstep rule
+  # and would prove nothing about the ban.
+  SELF_TEST_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
+  SELF_TEST_AC_PLANT = SELF_TEST_SEVEN.map do |d|
+    [:edit, "kiosk-demo-#{d}/app/controllers/application_controller.rb",
+     "endpoints, the catalog link and the modules this origin serves",
+     "endpoints and the schema, query, run, pay endpoints"]
+  end.freeze
+  SELF_TEST_404_PLANT = SELF_TEST_SEVEN.map do |d|
+    [:edit, "kiosk-demo-#{d}/public/404.html",
+     "for the register/login endpoints, the catalog link and the modules this",
+     "for the register/login, schema, query, run, pay endpoints and the modules this"]
+  end.freeze
+
+  # The whole FRAGMENT_EXCLUDED entry for one path, removed the way a session that
+  # thought the note was stale would remove it.
+  SELF_TEST_EXCLUSION_RE = /^  "script\/schema_flow\.rb" =>\n(?:^ {4}".*\n)+/
+  SELF_TEST_DSL_LINE     = "    dsl_names.each { |name| fragment_dsl_ids[\"\#{rel}\#\#{name}\"] = true }\n"
+
+  # Banners that are DATA or a HELPER rather than an invariant. The coverage table
+  # is `every banner in this file` MINUS this list, so a rule added later appears
+  # as UNCOVERED instead of not appearing at all, and an arm naming a banner that
+  # no longer exists is an error rather than a silent no-op.
+  SELF_TEST_NOT_A_RULE = [
+    "--self-test: one planted break per invariant, in a throwaway copy",
+    "The manifest",
+    "What is NOT compared, and why (K-629)",
+    "The engine side of the generator output (K-640, hardened at K-646)",
+    "WHY THERE IS NO WAY TO RECORD AN EXCEPTION ANY MORE",
+    "Cross-demo singleton pairs (K-648)",
+    "Normalisation",
+    "Magic comments (K-628)",
+    "Discovery",
+    "The e2e harness's fixtures, paired with the demo files they came from",
+  ].freeze
+
+  # The one rule with no `# ── … ──` banner, declared so the check below can tell
+  # «an arm for an unbannered rule» from «an arm for a banner that has moved».
+  # It is the twentieth invariant; see the note on the header's count.
+  SELF_TEST_UNBANNERED = ["every demo lockfile resolves for the SAME platforms (K-962)"].freeze
+
+  # THE PLANT TABLE. `rule:` is the banner the arm aims at, verbatim, so coverage
+  # is derived from this column. `ops:` are applied in order to one fixture tree
+  # and undone from the pristine original afterwards; `expect:` must appear in the
+  # planted run's output, and the run must exit 1.
+  SELF_TEST_PLANTS = [
+    { id: "code-copy-diverges", kind: :break,
+      rule: "The one comparison this whole file exists for",
+      what: "a rename reaches ONE of seven `:code` copies — 057196e's exact shape",
+      ops:  [[:edit, "kiosk-demo-philslist/script/equihash_register.rb", "equihash_solve", "solve_equihash"]],
+      expect: /script\/equihash_register\.rb: declared :code — the copies must agree.+\[philslist\]/ },
+    { id: "magic-comment-lost", kind: :break,
+      rule: "The one comparison this whole file exists for",
+      what: "one copy loses `# frozen_string_literal: true` — K-628's exact shape",
+      ops:  [[:edit, "kiosk-demo-stylish/app/controllers/application_controller.rb",
+              "# frozen_string_literal: true\n", ""]],
+      expect: /application_controller\.rb: declared :code — prose may differ per demo, MAGIC comments may not/ },
+    { id: "ships-stray-copy", kind: :break,
+      rule: "The one comparison this whole file exists for",
+      what: "a copy reappears in a demo outside the entry's `ships:` set — K-860/K-883 undone",
+      ops:  [[:copy, "kiosk-demo-atablefor/script/bound_assistant.rb",
+              "kiosk-demo-hoteling/script/bound_assistant.rb"]],
+      expect: /script\/bound_assistant\.rb: hoteling ships this file but is not in its declared `ships:` set/ },
+    { id: "ships-copy-gone", kind: :break,
+      rule: "The one comparison this whole file exists for",
+      what: "a demo named in `ships:` stops shipping the file and the declaration is not moved",
+      ops:  [[:delete, "kiosk-demo-stylish/script/bound_assistant.rb"]],
+      expect: /script\/bound_assistant\.rb: `ships:` names stylish, which no longer ships/ },
+    { id: "except-has-converged", kind: :break,
+      rule: "The one comparison this whole file exists for",
+      what: "the excepted copy converges on its siblings and the exception is left standing",
+      ops:  [[:copy, "kiosk-demo-tudu/config/environments/test.rb",
+              "kiosk-demo-prove/config/environments/test.rb"]],
+      expect: /config\/environments\/test\.rb: `except:` for prove is stale/ },
+
+    { id: "new-copy-undeclared", kind: :break,
+      rule: "Undeclared and stale manifest entries",
+      what: "a helper lands in two demos at once with no manifest entry — how six of these got here",
+      ops:  [[:write, "kiosk-demo-tudu/app/services/self_test_probe.rb", SELF_TEST_PROBE_RB],
+             [:write, "kiosk-demo-philslist/app/services/self_test_probe.rb", SELF_TEST_PROBE_RB]],
+      expect: /app\/services\/self_test_probe\.rb: exists in 2 demos \(philslist, tudu\) but is not declared/ },
+    { id: "entry-no-longer-duplicated", kind: :break,
+      rule: "Undeclared and stale manifest entries",
+      what: "a copy is deleted, leaving an entry that compares one file to itself",
+      ops:  [[:delete, "kiosk-demo-getgrocery/app/services/bad_proof_counter.rb"]],
+      expect: /app\/services\/bad_proof_counter\.rb: declared in bin\/check-demo-copies but only atablefor ships it/ },
+
+    { id: "exclusion-no-longer-true", kind: :break,
+      rule: "The recorded exclusion must stay true (K-629)",
+      what: "a cleanup deletes an inert generator file from all but one demo and leaves the record",
+      ops:  [[:delete, "kiosk-demo-philslist/config/initializers/cors.rb"],
+             [:delete, "kiosk-demo-stylish/config/initializers/cors.rb"]],
+      expect: /config\/initializers\/cors\.rb: recorded in SKELETON_NOT_COMPARED .+ but only 1 demo ships it/ },
+
+    { id: "template-regenerated-alone", kind: :break,
+      rule: "Template ↔ copy: the drift the lockstep rule cannot see (K-640)",
+      what: "the engine's install template is edited and the demos are not regenerated",
+      ops:  [[:edit, "kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_schema.rb.tt",
+              "  def up\n", "  def up\n    # engine-side change that never reached the demos\n"]],
+      expect: /create_kiosk_schema\.rb\.tt: rendered with the generator's default options/ },
+    { id: "template-undeclared", kind: :break,
+      rule: "Template ↔ copy: the drift the lockstep rule cannot see (K-640)",
+      what: "a new install-generator template appears with no GENERATOR_TEMPLATES entry",
+      ops:  [[:write, "kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_audit_log.rb.tt",
+              "class CreateKioskAuditLog < ActiveRecord::Migration[8.0]\n  def change; end\nend\n"]],
+      expect: /create_kiosk_audit_log\.rb\.tt: new install-generator template not declared/ },
+
+    { id: "migration-pair-drift", kind: :break,
+      rule: "Cross-demo singleton pairs: the migrations neither rule above sees (K-648)",
+      what: "the hand-written migration that ships at demo-specific timestamps is edited in one demo",
+      ops:  [[:edit, "kiosk-demo-atablefor/db/migrate/20260721000001_add_devise_columns_to_users.rb",
+              "add_index :users, :email, unique: true",
+              "add_index :users, :email, unique: true, where: \"email IS NOT NULL\""]],
+      expect: /db\/migrate\/\*_add_devise_columns_to_users\.rb: declared :code — the copies must agree/ },
+
+    { id: "telemetry-autoload-line-gone", kind: :break,
+      rule: "The telemetry cluster's own wiring (K-623, K-624)",
+      what: "the autoload_once_paths line K-502 made load-bearing is dropped from one demo",
+      ops:  [[:edit, "kiosk-demo-skooti/config/application.rb", /^.*autoload_once_paths.*\n/, ""]],
+      expect: /skooti: ships app\/services\/demo_telemetry\.rb but config\/application\.rb does not put app\/services/ },
+
+    { id: "operation-result-regrows", kind: :break,
+      rule: "What is LEFT in a per-demo operation_result.rb (K-792)",
+      what: "uncompared behaviour starts growing back inside a `:per_demo` file",
+      ops:  [[:edit, "kiosk-demo-hoteling/app/operations/operation_result.rb", "  }.freeze\nend\n",
+              "  }.freeze\n\n  def refused?\n    status != :ok\n  end\nend\n"]],
+      expect: /hoteling: app\/operations\/operation_result\.rb defines "refused\?"/ },
+
+    { id: "controller-prose-stale", kind: :break,
+      rule: "application_controller.rb's PROSE must stay true (K-1021)",
+      what: "a new wire controller lands and the header sentence enumerating them is not moved",
+      ops:  [[:write, "kiosk-demo-philslist/app/controllers/kiosk/probe_controller.rb",
+              "# frozen_string_literal: true\n\nclass Kiosk::ProbeController < ApplicationController\nend\n"]],
+      expect: /philslist: app\/controllers\/application_controller\.rb's comment names .+Kiosk::ProbeController/ },
+
+    { id: "retired-wire-in-code", kind: :break,
+      rule: "The wrong-door hint must not name a RETIRED endpoint (K-1088)",
+      what: "the 0.3 verb enumeration comes back into the LIVE CSRF body, identically in all seven",
+      ops:  SELF_TEST_AC_PLANT,
+      expect: /tudu: app\/controllers\/application_controller\.rb names "schema, query, run, pay" in CODE/ },
+
+    { id: "retired-wire-on-static-page", kind: :break,
+      rule: "The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)",
+      what: "the same enumeration comes back on the page served for every unrouted path",
+      ops:  SELF_TEST_404_PLANT,
+      expect: /tudu: public\/404\.html names "schema, query, run, pay" in the file, which is SERVED whole/ },
+
+    { id: "env-template-dead-cite", kind: :break,
+      rule: "A deploy/env template may not cite a path that is not there (K-1093)",
+      what: "the shipped operator template keeps pointing at a file that has been renamed",
+      ops:  [[:edit, "deploy/env/tudu.env.example", "config/database.yml", "config/databases.yml"]],
+      expect: /deploy\/env\/tudu\.env\.example:\d+: cites `config\/databases\.yml`/ },
+
+    { id: "flow-runner-one-sided", kind: :break,
+      rule: "The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)",
+      what: "one demo's copy of the hand-copied helper gains a line the other five do not",
+      ops:  [[:edit, "kiosk-demo-philslist/lib/tasks/demo.rake",
+              "  require \"open3\"\n  require \"shellwords\"\n",
+              "  require \"open3\"\n  require \"shellwords\"\n  require \"json\"\n"]],
+      expect: /lib\/tasks\/demo\.rake: the `<demo>_run_flow` helpers must agree byte-for-byte/ },
+    { id: "flow-runner-status-tail", kind: :break,
+      rule: "The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)",
+      what: "the DECLARED variant's exit-status tail drifts — the half K-1043 closed",
+      ops:  [[:edit, "kiosk-demo-tudu/lib/tasks/demo.rake", "  puts json_line if json_line\n",
+              "  puts json_line if json_line\n  warn \"tudu: no JSON line\" if json_line.nil?\n"]],
+      expect: /lib\/tasks\/demo\.rake: every `<demo>_run_flow` — variants included — must handle the child's exit status/ },
+
+    { id: "unit-one-sided-edit", kind: :break,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "one of the six held `devise` lines gains a module — K-1263's own gate",
+      ops:  [[:edit, "kiosk-demo-getgrocery/app/models/user.rb", "devise :database_authenticatable",
+              "devise :database_authenticatable, :rememberable"]],
+      expect: /app\/models\/user\.rb#devise: the copies must agree once comments and whitespace are normalised away/ },
+    { id: "unit-except-has-converged", kind: :break,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "the excepted copy converges on the six, leaving the exemption excusing nothing",
+      ops:  [[:edit, "kiosk-demo-tudu/app/models/user.rb", "devise :database_authenticatable, :registerable",
+              "devise :database_authenticatable"]],
+      expect: /app\/models\/user\.rb#devise: `except:` for tudu is stale/ },
+    { id: "fragment-path-shares-nothing", kind: :break,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "a rename leaves a declared FRAGMENT_PATHS entry contributing nothing (T-146)",
+      ops:  [[:edit, "kiosk-demo-skooti/app/services/prove_trust.rb", "def issuer", "def kyc_issuer"],
+             [:edit, "kiosk-demo-skooti/app/services/prove_trust.rb", "def broker_url", "def kyc_broker_url"],
+             [:edit, "kiosk-demo-skooti/app/services/prove_trust.rb", "def operator_id", "def kyc_operator_id"]],
+      expect: /app\/services\/prove_trust\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared/ },
+    { id: "per-demo-path-in-neither-list", kind: :break,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS (T-146)",
+      ops:  [[:edit, "bin/check-demo-copies", SELF_TEST_EXCLUSION_RE, ""]],
+      expect: /script\/schema_flow\.rb: declared `:per_demo` in COPIES — compared to NOTHING — but named neither/ },
+    { id: "vacuity-fragment-comparisons", kind: :vacuity,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "the fragment rule stops comparing anything and the count-based guard must say so",
+      ops:  [[:edit, "bin/check-demo-copies", "  fragment_comparisons += held.size\n", ""]],
+      expect: /the T-120 fragment rule declares \d+ unit\(s\) and compared NONE of them/ },
+    { id: "vacuity-fragment-except", kind: :vacuity,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "the `:code` arm stops partitioning, so a declared exemption excuses nothing (K-1263)",
+      ops:  [[:edit, "bin/check-demo-copies", "    fragment_exceptions_live += excused.size\n", ""]],
+      expect: /FRAGMENTS declares \d+ `except:` entr(?:y|ies) and NONE of them was reached/ },
+    { id: "vacuity-class-macro-handle", kind: :vacuity,
+      rule: "A shared UNIT inside a `:per_demo` file (T-120)",
+      what: "the T-146 class-macro handle stops seeing a class body — the EARLIER_WIRES arm",
+      ops:  [[:edit, "bin/check-demo-copies", SELF_TEST_DSL_LINE, ""]],
+      expect: /the T-146 class-macro handle found NO class-body macro/ },
+
+    { id: "two-of-three-converge", kind: :break,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "two of three copies quietly become one file — the plant that measured EXIT 0 before K-1262",
+      ops:  [[:edit, "kiosk-demo-skooti/app/models/cart_mandate.rb", "reservation_id", "booking_id"]],
+      expect: /app\/models\/cart_mandate\.rb#scope: \[hoteling,skooti\] — 2 of 3 copies — agree/ },
+    { id: "lockstep-group-shrinks", kind: :break,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "a one-sided edit inside a `:lockstep` group — the Bearer token that would pass its own demo",
+      ops:  [[:edit, "kiosk-demo-philslist/script/schema_flow.rb",
+              "get_json(\"\#{SERVER}/kiosk/schema\")",
+              "get_json(\"\#{SERVER}/kiosk/schema\", { \"Authorization\" => \"Bearer \#{token}\" })"]],
+      expect: /script\/schema_flow\.rb: `agree:` holds \[atablefor,philslist,tudu\] in lockstep/ },
+    { id: "fourth-demo-joins-group", kind: :break,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "a fourth copy joins a group that already agrees — a NEW copy of something hand-copied",
+      ops:  [[:copy, "kiosk-demo-tudu/script/schema_flow.rb", "kiosk-demo-stylish/script/schema_flow.rb"]],
+      expect: /script\/schema_flow\.rb: `agree:` declares \[atablefor,philslist,tudu\] and stylish has since joined/ },
+    { id: "coincidence-has-ended", kind: :break,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "a legitimate divergence inside a `:coincidence` — the OTHER diagnosis, not drift",
+      ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
+              "    \"quota_exceeded\" => :too_many_requests,\n", ""]],
+      expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,skooti\] as a `:coincidence` and the coincidence has ended/ },
+    { id: "coincidence-over-the-cap", kind: :break,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "a lockstep group relabelled `:coincidence` — the free way to switch the rule off, capped",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "      %w[atablefor philslist tudu] => {\n        rule: :lockstep,\n",
+              "      %w[atablefor philslist tudu] => {\n        rule: :coincidence,\n"]],
+      expect: /`agree:` calls \[atablefor,philslist,tudu\] a `:coincidence`, but what they agree on is 37 normalised lines and the cap is 12/ },
+    { id: "vacuity-agree-confirmation", kind: :vacuity,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "the grouping pass stops running, so the ban passes silently and confirms nothing",
+      ops:  [[:edit, "bin/check-demo-copies", "def agree_check(label, what, bodies, declared, errors)\n",
+              "def agree_check(label, what, bodies, declared, errors)\n  return 0\n"]],
+      expect: /declares \d+ `agree:` group\(s\) of converged `:per_demo` copies and this run CONFIRMED none/ },
+
+    { id: "initializer-patches-framework", kind: :break,
+      rule: "No demo initializer patches a Rails framework class (K-504)",
+      what: "the exact line four demos carried before kiosk-rls grew a railtie",
+      ops:  [[:prepend, "kiosk-demo-hoteling/config/initializers/kiosk.rb",
+              "ActiveRecord::Migration.include(Kiosk::RLS::DSL)\n"]],
+      expect: /hoteling: config\/initializers\/kiosk\.rb:1 calls ActiveRecord::Migration\.include/ },
+
+    { id: "initializer-resolves-env", kind: :break,
+      rule: "No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT)",
+      what: "an initializer resolves configuration instead of reading it",
+      ops:  [[:prepend, "kiosk-demo-philslist/config/initializers/kiosk.rb",
+              "SETTLEMENT_WEBHOOK = ENV.fetch(\"KIOSK_SETTLEMENT_WEBHOOK\", nil)\n"]],
+      expect: /philslist: config\/initializers\/kiosk\.rb:1 resolves KIOSK_SETTLEMENT_WEBHOOK with ENV\.fetch/ },
+
+    { id: "e2e-fixture-undeclared", kind: :break,
+      rule: "The e2e fixture rule runs (T-118)",
+      what: "a new harness fixture arrives with no E2E_FIXTURES entry",
+      ops:  [[:write, "e2e/fixtures/probe_helper.rb",
+              "# frozen_string_literal: true\n\n# A helper the harness grew.\nmodule ProbeHelper\nend\n"]],
+      expect: /e2e\/fixtures\/probe_helper\.rb: exists but is not declared in E2E_FIXTURES/ },
+    { id: "e2e-fixture-diverges", kind: :break,
+      rule: "The e2e fixture rule runs (T-118)",
+      what: "the harness copy and the demo copy of one file stop agreeing",
+      ops:  [[:edit, "e2e/fixtures/salon.rb", /\nend\n\z/, "\n\n  def self.probe = :ok\nend\n"]],
+      expect: /e2e\/fixtures\/salon\.rb: declared `:identical` to app\/models\/salon\.rb/ },
+
+    { id: "comment-cites-dead-path", kind: :break,
+      rule: "A comment in a compared file may not cite something that is not there",
+      what: "a header keeps pointing at a file that moved — and `:code` compares modulo comments",
+      ops:  [[:edit, "kiosk-demo-tudu/app/models/uuid_check.rb", "# frozen_string_literal: true\n",
+              "# frozen_string_literal: true\n\n# The accounting half lives in app/services/uuid_ledger.rb.\n"]],
+      expect: /tudu: app\/models\/uuid_check\.rb — a comment cites the source path `app\/services\/uuid_ledger\.rb`/ },
+    { id: "comment-cites-dead-constant", kind: :break,
+      rule: "A comment in a compared file may not cite something that is not there",
+      what: "a `{Constant}` reference a rename never reached — K-1264's shape",
+      ops:  [[:edit, "kiosk-demo-tudu/app/models/uuid_check.rb", "# frozen_string_literal: true\n",
+              "# frozen_string_literal: true\n\n# Callers go through {WireUuidGuard} first.\n"]],
+      expect: /tudu: app\/models\/uuid_check\.rb — a comment references `\{WireUuidGuard\}`/ },
+
+    { id: "framework-claim-dropped", kind: :break,
+      rule: "Cross-demo PROSE about the FRAMEWORK (K-1069)",
+      what: "a sweep rewords one demo's copy of a shared framework claim and not the others",
+      ops:  [[:edit, "kiosk-demo-hoteling/config/routes.rb",
+              "REST endpoints: one per verb, HTTP method = semantics.", "REST endpoints, one per verb."]],
+      expect: /hoteling: config\/routes\.rb does not carry K-1069 claim `one-endpoint-per-verb` verbatim/ },
+
+    { id: "lockfile-platforms-drift", kind: :break,
+      rule: "every demo lockfile resolves for the SAME platforms (K-962)",
+      what: "one lockfile loses a platform, so that demo alone cannot be installed frozen",
+      ops:  [[:edit, "kiosk-demo-philslist/Gemfile.lock", "\n  x86_64-linux\n", "\n"]],
+      expect: /philslist: Gemfile\.lock PLATFORMS differs from the other demos/ },
+  ].freeze
+
+  # ── coverage, derived from this file's own banners ────────────────────────
+  st_banners    = File.readlines(__FILE__).filter_map { |l| l[/\A# ── (.+?)\s*─*\s*\z/, 1] }
+  st_invariants = st_banners - SELF_TEST_NOT_A_RULE
+  st_aimed      = SELF_TEST_PLANTS.map { |p| p[:rule] }.uniq
+  st_orphans    = st_aimed - st_invariants - SELF_TEST_UNBANNERED
+  st_uncovered  = st_invariants - st_aimed
+
+  st_bad   = []
+  st_notes = []
+
+  unless st_orphans.empty?
+    st_bad << "#{st_orphans.length} arm(s) name a `rule:` that is neither a banner in this file nor a " \
+              "declared unbannered rule: #{st_orphans.map(&:inspect).join(', ')}. A banner was reworded " \
+              "and the plant table was not — which is how a coverage table starts describing a file " \
+              "that no longer exists."
+  end
+  if (SELF_TEST_NOT_A_RULE - st_banners).any?
+    st_bad << "SELF_TEST_NOT_A_RULE names #{(SELF_TEST_NOT_A_RULE - st_banners).map(&:inspect).join(', ')}, " \
+              "which is not a banner in this file any more. Update the exclusion list in the same commit " \
+              "that moved the banner."
+  end
+
+  if ARGV.include?("--list")
+    puts "check-demo-copies --self-test --list: #{SELF_TEST_PLANTS.length} arm(s) over " \
+         "#{st_invariants.length} bannered invariant(s) + #{SELF_TEST_UNBANNERED.length} unbannered"
+    (st_invariants + SELF_TEST_UNBANNERED).each do |rule|
+      arms = SELF_TEST_PLANTS.select { |p| p[:rule] == rule }
+      if arms.empty?
+        puts format("  %-6s %s", "NONE", rule)
+      else
+        puts format("  %-6s %s", arms.map { |a| a[:kind] == :vacuity ? "V" : "B" }.join, rule)
+        arms.each { |a| puts format("         %-32s %s — %s", a[:id], a[:kind], a[:what]) }
+      end
+    end
+    st_bad.each { |b| warn "  ✗ #{b}" }
+    exit(st_bad.empty? ? 0 : 1)
+  end
+
+  # ── the fixture trees ─────────────────────────────────────────────────────
+  st_ls, st_git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others",
+                                 "--exclude-standard")
+  unless st_git.success?
+    warn "check-demo-copies --self-test: FAIL — `git ls-files` failed in #{ROOT}. The fixture tree is a " \
+         "copy of what git carries plus what it does not ignore, and there is nothing to copy without it."
+    exit 1
+  end
+  st_rels = st_ls.split("\0").select { |r| File.file?(File.join(ROOT, r)) }
+
+  st_jobs = [4, SELF_TEST_PLANTS.length].min
+  st_t0   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+  st_results = Array.new(SELF_TEST_PLANTS.length)
+
+  Dir.mktmpdir("check-demo-copies-self-test") do |tmp|
+    st_trees = (0...st_jobs).map do |i|
+      tree = File.join(tmp, "tree#{i}")
+      FileUtils.mkdir_p(st_rels.map { |r| File.dirname(File.join(tree, r)) }.uniq)
+      st_rels.each { |r| FileUtils.copy_file(File.join(ROOT, r), File.join(tree, r), true) }
+      tree
+    end
+
+    st_run = lambda do |tree|
+      out, status = Open3.capture2e(RbConfig.ruby, File.join(tree, "bin", "check-demo-copies"))
+      [out, status.exitstatus]
+    end
+
+    # SELF-NON-VACUITY, three ways, before any arm means anything.
+    mine   = Digest::SHA256.file(__FILE__).hexdigest
+    theirs = Digest::SHA256.file(File.join(st_trees[0], "bin/check-demo-copies")).hexdigest
+    st_bad << "the fixture's copy of this script is not byte-identical to the one running (#{mine[0, 12]} " \
+              "vs #{theirs[0, 12]}), so every arm below tests a different file" unless mine == theirs
+
+    real_demos = Dir[File.join(ROOT, "kiosk-demo-*")].count { |d| File.directory?(d) }
+    fix_demos  = Dir[File.join(st_trees[0], "kiosk-demo-*")].count { |d| File.directory?(d) }
+    st_bad << "the fixture holds #{fix_demos} demo(s) and #{ROOT} holds #{real_demos} — the copy is not " \
+              "the corpus this guard walks" unless real_demos == fix_demos && real_demos.positive?
+
+    base_out, base_code = st_run.call(st_trees[0])
+    if base_code.zero?
+      puts format("  %-6s %s", "GREEN", "baseline: the untouched copy exits 0, so every arm below is ONE " \
+                                        "planted break away from red")
+    else
+      st_bad << "the BASELINE copy is not green (exit #{base_code.inspect}). No arm below means anything " \
+                "until it is — and the usual cause is that a bare run of this guard is red too:\n" +
+                base_out.lines.grep(/✗/).first(4).map { |l| "      #{l.rstrip[0, 160]}" }.join("\n")
+    end
+
+    if st_bad.empty?
+      st_queue = SELF_TEST_PLANTS.each_with_index.to_a
+      st_lock  = Mutex.new
+
+      st_trees.map do |tree|
+        Thread.new do
+          loop do
+            plant, idx = st_lock.synchronize { st_queue.shift }
+            break if plant.nil?
+
+            saved   = {}
+            trouble = nil
+            plant[:ops].each do |op|
+              rel = op[0] == :copy ? op[2] : op[1]
+              saved[rel] = nil unless saved.key?(rel)
+              path = File.join(tree, rel)
+              saved[rel] ||= File.exist?(path) ? File.binread(path) : nil
+            end
+
+            out, code = nil, nil
+            begin
+              plant[:ops].each do |op|
+                rel  = op[0] == :copy ? op[2] : op[1]
+                path = File.join(tree, rel)
+                case op[0]
+                when :edit
+                  before = File.read(path)
+                  after  = before.gsub(op[2]) { op[3] }
+                  trouble ||= "the needle #{op[2].inspect} no longer occurs in #{rel}" if after == before
+                  File.write(path, after)
+                when :prepend
+                  File.write(path, op[2] + File.read(path))
+                when :write
+                  FileUtils.mkdir_p(File.dirname(path))
+                  File.write(path, op[2])
+                when :delete
+                  trouble ||= "#{rel} is already absent, so the deletion plants nothing" unless File.exist?(path)
+                  FileUtils.rm_f(path)
+                when :copy
+                  src = File.join(tree, op[1])
+                  trouble ||= "#{op[1]} does not exist, so there is nothing to copy" unless File.exist?(src)
+                  FileUtils.mkdir_p(File.dirname(path))
+                  FileUtils.copy_file(src, path, true) if File.exist?(src)
+                end
+              end
+              out, code = st_run.call(tree) if trouble.nil?
+            ensure
+              saved.each do |rel, body|
+                p = File.join(tree, rel)
+                body.nil? ? FileUtils.rm_f(p) : File.binwrite(p, body)
+              end
+            end
+
+            # RESTORE VERIFIED, not assumed: every touched file is re-checksummed
+            # against the pristine original under ROOT, because a restore that put
+            # back different bytes reads exactly like one that worked.
+            drift = saved.keys.reject do |rel|
+              a = File.join(tree, rel)
+              b = File.join(ROOT, rel)
+              next false unless File.exist?(a) == File.exist?(b)
+              next true unless File.exist?(a)
+
+              Digest::SHA256.file(a).hexdigest == Digest::SHA256.file(b).hexdigest
+            end
+
+            st_results[idx] = { plant: plant, trouble: trouble, code: code, out: out.to_s, drift: drift }
+          end
+        end
+      end.each(&:join)
+    end
+  end
+
+  st_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - st_t0
+
+  st_results.compact.each do |r|
+    plant = r[:plant]
+    label = plant[:kind] == :vacuity ? "VAC" : "RED"
+    if r[:trouble]
+      st_bad << "#{plant[:id]}: the plant did not apply — #{r[:trouble]}. An arm whose break no longer " \
+                "lands is an arm that tests nothing while reading green; re-point it at the live text."
+      next
+    end
+    if r[:code] != 1
+      st_bad << "#{plant[:id]}: planted «#{plant[:what]}» and the guard exited #{r[:code].inspect} " \
+                "instead of 1. The invariant «#{plant[:rule]}» no longer catches it."
+      next
+    end
+    unless r[:out] =~ plant[:expect]
+      st_bad << "#{plant[:id]}: the guard went red as it should, but nothing in its output matched " \
+                "#{plant[:expect].inspect} — so it failed for a different reason and this arm proves " \
+                "nothing about «#{plant[:rule]}». First failure line:\n      " +
+                (r[:out].lines.grep(/✗/).first.to_s.rstrip[0, 200])
+      next
+    end
+    unless r[:drift].empty?
+      st_bad << "#{plant[:id]}: after restoring, #{r[:drift].join(', ')} no longer checksum-matches the " \
+                "original under #{ROOT}. The fixture tree is throwaway so nothing is lost, but a restore " \
+                "that does not restore is a failure this arm exists to make visible."
+      next
+    end
+    puts format("  %-6s %-32s %s", label, plant[:id], plant[:what])
+  end
+
+  st_notes << "#{st_uncovered.length} of #{st_invariants.length} bannered invariant(s) have NO arm: " \
+              "#{st_uncovered.map(&:inspect).join('; ')}" unless st_uncovered.empty?
+
+  if st_bad.empty?
+    puts
+    puts "check-demo-copies --self-test: OK — #{SELF_TEST_PLANTS.length} arm(s) " \
+         "(#{SELF_TEST_PLANTS.count { |p| p[:kind] == :break }} planted breaks, " \
+         "#{SELF_TEST_PLANTS.count { |p| p[:kind] == :vacuity }} vacuity), every one RED and naming its " \
+         "invariant, over #{st_aimed.length} of #{st_invariants.length + SELF_TEST_UNBANNERED.length} " \
+         "invariants, in #{format('%.1f', st_elapsed)} s over #{st_jobs} throwaway tree(s)."
+    st_notes.each { |n| puts "note: #{n}" }
+    puts "(This proves each listed arm still reddens on ONE break. It does not prove the guard is " \
+         "correct, and it is not a substitute for running it bare.)"
+    exit 0
+  end
+
+  $stdout.flush
+  warn "\ncheck-demo-copies --self-test FAILED:\n"
+  st_bad.each { |b| warn "  ✗ #{b}" }
+  warn "\nAn arm that stops reddening is an invariant that has quietly left service while the bare run " \
+       "still exits 0 — the shape K-1240 measured. Repair the rule, or record why the arm is wrong; do " \
+       "not delete the arm to make this green."
+  exit 1
+end
 
 # Where hand-written demo code lives. Deliberately NOT the Rails skeleton
 # (bin/, config/, public/, Rakefile, config.ru): those are generator output that

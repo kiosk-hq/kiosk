@@ -1012,7 +1012,8 @@ jobs:
   #
   # It is a separate job rather than a step in ci-task-coverage so the two
   # invariants (is every task gated / do the copies agree) fail with their own
-  # names. Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.
+  # names. Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
+  # check and ~10 s for the self-test step beside it.
   demo-file-sync:
     name: duplicated demo files agree (bin/check-demo-copies)
     runs-on: ubuntu-latest
@@ -1030,6 +1031,20 @@ jobs:
 
       - name: Hand-copied demo files agree, or the divergence is declared
         run: ./bin/check-demo-copies
+
+      # Its own step, for the reason the publication-paths, prose-counts and
+      # demo-derivations self-tests each have one — and here the argument is the
+      # COUNT. This one script holds twenty independent invariants behind the one
+      # exit code above, so a reverted regex takes one of them out of service
+      # while the step above stays green; K-1240 measured exactly that shape one
+      # repository over. The self-test copies this checkout into throwaway
+      # directories, plants one faithful break per invariant (a one-sided edit, a
+      # stale `except:`, a converged copy, a claim dropped from one document),
+      # and requires each to come back red NAMING its invariant. It writes
+      # nothing outside its tmpdir and needs no bundle, no services and no
+      # database. ~10 s (K-1267).
+      - name: check-demo-copies self-test
+        run: ./bin/check-demo-copies --self-test
 
   # Is every fenced block in a demo's before-after.md a line its own producer
   # actually prints? (K-1051)

@@ -49,6 +49,10 @@ require "json"
 require "json_schemer"
 require "net/http"
 require "uri"
+# The RESERVED wire names, read from the engine rather than restated (§4). Its
+# own requires are `date`, `time`, `rack` and `kiosk/server/errors` — all
+# loadable without Rails, which is what lets this bare `ruby` process have them.
+require "kiosk/server/argument_decoder"
 
 SERVER  = ENV.fetch("SERVER_URL")
 E2E_DIR = __dir__
@@ -247,9 +251,24 @@ examples_checked = 0
     name = descriptor["name"]
 
     if descriptor.key?("example_params")
+      # `limit` and `cursor` are RESERVED (§8.1 item 6, §8.4): the wire always
+      # accepts them and a verb never declares them, so an `input_schema` with
+      # `additionalProperties: false` still takes one and an `example_params`
+      # may legitimately show one. {RequestValidation#validate_arguments!}
+      # drops exactly this set — minus any the verb declares for itself, which
+      # is the more specific statement — before validating a real request, so a
+      # check that did not would refuse an example the origin ACCEPTS. Read
+      # from the engine's own constant; a second copy is the drift this file
+      # exists to catch elsewhere. (K-1273, found extending §4 to the demos.)
+      declared_props = Kiosk::Server::ArgumentDecoder.fetch(descriptor["input_schema"], :properties)
+      exempt = Kiosk::Server::ArgumentDecoder::RESERVED.keys -
+               (declared_props.is_a?(Hash) ? declared_props.keys.map(&:to_s) : [])
+      payload = descriptor["example_params"]
+      payload = payload.reject { |key, _| exempt.include?(key) } if payload.is_a?(Hash)
+
       schema = JSONSchemer.schema(descriptor["input_schema"],
                                   meta_schema: "https://json-schema.org/draft/2020-12/schema")
-      errors = schema.validate(descriptor["example_params"]).to_a
+      errors = schema.validate(payload).to_a
       examples_checked += 1
       if errors.empty?
         ok "#{name}: example_params satisfies its own input_schema"

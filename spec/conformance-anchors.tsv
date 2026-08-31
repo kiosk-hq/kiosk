@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1627 anchors.
+# 1633 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -639,6 +639,7 @@ kiosk-demo-stylish/lib/tasks/demo.rake	assistant 2 sees assistant 1's booking (s
 kiosk-demo-stylish/lib/tasks/demo.rake	check.call("DB owner-agent allowed_roles == {owner} (inherited from IdP)", owner_roles == "{owner}")
 kiosk-demo-stylish/lib/tasks/demo.rake	check.call("customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
 kiosk-demo-stylish/lib/tasks/demo.rake	check.call("owner salon_calendar carries a FORECAST summary", result["owner_sees_forecast"] == true)
+kiosk-demo-stylish/lib/tasks/demo.rake	descriptor_example_failures(queries:
 kiosk-demo-stylish/lib/tasks/demo.rake	human signed in via the real Devise form
 kiosk-demo-stylish/lib/tasks/demo.rake	re-rendered page shows the saved cap + label
 kiosk-demo-stylish/lib/tasks/demo.rake	result["devise_customer_token_role"] ==
@@ -647,6 +648,11 @@ kiosk-demo-stylish/lib/tasks/demo.rake	set spending cap via the manage page → 
 kiosk-demo-stylish/lib/tasks/demo.rake	task :walkthrough do
 kiosk-demo-stylish/lib/tasks/demo.rake	task binding: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	task roles: :setup do
+kiosk-demo-stylish/script/descriptor_examples.rb	asserted almost nothing (T-097)
+kiosk-demo-stylish/script/descriptor_examples.rb	example_params satisfies its own input_schema
+kiosk-demo-stylish/script/descriptor_examples.rb	example_row satisfies its own output_schema
+kiosk-demo-stylish/script/descriptor_examples.rb	exempt_names = Kiosk::Server::ArgumentDecoder::RESERVED.keys
+kiosk-demo-stylish/script/descriptor_examples.rb	published examples (the loop is not empty)
 kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
 kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real
 kiosk-demo-stylish/script/redteam_suite.rb	#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated

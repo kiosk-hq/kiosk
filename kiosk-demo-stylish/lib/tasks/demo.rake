@@ -922,6 +922,24 @@ namespace :demo do
       end
     end
 
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    #
+    # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
+    # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`
+    # refuses, or an `example_row` its own `output_schema` rejects, is a
+    # published lie in the document an assistant reads first. The loop, and the
+    # `limit`/`cursor` exemption the engine applies to a real request, live in
+    # script/descriptor_examples.rb — ONE file across the seven origins. The
+    # only per-demo part is the floor: how many examples THIS origin publishes,
+    # so a refactor that stopped publishing them fails here instead of turning
+    # the loop into a silent no-op.
+    require_relative "../../script/descriptor_examples"
+
+    puts "\n── §8.3 descriptor examples vs their own schemas (SPEC-084) ──"
+    failures.concat(
+      descriptor_example_failures(queries: query_specs, actions: action_specs, minimum: 6),
+    )
+
     if failures.empty?
       puts "\n  All schema assertions passed."
     else

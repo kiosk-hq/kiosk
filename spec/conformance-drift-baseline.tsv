@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at d98f3407
-# 1627 anchors.
+# recorded: 2026-08-31 at a91cce79 (working tree: 11 cited file(s) modified)
+# 1633 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -412,7 +412,7 @@ kiosk-demo-getgrocery/lib/tasks/demo.rake	43c83e5c9b8e2e26	task :shop do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	52398882cea3b71a	task agecheck: :setup do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	2f73db04dc72f38b	task demo: ["demo:setup", "demo:shop"]
 kiosk-demo-getgrocery/lib/tasks/demo.rake	0b8a6aed64de6423	task isolation: :setup do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	060a685cfcf78504	task schema: :setup do
+kiosk-demo-getgrocery/lib/tasks/demo.rake	9740d12f25859a1d	task schema: :setup do
 kiosk-demo-getgrocery/script/claim_flow.rb	07cf6f54bcd60358	#   human's saved card (the seeded stripe_customers mapping; stripe-mock
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	aedfd581fd38566b	  exp:              now + 600,
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	8669b7c8f2bb8041	# Agent-side driver: no-human grocery order end-to-end.
@@ -467,7 +467,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	f1416eb32542a093	        puts "  OK  SKI
 kiosk-demo-hoteling/lib/tasks/demo.rake	b3850dac6b1589ca	  task book: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	1147bfade07e1bfb	  task isolation: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	7584ca0f10efb9ec	  task redteam: :setup do
-kiosk-demo-hoteling/lib/tasks/demo.rake	f45c06b28ea44c07	  task schema: :setup do
+kiosk-demo-hoteling/lib/tasks/demo.rake	b9ec115779d15a1c	  task schema: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	91eddf1d7d813842	  task search: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	dcf8619f8ce94b66	availability for the SAME unknown id → 404 not_found (the two verbs agree)
 kiosk-demo-hoteling/lib/tasks/demo.rake	e30d22abb04f580b	check.call(result["empty_filter_total"] == 0
@@ -504,7 +504,7 @@ kiosk-demo-philslist/lib/tasks/demo.rake	378dcfe05f554ca0	  task binding: :setup
 kiosk-demo-philslist/lib/tasks/demo.rake	0499a266825ff2e9	  task isolation: :setup do
 kiosk-demo-philslist/lib/tasks/demo.rake	8ad43b572b7f799a	  task redteam: :setup do
 kiosk-demo-philslist/lib/tasks/demo.rake	3ed381b4c7a1a7cf	  task register: :setup do
-kiosk-demo-philslist/lib/tasks/demo.rake	e08ab46877b3dcce	  task schema: :setup do
+kiosk-demo-philslist/lib/tasks/demo.rake	8d593b0f475b0daf	  task schema: :setup do
 kiosk-demo-philslist/lib/tasks/demo.rake	2f7c2f9a2fa307c3	Assertion 5a: forged owner_id
 kiosk-demo-philslist/lib/tasks/demo.rake	183c68ab9fa6c7b7	Assertion 5b: DB listings.owner_id == Bob
 kiosk-demo-philslist/lib/tasks/demo.rake	c28320d9c20361b8	Assertion 6a: the catalog declares browse_listings
@@ -513,7 +513,7 @@ kiosk-demo-philslist/lib/tasks/demo.rake	a2355f3843cb50b5	failures << "agents.js
 kiosk-demo-philslist/lib/tasks/demo.rake	bab0f9f8aef17a01	failures << "agents.txt carries AP2/Payments directives — must be absent"
 kiosk-demo-philslist/lib/tasks/demo.rake	9903da8c05ba2402	failures << "discovery capabilities advertise `pay` (got #{capabilities.inspect}) — philslist takes no payments"
 kiosk-demo-philslist/lib/tasks/demo.rake	b12bfd35a64c1298	failures << "unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}, want 200"
-kiosk-demo-philslist/lib/tasks/demo.rake	e08ab46877b3dcce	task schema: :setup do
+kiosk-demo-philslist/lib/tasks/demo.rake	8d593b0f475b0daf	task schema: :setup do
 kiosk-demo-philslist/script/binding_flow.rb	030b89ac67a8c984	results[:a2_edit] = rc
 kiosk-demo-philslist/script/binding_flow.rb	87d58f9695cf3eb6	results[:a2_sees_listing] = rc == 200 && Array(mine2).any? { |r| r["listing_id"] == listing_id }
 kiosk-demo-philslist/script/binding_flow.rb	345c135b18f808af	results[:unlink_same_second] = (jwt_claims(token1_fresh)["iat"] == Time.now.to_i) if token1_fresh
@@ -634,13 +634,14 @@ kiosk-demo-stylish/lib/tasks/demo.rake	80545a0cf84a036d	  task isolation: :setup
 kiosk-demo-stylish/lib/tasks/demo.rake	a9a5ba94d2cd3d2e	  task redteam: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	fdc93cf5f90c815a	  task register: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	e96d56d598895211	  task roles: :setup do
-kiosk-demo-stylish/lib/tasks/demo.rake	dfc73ff4addea4ac	  task schema: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	51242b23de230c0d	  task schema: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	5a0a0bfbbf15e1bd	DB kiosk.agents.spending_cap_cents for assistant 1 == 12345
 kiosk-demo-stylish/lib/tasks/demo.rake	56e7ea9f575166a9	DB owner-agent allowed_roles == {owner} (inherited from IdP)
 kiosk-demo-stylish/lib/tasks/demo.rake	86fe36ffcae0638f	assistant 2 sees assistant 1's booking (same account)
 kiosk-demo-stylish/lib/tasks/demo.rake	56e7ea9f575166a9	check.call("DB owner-agent allowed_roles == {owner} (inherited from IdP)", owner_roles == "{owner}")
 kiosk-demo-stylish/lib/tasks/demo.rake	25858f4b78dc716c	check.call("customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
 kiosk-demo-stylish/lib/tasks/demo.rake	c21f8416d533306f	check.call("owner salon_calendar carries a FORECAST summary", result["owner_sees_forecast"] == true)
+kiosk-demo-stylish/lib/tasks/demo.rake	fe7228406f1a576a	descriptor_example_failures(queries:
 kiosk-demo-stylish/lib/tasks/demo.rake	63479ffcb9435de5	human signed in via the real Devise form
 kiosk-demo-stylish/lib/tasks/demo.rake	ac6226812ccfe4c7	re-rendered page shows the saved cap + label
 kiosk-demo-stylish/lib/tasks/demo.rake	25858f4b78dc716c	result["devise_customer_token_role"] ==
@@ -649,6 +650,11 @@ kiosk-demo-stylish/lib/tasks/demo.rake	db6b4f3d59460584	set spending cap via the
 kiosk-demo-stylish/lib/tasks/demo.rake	077239e31356294d	task :walkthrough do
 kiosk-demo-stylish/lib/tasks/demo.rake	54cec4590f151597	task binding: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	e96d56d598895211	task roles: :setup do
+kiosk-demo-stylish/script/descriptor_examples.rb	fe4f7bc139e138a7	asserted almost nothing (T-097)
+kiosk-demo-stylish/script/descriptor_examples.rb	91c1d41fa6c5f359	example_params satisfies its own input_schema
+kiosk-demo-stylish/script/descriptor_examples.rb	baf9c2f01091bc00	example_row satisfies its own output_schema
+kiosk-demo-stylish/script/descriptor_examples.rb	bc06cdb941d47bd8	exempt_names = Kiosk::Server::ArgumentDecoder::RESERVED.keys
+kiosk-demo-stylish/script/descriptor_examples.rb	bf9559acbc0f999f	published examples (the loop is not empty)
 kiosk-demo-stylish/script/redteam_suite.rb	1ea76bea2bc01ff5	#   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
 kiosk-demo-stylish/script/redteam_suite.rb	3aba1d1aae4b1486	#   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real
 kiosk-demo-stylish/script/redteam_suite.rb	eccb92c4bf70f45f	#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
@@ -694,7 +700,7 @@ kiosk-demo-tudu/lib/tasks/demo.rake	48d8dfaf143acc91	  task collab: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	6770d4b946f73702	  task isolation: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	e9cbccca25ea0afd	  task link: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	56c4cac13b331014	  task redteam: :setup do
-kiosk-demo-tudu/lib/tasks/demo.rake	b0fd4db80ef54535	  task schema: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	98bb98e0612c66a6	  task schema: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	2d8e548f969e1ef0	Assertion 8a: the catalog declares
 kiosk-demo-tudu/lib/tasks/demo.rake	92b615178b423f66	Assertion 8b: no principal-reach verb returned
 kiosk-demo-tudu/lib/tasks/demo.rake	59bcf7f075ca9ec1	check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
@@ -702,7 +708,7 @@ kiosk-demo-tudu/lib/tasks/demo.rake	b9d17e4d51b23689	check.call("agents.txt carr
 kiosk-demo-tudu/lib/tasks/demo.rake	dd98b92b00b8a3c4	check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
 kiosk-demo-tudu/lib/tasks/demo.rake	48d8dfaf143acc91	task collab: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	1a6fa97bb1ddaa54	task demo: ["demo:setup", "demo:collab"]
-kiosk-demo-tudu/lib/tasks/demo.rake	b0fd4db80ef54535	task schema: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	98bb98e0612c66a6	task schema: :setup do
 kiosk-demo-tudu/script/redteam_suite.rb	c831e03fe3b4a26c	#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 kiosk-demo-tudu/script/redteam_suite.rb	274c4a7ee69cb819	record(results, "ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	e8992a3885a28dcd	record(results, "NoLoginAddressOnTheRoster",

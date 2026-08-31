@@ -70,8 +70,15 @@ class Kiosk::AppointmentsController < ApplicationController
   # resolvable slot ({Kiosk::Server::SchemaSlots}); the instant itself lives in
   # the Operation, quoted back by the two `slot` refusals as the shape to retry.
   example_params({ salon_id: 1, service_id: 3, slot: -> { BookAppointmentOperation.example_slot } })
+  # A UUID, because that is the only thing this column can ever answer:
+  # `appointments` is created `id: :uuid`, the declaration above says
+  # `type: "string"`, and an assistant that copied the integer would build a
+  # value it will only ever be handed as a uuid and then round-trip it back.
+  # Caught on the first run of the §8.3 example-vs-schema check across the
+  # seven origins (T-097) — the SAME defect K-825 found in the reference
+  # origin, whose fixtures stage this demo's salons and appointments.
   example_row({
-    appointment_id: 1, salon_id: 1,
+    appointment_id: "6b1f0c5a-9d3e-4f27-8a10-2c7e4b9d5f83", salon_id: 1,
     slot: -> { BookAppointmentOperation.example_slot }, service: "Colour",
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })

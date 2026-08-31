@@ -1034,6 +1034,19 @@ COPIES = {
           "no verb, and the `session:` opt-in — the rule that an agent's Bearer call never " \
           "carries the human's cookies — must be one rule, not seven.",
   },
+  "script/descriptor_examples.rb" => {
+    rule: :identical,
+    why:  "The §8.3 example-vs-schema loop (T-097, matrix SPEC-084): for every descriptor in the " \
+          "SERVED catalog, `example_params` against that verb's own `input_schema` and " \
+          "`example_row` against its `output_schema`'s row shape. `:identical` rather than `:code` " \
+          "because NOTHING in it is per-demo — it names no port, no persona, no verb and no " \
+          "count; the only per-origin number, the non-vacuity floor, is an argument each " \
+          "`demo:schema` task passes. Two halves make a one-sided edit dangerous rather than " \
+          "merely untidy: the `limit`/`cursor` exemption must mean what " \
+          "{Kiosk::Server::RequestValidation} means, or a copy starts refusing examples its own " \
+          "origin accepts; and a copy that quietly stopped counting would leave that demo's floor " \
+          "asserting nothing while six others still checked.",
+  },
   "script/equihash_register.rb" => {
     rule: :code,
     why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \

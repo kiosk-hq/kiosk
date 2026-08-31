@@ -32,6 +32,19 @@ because the lever IS the economic argument for a metered toll (ADR-0007: a price
 on abuse, not a hardware wall). Cuckatoo29's column says `unbenched` for the same
 reason its verify row does: no measurement of it exists here.
 
+**And the lever is a property of the PARAMETERS, so read it beside the level an
+origin actually charges rather than beside the gem's default.** The performance
+and verification numbers above give ~40× at **n=96, k=5** (~0.2 s solve ÷
+~4.6 ms verify) — an order of magnitude below the default's ~530×, because a
+lighter `n` cuts the solve far faster than a smaller `k` cuts the verify. That
+is not trivia here: `low` IS n=96 k=5, it is what
+<!-- count: 7 ¦ from: git ls-files 'kiosk-demo-*/app/services/pow_difficulty.rb' | wc -l -->
+all but one of the seven hosted demos ship and what `e2e/` is hardcoded at
+(`kiosk-demo-*/app/services/pow_difficulty.rb`), so the toll a first-time poker
+meets buys ~40×, not ~530×. Both levers are derived from this README's own
+numbers by `spec/readme_lever_spec.rb`, which fails if either operand moves
+without its lever.
+
 The one property that actually matters for a gateway is **cheap verify**:
 
 - **Asymmetric verify.** A few KB (and ~18 ms, pure Ruby — far less for a
@@ -157,7 +170,10 @@ Checks performed (in order):
 
 Verification cost: **~18 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
 Ruby, a few KB; measured median at n=168 k=7). A native verifier would be
-sub-millisecond.
+sub-millisecond. Verify scales with 2^k, not with n, so the demos' lighter
+`low` level costs **~4.6 ms for a valid proof at n=96 k=5** (32 hashes, same
+machine) — cheaper to verify, but cheaper to solve by far more, which is the
+next paragraph's point.
 
 **A wrong proof costs far less, deliberately.** The list above is also the
 evaluation ORDER, cheapest first, and the leaf hashes are computed one at a
@@ -225,6 +241,7 @@ the healthy small buckets, and unsolved seeds retry with the next
 
 | params | p50 solve | p95 solve | peak RSS |
 |---|---|---|---|
+| n=96, k=5 (the demos' `low`) | ~0.2 s | ~0.3 s | ~44 MiB |
 | **n=168, k=7 (default)** | ~9.6 s | ~10.3 s | ~1.3 GiB |
 | n=192, k=7 (old default) | ~155 s | ~155 s | ~5.4 GiB |
 

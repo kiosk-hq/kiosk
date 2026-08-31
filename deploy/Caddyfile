@@ -127,8 +127,10 @@
 
 # (snippet) per-IP 60 req/min backstop — requires github.com/mholt/caddy-ratelimit.
 # Uncomment together with the `import ratelimit` line above. 60/min per IP is
-# far above any honest agent's pace (register once, then solve a ~1-10 s PoW per
-# tolled call) and far below what it takes to saturate a worker.
+# far above any honest agent's pace (register once, then solve one PoW per tolled
+# call — sub-second at the hosted `low`, ~10 s at `high`, on the M-series laptop
+# core kiosk-pow-equihash/bench/README.md names) and far below what it takes to
+# saturate a worker.
 # (ratelimit) {
 # 	rate_limit {
 # 		zone kiosk_per_ip {

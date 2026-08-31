@@ -27,7 +27,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 
 | Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
 |------|-----------|------|----------------|---------------|
-| getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (~1 s, poke-friendly) | yes |
+| getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (sub-second, poke-friendly) | yes |
 | atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s on an M-series laptop core, "beware: intensive PoW") | — (no payment provider) |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
 | skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | — |
@@ -46,7 +46,8 @@ its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 
 **PoW difficulty is a feature**: ALL seven demos honor the
 `KIOSK_POW_DIFFICULTY` knob (low default, high opt-in) in their env file. Six run
-a low/fast toll so a poker can register in ~1 s and still SEE the toll; only
+a low/fast toll so a poker can register in well under a second and still SEE
+the toll; only
 **atablefor** — the designated production-grade showcase — ships the high
 memory+CPU-hard toll behind a "beware: intensive PoW" banner so the toll is
 tangible first-hand. (The toll prices abuse; it is not by itself a DoS shield —
@@ -311,10 +312,11 @@ assistant) can read what the origin offers before it registers. Everything else
 proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
 by design, and the "true" one-liner ships a copy-paste **solver**
 (`kiosk-pow-equihash/solve.py`). Hosted difficulty is
-`KIOSK_POW_DIFFICULTY=low` (~1 s) in every `deploy/env/*.env.example` but
-atablefor's, which is intentionally ~9–10 s on an M-series laptop core, the
-only hardware the seconds have been measured on (you'll feel it — that's the
-point). Flow:
+`KIOSK_POW_DIFFICULTY=low` (n=96 k=5, ~0.2 s) in every `deploy/env/*.env.example`
+but atablefor's, which is intentionally ~9–10 s on an M-series laptop core, the
+only hardware either figure has ever been measured on — both rows of
+`kiosk-pow-equihash/bench/README.md`'s measured grid, which is where to re-run
+them for your own machine (you'll feel the high one — that's the point). Flow:
 **discover (free) → read the schema (free) → register (solve PoW) → call a verb
 (each MAY toll PoW too)**.
 
@@ -332,7 +334,7 @@ CH=$(curl -s "$BASE/kiosk/auth/challenge")
 
 #    b) solve it with the bundled solver (from kiosk-pow-equihash/):
 #       python3 solve.py  reads the challenge on stdin, prints the proof.
-PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~9–10 s high on an M-series core (atablefor)
+PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~0.2 s low / ~9–10 s high on an M-series core (atablefor)
 
 #    c) register (agent key + solved proof) → returns a token
 TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \

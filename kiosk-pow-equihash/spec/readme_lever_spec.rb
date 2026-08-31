@@ -49,4 +49,50 @@ RSpec.describe "the README's solve/verify lever" do
                        "The lever is the economic argument for the toll (ADR-0007) — it is the one " \
                        "number in this file a reader will check."
   end
+
+  # The SECOND lever, and it is the one most readers of this repository are
+  # actually under: `~530×` is the gem DEFAULT's, while `KIOSK_POW_DIFFICULTY=low`
+  # — n=96, k=5 — is what six of the seven hosted demos and `e2e/` charge (K-1276).
+  # Nothing anywhere said the deployed fleet buys an order of magnitude less
+  # lever than the headline, so the README now says it; this pins it the same
+  # way, by dividing this file's own two numbers, so a re-bench that moves the
+  # light solve or the light verify fails here until the sentence moves with it.
+  it "states a LIGHT-level lever that equals the README's own light solve ÷ light verify" do
+    claimed = readme[/~([\d.]+)× at \*\*n=96, k=5\*\*/, 1]
+    expect(claimed).not_to be_nil,
+                          "the lever paragraph no longer states a figure for n=96 k=5. `low` is the " \
+                          "level six of seven hosted origins run — if the sentence goes, the reader " \
+                          "is back to reading the default's ~530× as the fleet's lever (K-1276)."
+    claimed = claimed.to_f
+
+    solve_s = readme[/n=96, k=5 \(the demos' `low`\)\s*\|\s*~?([\d.]+) s/, 1]
+    expect(solve_s).not_to be_nil,
+                          "no p50 solve for n=96 k=5 in the performance table — the light lever has " \
+                          "no numerator to be derived from."
+
+    verify_ms = readme[/~([\d.]+) ms for a valid proof at n=96 k=5/, 1]
+    expect(verify_ms).not_to be_nil,
+                            "no valid-proof verify cost stated for n=96 k=5 — the light lever has no " \
+                            "denominator to be derived from."
+
+    derived = (solve_s.to_f * 1000) / verify_ms.to_f
+
+    expect(claimed).to be_within(derived * 0.2).of(derived),
+                       "the README claims a #{claimed}× lever at n=96 k=5, but its own numbers give " \
+                       "#{derived.round}× (p50 solve #{solve_s} s ÷ valid verify #{verify_ms} ms)."
+  end
+
+  # The two levers must not converge: the whole reason the second sentence
+  # exists is that the deployed level buys an order of magnitude LESS.
+  it "keeps the two levers an order of magnitude apart" do
+    default_lever = readme[/^\| Lever \(solve\/verify\).*$/][/~?([\d,]+)×\*?\*?\s*\(/, 1].to_s.delete(",").to_i
+    light_lever   = readme[/~([\d.]+)× at \*\*n=96, k=5\*\*/, 1].to_f
+
+    expect(light_lever).to be > 0
+    expect(default_lever / light_lever).to be > 5,
+                                           "the default lever (#{default_lever}×) and the light one " \
+                                           "(#{light_lever}×) are now within a factor of five. Either a " \
+                                           "retune closed the gap — in which case say so — or one of " \
+                                           "the two figures was edited without its operands."
+  end
 end

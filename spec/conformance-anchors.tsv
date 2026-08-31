@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1637 anchors.
+# 1638 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -798,6 +798,7 @@ kiosk-pow-equihash/README.md	memory-bandwidth-bound). What it buys the provider 
 kiosk-pow-equihash/README.md	never accepted a real proof
 kiosk-pow-equihash/README.md	no amortization
 kiosk-pow-equihash/README.md	not cancel. Rubbish indices are rejected without a single hash (0.012 ms
+kiosk-pow-equihash/README.md	origin actually charges rather than beside the gem's default.
 kiosk-pow-equihash/README.md	pip install numpy          # REQUIRED — see performance note below
 kiosk-pow-equihash/README.md	prices _throughput_, not latency
 kiosk-pow-equihash/README.md	so the bug was latent, and equihash never accepted a real proof at the

@@ -847,7 +847,7 @@ namespace :demo do
     # broker, CrossOperatorClaimReplay, ForgedCallbackNoSig) drive the broker, so
     # boot the broker first and wire skooti's trust/intake config at it.
     exit_status = nil
-    ProveBrokerBoot.with_broker(skooti_host: host, log: "/tmp/kiosk-prove-broker-redteam.log") do |broker|
+    ProveBrokerBoot.with_broker(operator_host: host, log: "/tmp/kiosk-prove-broker-redteam.log") do |broker|
       # The one gate that runs BOTH issuance paths — the running broker's key
       # (fetched at /prove_key.pem and pinned as skooti's trust anchor) and the
       # driver's own ProveTestIssuer — so it is where their lockstep is checked
@@ -1290,7 +1290,7 @@ namespace :demo do
     # TWO-SERVER GATE: boot the KYC broker first, wire skooti's trust +
     # intake config at it, then boot skooti and drive the cross-app KYC flow.
     result = nil
-    ProveBrokerBoot.with_broker(skooti_host: host) do |broker|
+    ProveBrokerBoot.with_broker(operator_host: host) do |broker|
       puts "\n── Starting skooti (KYC-gate proof) on #{server_url} ──"
 
       File.truncate(log, 0) if File.exist?(log)

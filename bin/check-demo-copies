@@ -2009,8 +2009,8 @@ end
 #
 # WHICH PATHS ARE IN, AND THE RULE THE NEXT ONE IS JUDGED BY (T-136, T-145).
 # Seventeen manifest paths are `:per_demo`. Running the extractor below over all
-# seventeen at head finds **110 unit NAMES shared by two or more copies**, of
-# which **71** also have identical bodies once comments and whitespace are
+# seventeen at head finds **114 unit NAMES shared by two or more copies**, of
+# which **72** also have identical bodies once comments and whitespace are
 # normalised away. Both readings are stated because they answer different
 # questions: discovery fires on a shared NAME whatever the bodies do, and only
 # the narrower number is what a lockstep rule can actually hold. Re-measured for
@@ -2040,12 +2040,13 @@ end
 # dozen re-declarations.
 #
 # TAKEN — every `:per_demo` path that passes it, which is THIRTEEN of the
-# seventeen and 74 of the 110 shared names. Shared/identical at head:
+# seventeen and 78 of the 114 shared names. Shared/identical at head:
 # `script/binding_flow.rb` 16/16, `script/pay_window.rb` 19/15 (the four that
 # differ are `reserve!`, `payment_state`, `cart_for` and `settlements_for` —
 # booking_id against reservation_id, a room-night against a scooter-minute),
 # `spec/wire_arguments_spec.rb` 8/7 (T-145; the odd one is each demo's own
-# fixture DAY), `script/pow_flow.rb` 7/6, `script/prove_broker_boot.rb` 5/3,
+# fixture DAY), `script/pow_flow.rb` 7/6, `script/prove_broker_boot.rb` 9/4 (T-147 split four
+# per-operator units out of `with_broker` so the other 54 lines could be held),
 # `app/operations/wire_arguments.rb` 4/3 (T-120's original path),
 # `app/operations/request_kyc_operation.rb` 4/2, `script/register_flow.rb` 4/4,
 # `app/services/prove_trust.rb` 3/2, and four paths contributing one unit each —
@@ -2077,8 +2078,8 @@ end
 #
 # A hundred declarations with a hundred reasoned `why:` lines is still a manifest
 # nobody would read, and a manifest nobody reads is how «declared» stops meaning
-# «reasoned about». The criterion above is what keeps this at 74 entries rather
-# than 110, and it is a judgement about VALUE — not a budget.
+# «reasoned about». The criterion above is what keeps this at 78 entries rather
+# than 114, and it is a judgement about VALUE — not a budget.
 FRAGMENT_PATHS = %w[
   app/controllers/home_controller.rb
   app/models/booking.rb
@@ -2550,18 +2551,53 @@ FRAGMENTS = {
            "that it is per-operator: two operators sharing one would let either replay the " \
            "other's intake, which is the arrangement this demo pair exists to argue against.",
   },
-  "script/prove_broker_boot.rb#with_broker" => {
+  "script/prove_broker_boot.rb#BROKER_LOG" => {
     rule:  :per_demo,
     ships: KYC_DEMOS,
-    why:   "SAME NAME, EACH OPERATOR'S OWN WIRING, and the copies are close enough that the " \
-           "differences are worth naming: the callback env var is per-operator " \
-           "(KIOSK_PROVE_GETGROCERY_CALLBACK_HOST against …SKOOTI…), `KIOSK_PROVE_OPERATOR_ID` " \
-           "differs, the keyword argument is named for the operator (`operator_host:` against " \
-           "`skooti_host:`), the log path differs, and getgrocery's copy additionally generates " \
-           "and passes a test signing key. Everything else — the DB setup, the spawn, the " \
-           "at_exit stop, the 40-second readiness poll — is line-for-line the same, so this is a " \
-           "convergence candidate rather than a settled variant, and if the two ever agree this " \
-           "entry fails and asks the question.",
+    why:   "SAME NAME, EACH OPERATOR'S OWN DEFAULT LOG PATH — `/tmp/kiosk-prove-broker-getgrocery.log` " \
+           "against `/tmp/kiosk-prove-broker.log`. The two demos boot the SAME broker app, so a " \
+           "shared default would have one demo's run truncate the log the other is being debugged " \
+           "from. It exists as a constant at all because {with_broker}'s signature had to stop " \
+           "carrying a per-operator default before that method could be held (T-147).",
+  },
+  "script/prove_broker_boot.rb#broker_signing_key_pem" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, ONE OPERATOR PINS A KEY AND THE OTHER DOES NOT. getgrocery reads " \
+           "PROVE_KEY_PEM or the repo's dev key, because its redteam beats need the private half " \
+           "to mint attestations that are genuinely signed and deliberately malformed (K-656); " \
+           "skooti returns nil and lets the broker use its own env default. If these two ever " \
+           "agree, one demo has lost a beat or gained a key it does not need (T-147).",
+  },
+  "script/prove_broker_boot.rb#broker_operator_env" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, THE BROKER-SIDE ENV THAT NAMES THIS OPERATOR. The broker keys its SSRF " \
+           "callback allow-list and its intake secret by operator name — " \
+           "KIOSK_PROVE_GETGROCERY_CALLBACK_HOST against KIOSK_PROVE_SKOOTI_CALLBACK_HOST — so the " \
+           "variable NAMES cannot be shared, and getgrocery additionally passes PROVE_KEY_PEM. " \
+           "Split out of {with_broker} by T-147 precisely so the other fifty lines could be held.",
+  },
+  "script/prove_broker_boot.rb#operator_wiring" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, THE OPERATOR-SIDE ENV. `KIOSK_PROVE_OPERATOR_ID` is the whole point of the " \
+           "divergence — if these two agreed, one demo would be intaking as the other — and " \
+           "getgrocery alone carries KIOSK_PROVE_TEST_SIGNING_KEY_PEM for its redteam beats. Split " \
+           "out of {with_broker} by T-147 for the same reason as broker_operator_env above.",
+  },
+  "script/prove_broker_boot.rb#with_broker" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "THE SHARED HALF, AND IT IS THE REASON T-147 EXISTS. Declared `:per_demo` until " \
+           "2026-08-31, when the entry read «everything else — the DB setup, the spawn, the " \
+           "at_exit stop, the 40-second readiness poll — is line-for-line the same»: MEASURED, 46 " \
+           "of getgrocery's 64 normalised lines and skooti's 61 were common, and `:per_demo` means " \
+           "compared to NOTHING, so ~55 lines of real shared logic were held by no gate. The four " \
+           "lines that genuinely differed were all operator identity and now live in the four " \
+           "per-demo units above; what is left is operator-neutral and normalises to 54 identical " \
+           "lines in both copies. An edit to the readiness poll, the teardown or the DB setup that " \
+           "reaches one demo now fails the build.",
   },
 
   # ── script/register_flow.rb — philslist, stylish (T-136) ───────────────────

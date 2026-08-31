@@ -16,6 +16,18 @@ require "uri"
 # KIOSK_PROVE_PUBLIC_KEY_PEM, alongside the URLs, the shared intake secret and
 # the callback host.
 #
+# THE FILE IS SPLIT THE WAY IT IS SO A GATE CAN HOLD THE SHARED HALF (T-147).
+# getgrocery ships the same helper, and {with_broker} was ~55 of its ~64
+# normalised lines identical between the two copies — the DB setup, the spawn,
+# the at_exit stop, the 40-second readiness poll and the yield/ensure — while
+# the four lines that genuinely differ are all OPERATOR IDENTITY. Declared whole
+# it had to be `:per_demo`, which bin/check-demo-copies defines as compared to
+# NOTHING, so an edit to the poll or the teardown reaching one copy was
+# invisible. The operator half now lives in {broker_operator_env},
+# {operator_wiring}, {broker_signing_key_pem} and BROKER_LOG — four small
+# per-demo units — and {with_broker} itself is held `:code` against
+# getgrocery's copy.
+#
 # IT LIVES IN script/, NOT IN lib/, AND THAT IS THE BINDING CONDITION ON IT
 # (K-663). This is CI/flow-driver harness code — it shells out, spawns a server
 # and polls a port — and Phil's answer to the sibling-path question was one
@@ -35,6 +47,10 @@ module ProveBrokerBoot
   BROKER_APP  = File.expand_path("../../kiosk-demo-prove", __dir__)
   BROKER_PORT = ENV.fetch("KIOSK_PROVE_PORT", "3020")
   SHARED_SECRET = "prove-skooti-demo-shared-secret"
+  # Where the booted broker's log lands by default. Per-operator on purpose: the
+  # two KYC demos boot the same broker app, and a shared default would have one
+  # demo's run truncate the log the other is being debugged from.
+  BROKER_LOG  = "/tmp/kiosk-prove-broker.log"
   # The `iss` both apps must agree on. Pinned here explicitly on BOTH the broker
   # (it stamps this into every claim) and skooti (its KycVerifier compares the
   # minted `iss` against c.kyc_issuer). Kept as a local test identity so the gate
@@ -44,6 +60,57 @@ module ProveBrokerBoot
 
   module_function
 
+  # PER-OPERATOR (T-147): the PEM the booted broker signs with. skooti pins
+  # NOTHING and returns nil, so the broker falls back to the key its own
+  # development env file configures. getgrocery's copy DOES pin one, because its
+  # redteam beats need the private half to mint deliberately-malformed but
+  # genuinely signed attestations; skooti's redteam beats do not.
+  def broker_signing_key_pem
+    nil
+  end
+
+  # PER-OPERATOR (T-147): the slice of the BROKER's env that names THIS
+  # operator. The broker keys its SSRF callback allow-list and its intake secret
+  # by operator name, so these variable NAMES cannot be shared with getgrocery's
+  # copy — which is precisely why they are here and not in {with_broker}.
+  #
+  # @param operator_host    [String] the host skooti serves on
+  # @param _signing_key_pem [String, nil] see {broker_signing_key_pem}; skooti
+  #   pins no key, so it is not passed on to the broker.
+  def broker_operator_env(operator_host, _signing_key_pem)
+    {
+      # SSRF allow-list: the ONLY host the broker will POST a callback to for
+      # skooti is skooti's own host.
+      "KIOSK_PROVE_SKOOTI_CALLBACK_HOST" => operator_host,
+      "KIOSK_PROVE_SKOOTI_SECRET"        => SHARED_SECRET,
+    }
+  end
+
+  # PER-OPERATOR (T-147): the env skooti's server + the drivers must carry to
+  # reach and trust the broker. It names skooti as the operator and carries no
+  # redteam signing key, neither of which matches getgrocery's copy.
+  #
+  # @param broker_url       [String] the booted broker's reachable origin
+  # @param prove_public_pem [String] the running broker's own public key
+  # @param _signing_key_pem [String, nil] see {broker_signing_key_pem}; skooti
+  #   ships no redteam beat that needs the private half.
+  def operator_wiring(broker_url, prove_public_pem, _signing_key_pem)
+    {
+      "KIOSK_PROVE_BROKER_URL"    => broker_url,
+      # Same `iss` the broker (broker_env in {with_broker}) stamps — skooti's
+      # KycVerifier compares the minted `iss` against this, so both must line up.
+      "KIOSK_PROVE_ISSUER"        => SHARED_ISSUER,
+      # The operator side reads ONE role-named variable (K-694); the broker
+      # side reads its per-operator KIOSK_PROVE_SKOOTI_SECRET. Same
+      # VALUE on both sides is what pairs them — the broker looks the operator
+      # up by the operator_id in the intake body, not by a variable name.
+      "KIOSK_PROVE_INTAKE_SECRET" => SHARED_SECRET,
+      "KIOSK_PROVE_OPERATOR_ID"   => "skooti",
+      # The running broker's OWN public key, fetched in {with_broker} (K-650).
+      "KIOSK_PROVE_PUBLIC_KEY_PEM" => prove_public_pem,
+    }
+  end
+
   # Boot the broker for the duration of the block. Yields a hash of the env vars
   # skooti + the drivers must carry:
   #   { broker_url:, wiring: {...} }
@@ -51,12 +118,21 @@ module ProveBrokerBoot
   # (K-712k: this said `skooti_env:` / `driver_env:`, two keys the yield has
   # never produced. The getgrocery sibling has always documented it correctly.)
   #
-  # @param skooti_host [String] the host skooti binds/serves on (for the broker's
-  #   callback allow-list AND the callback_url skooti sends at intake).
-  # @param log         [String] broker log path
-  def with_broker(skooti_host:, log: "/tmp/kiosk-prove-broker.log")
+  # SHARED WITH getgrocery AND HELD THERE (T-147): everything below is operator-
+  # neutral and bin/check-demo-copies compares it against getgrocery's copy
+  # modulo comments. Anything that has to name this operator belongs in one of
+  # the three per-demo methods above, not here. The keyword is `operator_host:`
+  # rather than the `skooti_host:` it used to be for the same reason — a
+  # per-operator NAME in a shared signature is what forced the whole method to
+  # be declared per-demo.
+  #
+  # @param operator_host [String] the host skooti binds/serves on (for the
+  #   broker's callback allow-list AND the callback_url skooti sends at intake).
+  # @param log           [String] broker log path
+  def with_broker(operator_host:, log: BROKER_LOG)
     broker_host = "127.0.0.1"
     broker_url  = "http://#{broker_host}:#{BROKER_PORT}"
+    signing_key_pem = broker_signing_key_pem
 
     # ── Set up the broker DB (idempotent) ──────────────────────────────────
     puts "\n── Setting up KYC broker DB (#{BROKER_APP}) ──"
@@ -69,19 +145,15 @@ module ProveBrokerBoot
     # ── Boot the broker ────────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
     broker_env = {
-      "PORT"                            => BROKER_PORT,
-      "RAILS_ENV"                       => "development",
-      # SSRF allow-list: the ONLY host the broker will POST a callback to for
-      # skooti is skooti's own host.
-      "KIOSK_PROVE_SKOOTI_CALLBACK_HOST" => skooti_host,
-      "KIOSK_PROVE_SKOOTI_SECRET"       => SHARED_SECRET,
-      # The `iss` the broker stamps — pinned to match skooti's KIOSK_PROVE_ISSUER
-      # below so the gate is independent of either app's deploy default.
-      "KIOSK_PROVE_ISSUER"              => SHARED_ISSUER,
+      "PORT"               => BROKER_PORT,
+      "RAILS_ENV"          => "development",
+      # The `iss` the broker stamps — pinned to match the operator's
+      # KIOSK_PROVE_ISSUER so the gate is independent of any deploy default.
+      "KIOSK_PROVE_ISSUER" => SHARED_ISSUER,
       # The verification_url the broker hands back must point at the broker's
       # reachable origin (host:port), so the human/driver can approve on it.
-      "PROVE_PUBLIC_URL"                => broker_url,
-    }
+      "PROVE_PUBLIC_URL"   => broker_url,
+    }.merge(broker_operator_env(operator_host, signing_key_pem))
     broker_pid = spawn(
       broker_env,
       "bundle exec rails s -p #{BROKER_PORT} -b #{broker_host} -e development",
@@ -101,7 +173,7 @@ module ProveBrokerBoot
     # ── Wait for the broker to answer (and capture its public key) ─────────
     # The readiness probe doubles as the trust-anchor fetch: GET /prove_key.pem
     # returns the PUBLIC half of the key the running broker signs with, and
-    # THAT is what skooti is told to trust — no pinned copy (K-650).
+    # THAT is what the operator is told to trust — no pinned copy (K-650).
     prove_public_pem = nil
     40.times do
       begin
@@ -118,21 +190,7 @@ module ProveBrokerBoot
     abort "KYC broker did not become ready — see #{log}" unless prove_public_pem
     puts "  KYC broker up at #{broker_url}"
 
-    # The env skooti's server + the drivers must carry to reach/trust the broker.
-    wiring = {
-      "KIOSK_PROVE_BROKER_URL"    => broker_url,
-      # Same `iss` the broker (broker_env above) stamps — skooti's KycVerifier
-      # compares the minted `iss` against this, so both must line up.
-      "KIOSK_PROVE_ISSUER"        => SHARED_ISSUER,
-      # The operator side reads ONE role-named variable (K-694); the broker
-      # side above reads its per-operator KIOSK_PROVE_SKOOTI_SECRET. Same
-      # VALUE on both sides is what pairs them — the broker looks the operator
-      # up by the operator_id in the intake body, not by a variable name.
-      "KIOSK_PROVE_INTAKE_SECRET" => SHARED_SECRET,
-      "KIOSK_PROVE_OPERATOR_ID"   => "skooti",
-      # The running broker's OWN public key, fetched above (K-650).
-      "KIOSK_PROVE_PUBLIC_KEY_PEM" => prove_public_pem,
-    }
+    wiring = operator_wiring(broker_url, prove_public_pem, signing_key_pem)
 
     begin
       yield({ broker_url: broker_url, wiring: wiring })

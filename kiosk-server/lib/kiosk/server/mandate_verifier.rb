@@ -21,6 +21,20 @@ module Kiosk
     # `verify_cart` additionally enforces the AP2 spending envelope: the cart
     # must reference the presented intent and stay within its cap.
     module MandateVerifier
+      # The mandate `currency` domain, closed on ISO 4217 alpha-3 (T-159; K-1252,
+      # Phil 2026-08-31, «accept iso codes»). Matched against the CANONICAL form
+      # — {canonical_currency} has already trimmed and lower-cased — so `"EUR"`,
+      # `"eur"` and `"  eur "` all reach here as `eur` and all pass, while
+      # `"Euro"`, `"US"`, `"978"` and `"\u20ac"` do not.
+      #
+      # ASCII `a-z` and exactly three of them, deliberately: `\w` and `[[:alpha:]]`
+      # would admit `_`, digits and non-Latin letters respectively, none of which
+      # can be an alpha-3 code, and `String#downcase` does not fold every script to
+      # `a-z` — so a Unicode-permissive class would let through bytes no PSP takes.
+      # The reasoning for a SHAPE rather than a list is at {require_currency!};
+      # this constant is only where the shape is written down once.
+      CURRENCY_CODE = /\A[a-z]{3}\z/
+
       module_function
 
       # Verify an IntentMandate JWS → {Kiosk::Mandate::IntentMandate}.
@@ -277,10 +291,47 @@ module Kiosk
       # the operator to refuse a `pay` that would push the settled total past the
       # cap, and a tally keyed on raw bytes computes a total that is not the total.
       #
+      # T-159 CLOSED THE DOMAIN, AND {CURRENCY_CODE} IS WHERE IT IS CLOSED (K-1252,
+      # Phil 2026-08-31, «accept iso codes»). Until then `"Euro"`, `"US"` and
+      # `"xyz"` were all accepted, signed into the chain and passed verbatim to the
+      # PSP, so a human who typed a currency NAME was told their card had failed.
+      # §11.1 now says `currency` MUST be an ISO 4217 alpha-3 code and that an
+      # operator MUST refuse anything that is not three ASCII letters; this is that
+      # sentence, and the two must move together or the document is a D1.
+      #
+      # WHY A SHAPE AND NOT A LIST, because that is the judgement and it should not
+      # have to be re-derived from the diff. THREE MEASURED REASONS:
+      #
+      #   1. THERE IS NO SOURCE TO TAKE A LIST FROM. The vendored stripe client is
+      #      the only PSP integration this repository ships and it carries NO
+      #      enumeration — it documents the parameter as «Three-letter ISO currency
+      #      code, in lowercase. Must be a supported currency» and defers to a
+      #      server-side set. ISO's own register is not vendored here and no
+      #      currency gem is in the bundle. A list would therefore be TYPED, and a
+      #      hand-kept enumeration is this workspace's most-repeated failure.
+      #   2. A LIST WOULD NOT CLOSE THE HOLE ANYWAY. Stripe's supported set is
+      #      NARROWER than ISO 4217, so `xau` and `xxx` — real ISO codes — fail at
+      #      the PSP exactly as `xyz` does. The failure this guard removes is the
+      #      one it CAN remove without data: the plausible human mistakes, which
+      #      are the ones with a name rather than a code («Euro», «US», «dollars»).
+      #   3. NUMERIC-3 IS OUT, AND FOR A MEASURED REASON RATHER THAN A TASTE ONE.
+      #      ISO 4217 publishes `978` alongside `EUR`, so «an ISO 4217 code» read
+      #      literally admits it — and the PSP does not, by its own documented
+      #      contract. Admitting it here would guarantee a payment failure. §11.1
+      #      says alpha-3 in those words so the document and this line agree.
+      #
+      # WHAT REMAINS OPEN, said plainly rather than left to be discovered: three
+      # letters that name no currency still pass. That is the operator's MINIMUM
+      # refusal, not the whole domain — §11.1 says an operator MAY refuse further,
+      # and most will, because their PSP does it for them one call later.
+      #
       # `Errors::Forbidden`, not `BadRequest`, because `currency` is one of the
       # seven limbs of the mandate carve-out (§9.1, §11.1): a mandate that does not
       # carry what a mandate must carry has authorised nothing. The two mandate
-      # checks that answer 400 are named in §9.1 and neither is this one.
+      # checks that answer 400 are named in §9.1 and neither is this one. The new
+      # domain refusal joins that class rather than starting a second one: T-150
+      # published the list, and a 400 here would contradict a freshly-published
+      # normative sentence.
       #
       # @return [String] the canonical currency — trimmed and lower-cased
       def require_currency!(payload)
@@ -292,12 +343,21 @@ module Kiosk
           )
         end
 
-        return canonical_currency(value) if value.is_a?(String) && !value.strip.empty?
+        unless value.is_a?(String) && !value.strip.empty?
+          raise Errors::Forbidden.new(
+            "mandate currency must be a non-empty string",
+            hint: "currency was #{value.inspect} — send the currency code this mandate is " \
+                  "denominated in (spec §11.1: an ISO 4217 alpha-3 code)",
+          )
+        end
+
+        code = canonical_currency(value)
+        return code if CURRENCY_CODE.match?(code)
 
         raise Errors::Forbidden.new(
-          "mandate currency must be a non-empty string",
-          hint: "currency was #{value.inspect} — send the currency code this mandate is " \
-                "denominated in (spec §11.1: an ISO 4217 code)",
+          "mandate currency is not an ISO 4217 alpha-3 code",
+          hint: "currency was #{value.inspect} — send the three-letter code, not a name or a " \
+                "number (spec §11.1: `\"eur\"`, `\"usd\"`; `\"Euro\"`, `\"US\"` and `\"978\"` are refused)",
         )
       end
 

@@ -23,7 +23,7 @@
       "required": ["cap_amount_cents", "currency"],
       "properties": {
         "cap_amount_cents": { "type": "integer", "minimum": 1, "description": "Spending cap; REQUIRED (a nil cap is rejected). MUST be positive; a non-positive amount is rejected." },
-        "currency": { "type": "string", "minLength": 1, "description": "ISO 4217 code; REQUIRED, and a NON-EMPTY string. The bound is not pedantry: Section 11.2 compares the three mandates' currencies to EACH OTHER and never to a domain, so an empty string is internally consistent the whole way through the chain and arrives at the PSP as the currency of a real charge, and it is also the key the spent-to-date tally of Section 11.5 is scoped by. The DOMAIN is deliberately not closed further here -- which spellings an operator accepts is its own rule (K-1250)." },
+        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "REQUIRED. An ISO 4217 ALPHA-3 code, and the `pattern` is the domain: three ASCII letters, either case. The bound was once presence alone, and presence is not the constraint -- Section 11.2 compares the three mandates' currencies to EACH OTHER and never to a domain, so an empty string, a name (`Euro`) or a country code (`US`) is internally consistent the whole way through the chain and arrives at the PSP as the currency of a real charge, and it is also the key the spent-to-date tally of Section 11.5 is scoped by. NUMERIC-3 is OUT: ISO 4217 publishes `978` beside `EUR` and this wire does not take it, because the payment providers the chain terminates at take the letters. Three letters that name no currency (`xyz`) satisfy this pattern -- it is the operator's MINIMUM refusal, not the whole domain, and an operator MAY refuse further (Section 11.1). Case is not part of the code: which spellings an operator accepts is still its own rule (Section 11.1, Section 11.5)."},
         "scope": { "type": "string", "description": "Optional provider-defined scope." }
       }
     },
@@ -34,7 +34,7 @@
       "properties": {
         "intent_mandate_id": { "type": "string", "description": "MUST equal the intent mandate id; cart total MUST NOT exceed the intent cap." },
         "total_amount_cents": { "type": "integer", "minimum": 1, "description": "REQUIRED. MUST be positive; a non-positive amount is rejected." },
-        "currency": { "type": "string", "minLength": 1, "description": "MUST equal the intent currency, and MUST be a non-empty string -- see the intent's note; equality to another empty string is not a check." },
+        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "MUST equal the intent currency, and MUST be an ISO 4217 alpha-3 code -- see the intent's note; equality to another empty string, or to another currency NAME, is not a check." },
         "line_items": { "type": "array", "minItems": 1, "description": "REQUIRED, and NON-EMPTY. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them -- which is exactly as true of an empty array as of an absent field, so presence alone was not the constraint. A positive `total_amount_cents` with nothing itemised under it is an unitemised charge, which is what a cart mandate exists to prevent." }
       }
     },
@@ -45,7 +45,7 @@
       "properties": {
         "cart_mandate_id": { "type": "string", "description": "MUST equal the cart mandate id." },
         "amount_cents": { "type": "integer", "minimum": 1, "description": "MUST equal the cart total, same currency. MUST be positive; a non-positive amount is rejected." },
-        "currency": { "type": "string", "minLength": 1, "description": "MUST equal the cart currency, and MUST be a non-empty string." },
+        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "MUST equal the cart currency, and MUST be an ISO 4217 alpha-3 code." },
         "payment_method": { "type": "string", "description": "Optional PSP method identifier (e.g. \"on_file\")." }
       }
     },
@@ -67,7 +67,7 @@
         "settlement_id": { "type": "string" },
         "psp_reference": { "type": "string" },
         "settled_amount_cents": { "type": "integer", "minimum": 1, "description": "The captured amount; equals the cart total. MUST be positive: a settlement exists only for a completed capture, and every mandate amount is already positive." },
-        "currency": { "type": "string", "minLength": 1, "description": "The currency of the capture: the cart's currency in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling the assistant signed (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." }
+        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "The currency of the capture: the cart's currency in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling the assistant signed (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." }
       }
     }
   }

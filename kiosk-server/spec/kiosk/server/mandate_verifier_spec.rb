@@ -174,22 +174,85 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         expect(m.currency).to eq("eur")
       end
 
-      # THE DOMAIN IS STILL NOT CLOSED, and this example says so out loud —
-      # but the boundary it pins MOVED on 2026-08-30 (K-1251/T-153), so it now
-      # states both halves rather than only the refusal that does not happen.
-      # WHAT IS SETTLED: two spellings of ONE code are one currency, and the
-      # guard returns the canonical form (trimmed, lower-cased) that the §11.2
-      # comparisons, the persisted rows and the §11.5 tally are all keyed on.
-      # WHAT IS STILL OPEN: whether a syntactically-valid string that names no
-      # ISO 4217 code is refused. "Euro" is not a code and is still accepted —
-      # as "euro". Tightening THAT is a decision (K-1252), and this example is
-      # what makes the tightening visible instead of silent.
-      it "still accepts a string outside ISO 4217, canonicalised — the domain is K-1252, not this guard" do
-        odd = intent_payload.merge(currency: "Euro")
-        m = nil
-        expect { m = described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
-          .not_to raise_error
-        expect(m.currency).to eq("euro")
+      # ── THE DOMAIN IS NOW CLOSED, AND THIS IS THE EXAMPLE THAT SAYS WHERE ──
+      #
+      # This example is the REWRITE of the one that used to pin the looseness on
+      # purpose («still accepts a string outside ISO 4217, canonicalised — the
+      # domain is K-1252, not this guard»). It was written so a later tightening
+      # could not happen by accident; the tightening has now happened ON PURPOSE
+      # — Phil decided K-1252 on 2026-08-31 with «accept iso codes» — so the
+      # example asserts the NEW boundary instead of being deleted with the old one.
+      #
+      # WHAT IT PINS, and each clause is a place a regression would land:
+      #   * "Euro" is a NAME, not a code, and is now REFUSED where it used to be
+      #     accepted as "euro". This is the exact input the old example asserted
+      #     the opposite of, kept deliberately so the diff reads as a decision.
+      #   * The status is 403, not 400: `currency` is one of the seven limbs of
+      #     the §9.1 mandate carve-out that T-150 published on 2026-08-30, and a
+      #     domain refusal that answered 400 would contradict that list on the
+      #     day after it shipped.
+      #   * The refusal is on the SHAPE, so `"xyz"` still passes — stated here
+      #     rather than left to be discovered, because it is the operator's
+      #     MINIMUM refusal and not the whole domain (§11.1). The PSP refuses the
+      #     rest one call later, and no list in this repository could do better:
+      #     the vendored Stripe client documents a server-side supported set and
+      #     enumerates nothing.
+      describe "the currency domain is closed on ISO 4217 alpha-3 (T-159, K-1252)" do
+        it "refuses a currency NAME: Euro was accepted as euro until T-159" do
+          odd = intent_payload.merge(currency: "Euro")
+          expect { described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
+            .to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
+        end
+
+        it "refuses a two-letter country code: US is not a currency" do
+          expect {
+            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: "US")),
+                                          identity: identity)
+          }.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
+        end
+
+        # ISO 4217 publishes a numeric-3 code beside every alpha-3 one, so «an
+        # ISO 4217 code» read literally admits "978". §11.1 says alpha-3 in those
+        # words BECAUSE the PSP takes letters: the vendored Stripe client
+        # documents `currency` as «Three-letter ISO currency code, in lowercase».
+        it "refuses the NUMERIC-3 spelling ISO 4217 also publishes" do
+          expect {
+            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: "978")),
+                                          identity: identity)
+          }.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
+        end
+
+        it "answers 403, not 400 — a domain refusal joins the §9.1 mandate carve-out (T-150)" do
+          expect {
+            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: "Euro")),
+                                          identity: identity)
+          }.to raise_error { |e| expect(e.class::HTTP_STATUS).to eq(403) }
+        end
+
+        # THE CONTROL, and it is not decoration: every currency spelled anywhere
+        # in this repository must still settle. Measured with `git grep -c` over
+        # the TRACKED tree of `reference` on 2026-08-31 — "eur" 183 hits in 49
+        # files, "EUR" 43 in 13, "usd" 13 in 7, "USD" 9 in 4 — so these four
+        # spellings are the whole live set and they fold to two codes.
+        it "still accepts every currency spelling live in this repository" do
+          { "eur" => "eur", "EUR" => "eur", "usd" => "usd", "USD" => "usd",
+            "  eur " => "eur" }.each do |sent, canonical|
+            m = described_class.verify_intent(
+              raw_jws: sign(intent_payload.merge(currency: sent)), identity: identity,
+            )
+            expect(m.currency).to eq(canonical), "#{sent.inspect} should settle as #{canonical.inspect}"
+          end
+        end
+
+        # The shape is the MINIMUM refusal and this says so, so that a later wave
+        # that adds a real allow-list finds an example telling it what changed
+        # rather than a silent pass.
+        it "accepts three letters that name no currency — the shape is the minimum, not the domain" do
+          m = described_class.verify_intent(
+            raw_jws: sign(intent_payload.merge(currency: "xyz")), identity: identity,
+          )
+          expect(m.currency).to eq("xyz")
+        end
       end
     end
 

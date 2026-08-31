@@ -213,8 +213,8 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       expect(descriptor[:example_row]).to eq(sku: "MILK-1L", price_cents: 199)
     end
 
-    it "omits params — retired by ADR-0023, and the mixin has no macro for it" do
-      expect(Kiosk::Server::Queries.describe("catalog")[:params]).to be_nil
+    it "omits params — the slot left the wire (ADR-0023 retired it, T-085 removed it)" do
+      expect(Kiosk::Server::Queries.describe("catalog")).not_to have_key(:params)
     end
 
     it "reaches the wire catalog the public `schema` endpoint serves" do

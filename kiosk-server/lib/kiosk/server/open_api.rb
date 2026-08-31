@@ -587,7 +587,6 @@ module Kiosk
                                 description: "Whose rows this verb may touch (spec §7.2). " \
                                              "`principal` is the default and the norm; the " \
                                              "other three are declared departures." },
-              params:         { type: "null", description: "Retired (spec §8.3); always null." },
               input_schema:   { type: "object",
                                 description: "JSON Schema (draft 2020-12) for this verb's inputs. " \
                                              "The authoritative input contract." },

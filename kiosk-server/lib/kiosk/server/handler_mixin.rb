@@ -129,9 +129,9 @@ module Kiosk
     # ── What is NOT here ─────────────────────────────────────────────────
     # `params:` (the free-text name → hint hash) is retired by ADR-0023 and has
     # no macro: a hint is either a constraint (schema) or a meaning
-    # (description), and there is no third thing. Since T-081 there is no way to
-    # set one at all — the registry publishes the retired descriptor slot as
-    # null, which is what the spec asks a post-retirement descriptor to do.
+    # (description), and there is no third thing. Since T-081 there was no way to
+    # set one at all, and since T-085 there is no slot to set: spec §8.3 removed
+    # the key, so a descriptor this registry builds does not carry it.
     #
     # ── The property the two-mixin split used to carry ───────────────────
     # Until K-921 there were TWO public mixins, `Kiosk::Query` and

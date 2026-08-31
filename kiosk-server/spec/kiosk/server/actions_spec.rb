@@ -61,13 +61,13 @@ RSpec.describe Kiosk::Server::Actions do
     end
 
     # ADR-0023 retired the free-text `params` hint and the mixin has no macro
-    # for it, so every descriptor this implementation publishes carries null.
-    # The KEY stays on the wire — dropping it would be a wire change.
-    it "always publishes params as nil — retired by ADR-0023, no macro declares it" do
+    # for it; T-085 then took the KEY off the wire too (spec §8.3: a descriptor
+    # MUST NOT publish it). Asserted as ABSENCE of the key — a nil-value
+    # assertion passes either way, which is the difference this row is about.
+    it "does not publish params at all — the slot left the wire (T-085)" do
       declare_action("place_order", description: "Place an order")
 
-      expect(described_class.describe("place_order")).to have_key(:params)
-      expect(described_class.describe("place_order")[:params]).to be_nil
+      expect(described_class.describe("place_order")).not_to have_key(:params)
     end
 
     it "leaves description nil when the verb opted in with another macro" do
@@ -75,7 +75,7 @@ RSpec.describe Kiosk::Server::Actions do
 
       descriptor = described_class.describe("bare")
       expect(descriptor[:description]).to be_nil
-      expect(descriptor[:params]).to      be_nil
+      expect(descriptor).not_to have_key(:params)
     end
 
     it "fetch returns the handler, not the Entry" do
@@ -141,7 +141,7 @@ RSpec.describe Kiosk::Server::Actions do
       described_class.declare("plain", ->(_args) { {} }, description: "Do")
 
       d = described_class.describe("plain")
-      expect(d).to eq({ name: "plain", description: "Do", reach: "principal", params: nil })
+      expect(d).to eq({ name: "plain", description: "Do", reach: "principal" })
       expect(d).not_to have_key(:input_schema)
       expect(d).not_to have_key(:output_schema)
       expect(d).not_to have_key(:example_params)

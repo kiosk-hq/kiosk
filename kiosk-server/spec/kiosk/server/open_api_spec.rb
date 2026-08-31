@@ -147,6 +147,20 @@ RSpec.describe Kiosk::Server::OpenApi do
         .to include("schema.response", "schema.descriptor")
     end
 
+    # An origin publishes its descriptor shape on TWO documents — `GET
+    # <endpoint>/schema` and this derived OpenAPI — so a slot removed from one
+    # and left on the other is a HALF removal, and nothing else asserted this
+    # half. T-085 took `params` off the wire (spec §8.3); the component that
+    # describes a descriptor to an OpenAPI reader must not still declare it.
+    it "does not declare the retired `params` slot on the descriptor component (T-085)" do
+      declare_query("salons")
+
+      props = document.dig(:components, :schemas, "schema.descriptor", :properties)
+      expect(props).not_to have_key(:params)
+      expect(props.keys).to eq(%i[name description reach input_schema output_schema
+                                  example_params example_row])
+    end
+
     it "describes `pay` as a POST when this origin serves the pay module" do
       declare_query("salons")
       Kiosk.configure { |c| c.payment_provider = Object.new }

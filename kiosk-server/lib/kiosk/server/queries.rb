@@ -33,7 +33,7 @@ module Kiosk
     #
     # @example reading the registry
     #   Kiosk::Server::Queries.known             # => ["menu"]
-    #   Kiosk::Server::Queries.describe("menu")  # => { name:, description:, params:, … }
+    #   Kiosk::Server::Queries.describe("menu")  # => { name:, description:, reach:, … }
     #   Kiosk::Server::Queries.catalog           # => sorted Array of descriptors
     #
     # The descriptor fields, all declared as macros on the handler controller.
@@ -70,7 +70,8 @@ module Kiosk
     #   example_row:    OPTIONAL. An example of ONE row this query returns. It
     #                   ILLUSTRATES output_schema, and loses to it.
     #
-    # `params` — the free-text hint ADR-0023 retired — is not a macro at all.
+    # `params` — the free-text hint ADR-0023 retired — is not a macro, and since
+    # T-085 it is not a descriptor key either: spec §8.3 removed the slot.
     module Queries
       # Which registry a memoized descriptor belongs to ({SchemaSlots}).
       SCOPE = :query
@@ -117,18 +118,16 @@ module Kiosk
         end
 
         # Returns a descriptor Hash for the named query:
-        #   { name: String, description: String|nil, params: nil }
+        #   { name: String, description: String|nil, reach: String }
         # plus, ONLY when the operator declared them, the ADR-0021 machine-readable
         # keys `input_schema`, `output_schema`, `example_params`, `example_row`.
         # Absent keys are omitted entirely, so an undeclared extension is absent
         # rather than a null an assistant has to interpret.
         #
-        # `params` — the free-text hint ADR-0023 retired — is always nil: no macro
-        # declares it and nothing can set it. The KEY stays because the slot is
-        # part of the published descriptor shape (spec §8.3, "the slot survives on
-        # the wire only so descriptors written before the retirement stay valid"),
-        # and dropping it would change every descriptor this implementation
-        # serves. Whether to drop the slot is a WIRE decision, not this one.
+        # `params` — the free-text hint ADR-0023 retired — is NOT here. It was
+        # published as a literal nil long after no macro could set one, and spec
+        # §8.3 now says a descriptor MUST NOT carry it (T-085), so the key is
+        # gone from every descriptor this implementation serves.
         def describe(name)
           entry = registry.fetch(name.to_s) do
             raise Errors::NotFound.new(
@@ -144,7 +143,7 @@ module Kiosk
           # proc anywhere on the origin it yields straight through.
           SchemaSlots.descriptor(SCOPE, name, entry) do
             descriptor = { name: name.to_s, description: entry.description,
-                           reach: entry.reach.to_s, params: nil }
+                           reach: entry.reach.to_s }
             descriptor[:input_schema]   = entry.input_schema   unless entry.input_schema.nil?
             descriptor[:output_schema]  = entry.output_schema  unless entry.output_schema.nil?
             descriptor[:example_params] = entry.example_params unless entry.example_params.nil?

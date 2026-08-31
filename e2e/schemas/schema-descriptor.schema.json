@@ -59,19 +59,12 @@
           ],
           "description": "REQUIRED. Whose rows this verb may touch (Section 7.2). `principal` is the DEFAULT and the norm: this verb touches only the calling principal's own rows, or rows that belong to no principal at all (a catalogue, a price list). The other three are DECLARED DEPARTURES, each naming what authorises the wider reach -- `published`, the operator publishes these owner-carrying rows to every principal by intent (a classifieds board); `consented`, a principal shared them and the operator can point at the artefact that says so (an invite that became a membership) -- the stronger of the two sharing claims; `role`, the reach follows the caller's operator-ASSIGNED `role` claim, which is never client-requested (Section 5.4). Declaring a reach does not make it correct, it makes it reviewable: an UNDECLARED cross-principal read is a defect whether or not the operator intended it. An AI assistant that meets a descriptor with no `reach` MUST read the verb as `principal` and MUST NOT take the absence as licence to assume anything wider."
         },
-        "params": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "description": "RETIRED free-form provider-defined hint object (by convention name -> type-hint string), or null. Never a validation contract, and no longer the input contract: publish null, or omit the key. Retained on the wire so descriptors written before the retirement still validate -- an AI assistant MAY read a non-null value as a prose hint for a verb that publishes no input_schema, and MUST prefer input_schema wherever one is published."
-        },
         "input_schema": {
           "type": [
             "object",
             "boolean"
           ],
-          "description": "REQUIRED. JSON Schema (draft 2020-12) for THIS verb's inputs: names, required/optional, types, enums, ranges. The AUTHORITATIVE input contract -- the only place a parameter name is declared -- and it wins over any `params` hint or `description` sentence that disagrees. The operator validates a request's arguments against it before the handler runs and answers 400 bad_request naming the offending parameter otherwise. A verb that takes nothing declares the closed empty object."
+          "description": "REQUIRED. JSON Schema (draft 2020-12) for THIS verb's inputs: names, required/optional, types, enums, ranges. The AUTHORITATIVE input contract -- the only place a parameter name is declared -- and it wins over any `description` sentence that disagrees. The operator validates a request's arguments against it before the handler runs and answers 400 bad_request naming the offending parameter otherwise. A verb that takes nothing declares the closed empty object."
         },
         "output_schema": {
           "type": [

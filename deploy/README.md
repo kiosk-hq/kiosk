@@ -327,19 +327,52 @@ them for your own machine (you'll feel the high one — that's the point). Flow:
 curl -s https://getgrocery.demo.kiosk.tech/.well-known/kiosk.json | jq .
 
 # 1. Full flow — register with the bundled solver, then read schema + query.
+#    Needs curl, jq, openssl, uuidgen and python3+numpy; run it from the repo
+#    root, since the solver is referenced by a repo-relative path. Everything
+#    down to and including (e) was EXECUTED against the hosted origin exactly
+#    as written before being published here — the block it replaced had never
+#    been, and failed on its first line (K-1277).
 BASE=https://getgrocery.demo.kiosk.tech
 
-#    a) get a register challenge (returns the Equihash params to solve)
-CH=$(curl -s "$BASE/kiosk/auth/challenge")
+#    Two helpers. `b64url` is JWS base64url; `proofs_for` turns a 402 problem
+#    document read on STDIN into the `Kiosk-PoW` header value. Note where the
+#    challenge goes: the solver takes it as its ARGUMENT and reads nothing on
+#    stdin, so a pipe into it prints a usage error and exits 1.
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+proofs_for() { jq -c '.challenges[]' | while read -r c; do
+    jq -cn --argjson challenge "$c" \
+           --argjson nonce "$(python3 kiosk-pow-equihash/solve.py "$c")" \
+           '{challenge:$challenge,nonce:$nonce}'   # ~0.2 s low / ~9–10 s high on an M-series core (atablefor)
+  done | jq -sc .; }
 
-#    b) solve it with the bundled solver (from kiosk-pow-equihash/):
-#       python3 solve.py  reads the challenge on stdin, prints the proof.
-PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~0.2 s low / ~9–10 s high on an M-series core (atablefor)
+#    a) an agent keypair, and a challenge nonce FOR THAT KEY. `public_key` is
+#       required — without it the endpoint answers 400 — and what comes back is
+#       a proof-of-POSSESSION nonce. The PoW challenge arrives later, in (c).
+AGENT=$(mktemp -d)   # the keypair lives here, NOT in your checkout
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$AGENT/agent.pem"
+openssl rsa -in "$AGENT/agent.pem" -pubout -out "$AGENT/agent.pub"
+NONCE=$(curl -sG --data-urlencode "public_key@$AGENT/agent.pub" \
+  "$BASE/kiosk/auth/challenge" | jq -r .challenge)
 
-#    c) register (agent key + solved proof) → returns a token
+#    b) sign the proof of possession: an RS256 JWS carrying (a)'s nonce, with
+#       `aud` = the origin YOU dialed. That binding is the relay defence — a
+#       proof signed for one origin is worthless at another.
+H=$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64url)
+P=$(printf '{"aud":"%s","nonce":"%s","jti":"%s","iat":%s}' \
+     "$BASE" "$NONCE" "$(uuidgen)" "$(date +%s)" | b64url)
+POP="$H.$P.$(printf '%s.%s' "$H" "$P" | openssl dgst -sha256 -sign "$AGENT/agent.pem" -binary | b64url)"
+BODY=$(jq -n --rawfile pk "$AGENT/agent.pub" --arg s "$POP" '{public_key:$pk, signed:$s}')
+
+#    c) register → the token. The first POST answers 402 `pow_required` with
+#       the Equihash challenge(s); solve them and re-send the SAME body with
+#       the proof in the `Kiosk-PoW` HEADER, never in the body — the signed
+#       body may not change, or the proof no longer covers what you sent.
+REG=$(curl -s -X POST "$BASE/kiosk/auth/register" \
+  -H 'content-type: application/json' -d "$BODY")
 TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
   -H 'content-type: application/json' \
-  -d "$PROOF" | jq -r .token)
+  -H "Kiosk-PoW: $(printf '%s' "$REG" | proofs_for)" \
+  -d "$BODY" | jq -r .access_token)
 
 #    d) read the schema — PUBLIC and cacheable, so no Bearer and no toll here;
 #       this one answers just as well before step (c) as after it.
@@ -349,12 +382,15 @@ curl -s "$BASE/kiosk/schema" | jq .
 #       per verb, a query is a GET whose arguments are the query string, and the
 #       success body IS the result: a bare JSON array, no envelope to unwrap
 #       (the matching-row count rides in the X-Total-Count response header).
-#       Bearer required, MAY 402 — solve like register and re-send the SAME
-#       request with the proof in the Kiosk-PoW header.
-curl -s "$BASE/kiosk/catalog" \
-  -H "authorization: Bearer $TOKEN" | jq .
+#       Bearer required, and on the hosted origins this one DOES toll: the
+#       first call answers 402, and the retry is the SAME request with the
+#       proof in the Kiosk-PoW header — the pattern register just used.
+CAT=$(curl -s "$BASE/kiosk/catalog" -H "authorization: Bearer $TOKEN")
+curl -s "$BASE/kiosk/catalog" -H "authorization: Bearer $TOKEN" \
+  -H "Kiosk-PoW: $(printf '%s' "$CAT" | proofs_for)" | jq .
 
-#    f) …and an action is a POST at its own path, with the arguments as the body.
+#    f) …and an action is a POST at its own path, with the arguments as the body,
+#       tolled the same way (wrap it in the (e) retry if it answers 402).
 #       Send everything the verb's input_schema requires — create_order needs
 #       delivery_slot_id and delivery_address as well as items (delivery is part
 #       of the order), and a call missing one is a typed 400 naming it. The

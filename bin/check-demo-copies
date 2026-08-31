@@ -1989,6 +1989,23 @@ end
 #   * TAKES the `ships:` declaration (K-860, K-883) and the two-directional
 #     staleness check, so a demo growing a copy fails rather than becoming a
 #     fourth copy nobody reasoned about, and a demo losing one fails too.
+#   * TAKES, since K-1263, the file-level manifest's `except:` map — «one copy
+#     that legitimately differs from its siblings», the K-643 escape hatch,
+#     one level down. WITHOUT IT THE MANIFEST COULD NOT STATE A TRUE THING:
+#     `app/models/user.rb#devise` is `devise :database_authenticatable` in six
+#     demos and `devise :database_authenticatable, :registerable` in tudu, the
+#     one demo whose humans sign themselves up. `:code` failed on tudu, and
+#     pinning `ships:` to the six failed on tudu as a stray, because discovery
+#     requires every copy of a shared unit to be in its entry's set — so the
+#     only declarable rule was `:per_demo`, and SIX copies of the line that
+#     decides which Devise modules an operator's human IdP loads were compared
+#     to nothing. The exception is DECLARED with what makes that copy
+#     different, and it is checked exactly as hard as the file-level one: a
+#     reason may not be blank, an exception for a demo that no longer defines
+#     the unit is stale, an exception whose copy has since CONVERGED on its
+#     siblings is stale, and an entry where every copy but one is excepted
+#     guards nothing and says so. A seventh demo growing a divergent `devise`
+#     line still reddens, because it is compared, not excepted.
 #   * TAKES the loud-failure-on-unreadable rule: a unit the extractor cannot
 #     read back as valid Ruby is an ERROR, never a silent skip, because a
 #     lockstep rule with nothing to compare passes everything.
@@ -2745,15 +2762,24 @@ FRAGMENTS = {
            "asking whether a cart references another demo's row.",
   },
   "app/models/user.rb#devise" => {
-    rule:  :per_demo,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:   "SAME MACRO, AND SIX OF THE SEVEN AGREE — `devise :database_authenticatable` — while " \
-           "tudu alone adds `:registerable`, because it is the one demo whose humans sign " \
-           "themselves up. That 6/1 split is why this is `:per_demo` and not `:code`: the rule " \
-           "compares all held copies against each other and has no per-copy exception at this " \
-           "level, so declaring `:code` would fail on tudu and pinning `ships:` to the six would " \
-           "fail on tudu as a stray. The six are therefore NOT held, which is a gap this entry " \
-           "states rather than hides (K-1263).",
+    rule:   :code,
+    ships:  %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    except: {
+      "tudu" => "tudu is the one demo whose HUMANS SIGN THEMSELVES UP, so its copy reads " \
+                "`devise :database_authenticatable, :registerable` where the other six read " \
+                "`devise :database_authenticatable`. `:registerable` is what mounts Devise's " \
+                "public sign-up route; on the other six the operator's human account is seeded " \
+                "and a self-service registration route on those origins would be a way in that " \
+                "nobody designed. The difference is one module name and it is deliberate.",
+    },
+    why:    "WHICH DEVISE MODULES THE OPERATOR'S HUMAN IdP LOADS — and the six that agree are HELD " \
+            "here, which until K-1263 gave this rule an `except:` they could not be. The entry was " \
+            "`:per_demo` because neither available declaration was true: `:code` failed on tudu, " \
+            "and pinning `ships:` to the six failed on tudu as a stray, since discovery requires " \
+            "every copy of a shared unit to be in its entry's set. So six copies of an " \
+            "authentication line were compared to NOTHING while the manifest read as coverage. " \
+            "With the exception declared, one of the six quietly losing " \
+            "`:database_authenticatable` — or quietly gaining `:registerable` — fails here.",
   },
   "app/models/user.rb#has_many" => {
     rule:  :per_demo,
@@ -3048,7 +3074,9 @@ fragment_sources.each do |id, per_demo|
             "with its `ships:` set and the reason the copies exist (T-120)."
 end
 
-fragment_comparisons = 0
+fragment_comparisons     = 0
+fragment_copies_compared = 0
+fragment_exceptions_live = 0
 FRAGMENTS.each do |id, entry|
   rel = id.split("#").first
   unless FRAGMENT_PATHS.include?(rel)
@@ -3082,22 +3110,66 @@ FRAGMENTS.each do |id, entry|
               "exists for (T-120)."
   end
 
+  # ── `except:` — the K-643 escape hatch, one level down (K-1263) ──────────
+  unit_name = id.split("#", 2).last
+  excepted  = entry[:except] || {}
+  excepted.each do |demo, reason|
+    errors << "#{id}: `except:` reason for #{demo} is blank" if reason.to_s.strip.empty?
+    unless entry[:ships].include?(demo)
+      errors << "#{id}: `except:` names #{demo}, which is not in this entry's `ships:` set " \
+                "(#{entry[:ships].join(', ')}) — an exception can only excuse a copy the rule " \
+                "would otherwise compare (K-1263)."
+    end
+    next if per_demo.key?(demo)
+
+    errors << "#{id}: stale `except:` entry for #{demo} — #{rel} there defines no `#{unit_name}` " \
+              "any more, so the exception excuses nothing. Drop it (K-1263)."
+  end
+  if excepted.any? && entry[:rule] != :code
+    errors << "#{id}: `except:` excuses one copy from a COMPARISON, and `rule: " \
+              "#{entry[:rule].inspect}` compares nothing, so it means nothing here. Either the " \
+              "other copies are held — then the rule is `:code` — or they are not, and the " \
+              "exception is decoration (K-1263)."
+  end
+
   held   = per_demo.select { |demo, _| entry[:ships].include?(demo) }
   next if held.size < 2
 
   fragment_comparisons += held.size
-  groups = held.group_by { |_demo, src| src }
   case entry[:rule]
   when :code
-    next if groups.size == 1
+    compared, excused = held.partition { |demo, _| !excepted.key?(demo) }.map(&:to_h)
+    if compared.size < 2
+      errors << "#{id}: every copy but one is excepted — the entry guards nothing. Either drop an " \
+                "exception or make the rule `:per_demo` and say the copies are not compared (K-1263)."
+      next
+    end
+    fragment_copies_compared += compared.size
+    fragment_exceptions_live += excused.size
+    groups = compared.group_by { |_demo, src| src }
+    unless groups.size == 1
+      listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
+      errors << "#{id}: the copies must agree once comments and whitespace are normalised away, and " \
+                "they do not: #{listed}. This unit is hand-copied into #{compared.size} demos — " \
+                "propagate the edit to all of them, or, if one copy legitimately differs, declare it " \
+                "in this entry's `except:` map with the reason, or give it a " \
+                "different NAME and say why, because a shared name with different behaviour is what " \
+                "makes the next reader trust the wrong copy (T-120, K-1263)."
+      next
+    end
 
-    listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
-    errors << "#{id}: the copies must agree once comments and whitespace are normalised away, and " \
-              "they do not: #{listed}. This unit is hand-copied into #{held.size} demos — " \
-              "propagate the edit to all of them, or, if one copy legitimately differs, give it a " \
-              "different NAME and say why, because a shared name with different behaviour is what " \
-              "makes the next reader trust the wrong copy (T-120)."
+    # An exception that is no longer needed is a lie the next reader will
+    # believe — the same arm the file-level rule has carried since K-643.
+    canonical = groups.keys.first
+    excused.each do |demo, src|
+      next unless src == canonical
+
+      errors << "#{id}: `except:` for #{demo} is stale — its copy now agrees with the others once " \
+                "comments and whitespace are normalised away. Drop the exception so the copy is " \
+                "HELD with its siblings (K-1263)."
+    end
   when :per_demo
+    groups = held.group_by { |_demo, src| src }
     next if groups.size > 1
 
     errors << "#{id}: declared `:per_demo` — a shared NAME with genuinely different bodies — but " \
@@ -3108,6 +3180,24 @@ FRAGMENTS.each do |id, entry|
     errors << "#{id}: unknown `rule: #{entry[:rule].inspect}` — the fragment rule understands " \
               ":code and :per_demo only (T-120)."
   end
+end
+
+# VACUITY FOR THE EXCEPTION MECHANISM (K-1263). `except:` is an EXEMPTION, not a
+# ban, so «its pattern must match something» is the right direction: an exception
+# that is never REACHED is an exception that is not excusing anything, and the
+# entry it sits in would then be comparing copies it thinks it is not. The two
+# arms above cover a single entry (stale demo, converged copy); this one covers
+# the mechanism — if the manifest declares exceptions and none of them was live
+# in this run, the partition stopped running rather than the tree stopped needing
+# it, and a `:code` entry silently comparing an excepted copy is a red build for
+# the wrong reason, or worse, a green one.
+declared_exceptions = FRAGMENTS.sum { |_, e| (e[:except] || {}).size }
+if declared_exceptions.positive? && fragment_exceptions_live.zero?
+  errors << "check-demo-copies: FRAGMENTS declares #{declared_exceptions} `except:` " \
+            "entr#{declared_exceptions == 1 ? 'y' : 'ies'} and NONE of them was reached — every " \
+            "excepted copy is outside its entry's `ships:` set, or the `:code` arm stopped " \
+            "partitioning. An exemption that excuses nothing is a hole the manifest believes it " \
+            "has closed (K-1263)."
 end
 
 if FRAGMENTS.any? && fragment_comparisons.zero?
@@ -4285,7 +4375,9 @@ if errors.empty?
        "counterpart and checked for one), " \
        "#{fragment_comparisons} shared-unit cop#{fragment_comparisons == 1 ? 'y' : 'ies'} declared " \
        "in #{FRAGMENTS.size} unit(s) inside #{FRAGMENT_PATHS.size} `:per_demo` file(s) " \
-       "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} held in lockstep, the rest declared " \
+       "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} unit(s) held in lockstep over " \
+       "#{fragment_copies_compared} compared copies with #{fragment_exceptions_live} declared " \
+       "exception(s), the rest declared " \
        "same-name-different-body; #{fragment_dsl_ids.size} reached only by the class-macro handle, " \
        "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason)"
   exit 0

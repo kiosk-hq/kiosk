@@ -194,6 +194,39 @@
 #      INTRO instead — see its own comment for why widening is safe for THIS
 #      rule and would not be for a rule that reads the prose as a description.
 #
+# ── THE PRICE THE WIDE WINDOW CAME WITH, AND WHERE IT IS PAID (T-129) ───────
+#
+# READ THIS BEFORE ADDING A KIND TO `PROMISE_KINDS`. It used to live only beside
+# `promise_window_boundary?`, twelve hundred lines down, which is a constraint
+# the next author meets when it fires rather than when they need it.
+#
+# The window runs from the nearest preceding heading, `---` rule or fence down
+# to the declaration. Where two blocks share a section with no heading between
+# them, the nearest fence above is the EARLIER block's closing one, so the
+# window spans that block's own trailing commentary and attributes its sentences
+# here. MEASURED at head with the shipped neighbourhood, over all 25 declared
+# blocks: unfloored, the promise vocabulary hits 3 `generator` blocks and 13
+# `snippet` blocks; every one of the three generator hits is a `verbatim`
+# inherited from a preceding Gemfile or routes commentary. The rule covers
+# neither kind, so it cost nothing — which is what T-129 recorded, and the row's
+# reading of WHY is corrected here rather than carried: it said the four
+# `transcript` blocks and the one `none` block inherit nothing. The transcripts
+# do not (each is the first declared block under a heading). Hoteling's `none`
+# block DOES — it sits directly under a `snippet` — and it is green only because
+# those eight lines happen to contain no promise word, in a place where
+# «nothing else altered» is the qualified sentence the K-1062 repair wave
+# deliberately wrote. So the false positive was one sentence away, not one
+# extension away.
+#
+# THE FLOOR closes it: the window starts after the previous block's
+# after-paragraph, unless that paragraph is ALSO this block's own
+# `paragraph_before` — the gap holding exactly one paragraph, which serves both
+# and which hoteling's `none` block is the corpus's only instance of. MEASURED
+# after the floor: 0 generator hits, 13 snippet hits, transcripts and `none`
+# unchanged at 0. Both directions are fixtures in `--self-test` rather than
+# prose, because the corpus has one instance of this geometry and a document
+# rewrite would take the proof with it.
+#
 # WHAT WAS NOT DONE, AND WHY. The rule was NOT extended to `snippet`, where the
 # other thirteen promise hits live. Those are the weaker case and sweeping them
 # in unread would be the over-claim this section is about: a snippet's «every
@@ -423,6 +456,13 @@
 #     one for (`none`, `transcript`), and that is a phrase ban, not a truth
 #     test: it says such a sentence may not be published there, never that the
 #     sentence was false.
+#   * THE PROMISE WINDOW IS A GEOMETRY, NOT AN ATTRIBUTION (T-129). Where the
+#     gap between two blocks holds ONE paragraph it is read as belonging to
+#     both, because a reader cannot tell either; where it holds more, the first
+#     belongs to the block above and the last to the block below, and any
+#     paragraph BETWEEN them belongs to neither and is invisible to this rule.
+#     That middle ground is empty in the four documents today and is the price
+#     of not attributing one block's sentence to another.
 #   * AND `PROMISES` IS A VOCABULARY, NOT A CLASSIFIER. Eight regexes, every one
 #     of them added because a document in this corpus said that exact thing —
 #     two of them (K-1106) only after a re-measurement found «all three runs»,
@@ -529,8 +569,9 @@
 # no bundle, no database, no Rails boot, well under a second on a bare checkout — the same profile as bin/check-demo-copies.
 #
 # Usage:
-#   bin/check-demo-derivations           # check
-#   bin/check-demo-derivations --list    # print every declared block
+#   bin/check-demo-derivations             # check
+#   bin/check-demo-derivations --list      # print every declared block
+#   bin/check-demo-derivations --self-test # prove the promise rule on fixtures
 
 require "json"
 require "ripper"
@@ -573,6 +614,40 @@ PROMISES = [
   # VOCABULARY, not a classifier, and the over-claim list says so.
   /\ball\s+(?:\w+\s+)?runs\b/i,
   /\bnone\s+of\s+\S+[^.]{0,60}?\bis\s+in\s+here\b/i,
+].freeze
+
+# The two block classes the ban covers: `none`, checked by nothing, and
+# `transcript`, checked by a SUBSET test. Hoisted out of the check below so the
+# self-test can assert the set rather than re-type it (T-129).
+PROMISE_KINDS = %w[none transcript].freeze
+
+# THE SENTENCE THAT PUT EACH REGEX IN THE LIST — and it is a GATE, not a
+# citation (T-129).
+#
+# `PROMISES` is a phrase BAN, and a ban that is being obeyed matches NOTHING.
+# MEASURED at head over the four documents: SIX of the eight regexes have zero
+# hits anywhere, which is the K-1106 repair wave's success rather than a defect.
+# That makes the usual vacuity arm — «a pattern that matches nothing in this
+# repository must fail» — exactly backwards here, and it leaves the rule with a
+# hazard the other kind of rule does not have: a regex broken by an edit is
+# INDISTINGUISHABLE from a regex nobody has violated, and the run stays green.
+# It is the same shape as EARLIER_WIRES one repo over, which matched nothing for
+# its entire existence while reading as coverage.
+#
+# So the proof is a POSITIVE CONTROL instead. Every regex carries the sentence
+# that put it in the list — six of them the false sentences K-1062 and K-1063
+# found, two of them the claims K-1106's re-measurement caught the list missing
+# — and `--self-test` asserts each one still matches, and matches through the
+# real neighbourhood window rather than on its own.
+PROMISE_EXEMPLARS = [
+  "every line is that file's with its `description` cut out and nothing else altered",
+  "Nothing is removed and nothing is added.",
+  "From there down it is unedited.",
+  "The transcript below is verbatim.",
+  "It is the run's own output, first line to last.",
+  "This is the **whole** output of the task.",
+  "The block carries all three runs.",
+  "It is the task's own output and none of its chatter is in here.",
 ].freeze
 
 TRANSFORMS = %w[strip_descriptions dedent].freeze
@@ -1154,6 +1229,7 @@ end
 def parse_document(path)
   lines = File.readlines(path, chomp: true)
   blocks = []
+  prev_after = nil
   i = 0
   while i < lines.length
     unless lines[i].start_with?("```")
@@ -1173,10 +1249,11 @@ def parse_document(path)
     blocks << Block.new(
       fence_line: i + 1, info: info, body: lines[(i + 1)...j],
       decl: decl, decl_line: decl_line && decl_line + 1,
-      neighbourhood: [promise_window_before(lines, decl_line || i),
+      neighbourhood: [promise_window_before(lines, decl_line || i, prev_after),
                       paragraph_after(lines, j)].join("\n"),
       preceding_paragraph: paragraph_before(lines, decl_line || i),
     )
+    prev_after = paragraph_after_range(lines, j)
     i = j + 1
   end
   blocks
@@ -1186,20 +1263,28 @@ end
 # the prose that comments on it. Deliberately not "everything since the previous
 # block": the gap between two blocks belongs to both of them, so a wider window
 # attributes one document's sentence to a block it was never about.
-def paragraph_before(lines, idx)
+def paragraph_before_range(lines, idx)
   k = idx - 1
   k -= 1 while k >= 0 && lines[k].strip.empty?
   stop = k
   k -= 1 while k >= 0 && !lines[k].strip.empty?
-  lines[(k + 1)..stop].to_a.join("\n")
+  (k + 1)..stop
 end
 
-def paragraph_after(lines, idx)
+def paragraph_before(lines, idx)
+  lines[paragraph_before_range(lines, idx)].to_a.join("\n")
+end
+
+def paragraph_after_range(lines, idx)
   k = idx + 1
   k += 1 while k < lines.length && lines[k].strip.empty?
   start = k
   k += 1 while k < lines.length && !lines[k].strip.empty? && !lines[k].start_with?("```")
-  lines[start...k].to_a.join("\n")
+  start...k
+end
+
+def paragraph_after(lines, idx)
+  lines[paragraph_after_range(lines, idx)].to_a.join("\n")
 end
 
 # ── What «beside» means for the PROMISE rule, and why it is WIDER (K-1106) ───
@@ -1221,14 +1306,49 @@ end
 # sits. MEASURED at head: the wider window adds `verbatim` beside all three
 # `derived: generator` blocks, reaching back over the Gemfile snippet's
 # commentary; the rule does not fire on `generator`, so it costs nothing today.
+# AND THE FLOOR, WHICH IS THE PRICE THE WIDE WINDOW CAME WITH (T-129).
+#
+# The nearest boundary above a declaration is, where two blocks share a section
+# with no heading between them, the EARLIER block's closing fence — so the wide
+# window reaches back over that block's own trailing commentary and attributes
+# its sentences to this one. MEASURED at head before this floor existed, over
+# all 25 declared blocks: `verbatim` was inherited that way by SEVEN blocks, all
+# of them from a preceding Gemfile or routes commentary.
+#
+# T-129 filed that as latent, on the reading that the rule fires only on
+# `transcript` and `none` and none of those inherited anything. RE-MEASURED
+# 2026-08-31, that reading is WRONG IN ONE PLACE and the row is corrected here
+# rather than carried: the four transcript blocks are each the first declared
+# block under a heading and their windows are clean, but hoteling's ONE
+# `derived: none` block sits directly below a `snippet`, and its window DOES
+# span that snippet's commentary. Nothing fires today only because those eight
+# lines happen to contain no promise word — and «nothing else altered» beside a
+# snippet is the QUALIFIED form the K-1062 repair wave deliberately wrote, so
+# the next author to write one there reddens a block it was never about.
+#
+# THE FLOOR, and the exception is the whole design. The window starts after the
+# previous block's after-paragraph — UNLESS that paragraph is also this block's
+# own `paragraph_before`, i.e. the gap holds exactly ONE paragraph and it serves
+# both. hoteling's does: «Swapping in real payments is one line and touches no
+# other code:» ends in a colon that introduces the very block below it while
+# also commenting on the one above. Flooring unconditionally would delete that
+# block's real intro from its window and take the rule's only `none` subject
+# with it. So a shared single paragraph stays attributed to both — which is
+# right, because a reader cannot tell either, and that ambiguity is a fair thing
+# to be asked to fix by adding a heading or a rule.
 def promise_window_boundary?(line)
   line.start_with?("```") || line.start_with?("#") || line.strip.match?(/\A-{3,}\z/)
 end
 
-def promise_window_before(lines, idx)
+def promise_window_before(lines, idx, prev_after = nil)
   k = idx - 1
   k -= 1 while k >= 0 && !promise_window_boundary?(lines[k])
-  lines[(k + 1)...idx].to_a.join("\n")
+  floor = k + 1
+  if prev_after && prev_after.end > prev_after.begin &&
+     paragraph_before_range(lines, idx).begin != prev_after.begin
+    floor = [floor, prev_after.end].max
+  end
+  lines[floor...idx].to_a.join("\n")
 end
 
 # ── A NUMBERED CUT LIST, AND THE NAMES IN IT (K-1107) ────────────────────────
@@ -1300,6 +1420,150 @@ def over_claim_limit_count
   n
 end
 
+# ── --self-test: the promise rule proves itself on fixtures (T-129) ─────────
+#
+# WHY THIS EXISTS AND WHY IT IS SCOPED THE WAY IT IS. Everything else in this
+# script is proven by a plant in the real corpus, and the header records twelve
+# of them. The promise rule cannot be: it is a phrase BAN whose live subject set
+# is EMPTY by design (six of the eight regexes match nothing anywhere at head,
+# because K-1106's repair wave removed the sentences), and its window is a
+# geometry that only bites where two blocks share a section — a shape the four
+# documents contain in exactly one place today. Both are invisible to a bare
+# run. So this mode carries fixtures: eight positive controls for the
+# vocabulary, and four documents built to have the geometry the corpus barely
+# has.
+#
+# IT DOES NOT COVER THE REST OF THE SCRIPT. The membership, JSON, elision,
+# `abridged:` and generator rules are proven by planting in the real corpus, and
+# a `--self-test` that claimed to cover them would be the over-claim this file's
+# own header list exists to prevent.
+def self_test
+  require "tmpdir"
+  failures = []
+  arms = 0
+  check = lambda do |name, ok, detail = nil|
+    arms += 1
+    failures << "#{name}#{detail ? " — #{detail}" : ""}" unless ok
+  end
+
+  # A. VOCABULARY, one positive control per regex. A ban that matches nothing is
+  #    indistinguishable from a ban nobody is violating, so each pattern is held
+  #    to the sentence that put it in the list.
+  unless PROMISES.length == PROMISE_EXEMPLARS.length
+    failures << "PROMISES has #{PROMISES.length} regex(es) and PROMISE_EXEMPLARS " \
+                "#{PROMISE_EXEMPLARS.length} sentence(s) — every pattern needs the sentence that " \
+                "put it in the list, or the next one added is proven by nothing"
+  end
+  PROMISES.each_with_index do |re, i|
+    exemplar = PROMISE_EXEMPLARS[i].to_s
+    check.("vocabulary[#{i}] #{re.inspect} matches its exemplar", exemplar =~ re,
+           "#{exemplar.inspect} no longer matches — the pattern was edited and nothing else can " \
+           "tell you, because a ban with no live subject stays green")
+  end
+
+  # B. THE KINDS. The ban covers the two classes nothing can back a completeness
+  #    claim for, and deliberately not `snippet`, whose qualified form IS backed.
+  check.("PROMISE_KINDS is exactly none+transcript", PROMISE_KINDS.sort == %w[none transcript],
+         "got #{PROMISE_KINDS.inspect} — widening this set is the change T-129 is about, and it " \
+         "may not happen without re-measuring the window's false positives")
+
+  # C. THE WINDOW. Four fixture documents, each one block class over the same
+  #    geometry, run through the REAL parse_document.
+  doc = lambda do |body|
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "before-after.md")
+      File.write(path, body)
+      blocks = parse_document(path)
+      last = blocks.last
+      hit = PROMISE_KINDS.include?(last.decl["derived"]) && PROMISES.any? { |re| last.neighbourhood =~ re }
+      [hit, last]
+    end
+  end
+
+  shared_gap = <<~MD
+    ## One section, two blocks, ONE paragraph between them
+
+    <!-- derived: snippet | from: config/initializers/kiosk.rb -->
+    ```ruby
+      c.issuer = "https://example.test"
+    ```
+
+    Quoted verbatim from the initializer, and swapping the provider is one line:
+
+    <!-- derived: none | why: an illustrative swap -->
+    ```ruby
+      c.payment_provider = Other.new
+    ```
+  MD
+  check.("a promise in a gap of ONE paragraph still reaches the block below it", doc.(shared_gap).first,
+         "the floor swallowed a paragraph that is the later block's own intro — hoteling's real " \
+         "`derived: none` block has exactly this shape and it is the rule's only live subject")
+
+  split_gap = <<~MD
+    ## One section, two blocks, TWO paragraphs between them
+
+    <!-- derived: snippet | from: config/initializers/kiosk.rb -->
+    ```ruby
+      c.issuer = "https://example.test"
+    ```
+
+    The two lines above are quoted verbatim from the initializer.
+
+    Here is the swap an operator would make:
+
+    <!-- derived: none | why: an illustrative swap -->
+    ```ruby
+      c.payment_provider = Other.new
+    ```
+  MD
+  check.("a promise in the EARLIER block's own commentary does not reach the block below it",
+         !doc.(split_gap).first,
+         "the unfloored window reaches back over a snippet's commentary and reddens a `none` " \
+         "block for a sentence that was never about it — the T-129 false positive")
+
+  own_intro = <<~MD
+    ## A block whose OWN intro promises
+
+    <!-- derived: transcript | from: demo:thing | abridged: nothing -->
+    ```text
+      OK  thing
+    ```
+
+    The block above is unedited.
+  MD
+  check.("a promise in the block's OWN commentary still fires", doc.(own_intro).first,
+         "the rule stopped seeing the paragraph directly after a block, which is where four of " \
+         "the corpus's eleven promises sat")
+
+  snippet_ok = <<~MD
+    ## A snippet may carry its qualified sentence
+
+    <!-- derived: snippet | from: config/routes.rb -->
+    ```ruby
+      root "home#index"
+    ```
+
+    Every line is that file's with its `description` cut out and nothing else altered.
+  MD
+  check.("a snippet's qualified promise is NOT banned", !snippet_ok.then { |b| doc.(b).first },
+         "the ban reached `snippet`, whose form is backed by the declared strip_descriptions " \
+         "transform — sweeping it in is the over-claim K-1106 declined")
+
+  if failures.empty?
+    puts "check-demo-derivations --self-test: OK — #{arms} arm(s): #{PROMISES.length} vocabulary " \
+         "positive control(s), the covered-kind set, and 4 fixture document(s) for the promise " \
+         "window (shared gap, split gap, own commentary, snippet control)."
+    exit 0
+  end
+  warn "\ncheck-demo-derivations --self-test FAILED (#{failures.length} of #{arms} arm(s)):\n"
+  failures.each { |f| warn "  ✗ #{f}" }
+  warn "\nThese arms are the ONLY proof the promise rule still fires: its regexes are a ban whose " \
+       "live subject set is empty by design, so a broken one leaves a bare run green."
+  exit 1
+end
+
+self_test if ARGV.include?("--self-test")
+
 # ── Checks ───────────────────────────────────────────────────────────────────
 
 errors = []
@@ -1352,7 +1616,7 @@ end
     # declared block this script does not check — and beside none of the four
     # that quote a recorded run, which is where every falsehood K-1062 and
     # K-1063 found had been. See the K-1106 header section.
-    if %w[none transcript].include?(kind) && (hit = PROMISES.find { |re| block.neighbourhood =~ re })
+    if PROMISE_KINDS.include?(kind) && (hit = PROMISES.find { |re| block.neighbourhood =~ re })
       why_unbacked = if kind == "none"
                        "the block is declared `derived: none`, so nothing checks it at all"
                      else

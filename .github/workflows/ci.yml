@@ -1066,6 +1066,16 @@ jobs:
       - name: Every quoted transcript line and snippet line derives from its declared producer
         run: ./bin/check-demo-derivations
 
+      # Its own step, for the reason the publication-paths and prose-counts
+      # self-tests are: the promise rule is a phrase BAN whose live subject set
+      # is EMPTY by design — six of its eight regexes match nothing in the
+      # corpus, because the K-1106 repair wave removed the sentences — so a
+      # regex broken by an edit leaves the run above at exit 0 and says nothing.
+      # Measured: reverting `/\bunedited\b/i` to a pattern that matches nothing
+      # keeps the bare run green and reddens two arms here (T-129).
+      - name: check-demo-derivations self-test
+        run: ./bin/check-demo-derivations --self-test
+
   # Does the deploy runbook's edge-rate-limit check still work? (K-976)
   #
   # deploy/Caddyfile ships its per-IP backstop COMMENTED, and it has to: a

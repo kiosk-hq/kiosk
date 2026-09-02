@@ -29,6 +29,8 @@
   "$defs": {
     "descriptor": {
       "type": "object",
+      "description": "One verb's description. CLOSED (K-1278, Section 8.3): a descriptor carries the members named here and no others, so a key this specification does not declare at this level -- `x_internal_sla`, `ttl`, an operator's internal owner -- makes the catalog non-conformant. An operator that wants a field on a verb proposes it for the protocol rather than publishing it: a name taken privately is a name a later revision can no longer claim. This closes the DESCRIPTOR and nothing else; a problem document still carries its RFC 9457 extension members, which is that object's own rule.",
+      "additionalProperties": false,
       "required": [
         "name",
         "description",
@@ -74,7 +76,7 @@
           "description": "REQUIRED. JSON Schema (draft 2020-12) for what this verb RETURNS. With no response envelope, this is the ONLY machine-readable statement of the result shape: what a query's rows look like, or what an action's object contains. A query's is an ARRAY schema whether or not the verb paginates -- a paginated page carries its cursor in an RFC 8288 Link header, not in the body -- so a paginating verb declares one shape, not a two-branch union. It must describe what the verb actually renders -- a success body that does not satisfy it is an operator-side defect, not a permitted variation."
         },
         "params": {
-          "description": "FORBIDDEN. `false` refuses the key outright: the retired 0.3 free-form hint object was WITHDRAWN from the wire in 0.4 (Section 8.3), and a catalog that still publishes one -- including the `null` every 0.3 origin published -- is not conformant. This declaration is narrow ON PURPOSE. It forbids exactly the withdrawn key and says nothing about any other member: whether a descriptor may carry operator-defined members at all is UNSETTLED (K-1278), and closing the whole object here would answer that question by accident. Contrast the ROOT, which IS closed and says so above.",
+          "description": "FORBIDDEN. `false` refuses the key outright: the retired 0.3 free-form hint object was WITHDRAWN from the wire in 0.4 (Section 8.3), and a catalog that still publishes one -- including the `null` every 0.3 origin published -- is not conformant. It keeps its own declaration now that the object around it is closed, and the redundancy is only apparent: `additionalProperties` does not reach a key `properties` names, so a descriptor still publishing `params` is refused by THIS sentence, which says what was withdrawn and when, rather than by the generic unknown-member refusal every other stray key gets. Contrast the ROOT, closed for the same reason and saying so above.",
           "not": {}
         },
         "example_params": {

@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-03 at 7e729ed1
-# 1661 anchors.
+# recorded: 2026-09-03 at 350678b3
+# 1663 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -260,6 +260,7 @@ e2e/schema_conformance.rb	d37e42b8b5d62e4e	the settlement this origin answered
 e2e/schema_conformance.rb	2c99e10730210e04	§5 and §6 — the auth and binding planes (T-152)
 e2e/schemas/auth.schema.json	2538ee59823fb28a	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 e2e/schemas/binding.schema.json	507893a531cffe79	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
+e2e/schemas/schema-descriptor.schema.json	5c95fb6120434f93	One verb's description. CLOSED (K-1278, Section 8.3): a descriptor carries the members named here and no others
 kiosk-all/README.md	38e41bce797bf1bb	`kiosk-all` declares runtime dependencies on the two production data-plane gems:
 kiosk-all/README.md	dd036f6c1ff54d53	`kiosk-all` does **not** pull in `kiosk-rls`.
 kiosk-all/README.md	038c31fbc1bfbefc	`kiosk-all` does **not** pull in any adapter gem.
@@ -1121,6 +1122,7 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	0d63eff06478930f	def enforce(spec:, fi
 kiosk-server/lib/kiosk/server/pow_gate.rb	f02a3c9b30e9509b	def issue_challenges(count, spec, fp, secret, config)
 kiosk-server/lib/kiosk/server/pow_gate.rb	0572055c04d3b4ba	def pow_count
 kiosk-server/lib/kiosk/server/pow_gate.rb	cdbb3f3ad98e9641	def proofs_from_header(raw)
+kiosk-server/lib/kiosk/server/queries.rb	9628347efd3bb581	            descriptor[:example_row]    = entry.example_row    unless entry.example_row.nil?
 kiosk-server/lib/kiosk/server/queries.rb	c9cd761651e5d5b1	    # Registry of named queries — the sanctioned read surface that replaces raw
 kiosk-server/lib/kiosk/server/queries.rb	8f2197a922c284fe	convention the provider upholds (the registry does not enforce it)
 kiosk-server/lib/kiosk/server/registration_pow.rb	6b7d82e8b64deb43	def gate(public_key_pem:, pow:, config: Kiosk.configuration)

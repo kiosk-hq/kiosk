@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-03 at f3e55c61 (working tree: 6 cited file(s) modified)
+# recorded: 2026-09-03 at 7e729ed1
 # 1661 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh

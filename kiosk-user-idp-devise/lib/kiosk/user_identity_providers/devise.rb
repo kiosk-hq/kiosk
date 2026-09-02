@@ -131,9 +131,18 @@ module Kiosk
       # No shipped model in this repo does that (`kiosk-test-support`'s
       # `demo_roles_are_total_spec.rb` is the gate on it), and the example below
       # pins the verbatim return so the hazard is measured rather than assumed.
-      # A host writing `#kiosk_role` should make it TOTAL: return the
-      # least-privileged declared role rather than nil, the way
-      # `kiosk-demo-stylish`'s does.
+      #
+      # SINCE T-165 THIS IS A CONTRACT, NOT ADVICE. A host writing `#kiosk_role`
+      # MUST make it TOTAL — return the least-privileged declared role rather
+      # than nil, the way `kiosk-demo-stylish`'s does. An operator that declares
+      # roles at all owes one to EVERY human who can approve a binding; a role
+      # for staff and nothing for customers is not a supported configuration
+      # (kiosk.tech `protocol.md` §6.3). This method still hands nil back
+      # verbatim, deliberately, for the reason above — the repair belongs in the
+      # host's model. What is NOT silent any more is the consequence:
+      # `Kiosk::Server::AccountBinding.bind!` warns in the operator's log when a
+      # ceremony resolves no role on an origin declaring more than one, which is
+      # the one moment the mixture is decidable.
       def role_for(user)
         return user.kiosk_role if user.respond_to?(:kiosk_role)
 

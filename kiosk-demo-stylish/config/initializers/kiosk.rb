@@ -88,6 +88,11 @@ Kiosk.configure do |c|
   # Kiosk::FrontDeskController. (No stylist roster
   # — the menu is evergreen and infinite-capacity, so there is nothing
   # per-stylist to scope.)
+  # TWO roles, so this origin is the one in the fleet where role totality has
+  # teeth: `User#kiosk_role` MUST answer a declared role for EVERY human, never
+  # nil. A role for staff and nothing for customers is not a supported
+  # configuration — the ceremony would leave an `owner` assistant at `owner`
+  # while its principal became a customer (kiosk.tech `protocol.md` §6.3).
   c.roles  = %i[customer owner]
   # Role pinned to every SELF-registered agent (agents cannot choose their
   # own). Staff assistants get their role indirectly, from the bound human's

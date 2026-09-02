@@ -56,6 +56,8 @@ module Kiosk
         pem    = public_key_pem.to_s.strip
         raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
 
+        warn_role_resolution_not_total(config, requested_role)
+
         # `lease_connection`, not `connection` (K-782, following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
@@ -299,6 +301,55 @@ module Kiosk
                   "binding role #{role.inspect} is not among configured roles #{config.roles.inspect}"
           end
           role
+        end
+
+        # ROLE RESOLUTION IS TOTAL, OR THE OPERATOR HAS NO ROLES (T-165, Phil
+        # 2026-09-02, deciding K-1134). An operator that declares roles at all
+        # owes one to EVERY human who can approve a binding; a role for staff
+        # and nothing for customers is a MISCONFIGURATION of the operator's
+        # identity system, not a case the ceremony has to define. kiosk.tech
+        # `protocol.md` §6.3 and `specification.html` state the contract.
+        #
+        # WHY THIS WARNS INSTEAD OF CRASHING AT BOOT. The `signing_key`
+        # precedent crashes on a fact the engine can settle with certainty
+        # before serving a request: the value is configured or it is not.
+        # Totality is not that fact. It is a property of the host's
+        # `#kiosk_role` over every row in the host's users table, and nothing
+        # in the initializer, the schema or the adapter can decide it — an
+        # origin declaring two roles and defining `#kiosk_role` is the CORRECT
+        # multi-role shape, so a boot check would either accuse every such
+        # origin or catch nothing. The one moment it IS decidable with
+        # certainty is this one: a ceremony arriving with no role at an origin
+        # that declares more than one is the unsupported mixture and nothing
+        # else, because a single-role origin cannot exhibit it (retaining and
+        # resetting are the same value there) and a role-less origin has
+        # nothing to resolve.
+        #
+        # It does not raise. Phil's ruling was that the ENGINE keeps its
+        # behaviour and the operator fixes the configuration, so this is a
+        # loud, actionable line in the operator's log and no change on the
+        # wire. It fires per ceremony rather than once: a misconfiguration
+        # that shows up in one log line and never again is one nobody reads.
+        def warn_role_resolution_not_total(config, requested_role)
+          return unless requested_role.nil? || requested_role.to_s.strip.empty?
+          return unless config.roles.to_a.size > 1
+
+          message =
+            "[kiosk-server] an account-binding ceremony resolved NO role for the approving " \
+            "human, and this origin declares more than one role " \
+            "(#{config.roles.inspect}). Role resolution must be TOTAL: an operator that " \
+            "assigns roles at all assigns one to EVERY human who can approve a binding. A " \
+            "role for staff and nothing for customers is not a supported configuration — " \
+            "this binding leaves the assistant's existing role in place, so an assistant " \
+            "already holding the privileged role keeps it while its principal becomes a " \
+            "human who may hold none. Fix the identity system, not the ceremony: a " \
+            "`#kiosk_role` that can answer nil is the usual cause, and returning the " \
+            "least-privileged declared role instead makes it total."
+          # Rails.logger is nil until the host app boots (rake tasks, console
+          # helpers, the gem's own specs), so keep the Kernel#warn fallback —
+          # same shape as {PopVerifier.log_audience_mismatch}.
+          logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+          logger ? logger.warn(message) : Kernel.warn(message)
         end
 
         # kiosk-pop is the only token minter: same

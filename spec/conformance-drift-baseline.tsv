@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-31 at df16d303 (working tree: 38 cited file(s) modified) -- T-158 not_found split
+# recorded: 2026-09-03 at f3e55c61 (working tree: 6 cited file(s) modified)
 # 1661 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
@@ -1009,7 +1009,7 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	7ca5c12cc10c1dc5	
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	b429c59b6c4cfcc3	migration_template "create_kiosk_schema.rb.tt",
 kiosk-server/lib/kiosk/server/account_binding.rb	c1c9d43181b10230	        # object and run the operator's `assistant_claimed` /
 kiosk-server/lib/kiosk/server/account_binding.rb	5ea3ecabcd0d346a	      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
-kiosk-server/lib/kiosk/server/account_binding.rb	bb012f611149c470	      def bind!(public_key_pem:, user_id:, requested_role: nil)
+kiosk-server/lib/kiosk/server/account_binding.rb	7d23e94c84eeaac4	      def bind!(public_key_pem:, user_id:, requested_role: nil)
 kiosk-server/lib/kiosk/server/account_binding.rb	204f61ec2a1c5f34	    #     ceremony can carry — K-072), `allowed_roles` is REMAPPED to
 kiosk-server/lib/kiosk/server/account_binding.rb	c9854b30380764fc	effective_role = new_role
 kiosk-server/lib/kiosk/server/actions.rb	a2e8f2677fafc2d6	    # Process-wide registry of Action handlers: a name -> callable map plus the

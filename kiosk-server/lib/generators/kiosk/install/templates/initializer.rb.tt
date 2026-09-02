@@ -66,6 +66,25 @@ Kiosk.configure do |c|
   # Role vocabulary your authz (app-layer policies, and RLS if opted in)
   # branches on. Never include `:admin` — prefer job-titled roles like
   # `:support`, `:master`.
+  #
+  # ROLES ARE TOTAL, OR YOU HAVE NONE. If you declare roles here, your
+  # `user_idp` MUST resolve one for EVERY human who can approve an assistant
+  # binding. A role for staff and nothing for customers is NOT a supported
+  # configuration: on an origin with more than one role, a binding that
+  # resolves no role leaves the assistant's existing role in place, so an
+  # assistant already holding the privileged role KEEPS it while its principal
+  # changes to a human who holds none. Declaring no roles at all is the other
+  # supported shape — then no binding carries a role and no token has one.
+  # Both are total; the MIXTURE is what is unsupported (kiosk.tech
+  # `protocol.md` §6.3).
+  #
+  # In practice the only way to acquire the mixture is to write `#kiosk_role`
+  # on your user model and let it answer nil. Make it TOTAL: return your
+  # least-privileged declared role instead. Nothing can check this at boot —
+  # whether a method is total over your humans is not a fact a configuration
+  # file holds — so kiosk-server warns in your log the first time a ceremony
+  # resolves no role on a multi-role origin. That warning is the only signal
+  # you get, and it arrives at the first binding rather than at deploy.
   # c.roles = %i[customer]
 
   # Role pinned to every self-registered agent (agents cannot choose their

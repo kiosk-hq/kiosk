@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "stringio"
+
 # The binding product of the ceremony: fresh key → linked
 # assistant account under the holder's user_id; known key → rebind with
 # reputation carried; unlink = registration-layer revocation. DB access is
@@ -257,6 +259,95 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # ...and the role did not.
       expect(con.all_sql).not_to match(/allowed_roles\s*=/i)
       expect(minted).to eq(["agent-known", "owner"])
+    end
+
+    # ── THE MISCONFIGURATION WARNING (T-165, Phil 2026-09-02 on K-1134) ──────
+    #
+    # The example above characterises what the engine DOES; these pin the only
+    # thing that changed when the contract was written down. Role resolution is
+    # total or the operator has no roles, so a ceremony that resolves none at an
+    # origin declaring MORE THAN ONE role is the unsupported mixture and nothing
+    # else — the one moment the misconfiguration is decidable with certainty,
+    # which is why it is detected here and not at boot (see the comment on
+    # {AccountBinding.warn_role_resolution_not_total}). It WARNS; the ceremony is
+    # unchanged, because Phil's ruling was that the operator fixes the identity
+    # system and the engine keeps its behaviour.
+    #
+    # Rails.logger is nil in this plain-Ruby suite, so the line lands on $stderr.
+    def capture_operator_log
+      original = $stderr
+      $stderr  = StringIO.new
+      yield
+      $stderr.string
+    ensure
+      $stderr = original
+    end
+
+    it "warns the operator when a role-less ceremony lands on a multi-role origin" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      route_exec_query(con) do |sql, _binds|
+        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
+                              "allowed_roles" => "{owner}" }] : []
+      end
+
+      output = capture_operator_log do
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
+      end
+
+      expect(output).to include("resolved NO role for the approving human")
+      expect(output).to include("must be TOTAL")
+      expect(output).to include("kiosk_role")
+      # It names the vocabulary, so the operator can see which origin this is.
+      expect(output).to include("customer")
+      expect(output).to include("owner")
+    end
+
+    it "prefers Rails.logger for that warning when a Rails logger is present" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      route_exec_query(con) do |sql, _binds|
+        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
+                              "allowed_roles" => "{owner}" }] : []
+      end
+      logged = []
+      logger = double("logger")
+      allow(logger).to receive(:warn) { |m| logged << m }
+      stub_const("Rails", double("Rails", logger: logger))
+
+      described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
+
+      expect(logged.size).to eq(1)
+      expect(logged.first).to include("resolved NO role for the approving human")
+    end
+
+    # A single-role origin cannot exhibit the defect — retaining and resetting
+    # are the same value there — so warning about it would be noise on a correct
+    # configuration, and a warning an operator learns to ignore is not a warning.
+    it "stays silent on a single-role origin, where retain and reset are the same value" do
+      Kiosk.configure { |c| c.roles = %i[customer] }
+      route_exec_query(con) do |sql, _binds|
+        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
+                              "allowed_roles" => "{customer}" }] : []
+      end
+
+      output = capture_operator_log do
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
+      end
+
+      expect(output).to eq("")
+    end
+
+    it "stays silent on a multi-role origin when the ceremony DOES carry a role" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      route_exec_query(con) do |sql, _binds|
+        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
+                              "allowed_roles" => "{owner}" }] : []
+      end
+
+      output = capture_operator_log do
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "customer")
+      end
+
+      expect(output).to eq("")
     end
 
     # A rebind is a principal change, so — like

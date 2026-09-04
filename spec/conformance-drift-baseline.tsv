@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-03 at 350678b3
+# recorded: 2026-09-04 at 83abb555
 # 1663 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
@@ -1302,7 +1302,7 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	b091eec987f7cfdb	does not map 501 
 kiosk-server/spec/kiosk/server/errors_spec.rb	5e702cf7a673100e	drops a nil hint and never emits `instance`
 kiosk-server/spec/kiosk/server/errors_spec.rb	625d7d153332e7c6	each agrees with the CODES table on both code and status
 kiosk-server/spec/kiosk/server/errors_spec.rb	3be2b34674468b49	every Kiosk::Server::Errors::* subclass rescues as Base
-kiosk-server/spec/kiosk/server/errors_spec.rb	61f5c4bf7ad49531	is exactly the spec's closed `code` table
+kiosk-server/spec/kiosk/server/errors_spec.rb	4973b5af6d56a8a9	is exactly the spec's closed `code` table
 kiosk-server/spec/kiosk/server/errors_spec.rb	ebdc64fc6a1d9236	maps every status to a vocabulary code
 kiosk-server/spec/kiosk/server/errors_spec.rb	deaf7a55c662068d	mints one problem type URI per code and nothing else
 kiosk-server/spec/kiosk/server/errors_spec.rb	e21e6b08ebc0127e	names every code in TITLES — a problem document without a title is not one

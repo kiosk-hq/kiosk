@@ -1,27 +1,63 @@
 # frozen_string_literal: true
 
+require "json"
+
 RSpec.describe Kiosk::Server::Errors do
+  # THE `code` → HTTP-STATUS MAP IS DERIVED FROM THE PUBLISHED SCHEMA, NEVER
+  # RESTATED HERE (K-1286).
+  #
+  # It used to be a literal seventeen-row hash typed into the example below, and
+  # that made this file the THIRD hand-kept copy of one table: the narrative
+  # spec's vocabulary table, the formal spec's Section 9 table and the seventeen
+  # published `problems/<code>/` pages are the others, and `Errors::CODES` is a
+  # fourth — on the far side of a repository boundary from all three. Nothing
+  # compared them. MEASURED 2026-09-04: publishing `conflict` as 410 on every
+  # kiosk.tech surface while this table kept 409 left THIRTEEN gates at exit 0,
+  # this suite among them, because a literal restating a literal only ever proves
+  # that someone typed the same thing twice.
+  #
+  # So the expected value comes out of `e2e/schemas/problem.schema.json`, the
+  # VENDORED copy of the published normative schema, whose `allOf` carries one
+  # `if code == X then status == N` branch per vocabulary entry. `bin/check-spec-schemas`
+  # holds that copy equal to what kiosk.tech publishes whenever the umbrella
+  # layout puts the two repositories side by side; this file closes the other
+  # half, and needs no sibling checkout, so it runs in public CI exactly as it
+  # runs locally.
+  #
+  # WHAT THIS DOES NOT CLOSE, stated rather than implied: vendored-equals-published
+  # runs in NEITHER repository's CI (no job in either checks the other out), so the
+  # cross-repo link is proved in the umbrella workspace and not on a runner. What
+  # IS closed on a runner is that this gem's table equals the schema this repo
+  # ships — which is the copy `e2e/schema_conformance.rb` validates the live wire
+  # against, so the engine, the e2e harness and the published contract cannot
+  # disagree about a status without something here going red.
+  vendored_problem_schema = File.expand_path("../../../../e2e/schemas/problem.schema.json", __dir__)
+
   describe "CODES — the wire vocabulary" do
-    it "is exactly the spec's closed `code` table" do
-      expect(described_class::CODES).to eq(
-        "bad_request"            => 400,
-        "unauthenticated"        => 401,
-        "pow_required"           => 402,
-        "payment_setup_required" => 402,
-        "payment_failed"         => 402,
-        "forbidden"              => 403,
-        "rls_denied"             => 403,
-        "spending_cap_exceeded"  => 403,
-        "kyc_required"           => 403,
-        "verb_not_found"         => 404,
-        "not_found"              => 404,
-        "method_not_allowed"     => 405,
-        "conflict"               => 409,
-        "quota_exceeded"         => 429,
-        "action_failed"          => 500,
-        "internal_error"         => 500,
-        "module_not_served"      => 501,
-      )
+    it "is exactly the spec's closed `code` table, derived from the published schema rather than restated" do
+      expect(File).to exist(vendored_problem_schema)
+      schema = JSON.parse(File.read(vendored_problem_schema))
+
+      published = schema.fetch("allOf", []).each_with_object({}) do |branch, map|
+        code   = branch.dig("if", "properties", "code", "const")
+        status = branch.dig("then", "properties", "status", "const")
+        map[code] = status if code && status
+      end
+
+      # A derivation that derives nothing passes every comparison. The floor is
+      # the vocabulary size the wire has carried since T-158; a schema whose
+      # `allOf` was emptied or whose branch shape changed fails HERE, naming the
+      # cause, instead of quietly agreeing with an empty hash.
+      expect(published.size).to be >= 17,
+        "the vendored problem schema binds #{published.size} code(s) to a status; the `allOf` " \
+        "branches are the only machine-readable copy of the map and this comparison is blind " \
+        "without them"
+
+      # The two halves of the schema must name the same set, or one of them is
+      # describing a wire the other does not.
+      expect(published.keys).to match_array(schema.dig("properties", "code", "enum"))
+
+      expect(described_class::CODES).to eq(published)
     end
 
     it "names every code in TITLES — a problem document without a title is not one" do

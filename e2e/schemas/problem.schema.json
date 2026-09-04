@@ -24,7 +24,7 @@
     },
     "status": {
       "type": "integer",
-      "description": "RFC 9457 status: the HTTP status code, restated in the body.",
+      "description": "RFC 9457 status: the HTTP status code, restated in the body. The status is a CONSTANT OF THE CODE, never a per-incident choice: the `allOf` below binds each of the seventeen vocabulary entries to exactly one status, so a document whose `code` and `status` disagree is invalid here and not merely unusual. That mapping is the one the specification's error-vocabulary table publishes, and it is the machine-readable copy an implementation's own code table is derived from -- before this existed the table lived in hand-kept copies on both sides of the repository boundary with nothing comparing them. Four codes share 403, three share 402 and two share 404, which is why `code` and not the status is the field to branch on.",
       "minimum": 100,
       "maximum": 599
     },
@@ -65,5 +65,330 @@
         "$ref": "https://kiosk.tech/spec/schemas/pow.schema.json#/$defs/challenge"
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "bad_request"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "unauthenticated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 401
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "pow_required"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 402
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "payment_setup_required"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 402
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "payment_failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 402
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "forbidden"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 403
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "rls_denied"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 403
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "spending_cap_exceeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 403
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "kyc_required"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 403
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "verb_not_found"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 404
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "not_found"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 404
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "method_not_allowed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 405
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "conflict"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 409
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "quota_exceeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 429
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "action_failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 500
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "internal_error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 500
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "const": "module_not_served"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 501
+          }
+        }
+      }
+    }
+  ]
 }

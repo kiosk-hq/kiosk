@@ -17,11 +17,12 @@ class RequestKycOperation
   # anonymized boolean `licence_a`, which {RentMotorcycleOperation} gates on.
   REQUESTED_CLAIMS = %w[age_over_18 licence_category:A].freeze
 
-  # THE OUTSTANDING-INTAKE CAP (K-586). Nothing else meters this verb — skooti
+  # THE OUTSTANDING-INTAKE CAP. Nothing else meters this verb — skooti
   # configures no `reputation_policy` and `registration_pow_count` is 1 — so one
   # registration proof would otherwise buy unlimited broker intakes. Free while
   # the broker is a stub that bills nothing; a budget hole the day a paid issuer
-  # sits behind prove.my, and a licence check is the expensive kind (K-460).
+  # sits behind the KYC broker, and a licence check is the expensive kind: it
+  # reads a real document where an age boolean reads a date.
   #
   # PENDING only, so the cap is self-clearing: a finished (approved or declined)
   # request must never wall its principal out, and there is no TTL to tune and no

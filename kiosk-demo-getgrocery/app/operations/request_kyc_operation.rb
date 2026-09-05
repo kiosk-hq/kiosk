@@ -20,7 +20,7 @@ class RequestKycOperation
   # THE OUTSTANDING-INTAKE CAP. Nothing else meters this verb — the
   # reputation policy challenges `:query` only — so without it one registration
   # proof buys unlimited broker intakes: a budget hole the day a paid issuer
-  # sits behind prove.my.
+  # sits behind the KYC broker.
   #
   # PENDING requests only, and that IS the design: an approved or declined
   # request is a finished conversation and must never wall its principal out,

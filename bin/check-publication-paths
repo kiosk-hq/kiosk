@@ -42,6 +42,13 @@
 #         private-workspace file name, or a citation of a superseded internal
 #         draft.
 #   ABS   No shipped line may carry a developer-machine absolute path.
+#   RN    No shipped line may name a demo operator at a domain the project does
+#         not own. The demos are hosted, one subdomain each, under one real
+#         domain; every other spelling of them is an invention, and an invented
+#         domain in shipped prose is a pointer a reader can follow to somebody
+#         else's website. Twice now the invented names have been scrubbed out by
+#         hand and once they grew back, in a comment written nine days after the
+#         scrub -- by an author who had no way to know, because nothing checked.
 #
 # WHAT THE SEC ARM CANNOT SEE, stated here because an over-claimed gate is worse
 # than none. Number resolution is NECESSARY and NOT SUFFICIENT. A citation may
@@ -112,7 +119,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "75a28cc5688b4256ea71af43547f0531284a327f896f67be46ed6a15d896103c"
+TWIN_DIGEST = "20b4e67efd11ad5ede40c0d7defe88274c97aa2f6c74bc1ead4629a7797e6a55"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -154,6 +161,15 @@ PATTERNS = [
     repair: "cite the published specification section that carries the same rule, or state the rule inline",
     example: ["# The verb-name rules are the ones stated in the design",
               "# doc, which is where the whole list lives."],
+  },
+  {
+    id: "RN-1",
+    what: "a demo operator named at a domain this project does not own",
+    re: /(getgrocery|atablefor|hoteling|skooti|stylish|philslist|tudu|prove)\.(my|us|com|io|app|net|org|co)\b/,
+    repair: "name the hosted subdomain the demo actually serves on, or say what the thing IS " \
+            "(\"the KYC broker\", \"the grocery demo\") -- an operator that is not a real business " \
+            "does not need a domain to be referred to",
+    example: ["# a budget hole the day a paid issuer sits behind prove.my"],
   },
   {
     id: "ABS-1",

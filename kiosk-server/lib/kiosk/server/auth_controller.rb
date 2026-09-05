@@ -74,7 +74,7 @@ module Kiosk
         )
         respond(result, :created)
       rescue KeyError => e
-        render_error(Errors::BadRequest.new("missing field: #{e.message}"))
+        render_error(Errors.missing_field(e))
       rescue Errors::Base => e
         render_error(e)
       end
@@ -88,7 +88,7 @@ module Kiosk
         )
         respond(result, :ok)
       rescue KeyError => e
-        render_error(Errors::BadRequest.new("missing field: #{e.message}"))
+        render_error(Errors.missing_field(e))
       rescue Errors::Base => e
         render_error(e)
       end
@@ -160,7 +160,7 @@ module Kiosk
         )
         respond(result.slice(*CLAIM_RESPONSE_FIELDS), :created)
       rescue KeyError => e
-        render_error(Errors::BadRequest.new("missing field: #{e.message}"))
+        render_error(Errors.missing_field(e))
       rescue Errors::Base => e
         render_error(e)
       end
@@ -196,7 +196,7 @@ module Kiosk
         Kiosk::Server::Headers.add_to(response.headers)
         head :no_content
       rescue KeyError => e
-        render_error(Errors::BadRequest.new("missing field: #{e.message}"))
+        render_error(Errors.missing_field(e))
       rescue Errors::Base => e
         render_error(e)
       end
@@ -234,8 +234,8 @@ module Kiosk
         raise Errors::BadRequest, "request body must be a JSON object" unless parsed.is_a?(Hash)
 
         parsed
-      rescue JSON::ParserError => e
-        raise Errors::BadRequest, "invalid JSON body: #{e.message}"
+      rescue JSON::ParserError
+        raise Errors.malformed_json
       end
 
       def respond(payload, status)

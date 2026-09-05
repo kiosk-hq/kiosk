@@ -539,6 +539,19 @@ if ARGV.include?("--self-test")
               "REST endpoints: one per verb, HTTP method = semantics.", "REST endpoints, one per verb."]],
       expect: /hoteling: config\/routes\.rb does not carry K-1069 claim `one-endpoint-per-verb` verbatim/ },
 
+    { id: "engine-words-it-differently", kind: :break,
+      rule: "The HOUSE SENTENCE, where the ENGINE says it too (K-1294)",
+      what: "the engine grows a fourth wording for the absent-field refusal — the deployed leak's shape",
+      ops:  [[:edit, "kiosk-server/lib/kiosk/server/errors.rb",
+              "BadRequest.new(\"missing field: \#{name}\", hint: hint)",
+              "BadRequest.new(\"missing param: \#{name}\", hint: hint)"]],
+      expect: /the absent-field refusal has 2 spellings across the demos and the engine/ },
+    { id: "vacuity-house-sentence", kind: :vacuity,
+      rule: "The HOUSE SENTENCE, where the ENGINE says it too (K-1294)",
+      what: "the slice stops reaching the refusal, so every producer reads as silent and agrees with nothing",
+      ops:  [[:edit, "bin/check-demo-copies", "HOUSE_SENTENCE_WINDOW = 400", "HOUSE_SENTENCE_WINDOW = 1"]],
+      expect: /the absent-field refusal cannot be read out of .*errors\.rb/ },
+
     { id: "lockfile-platforms-drift", kind: :break,
       rule: "every demo lockfile resolves for the SAME platforms (K-962)",
       what: "one lockfile loses a platform, so that demo alone cannot be installed frozen",
@@ -3086,7 +3099,13 @@ FRAGMENTS = {
            "deliberately NOT here: it words the same refusal `missing param: party_size` in " \
            "{missing_party_size}, for the one verb that asks the question, so it has no method of " \
            "this name to hold. That difference is real and predates this rule; what this rule " \
-           "stops is a FOURTH wording appearing inside the three that already agree.",
+           "stops is a FOURTH wording appearing inside the three that already agree. THE ENGINE " \
+           "IS THE FIFTH PRODUCER AND WAS OUTSIDE EVERY RULE IN THIS FILE UNTIL K-1294: it emits " \
+           "the same sentence on the auth plane, where an assistant meets it before any verb, and " \
+           "it shipped `missing field: key not found: :public_key` to the live fleet. The " \
+           "house-sentence section near the bottom of this file now reads this method's literal " \
+           "off the three copies and compares it with the engine's builder; the `ships:` list here " \
+           "is what that section derives its demo set from, so the two move together.",
   },
   "app/operations/wire_arguments.rb#whole_number" => {
     rule:  :code,
@@ -5258,6 +5277,117 @@ FRAMEWORK_CLAIMS.each do |id, claim|
   end
 end
 
+# ── The HOUSE SENTENCE, where the ENGINE says it too (K-1294) ────────────────
+#
+# The FRAGMENTS entry for `app/operations/wire_arguments.rb#missing` calls
+# `missing field: <name>` "the one an assistant's error handling matches on" and
+# holds the three demos that ship it in lockstep. That was true and it was not
+# enough: the file set of every rule above is `kiosk-demo-*`, and the ENGINE
+# emits the same sentence on the auth plane — where an assistant meets it FIRST,
+# before it has read a catalogue or called a verb.
+#
+# MEASURED live against the deployed fleet on 2026-09-05: `POST
+# /kiosk/auth/register` with an empty object answered
+# `"detail":"missing field: key not found: :public_key"`. That is
+# `KeyError#message` spliced in whole — a fourth wording, with a Ruby symbol in
+# it, in the one place no rule in this file could see. So the sentence is
+# compared ACROSS the boundary here: the demos' refusal and the engine's builder
+# must open with the same literal, or one of them has drifted.
+#
+# READ OFF THE PRODUCER, NOT MATCHED AGAINST A REMEMBERED TEXT, and that
+# distinction is the whole rule rather than an implementation note. The first
+# writing of this section carried the sentence in its own regex; the self-test
+# arm below — the engine re-worded to `missing param:` — then reddened for the
+# WRONG reason, reporting the engine as silent rather than as disagreeing,
+# because a pattern that knows the answer can only ever notice the answer
+# VANISHING. So each producer's own method body is sliced and whatever literal
+# it interpolates the field into is taken as its spelling; the rule compares
+# those spellings to each other and holds nothing else.
+#
+# WHAT THIS DOES NOT DO, said plainly. It compares the LITERAL, not the
+# behaviour: the engine's own suite (`kiosk-server/spec/kiosk/server/
+# wire_wording_spec.rb`) is what dispatches each site and reads the detail off
+# the wire, and it carries the sweep that stops a new site building the sentence
+# for itself. This rule answers the one question that spec structurally cannot:
+# whether the two INDEPENDENT producers, in two gems with two suites, still say
+# the same words.
+#
+# The demo side is DERIVED from the fragment entry rather than re-listed, so a
+# demo joining or leaving the house sentence moves both rules at once.
+HOUSE_SENTENCE_UNIT   = "app/operations/wire_arguments.rb#missing"
+HOUSE_SENTENCE_ENGINE = "kiosk-server/lib/kiosk/server/errors.rb"
+HOUSE_SENTENCE_ENTRY  = { HOUSE_SENTENCE_ENGINE => "def self.missing_field(",
+                          HOUSE_SENTENCE_UNIT   => "def missing(field)" }.freeze
+# How far past the entry point the refusal may be built. Both producers put it
+# on the next line or two; the window exists so an unrelated later method cannot
+# be read as this one's answer.
+HOUSE_SENTENCE_WINDOW = 400
+# «a literal, then the interpolated field» — the shape both producers use, with
+# the literal captured and nothing about it assumed.
+HOUSE_SENTENCE_RE     = /"([^"\n]*?)\#\{/
+
+# @return [String, nil] the sentence this producer interpolates the field into
+def house_sentence_of(path, entry)
+  src = code_source(path)
+  idx = src.index(entry)
+  return nil if idx.nil?
+
+  src[idx, HOUSE_SENTENCE_WINDOW][HOUSE_SENTENCE_RE, 1]
+end
+
+house_sentence_sites = {}
+
+house_engine_path = File.join(ROOT, HOUSE_SENTENCE_ENGINE)
+if File.file?(house_engine_path)
+  house_sentence_sites[HOUSE_SENTENCE_ENGINE] =
+    house_sentence_of(house_engine_path, HOUSE_SENTENCE_ENTRY.fetch(HOUSE_SENTENCE_ENGINE))
+else
+  errors << "#{HOUSE_SENTENCE_ENGINE} is not in the tree — the engine half of the house-sentence " \
+            "rule (K-1294) is aimed at a file that no longer exists. Re-aim it or delete it; a rule " \
+            "with no subject is not coverage."
+end
+
+house_rel   = HOUSE_SENTENCE_UNIT.split("#").first
+house_ships = (FRAGMENTS[HOUSE_SENTENCE_UNIT] || {})[:ships]
+if house_ships.nil?
+  errors << "the house-sentence rule (K-1294) derives its demo list from " \
+            "FRAGMENTS[#{HOUSE_SENTENCE_UNIT.inspect}], which is gone. The engine is then compared to " \
+            "nothing at all until that entry is restored or this rule is given another source."
+else
+  house_ships.each do |demo|
+    path = (dups[house_rel] || {})["kiosk-demo-#{demo}"]
+    if path.nil?
+      errors << "#{demo}: #{house_rel} is declared in `ships:` for the house sentence (K-1294) but " \
+                "is not in the tree."
+      next
+    end
+    house_sentence_sites["kiosk-demo-#{demo}/#{house_rel}"] =
+      house_sentence_of(path, HOUSE_SENTENCE_ENTRY.fetch(HOUSE_SENTENCE_UNIT))
+  end
+end
+
+# VACUITY: a producer this rule cannot read is not a producer that agrees. It is
+# reported as silence rather than folded into the spellings below, because a
+# `nil` quietly compared as one more value is how a rule starts confirming
+# agreement between one site and nothing.
+house_silent = house_sentence_sites.select { |_, sentence| sentence.nil? }.keys
+if house_silent.any?
+  errors << "the absent-field refusal cannot be read out of #{house_silent.join(', ')} (K-1294) — " \
+            "no `\"…\#{…}\"` sentence within #{HOUSE_SENTENCE_WINDOW} characters of its entry point. " \
+            "Either the producer was restructured, in which case this rule must be re-aimed at where " \
+            "it now builds the sentence, or it stopped building one at all. It may not simply become " \
+            "unreadable: an unread producer is compared to nothing."
+end
+
+house_spellings = house_sentence_sites.values.compact.uniq
+if house_spellings.size > 1
+  errors << "the absent-field refusal has #{house_spellings.size} spellings across the demos and the " \
+            "engine — " + house_sentence_sites.compact.map { |site, sentence| "#{site} says #{sentence.inspect}" }.join("; ") +
+            " (K-1294). An assistant's error handling matches on ONE of them; the deployed engine " \
+            "already shipped a fourth wording once — `missing field: key not found: :public_key`, a " \
+            "Ruby KeyError message on the auth plane — and nothing in this file could see it."
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
@@ -5298,7 +5428,10 @@ if errors.empty?
        "same-name-different-body; #{fragment_dsl_ids.size} reached only by the class-macro handle, " \
        "#{agree_groups} declared convergence group(s) of `:per_demo` copies confirmed against the " \
        "tree over both granularities, " \
-       "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason)"
+       "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason), " \
+       "one spelling (#{house_spellings.first.inspect}) of the absent-field refusal read off " \
+       "#{house_sentence_sites.length} producer(s) — #{house_ships ? house_ships.length : 0} demo(s) " \
+       "plus the engine"
   exit 0
 end
 

@@ -54,8 +54,8 @@ module Kiosk
         raise Errors::BadRequest, "request body must be a JSON object" unless parsed.is_a?(Hash)
 
         parsed
-      rescue JSON::ParserError => e
-        raise Errors::BadRequest, "invalid JSON body: #{e.message}"
+      rescue JSON::ParserError
+        raise Errors.malformed_json
       end
 
       # KYC attestation is an AGENT-only surface: the effective agent IdP

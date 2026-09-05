@@ -228,6 +228,72 @@ module Kiosk
         "unknown #{verb} '#{name}'. #{available} Call GET .../schema for the full catalog."
       end
 
+      # ── THE TWO MALFORMED-REQUEST SENTENCES, BUILT HERE AND NOWHERE ELSE ────
+      #
+      # Both used to be assembled at the call site by splicing a Ruby
+      # exception's `message` into the problem document's `detail`, at five
+      # sites across three controllers, and the wire carried the result
+      # verbatim (K-1294). Measured live against the deployed fleet on
+      # 2026-09-05, `POST /kiosk/auth/register` with an empty object answered
+      # `"detail":"missing field: key not found: :public_key"` — `KeyError#message`,
+      # Ruby symbol and all, on the FIRST call an assistant makes — and a body
+      # that was not JSON answered `"detail":"invalid JSON body: unexpected token
+      # 'notjson' at line 1 column 1"`, which is the json gem's wording and moves
+      # when the parser does.
+      #
+      # Neither is ours to publish. `missing field: <name>` is the house
+      # sentence: the seven demos answer an absent argument with it
+      # (`WireArguments.missing`, held in lockstep across three of them by
+      # bin/check-demo-copies) and it is the one an assistant's error handling
+      # matches on. The same controller that leaked the symbol already words its
+      # own query-parameter refusal `missing public_key query parameter` a
+      # hundred lines away, so the clean wording was never in doubt — only
+      # unenforced, because the house-sentence rule's file set was `kiosk-demo-*`
+      # and could not see the engine.
+      #
+      # A detail says WHAT is wrong in this repository's own words; anything the
+      # caller needs in order to retry goes in `hint`, which is where the
+      # position information a parser message carried belongs if a site wants it.
+
+      # `missing field: <name>` — the field, never the exception.
+      #
+      # @param err  [KeyError, #to_s] the rescued `KeyError`, or the field name
+      # @param hint [String, nil]
+      def self.missing_field(err, hint: nil)
+        name = err.is_a?(::KeyError) ? key_of(err) : err
+        return BadRequest.new("missing field: #{name}", hint: hint) if name
+
+        # `raise KeyError, "…"` by hand sets no key, and `KeyError#key` raises
+        # ArgumentError when asked. Say so in plain words rather than falling
+        # back to `message`, which is the sentence this method exists to keep
+        # off the wire.
+        BadRequest.new("request is missing a required field", hint: hint)
+      end
+
+      # @return [String, nil] the absent key's name, or nil when the error
+      #   carries none.
+      def self.key_of(err)
+        err.key.to_s
+      rescue ::ArgumentError
+        nil
+      end
+
+      # The recovery sentence for a body that did not parse. One string, so the
+      # three controllers that answer this cannot word it three ways.
+      MALFORMED_JSON_HINT = "the request body must be a single well-formed JSON object"
+
+      # `invalid JSON body` — the whole detail. The parser's own message is
+      # deliberately dropped: it names Ruby's json gem rather than this
+      # protocol, and a caller that sent something which is not JSON does not
+      # need a byte offset to find that out.
+      #
+      # @param hint [String, nil] defaults to {MALFORMED_JSON_HINT}; a site with
+      #   a narrower one (the verb wire's arguments-vs-query-string split)
+      #   passes it.
+      def self.malformed_json(hint: MALFORMED_JSON_HINT)
+        BadRequest.new("invalid JSON body", hint: hint)
+      end
+
       # Base class. `rescue Kiosk::Server::Errors::Base` catches every Kiosk
       # error without leaking unrelated StandardErrors.
       class Base < StandardError

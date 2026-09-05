@@ -75,10 +75,9 @@ module Kiosk
       # document; without this line, malformed JSON would be the one hole in
       # the error contract, and the shape of the hole depends on the host's
       # exception app rather than on the protocol.
-      rescue_from ::ActionDispatch::Http::Parameters::ParseError do |error|
+      rescue_from ::ActionDispatch::Http::Parameters::ParseError do
         render_wire_error(
-          Errors::BadRequest.new(
-            "invalid JSON body: #{error.message}",
+          Errors.malformed_json(
             hint: "an action's arguments are a JSON object in the request body; " \
                   "a query's are in the query string.",
           ),
@@ -426,8 +425,11 @@ module Kiosk
         end
 
         parsed
-      rescue JSON::ParserError => e
-        raise Errors::BadRequest, "invalid JSON body: #{e.message}"
+      rescue JSON::ParserError
+        raise Errors.malformed_json(
+          hint: "an action's arguments are a JSON object in the request body; " \
+                "a query's are in the query string.",
+        )
       end
 
       # Default: host's primary ActiveRecord connection. Satellite-mode

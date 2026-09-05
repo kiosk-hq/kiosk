@@ -529,7 +529,7 @@ kiosk-demo-philslist/script/binding_flow.rb	results[:a2_edit] = rc
 kiosk-demo-philslist/script/binding_flow.rb	results[:a2_sees_listing] = rc == 200 && Array(mine2).any? { |r| r["listing_id"] == listing_id }
 kiosk-demo-philslist/script/binding_flow.rb	results[:unlink_same_second] = (jwt_claims(token1_fresh)["iat"] == Time.now.to_i) if token1_fresh
 kiosk-demo-philslist/script/redteam_suite.rb	record(results, "NoSellerPiiOnTheOpenBoard",
-kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the wire (ADR-0020): every
+kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the wire: every
 kiosk-demo-prove/README.md	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
 kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
 kiosk-demo-prove/README.md	# kiosk-demo-prove
@@ -1166,7 +1166,7 @@ kiosk-server/lib/kiosk/server/wire_controller.rb	Wire response (JSON): success i
 kiosk-server/lib/kiosk/server/wire_controller.rb	def render_wire_error(error)
 kiosk-server/lib/kiosk/server/wire_controller.rb	def schema
 kiosk-server/lib/kiosk/server/wire_controller.rb	pow = PowGate.proofs_from_header(
-kiosk-server/lib/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do |error|
+kiosk-server/lib/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do
 kiosk-server/lib/kiosk/server/wire_controller.rb	rescue_from Errors::Base, with: :render_wire_error
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	does not fire assistant_claimed for a fresh key (nothing was re-bound)
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires assistant_claimed(agent:, previous_user_id:, user_id:)

@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-05 at 3bd1f002 -- K-1294 house sentence + K-1300 scrub residue judged
-# 1663 anchors.
+# recorded: 2026-09-06 at 73b20084
+# 1664 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -539,6 +539,7 @@ kiosk-demo-prove/README.md	100db29d360b2883	## The three legs
 kiosk-demo-prove/README.md	0148332b3350de10	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	f4c0288ba2074cb5	Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
 kiosk-demo-prove/README.md	169e1e8d38bd3ab8	`base_url` — the origin the request arrived on — **not** the deploy origin. The
+kiosk-demo-prove/README.md	8240d550420a9c7d	account-possession assurance level adopted for now, after a survey of the
 kiosk-demo-prove/README.md	3be9a6254148cf42	and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
 kiosk-demo-prove/README.md	e2dd450707d4c20c	operator → broker (server-to-server)
 kiosk-demo-prove/README.md	712e1bc4d74928a3	verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own

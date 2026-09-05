@@ -4,16 +4,25 @@
 # kiosk-demo@.service). Caddy handles automatic TLS (Let's Encrypt HTTP-01)
 # per subdomain with zero cert plumbing.
 #
-# ── DRIFT NOTE (K-463) ──────────────────────────────────────────────────────
-# This file is the canonical template for a FRESH, single-purpose box (it uses
-# a `(kioskproxy)` snippet that adds `encode zstd gzip`). The current live VPS,
-# however, is a SHARED host: its /etc/caddy/Caddyfile also serves other sites,
-# was hand-maintained BEFORE this snippet existed, and uses the plainer inline
-# form `reverse_proxy 127.0.0.1:PORT` (no snippet). So do NOT overwrite the live
-# Caddyfile with this file — you would drop the other sites' vhosts. When adding
-# a vhost to the EXISTING live box, hand-add an inline block matching its style
-# (that is how kyc.demo.kiosk.tech was added). Bringing the live box up to this
-# snippet template (to gain `encode`) is a maintenance-window task, not a copy.
+# ── HOW THIS FILE REACHES THE BOX ───────────────────────────────────────────
+# `deploy/deploy-caddy.sh` ships it whole: it stages the file, has the BOX's own
+# caddy validate it, diffs, backs up, installs, reloads, then verifies the live
+# wire and rolls back if the wire disagrees. Run `--check` to see the diff and
+# change nothing. Do not hand-edit /etc/caddy/Caddyfile: this file is the source
+# of truth and the script overwrites it entirely.
+#
+# THE NOTE THAT USED TO BE HERE SAID THE OPPOSITE, AND IT WAS FALSE. It warned
+# that the live VPS is a SHARED host whose Caddyfile "also serves other sites",
+# and that overwriting it "would drop the other sites' vhosts". MEASURED
+# 2026-09-06 before the first deploy: /etc/caddy/ holds one Caddyfile and one
+# old backup, nothing imports anything, and the RUNNING caddy's admin API lists
+# exactly the eight demo hosts and no others. There were no other sites. The
+# note cost a month: it is why the template was never applied, which is why the
+# fleet sent no HSTS (K-1295) while this file shipped the header enabled, and
+# why the fleet throttled every request (K-1168) while this file shipped the
+# limiter commented out. A warning nobody can check is a warning nobody can
+# retire -- so if this box ever does gain a non-Kiosk vhost, the answer is to
+# make the script manage a fragment, not to write another note.
 #
 # Port map (must match env/<app>.env PORT and kiosk-demo@.service):
 #   getgrocery -> 3001   atablefor -> 3002   hoteling  -> 3003
@@ -39,7 +48,14 @@
 # Global options: contact address for Let's Encrypt expiry notices.
 # Set a real ops mailbox before going live.
 {
-	email ops@kiosk.tech
+	# The ACME contact. This is what the live box has had since it was built, and
+	# it is kept rather than "corrected" for a reason worth stating: changing it
+	# makes Caddy register a NEW ACME account, which is a real action taken for no
+	# benefit -- kiosk.tech publishes no MX (`dig +short MX kiosk.tech` is empty),
+	# so neither this address nor any other on the domain receives anything today.
+	# Whether the fleet should have a reachable operations address at all is its
+	# own question and is not settled by a deploy script.
+	email admin@kiosk.tech
 }
 
 # Reusable snippet: shared proxy + the per-IP edge rate-limit.
@@ -89,7 +105,14 @@
 #      all eight sites serve, and nothing says the edge is open (K-976).
 #
 # ALTERNATIVE (equally acceptable): a per-IP rate rule on `/kiosk/*` at a CDN /
-# WAF in front of this box. What is NOT acceptable is deploying with neither —
+# WAF in front of this box. NEITHER IS THE DEFAULT, and that is a decision
+# rather than an omission (Phil, 2026-09-05: «Наш PoW проверяется за
+# миллисекунды. Ну, пускай сыплют мусором. Посмотрим, как реагировать. Делать по
+# дефолту throttle - не надо.»). The measurements behind it: a proof verifies in
+# 4.46 ms, one worker completes a full registration 60 times a second and a
+# plain read 1075 times a second, and the limit that used to be here was ONE
+# request a second. It also keyed per-IP across every vhost, so bursting one
+# demo refused the other seven. What was NOT acceptable was
 # nor with "probably one of those", which is what an unchecked box is. If you
 # took this route, say so where the check can see it:
 #   KIOSK_EDGE_RATELIMIT=external deploy/check-edge-ratelimit.sh

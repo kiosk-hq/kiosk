@@ -1215,6 +1215,32 @@ jobs:
       - name: check-edge-ratelimit self-test
         run: ./deploy/check-edge-ratelimit.sh --self-test
 
+  # ITS SIBLING, FOR THE OTHER HALF OF THE SAME CLASS (K-1295). The edge rate
+  # limit got the script above and it landed; HSTS got a line in
+  # deploy/CHECKLIST.md, which is 0 ticked of 45, so its tick state carries no
+  # information at all — and MEASURED 2026-09-05, all eight deployed origins
+  # send no `Strict-Transport-Security` at all while deploy/Caddyfile has
+  # shipped it ENABLED since K-916. A checklist line is not a mechanism.
+  #
+  # ONLY THE --self-test RUNS HERE, and the omission is deliberate rather than
+  # an oversight: the probe reads the LIVE fleet, so running it in CI would
+  # make every build depend on a box this repository does not deploy, and it
+  # would be red until a human edits /etc/caddy/Caddyfile by hand. What CI can
+  # honestly hold is that the check still decides correctly — six header
+  # fixtures including the measured fleet state, plus two VACUITY arms: an
+  # empty host list must FAIL rather than read as an all-clear, and the
+  # derivation must still find the fleet in the shipped template.
+  deploy-live-hsts:
+    name: the deploy HSTS probe works (deploy/check-live-hsts.sh)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: check-live-hsts self-test
+        run: ./deploy/check-live-hsts.sh --self-test
+
   # What a `gem install` gets is NOT what this repo contains, and until now
   # nothing checked the difference. kiosk-server's spec.files globbed lib/ only,
   # so the three ERB templates under app/views/kiosk/server/ were absent from

@@ -161,11 +161,22 @@ For EACH of the 7 apps:
       `(kioskproxy)` snippet emits `Strict-Transport-Security: max-age=31536000; includeSubDomains`, ENABLED
       (unlike the rate-limit above, `header` is a stock directive and needs no module). Without it a client
       typing a bare hostname makes its FIRST request in plaintext, before the `:80`→`:443` redirect — the
-      window HSTS exists to close. `config.force_ssl` is deliberately OFF in all eight apps (K-439: Caddy
-      already terminates TLS and redirects, and the apps run with `assume_ssl`), so the edge is the ONLY
-      place this header can come from. **On the current live box the hand-maintained `/etc/caddy/Caddyfile`
-      does not import this snippet** (see the ⚠ below), so add the same `header` line by hand to each demo
-      vhost there. Verify: `curl -sI https://getgrocery.demo.kiosk.tech/ | grep -i strict-transport`.
+      window HSTS exists to close. `config.force_ssl` is deliberately OFF in every app behind the proxy
+      (K-439: Caddy already terminates TLS and redirects, and the apps run with `assume_ssl`), so the edge
+      is the ONLY place this header can come from. **On the current live box the hand-maintained
+      `/etc/caddy/Caddyfile` does not import this snippet** (see the ⚠ below), so paste this line by hand
+      into EVERY vhost block there, immediately inside the opening brace:
+
+          header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+      then `sudo caddy validate --config /etc/caddy/Caddyfile` · `sudo systemctl reload caddy`.
+- [ ] **Prove HSTS actually arrives — do not take the tick above on trust (K-1295):**
+      `/srv/kiosk/deploy/check-live-hsts.sh` · it probes every vhost `deploy/Caddyfile` declares and names
+      each origin that does not answer `max-age >= 31536000; includeSubDomains`, exit 1 if any does not.
+      This tick exists because the one above did not: it was written, never ticked, and MEASURED
+      2026-09-05 not one deployed origin sent the header — for as long as the box has been serving. A
+      checklist line is not a mechanism; the reason the rate-limit half of this class landed is that it
+      got a script.
 - [ ] Verify the limit bites: hammer `/kiosk/auth/register` from one IP and confirm 429 well before the box slows.
 - [ ] ⚠ On the CURRENT live box the `/etc/caddy/Caddyfile` is hand-maintained and also serves other sites —
       do NOT overwrite it with `deploy/Caddyfile` (you would drop the other vhosts). Hand-add the blocks in its

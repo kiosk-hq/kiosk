@@ -11,13 +11,14 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 
 | File | What it is |
 |------|-----------|
-| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. Emits **HSTS** (stock `header` directive, enabled — the fleet's only source of `Strict-Transport-Security`, since `force_ssl` is deliberately off behind the proxy, K-916). Carries the **required** per-IP edge rate-limit, shipped commented (needs the `caddy-ratelimit` module — see below). |
+| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. Emits **HSTS** (stock `header` directive, enabled). Carries the **required** per-IP edge rate-limit, shipped commented (needs the `caddy-ratelimit` module — see below). |
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `telemetry-init.sql` | The ONE shared live-activity store: `kiosk_demo_telemetry` DB + `kiosk_telemetry` login role + the append-only events table. Only needed if you turn telemetry on — see [Live-activity telemetry](#live-activity-telemetry--wired-opt-in). |
 | `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box (K-509/K-540): strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
 | `check-edge-ratelimit.sh` | **Run it on the box after any Caddyfile change.** Reads `/etc/caddy/Caddyfile` and answers whether every proxied vhost actually reaches a `rate_limit` directive, naming the ones that do not. The backstop ships commented (see below), so skipping the runbook step used to be SILENT — the box came up, every site served, and nothing said the edge was open (K-976). `--self-test` proves the check both ways and runs in CI. `KIOSK_EDGE_RATELIMIT=external` is the declared escape hatch for a CDN/WAF in front. |
+| `check-live-hsts.sh` | **Run it on the box after any Caddyfile change, and from anywhere to audit the fleet.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. Its sibling above parses a config; this one reads the WIRE, because a config check on the template would have said OK for as long as the box has been serving without the header — which is exactly what happened (K-1295). `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
 | `demo-reset.sh` | Run ON THE BOX to put demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (its orders are real third-party assistant runs and seeding cannot reproduce one); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
 | `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1` (K-594). |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
@@ -262,6 +263,60 @@ KIOSK_EDGE_RATELIMIT=external /srv/kiosk/deploy/check-edge-ratelimit.sh
 and then once, live: hammer `/kiosk/auth/register` from one IP and confirm you
 are cut off (429) well before the box slows down. The script proves the config
 says the right thing; only the flood proves the edge does it.
+
+## HSTS — shipped in the template, ABSENT from the live box (K-1295)
+
+**Measured 2026-09-05, every origin `deploy/Caddyfile` declares: not one of them
+sends `Strict-Transport-Security` at all.** The template is not the defect —
+`deploy/Caddyfile`'s `(kioskproxy)` snippet has emitted the header, enabled and
+needing no module, since K-916, and a box built from this file has it. The
+deployed box is not built from this file: `/etc/caddy/Caddyfile` on the VPS is
+hand-maintained, also serves other sites, and does not import the snippet. This
+is the same split the rate limit has, and this section exists because the README
+used to state only the template half — calling the Caddyfile "the fleet's only
+source of `Strict-Transport-Security`", which is a claim about the fleet that
+the fleet does not honour.
+
+What the header buys is one request: `config.force_ssl` is deliberately OFF in
+every app behind this proxy (Caddy already terminates TLS and redirects
+`:80`→`:443`, and the apps run with `assume_ssl`), so without HSTS a client typing a bare hostname
+makes its FIRST request in plaintext, before the redirect. That first request is
+the window HSTS closes and the only thing this line buys.
+
+**On the live box, paste this into every demo vhost block in
+`/etc/caddy/Caddyfile`, immediately inside the opening brace:**
+
+```
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+```
+
+One block per vhost that `deploy/Caddyfile` declares — the demo subdomains and
+the KYC broker; `check-live-hsts.sh` derives that list from the same file, so it
+names any you miss. Then:
+
+```sh
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+/srv/kiosk/deploy/check-live-hsts.sh          # must print OK for all 8
+```
+
+`preload` is deliberately absent: submitting to the browser preload list is
+irreversible on any useful timescale and these are demo hosts. `max-age` is one
+year, the value the preload list requires and the value a browser should be
+willing to remember; `includeSubDomains` covers a sub-subdomain nobody has
+created yet, and if one is ever added it must serve TLS.
+
+**Why a script and not a checklist line, said plainly.** The other half of this
+class — the edge rate limit — got `check-edge-ratelimit.sh` and it landed. HSTS
+got a line in `CHECKLIST.md`, which is 0 ticked of 45, so its tick state carries
+no information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
+because a config check run against this template would have said OK for as long
+as the box has been serving without the header.
+
+**`kiosk.tech` itself is a different owner's setting.** It answers no HSTS
+either, but it is served by GitHub Pages, not by this box — nothing in this
+directory can fix it, and `check-live-hsts.sh` only reports it if you pass the
+hostname explicitly.
 
 ## Scaling past one worker — shared stores REQUIRED (K-738)
 

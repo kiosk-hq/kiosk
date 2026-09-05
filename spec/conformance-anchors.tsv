@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1663 anchors.
+# 1664 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -537,6 +537,7 @@ kiosk-demo-prove/README.md	## The three legs
 kiosk-demo-prove/README.md	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
 kiosk-demo-prove/README.md	`base_url` — the origin the request arrived on — **not** the deploy origin. The
+kiosk-demo-prove/README.md	account-possession assurance level adopted for now, after a survey of the
 kiosk-demo-prove/README.md	and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
 kiosk-demo-prove/README.md	operator → broker (server-to-server)
 kiosk-demo-prove/README.md	verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own

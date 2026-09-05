@@ -118,12 +118,40 @@ abort "out-of-zone delivery_slots expected 400 bad_request, got #{rc_bad} #{bad_
 STDERR.puts "  delivery_slots (district-less address): http=#{rc_bad} code=#{bad_code} (rejected, as expected)"
 
 rc_slots = nil
-query_slots = lambda do |date_str|
+# THE CLIENT'S "TODAY" AND THE OPERATOR'S ARE NOT THE SAME DAY, and between
+# 23:00 and 00:00 UTC they differ. `Date.today` here is the CALLER's date; the
+# operator resolves the day in Europe/Dublin, so a run at 23:05 UTC asks for a
+# date that is already yesterday in Dublin and is refused 400 `bad_request`.
+# That is not a defect in the operator -- its refusal is exactly what a refusal
+# should be, naming its own today, its zone, and what to send instead:
+#
+#   "date 2026-09-05 is in the past — getgrocery delivers from 2026-09-06
+#    onwards (Europe/Dublin)"
+#
+# So the fix belongs HERE, and it is the whole point of a reference driver: an
+# assistant meeting this reads the operator's date out of the refusal and
+# retries. It does NOT guess a timezone it was never told -- the served
+# descriptor names Dublin only in prose -- and it does not blindly add a day,
+# which would be right for one hour and wrong for the offset it did not check.
+# Measured: CI failed exactly this way at 23:05 UTC on 2026-09-05, and both
+# directions are reproducible with `TZ=Etc/GMT+2 bin/rails demo:shop`.
+OPERATOR_DATE = /delivers from (\d{4}-\d{2}-\d{2})/.freeze
+
+query_slots = lambda do |date_str, retried: false|
   rc_slots, resp = get_json(
     "#{SERVER}/kiosk/delivery_slots",
     { "Authorization" => "Bearer #{token}" },
     { date: date_str, delivery_address: delivery_address },
   )
+  if rc_slots == 400 && !retried
+    named = "#{resp["detail"]} #{resp["hint"]}"[OPERATOR_DATE, 1]
+    if named && named != date_str
+      STDERR.puts "  delivery_slots: #{date_str} is already past for the operator — it says its " \
+                  "own first deliverable day is #{named}; retrying with that"
+      delivery_date = named
+      return query_slots.call(named, retried: true)
+    end
+  end
   abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(resp)}" unless rc_slots == 200
   Array(resp)
 end

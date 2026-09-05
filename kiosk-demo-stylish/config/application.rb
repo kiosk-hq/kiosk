@@ -3,7 +3,7 @@ require_relative "boot"
 require "rails"
 # Pick the frameworks you want:
 require "active_model/railtie"
-# active_job/railtie is NOT loaded (K-885): no demo in the fleet defines a job or
+# active_job/railtie is NOT loaded: no demo in the fleet defines a job or
 # enqueues one, and the frameworks this app does not use stay unloaded the same
 # way active_storage/action_mailer/action_mailbox/action_text/action_cable do
 # below. Re-add the require in the same commit that adds the first job class.
@@ -37,7 +37,7 @@ module KioskDemoStylish
     # `finisher`, i.e. AFTER config/initializers have run, so a constant in a
     # normal autoload path is simply not resolvable from an initializer; that,
     # not "lib/ is not autoloaded", is what the hand-written
-    # `require Rails.root.join("lib/...")` lines used to buy (K-502).
+    # `require Rails.root.join("lib/...")` lines used to buy.
     # `autoload_once_paths` is Rails' own answer: the once autoloader is set up
     # in `bootstrap`, BEFORE initializers, "so that engines and applications
     # are able to autoload from these paths during initialization". It also

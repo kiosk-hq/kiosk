@@ -8,20 +8,16 @@ require "securerandom"
 require "uri"
 
 require_relative "devise_session"
-# equihash_register moved out of the Rails app load path into the
-# flow-driver home (K-659). This file is flow-only too and belongs
-# beside it; that move is K-856.
 require_relative "equihash_register"
 
 # The ONE way a demo driver obtains an AGENT principal bound to a seeded human.
 #
 # This is the agent-side twin of script/devise_session.rb, and it exists for the
-# same reason (T-104, from K-660). Drivers used to hand themselves a principal
-# by writing one down — `agent:u-<uuid>:a-<uuid>:r-customer` — which a dev-only
-# parser in the demo turned into an authenticated identity at any role. That
-# parser is gone; agent auth now runs through the engine's own kiosk-pop JWTs,
-# the ones `/kiosk/auth/register` and `/kiosk/auth/claim` mint, verified by the
-# `DefaultAgentIdp` kiosk-server has always shipped as the default.
+# same reason. A driver cannot hand itself a principal by writing one down: a
+# self-asserted `agent:u-<uuid>:a-<uuid>:r-customer` string resolves to NO
+# identity, in every environment. Agent auth runs through the engine's own
+# kiosk-pop JWTs, the ones `/kiosk/auth/register` and `/kiosk/auth/claim` mint,
+# verified by the `DefaultAgentIdp` kiosk-server ships as the default.
 #
 # So a driver that needs "an assistant acting for Alice" has to EARN one, the
 # way a real assistant does:
@@ -43,9 +39,9 @@ require_relative "equihash_register"
 #                          email: "alice@example.com", password: PASSWORD)
 #   get_json("/kiosk/my_listings", {}, alice.bearer)
 #
-# `agent_id` is a UUID here because `/auth/register` minted it (K-829/K-830):
-# every `agent_id` column in the canonical schema is typed `uuid`, and a driver
-# can no longer choose a shape the tables cannot store.
+# `agent_id` is a UUID here because `/auth/register` minted it: every `agent_id`
+# column in the canonical schema is typed `uuid`, so a driver cannot choose a
+# shape the tables cannot store.
 BoundAssistant = Struct.new(:agent_id, :user_id, :token, :key, :pem, :session,
                             keyword_init: true) do
   # The header an agent's call carries — and the only thing it carries. The

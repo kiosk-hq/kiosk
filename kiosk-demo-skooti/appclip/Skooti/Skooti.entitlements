@@ -9,7 +9,7 @@
 	     App Clip Code will launch anything. The demo path in appclip/README.md
 	     (Settings -> Developer -> Local Experiences) bypasses the lookup entirely
 	     and does not consult this key. Named here so the entitlement points at a
-	     host this project can actually serve (K-719). -->
+	     host this project can actually serve. -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>appclips:skooti.demo.kiosk.tech</string>

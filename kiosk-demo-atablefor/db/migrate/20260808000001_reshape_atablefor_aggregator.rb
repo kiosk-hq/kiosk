@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# K-446 (atablefor half) — reshape the single-restaurant, date-offset-seeded
-# model into a FINITE restaurant AGGREGATOR with ROLLING-CURRENT seatings.
+# Reshape the single-restaurant, date-offset-seeded model into a FINITE
+# restaurant AGGREGATOR with ROLLING-CURRENT seatings.
 #
 # WHY: the old `table_slots` carried a fixed (slot_date, slot_time) seeded at a
 # DATE OFFSET from seed-time, so the hosted deploy went stale (availability

@@ -16,22 +16,21 @@ class User < ApplicationRecord
 
   has_many :bookings, dependent: :destroy
 
-  # THE ONE PUBLIC NAME AN ACCOUNT HAS ON THE RESERVATIONS BOARD (K-973).
+  # THE ONE PUBLIC NAME AN ACCOUNT HAS ON THE RESERVATIONS BOARD.
   #
   # The board at `/` and `/reservations` is served to anyone, with no session
-  # and no toll, so whatever it prints beside a booking is published. It used
-  # to fall back to the login address's local part, masked past two characters
-  # (`di•••`) — the same construction philslist published before K-913 and tudu
-  # before K-950, and spec §7.2 rule 4 now says outright that masking is not a
-  # third option: two characters plus the confirmation that the address holds
-  # an account at this origin is a disclosure, not a redaction.
+  # and no toll, so whatever it prints beside a booking is published. Falling
+  # back to the login address's local part, masked past two characters
+  # (`di•••`), is NOT an option: spec §7.2 rule 4 says outright that masking is
+  # not a third option — two characters plus the confirmation that the address
+  # holds an account at this origin is a disclosure, not a redaction.
   #
   # SO: the diner's OWN chosen name, and an opaque pseudonym when it has none.
   #
-  # THE PSEUDONYM IS DERIVED FROM THE ACCOUNT UUID AND NEVER FROM THE ADDRESS,
-  # which is K-913's argument and it transfers unchanged. Hashing an email is
-  # reversible in practice: the input space is a wordlist, and anyone holding a
-  # candidate address confirms it with one hexdigest. A v4 UUID is 122 bits of
+  # THE PSEUDONYM IS DERIVED FROM THE ACCOUNT UUID AND NEVER FROM THE ADDRESS.
+  # Hashing an email is reversible in practice: the input space is a wordlist,
+  # and anyone holding a candidate address confirms it with one hexdigest. A
+  # v4 UUID is 122 bits of
   # randomness that appears nowhere a board reader can enumerate, so the same
   # construction over it inverts to nothing.
   #

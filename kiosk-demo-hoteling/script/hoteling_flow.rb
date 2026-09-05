@@ -195,11 +195,11 @@ rc_confirm, confirm_resp = post_json(
   { "Authorization" => "Bearer #{token}" },
 )
 
-# ── Step 6b: read the confirmation code back (K-698) ──────────────────────
+# ── Step 6b: read the confirmation code back ──────────────────────────────
 # The code confirm_booking hands over is only a booking reference if the hotel
-# KEPT it. It used to be a SecureRandom.uuid minted for the response against a
-# table with no such column, so a guest quoting it at the desk could not be
-# matched. Re-query my_bookings for this booking and report the stored code, so
+# KEPT it: a value minted for the response and stored in no column cannot be
+# matched when a guest quotes it at the desk.
+# Re-query my_bookings for this booking and report the stored code, so
 # demo:book can assert the two are the same string.
 rc_mine, mine_resp = query_json(
   "my_bookings", {},

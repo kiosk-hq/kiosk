@@ -42,11 +42,10 @@ HUMAN    = ENV.fetch("HUMAN_USER_ID")   # seeded account holder with a saved car
 EMAIL    = ENV.fetch("HUMAN_EMAIL")
 PASSWORD = ENV.fetch("HUMAN_PASSWORD")
 
-# The human's browser session — the REAL one. getgrocery used to hand the
-# verify page a self-asserted `user:u-<uuid>` bearer because it shipped no login
-# UI; it ships one now (T-066), so the approving human is a Devise/Warden
-# session like every other demo's, and this driver holds it the way a browser
-# does. The agent's calls below never touch it.
+# The human's browser session — the REAL one. getgrocery ships a login UI, so
+# the approving human is a Devise/Warden session like every other demo's — not
+# a self-asserted `user:u-<uuid>` bearer — and this driver holds it the way a
+# browser does. The agent's calls below never touch it.
 HUMAN_SESSION = DeviseSession.new(SERVER)
 
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in

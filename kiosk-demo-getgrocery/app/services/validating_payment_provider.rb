@@ -18,7 +18,7 @@
 # malformed rather than merely wrong); the mandate trail is persisted, nothing is
 # charged.
 #
-# ── Per-order serialization (K-544) ───────────────────────────────────────
+# ── Per-order serialization ───────────────────────────────────────────────
 # The engine settles across two short DB transactions with the irreversible PSP
 # capture BETWEEN them (executor P1→P2→P3), and the only "paid" marker is the
 # settlement row written in P3, AFTER capture. That leaves two races open, both
@@ -64,7 +64,7 @@ class ValidatingPaymentProvider
     @provider.respond_to?(name, include_private) || super
   end
 
-  # ── Stuck-`paying` reconciliation (K-578, LOCAL evidence only) ────────────
+  # ── Stuck-`paying` reconciliation (LOCAL evidence only) ───────────────────
   #
   # A crash between a successful capture and the paid-flip leaves an order
   # `paying` forever: charged ONCE — the claim makes double-charging impossible —
@@ -73,8 +73,9 @@ class ValidatingPaymentProvider
   #
   #   • settlement row exists  ⇒ the charge is recorded; flip `paying` → `paid`.
   #   • no settlement row      ⇒ only the PSP knows whether money moved, so do
-  #     NOT release the claim (that is exactly the blind retry K-545 forbids) and
-  #     do NOT invent an answer; list the order UNRESOLVED with the cart-mandate
+  #     NOT release the claim — releasing it invites the blind retry that can
+  #     charge a second time — and do NOT invent an answer; list the order
+  #     UNRESOLVED with the cart-mandate
   #     ids to look up at the processor (the Stripe adapter stamps each
   #     PaymentIntent with `metadata.cart_mandate_id`).
   #
@@ -82,10 +83,10 @@ class ValidatingPaymentProvider
   # demo, and querying the PSP for the unresolved half is not built.
   #
   # THE THREE STATUS STATEMENTS here and in `claim_and_validate!` are RAW SQL
-  # where every READ on this origin is a model call (K-654), because the claim's
-  # ATOMICITY is the K-544/K-545 fix and `update_all` has no RETURNING in Rails
-  # 8.1 — an ActiveRecord spelling would be a SELECT then an UPDATE, and the race
-  # would be back. Every value still travels as a `$N` BIND rather than through
+  # where every READ on this origin is a model call, because the claim's
+  # ATOMICITY is what closes both races above and `update_all` has no RETURNING
+  # in Rails 8.1 — an ActiveRecord spelling would be a SELECT then an UPDATE, and
+  # the race would be back. Every value still travels as a `$N` BIND rather than through
   # `conn.quote`: a demo is the file a provider copies, and the copy is where a
   # forgotten `quote` lives (`no_interpolated_sql_spec.rb` enforces it).
   #
@@ -125,10 +126,10 @@ class ValidatingPaymentProvider
 
   # True iff a settlement (capture receipt) references this order — the
   # authoritative local "this was charged" marker, written by executor phase 3.
-  # {CartMandate.referencing} is ONE containment for the whole origin (K-654),
-  # shared with `create_order`'s replace guard and `reschedule_delivery`'s
-  # payment gate — and it matters most here, because THIS is the reader the K-545
-  # race fix consults before deciding whether money has already moved.
+  # {CartMandate.referencing} is ONE containment for the whole origin, shared
+  # with `create_order`'s replace guard and `reschedule_delivery`'s payment gate
+  # — and it matters most here, because THIS is the reader the claim consults
+  # before deciding whether money has already moved.
   def self.settled?(order_id)
     Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).exists?
   end
@@ -161,7 +162,7 @@ class ValidatingPaymentProvider
     deny "cart line_items must reference exactly one order_id (see create_order's pay_hint)" unless refs.size == 1
     order_id = refs.first
 
-    # K-579: the order_id goes straight into an `::uuid` cast below, where a
+    # The order_id goes straight into an `::uuid` cast below, where a
     # malformed one makes Postgres raise InvalidTextRepresentation — a raw 500,
     # and on the pay path a 500 is the worst answer there is, because an
     # assistant cannot tell "your input was wrong" from "the charge may have gone
@@ -177,9 +178,9 @@ class ValidatingPaymentProvider
 
     # CLAIM: created → paying, race-free compare-and-set. Winning this UPDATE is
     # what serializes concurrent /pay (only one can flip 'created') and, with
-    # create_order's FOR UPDATE guard, freezes O's items for this payment
-    # (K-544). `$1::uuid` casts the bound text, so a non-uuid is a Postgres
-    # refusal rather than a silent miss.
+    # create_order's FOR UPDATE guard, freezes O's items for this payment.
+    # `$1::uuid` casts the bound text, so a non-uuid is a Postgres refusal
+    # rather than a silent miss.
     claimed = Order.lease_connection.exec_query(
       "UPDATE orders SET status = 'paying', updated_at = now() " \
       "WHERE id = $1::uuid " \
@@ -196,7 +197,8 @@ class ValidatingPaymentProvider
       existing_status = Order.where(id: order_id, user_id: cart.user_id.to_s).pick(:status)
       deny "order not found or not yours" if existing_status.nil?
 
-      # K-578 (local half): a `paying` order that ALREADY HAS a settlement is not
+      # The LOCAL half of that reconciliation: a `paying` order that ALREADY HAS
+      # a settlement is not
       # "in progress" — it was charged and only the local status flip was lost.
       # The settlement row is decisive local evidence, so heal the status here
       # rather than park the payer behind one that would never move.
@@ -208,7 +210,7 @@ class ValidatingPaymentProvider
       if existing_status == Order::PAYING
         # Claimed, no settlement: either a pay is genuinely in flight, or one
         # died at an UNKNOWN outcome and we deliberately kept the claim so a
-        # blind retry can't double-charge (K-545). Say what recovers it.
+        # blind retry can't double-charge. Say what recovers it.
         deny "order #{order_id} has a payment in progress — re-read GET <endpoint>/my_orders: " \
              "if it shows paid, the charge went through and there is nothing to retry; " \
              "if it stays unpaid, the operator must reconcile this order with the payment " \
@@ -261,8 +263,8 @@ class ValidatingPaymentProvider
 
   # Release a claim we know involved NO charge (definitive decline / setup
   # required). On an UNKNOWN outcome, or any unexpected error, deliberately do
-  # NOT release: leaving O `paying` blocks a blind retry that could double-charge
-  # (K-545), and reconciliation resolves it out of band.
+  # NOT release: leaving O `paying` blocks a blind retry that could double-charge,
+  # and reconciliation resolves it out of band.
   def release_claim_on_failure!(order_id, error)
     return unless order_id
 

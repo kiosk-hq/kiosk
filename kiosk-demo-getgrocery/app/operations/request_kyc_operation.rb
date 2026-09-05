@@ -17,7 +17,7 @@ class RequestKycOperation
   # grocery basket needs a boolean and nothing else.
   REQUESTED_CLAIMS = %w[age_over_18].freeze
 
-  # THE OUTSTANDING-INTAKE CAP (K-586). Nothing else meters this verb — the
+  # THE OUTSTANDING-INTAKE CAP. Nothing else meters this verb — the
   # reputation policy challenges `:query` only — so without it one registration
   # proof buys unlimited broker intakes: a budget hole the day a paid issuer
   # sits behind prove.my.

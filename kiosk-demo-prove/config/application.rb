@@ -18,9 +18,9 @@ module KioskDemoProve
 
     # lib/ holds only rake tasks: the broker's four modules — the RSA issuer
     # key (the "ProveKey" skooti trusts, whose MATERIAL comes from
-    # per-environment config; K-673), the operator registry, the claim catalog
+    # per-environment config), the operator registry, the claim catalog
     # and the callback poster — are application code and live under
-    # app/models and app/services (K-502).
+    # app/models and app/services.
     #
     # Unlike the seven operator demos, prove declares NO
     # `config.autoload_once_paths`: nothing here is named during

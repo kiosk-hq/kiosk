@@ -91,14 +91,14 @@ items  = chosen.map { |p| { sku: p.fetch("sku"), qty: 1 } }
 STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 
 # -- Step 3: query delivery_slots (delivery ADDRESS/zone is a REQUIRED early input) --
-# ADDRESS-UPFRONT (K-468): the address must name a SERVED Dublin district or the
+# ADDRESS-UPFRONT: the address must name a SERVED Dublin district or the
 # operator returns 400 before it will show any slots. This is a real, in-zone
 # Dublin address; in a live run the ASSISTANT obtains it from its human (never
 # invents one) — the operator validates zone/format but cannot verify it is real.
-# K-470: query for TODAY (the live-run scenario) so the assertion below catches
-# any date drift — create_order must book the SAME day the slot was shown for,
-# not a fixed +1.
-# K-480: delivery_slots now hides today's already-started windows. If this runs
+# Query for TODAY (the live-run scenario) so the assertion below catches any
+# date drift — create_order must book the SAME day the slot was shown for, not
+# a fixed +1.
+# delivery_slots hides today's already-started windows. If this runs
 # late enough in Dublin's day that today is sold out, fall back to tomorrow so
 # the happy-path proof is robust to wall-clock time; the no-drift assertion below
 # copies whatever date the returned row carries, so it holds for either day.
@@ -130,7 +130,7 @@ end
 
 slots = query_slots.call(delivery_date)
 if slots.empty?
-  # K-480: today's windows have all already started in Dublin — the earliest
+  # Today's windows have all already started in Dublin — the earliest
   # bookable slot is tomorrow. A live agent would do exactly this.
   delivery_date = (Date.today + 1).to_s
   STDERR.puts "  delivery_slots: today is sold out (all windows started) — querying #{delivery_date}"
@@ -144,7 +144,7 @@ slot_date     = slot.fetch("date")     # the day the assistant sees for this slo
 chosen_slot_at = slot.fetch("slot_at") # its exact start time — create_order must match
 STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} zone=#{slot["zone"]} on #{slot_date} (#{chosen_slot_at})"
 
-# K-480 negative control: delivery_slots must HIDE already-started windows, and
+# Negative control: delivery_slots must HIDE already-started windows, and
 # create_order must REJECT one with a clean 400 (never book an un-bookable past
 # slot). This only asserts when there genuinely is a past slot for the queried
 # day — i.e. some early slot id (1..6) is absent from the returned set because
@@ -171,7 +171,7 @@ unless missing_ids.empty?
 end
 
 # -- Step 4: create_order (items + delivery slot + chosen slot's date + address) --
-# K-470: pass back the DATE of the slot we chose so create_order books the day
+# Pass back the DATE of the slot we chose so create_order books the day
 # we saw, not a fixed +1.
 rc_order, order_resp = post_json(
   "#{SERVER}/kiosk/create_order",
@@ -187,7 +187,7 @@ order_value = order_resp
 order_id    = order_value.fetch("order_id")
 total_cents = order_value.fetch("total_cents")
 slot_at     = order_value.fetch("slot_at")
-# K-470: the booked slot_at MUST equal the date+start-time of the slot the agent
+# The booked slot_at MUST equal the date+start-time of the slot the agent
 # saw and chose in delivery_slots — same day, NOT +1.
 abort "K-470: create_order slot_at=#{slot_at.inspect} != chosen delivery_slot slot_at=#{chosen_slot_at.inspect} (date drift)" \
   unless slot_at == chosen_slot_at
@@ -291,7 +291,7 @@ abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 2
 my_orders = Array(my_resp)
 own = my_orders.find { |o| o["order_id"] == order_id }
 abort "my_orders does not contain own order #{order_id}" if own.nil?
-# K-853: the wire field is a TRI-state (unpaid | pending | paid), not a boolean.
+# The wire field is a TRI-state (unpaid | pending | paid), not a boolean.
 # `paid` is the only one of the three that means the charge went through; a
 # `pending` here would mean a capture is still outstanding, which is NOT a
 # settled order and must not be read as one.

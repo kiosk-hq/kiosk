@@ -29,7 +29,7 @@ class Kiosk::ReservationsController < ActionController::API
   # `pay`. With StubPsp (no SetupIntent model) `setup_required?` is always
   # false, so this is an immediate no-op success: {status: "ready"}.
   #
-  # POLL CADENCE + STOP CONDITION (K-477/K-595): the wire has no server→assistant
+  # POLL CADENCE + STOP CONDITION: the wire has no server→assistant
   # push, so an assistant that ever DOES get a `setup_required` learns the human
   # finished only by re-calling this — the descriptor must state a cadence AND a
   # terminal stop condition, or an agent invents its own and polls forever. The
@@ -37,9 +37,9 @@ class Kiosk::ReservationsController < ActionController::API
   # what assistants actually follow. No CHECK COUNT is stated: a count is derived
   # from cadence and horizon, so it goes silently wrong when either moves.
   #
-  # getgrocery's descriptor also promises its setup_url is stable across polls
-  # (K-492). NOT repeated here: StubPsp mints no setup session, so claiming it
-  # would be a claim about code this demo never runs.
+  # getgrocery's descriptor also promises its setup_url is stable across polls.
+  # NOT repeated here: StubPsp mints no setup session, so claiming it would be a
+  # claim about code this demo never runs.
   kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
@@ -90,7 +90,7 @@ class Kiosk::ReservationsController < ActionController::API
   # the two identity values below are read from the identity the wire resolved
   # rather than from arguments, which is what makes a forged `user_id` in the
   # body inert. The descriptor deliberately does NOT promise the hold expires on
-  # its own: the deadline is recorded and no sweep enforces it (K-936).
+  # its own: the deadline is recorded and no sweep enforces it.
   kind :action
   description "Hold a room for the authenticated principal. It is a HOLD and not a booking: " \
               "nothing is charged and no stay is confirmed until you pay and call " \

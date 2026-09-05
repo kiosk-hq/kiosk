@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  Static 422 page (K-532). Rails' PublicExceptions serves this file in production
+  Static 422 page. Rails' PublicExceptions serves this file in production
   for any 422 that reaches the middleware; WITHOUT it the response is BODYLESS
   (text/html, Content-Length: 0). NOT, however, for the /verify form POST: that
   controller sets `protect_from_forgery with: :null_session` (the verify page's

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# ── Dublin delivery-zone validation (ADDRESS-UPFRONT, K-468) ──────────────────
+# ── Dublin delivery-zone validation (ADDRESS-UPFRONT) ─────────────────────────
 #
 # getgrocery delivers only within a set of served Dublin postal districts. The
 # delivery address is a REQUIRED, EARLY input: `delivery_slots` cannot return
@@ -15,7 +15,7 @@
 #     Street, Dublin 2" and "1 Nonexistent Way, Dublin 2" both pass — there is
 #     no address-book lookup here. Catching a *fabricated but plausible* address
 #     is beyond any format/zone check; the only real defense is the HUMAN
-#     providing/confirming the address (that is the skill's job, K-468). This
+#     providing/confirming the address (that is the skill's job). This
 #     structural gate adds realism and catches gross fakes; it is not, and
 #     cannot be, proof the address exists.
 #

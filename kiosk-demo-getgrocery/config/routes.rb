@@ -4,8 +4,8 @@ Rails.application.routes.draw do
   # Human sign-in (Devise) — the web session that approves assistant links.
   # The sessions controller is overridden ONLY to answer a JSON-shaped
   # `DELETE /users/sign_out` with a JSON courtesy body — deliberately NOT the
-  # wire's RFC 9457 problem document, see the controller (K-1092) — instead of
-  # a bodyless 401 (K-533); every other Devise behaviour is inherited untouched.
+  # wire's RFC 9457 problem document, see the controller — instead of a
+  # bodyless 401; every other Devise behaviour is inherited untouched.
   devise_for :users, controllers: { sessions: "users/sessions" }
 
   # Human storefront + the agent hook ("Agents → Kiosk here") on the homepage.
@@ -73,8 +73,8 @@ Rails.application.routes.draw do
   # (schema tagged service-desc), served by the same DiscoveryController.
   get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
 
-  # /kiosk/openapi.json — the DERIVED OpenAPI description of the per-verb wire
-  # (T-071 = C). It MUST be drawn above the per-verb pair: Rails appends
+  # /kiosk/openapi.json — the DERIVED OpenAPI description of the per-verb wire.
+  # It MUST be drawn above the per-verb pair: Rails appends
   # `(.:format)` to `/kiosk/:kiosk_verb`, so without this line the path reads as
   # the verb `openapi` in the `json` format and answers 404.
   get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"

@@ -6,7 +6,7 @@
 # anti-spam toll. It is ALWAYS ON (wired in the app config, no env flag). Proves
 # it: POST /auth/register with no proof returns 402; the agent solves the
 # challenge(s) and resubmits the SAME signed body, sending the proof(s) in the
-# Kiosk-PoW request header (ADR-0022), getting 201. Then the fresh token POSTS A
+# Kiosk-PoW request header, getting 201. Then the fresh token POSTS A
 # LISTING. One JSON line on stdout.
 #
 # Usage (invoked by rake demo:register):
@@ -25,7 +25,7 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # equihash_solve comes from the shared helper (solver location owned by the
-# kiosk-pow-equihash gem, K-627). The full equihash_register handshake it also
+# kiosk-pow-equihash gem). The full equihash_register handshake it also
 # defines is deliberately NOT used here: this driver spells out the 402 →
 # solve → resubmit choreography step by step and asserts each status.
 require_relative "equihash_register"
@@ -61,7 +61,7 @@ challenges = resp_nopow["challenges"]
 abort "402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
 
 # ── Solve and resubmit the SAME signed body → expect 201 ────────────────────
-# Proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022); the
+# Proof(s) ride in the Kiosk-PoW request header as raw JSON; the
 # signed body stays byte-identical so the key-bound challenge fingerprint matches.
 proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", reg_body, { "Kiosk-PoW" => JSON.generate(proofs) })
@@ -80,8 +80,8 @@ listing_id = posted["listing_id"]
 #
 # Since 0.4 this refusal comes from the SCHEMA LAYER rather than from the
 # handler: `category_slug` is declared as an `enum`, `input_schema` is validated
-# on every call, and the refusal names the closed set verbatim. That is K-717's
-# rule delivered by the declaration instead of by hand-written prose — so the
+# on every call, and the refusal names the closed set verbatim. The rule is
+# delivered by the declaration instead of by hand-written prose — so the
 # assertion below checks for the SLUGS, which is what an assistant recovers
 # from, rather than for a sentence a handler happened to phrase. ──────────────
 rc_badcat, badcat = post_json("#{SERVER}/kiosk/post_listing",

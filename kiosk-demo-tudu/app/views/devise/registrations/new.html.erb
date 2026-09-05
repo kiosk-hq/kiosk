@@ -1,13 +1,13 @@
 <%#
   tudu's sign-up form — Devise's own view with ONE field added: display_name.
 
-  It is overridden for exactly that reason (K-950). `list_members` publishes the
+  It is overridden for exactly that reason. `list_members` publishes the
   name an account chose, and an account that chose none is published as an
   opaque `member-<hex>`; tudu is the one demo in the fleet with OPEN
   registration, so without a field here every real visitor would join a
   household roster as a hash — and "a name the household recognises" is the
-  whole point of the verb. The alternative, publishing the address they signed
-  up with, is what K-950 removed.
+  whole point of the verb. The alternative — publishing the address they signed
+  up with — is exactly what the roster must not leak.
 
   Everything else is Devise's shipped view unchanged, including its two shared
   partials, which still resolve out of the gem.

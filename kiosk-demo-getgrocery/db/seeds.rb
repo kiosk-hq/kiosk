@@ -60,8 +60,8 @@ HUMAN_ID     = "00000000-0000-0000-0000-000000000042"
 HUMAN_CUS_ID = "cus_getgrocery_saved_card"
 # Demo-only credentials (development database, reset by every demo:setup). The
 # shopper signs in at /users/sign_in with a real Devise session — the channel
-# the account-binding surfaces authenticate now that the stub user-IdP is gone
-# (T-066), and the one `rake demo:claim` drives.
+# the account-binding surfaces authenticate, and the one `rake demo:claim`
+# drives. There is no stub user-IdP.
 HUMAN_EMAIL    = "hana@example.com"
 HUMAN_PASSWORD = "getgrocery-demo-password"
 

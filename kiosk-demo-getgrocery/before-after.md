@@ -121,8 +121,8 @@ fire in this recording** — the run went out at 19:03 Dublin, by which time eve
 one of today's windows had started, so the driver did what a live assistant
 would do and asked for tomorrow instead (`delivery_slots: today is sold out …
 — querying 2026-08-27`). With the whole cart moved to a fresh day there was no
-past slot left to offer, `past_slot_check` is `null`, and the K-480 assertion
-reports itself a no-op rather than silently passing. Run the same task in the
+past slot left to offer, `past_slot_check` is `null`, and the past-slot
+assertion reports itself a no-op rather than silently passing. Run the same task in the
 Dublin afternoon and both controls fire.
 
 **What the AI assistant did — no human involved at any step:**

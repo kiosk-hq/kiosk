@@ -8,8 +8,8 @@
 #     Principal A reserves scooter → reservation_id rA.
 #     Principal B satisfies Gate 1b (licence-free vehicle) and Gate 2 (settles
 #     a payment mandate whose cart references rA) then calls run start_rental
-#     {reservation_id: rA}. start_rental has no KYC gate (K-442 abolished the
-#     scooter KYC gate; see register_principal below) — the only gates are
+#     {reservation_id: rA}. start_rental has no KYC gate (licence-free scooters
+#     need none; see register_principal below) — the only gates are
 #     ownership, vehicle kind and payment.
 #     → Must be denied (HTTP 403). Gate 1 WHERE user_id = kiosk.current_user_id()
 #       AND status='reserved' finds nothing because rA.user_id = A ≠ B.
@@ -80,8 +80,9 @@ require_relative "equihash_register"
 # Returns [user_id, agent_id, token, key].
 #
 # NOT A GATE: start_rental (the licence-free scooter verb this driver
-# exercises) has no KYC gate — K-442 dropped it for scooters, and start_rental's
-# actual gates are 1 (ownership), 1b (vehicle kind, K-687) and 2 (payment). The
+# exercises) has no KYC gate — licence-free scooters need none, and
+# start_rental's actual gates are 1 (ownership), 1b (vehicle kind) and 2
+# (payment). The
 # KYC submission below is kept only so both principals carry a real attestation,
 # matching a normally-onboarded agent; abort-on-failure here proves attestation
 # issuance itself works, not that it is consulted by anything below. B also

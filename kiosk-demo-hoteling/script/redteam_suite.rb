@@ -17,14 +17,14 @@
 #                        is a typed 400 with no SQL internals — never a 500
 #   HostileArgShapes   — every hostile SHAPE (boolean, array, object, junk
 #                        integer, unparseable and out-of-horizon date) on the
-#                        integer and date arguments is a typed 400 too (K-773)
+#                        integer and date arguments is a typed 400 too
 #   PastStay           — a check_in before today is a typed 400 on BOTH
 #                        availability and reserve_room: never rooms, never a
-#                        hold (K-969)
+#                        hold
 #   DoubleBookedRoom   — a room-night already held cannot be reserved again by
 #                        anyone, on the same or overlapping dates → 409
 #
-# And two beats that are only expressible after the 0.4 cutover (T-074 = A):
+# And two beats that are only expressible after the 0.4 cutover:
 #   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
 #                        404 / verb_not_found an AUTHENTICATED caller gets, and
 #                        401 / unauthenticated without a bearer (auth precedes
@@ -105,10 +105,10 @@ profile = Kiosk::Redteam::Profile.new(
   # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
   # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
   # The claim ceremony's beat must name a role this origin ACTUALLY declares:
-  # an invented one was refused by the vulnerable code too, which is how a
-  # green battery sat on top of K-072 for nineteen days. The scenario also
-  # derives one off the wire, so a stale list here weakens the probe rather
-  # than emptying it.
+  # an invented one is refused even by an implementation that lets a DECLARED
+  # role through, so a battery probing only an invented role stays green over a
+  # real hole. The scenario also derives one off the wire, so a stale list here
+  # weakens the probe rather than emptying it.
   declared_roles: %w[customer],
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
@@ -303,11 +303,11 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 end
 
-# A malformed booking_id must come back as a TYPED 400, never a 500 (K-581/K-582).
+# A malformed booking_id must come back as a TYPED 400, never a 500.
 # Two surfaces, one guard (UuidCheck): confirm_booking's `booking_id` arg, and the
 # `{"booking_id":…}` reference inside a signed cart mandate that the cashier
-# prices at capture. Before the guard, Postgres raised InvalidTextRepresentation
-# on the `::uuid` cast — not a Kiosk error, so it escaped as a raw 500 with the
+# prices at capture. Without the guard, Postgres raises InvalidTextRepresentation
+# on the `::uuid` cast — not a Kiosk error, so it escapes as a raw 500 with the
 # PG message attached, and on the PAY path a 500 is the worst possible answer
 # because an assistant cannot tell it from "the charge may have gone through".
 #
@@ -370,13 +370,13 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   private
 
   # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker (T-121). hoteling answers a
-  # bad `booking_id` by naming it back, so the bytes scanned for SQL_INTERNALS
-  # are partly the probe's own; a junk id spelling `PG::` would otherwise be
+  # leak assertion being decided by the attacker. hoteling answers a bad
+  # `booking_id` by naming it back, so the bytes scanned for SQL_INTERNALS are
+  # partly the probe's own; a junk id spelling `PG::` would otherwise be
   # reported as a BREACH on its own echo, under a runner whose prose says a
-  # BREACH means "fix the app, not the scenario". The default is nil, which is
-  # the pre-fix oracle exactly: forgetting to declare risks a FALSE BREACH,
-  # never a missed leak.
+  # BREACH means "fix the app, not the scenario". The default is nil, which
+  # discounts nothing: forgetting to declare risks a FALSE BREACH, never a
+  # missed leak.
   def check(failures, statuses, label, resp, supplied: nil)
     statuses << resp.status
     scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
@@ -405,14 +405,14 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 end
 
-# Two principals must not be able to hold the same room-night (K-690).
-# `reserve_room` used to validate exactly two things — room-type↔property and
-# check_out > check_in — and never re-applied the overlap exclusion its OWN
-# `availability` query defines; no database constraint stood behind it either.
-# So A and B could both reserve, and both PAY for, one physical room, and the
-# operator would owe two guests one bed. Nothing exercised it, which is why it
-# survived: every other scenario picks its room FROM availability, where the
-# exclusion is applied, so none of them ever asked for a room that was gone.
+# Two principals must not be able to hold the same room-night.
+# A `reserve_room` that validates only room-type↔property and
+# check_out > check_in — never re-applying the overlap exclusion its OWN
+# `availability` query defines, with no database constraint behind it — lets A
+# and B both reserve, and both PAY for, one physical room, leaving the operator
+# owing two guests one bed. Nothing else reaches it: every other scenario picks
+# its room FROM availability, where the exclusion is applied, so none of them
+# ever asks for a room that is gone.
 #
 # Four probes, because the interesting failures sit on both sides of the guard:
 #   1. same nights, DIFFERENT principal        → 409 (the headline: two settlements, one bed)
@@ -530,7 +530,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
     nil
   end
 
-  # hotel_detail answers a ONE-ROW ARRAY (K-794): it is a query, and a query
+  # hotel_detail answers a ONE-ROW ARRAY: it is a query, and a query
   # that does not paginate answers rows. `.first` is the whole unwrap, and an
   # EMPTY array — no property with that id — falls through to `{}` here rather
   # than needing a 404 branch.
@@ -552,7 +552,7 @@ end
 module RawWire
   # One raw request under the given principal's bearer.
   #
-  # A NIL principal is the ANONYMOUS probe (K-1094) and is a different question,
+  # A NIL principal is the ANONYMOUS probe and is a different question,
   # not a degenerate case of the same one: the wire resolves the caller BEFORE it
   # looks the verb up, so what an unauthenticated request gets at a retired path
   # is 401, never the 404 an authenticated one gets.
@@ -568,17 +568,16 @@ module RawWire
   end
 end
 
-# K-773 — THE STANDING HOSTILE-SHAPE BEAT.
+# THE STANDING HOSTILE-SHAPE BEAT.
 #
-# K-773 is the finding that Postgres used to do free shape-checking on wire
-# arguments and ActiveRecord does not: `property_id`/`check_in`/`check_out` were
-# interpolated into `::integer`/`::date` casts, so junk RAISED and the handler
-# turned it into a typed refusal, while `where(property_id: "abc")` silently
-# CASTS to `= 0` and `where(property_id: true)` to `= 1` — a wrong answer
-# delivered as success. The guards in `app/operations/wire_arguments.rb` are the
-# fix. The row's own bar for closing was that the hostile shapes be re-sent AS A
-# STANDING BEAT rather than from the migration's throwaway harness, and this is
-# that beat.
+# Postgres does free shape-checking on wire arguments and ActiveRecord does not.
+# Interpolate `property_id`/`check_in`/`check_out` into `::integer`/`::date`
+# casts and junk RAISES, which the handler turns into a typed refusal; hand the
+# same value to ActiveRecord and `where(property_id: "abc")` silently CASTS to
+# `= 0` and `where(property_id: true)` to `= 1` — a wrong answer delivered as
+# success. The guards in `app/operations/wire_arguments.rb` are what hold the
+# refusal, and this is the standing beat that re-sends the hostile shapes on
+# every run so they cannot quietly stop firing.
 #
 # WHICH LAYER ANSWERS THESE TODAY, measured rather than assumed, because it
 # changes what the beat is worth. Every SHAPE probe below is currently refused
@@ -593,28 +592,27 @@ end
 #
 # TWO PROBES DO REACH HOTELING'S OWN CODE, and they are here for exactly that
 # reason:
-#   • an unknown `property_id` is `404 not_found` and NOT `200 []` (T-090,
-#     {WireArguments.existing_property}) — the empty list would assert the hotel
-#     exists and merely has no rooms;
-#   • a stay nobody can price is a typed 400 and not a crash (K-968) — found BY
-#     this beat while it was being written: `check_in: "0000-01-01"` is a
-#     well-formed date the schema accepts, and the 739,000-night stay it asks
-#     for overflowed `bookings.total_cents` (a 4-byte integer) with
-#     `ActiveModel::RangeError`, which the wire answered `500 action_failed`.
+#   • an unknown `property_id` is `404 not_found` and NOT `200 []`
+#     ({WireArguments.existing_property}) — the empty list would assert the
+#     hotel exists and merely has no rooms;
+#   • a stay nobody can price is a typed 400 and not a crash: `check_in:
+#     "0000-01-01"` is a well-formed date the schema accepts, and the
+#     739,000-night stay it asks for overflows `bookings.total_cents` (a 4-byte
+#     integer) with `ActiveModel::RangeError`, which the wire would answer
+#     `500 action_failed`.
 #
-# WHAT IS PROBED, NAMED RATHER THAN CLAIMED (K-773's 2026-08-25 reopen). The
-# beat used to be described as sending the hostile families on «every argument
-# its verbs take», and that was FALSE as written: `check_out` was a frozen
-# constant passed to all eleven call sites and `search_hotels`'s four filters
-# were not touched. The claim is now an enumeration, so it can be checked
-# against this method rather than believed:
+# WHAT IS PROBED, NAMED RATHER THAN CLAIMED. A summary sentence — «every
+# argument its verbs take» — is unverifiable, and goes false the moment an
+# argument is added or a constant is passed to every call site instead of being
+# varied. The claim is therefore an enumeration, checkable against this method
+# rather than believed:
 #
 #   reserve_room   property_id, room_type_id  (INT_SHAPES)
 #                  check_in, check_out        (DATE_SHAPES)
 #   availability   property_id, check_in, check_out (the string spellings a
 #                  query can express, plus the two BRACKET spellings)
 #   search_hotels  min_stars, max_price_cents (junk + out-of-range integers +
-#                                              one past int4, T-125)
+#                                              one past int4)
 #                  neighbourhood, amenity     (off-enum strings)
 #
 # An argument NOT in that list is not covered here — say so by extending the
@@ -622,9 +620,8 @@ end
 class HostileArgShapes < Kiosk::Redteam::Scenario
   include RawWire
 
-  # An error body must never carry the database's own vocabulary — that is the
-  # K-581/K-582 property, re-asserted here because these probes are the ones
-  # most likely to reach a cast.
+  # An error body must never carry the database's own vocabulary, re-asserted
+  # here because these probes are the ones most likely to reach a cast.
   LEAKS = ["::uuid", "::integer", "::date", "PG::", "22P02", "invalid input syntax",
            "ActiveRecord::", "ActiveModel::", "RangeError"].freeze
 
@@ -710,14 +707,14 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # Two are declared integers with a range (`min_stars` 1..5,
     # `max_price_cents` >= 0) and two are declared string ENUMS
     # (`neighbourhood`, `amenity`). WHICH LAYER ANSWERS WHICH, named rather than
-    # assumed, because K-1025 changed half of it:
+    # assumed:
     #
     #   * the two INTEGERS are refused on SHAPE twice and on RANGE once, and the
     #     split is measured rather than assumed. The decoder coerces a query
     #     string through `Integer(v, 10)` and the handler re-reads it through
-    #     {WireArguments.integer}, which is the same call (K-1025; they used to
-    #     be read with `.to_s.to_i`, so `abc` was a floor of 0 and `1.5` a floor
-    #     of 1 and the DECLARATION was the whole refusal). The POLICY range —
+    #     {WireArguments.integer}, which is the same call (read with a bare
+    #     `.to_s.to_i` instead, `abc` would floor to 0 and `1.5` to 1, leaving
+    #     the DECLARATION as the whole refusal). The POLICY range —
     #     `min_stars` 1..5, `max_price_cents` >= 0 — is the schema's alone; no
     #     handler line re-checks it, and none should: those are house rules, not
     #     facts about a column. WATCHED FAIL, run and restored: drop `min_stars`'
@@ -726,10 +723,11 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #     `minimum`/`maximum` stop applying to a value that is no longer declared
     #     a number.
     #   * MAGNITUDE is the third axis and it IS re-checked in the handler
-    #     (T-125): both filters now pass `max: WireArguments::MAX_INT4`, so a
+    #     both filters pass `max: WireArguments::MAX_INT4`, so a
     #     value past PostgreSQL `integer` is a typed 400 from the schema layer
-    #     AND from the guard behind it. Before that it was safe by coincidence —
-    #     `min_stars` only because its descriptor declares `maximum: 5` (it
+    #     AND from the guard behind it. Without it the pair would be safe only
+    #     by coincidence — `min_stars` only because its descriptor declares
+    #     `maximum: 5` (it
     #     reaches `stars.gteq(…)`, which RAISES `ActiveModel::RangeError` casting
     #     the comparison), and `max_price_cents` only because
     #     {Property.from_price_cents} is an `Arel::Nodes::Grouping` carrying no
@@ -778,13 +776,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
                    "assert the hotel exists and merely has no rooms)"
     end
 
-    # K-968's unpriceable stay. THE SPAN MOVED TO THE FAR END (K-969): it used to
-    # be `check_in: "0000-01-01"` with a normal check_out, which is now refused
-    # by {WireArguments.past_stay} FIRST — still a typed 400, so this assertion
-    # would have kept passing while never reaching the guard it exists for. A
-    # near check_in with a check_out at the end of the calendar asks the same
-    # question (a stay whose total overflows `bookings.total_cents`) from the
-    # side the past-date floor does not stand on.
+    # The unpriceable stay, ASKED FROM THE FAR END. A century-ago `check_in`
+    # with a normal check_out is refused by {WireArguments.past_stay} FIRST —
+    # still a typed 400, so the assertion would keep passing while never
+    # reaching the guard it exists for. A near check_in with a check_out at the
+    # end of the calendar asks the same question (a stay whose total overflows
+    # `bookings.total_cents`) from the side the past-date floor does not stand
+    # on.
     refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay, K-968)",
             client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                           check_in: PROBE_IN, check_out: "9999-12-31"),
@@ -832,14 +830,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 
   # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker (T-121). hoteling names the
-  # value it got in most of these refusals — `property_id "abc" is not an
-  # integer`, `invalid check_in/check_out: …` — so the bytes scanned for LEAKS
-  # are partly the probe's own, and a value spelling `PG::` would otherwise be
-  # reported as a BREACH on its own echo, under a runner whose prose says a
-  # BREACH means "fix the app, not the scenario". The default is nil, which is
-  # the pre-fix oracle exactly: forgetting to declare risks a FALSE BREACH,
-  # never a missed leak.
+  # leak assertion being decided by the attacker. hoteling names the value it
+  # got in most of these refusals — `property_id "abc" is not an integer`,
+  # `invalid check_in/check_out: …` — so the bytes scanned for LEAKS are partly
+  # the probe's own, and a value spelling `PG::` would otherwise be reported as
+  # a BREACH on its own echo, under a runner whose prose says a BREACH means
+  # "fix the app, not the scenario". The default is nil, which discounts
+  # nothing: forgetting to declare risks a FALSE BREACH, never a missed leak.
   def note(label, status, doc, supplied: nil)
     scan = Kiosk::Redteam::LeakScan.scan(doc, LEAKS, supplied: supplied)
     return if status == 400 && doc["code"] == "bad_request" && !scan.leak?
@@ -849,24 +846,23 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 end
 
-# The 0.3 multiplexed pair was DELETED, not tombstoned (T-074 = A). `POST
+# The 0.3 multiplexed pair was DELETED, not tombstoned. `POST
 # /kiosk/query` now reaches the per-verb controller as a verb literally named
 # "query", which nobody registered, so it answers the ordinary 404 an
 # AUTHENTICATED caller gets — no privileged endpoint left, no compatibility
 # payload keeping the 0.3 argument channel alive, and no second conformance
 # surface to attack.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
+# caller with no bearer never reaches the registry lookup that produces the 404 —
+# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
+# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
+# nothing tested the anonymous case.
 #
-# A deprecation shim
-# here is exactly what an attacker would reach for, because it took the verb
-# name from the BODY, where no route constraint and no input_schema could see it.
+# A deprecation shim here is exactly what an attacker would reach for, because
+# it takes the verb name from the BODY, where no route constraint and no
+# input_schema can see it.
 class RetiredWire < Kiosk::Redteam::Scenario
   include RawWire
 
@@ -946,18 +942,18 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 end
 
-# ── K-969: NO AVAILABILITY IN THE PAST, AND NO BOOKING INTO IT ────────────────
+# ── NO AVAILABILITY IN THE PAST, AND NO BOOKING INTO IT ───────────────────────
 #
-# Phil, 2026-08-23: «there should be zero availability for past dates. Booking
-# shouldn't be allowed for those.» This demo is where the finding was filed:
-# `reserve_room` with `check_in: "1900-01-01"` answered 200 with a real booking
-# and a real quote, and `availability` for those nights listed rooms.
+# There must be zero availability for past dates, and no booking into them.
+# Unguarded, `reserve_room` with `check_in: "1900-01-01"` answers 200 with a
+# real booking and a real quote, and `availability` for those nights lists
+# rooms.
 #
 # BOTH HALVES ARE PROBED, and the second is not redundant. The read side is the
 # primary fix — an assistant must never SEE a room it cannot book — but an
 # assistant may name a date it never read from an availability response, which
-# is exactly how the finding was found. So the sale is guarded too, from the
-# same {WireArguments.past_stay}, and both are asserted here.
+# is exactly how a stay in the past gets sold. So the sale is guarded too,
+# from the same {WireArguments.past_stay}, and both are asserted here.
 #
 # THE CONTROLS ARE WHAT MAKE IT NON-VACUOUS. A handler that refused EVERY date,
 # or one that answered `[]` to everything, would satisfy the refusals alone. So
@@ -1070,7 +1066,7 @@ end
 # cutover made expressible, per the header above). The 3 KYC variants are the
 # only expected skips — RegistrationWithoutPow runs, because register PoW is ON.
 # NO TOTALS ARE WRITTEN DOWN HERE: the run prints `scenarios.size` and the skip
-# count below, and a total written here is a total that rots (K-710).
+# count below, and a total written here is a total that rots.
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
@@ -1083,19 +1079,19 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
-  # `/auth/register`, where the role was never client-readable; this covers the
-  # door that WAS open (K-072) — the unauthenticated `device_authorization`
-  # request that opens the account-binding ceremony.
+  # `/auth/register`, where the role is never client-supplied; this covers the
+  # other door — the unauthenticated `device_authorization` request that opens
+  # the account-binding ceremony.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   WrongCurrencyCart.new,                                  # cashier check — currency
   TamperedPriceCart.new,                                  # cashier check — below quote
   InflatedTotalCart.new,                                  # cashier check — total ≠ line sum
-  MalformedUuidArg.new,                                   # K-581/K-582 — junk uuid → typed 400, no 500
-  HostileArgShapes.new,                                   # K-773 — boolean/array/object/date shapes → typed 400
-  DoubleBookedRoom.new,                                   # K-690 — one room-night, one booking
-  RetiredWire.new,                                        # T-074 = A — the 0.3 pair is 404, not a shim
+  MalformedUuidArg.new,                                   # junk uuid → typed 400, no 500
+  HostileArgShapes.new,                                   # boolean/array/object/date shapes → typed 400
+  DoubleBookedRoom.new,                                   # one room-night, one booking
+  RetiredWire.new,                                        # the 0.3 pair is 404, not a shim
   MethodMismatch.new,                                     # 0.4 — wrong method is 405 + Allow, not 404
-  PastStay.new,                                           # K-969 — no availability in the past, no booking into it
+  PastStay.new,                                           # no availability in the past, no booking into it
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)
@@ -1118,12 +1114,12 @@ EXPECTED_SKIP_NAMES = %w[
 
 puts "\n── hoteling redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-# K-1035 class — DERIVE BOTH, NEVER TYPE THEM.  `requires_kyc` was a typed
-# `false` sitting directly under a line that already read `profile.pow_difficulty`
-# off the object, so one flipped constructor argument 940 lines up left the banner
-# announcing the opposite of the battery it introduces.  The ON/OFF gloss is
-# derived for the same reason: `1 (register PoW ON)` and `0 (register PoW ON)`
-# were both printable, and only one of them is ever true.
+# DERIVE BOTH, NEVER TYPE THEM.  A typed `requires_kyc: false` sitting directly
+# under a line that already reads `profile.pow_difficulty` off the object lets
+# one flipped constructor argument 940 lines up leave the banner announcing the
+# opposite of the battery it introduces.  The ON/OFF gloss is derived for the
+# same reason: `1 (register PoW ON)` and `0 (register PoW ON)` are both
+# printable, and only one of them is ever true.
 #
 # These are the values every generic scenario reads to decide whether it is
 # applicable — RegistrationWithoutPow skips on 0, the KYC trio skips on false —

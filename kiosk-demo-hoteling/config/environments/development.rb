@@ -55,7 +55,7 @@ Rails.application.configure do
   # which blocks `rake demo` when it runs on http://hoteling.demo.kiosk.tech:3003.
   config.hosts << "hoteling.demo.kiosk.tech"
 
-  # ── Kiosk env inputs (K-650) ────────────────────────────────────────────
+  # ── Kiosk env inputs ────────────────────────────────────────────────────
   # ENV is read HERE, per environment, and published as Rails custom config
   # (Rails.configuration.x.kiosk.*); initializers and lib code read the
   # config, never ENV. Development keeps the out-of-the-box fallbacks
@@ -74,7 +74,7 @@ Rails.application.configure do
   end
 
   # Stable (non-secret) PoW HMAC default so `bin/rails s` and the demo
-  # drivers boot with no env; production REQUIRES the variable (K-541). A
+  # drivers boot with no env; production REQUIRES the variable. A
   # too-short override is rejected here exactly as in production.
   config.x.kiosk.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "kiosk-demo-pow-secret-dev-insecure-default")
   raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
@@ -82,7 +82,7 @@ Rails.application.configure do
   # Issuer origin: defaults to the local server origin. PORT defaults to 3000
   # to match config/puma.rb; the demo rake tasks always pass KIOSK_ISSUER
   # explicitly, so the default only serves a bare `rails s`. Production
-  # REQUIRES the variable (K-510).
+  # REQUIRES the variable.
   config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") { "http://localhost:#{ENV.fetch("PORT", "3000")}" }
 
   # KIOSK_TEST_AUTOCARD=1 (set by the pay demos' rake suites) makes the
@@ -91,27 +91,27 @@ Rails.application.configure do
   # pins it OFF.
   config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 
-  # ── Postgres role names (K-699) ─────────────────────────────────────────
+  # ── Postgres role names ─────────────────────────────────────────────────
   # `app_role` is the non-owner role a request-scoped session drops into when
   # `enforce_db_role` is on; `system_role` is the owner role the engine returns
   # to afterwards. WHICH roles a database actually has is deployment posture
   # rather than a demo mode, so the names are resolved here with every other env
-  # input and the initializer reads the config, never ENV (ENV-CONFIG-PLACEMENT,
-  # K-650). Nothing in this repo SETS either variable: they are the seam an
-  # adopter whose database names its roles differently would use, and this file
-  # is where they would name them.
+  # input and the initializer reads the config, never ENV
+  # (ENV-CONFIG-PLACEMENT). Nothing in this repo SETS either variable: they are
+  # the seam an adopter whose database names its roles differently would use,
+  # and this file is where they would name them.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
-  # ── The toy bad-proof counter's store (K-1008) ──────────────────────────
+  # ── The toy bad-proof counter's store ───────────────────────────────────
   # WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
   # is per-environment posture rather than a demo mode, so it is resolved here
   # with every other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699). `rake demo:pow` OWNS
-  # the location: it wipes the file for a clean slate and exports
-  # KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the driver that reads
-  # the counts back, so the two processes cannot drift onto different files and
-  # report zero at each other; the defaults below are only for a bare `rails s`.
+  # (ENV-CONFIG-PLACEMENT). `rake demo:pow` OWNS the location: it wipes the file
+  # for a clean slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it
+  # spawns and the driver that reads the counts back, so the two processes
+  # cannot drift onto different files and report zero at each other; the
+  # defaults below are only for a bare `rails s`.
   # TWO keys because atablefor's :demo and :reputation PoW branches keep
   # SEPARATE stores and this file cannot know which branch will run — an
   # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
@@ -124,11 +124,11 @@ Rails.application.configure do
 
   # KYC broker trust — read by whichever demos ship a broker client
   # (app/services/prove_broker_client.rb); inert in the others. No pinned dev
-  # broker key and no default intake secret (K-650): the two-server harnesses
+  # broker key and no default intake secret: the two-server harnesses
   # and the KYC rake tasks pin both sides explicitly (ProveBrokerBoot wiring /
   # the ProveKey public half), so nothing here needs to line up "out of the
   # box". The intake secret is ONE variable named for its role, never for an
-  # operator (K-694) — see production.rb for why.
+  # operator — see production.rb for why.
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
   config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
 
@@ -137,7 +137,7 @@ Rails.application.configure do
   # ephemeral because the known-answer vector, the firmware fixtures and the
   # lock the flow drivers provision are all pinned to it. Its private half is
   # world-readable in this public repo, which is why production refuses to boot
-  # without an explicit KIOSK_UNLOCK_SIGNING_KEY_PEM (K-686).
+  # without an explicit KIOSK_UNLOCK_SIGNING_KEY_PEM.
   dev_unlock_key_file = Rails.root.join("config/dev_unlock_key.pem")
   config.x.kiosk.unlock_signing_key_pem =
     ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") { dev_unlock_key_file.read if dev_unlock_key_file.exist? }

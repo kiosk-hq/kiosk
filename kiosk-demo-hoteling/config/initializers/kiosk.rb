@@ -114,7 +114,7 @@ if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   end
 end
 
-# ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
+# ── PoW HMAC secret ─────────────────────────────────────────────────────────
 # The HMAC key the engine signs every PoW challenge with. Required in
 # production, stable (non-secret) default in dev/test — that posture lives in
 # config/environments/*; here we only read the resolved value.
@@ -140,12 +140,12 @@ Kiosk.configure do |c|
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
-  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # ── Postgres role names ──────────────────────────────────────────────────
   # Resolved in config/environments/*, like every other env input; read here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
 
-  # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
+  # ── Issuer origin ─────────────────────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,
   # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
   # assistant proof-of-possession. Required in production, localhost default
@@ -209,7 +209,7 @@ Kiosk.configure do |c|
   # USE time (confirm_booking Gate-1), not here.
   c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
 
-  # ── Per-assistant spending cap (T-154) ───────────────────────────────────
+  # ── Per-assistant spending cap ───────────────────────────────────────────
   # The batteries-included seam: read the cap from `kiosk.agents
   # .spending_cap_cents`, the nullable column every demo's identity migration
   # already declares. Null means uncapped, so this line changes nothing for any

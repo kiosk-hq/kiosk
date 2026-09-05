@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# T-042 / K-452: give `properties` the columns a realistic multi-parameter
+# Give `properties` the columns a realistic multi-parameter
 # hotel search filters on (neighbourhood, star rating, amenities, address) so
 # the ~100-hotel search_hotels query is genuine, not cosmetic. Additive: existing
 # rows/seeds keep working (nullable-with-default backfill on the two required-ish

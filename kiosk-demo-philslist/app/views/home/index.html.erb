@@ -7,9 +7,9 @@
   <!-- Machine-readable affordance: assistants discover the Kiosk surface here.
        The href is the VERSIONED cut this operator pins, read from
        Kiosk.configuration.skill_url — the SAME url the `skill` block of
-       /.well-known/kiosk.json carries, never the mutable skill.md alias
-       (K-927). One immutable, hash-pinnable file behind both signals, and
-       one place to re-pin: the initializer. -->
+       /.well-known/kiosk.json carries, never the mutable skill.md alias.
+       One immutable, hash-pinnable file behind both signals, and one
+       place to re-pin: the initializer. -->
   <link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
   <style>
     :root{--accent:#2f6b3c;--accent2:#a8e8b6;--ink:#132018;--muted:#7a8b7e;--soft:#dcf0e0;--line:#dce8de;--bg:#f4f8f4}

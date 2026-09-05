@@ -114,7 +114,7 @@ require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-# ── PoW verb-toll MODE — exactly one, explicitly selected (K-497) ──────────
+# ── PoW verb-toll MODE — exactly one, explicitly selected ──────────────────
 #
 # atablefor advertises ONE anti-scalping PoW policy on the :query verb.
 # Historically three independent env flags each configured a DIFFERENT policy
@@ -234,7 +234,7 @@ when :reputation
   ATABLEFOR_REPUTATION_BAD_PROOF_DB = Rails.configuration.x.kiosk.reputation_bad_proof_db
 end
 
-# ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
+# ── PoW HMAC secret ─────────────────────────────────────────────────────────
 # The HMAC key the engine signs every PoW challenge with. Required in
 # production, stable (non-secret) default in dev/test — that posture lives in
 # config/environments/*; here we only read the resolved value.
@@ -263,12 +263,12 @@ Kiosk.configure do |c|
   # scoping and the WHERE clauses in the two handler controllers named above) —
   # so app_role and system_role are set to the same role only to satisfy the
   # config; no enable_rls_on / GRANT statements run here.
-  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # ── Postgres role names ──────────────────────────────────────────────────
   # Resolved in config/environments/*, like every other env input; read here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
 
-  # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
+  # ── Issuer origin ─────────────────────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,
   # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
   # assistant proof-of-possession. Required in production, localhost default
@@ -338,7 +338,7 @@ Kiosk.configure do |c|
   # payments block. atablefor books restaurant tables — a reservation takes
   # no money. The advertised capabilities are [schema, queries, actions].
 
-  # ── PoW verb-toll gate — exactly one mode (K-497) ───────────────────────
+  # ── PoW verb-toll gate — exactly one mode ───────────────────────────────
   # ATABLEFOR_POW_MODE (resolved at the top of this file) selects exactly one
   # :query PoW policy, so the branches can no longer clobber each other's
   # reputation_policy / reputation_factors (the last-block-wins bug). In

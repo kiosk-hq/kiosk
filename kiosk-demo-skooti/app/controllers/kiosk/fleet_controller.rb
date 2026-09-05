@@ -6,10 +6,10 @@
 # whole contract — and each class-level macro records a declaration that the NEXT
 # `def` claims, so a method with no macros above it is a helper the wire cannot
 # see. The superclass is `ActionController::API` because the mixin leaves that
-# choice to the operator (K-495) and skooti is `config.api_only = true`.
+# choice to the operator and skooti is `config.api_only = true`.
 #
 # `kind :query` above each declaration is what puts it on `GET`; the kind belongs
-# to the DECLARATION, not to the class (K-921), so one controller may declare
+# to the DECLARATION, not to the class, so one controller may declare
 # both. The five write verbs live next door in Kiosk::RentalsController.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing here: handlers are reached only
@@ -67,8 +67,8 @@ class Kiosk::FleetController < ActionController::API
     # `code` is the ONLY vehicle handle on the wire — reserve takes scooter_code.
     # The numeric primary key is deliberately NOT selected: a row id no verb
     # accepts is a dead field that invites the assistant to guess it is some
-    # verb's param (K-516/K-484; descriptor-house-style.md "Never expose a row id
-    # that no verb consumes"). It still ORDERS the fleet — an ORDER BY needs no
+    # verb's param (descriptor-house-style.md: "Never expose a row id that no
+    # verb consumes"). It still ORDERS the fleet — an ORDER BY needs no
     # SELECT. The currency rides on every row so an external assistant knows to
     # sign its cart in EUR; the cashier rejects any other currency at capture.
     render json: Scooter.available
@@ -93,7 +93,7 @@ class Kiosk::FleetController < ActionController::API
   # no filter it supplies. `owned_by_current_principal` is the ONE place the
   # identity predicate is written — see Reservation for why it stays SQL-side.
   #
-  # THE RECONCILIATION SURFACE (K-853): this is the "per-user query" protocol.md
+  # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
   # §11.6 sends an assistant to after a `pay` whose response it never read, so
   # what it publishes about money is normative. `payment_state` is a TRI-state on
   # purpose — §11.6 requires a third answer distinct from paid and not-paid,
@@ -122,7 +122,7 @@ class Kiosk::FleetController < ActionController::API
   def my_reservations
     # The vehicle is named by its `code`, never by the numeric scooters.id: that
     # primary key is not a param of any verb, so emitting it would be a dead
-    # field the assistant can only guess at (K-516).
+    # field the assistant can only guess at.
     #
     # Every column is named through its OWN arel_table: both tables carry `id`,
     # `status` and `created_at`, so an unqualified `:status` would be resolved by
@@ -148,8 +148,8 @@ class Kiosk::FleetController < ActionController::API
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
   #
-  # THE CADENCE AND THE GIVE-UP HORIZON ARE PART OF THE CONTRACT (K-477/K-595,
-  # K-606): the wire has no server→assistant push, so a descriptor that stops at
+  # THE CADENCE AND THE GIVE-UP HORIZON ARE PART OF THE CONTRACT:
+  # the wire has no server→assistant push, so a descriptor that stops at
   # "poll until the human acts" leaves an agent to invent a loop with no exit.
   # The schedule below is QUOTED from kiosk.tech/skill.md so the two surfaces
   # cannot publish rival arithmetic, and `demo:schema` asserts the SERVED

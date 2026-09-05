@@ -53,20 +53,20 @@ end
 
 # Run a one-JSON-line flow driver, return the parsed hash.
 #
-# READ THE CHILD'S EXIT STATUS (K-1043). This used to capture with `IO.popen`
-# and never look at `$?`, so the verdict rested entirely on "did a line
-# starting with `{` appear". Two failures fall out of that. It FAILED OPEN: a
-# driver that printed its JSON line and THEN died was reported as a PASS — and
-# that is not hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints
-# its summary line before `exit 1` on a breach. And when a driver died BEFORE
-# printing one, the operator's headline was a JSON parse error naming the
-# driver's FIRST line of output, which sends the reader to the wrong file
-# instead of showing the driver's own message.
+# READ THE CHILD'S EXIT STATUS. Capturing with `IO.popen` and never looking
+# at `$?` rests the verdict entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILS OPEN: a driver that
+# prints its JSON line and THEN dies is reported as a PASS — and that is not
+# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
+# line before `exit 1` on a breach. And when a driver dies BEFORE printing
+# one, the operator's headline is a JSON parse error naming the driver's
+# FIRST line of output, which sends the reader to the wrong file instead of
+# showing the driver's own message.
 #
 # So: status first, and on a non-zero child the abort quotes the child's own
 # last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
-# merged stdout+stderr interleaving the transcript always had, and hands back
-# the status `IO.popen(&:read)` threw away.
+# merged stdout+stderr interleaving and hands back the status
+# `IO.popen(&:read)` throws away.
 #
 # NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
 # those capture with `2>&1` into a value that is then COMPARED, so a psql error
@@ -108,8 +108,8 @@ namespace :demo do
     # secret_key_base exists (Devise sessions need it) — idempotent. Done
     # directly (NOT via `rails credentials:edit`): the credentials generator's
     # master-key step appends its own ignore block to .gitignore, silently
-    # regrowing the K-629-unified file on every fresh-machine run (K-666); the
-    # unified .gitignore already covers /config/master.key and /config/*.key.
+    # regrowing the unified ignore file on every fresh-machine run; that file
+    # already covers /config/master.key and /config/*.key.
     enc_path, key_path = "config/credentials.yml.enc", "config/master.key"
     if File.exist?(enc_path) && !File.exist?(key_path)
       # Same dead end as before this task existed: nothing can decrypt the enc.
@@ -193,7 +193,7 @@ namespace :demo do
     re-logs in and sees the list under Alice, Alice's browser sees it too, and
     Alice ends with >=2 non-revoked agents. Then RE-LINKS the same, already-
     bound key: nothing transitions, so nothing may be migrated or destroyed
-    (K-783 — that beat used to delete every membership Alice had).
+    (the regression it guards against destroys every membership Alice holds).
   DESC
   task link: :setup do
     port = ENV.fetch("PORT", "3007")
@@ -218,25 +218,26 @@ namespace :demo do
       check.call("link code minted (session channel) → 201",        r["link_mint"] == 201)
       check.call("claim rebound the key to Alice (same agent_id)",   r["claim_status"] == 201 && r["claim_rebound_to_holder"] && r["claim_same_agent_id"])
       check.call("pre-link token revoked by the rebind (principal change ⇒ 401)", r["prelink_status"] == 401 && r["prelink_revoked"])
-      # K-836: the same, for a token minted in the rebind's OWN wall-clock
-      # second — the case the strict `iat < watermark` comparison used to let
-      # through, and which the driver used to sidestep with a sleep.
+      # The same, for a token minted in the rebind's OWN wall-clock second —
+      # the case a strict `iat < watermark` comparison lets through, and the
+      # one a driver that slept before re-probing would never reach.
       check.call("a pre-link token minted in the rebind's own second is revoked too (K-836)", r["same_second_prelink_status"] == 401 && r["same_second_prelink_revoked"])
       check.call("re-login mints a token whose sub is Alice",        r["relogin_sub_is_holder"])
       check.call("re-logged-in agent sees 'Hike' as owner under Alice", r["agent_sees_migrated_list"])
       check.call("Alice's browser session sees 'Hike'",             r["human_sees_migrated_list"])
       check.call("a SECOND assistant links to Alice (multi-agent)", r["second_bound_to_holder"])
 
-      # K-783: re-linking an ALREADY-bound key transitions nothing, so it must
-      # migrate nothing and destroy nothing. It used to delete every membership
-      # Alice had — the lists stayed hers and she could no longer reach one.
+      # Re-linking an ALREADY-bound key transitions nothing, so it must migrate
+      # nothing and destroy nothing. The regression this guards against destroys
+      # every membership Alice holds — the lists stay hers and she can no longer
+      # reach one.
       check.call("re-linking the already-bound key still answers 201, same agent_id, same holder",
                  r["relink_status"] == 201 && r["relink_same_agent_id"] && r["relink_still_holder"])
       check.call("the assistant still sees 'Hike' after the re-link (membership survived)", r["relink_keeps_list_access"])
       check.call("Alice's browser still sees BOTH 'Hike' and the seeded 'Flat 3B'", r["human_keeps_all_lists"])
 
-      # T-082: the human UI's READ half no longer goes through the wire
-      # dispatcher — /lists/:id runs ListAccess + the model projections directly.
+      # The human UI's READ half does not go through the wire dispatcher —
+      # /lists/:id runs ListAccess + the model projections directly.
       # Both answers are asserted, because the page has two: the roster, and the
       # refusal a non-member earns.
       check.call("Alice's browser reads the list's own page (members roster rendered)", r["human_reads_list_page"])
@@ -276,7 +277,7 @@ namespace :demo do
       • a used/garbage invite code → 403
       • POSITIVE CONTROL: the genuine member DOES see + read the list
       • after remove_member, the member's next read → 403 (access gone)
-      • Assertion 8 (K-949/ADR-0028): the §7.2 DEPARTURE IS DECLARED. 8a reads
+      • Assertion 8: the §7.2 DEPARTURE IS DECLARED. 8a reads
         the unauthenticated catalog and requires my_lists / list_todos /
         list_members to publish `reach: consented` and whoami `reach:
         principal`. 8b calls every principal-reach no-argument query AS THE
@@ -312,13 +313,12 @@ namespace :demo do
 
     # ── Assertion 8a: the catalog PUBLISHES the reach of tudu's four queries ──
     #
-    # K-949 / ADR-0028. Collaboration is a legitimate authorization model and
-    # the spec no longer forbids it — what it requires is that the model be a
-    # DECLARED property of the verb rather than something a reader has to infer
-    # from a join. `consented` rather than `published` is the stronger of the
-    # two sharing claims and is the true one here: what admits another
-    # account's row is a `memberships` row this operator can produce, minted by
-    # redeeming an invite a human created.
+    # Collaboration is a legitimate authorization model; what the spec requires
+    # is that the model be a DECLARED property of the verb rather than
+    # something a reader has to infer from a join. `consented` rather than
+    # `published` is the stronger of the two sharing claims and is the true one
+    # here: what admits another account's row is a `memberships` row this
+    # operator can produce, minted by redeeming an invite a human created.
     want_reach = { "my_lists" => "consented", "list_todos" => "consented",
                    "list_members" => "consented", "whoami" => "principal" }
     got_reach  = (r["reach_by_verb"] || {}).slice(*want_reach.keys)
@@ -381,7 +381,7 @@ namespace :demo do
     Plus DeviceGrantRoleSelfSelection, the shared kiosk-redteam beat: the
     account-binding ceremony's unauthenticated opening request refuses
     `role`/`scope` at a DECLARED value as well as an invented one, while the
-    role-less request still opens it (K-072, K-1128).
+    role-less request still opens it.
   DESC
   task redteam: :setup do
     port = ENV.fetch("PORT", "3007")
@@ -420,7 +420,7 @@ namespace :demo do
     Also asserts the discovery SIGNAL over HTTP: the `<link rel="kiosk">` tag and
     the `Link: <…>; rel="kiosk"` header both name a VERSIONED cut — never the
     mutable `skill.md` alias — and both agree with the `skill` pin in
-    /.well-known/kiosk.json (K-927, protocol.md §4.5).
+    /.well-known/kiosk.json (protocol.md §4.5).
   DESC
   task schema: :setup do
     port = ENV.fetch("PORT", "3007")
@@ -436,16 +436,16 @@ namespace :demo do
 
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -510,9 +510,9 @@ namespace :demo do
     actions = action_specs.map { |a| a["name"] }
     capabilities = r["discovery_capabilities"] || []
 
-    # The schema call carried NO Authorization header (T-094): this status IS
-    # the public-access proof. And the MODULE set is asserted at its one
-    # remaining home — `schema.verbs` was a byte-identical copy until T-095.
+    # The schema call carried NO Authorization header: this status IS the
+    # public-access proof. And the MODULE set is asserted at its ONE home,
+    # `capabilities` — there is no second copy of it under `schema.verbs`.
     check.call("GET /kiosk/schema answered 200 with NO Authorization header", r["schema_status"] == 200)
     %w[schema queries actions].each { |v| check.call("capabilities includes #{v}", capabilities.include?(v)) }
     %w[whoami my_lists list_todos list_members].each { |q| check.call("schema.queries includes #{q}", queries.include?(q)) }
@@ -523,8 +523,8 @@ namespace :demo do
       check.call("schema entry #{spec['name']} carries a description", desc.is_a?(String) && !desc.strip.empty?)
     end
 
-    # T-042 / K-452: the primary read query (my_lists) and primary action
-    # (create_list) advertise the machine-readable descriptor extensions.
+    # The primary read query (my_lists) and primary action (create_list)
+    # advertise the machine-readable descriptor extensions.
     {
       query_specs  => %w[my_lists],
       action_specs => %w[create_list],
@@ -543,7 +543,7 @@ namespace :demo do
     check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
     check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`

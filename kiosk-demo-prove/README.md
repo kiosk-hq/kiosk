@@ -58,7 +58,7 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
   un-confirmable.
 - **No replay across operators.** The claim carries `operator`/`aud`; the
   operator's callback handler rejects a claim not addressed to it. The engine
-  `KycVerifier` **also** enforces this at the wire (ADR-0020): every
+  `KycVerifier` **also** enforces this at the wire: every
   `POST /kiosk/agents/kyc` rejects a claim whose `aud` != the operator's
   `kyc_audience`, so the cross-operator check lives in BOTH the operator
   callback layer and the normative wire.
@@ -89,8 +89,8 @@ is replaced by a **government identity service** login (an mDL / ISO-18013-5
 mobile driving licence, an EUDI wallet, or a national IdP), from which the broker
 derives the booleans it was asked for. The real broker closes two gaps the stub
 leaves open: it verifies the human **possesses a government account** (the
-account-possession assurance level adopted for now, after the 2026-08-04
-government-IdP / mDL landscape research), and later that **the account is
+account-possession assurance level adopted for now, after a survey of the
+government-IdP / mDL landscape), and later that **the account is
 actually theirs** — so a person cannot lend or share their account to vouch for
 other people's age or licence. The broker↔operator interface (intake → per-request binding → signed
 anonymized callback) is identical, which is why the stub is a faithful proof.

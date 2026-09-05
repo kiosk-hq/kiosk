@@ -54,7 +54,7 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # equihash_solve / equihash_register come from the shared helper; the solver
-# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem.
 require_relative "equihash_register"
 
 # ── Shared helpers ─────────────────────────────────────────────────────────
@@ -106,8 +106,8 @@ def exec_with_pow(kind, verb, args, token)
     abort "missing challenges[] in 402 for #{verb}" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 
-    # The solved proof(s) ride in the Kiosk-PoW request header as raw JSON
-    # (ADR-0022) — method, path, query string and body are unchanged, so the
+    # The solved proof(s) ride in the Kiosk-PoW request header as raw JSON —
+    # method, path, query string and body are unchanged, so the
     # request_fingerprint the challenge binds to still matches.
     rc, resp = send_it.call("Kiosk-PoW" => JSON.generate(proofs))
     [rc, resp, proofs.size]

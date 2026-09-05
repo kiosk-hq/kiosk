@@ -6,8 +6,8 @@ require "uri"
 
 # The ONE way a demo driver obtains a HUMAN principal.
 #
-# Every demo authenticates its humans with real Devise (T-066): there is no
-# stub user-IdP left to hand a driver a synthetic `user:u-<uuid>` bearer. So a
+# Every demo authenticates its humans with real Devise: there is no stub
+# user-IdP to hand a driver a synthetic `user:u-<uuid>` bearer. So a
 # driver that needs the human half of a ceremony — approving an assistant on
 # the device-verify page, minting a link code, unlinking — has to hold a real
 # browser session, and that means the real form: GET /users/sign_in for the

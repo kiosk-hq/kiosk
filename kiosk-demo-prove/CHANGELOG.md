@@ -14,7 +14,7 @@ sentences — essence and intent, not content.
   self-asserts (a labelled stub); the security model (per-request binding, no
   replay, anti-mass-confirm, SSRF guard) is the point.
 
-- 2026-08-13: closed a TOCTOU race in the human approve action (K-705): two
+- 2026-08-13: closed a TOCTOU race in the human approve action: two
   concurrent approvals of the same pending request used to both pass the
   in-memory single-use check and both mint + deliver a signed claim before
   either write landed. The decision is now an atomic conditional UPDATE

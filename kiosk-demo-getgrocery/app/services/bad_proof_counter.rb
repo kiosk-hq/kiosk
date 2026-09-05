@@ -2,7 +2,7 @@
 
 require "sqlite3"
 
-# The demo's PER-IDENTITY bad-proof tally (K-498).
+# The demo's PER-IDENTITY bad-proof tally.
 #
 # The engine calls `on_bad_proof` with the verified agent identity every time a
 # cryptographically invalid PoW proof arrives; this counts those rejections per

@@ -3,28 +3,27 @@
 # The HTTP half of tudu's Kiosk handlers: the one place an {OperationResult}
 # becomes a response.
 #
-# WHY A CONCERN, in a repo whose three earliest T-057 slices duplicated a
-# four-line `render_bad_request` rather than invent one. tudu was the fourth demo
-# whose QUERY half refuses as well as its action half, and the first where the two
+# WHY A CONCERN rather than a four-line `render_bad_request` copied into each
+# controller. tudu's QUERY half refuses as well as its action half, and the two
 # halves refuse the SAME WAY. What is shared is split in two: the ANSWER (shape
 # check, membership predicate, and the sentence each refusal carries) is
 # {ListAccess}, which renders nothing and is therefore reachable from the
 # Operations and the human web controllers as well; what is left here is the part
 # that genuinely needs a controller, because it calls `render`.
 #
-# WHY IT IS ITS OWN FILE (T-083). These two renderers used to live inside
-# {KioskMembershipGate} — the same code as the other six demos' `KioskRefusals`,
-# under a name only tudu used, at a path `bin/check-demo-copies` could not match
-# against its siblings. The lockstep rule pairs copies by relative path, so tudu's
-# were compared to nothing and were free to drift from the fleet's while every
-# check stayed green. Splitting the file is what puts all seven under the gate;
-# the membership guard stays next door, because it is tudu's alone.
+# WHY IT IS ITS OWN FILE, under the same name the other six demos use.
+# `bin/check-demo-copies` pairs copies by RELATIVE PATH, so the same two
+# renderers parked under a name only tudu uses — folded into
+# {KioskMembershipGate}, say — are compared to nothing and free to drift from
+# the fleet's while every check stays green. Keeping the file here is what puts
+# all seven under the gate; the membership guard stays next door, because it is
+# tudu's alone.
 #
 # Not a Kiosk mechanism and not shipped by the gem — an ordinary Rails concern
 # in the operator's own app, which is the whole point of the mixin design
-# (K-495: the operator owns the structure). A gem-level
+# — the operator owns the structure. A gem-level
 # `render_kiosk_error(code:, message:)` would cover `render_refusal` below and
-# nothing else; it is not proposed here (K-792 carries that question).
+# nothing else, so it is not proposed here.
 module KioskRefusals
   extend ActiveSupport::Concern
 

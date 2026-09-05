@@ -17,8 +17,8 @@ class HomeController < ApplicationController
     # Set a Link header too, so a header-only agent finds the well-known.
     # The url is `Kiosk.configuration.skill_url` — the VERSIONED cut this
     # operator pins, identical to the one `/.well-known/kiosk.json` carries
-    # under `skill`, never the mutable skill.md alias (K-927). Derived rather
-    # than restated so a cut is re-pinned in ONE place, the initializer.
+    # under `skill`, never the mutable skill.md alias. Derived rather than
+    # restated so a cut is re-pinned in ONE place, the initializer.
     response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

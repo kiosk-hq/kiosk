@@ -16,16 +16,14 @@
 # (There is no stylist roster: the menu is evergreen and infinite-capacity, so
 # the meaningful role contrast is owner=whole-book+forecast vs customer=own-only.)
 #
-# ONE channel, the real one (T-066). This flow used to run every beat twice —
-# once through an `X-Staff-Session` SSO stand-in and once through Devise —
-# because a role that only resolves through the stand-in is a role that does not
-# work for a real operator (K-437, the bug Phil hit live where the owner's token
-# came back `customer`). The stand-in is deleted, so there is nothing left to
-# contrast: every principal here signs in through the real /users/sign_in form
-# and mints the link over that Devise session cookie, and the role is resolved
-# by Kiosk::UserIdentityProviders::Devise off the User model's `#kiosk_role`,
-# which reads the provider's own `staff_role` column. That column, not a header,
-# was always the role source.
+# ONE channel, the real one. Every principal here signs in through the real
+# /users/sign_in form and mints the link over that Devise session cookie, and
+# the role is resolved by Kiosk::UserIdentityProviders::Devise off the User
+# model's `#kiosk_role`, which reads the provider's own `staff_role` column.
+# There is deliberately no SSO stand-in to contrast against: a role that only
+# resolves through a stand-in is a role that does not work for a real operator,
+# and the live failure it hides is an owner whose token comes back `customer`.
+# The column, not a header, is the role source.
 #
 # Usage (invoked by `rake demo:roles`, which supplies the seeded credentials
 # db/seeds.rb owns — do not run standalone without the server):
@@ -50,7 +48,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # Seeded principals and their Devise credentials. `db/seeds.rb` owns the
 # values; `demo:roles` hands them over as env, the way every sibling driver
-# gets its credentials (K-838) — a driver that re-types the seeded password
+# gets its credentials — a driver that re-types the seeded password
 # turns a seed change into a sign-in failure that names nothing. The owner
 # carries staff_role='owner'; Alice carries none, which is what makes her a
 # customer — the same table, the same form, two roles.
@@ -124,8 +122,8 @@ results = {}
 # ══ OWNER signs in for real → role owner → salon_calendar = whole book ══════
 #    Without User#kiosk_role the Devise adapter falls back to roles.first
 #    (customer), so the owner's token would come back "customer" and the
-#    forecast would disappear — that is the K-437 regression these beats catch,
-#    and since T-066 there is no second channel that could mask it.
+#    forecast would disappear — that is the regression these beats catch, and
+#    there is no second channel that could mask it.
 owner = link_assistant_via_devise(OWNER_EMAIL, DEMO_PASSWORD, "OWNER")
 results[:owner_token_role] = owner[:claims]["role"]
 rc, cal = get_json("/kiosk/salon_calendar",

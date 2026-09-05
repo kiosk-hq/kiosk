@@ -3,8 +3,8 @@
 # Synthetic principals + an evergreen SERVICE MENU for the stylish demo.
 #
 # CUSTOMERS (visitors) — Alice and Bob, with stable UUIDs and real Devise
-# credentials. The credentials are the load-bearing part: since T-104 no driver
-# can hand itself a principal, so every one of them signs its human in through
+# credentials. The credentials are the load-bearing part: no driver can hand
+# itself a principal, so every one of them signs its human in through
 # the real /users/sign_in form and binds an assistant through the shipped
 # ceremony (register → link → claim, script/bound_assistant.rb). The UUIDs stay
 # stable because the claim REBINDS the assistant onto the human's account,
@@ -16,7 +16,7 @@
 # assistant sees the whole book (every booking made) plus the FORECAST € total;
 # a customer sees only their own bookings and no forecast.
 #
-# THE MENU (K-446) — the salon's structure is a small SERVICE MENU (a handful of
+# THE MENU — the salon's structure is a small SERVICE MENU (a handful of
 # services, each a EUR price). This is EVERGREEN and INFINITE-CAPACITY: every
 # service is ALWAYS bookable, OVERBOOKING is allowed (a visitor can book any
 # service any number of times), so the salon can always take you and the demo

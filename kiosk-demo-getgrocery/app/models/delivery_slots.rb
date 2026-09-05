@@ -1,22 +1,21 @@
 # frozen_string_literal: true
 
-# ── Delivery-slot time source of truth (K-470, K-480) ────────────────────────
+# ── Delivery-slot time source of truth ───────────────────────────────────────
 # BOTH delivery_slots and create_order compute a slot's wall-clock time from the
 # SAME (date, slot_id) pair via this one helper, so the day+time an assistant
 # sees in delivery_slots is EXACTLY what create_order books and returns. slot_id
-# 1 = 08:00, 2 = 10:00, … (two-hour windows). Previously create_order derived
-# the date independently (Date.today + 1), so a slot chosen for TODAY came back
-# booked for TOMORROW — the two verbs must never disagree on the date.
+# 1 = 08:00, 2 = 10:00, … (two-hour windows). Deriving the date independently
+# in create_order (`Date.today + 1`) books a slot chosen for TODAY as
+# TOMORROW — the two verbs must never disagree on the date.
 #
-# ZONE (K-480): slot wall-clock times are the OPERATOR's local time — getgrocery
+# ZONE: slot wall-clock times are the OPERATOR's local time — getgrocery
 # delivers in Dublin, so "08:00" means 08:00 in Europe/Dublin, and "now" for the
 # past-slot filter is also read in Europe/Dublin. We use the real IANA zone (not
 # a fixed +1 offset) so IST (UTC+1, summer) and GMT (UTC+0, winter) are both
-# handled automatically across DST. Previously slot_at built a NAIVE UTC time
-# (`Time.utc(…, 08, …)`), and delivery_slots returned EVERY slot for the date
-# with no past-filter — so at 11:00 Dublin it still offered the un-bookable
-# 08:00–10:00 window (worse under UTC+3 dev clocks). Now delivery_slots hides
-# any of TODAY's slots whose START has already passed in Dublin, and both
+# handled automatically across DST. A NAIVE UTC `slot_at` (`Time.utc(…, 08,
+# …)`) with no past-filter would offer the un-bookable 08:00–10:00 window at
+# 11:00 Dublin, and worse under UTC+3 dev clocks. So delivery_slots hides any
+# of TODAY's slots whose START has already passed in Dublin, and both
 # create_order/reschedule_delivery re-validate the chosen slot is not in the past.
 module DeliverySlots
   FIRST_HOUR   = 8
@@ -39,13 +38,12 @@ module DeliverySlots
     zone.now
   end
 
-  # THE DAY A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the operator's own
-  # locale.
+  # THE DAY A PUBLISHED EXAMPLE NAMES: tomorrow, in the operator's own locale.
   #
   # A descriptor's `example_params`/`example_row` say «copy this verbatim», and
-  # a calendar literal there stops being true on a day nobody notices: since
-  # K-969 a `date` before today is REFUSED, so the published example aged into
-  # a 400. Tomorrow is the right answer rather than today because EVERY window
+  # a calendar literal there stops being true on a day nobody notices: a `date`
+  # before today is REFUSED, so a published literal ages into a 400. Tomorrow is
+  # the right answer rather than today because EVERY window
   # of a future day is still bookable — today's example would go empty at 18:00
   # Dublin — and because tomorrow is already what a blank `delivery_date` means
   # to both write verbs, so an assistant that copies the catalogue gets exactly

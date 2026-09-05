@@ -5,7 +5,7 @@
 # the JSON body. Same shape as Kiosk::DiningRoomController — this app's own
 # ApplicationController plus `include Kiosk::Handler` — and `kind :action` above
 # each declaration is what puts it on `POST`. Each write reads its arguments,
-# hands them to an Operation and renders what it answers (T-083).
+# hands them to an Operation and renders what it answers.
 #
 # The wire's error-`code` vocabulary is a closed table, not a class hierarchy,
 # so a refusal is an ordinary `render json:, status:` naming the code, which the
@@ -25,7 +25,7 @@ class Kiosk::BookingsController < ApplicationController
   # upcoming seating, for the authenticated principal. The (restaurant_id,
   # restaurant_table_id) come from an availability row; the (date, time) seating
   # is re-validated through the same app/models/seatings.rb helper `availability`
-  # filters with, so it must be one of the CURRENT upcoming seatings (K-767).
+  # filters with, so it must be one of the CURRENT upcoming seatings.
   # Contention is finite: a UNIQUE index on (restaurant_table_id, seating_at)
   # among confirmed rows makes a table already held a clean 409 Conflict. No
   # payment — any deposit shown is settled at the restaurant.
@@ -52,7 +52,7 @@ class Kiosk::BookingsController < ApplicationController
                                         description: "The seating_date (YYYY-MM-DD) from the availability row." },
                  time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
                                         description: "The seating_time HH:MM (24-hour), e.g. \"20:00\"." },
-                 # K-1047: the ceiling is DECLARED, not merely enforced — a
+                 # THE CEILING IS DECLARED, not merely enforced — a
                  # refusal the published schema does not predict is its own
                  # defect. It is the width of `bookings.party_size` (and of the
                  # `restaurant_tables.capacity` this is compared against), so it
@@ -80,7 +80,7 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
                              date time seating_at status]
-  # THE SEATING IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here
+  # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
   # ages into a 400 the day that seating passes, so `example_params` and
   # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
   # same {Seatings} helpers `availability` uses — the three cannot drift.

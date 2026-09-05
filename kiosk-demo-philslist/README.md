@@ -136,7 +136,7 @@ beat this file does not hand-roll: `DeviceGrantRoleSelfSelection`, shared from
 `kiosk-redteam` by every demo — the account-binding claim ceremony's
 unauthenticated opening request must refuse a `role` at a value this origin
 DECLARES as firmly as an invented one, and a SKIP is scored as a breach here
-because this origin declares a role (K-072, K-1128). The task prints the count
+because this origin declares a role. The task prints the count
 it actually ran; that number is the length of this list.
 
 ### Not-only-commerce proof (`rake demo:schema`)
@@ -145,10 +145,10 @@ Asserts the schema catalog (queries/actions + descriptions) **and** that the
 advertised `capabilities` do **not** include `pay`, `agents.json` carries no
 payments block, and `agents.txt` carries no `Protocols: ap2` / `Payments:`
 directives. The `schema` verb published a byte-identical copy of that set as
-`verbs` until it was dropped (T-095) — the two fields were rendered by the same
+`verbs` until it was dropped — the two fields were rendered by the same
 call, so the module set now has exactly one home. The same beat also asserts
 that `GET /kiosk/schema` answers **with no Authorization header at all**: the
-catalogue went public in T-094.
+catalogue is public.
 
 ### Registration PoW (`rake demo:register`)
 
@@ -225,9 +225,9 @@ The demo bakes in shortcuts production operators replace:
   contact detail in their own listing text — which works, and is how classifieds
   worked before relays, but it means a seller who wants replies must publish
   something in the clear. A production board adds an operator-relayed message
-  verb so neither side hands the other an address; that is designed and tracked
-  as T-108, deliberately not built here because a half-built inbox would be a
-  worse demo than an honestly-stated absence.
+  verb so neither side hands the other an address; that is designed and
+  deliberately not built here, because a half-built inbox would be a worse demo
+  than an honestly-stated absence.
 - **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here any
   more: this demo sets nothing, so the engine's own `DefaultAgentIdp` verifies
   the kiosk-pop JWTs it minted, in every environment. The bespoke
@@ -235,7 +235,7 @@ The demo bakes in shortcuts production operators replace:
   identity at any role it asked for — is deleted. Swap this seam only to front
   an EXTERNAL agent-identity issuer (Entra Agent ID, Okta, an ID-JAG-style
   broker), by subclassing `Kiosk::AgentIdentityProviders::Base`; its one hard
-  constraint is that the `agent_id` you return must be a **UUID** (K-830).
+  constraint is that the `agent_id` you return must be a **UUID**.
 - **The human session channel** (`c.user_idp`) already runs the real
   `kiosk-user-idp-devise` adapter.
 

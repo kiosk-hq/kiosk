@@ -1,28 +1,26 @@
 # frozen_string_literal: true
 
 # §8.3 — A DESCRIPTOR'S PUBLISHED EXAMPLES, AGAINST THAT DESCRIPTOR'S OWN
-# SCHEMAS (T-097). Matrix SPEC-084.
+# SCHEMAS. Matrix SPEC-084.
 #
 # WHY THIS EXISTS. A descriptor publishes `example_params` so an assistant can
 # copy one verbatim as its first call, and `example_row` so it knows the shape
 # to expect back. The spec says an example ILLUSTRATES the contract and the
 # SCHEMA is the contract where the two disagree — which is precisely the
 # sentence that lets an example be WRONG with every suite green. e2e's
-# `schema_conformance.rb` §4 closed that hole for the reference origin and
-# found TWO violations on its first run (K-825, an integer id published for a
-# uuid column); it runs against the e2e app only, and the seven operator
-# origins publish far richer descriptors. This is the same check for them, and
-# it found one on its own first run — stylish's `book_appointment` published
-# an integer `appointment_id` for a uuid column, the SAME defect K-825 found in
-# the reference origin, in the demo whose salons-and-appointments schema the
-# e2e fixtures were staged from.
+# `schema_conformance.rb` §4 closes that hole for the reference origin, but it
+# runs against the e2e app only, and the seven operator origins publish far
+# richer descriptors. This is the same check for them. The defect it catches is
+# a small one to write and an expensive one to relay — an integer id published
+# as the example for a `uuid` column, so the first call an assistant copies
+# verbatim is refused by the origin that published it.
 #
 # THE BYTES ARE THE SERVED ONES. `demo:schema` hands this the `queries` and
 # `actions` arrays `script/schema_flow.rb` GOT off `/kiosk/schema` over HTTP,
 # so what is validated is what an assistant actually reads — not what a
 # controller file says. Hand-written examples on one side, code checked against
-# its own specs on the other, and the two never meeting, is K-822's argument
-# and the reason a source read would not do.
+# its own specs on the other, and the two never meeting, is the gap this closes
+# — and the reason a source read would not do.
 #
 # `limit` AND `cursor` ARE EXEMPT, AND THE ENGINE SAYS WHICH ONES. Spec §8.1
 # item 6 and §8.4 make them RESERVED names the wire always accepts and a verb

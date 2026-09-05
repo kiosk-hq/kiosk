@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# K-853: skooti had no payment lifecycle at all. The ONLY record that money had
-# moved for a reservation was the engine's `kiosk.settlements` row, which is
+# Without a payment lifecycle of its own, the ONLY record that money had moved
+# for a reservation would be the engine's `kiosk.settlements` row, which is
 # written AFTER the irreversible capture — so between the capture returning and
-# that row landing, skooti's own records said "no settlement for this
-# reservation", and `my_reservations` published nothing about money whatsoever.
+# that row landing, skooti's own records would say "no settlement for this
+# reservation", and `my_reservations` would publish nothing about money at all.
 #
 # protocol.md §11.6 forbids exactly that answer: paid state MUST be anchored to
 # the CAPTURE, not to the settlement record, and an operator MUST NOT report a

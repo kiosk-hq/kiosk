@@ -5,15 +5,14 @@
 # Registration is gated by ONE Equihash proof (see config/initializers/kiosk.rb).
 # This helper does the full handshake: challenge → sign PoP → register; on a 402
 # it solves every challenge with the shipped Python solver and retries the SAME
-# register body, sending the proof(s) in the Kiosk-PoW request header as raw JSON
-# (ADR-0022). Replaces the old inline SHA256 hashcash.
+# register body, sending the proof(s) in the Kiosk-PoW request header as raw
+# JSON rather than in the body — which is what lets a GET carry one too.
 #
-# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE POINT (K-659). It is a
-# FLOW-DRIVER helper — its only callers are the scripts in this directory and
-# the demo rake tasks that run them — so it has no business in the Rails
-# application's autoload path. It used to sit in lib/ and be hand-excluded from
-# `config.autoload_lib(ignore: …)` in all seven demos, i.e. loaded by `rails
-# server` and then told not to be; the exclusion is gone because the file is.
+# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE POINT. It is a FLOW-DRIVER
+# helper — its only callers are the scripts in this directory and the demo rake
+# tasks that run them — so it has no business in the Rails application's
+# autoload path. In lib/ it would be loaded by `rails server` and then have to
+# be hand-excluded again from `config.autoload_lib(ignore: …)`.
 #
 # Requires: json, jwt, net/http, uri, openssl, open3, securerandom (the caller
 # already requires most of these) plus the kiosk-pow-equihash gem, which owns
@@ -25,7 +24,7 @@ require "kiosk/pow/equihash"
 # Solve one Equihash challenge with the shipped solver → proof nonce hash.
 # The solver path comes from Kiosk::Pow::Equihash.solver_path — the gem's
 # documented accessor for solve.py inside its own package — instead of a
-# checkout-relative constant here (K-627/K-632: one owner for the location).
+# checkout-relative constant here: one owner for the location.
 def equihash_solve(challenge)
   out, status = Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, JSON.generate(challenge))
   abort "solve.py exited non-zero: #{out}" unless status.success?
@@ -42,7 +41,7 @@ end
 # @param post_json [#call] ->(url, body, headers = {}) { [code, body] }
 #   (the header slot carries the Kiosk-PoW proof on the retry)
 # @return [Array(OpenSSL::PKey::RSA, Hash, Integer)] the keypair, the register
-#   response, and the response CODE. The code is returned (K-707) so a driver
+#   response, and the response CODE. The code is returned so a driver
 #   that REPORTS `http_register` reports what the server actually answered
 #   instead of writing `201` down beside a comment explaining why it must be
 #   201 — a rake task cannot "assert" a constant the driver typed. It is the

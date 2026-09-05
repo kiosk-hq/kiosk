@@ -24,18 +24,18 @@ Rails.application.configure do
   # localhost/127.0.0.1.
   config.hosts << "kyc.demo.kiosk.tech"
 
-  # ── Prove env inputs (K-672) ────────────────────────────────────────────
+  # ── Prove env inputs ────────────────────────────────────────────────────
   # ENV is read HERE, per environment, and published as Rails custom config
   # (Rails.configuration.x.prove.*); lib code and controllers read the
-  # config, never ENV — the same shape as the operator demos' K-650 blocks.
+  # config, never ENV — the same shape as the operator demos' env blocks.
   # prove is the API-only broker and the declared exception to their env-file
-  # lockstep (K-643), so this block carries broker config, not operator config.
+  # lockstep, so this block carries broker config, not operator config.
 
   # Operator intake allow-list — ENV-only, the SAME fail-closed posture as
-  # production (K-547): an operator whose secret is unset is simply NOT
-  # registered. The old shipped dev defaults are gone (K-672): since K-650
-  # the operator side reads its own KIOSK_PROVE_*_SECRET with NO fallback,
-  # so a default here paired with nothing — the two-server harnesses
+  # production: an operator whose secret is unset is simply NOT registered.
+  # There is deliberately no shipped dev default, because the operator side
+  # reads its own KIOSK_PROVE_*_SECRET with NO fallback, so a default here
+  # would pair with nothing — the two-server harnesses
   # (ProveBrokerBoot) pin the secret explicitly on both sides, and a bare
   # `rails s` broker still serves its human /verify page and /prove_key.pem
   # with no operator registered (intake then answers 401, as it should).
@@ -51,7 +51,7 @@ Rails.application.configure do
   # The operator-binding `aud` minted into each operator's attestations —
   # defaults to the operator_id handle (what the demo operators set as
   # c.kyc_audience); overridable for a distinct origin-URL audience, kept in
-  # lockstep with the operator's own kyc_audience (K-550).
+  # lockstep with the operator's own kyc_audience.
   config.x.prove.skooti_audience     = ENV.fetch("KIOSK_PROVE_SKOOTI_AUDIENCE", "skooti")
   config.x.prove.getgrocery_audience = ENV.fetch("KIOSK_PROVE_GETGROCERY_AUDIENCE", "getgrocery")
 
@@ -70,8 +70,8 @@ Rails.application.configure do
   # config/dev_prove_key.pem: fixed (not per-boot ephemeral) so a broker
   # restart keeps the key a hand-wired local operator has pinned; the
   # two-server harnesses fetch the public half from the running broker
-  # (GET /prove_key.pem, K-650) and so work with ANY key here. Its private
-  # half ships in this public repo, which is why production refuses to boot
-  # without an explicit PROVE_KEY_PEM (K-673).
+  # (GET /prove_key.pem) and so work with ANY key here. Its private half ships
+  # in this public repo, which is why production refuses to boot without an
+  # explicit PROVE_KEY_PEM.
   config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM") { File.read(Rails.root.join("config/dev_prove_key.pem")) }
 end

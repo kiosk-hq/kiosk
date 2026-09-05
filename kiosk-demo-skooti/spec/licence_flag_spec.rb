@@ -1,19 +1,18 @@
 # frozen_string_literal: true
 
-# K-724 — THE STANDING ASSERTION FOR THE LICENCE GATE'S FAIL-CLOSED PROPERTY.
+# THE STANDING ASSERTION FOR THE LICENCE GATE'S FAIL-CLOSED PROPERTY.
 #
 #   bundle exec rails runner spec/licence_flag_spec.rb
 #
 # `rake demo:kyc` runs it first, before it boots anything, so the property is
 # checked on every CI run of the demo whose motorcycle it protects.
 #
-# WHAT IT IS FOR. K-687 found that `reserve` is open to every vehicle, so an
-# agent could reserve the KYC-gated motorcycle and activate it through the
-# licence-FREE verb `start_rental`, getting a signed unlock token having
-# attested nothing. The fix put a licence predicate in BOTH rental verbs.
-# K-724 is the SECOND finding on the same gate: the predicate enumerated the
-# truthy spellings it knew by hand — `x == true || x == "t" || x == "true"` —
-# and every spelling it did not enumerate failed OPEN. That is correct against
+# WHAT IT IS FOR. `reserve` is open to every vehicle, so unless BOTH rental
+# verbs carry a licence predicate an agent can reserve the KYC-gated motorcycle
+# and activate it through `start_rental`, getting a signed unlock token having
+# attested nothing. The predicate itself is the second trap: enumerate the
+# truthy spellings by hand — `x == true || x == "t" || x == "true"` — and every
+# spelling not enumerated fails OPEN. That enumeration is correct against
 # today's pg adapter, which decodes a boolean column to a real Ruby boolean,
 # and wrong the moment anything changes it: one adapter, cast or schema change
 # yielding `"TRUE"` or `1`, and the unrecognised value reads as licence-FREE.
@@ -55,7 +54,7 @@ def vehicle_reading(raw)
   Scooter.allocate.tap { |s| s.define_singleton_method(:needs_licence) { raw } }
 end
 
-puts "\n── K-724: the licence gate is fail-closed for every spelling ──"
+puts "\n── the licence gate is fail-closed for every spelling ──"
 
 # ── 0. the thing under test is actually here (this spec never no-ops) ────────
 assert(defined?(Scooter) && Scooter.respond_to?(:table_name), "Scooter is loaded")

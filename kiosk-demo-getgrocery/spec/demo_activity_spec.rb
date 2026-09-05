@@ -10,7 +10,7 @@
 #
 # `bundle exec rake demo:telemetry_spec` runs both, in that order.
 #
-# WHY A BOOT (K-622). The route is drawn, and the middleware inserted, only when
+# WHY A BOOT. The route is drawn, and the middleware inserted, only when
 # KIOSK_TELEMETRY=1 at boot time (config/routes.rb, config/initializers/kiosk.rb),
 # so "is it there / is it absent" cannot be asserted in-process — it needs two
 # processes. Everything else here rides the app's own middleware stack via
@@ -56,7 +56,7 @@ end
 
 telemetry_on = ENV["KIOSK_TELEMETRY"] == "1"
 
-# K-620 write-target guard, same as demo:telemetry's. The scope assertions below
+# The write-target guard, same as demo:telemetry's. The scope assertions below
 # WRITE a handful of synthetic rows, and which store they land in is decided by
 # an environment variable — one of whose two settings is the SHARED store behind
 # the public kiosk.tech landing tile. Refuse that target unless asked by name.
@@ -71,12 +71,12 @@ end
 if telemetry_on
   puts "\n── GET /demo/activity.json with KIOSK_TELEMETRY=1 ──"
 
-  # K-714. The store is provisioned ahead of the request — by this demo's own
-  # migration locally, by deploy/telemetry-init.sql for the shared hosted one —
-  # so nothing here may issue DDL. Watching starts BEFORE the first read: the
-  # schema guard it replaced was process-local, so it fired on the first call a
-  # fresh process made and on no other, and an assertion placed any later would
-  # pass against the very code it exists to rule out.
+  # The store is provisioned ahead of the request — by this demo's own migration
+  # locally, by deploy/telemetry-init.sql for the shared hosted one — so nothing
+  # here may issue DDL. Watching starts BEFORE the first read: a process-local
+  # schema guard would fire on the first call a fresh process made and on no
+  # other, and an assertion placed any later would pass against the very code it
+  # exists to rule out.
   ddl = []
   ddl_watch = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
     ddl << payload[:sql].to_s if payload[:sql].to_s.match?(/\A\s*(CREATE|ALTER|DROP)\b/i)
@@ -148,7 +148,7 @@ if telemetry_on
   ActiveSupport::Notifications.unsubscribe(ddl_watch)
   assert(ddl.empty?,
          "no DDL anywhere on the read or write path — the table is a migration's, not a " \
-         "request's (K-714); saw #{ddl.map { |s| s[0, 60] }.inspect}")
+         "request's; saw #{ddl.map { |s| s[0, 60] }.inspect}")
 else
   puts "\n── GET /demo/activity.json with KIOSK_TELEMETRY unset ──"
 

@@ -35,7 +35,7 @@ import Foundation
 //
 //   (b) Shared App Group Keychain
 //       The full Skooti app (which ran register → reserve → pay → start_rental;
-//       licence-free scooters have had no KYC leg since K-442 — KYC gates only
+//       licence-free scooters have no KYC leg — KYC gates only
 //       the combustion motorcycle, see script/rental_flow.rb)
 //       writes the rental token into a Keychain item in a shared App Group
 //       (e.g. group.app.skooti).  The App Clip reads it on launch.
@@ -96,7 +96,7 @@ enum Configuration {
     /// Base URL of the Kiosk provider (kiosk-demo-skooti) — the SAME host the
     /// two entitlements declare and appclip/README.md uses throughout. Point it
     /// at your own origin for a real deployment; the value here names a host
-    /// this project actually serves rather than an invented one (K-719).
+    /// this project actually serves rather than an invented one.
     static let kioskBaseURL = URL(string: "https://skooti.demo.kiosk.tech")!
 
     // ── DEMO STUB ─────────────────────────────────────────────

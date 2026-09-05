@@ -26,9 +26,9 @@ BOB_ID   = "00000000-0000-0000-0000-000000000002"
 # Demo-only credentials (development database, reset by every demo:setup).
 DEMO_PASSWORD = "tudu-demo-password"
 
-# display_name is what the ROSTER publishes (K-950). `list_members` used to
-# publish `users.email`, so every housemate learned every other housemate's
-# login address; it publishes this column instead, and an account that has
+# display_name is what the ROSTER publishes. `list_members` publishes this
+# column and never `users.email` — a roster must not teach every housemate
+# every other housemate's login address — and an account that has
 # chosen no name — every assistant-created principal — gets the opaque
 # `member-<hex>` {User.public_name} derives from its UUID. Seeded here so the
 # demo's own household reads the way a household should ("Alice", "Bob") rather

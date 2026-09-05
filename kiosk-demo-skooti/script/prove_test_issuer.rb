@@ -10,30 +10,28 @@ require "jwt"
 # test can block"). It is the direct analogue of the retired StubKyc.attest —
 # but now signing with the SHARED broker key skooti trusts (the KYC rake tasks
 # pin c.kyc_public_key to ProveTestIssuer.public_key_pem — the ProveKey public
-# half — via KIOSK_PROVE_PUBLIC_KEY_PEM on the server they spawn; K-650).
+# half — via KIOSK_PROVE_PUBLIC_KEY_PEM on the server they spawn).
 #
-# WHY IT NO LONGER LOADS THE BROKER'S ProveKey (K-681). This file used to
-# `require` the sibling app's kiosk-demo-prove/lib/prove_key.rb across the app
-# boundary, back when that module was a self-contained constant carrier. K-672
-# moved the broker's key and issuer into the broker's OWN per-environment Rails
-# config (Rails.configuration.x.prove), which turned that cross-app require into
-# a file that only works inside the BOOTED BROKER — while this file is loaded
-# into two FOREIGN processes, and broke in both:
+# WHY IT DOES NOT LOAD THE BROKER'S ProveKey. The broker's key and issuer live
+# in the BROKER's own per-environment Rails config (Rails.configuration.x.prove),
+# so `require`-ing the sibling app's kiosk-demo-prove/lib/prove_key.rb across
+# the app boundary only works inside the BOOTED BROKER — and this file is
+# loaded into two FOREIGN processes, where it would break in two ways:
 #   * skooti's own Rails (demo:rideflow, demo:isolation, the KYC rake tasks):
 #     `Rails` resolves, but skooti's config has no `x.prove` block (skooti sets
-#     x.kiosk.prove_*), so key_pem came back nil and OpenSSL::PKey::RSA.new(nil)
-#     raised TypeError — no NameError to point at the cause;
+#     x.kiosk.prove_*), so key_pem comes back nil and OpenSSL::PKey::RSA.new(nil)
+#     raises TypeError — no NameError to point at the cause;
 #   * the bare-Ruby drivers (script/redteam_suite.rb, script/isolation_flow.rb):
 #     no Rails at all → NameError: uninitialized constant ProveKey::Rails.
-# So the test issuer now resolves its own key and issuer and does not touch the
+# So the test issuer resolves its own key and issuer and does not touch the
 # broker's app load path at all — the same principle as ProveTrust below
-# (flow-only helpers stay off a Rails app's load path; K-659/K-663).
+# (flow-only helpers stay off a Rails app's load path).
 #
 # HOW THE TWO STAY IN LOCKSTEP. They must sign with the SAME key and stamp the
 # SAME `iss`, or every valid-attestation control in the drivers is rejected:
 #   key — both read the SAME FILE: kiosk-demo-prove/config/dev_prove_key.pem,
-#         where K-673 put the dev/test key, and which the broker's development
-#         and test env files read by that exact path. PROVE_KEY_PEM overrides on
+#         the dev/test key, which the broker's development and test env files
+#         read by that exact path. PROVE_KEY_PEM overrides on
 #         both sides, in the same precedence order.
 #   iss — ProveTrust.issuer is literally the same expression the broker's env
 #         files use (KIOSK_PROVE_ISSUER, defaulting to the deploy origin), and
@@ -43,8 +41,9 @@ require "jwt"
 #   RUNNING broker serves at GET /prove_key.pem, so a broker that changes its
 #   key source reddens that gate with a message naming this file.
 #
-# WHY THIS CANNOT REOPEN K-673 (production must never sign KYC claims with the
-# dev key that ships in this public repo). This file lives in kiosk-demo-skooti
+# WHY THIS CANNOT LET PRODUCTION SIGN WITH THE DEV KEY (production must never
+# sign KYC claims with the key that ships in this public repo). This file lives
+# in kiosk-demo-skooti
 # and is loaded ONLY by skooti's flow/redteam/rake scaffolding — the served
 # broker never loads it, and the broker's own resolution is untouched: ProveKey
 # still reads Rails.configuration.x.prove.key_pem and production's env file
@@ -62,10 +61,10 @@ require "jwt"
 #   ProveTestIssuer.attest_expired(user_id:)       → same, but exp 1h in the past
 module ProveTestIssuer
   # The broker's dev/test signing key — the SAME file kiosk-demo-prove's
-  # config/environments/{development,test}.rb read (K-673 moved the PEM out of
-  # code into this file). Path is relative to this file so it resolves whether
+  # config/environments/{development,test}.rb read; the PEM lives in that file
+  # rather than in code. Path is relative to this file so it resolves whether
   # required from a flow, the redteam, or a rake task. Only the key MATERIAL
-  # crosses the app boundary now, never the broker's Rails-bound code (K-681).
+  # crosses the app boundary, never the broker's Rails-bound code.
   DEV_KEY_PATH = File.expand_path("../../kiosk-demo-prove/config/dev_prove_key.pem", __dir__)
 
   module_function
@@ -111,12 +110,12 @@ module ProveTestIssuer
   # The ProveKey PUBLIC half, PEM-encoded. The single-server KYC rake tasks
   # (rideflow, isolation) pin this on the server they spawn as
   # KIOSK_PROVE_PUBLIC_KEY_PEM, so the server trusts exactly the key this
-  # test issuer signs with — there is no pinned fallback in the app (K-650).
+  # test issuer signs with — there is no pinned fallback in the app.
   def public_key_pem
     keypair.public_key.to_pem
   end
 
-  # The two-server drift alarm (K-681). The two-server gates trust the key the
+  # The two-server drift alarm. The two-server gates trust the key the
   # RUNNING broker serves at GET /prove_key.pem, while the drivers' valid-KYC
   # controls are minted here — the two are kept in lockstep by both sides
   # reading kiosk-demo-prove/config/dev_prove_key.pem, which nothing enforces

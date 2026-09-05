@@ -6,15 +6,14 @@
 #
 # An engine-owned table with no engine-owned reader, the {Settlement} /
 # {CartMandate} shape: kiosk-server writes the row (POST /agents/kyc records the
-# attributes a verified attestation granted), and until K-654 the last reader of
-# it was a `conn.execute` heredoc in the initializer. Promoting it into the
-# engine is a public-API decision, not a handler conversion.
+# attributes a verified attestation granted) and this demo only reads it.
+# Promoting it into the engine is a public-API decision, not a handler
+# conversion.
 class Agent < ApplicationRecord
   self.table_name = "kiosk.agents"
 
   # The named anonymized attributes a valid attestation granted this agent —
-  # ROWS since K-656, one per granted name, in the engine's own
-  # `kiosk.kyc_attributes` table.
+  # one ROW per granted name, in the engine's own `kiosk.kyc_attributes` table.
   has_many :kyc_attributes, class_name: "KycAttribute", inverse_of: :agent,
                             foreign_key: :agent_id, dependent: nil
 
@@ -29,15 +28,13 @@ class Agent < ApplicationRecord
 
   # Does the acting agent carry EVERY named attribute as a granted boolean?
   #
-  # THE QUESTION IS AN EXISTENCE TEST, AND THAT IS WHAT MAKES IT SAFE. Until
-  # K-656 the grants were a jsonb map on this row and this method had to
-  # extract a VALUE — `COALESCE(kyc_attributes ->> 'age_over_18', 'false')`,
-  # deliberately in Postgres, because the engine stored JSON booleans and a
-  # Ruby comparison would accept one spelling of true and silently refuse the
-  # other inside the gate that decides whether alcohol is sold. There is no
-  # value any more: the grant IS the row, so this counts the required names
-  # that are present and compares the count. Nothing here can answer NULL, and
-  # no spelling of `true` reaches this side at all — the engine judges that
+  # THE QUESTION IS AN EXISTENCE TEST, AND THAT IS WHAT MAKES IT SAFE. The grant
+  # IS the row, so this counts the required names that are present and compares
+  # the count; there is no stored VALUE to extract and no spelling of it to
+  # judge. A grants map WOULD carry a value, and a Ruby comparison over a JSON
+  # boolean accepts one spelling of true and silently refuses another, inside
+  # the gate that decides whether alcohol is sold. Nothing here can answer NULL,
+  # and no spelling of `true` reaches this side at all — the engine judges that
   # once, on the write, in Postgres (`jsonb_each(...) WHERE value =
   # 'true'::jsonb`).
   #

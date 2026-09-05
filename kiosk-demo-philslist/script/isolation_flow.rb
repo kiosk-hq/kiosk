@@ -19,12 +19,11 @@
 #      id (both verified via psql in the rake task) — the principal comes from
 #      the token, and is not an input at all.
 #
-# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). This driver used to hand
-# itself both identities by writing them down — `agent:u-<uuid>:a-<uuid>:r-customer`
-# — which a dev-only parser inside the demo's own agent-IdP turned into an
-# authenticated identity at whatever role the string asked for. That parser is
-# deleted and nothing replaced it, so each principal here runs the shipped
-# ceremony instead (script/bound_assistant.rb: Equihash-tolled `/auth/register` →
+# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED. A driver cannot hand itself an
+# identity by writing one down: a self-asserted
+# `agent:u-<uuid>:a-<uuid>:r-customer` resolves to no principal at any role. So
+# each principal here runs the shipped ceremony
+# (script/bound_assistant.rb: Equihash-tolled `/auth/register` →
 # the human's real Devise sign-in → `/auth/link` → `/auth/claim`). Alice and Bob
 # hold SEPARATE Devise sessions because they are separate humans.
 #
@@ -34,8 +33,8 @@
 # human's seeded uuid. The `agent_id`, by contrast, is MINTED and cannot be
 # chosen — `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
 # `kiosk.current_agent_id()` are typed `uuid` in the canonical schema, so a
-# driver naming its own agent id was naming a shape the shipped tables may not
-# be able to store (K-829/K-830).
+# driver naming its own agent id would be naming a shape the shipped tables may
+# not be able to store.
 #
 # Users/listings pre-seeded by demo:setup (db/seeds.rb); the credentials arrive
 # in the environment from the rake task, never as literals here.
@@ -133,11 +132,11 @@ STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
 
 # ── Step 3b: the DECLARED reach, read off the SERVED catalog (Assertion 6) ───
 #
-# K-949 / ADR-0028. §7.2's default is absolute — a verb touches only the calling
-# principal's rows — and `browse_listings` departs from it by design. What the
-# spec now requires is that the departure be PUBLISHED, so an assistant and a
-# sweep can tell an open board from a scoping bug. Two halves are collected
-# here and asserted by the rake task:
+# §7.2's default is absolute — a verb touches only the calling principal's rows
+# — and `browse_listings` departs from it by design. The spec requires that the
+# departure be PUBLISHED, so an assistant and a sweep can tell an open board
+# from a scoping bug. Two halves are collected here and asserted by the rake
+# task:
 #
 #   (a) what the catalog SAYS: `browse_listings` publishes `published`,
 #       `my_listings` publishes `principal`. The catalog is unauthenticated, so
@@ -147,8 +146,8 @@ STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
 #       answers may carry Alice's listing. This is the half that cannot be
 #       satisfied by editing a comment. Drop `reach :published` from the board
 #       and `browse_listings` JOINS this probe set, immediately returning
-#       Alice's row under a `principal` claim — which is exactly the defect
-#       K-949 filed, now caught on the live wire.
+#       Alice's row under a `principal` claim — exactly the defect this beat
+#       exists to catch, on the live wire.
 rc, catalog = get_json("/kiosk/schema")
 abort "schema failed (#{rc}): #{JSON.generate(catalog)}" unless rc == 200
 reach_by_verb = (Array(catalog["queries"]) + Array(catalog["actions"]))

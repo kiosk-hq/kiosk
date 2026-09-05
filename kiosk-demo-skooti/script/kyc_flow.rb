@@ -4,7 +4,7 @@
 #
 # Proves the named-anonymized-attribute KYC gate end-to-end AND that an
 # EXTERNAL agent — holding ONLY its own keypair, with NO pre-shared issuer key
-# — can COMPLETE motorcycle KYC by relaying a human-approve link (K-440/K-443):
+# — can COMPLETE motorcycle KYC by relaying a human-approve link:
 #
 #   MOTORCYCLE (KYC-gated on age_over_18 AND licence_a):
 #     register (PoW) → reserve(MC-001) → pay → rent_motorcycle WITHOUT KYC → 403
@@ -21,16 +21,16 @@
 #   relayed back through kyc_status. This is what makes the flow externally
 #   completable — and the issuer is now a SHARED broker, not skooti's own stub.
 #
-#   SCOOTER (positive control — NO KYC at all, K-442):
+#   SCOOTER (positive control — NO KYC at all):
 #     register (PoW) → reserve(SK-001) → pay → start_rental → 200, with NO KYC
 #     submitted. A licence-free scooter needs no attestation whatsoever — the
 #     only KYC gate in skooti lives on rent_motorcycle (age_over_18 + licence_a).
-#     That is true of the VEHICLE, not of the verb: since K-687 start_rental
-#     refuses a needs_licence vehicle outright and sends the caller to
-#     rent_motorcycle, because otherwise reserve(MC-001) → pay → start_rental
-#     minted an unlock token for the motorcycle with no attestation at all
-#     (redteam MotorcycleViaStartRental covers that path; this driver only ever
-#     drove start_rental with SK-001, which is why it never saw it).
+#     That is true of the VEHICLE, not of the verb: start_rental refuses a
+#     needs_licence vehicle outright and sends the caller to rent_motorcycle,
+#     because otherwise reserve(MC-001) → pay → start_rental would mint an
+#     unlock token for the motorcycle with no attestation at all (redteam
+#     MotorcycleViaStartRental covers that path; this driver only ever drives
+#     start_rental with SK-001).
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
 
@@ -79,7 +79,7 @@ def post_form(url, form)
 end
 
 # Register a fresh agent, returning [key, agent_id, user_id, token, rc].
-# The response CODE is carried out (K-707) so the report below states what the
+# The response CODE is carried out so the report below states what the
 # server answered rather than the constant the helper's abort guarantees.
 def register_agent
   key, reg, rc = equihash_register(
@@ -159,7 +159,7 @@ rc_mc_pay = pay(mc_token, mc_key, mc_user, mc_agent, "MC-001", mc_resv, mc_price
 STDERR.puts "  Reserved + paid MC-001 (reservation #{mc_resv})"
 
 # A1: rent_motorcycle WITHOUT KYC → 403 kyc_required (Gate 0 fires first).
-# The 403 hint must point the agent at request_kyc (the K-440/K-443 fix).
+# The 403 hint must point the agent at request_kyc.
 rc_mc_nokyc, mc_nokyc_body = run_action(mc_token, "rent_motorcycle", { reservation_id: mc_resv })
 mc_nokyc_code = mc_nokyc_body["code"]
 mc_nokyc_hint = mc_nokyc_body["hint"].to_s
@@ -177,10 +177,10 @@ STDERR.puts "  verification_url=#{verification_url.inspect}"
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
 
-# A2b: THE OUTSTANDING-INTAKE CAP (K-586). Nothing meters this verb — skooti
-# configures no reputation policy at all and registration costs one proof — so
-# one registration used to buy unlimited broker intakes, and a licence check is
-# the expensive kind to buy. At most three may be PENDING per account: the one
+# A2b: THE OUTSTANDING-INTAKE CAP. Nothing meters this verb — skooti configures
+# no reputation policy at all and registration costs one proof — so without a
+# cap one registration would buy unlimited broker intakes, and a licence check
+# is the expensive kind to buy. At most three may be PENDING per account: the one
 # opened above plus two more fill the allowance, and the fourth is refused
 # BEFORE the broker is called, which is what makes it a cap rather than an
 # apology. The refusal is an RFC 9457 problem document, so the vocabulary token
@@ -243,18 +243,18 @@ if rc_mc_kyc == 200
   STDERR.puts "  motorcycle unlocked=#{mc_unlocked}"
 end
 
-# ── PART B: scooter positive control — NO KYC at all (K-442) ─────────────────
+# ── PART B: scooter positive control — NO KYC at all ─────────────────────────
 
 STDERR.puts "── PART B: scooter (positive control — NO KYC) ──"
 sc_key, sc_agent, sc_user, sc_token, = register_agent
 sc_resv, sc_price, = reserve(sc_token, "SK-001")
 pay(sc_token, sc_key, sc_user, sc_agent, "SK-001", sc_resv, sc_price)
 # NO KYC submitted at all — a fresh agent that has never attested rents a
-# licence-free scooter. Proves start_rental carries NO KYC gate (K-442).
+# licence-free scooter. Proves start_rental carries NO KYC gate.
 rc_sc, _sc_body = run_action(sc_token, "start_rental", { reservation_id: sc_resv })
 STDERR.puts "  start_rental SK-001 (NO KYC submitted at all): http=#{rc_sc}"
 
-# ── PART C: a NON-CANONICAL BOOLEAN SPELLING (K-656) ─────────────────────────
+# ── PART C: a NON-CANONICAL BOOLEAN SPELLING ─────────────────────────────────
 #
 # The forged-attestation beat (redteam MotorcycleForgedKyc) proves a BAD
 # SIGNATURE grants nothing. This proves the other half: a GENUINELY
@@ -283,10 +283,9 @@ STDERR.puts "  rent_motorcycle after the string spelling: http=#{rc_mc_after_spe
 # ── print ONE JSON line ──────────────────────────────────────────────────────
 
 puts JSON.generate(
-  # BOTH codes, MEASURED (K-707): this was the constant `200`, while the two
-  # calls it claimed to summarise discarded their response codes entirely — the
-  # aborts inside reserve/pay were the only gate and the reported field could
-  # not have said anything else.
+  # BOTH codes, MEASURED: a constant `200` here would summarise two calls whose
+  # response codes were thrown away — the aborts inside reserve/pay would be
+  # the only gate, and the reported field could not say anything else.
   http_mc_reserve:             rc_mc_reserve,
   http_mc_paid:                rc_mc_pay,
   http_mc_rent_no_kyc:         rc_mc_nokyc,

@@ -30,7 +30,7 @@ class Kiosk::RentalsController < ActionController::API
   # `pay`. With StubPsp (no SetupIntent model) `setup_required?` is always false,
   # so this is an immediate no-op success: {status: "ready"}.
   #
-  # POLL CADENCE + STOP CONDITION (K-477/K-595): the wire has no server→assistant
+  # POLL CADENCE + STOP CONDITION: the wire has no server→assistant
   # push, so an assistant that ever DOES get a `setup_required` learns the human
   # finished the hosted card entry ONLY by re-calling this. The descriptor must
   # state a cadence AND a terminal stop condition, or an agent invents its own
@@ -39,9 +39,9 @@ class Kiosk::RentalsController < ActionController::API
   # stated, since a count derived from the cadence and the horizon goes wrong the
   # moment either moves.
   #
-  # getgrocery's descriptor also promises the setup_url is stable across polls
-  # (K-492, a real-Stripe SetupIntent-reuse property). NOT repeated here: StubPsp
-  # mints no setup session, so that would be a claim about code this never runs.
+  # getgrocery's descriptor also promises the setup_url is stable across polls —
+  # a real-Stripe SetupIntent-reuse property. NOT repeated here: StubPsp mints no
+  # setup session, so that would be a claim about code this never runs.
   kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \

@@ -11,9 +11,9 @@ require "uri"
 # skooti), waits for readiness, and returns the env getgrocery (and the flow
 # driver) need to reach and trust the broker.
 #
-# Every trust anchor is wired EXPLICITLY here (K-650 — getgrocery no longer
-# ships a pinned dev ProveKey): the broker's public key is fetched from the
-# running broker's own GET /prove_key.pem and handed to getgrocery as
+# Every trust anchor is wired EXPLICITLY here, and getgrocery ships no pinned
+# dev ProveKey: the broker's public key is fetched from the running broker's
+# own GET /prove_key.pem and handed to getgrocery as
 # KIOSK_PROVE_PUBLIC_KEY_PEM, alongside the URLs, the shared intake secret and
 # the callback host.
 #
@@ -21,28 +21,28 @@ require "uri"
 # harness (via KIOSK_PROVE_GETGROCERY_* env). Registering getgrocery as a
 # standing broker operator in the hosted deploy is a follow-up.
 #
-# THE FILE IS SPLIT THE WAY IT IS SO A GATE CAN HOLD THE SHARED HALF (T-147).
-# skooti ships the same helper, and {with_broker} was ~55 of its ~64 normalised
-# lines identical between the two copies — the DB setup, the spawn, the at_exit
-# stop, the 40-second readiness poll and the yield/ensure — while the four lines
-# that genuinely differ are all OPERATOR IDENTITY. Declared whole it had to be
+# THE FILE IS SPLIT THE WAY IT IS SO A GATE CAN HOLD THE SHARED HALF. skooti
+# ships the same helper, and {with_broker} is ~55 of its ~64 normalised lines
+# identical between the two copies — the DB setup, the spawn, the at_exit stop,
+# the 40-second readiness poll and the yield/ensure — while the few lines that
+# genuinely differ are all OPERATOR IDENTITY. Declared whole it would have to be
 # `:per_demo`, which bin/check-demo-copies defines as compared to NOTHING, so an
-# edit to the poll or the teardown reaching one copy was invisible. The operator
-# half now lives in {broker_operator_env}, {operator_wiring},
+# edit to the poll or the teardown reaching one copy would be invisible. The
+# operator half lives in {broker_operator_env}, {operator_wiring},
 # {broker_signing_key_pem} and BROKER_LOG — four small per-demo units — and
 # {with_broker} itself is held `:code` against skooti's copy.
 #
-# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE BINDING CONDITION ON IT
-# (K-663). This is CI/flow-driver harness code — it shells out, spawns a server
-# and polls a port — and Phil's answer to the sibling-path question was one
-# sentence: «Главное чтобы это не грузилось вместе с rails server'ом». In lib/
-# it was inside the Rails autoload path and eager-loaded on every production
-# boot of an app that never calls it. Now it is only ever reached by an explicit
-# require from the demo rake tasks.
+# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE BINDING CONDITION ON IT.
+# This is CI/flow-driver harness code — it shells out, spawns a server and
+# polls a port — and the binding rule on it is that it must never be loaded
+# alongside `rails server`. In lib/ it would sit inside the Rails autoload
+# path and be eager-loaded on every production boot of an app that never
+# calls it. Here it is only ever reached by an explicit require from the demo
+# rake tasks.
 #
 # AND THE LAYOUT ASSUMPTION IS DELIBERATE, NOT AN OVERSIGHT: BROKER_APP below
 # resolves a SIBLING DIRECTORY of this demo, so it works in a checkout of this
-# monorepo and nowhere else. That is accepted (K-663) because the demos are not
+# monorepo and nowhere else. That is accepted because the demos are not
 # packaged gems and nothing shipped depends on it — but an external reader
 # should know it is here, and anyone moving a demo directory has to move this
 # with it.
@@ -53,8 +53,8 @@ module ProveBrokerBoot
   # rather than left to its env file's default. Two reasons. (1) The pairing
   # stops being implicit: the driver's redteam beats need to mint a claim the
   # booted broker's key would have signed, and "both sides happen to fall back
-  # to the same file" is not a pairing a reader can see. (2) The K-673 rule is
-  # unchanged — this is the key whose private half ships in this public repo,
+  # to the same file" is not a pairing a reader can see. (2) The rule on this
+  # key is unchanged — its private half ships in this public repo,
   # it is TEST scaffolding only, and the broker's production env file still
   # refuses to boot without a real PROVE_KEY_PEM and has no fallback.
   SIGNING_KEY_PATH = File.expand_path("../../kiosk-demo-prove/config/dev_prove_key.pem", __dir__)
@@ -75,7 +75,7 @@ module ProveBrokerBoot
   # The PEM the booted broker signs with: an explicit PROVE_KEY_PEM if the
   # caller set one (driving a broker with a real key), else the repo's dev key.
   #
-  # PER-OPERATOR (T-147): getgrocery PINS the key, because its redteam beats
+  # PER-OPERATOR: getgrocery PINS the key, because its redteam beats
   # need the private half to mint deliberately-malformed but genuinely signed
   # attestations. skooti's copy returns nil and lets the broker fall back to its
   # own env default — so this is a real divergence, not drift.
@@ -86,7 +86,7 @@ module ProveBrokerBoot
     File.read(SIGNING_KEY_PATH)
   end
 
-  # PER-OPERATOR (T-147): the slice of the BROKER's env that names THIS
+  # PER-OPERATOR: the slice of the BROKER's env that names THIS
   # operator. The broker keys its SSRF callback allow-list and its intake secret
   # by operator name, so these variable NAMES cannot be shared with skooti's
   # copy — which is precisely why they are here and not in {with_broker}.
@@ -104,7 +104,7 @@ module ProveBrokerBoot
     }
   end
 
-  # PER-OPERATOR (T-147): the env getgrocery's server + the driver must carry to
+  # PER-OPERATOR: the env getgrocery's server + the driver must carry to
   # reach and trust the broker. It names getgrocery as the operator and carries
   # the redteam signing key, neither of which skooti's copy does.
   #
@@ -117,18 +117,18 @@ module ProveBrokerBoot
       # Same `iss` the broker (broker_env in {with_broker}) stamps — getgrocery's
       # KycVerifier compares the minted `iss` against this, so both must line up.
       "KIOSK_PROVE_ISSUER"            => SHARED_ISSUER,
-      # The operator side reads ONE role-named variable (K-694); the broker
+      # The operator side reads ONE role-named variable; the broker
       # side reads its per-operator KIOSK_PROVE_GETGROCERY_SECRET. Same
       # VALUE on both sides is what pairs them — the broker looks the operator
       # up by the operator_id in the intake body, not by a variable name.
       "KIOSK_PROVE_INTAKE_SECRET"     => SHARED_SECRET,
       "KIOSK_PROVE_OPERATOR_ID"       => "getgrocery",
-      # The running broker's OWN public key, fetched in {with_broker} (K-650).
+      # The running broker's OWN public key, fetched in {with_broker}.
       "KIOSK_PROVE_PUBLIC_KEY_PEM"    => prove_public_pem,
       # The PRIVATE half the broker was booted with, for the driver's redteam
       # beats only: they need attestations that are genuinely signed but
       # deliberately malformed in one respect (a non-canonical boolean
-      # spelling, K-656), which the real broker will never mint. A beat that
+      # spelling), which the real broker will never mint. A beat that
       # signed with its own fresh key would only re-test the signature check
       # the R1 beat already covers.
       "KIOSK_PROVE_TEST_SIGNING_KEY_PEM" => signing_key_pem,
@@ -140,7 +140,7 @@ module ProveBrokerBoot
   #   { broker_url:, wiring: {...} }
   # wiring is merged into getgrocery's server spawn AND the flow driver env.
   #
-  # SHARED WITH skooti AND HELD THERE (T-147): everything below is operator-
+  # SHARED WITH skooti AND HELD THERE: everything below is operator-
   # neutral and bin/check-demo-copies compares it against skooti's copy modulo
   # comments. Anything that has to name this operator belongs in one of the
   # three per-demo methods above, not here.
@@ -193,7 +193,7 @@ module ProveBrokerBoot
     # ── Wait for the broker to answer (and capture its public key) ─────────
     # The readiness probe doubles as the trust-anchor fetch: GET /prove_key.pem
     # returns the PUBLIC half of the key the running broker signs with, and
-    # THAT is what the operator is told to trust — no pinned copy (K-650).
+    # THAT is what the operator is told to trust — no pinned copy.
     prove_public_pem = nil
     40.times do
       begin

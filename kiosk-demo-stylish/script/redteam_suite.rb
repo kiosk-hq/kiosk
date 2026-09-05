@@ -43,15 +43,15 @@
 #     handing over, and names a DIFFERENT one to each human
 #   DeviceGrantRebindCannotEscalate — a key already bound `customer` re-runs the
 #     ceremony: the role stays `customer`, agent_id stable, calendar own-scoped
-#   SelfAssertedTokenForgery — the AGENT sibling of the beat below (K-539 /
-#     T-104): a self-asserted `agent:u-…:a-…:r-owner` bearer naming the seeded
-#     owner resolves to NO identity, in EVERY environment, while the OWNER's
+#   SelfAssertedTokenForgery — the AGENT sibling of the beat below: a
+#     self-asserted `agent:u-…:a-…:r-owner` bearer naming the seeded owner
+#     resolves to NO identity, in EVERY environment, while the OWNER's
 #     genuinely-bound token reaches the whole book and the forecast
 #   SelfAssertedStaffSessionForgery — a forged `X-Staff-Session` header naming
-#     the seeded owner buys NOTHING over the live wire (K-555 / T-066): the
-#     role-carrying SSO stand-in that read that header is deleted, so the
-#     header reaches no reader and /kiosk/auth/link answers 401 in the SAME
-#     environment this suite drives — no in-process env shim needed any more
+#     the seeded owner buys NOTHING over the live wire: no role-carrying SSO
+#     stand-in reads that header, so it reaches no reader and /kiosk/auth/link
+#     answers 401 in the SAME environment this suite drives, with no in-process
+#     env shim
 #
 #   UntypedBookingInput — ten bad-input shapes to book_appointment (unparseable
 #     / fuzzy / missing / non-string / PAST slot, unknown & missing salon_id,
@@ -62,9 +62,9 @@
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony (K-072, K-1128)
+#     while the role-less request still opens the ceremony
 #
-# THE TWO CUSTOMER PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob
+# THE TWO CUSTOMER PRINCIPALS ARE EARNED, NOT ASSERTED. Alice and Bob
 # are bound through the shipped ceremony — Equihash-tolled `/auth/register` →
 # the human's real Devise sign-in → `/auth/link` → `/auth/claim`
 # (script/bound_assistant.rb) — because the dev-only parser that used to turn a
@@ -96,21 +96,20 @@ require "base64"
 # The shared harness. Required HERE rather than beside the one framework beat
 # further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
 # assertion in this file now asks — is needed from the first hostile-input beat
-# onwards (T-121).
+# onwards.
 require "kiosk/redteam"
 
 require_relative "bound_assistant"
 require_relative "devise_session"
 
-# ── Every slot this suite books is COMPUTED, never written down (K-969) ──────
+# ── Every slot this suite books is COMPUTED, never written down ──────────────
 #
 # Since a slot in the past is refused, a literal instant is a test that expires:
-# the seven positive controls below all named days in October 2026 and would
-# have started failing on the first of them, for a reason having nothing to do
-# with the behaviour under test — the same trap the descriptor's `example_params`
-# was rewritten to avoid. `n` separates the bookings from each other (this salon
-# overbooks by design, so they need not be distinct — they are distinct only so
-# a failure names which control it was).
+# positive controls naming fixed days would start failing on the first of them,
+# for a reason having nothing to do with the behaviour under test — the same trap
+# the descriptor's `example_params` avoids. `n` separates the bookings from
+# each other (this salon overbooks by design, so they need not be distinct —
+# they are distinct only so a failure names which control it was).
 #
 # UTC and not the runner's zone, deliberately: an ISO 8601 instant WITH an
 # offset is absolute, so the assertion holds from any caller's clock — which is
@@ -127,8 +126,8 @@ ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
 # The seeded humans this battery drives (db/seeds.rb). Only the owner carries a
 # `staff_role`; Alice and Bob are plain customers. All three are ordinary Devise
 # accounts — the same /users/sign_in form, the same users table; what separates
-# them is the column the Devise adapter reads through `User#kiosk_role` (T-066:
-# there is no second, role-carrying channel any more).
+# them is the column the Devise adapter reads through `User#kiosk_role`; there
+# is no second, role-carrying channel.
 #
 # Emails and password arrive in the environment from the rake task, the way
 # demo:binding's HOLDER_EMAIL / HOLDER_PASSWORD do — never as literals here.
@@ -270,22 +269,21 @@ rc, _ = post_json("/kiosk/nope", {}, ALICE.bearer)
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
-# T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
+# The 0.3 endpoints were a hard cut. `POST /kiosk/query` now reaches the per-verb
 # controller as a verb literally named "query", which nobody registered, so it
 # answers the ordinary 404 an AUTHENTICATED caller gets — no privileged
 # endpoint, no compatibility payload, no second conformance surface to attack.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
+# caller with no bearer never reaches the registry lookup that produces the 404 —
+# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
+# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
+# nothing tested the anonymous case.
 #
-# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
-# `run` are NAMES nobody registered, and the vocabulary now reserves
-# `not_found` for an argument that ADDRESSED something absent.
+# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
+# NAMES nobody registered, and the vocabulary reserves `not_found` for an
+# argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
   rc_r, body_r = post_json("/kiosk/#{name}", { name: "salons" }, ALICE.bearer)
   [rc_r == 404 && body_r["code"] == "verb_not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
@@ -326,12 +324,11 @@ record(results, "MethodMismatch",
 # her (absent) staff_role as "customer", so the assistant she binds inherits
 # `customer` and owner scope stays out of reach.
 #
-# THE BEAT CHANGED SHAPE WITH T-066, and the change is the point: it used to
-# assert the mint was REJECTED, because the staff channel was a separate
-# `X-Staff-Session` stand-in that resolved only staff rows. With one channel for
-# every human, "a customer gets no link" would be wrong — the honest claim is
-# "a customer gets a CUSTOMER link", which is a stronger statement about where
-# the role comes from.
+# WHY THE CLAIM IS "A CUSTOMER LINK" AND NOT "NO LINK". With one identity
+# channel for every human — no separate `X-Staff-Session` stand-in resolving
+# only staff rows — asserting that the mint is REJECTED would be wrong. The
+# honest claim is "a customer gets a CUSTOMER link", which is a stronger
+# statement about where the role comes from than any refusal would be.
 customer_session = DeviseSession.new(SERVER)
                                 .sign_in!(email: ALICE_EMAIL, password: DEMO_PASSWORD)
 rc_cl, link_cl = customer_session.post_json("/kiosk/auth/link", {}, { session: true })
@@ -365,7 +362,7 @@ record(results, "OwnerLinkIgnoresForgedClaimBody",
 # with her own customer-role token; she must see ONLY her own bookings and NO
 # forecast total (owner-only). The role gate is provider-controlled.
 #
-# K-689: `kind == "booking"` proves nothing — config/initializers/kiosk.rb
+# `kind == "booking"` proves nothing — config/initializers/kiosk.rb
 # stamps `"kind" => "booking"` on EVERY appointment row unconditionally
 # (owner-scoped or not), so a leaked owner-scope row is indistinguishable from
 # an own row by that test. Book a SECOND customer's (Bob's) appointment here,
@@ -388,23 +385,23 @@ record(results, "CustomerCalendarStaysOwnScoped",
        "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
        "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
 
-# ── the CLAIM ceremony's roles-from-IdP beats (K-072) ────────────────────────
+# ── the CLAIM ceremony's roles-from-IdP beats ────────────────────────────────
 #
 # The two beats above cover the LINK direction, and covering only that
-# direction is what let the hole below live at head. The claim direction —
+# direction is what would leave the hole below unwatched. The claim direction —
 # RFC 8628, `POST /kiosk/oauth/device_authorization` → the human approves at
-# the verify page → the token poll — used to read `role`/`scope` off THAT
+# the verify page → the token poll — must NOT read `role`/`scope` off THAT
 # FIRST REQUEST, which carries no Cookie and no Authorization, validate it
 # against `config.roles` alone, and bake it into the minted JWT. On this demo
 # (`c.roles = %i[customer owner]`) a stranger's `role=owner`, approved by a
-# plain CUSTOMER who was never shown the word, reached a token whose `role`
-# claim was `owner` and a `salon_calendar` answering with every visitor's
-# bookings plus the owner-only forecast. `role=master` was refused, which is
-# why a suite that probed only an undeclared role would have kept printing
-# BLOCKED: membership of `config.roles` was the entire filter, and
+# plain CUSTOMER who was never shown the word, would then reach a token whose
+# `role` claim is `owner` and a `salon_calendar` answering with every visitor's
+# bookings plus the owner-only forecast. `role=master` is refused either way,
+# which is why a suite that probed only an undeclared role would keep printing
+# BLOCKED: membership of `config.roles` is not the filter that matters —
 # `config.roles` says which roles this origin HAS, not who may have them.
 #
-# The role now comes from the approving human's own identity, captured at the
+# The role comes from the approving human's own identity, captured at the
 # verify page (`DeviceVerification.approve(role:)`) exactly as the link
 # direction captures it at mint — so the three beats below are the claim-side
 # mirror of `CustomerLinkCannotCarryOwnerRole` /
@@ -568,7 +565,7 @@ record(results, "DeviceGrantRebindCannotEscalate",
        "own_only=#{rebind_own_only} forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
        "the approver's role, not one ceremony later\'s escalation)")
 
-# ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
+# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
 # THE BEAT CHANGED SHAPE, AND THE CHANGE IS THE POINT. stylish used to compose a
 # hand-copied agent-IdP that parsed a self-asserted, UNSIGNED
@@ -611,8 +608,8 @@ record(results, "SelfAssertedTokenForgery",
        "salon_calendar #{rc_owner_cal}, forecast_visible=#{owner_sees_forecast} (want 200/true, so " \
        "the refusal is about the bearer and not a closed endpoint)")
 
-# ── SelfAssertedStaffSessionForgery (K-555 / T-066) — OVER THE LIVE WIRE ──────
-# The HUMAN sibling of the K-539 agent-stub forgery, and it changed shape when
+# ── SelfAssertedStaffSessionForgery — OVER THE LIVE WIRE ─────────────────────
+# The HUMAN sibling of the agent-stub forgery above, and it changed shape when
 # the stub it attacked was deleted.
 #
 # stylish used to map a self-asserted `X-Staff-Session: <user_id>` header to a
@@ -649,7 +646,7 @@ rescue StandardError => e
 end
 self_asserted_staff_forgery.call
 
-# ── UntypedBookingInput (K-692) — bad input is a typed 400, never a 500 and ──
+# ── UntypedBookingInput — bad input is a typed 400, never a 500 and ──────────
 # never a silent booking.
 #
 # `book_appointment` used to validate NOTHING, and the three ways that failed
@@ -683,12 +680,12 @@ BAD_INPUTS = [
   ["missing slot",            { salon_id: :seeded }],
   ["non-string slot",         { salon_id: :seeded, slot: 12345 }],
   ["out-of-range slot",       { salon_id: :seeded, slot: "2026-13-45T99:00:00Z" }],
-  # K-969. A well-formed instant that has PASSED. It parses (so the guard above
-  # never sees it), it is not fuzzy, and until today it booked a real
-  # appointment a century ago that the owner's calendar rendered as an ordinary
+  # A well-formed instant that has PASSED. It parses (so the guard above never
+  # sees it) and it is not fuzzy, so without a past-slot refusal it books a real
+  # appointment a century ago that the owner's calendar renders as an ordinary
   # row. The other three below carry a FUTURE slot on purpose: each is probing
-  # something OTHER than the time, and a stale literal would have started
-  # refusing them for the wrong reason once this guard existed.
+  # something OTHER than the time, and a stale literal would get them refused
+  # for the wrong reason.
   ["past slot (well-formed, already gone)", { salon_id: :seeded, slot: PAST_SLOT }],
   ["unknown salon_id",        { salon_id: 999_999, slot: FUTURE_SLOT.call(1) }],
   ["missing salon_id",        { slot: FUTURE_SLOT.call(1) }],
@@ -702,7 +699,7 @@ BAD_INPUTS.each do |label, args|
   body[:salon_id] = salon_id if body[:salon_id] == :seeded
   rc, resp = post_json("/kiosk/book_appointment", body, ALICE.bearer)
   code = resp.is_a?(Hash) ? resp["code"] : nil
-  # THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). `salon_id` is a bare
+  # THE SCAN IS TOLD WHAT THIS PROBE SENT. `salon_id` is a bare
   # `{type: "integer"}` and `slot` a bare `{type: "string"}` — the bookable
   # instants are a rolling calendar no JSON Schema can name — so hostile values
   # reach stylish's own guards, whose refusals name what they got. The bytes
@@ -741,20 +738,18 @@ end
 record(results, "UntypedBookingInput", bad_failures.empty?,
        bad_failures.empty? ? "#{BAD_INPUTS.size} bad-input shapes → typed 400 bad_request, no PG internals; bare + priced bookings still succeed" : bad_failures.join(" | "))
 
-# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
+# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
 # The one beat in this file that is NOT hand-rolled: it comes from
 # `kiosk-redteam`, so every demo runs the SAME assertion about the
 # account-binding claim ceremony and a demo cannot be left out of it by
 # forgetting to copy a block.
 #
-# It exists because the coverage that was supposed to catch K-072 rested on a
-# condition nobody re-measured: the shared `PrivilegeSelfSelection` scenario
-# probes `/auth/register` only, and the ceremony beats written when K-072 was
-# fixed lived in ONE demo's suite. The other six were safe purely because each
-# declares a single role — which is exactly the mitigation the ledger row had
-# priced K-072 on, and which expired unnoticed the day a demo declared a
-# second one.
+# It exists because the coverage for role self-selection rested on a condition
+# nobody re-measured: the shared `PrivilegeSelfSelection` scenario probes
+# `/auth/register` only, and the ceremony beats lived in ONE demo's suite. The
+# other six were safe purely because each declares a single role — a mitigation
+# that expires unnoticed the day a demo declares a second one.
 #
 # `declared_roles` names what `config/initializers/kiosk.rb` declares here. The
 # scenario ALSO derives a declared role from the wire (the `role` claim of a

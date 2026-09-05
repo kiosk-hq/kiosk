@@ -5,16 +5,15 @@
 # Registers a fresh agent through skooti's Equihash-tolled registration gate,
 # calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
 #
-# NO (n, k) IS NAMED IN THIS COMMENT (K-1035 class), AND THAT NOW INCLUDES THE
-# PAIR IT USED TO NAME. It used to state one difficulty level's literal pair,
-# which KIOSK_POW_DIFFICULTY moves to the other level's without an edit to this
-# tree — a false line reachable by an env var. `app/services/pow_difficulty.rb`
-# is where a level's numbers live; quoting either pair back here, even in the
-# past tense inside guillemets, puts it in the way of a grep for live claims and
-# is the one thing this comment exists to say nobody should do. The
-# register step below prints the pair instead, read off the gate's own 402 —
-# so on an origin whose register toll were switched off there would be no 402,
-# no proof, and nothing here claiming otherwise.
+# NO (n, k) IS NAMED IN THIS COMMENT, ON PURPOSE. Naming one difficulty level's
+# literal pair makes a line that KIOSK_POW_DIFFICULTY falsifies without an edit
+# to this tree — a wrong claim reachable by an env var.
+# `app/services/pow_difficulty.rb` is where a level's numbers live; quoting
+# either pair back here, even in the past tense inside guillemets, also puts it
+# in the way of a grep for live claims. The register step below prints the pair
+# instead, read off the gate's own 402 — so on an origin whose register toll
+# were switched off there would be no 402, no proof, and nothing here claiming
+# otherwise.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3004 \
@@ -36,7 +35,7 @@ def post_json(path, body, bearer: nil, pow: nil)
   uri = URI("#{SERVER}#{path}")
   headers = { "Content-Type" => "application/json" }
   headers["Authorization"] = "Bearer #{bearer}" if bearer
-  headers["Kiosk-PoW"] = pow if pow  # PoW proof rides in the header (ADR-0022)
+  headers["Kiosk-PoW"] = pow if pow  # PoW proof rides in the header, not the body
   req = Net::HTTP::Post.new(uri, headers)
   req.body = JSON.generate(body)
   res = Net::HTTP.new(uri.host, uri.port).request(req)
@@ -83,7 +82,7 @@ if rc == 402
   challenges = reg["challenges"]
   abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
 
-  # K-1035 class — THE PARAMS ARE READ OFF THE WIRE, NEVER TYPED.  Every
+  # THE PARAMS ARE READ OFF THE WIRE, NEVER TYPED.  Every
   # challenge the gate issues carries its own `params`
   # (Kiosk::Reputation::Challenge.issue → {id:, alg:, params:, salt:, exp:, sig:}),
   # so this is the (n, k) THIS server demanded of THIS request.  That is
@@ -102,24 +101,22 @@ end
 abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
 
-# ── Call schema — UNAUTHENTICATED, and that IS the assertion (T-094) ─────────
+# ── Call schema — UNAUTHENTICATED, and that IS the assertion ─────────────────
 #
-# This call carried a Bearer token until 2026-08-19. `GET <endpoint>/schema` is
-# PUBLIC now: the catalogue holds no per-agent value and no secret, it is
-# derived once at boot and served from memory, so gating it bought nothing.
-# Sending NO Authorization header here is what proves it — a 200 with the
-# catalogue in the body is the whole test, and a regression to the gate would
-# be a 401 the rake task reports.
+# `GET <endpoint>/schema` is PUBLIC: the catalogue holds no per-agent value and
+# no secret, it is derived once at boot and served from memory, so gating it
+# would buy nothing. Sending NO Authorization header here is what proves it — a
+# 200 with the catalogue in the body is the whole test, and a regression to a
+# gate would be a 401 the rake task reports.
 
 schema_rc, schema_body = get_json("/kiosk/schema")
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
 
-# ── /.well-known/kiosk.json — where the MODULE set lives (T-095) ─────────────
+# ── /.well-known/kiosk.json — where the MODULE set lives ─────────────────────
 #
-# `schema` published the module set too, as `verbs`, until 2026-08-19 — the
-# same `Array(config.capabilities)` call this document renders, so it was one
-# value under two names rather than two facts. The field is gone; the property
-# it carried is asserted here, at its one remaining home.
+# This document is the ONE place the module set is published. `schema` does not
+# carry a second copy of it: `Array(config.capabilities)` is rendered here and
+# nowhere else, so the property is asserted at its only home.
 wk_rc, wk = get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
@@ -127,8 +124,8 @@ STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
-# `GET <endpoint>/schema` answers `{verbs, queries, actions}` DIRECTLY — the
-# 0.3 `{ok, kind, value}` envelope was retired at the cutover (T-074 = A).
+# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY: no
+# `{ok, kind, value}` envelope around them.
 schema_value = schema_body || {}
 
 puts JSON.generate({

@@ -99,7 +99,7 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   end
 end
 
-# ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
+# ── PoW HMAC secret ─────────────────────────────────────────────────────────
 # The HMAC key the engine signs every PoW challenge with. Required in
 # production, stable (non-secret) default in dev/test — that posture lives in
 # config/environments/*; here we only read the resolved value.
@@ -113,7 +113,7 @@ Kiosk.configure do |c|
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
-  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # ── Postgres role names ──────────────────────────────────────────────────
   # Resolved in config/environments/*, like every other env input; read here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
@@ -131,7 +131,7 @@ Kiosk.configure do |c|
     c.app_role        = "kiosk_getgrocery_app"
   end
 
-  # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
+  # ── Issuer origin ─────────────────────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,
   # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
   # assistant proof-of-possession. Required in production, localhost default
@@ -139,7 +139,7 @@ Kiosk.configure do |c|
   c.issuer = Rails.configuration.x.kiosk.issuer
   c.roles  = %i[customer]
 
-  # ── The wire surface (T-057 / K-495 / K-761) ──────────────────────────────
+  # ── The wire surface ──────────────────────────────────────────────────────
   # The operator NAMES its handler controllers and the engine loads and
   # registers them on every `to_prepare` pass. Naming them is not a convenience:
   # nothing in a host app ever references a handler controller on its own — the

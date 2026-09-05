@@ -14,17 +14,15 @@ module WireArguments
 
   # PostgreSQL `integer` — the width of `bookings.party_size`, the column a
   # confirmed party is WRITTEN to, and of `restaurant_tables.capacity`, the
-  # column it is COMPARED against. THE BOUND IS THE COLUMN'S AND NOT A POLICY
-  # (K-968's rule, K-1047's class): it refuses exactly what cannot be
-  # REPRESENTED and invents no house limit on party size, so every party that
-  # used to be seatable still is and only the ones that used to CRASH are
-  # refused.
+  # column it is COMPARED against. THE BOUND IS THE COLUMN'S AND NOT A POLICY:
+  # it refuses exactly what cannot be REPRESENTED and invents no house limit on
+  # party size, so every party a table can seat is still seatable and only the
+  # ones that would CRASH are refused.
   MAX_INT4 = 2_147_483_647
 
   # The party a caller wants seated.
   #
-  # SHAPE AND RANGE, in that order — THREE answers, one per thing that can be
-  # wrong, and they are listed here because two of them are new since K-1027:
+  # SHAPE AND RANGE, in that order — one answer per thing that can be wrong:
   #
   #   * ABSENT (`nil`) → the SHAPE sentence, "party_size must be a whole number
   #     >= 1 — got nil", because {#whole_number} answers nil for a nil;
@@ -32,11 +30,11 @@ module WireArguments
   #     sentence with the value echoed;
   #   * GIVEN, OUT OF RANGE (`0` or a negative) → the RANGE sentence,
   #     "party_size must be >= 1".
-  #   * GIVEN, TOO LARGE TO STORE (past {MAX_INT4}) → the ceiling sentence, and
-  #     it is K-1047: this arm did not exist and neither did the descriptor's
-  #     `maximum`, so a well-formed `party_size: 2_147_483_648` walked into
+  #   * GIVEN, TOO LARGE TO STORE (past {MAX_INT4}) → the ceiling sentence.
+  #     Without this arm and the descriptor's `maximum`, a well-formed
+  #     `party_size: 2_147_483_648` walks into
   #     `RestaurantTable.where(capacity.gteq(party_size))` and ActiveRecord
-  #     raised `ActiveModel::RangeError` CASTING the comparison — HTTP 500 for
+  #     raises `ActiveModel::RangeError` CASTING the comparison — HTTP 500 for
   #     an argument a client simply got wrong, on BOTH surfaces at once, with
   #     the runtime's own class name in the body. Measured on a booted origin,
   #     and probed by this demo's HostileArgShapes beat so it stays measured.
@@ -55,41 +53,33 @@ module WireArguments
   # `nil` arm of its own ("missing param: …") because its ids have no such
   # question-asking verb in front of them.
   #
-  # THIS PARAGRAPH USED TO SAY THE OPPOSITE, and the correction is K-1032: while
-  # the body read `size = raw.to_i`, `nil.to_i` was 0, so an absent party really
-  # did get the RANGE sentence a zero gets and `availability` really was the only
-  # verb that distinguished the two. K-1027 replaced the coercion with
-  # {#whole_number} and its own shape refusal, which split the two cases apart
-  # and left the sentence about them behind by one commit.
-  #
   # The declared `{type: "integer", minimum: 1}` refuses a zero party on the wire
   # first, so this is defence in depth; it stays because {BookTableOperation} is
   # reachable with no descriptor in front of it and must not open a transaction
   # on a party of zero.
   #
-  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s (K-1027 — getgrocery's K-1020 and
-  # K-1025 defect, one demo over and WEAKER). This line read a bare `raw.to_i`,
-  # and MEASURED over that row's probe set it got two things wrong at once:
+  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s. A bare `raw.to_i` here gets two
+  # things wrong at once:
   #
   #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` AT
-  #     ALL, so each raised `NoMethodError` — a `500 action_failed` on the wire
+  #     ALL, so each raises `NoMethodError` — a `500 action_failed` on the wire
   #     for a value the published descriptor already forbids;
-  #   * `1.5.to_i` is 1, so a fractional party came out of this line INSIDE the
-  #     declared range and was seated as a party of ONE rather than refused.
+  #   * `1.5.to_i` is 1, so a fractional party comes out of that line INSIDE the
+  #     declared range and is seated as a party of ONE rather than refused.
   #
-  # (`"abc"`, `nil` and `"0x10"` were 0 and the range arm below caught them, and
-  # `2.0` was 2 — which it still is, see {#whole_number}.)
+  # (`"abc"`, `nil` and `"0x10"` coerce to 0 and the range arm below catches
+  # them, and `2.0` is 2 — which it still is, see {#whole_number}.)
   #
-  # THE COMMENT ABOVE IS WHY THAT HAD TO BE FIXED RATHER THAN NOTED. Nothing on
-  # the wire could reach it: `book_table` is `kind :action`, so its JSON body is
-  # validated against `input_schema` first, and `availability` is `kind :query`,
-  # so {Kiosk::Server::ArgumentDecoder}'s `Integer(v, 10)` refuses a non-integer
+  # THE COMMENT ABOVE IS WHY THAT STILL MATTERS THOUGH NOTHING ON THE WIRE CAN
+  # REACH IT: `book_table` is `kind :action`, so its JSON body is validated
+  # against `input_schema` first, and `availability` is `kind :query`, so
+  # {Kiosk::Server::ArgumentDecoder}'s `Integer(v, 10)` refuses a non-integer
   # spelling before the handler runs. The path this guard SAYS it exists for is
   # the descriptor-less one — {BookTableOperation} is an ordinary class with an
   # ordinary `call` — and that is precisely the path on which nothing has
-  # coerced the argument, so it is precisely where a `.to_i` turned a hostile
-  # shape into a 500 and `1.5` into a party of one. A layer that only holds
-  # while the layer in front of it holds is not a second layer at all.
+  # coerced the argument, so it is precisely where a `.to_i` would turn a
+  # hostile shape into a 500 and `1.5` into a party of one. A layer that only
+  # holds while the layer in front of it holds is not a second layer at all.
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def party_size(raw)
@@ -118,16 +108,16 @@ module WireArguments
   # NOT `is_a?(Integer)`, and the difference is measured rather than assumed:
   # draft 2020-12 defines `integer` NUMERICALLY, not by wire type, so
   # `{"party_size": 2.0}` is a VALID integer and json_schemer accepts it —
-  # re-measured against THIS demo's own bundle (json_schemer 2.5.0) and not
-  # inherited from the sibling row that first measured it (K-1020). A bare class
+  # re-measured against THIS demo's own bundle (json_schemer 2.5.0) rather than
+  # inherited from a sibling demo. A bare class
   # test here would therefore refuse a call the published schema allows, which is
   # the one way this guard could get the story wrong in the other direction.
   # JSON parsing yields Integer or Float and nothing else, so those are the two
   # cases; every other type — nil, true/false, String, Array, Hash — and every
   # fractional or non-finite Float is not a party.
   #
-  # DELIBERATELY THE SAME HELPER getgrocery grew for `qty` and `delivery_slot_id`
-  # (K-1020, K-1025) and deliberately NOT hoteling's `Integer(raw.to_s, 10)`
+  # DELIBERATELY THE SAME HELPER getgrocery uses for `qty` and
+  # `delivery_slot_id`, and deliberately NOT hoteling's `Integer(raw.to_s, 10)`
   # spelling: that one is for arguments the query decoder has ALREADY turned into
   # integers, and `party_size` is also reached with no decoder in front of it.
   #
@@ -156,7 +146,7 @@ module WireArguments
     OperationResult.refused(code: "bad_request", message: "missing param: party_size")
   end
 
-  # ── K-717: AN INVALID FILTER VALUE IS A TYPED 400, NEVER AN EMPTY LIST ────
+  # ── AN INVALID FILTER VALUE IS A TYPED 400, NEVER AN EMPTY LIST ───────────
   #
   # The house rule for every filter-shaped query in the fleet: a value this
   # origin cannot serve is refused 400 with the servable ones named, because
@@ -186,7 +176,7 @@ module WireArguments
   end
 
   # The "currently …" tail both DB-DERIVED refusals end in, and the reason it is
-  # a method rather than a `join` at each site (K-1231).
+  # a method rather than a `join` at each site.
   #
   # `[].join(", ")` is `""`, so the sentence came to rest as «… is not one this
   # aggregator serves — currently » — a promise of a set with nothing after it,
@@ -207,8 +197,7 @@ module WireArguments
   end
 
   # A seating DATE inside the rolling upcoming horizon. The valid values are
-  # NAMED in the refusal, so an assistant recovers without a second fetch
-  # (K-717).
+  # NAMED in the refusal, so an assistant recovers without a second fetch.
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def seating_date(raw, upcoming)
@@ -227,7 +216,7 @@ module WireArguments
   #
   # The set is DB-DERIVED — an operator adds one by inserting a restaurant — so
   # no static `enum` in `input_schema` can name it and this guard is the only
-  # place the refusal can live (T-090). It names the served neighbourhoods
+  # place the refusal can live. It names the served neighbourhoods
   # exactly as {#seating_time} and {#seating_date} name theirs.
   #
   # It is a FILTER over a collection in the §9.1 sense, so why not `200 []`?
@@ -256,7 +245,7 @@ module WireArguments
   #
   # The declared `format: "uuid"` refuses both classes on the wire first, so this
   # is defence in depth — but it must stay, because ActiveRecord does not refuse
-  # a malformed uuid, it CASTS it to NULL (K-654): `where(id: junk)` then matches
+  # a malformed uuid, it CASTS it to NULL: `where(id: junk)` then matches
   # no row, so {CancelBookingOperation}, which is callable with no descriptor in
   # front of it, would answer a typo as an OWNERSHIP refusal (403) rather than a
   # shape one (400). A well-formed but foreign id still gets the 403, so the

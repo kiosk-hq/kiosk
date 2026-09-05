@@ -23,7 +23,7 @@ class DemoTelemetryMiddleware
   # each side of the dispatch. BEFORE the app runs it is to hand the request to
   # the app. AFTER it has run the only safe recovery is the response already in
   # hand: calling the app again does not retry a request, it DISPATCHES A SECOND
-  # ONE, and on /auth/register that mints a second agent (K-622). So every
+  # ONE, and on /auth/register that mints a second agent. So every
   # `@app.call` below except one is an early return in the pre-dispatch region,
   # and nothing under the single dispatch line may reach one.
   def call(env)

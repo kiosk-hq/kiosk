@@ -17,7 +17,7 @@ class RescheduleDeliveryOperation
     order_id, refusal = WireArguments.order_id(order_id, hint: WireArguments::HINT_ORDER_ID_MOVE)
     return refusal if refusal
 
-    # ADDRESS-UPFRONT (K-468): a NEW address must also be an in-zone Dublin one.
+    # ADDRESS-UPFRONT: a NEW address must also be an in-zone Dublin one.
     # Omitted → the order keeps the address it has.
     if delivery_address.present?
       _zone, refusal = WireArguments.served_zone(delivery_address)
@@ -72,8 +72,8 @@ class RescheduleDeliveryOperation
                        .joins(:cart_mandate)
                        .merge(CartMandate.referencing(order_id))
       unless paid.exists?
-        # K-853: an order with a capture OUTSTANDING is neither paid nor unpaid,
-        # and "this order is not paid yet" is the sentence protocol.md §11.6
+        # An order with a capture OUTSTANDING is neither paid nor unpaid, and
+        # "this order is not paid yet" is the sentence protocol.md §11.6
         # forbids about one — it sends the assistant back to sign a fresh chain.
         # The claim is owner-scoped (see ValidatingPaymentProvider).
         if Order.owned_by_current_principal.where(id: order_id, status: Order::PAYING).exists?

@@ -25,7 +25,7 @@
 #       the same list. One shared world.
 #   (d) Alice ends with the linked agent bound to her (DB ground truth);
 #   (e) RE-LINKING the same, already-bound key is a NO-OP — it migrates
-#       nothing and, above all, destroys nothing (K-783).
+#       nothing and, above all, destroys nothing.
 
 require "date"
 require "json"
@@ -109,20 +109,17 @@ results[:link_mint] = rc
 abort "link mint failed (#{rc}): #{JSON.generate(link)}" unless rc == 201
 
 # ── 3. The SAME key redeems the code → REBIND + assistant_claimed migration ──
-# Until K-836 there was a `sleep 1.1` here, to CROSS a wall-clock second so the
-# pre-link token was unambiguously older than the rebind instant — the watermark
-# was stamped at the CURRENT second and the store compares a strict
-# `iat < watermark`, so a token minted in the rebind's own second survived it.
-# The driver worked AROUND the gap §6.3 says must not exist ("the key's pre-link
-# tokens MUST stop verifying").
+# THE SECOND BOUNDARY IS THE POINT. The revocation watermark is stamped at the
+# CURRENT second and the store compares a strict `iat < watermark`, so a token
+# minted in the rebind's OWN second is the one at risk of surviving it — and
+# §6.3 says it must not ("the key's pre-link tokens MUST stop verifying").
 #
-# It is replaced by its opposite. Align to just AFTER a second boundary, mint
-# one more pre-link token, and claim immediately: the login and the claim then
-# land in the SAME second, which is the case that used to slip through, and (b1)
-# below asserts it dies. The alignment is what makes that deterministic rather
-# than dependent on how long the preceding HTTP calls happened to take — the
-# original steps span seconds on their own, which is why the plain removal of
-# the sleep would have proven nothing.
+# So: align to just AFTER a second boundary, mint one more pre-link token, and
+# claim immediately. The login and the claim then land in the SAME second, which
+# is the case that slips through, and (b1) below asserts it dies. The alignment
+# is what makes that deterministic rather than dependent on how long the
+# preceding HTTP calls happened to take — those steps span seconds on their own,
+# so simply not sleeping would prove nothing.
 sleep(1.0 - (Time.now.to_f % 1.0))
 rc, same_second = post_json("/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
 abort "pre-claim login failed (#{rc}): #{JSON.generate(same_second)}" unless rc == 200
@@ -138,21 +135,21 @@ STDERR.puts "  Rebind: agent_id=#{claimed['agent_id']} now user_id=#{claimed['us
 
 # (b) The PRE-LINK token is watermark-revoked by the rebind (principal change ⇒
 #     the agent must re-login) — its next call is rejected 401, not merely empty.
-#     With the sleep gone this now exercises the same-second case (K-836).
+#     This deliberately exercises the same-second case.
 rc, _prelink = get_json("/kiosk/my_lists", {}, bearer(headless_token))
 results[:prelink_status]   = rc
 results[:prelink_revoked]  = rc == 401
 
-# (b1) K-836: and so is the pre-link token minted in the rebind's OWN second.
-#      This is the one the old strict `iat < watermark` let through — it kept
-#      full access to the assistant's pre-link rows for its whole lifetime.
+# (b1) And so is the pre-link token minted in the rebind's OWN second. That is
+#      the one a strict `iat < watermark` comparison lets through, and it would
+#      keep full access to the assistant's pre-link rows for its whole lifetime.
 rc, _same_second = get_json("/kiosk/my_lists", {}, bearer(same_second_token))
 results[:same_second_prelink_status]  = rc
 results[:same_second_prelink_revoked] = rc == 401
 
 # (c) The assistant RE-LOGS IN (fresh token bound to Alice) and sees "Hike".
 #     §6.3 names this as the second way back in, and it happens in the SAME
-#     second as the claim here — so it also pins the other half of K-836: the
+#     second as the claim here — so it also pins the other half: the
 #     watermark that kills the pre-link token must NOT kill the token minted
 #     after it. The engine clamps every mint to the agent's watermark, which is
 #     what makes both true at once.
@@ -176,19 +173,19 @@ rc, claimed2 = post_json("/kiosk/auth/claim",
 results[:second_agent_id]        = claimed2["agent_id"]
 results[:second_bound_to_holder] = claimed2["user_id"] == HOLDER
 
-# ── 4. RE-LINKING AN ALREADY-BOUND KEY IS A NO-OP, NOT A MIGRATION (K-783) ───
+# ── 4. RE-LINKING AN ALREADY-BOUND KEY IS A NO-OP, NOT A MIGRATION ───────────
 # Alice mints one more link code and the FIRST key — already bound to her by
 # beat 3 — redeems it. Nothing transitions: `previous_user_id == user_id`, so
 # there is no headless account to migrate from and no principal change to
 # notify anyone about.
 #
-# Why this beat exists: before K-783 the engine called `assistant_claimed`
-# anyway, and tudu's hook then DESTROYED the human's access to every list she
-# was a member of. The migration UPDATE moved nothing (she is already a member
-# of her own lists, so the "skip what they already have" guard skipped
-# everything) and the trailing DELETE — whose only job is to drop the now-
-# redundant HEADLESS memberships — deleted all of Alice's instead. She kept
-# owning the rows and could no longer see them.
+# Why this beat exists: if the engine fired `assistant_claimed` on a re-link
+# anyway, tudu's hook would DESTROY the human's access to every list she is a
+# member of. The migration UPDATE moves nothing (she is already a member of her
+# own lists, so the "skip what they already have" guard skips everything) and
+# the trailing DELETE — whose only job is to drop the now-redundant HEADLESS
+# memberships — would take all of Alice's instead. She would keep owning the
+# rows and stop being able to see them.
 rc, link3 = post_json("/kiosk/auth/link", {}, { session: true })
 results[:relink_mint] = rc
 abort "re-link mint failed (#{rc}): #{JSON.generate(link3)}" unless rc == 201
@@ -212,13 +209,13 @@ alice_after = get_html("/lists")
 results[:human_keeps_all_lists] =
   alice_after.code.to_i == 200 && alice_after.body.include?("Hike") && alice_after.body.include?("Flat 3B")
 
-# ── 5. THE LIST'S OWN PAGE — the READ half of the human UI (T-082) ───────────
+# ── 5. THE LIST'S OWN PAGE — the READ half of the human UI ───────────────────
 # /lists renders one projection (List.reachable_rows); /lists/:id renders the
 # other two (Todo.rows_on, Membership.rows_on) BEHIND the same ListAccess gate the
-# wire's query handlers use. Until T-082 that page reached its rows by dispatching
-# a synthetic Rack sub-request at those handlers — the human UI travelling through
-# the wire dispatcher — and nothing anywhere covered it, so the conversion off it
-# had no regression net. This is that net, and it is two beats because the page
+# wire's query handlers use. It reaches those rows DIRECTLY: a page that got them
+# by dispatching a synthetic Rack sub-request at the handlers would be the human
+# UI travelling through the wire dispatcher, which is not what either surface is
+# for. This is the regression net for that, and it is two beats because the page
 # has two answers: the roster a member may read, and the refusal a non-member
 # earns.
 list_page = get_html("/lists/#{list_id}")

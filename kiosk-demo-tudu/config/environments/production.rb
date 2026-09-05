@@ -63,7 +63,7 @@ Rails.application.configure do
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 
-  # ── Kiosk env inputs (K-650) ────────────────────────────────────────────
+  # ── Kiosk env inputs ────────────────────────────────────────────────────
   # ENV is read HERE, per environment, and published as Rails custom config
   # (Rails.configuration.x.kiosk.*); initializers and lib code read the
   # config, never ENV, and never raise — each environment's posture lives in
@@ -71,7 +71,7 @@ Rails.application.configure do
   # operator demos (bin/check-demo-copies), so nothing in this block may name
   # a single demo.
 
-  # The HMAC key every Kiosk PoW challenge is signed with — REQUIRED (K-541).
+  # The HMAC key every Kiosk PoW challenge is signed with — REQUIRED.
   # This repo is public, so a shipped fallback would be world-readable:
   # anyone could mint a self-signed challenge at trivial difficulty and forge
   # a valid proof, silently turning proof-of-work off.
@@ -89,7 +89,7 @@ Rails.application.configure do
   end
   raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
 
-  # This operator's canonical origin — REQUIRED (K-510). It is advertised in
+  # This operator's canonical origin — REQUIRED. It is advertised in
   # /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
   # enforced as the `aud` of every assistant proof-of-possession; a silent
   # localhost fallback would reject EVERY assistant with "proof audience
@@ -109,32 +109,32 @@ Rails.application.configure do
     MSG
   end
 
-  # NEVER in production (K-650): the Stripe autocard test shim (a completed
+  # NEVER in production: the Stripe autocard test shim (a completed
   # SetupIntent simulated without a hosted card-entry step) is pinned OFF
   # here — the live demo runs the real hosted flow. Dev/test honour the flag.
   config.x.kiosk.test_autocard = false
 
-  # ── Postgres role names (K-699) ─────────────────────────────────────────
+  # ── Postgres role names ─────────────────────────────────────────────────
   # `app_role` is the non-owner role a request-scoped session drops into when
   # `enforce_db_role` is on; `system_role` is the owner role the engine returns
   # to afterwards. WHICH roles a database actually has is deployment posture
   # rather than a demo mode, so the names are resolved here with every other env
-  # input and the initializer reads the config, never ENV (ENV-CONFIG-PLACEMENT,
-  # K-650). Nothing in this repo SETS either variable: they are the seam an
-  # adopter whose database names its roles differently would use, and this file
-  # is where they would name them.
+  # input and the initializer reads the config, never ENV
+  # (ENV-CONFIG-PLACEMENT). Nothing in this repo SETS either variable: they are
+  # the seam an adopter whose database names its roles differently would use,
+  # and this file is where they would name them.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
-  # ── The toy bad-proof counter's store (K-1008) ──────────────────────────
+  # ── The toy bad-proof counter's store ───────────────────────────────────
   # WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
   # is per-environment posture rather than a demo mode, so it is resolved here
   # with every other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699). `rake demo:pow` OWNS
-  # the location: it wipes the file for a clean slate and exports
-  # KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the driver that reads
-  # the counts back, so the two processes cannot drift onto different files and
-  # report zero at each other; the defaults below are only for a bare `rails s`.
+  # (ENV-CONFIG-PLACEMENT). `rake demo:pow` OWNS the location: it wipes the file
+  # for a clean slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it
+  # spawns and the driver that reads the counts back, so the two processes
+  # cannot drift onto different files and report zero at each other; the
+  # defaults below are only for a bare `rails s`.
   # TWO keys because atablefor's :demo and :reputation PoW branches keep
   # SEPARATE stores and this file cannot know which branch will run — an
   # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
@@ -145,7 +145,7 @@ Rails.application.configure do
   config.x.kiosk.bad_proof_db            = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
   config.x.kiosk.reputation_bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
 
-  # Payment-provider credentials (K-700) — REQUIRED by whichever demos configure
+  # Payment-provider credentials — REQUIRED by whichever demos configure
   # a REAL payment adapter, and never looked at by the others. Deliberately NO
   # placeholder here, unlike dev and test: a shipped `sk_test_…` placeholder
   # boots an origin that ADVERTISES `pay` in its discovery document and then
@@ -169,10 +169,10 @@ Rails.application.configure do
   # KycVerifier fails closed at the wire.
   #
   # The intake secret is ONE variable named for the ROLE it plays here, not
-  # for the operator that plays it (K-694) — the same discipline the unlock
-  # key below keeps by keying off a marker file. It has no shipped default
-  # (K-547). A per-operator name would have to be picked with an `||` chain
-  # in this byte-identical file, and a process that carried two operators'
+  # for the operator that plays it — the same discipline the unlock key below
+  # keeps by keying off a marker file. It has no shipped default. A
+  # per-operator name would have to be picked with an `||` chain in this
+  # byte-identical file, and a process that carried two operators'
   # secrets would then present the wrong one to the broker and be rejected
   # (or, worse, accepted) with nothing to say why. Each deploy sets its own
   # KIOSK_PROVE_INTAKE_SECRET to the value the broker holds for THAT
@@ -182,7 +182,7 @@ Rails.application.configure do
   config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
 
   # The Ed25519 key offline unlock/rental tokens are signed with — REQUIRED by
-  # the demos that issue them (K-686). This file is byte-identical across the
+  # the demos that issue them. This file is byte-identical across the
   # seven operator demos, so what makes the variable required here is not a
   # demo name but the marker every issuing demo carries: a shipped dev keypair
   # at config/dev_unlock_key.pem. A demo with no lock ships no such file,
@@ -192,9 +192,7 @@ Rails.application.configure do
   # world-readable in this public repo, so signing production tokens with it
   # would let anyone with a clone mint a token every provisioned lock accepts —
   # past reserve, past payment, past the ownership check, past KYC. It is a
-  # physical-access credential: the blast radius is a vehicle, not a row. That
-  # is exactly what shipped until K-686, under a comment promising an
-  # env-loaded PEM that never arrived.
+  # physical-access credential: the blast radius is a vehicle, not a row.
   dev_unlock_key_file = Rails.root.join("config/dev_unlock_key.pem")
   if dev_unlock_key_file.exist?
     config.x.kiosk.unlock_signing_key_pem = ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") do

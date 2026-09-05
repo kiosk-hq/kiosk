@@ -4,14 +4,13 @@
 # — the shape guards atablefor's verbs open with. Run with:
 #   bundle exec rake demo:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
 #
-# WHY IT IS DB-FREE, and why that is the whole point (T-137, T-116's row one demo
-# over). Before this file, atablefor shipped NO `spec/` at all: every one of its
+# WHY IT IS DB-FREE, and why that is the whole point. Every one of atablefor's
 # CI tasks needs a booted origin, a seeded database and — for half of them — a
-# live Equihash toll, so the only executable coverage of `party_size`,
-# `whole_number`, `seating_time`, `seating_date`, `neighborhood` and `booking_id`
-# was `demo:redteam`. Every one of them is a PURE FUNCTION: no connection, no
-# clock, no state. K-1027 and K-1047 each had to boot an origin to prove a table
-# about a handful of literal values.
+# live Equihash toll, so without this file the only executable coverage of
+# `party_size`, `whole_number`, `seating_time`, `seating_date`, `neighborhood`
+# and `booking_id` would be `demo:redteam`. Every one of them is a PURE
+# FUNCTION: no connection, no clock, no state — proving a table about a handful
+# of literal values should not cost an origin boot.
 #
 # WHAT IS ASSERTED. Not "something was refused" — the TYPE and the SHAPE of each
 # refusal:
@@ -19,11 +18,11 @@
 #     `status` resolves through atablefor's own STATUSES map to `:bad_request`,
 #     so a code this demo never mapped would raise a KeyError here rather than at
 #     the wire;
-#   • no hostile shape RAISES. That is K-1027 itself: `party_size` read a bare
-#     `raw.to_i`, and `true`, `false`, `[]`, `{}` have no `to_i` at all — each was
-#     a `500 action_failed` for a value the published descriptor already forbids;
+#   • no hostile shape RAISES. A bare `raw.to_i` on `party_size` is the trap:
+#     `true`, `false`, `[]`, `{}` have no `to_i` at all, so each would be a
+#     `500 action_failed` for a value the published descriptor already forbids;
 #   • the SHAPE refusal, the RANGE-FLOOR refusal and the CEILING refusal are
-#     THREE DIFFERENT sentences (K-1027, K-1047) — `1.5` is not "must be >= 1",
+#     THREE DIFFERENT sentences — `1.5` is not "must be >= 1",
 #     and a caller told the wrong one debugs the wrong thing;
 #   • the accepted shapes are exactly the published `input_schema`'s and nothing
 #     looser (JSON Schema's `integer` is numeric, so `2.0` IS one) and nothing
@@ -95,12 +94,12 @@ MAX = WireArguments::MAX_INT4
 
 # ── 1. whole_number/1 — JSON Schema's `integer`, in Ruby ─────────────────────
 #
-# K-1027's table, and deliberately the SAME table getgrocery's spec runs against
-# its own byte-identical copy of this method (T-120's fragment territory): draft
-# 2020-12 defines `integer` NUMERICALLY, so `2.0` is a valid integer and a bare
+# Deliberately the SAME table getgrocery's spec runs against its own
+# byte-identical copy of this method: JSON Schema draft 2020-12 defines
+# `integer` NUMERICALLY, so `2.0` is a valid integer and a bare
 # `is_a?(Integer)` would refuse a call the published schema allows. Everything
 # else JSON can carry is not a number at all.
-puts "\n── whole_number: the schema's `integer` and nothing looser (K-1027) ──"
+puts "\n── whole_number: the schema's `integer` and nothing looser ──"
 [
   # [raw, expected]
   [0,                     0],
@@ -153,8 +152,8 @@ puts "\n── party_size: shape, floor and ceiling are three different sentence
          "  … and the value is an Integer, so `capacity >= party_size` cannot compare a Float")
 end
 
-# WRONG SHAPE — including the four values that used to RAISE NoMethodError on a
-# bare `.to_i` (K-1027), and `1.5`, which used to be seated as a party of ONE.
+# WRONG SHAPE — including the four values that RAISE NoMethodError on a bare
+# `.to_i`, and `1.5`, which a bare `.to_i` would seat as a party of ONE.
 [nil, true, false, 1.5, -0.5, "2", "abc", "01", "0x10", "", [], [1], {}, { "a" => 1 }, :sym,
  Float::NAN, Float::INFINITY].each do |raw|
   pair    = guard("party_size(#{raw.inspect})") { WireArguments.party_size(raw) }
@@ -167,9 +166,8 @@ end
          "  … the SHAPE sentence echoing the value: #{refusal.message.inspect}")
 end
 
-# OUT OF RANGE at the bottom — a DIFFERENT sentence from the shape one, and the
-# split is what K-1032 corrected the header about: an ABSENT party gets the shape
-# sentence, a zero gets this one.
+# OUT OF RANGE at the bottom — a DIFFERENT sentence from the shape one: an
+# ABSENT party gets the shape sentence, a zero gets this one.
 [0, -1, -8, 0.0, -2.0, -MAX].each do |raw|
   refusal = refusal_of(guard("party_size(#{raw.inspect})") { WireArguments.party_size(raw) })
   assert_typed_400(refusal, "party_size(#{raw.inspect})")
@@ -179,9 +177,9 @@ end
          "  … the RANGE FLOOR, with no value echoed: #{refusal.message.inspect}")
 end
 
-# OUT OF RANGE at the top (K-1047) — `bookings.party_size` and
+# OUT OF RANGE at the top — `bookings.party_size` and
 # `restaurant_tables.capacity` are 4-byte integers, and it is the COMPARISON that
-# casts: `capacity.gteq(2**31)` raised ActiveModel::RangeError, i.e. HTTP 500 for
+# casts: `capacity.gteq(2**31)` raises ActiveModel::RangeError, i.e. HTTP 500 for
 # an argument a client simply got wrong, on BOTH surfaces at once.
 [MAX + 1, 2**40, 2**64, 1e18, (MAX + 1).to_f].each do |raw|
   refusal = refusal_of(guard("party_size(#{raw.inspect})") { WireArguments.party_size(raw) })
@@ -194,7 +192,7 @@ end
 
 assert(WireArguments::MAX_INT4 == 2_147_483_647,
        "MAX_INT4 is PostgreSQL's `integer` ceiling — the bound is the COLUMN's and not a house " \
-       "limit on party size (K-968's rule): #{WireArguments::MAX_INT4}")
+       "limit on party size: #{WireArguments::MAX_INT4}")
 
 # ── 3. missing_party_size/0 — the fourth question, asked one layer up ────────
 puts "\n── missing_party_size: `availability` asks whether the argument was GIVEN ──"
@@ -207,11 +205,11 @@ assert(refusal.message != "party_size must be a whole number >= 1 — got nil",
 
 # ── 4. seating_time/1 — a closed set, and absent means "no filter" ───────────
 #
-# K-717's house rule: a value this origin cannot serve is refused 400 with the
+# The house rule: a value this origin cannot serve is refused 400 with the
 # servable ones NAMED, because `200 []` is indistinguishable from an honest
 # sell-out. `time` is also declared as an `enum`, so this is defence in depth for
 # the Operations, which reach these guards with no descriptor in between.
-puts "\n── seating_time: the roster is named in the refusal (K-717) ──"
+puts "\n── seating_time: the roster is named in the refusal ──"
 Seatings::TIMES.each do |t|
   pair = guard("seating_time(#{t.inspect})") { WireArguments.seating_time(t) }
   assert(refusal_of(pair).nil? && value_of(pair) == t,
@@ -242,7 +240,7 @@ end
 # The horizon rolls forward daily, so no enum written at declaration time can
 # name it and `format: "date"` can only say the string is a calendar date. The
 # roster is passed IN — this guard reads no clock and no table.
-puts "\n── seating_date: the upcoming days, named in the refusal (K-717, T-090) ──"
+puts "\n── seating_date: the upcoming days, named in the refusal ──"
 UPCOMING = [[Date.new(2026, 9, 1), "19:00"],
             [Date.new(2026, 9, 1), "20:00"],
             [Date.new(2026, 9, 2), "19:00"]].freeze
@@ -275,10 +273,10 @@ end
 assert(WireArguments.seating_date("nope", UPCOMING)[1].message.scan("2026-09-01").size == 1,
        "a day with two seatings is named once in the refusal, not once per seating")
 
-# AN EMPTY ROSTER NAMES THE ABSENCE (K-1231). `[].join(", ")` is `""`, so this
-# sentence used to end «— currently » — a promise of a set with nothing after it.
-# An origin with no upcoming seatings is the state a fresh install is in, so this
-# is the first refusal a new operator's assistant would have read.
+# AN EMPTY ROSTER NAMES THE ABSENCE. `[].join(", ")` is `""`, so without the
+# «none» tail the sentence would end «— currently » — a promise of a set with
+# nothing after it. An origin with no upcoming seatings is the state a fresh
+# install is in, so this is the first refusal a new operator's assistant reads.
 assert(WireArguments.seating_date("2026-09-01", [])[1].message ==
        "date \"2026-09-01\" is not among the upcoming seatings — currently none",
        "an empty roster says «currently none», not «currently »: " \
@@ -287,7 +285,7 @@ assert(WireArguments.seating_date("2026-09-01", [])[1].message ==
 # ── 6. neighborhood/2 — a DB-derived set, held at arm's length ───────────────
 #
 # An operator adds a neighbourhood by inserting a restaurant, so no static `enum`
-# can name the set and this guard is the only place the refusal can live (T-090).
+# can name the set and this guard is the only place the refusal can live.
 # The set arrives as an ARGUMENT, which is exactly why this is testable with no
 # database.
 puts "\n── neighborhood: the served set is passed IN, so the guard stays pure ──"
@@ -319,14 +317,14 @@ assert(WireArguments.neighborhood("alfama", SERVED)[1].is_a?(OperationResult),
        "the match is EXACT, not case-folded — the value goes into a `where` and Postgres would " \
        "not fold it either")
 
-# THE SAME EMPTY-SET TAIL, on the other DB-derived refusal (K-1231). An origin
+# THE SAME EMPTY-SET TAIL, on the other DB-derived refusal. An origin
 # with no restaurants serves no neighbourhoods, and that is a fresh install.
 assert(WireArguments.neighborhood("Alfama", [])[1].message ==
        "neighborhood \"Alfama\" is not one this aggregator serves — currently none",
        "an empty served set says «currently none», not «currently »: " \
        "#{WireArguments.neighborhood("Alfama", [])[1].message.inspect}")
 
-# ── 7. booking_id/1 — PRESENT, then shaped like an id (K-581/K-582, K-654) ───
+# ── 7. booking_id/1 — PRESENT, then shaped like an id ────────────────────────
 #
 # ActiveRecord does not refuse a malformed uuid, it CASTS it to NULL, so the
 # owner-scoped query matches nothing and a TYPO comes back as an OWNERSHIP
@@ -386,18 +384,17 @@ end
 # ── 8. The guards run in front of the database, not behind it ──────────────
 #
 # Every assertion above ran with ActiveRecord never loaded, which is only
-# possible if these checks PRECEDE the connection — the property K-1027 and
-# K-1047 both had to boot an origin to demonstrate.
+# possible if these checks PRECEDE the connection.
 puts "\n── the whole module ran with no database ──"
 assert(!defined?(ActiveRecord::Base),
        "every guard above answered without ActiveRecord loaded (they precede every cast, every " \
        "comparison and every lock)")
 
 if FAILURES.empty?
-  puts "\nWireArguments T-137 spec: ALL PASS"
+  puts "\nWireArguments spec: ALL PASS"
   exit 0
 else
-  puts "\nWireArguments T-137 spec: #{FAILURES.size} FAILURE(S)"
+  puts "\nWireArguments spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

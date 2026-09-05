@@ -157,11 +157,11 @@ the box.  A real deployment flashes the public half of the server's own
 openssl pkey -in unlock_key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32
 ```
 
-That property — "the private key never leaves the server" — only became true at
-K-686.  Until then the signing key was hard-coded in the repo AND wired in
-production, so the previous public key (`8857880d…`) is **burned**: any lock
-still holding it accepts tokens anyone with a clone of this repo can mint, and
-must be reflashed.
+That property — "the private key never leaves the server" — has one historical
+exception, and it still matters: an earlier signing key was hard-coded in this
+repo AND wired in production, so the public key `8857880d…` is **burned**: any
+lock still holding it accepts tokens anyone with a clone of this repo can mint,
+and must be reflashed.
 
 ---
 
@@ -228,8 +228,7 @@ laptop, so the board can be exercised with no App Clip and no Apple account:
 It is built against the wire contract above (service `4e2a1000-…`,
 characteristic `4e2a1002-…`, UTF-8 token bytes, write-with-response) and is
 **UNVERIFIED until run against a real flashed ESP32-C3** — its own header says
-so, and the table below is where that status is tracked. It was an orphan in the
-tree until K-992; nothing else in the repo named it.
+so, and the table below is where that status is tracked.
 
 ---
 

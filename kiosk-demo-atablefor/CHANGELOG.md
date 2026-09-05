@@ -9,4 +9,4 @@
   `availability` aggregates open tables across restaurants with neighbourhood/
   time/date filters, and `book_table` reserves a specific (restaurant, table,
   seating) with clean sold-out contention. No payment added (deposit stays
-  display-only). Fixes the K-446 atablefor staleness.
+  display-only). Fixes the staleness the old date-offset seeding produced.

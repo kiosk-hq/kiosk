@@ -12,7 +12,7 @@ require "openssl"
 #   2. The known-answer vector (script/rental_token_issuer_kat.rb) reproduces exactly.
 #   3. The firmware host-test (T3) can hard-code the public key.
 #
-# DEV/TEST ONLY (K-686). The private half ships world-readable in this public
+# DEV/TEST ONLY. The private half ships world-readable in this public
 # repo, so it is NOT a key anything real may sign with: production resolves
 # KIOSK_UNLOCK_SIGNING_KEY_PEM in config/environments/production.rb and refuses
 # to boot without it. Nothing here reads ENV or decides posture — that lives in
@@ -20,8 +20,8 @@ require "openssl"
 # Kiosk.configuration.unlock_signing_key from
 # Rails.configuration.x.kiosk.unlock_signing_key_pem, never from this class.
 #
-# WHY IT STILL EXISTS AFTER THE ENV MOVE, and why it deliberately does NOT read
-# Rails config (the K-681 trap on prove's ProveKey): its remaining callers are
+# WHY IT EXISTS AS A CLASS OF ITS OWN, and why it deliberately does NOT read
+# Rails config: its callers are
 # BARE-RUBY drivers with no Rails at all — script/rental_flow.rb and
 # script/kyc_flow.rb provision their LockSim with the dev public half, and
 # script/rental_token_issuer_kat.rb signs with the dev private half. Reaching for

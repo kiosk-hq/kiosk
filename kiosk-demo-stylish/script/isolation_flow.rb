@@ -25,12 +25,11 @@
 #     behalf of another via book_appointment args. No ownership-denial assertion
 #     applies to this surface. Documented honestly rather than fabricated.
 #
-# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). This driver used to hand
-# itself both identities by writing them down — `agent:u-<uuid>:a-<uuid>:r-customer`
-# — which a dev-only parser inside the demo's own agent-IdP turned into an
-# authenticated identity at whatever role the string asked for. That parser is
-# deleted and nothing replaced it, so each principal here runs the shipped
-# ceremony instead (script/bound_assistant.rb: Equihash-tolled `/auth/register` →
+# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED. A driver cannot hand itself an
+# identity by writing one down: a self-asserted
+# `agent:u-<uuid>:a-<uuid>:r-customer` resolves to no principal at any role. So
+# each principal here runs the shipped ceremony
+# (script/bound_assistant.rb: Equihash-tolled `/auth/register` →
 # the human's real Devise sign-in → `/auth/link` → `/auth/claim`). A and B hold
 # SEPARATE Devise sessions because they are separate humans.
 #
@@ -40,8 +39,8 @@
 # seeded uuid. The `agent_id`, by contrast, is MINTED and cannot be chosen —
 # `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
 # `kiosk.current_agent_id()` are typed `uuid` in the canonical schema, so a
-# driver naming its own agent id was naming a shape the shipped tables may not
-# be able to store (K-829/K-830).
+# driver naming its own agent id would be naming a shape the shipped tables may
+# not be able to store.
 #
 # Users are pre-seeded by demo:setup (db/seeds.rb); the credentials arrive in
 # the environment from the rake task, never as literals here.
@@ -62,7 +61,7 @@ require "uri"
 
 require_relative "bound_assistant"
 
-# Slots are COMPUTED (K-969): `book_appointment` refuses an instant that has
+# Slots are COMPUTED: `book_appointment` refuses an instant that has
 # passed, so a literal here would be a driver that stops working on a date
 # nobody would think to look at. See script/redteam_suite.rb for the same
 # helper and the same reason.

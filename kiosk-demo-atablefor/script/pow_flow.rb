@@ -14,7 +14,7 @@
 #   5. Submit a deliberately wrong nonce against a fresh challenge → expect
 #      HTTP 403 (forbidden / invalid proof); assert on_bad_proof incremented
 #      FOR THIS IDENTITY, and that a second, innocent identity's count stayed 0
-#      (K-498 — the counter is per-identity, not one shared tally).
+#      (the counter is per-identity, not one shared tally).
 #
 # THE 0.4 WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
 # with its arguments in the query string — there is no `name` field and no
@@ -36,7 +36,7 @@
 # either level of KIOSK_POW_DIFFICULTY — toy `low` (n=96 k=5, the default) or
 # the shipped `high` (n=168 k=7). It reports the served `params` back to
 # `rake demo:pow`, which asserts them against the level it asked for, so the
-# toll a run pays is a fact off the wire rather than a banner (T-110).
+# toll a run pays is a fact off the wire rather than a banner.
 #
 # Requirements:
 #   - The server must be running with KIOSK_POW_DEMO=1.
@@ -54,18 +54,16 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # equihash_solve / equihash_register come from the shared helper; the solver
-# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem.
 require_relative "equihash_register"
 
-# EVERY SOLVE THIS FLOW PAYS FOR, COUNTED WHERE THE SOLVER ACTUALLY RUNS (K-1221).
+# EVERY SOLVE THIS FLOW PAYS FOR, COUNTED WHERE THE SOLVER ACTUALLY RUNS.
 #
-# `proofs_solved` used to be `proofs.size` — the challenges THIS file holds, i.e.
-# the tolled query's only — and reported 1 for a run that shells out to solve.py
-# three times, because `equihash_register` pays the registration toll
-# transparently for each identity the flow mints. That is not a cosmetic
-# undercount: it is the number a viewer multiplies by the per-proof budget to
-# size a recording, and both demos' rake prose had drifted to a hand-typed
-# "four" against it.
+# Counting `proofs.size` — the challenges THIS file holds, i.e. the tolled
+# query's only — would report 1 for a run that shells out to solve.py three
+# times, because `equihash_register` pays the registration toll transparently
+# for each identity the flow mints. That is not a cosmetic undercount: it is the
+# number a viewer multiplies by the per-proof budget to size a recording.
 #
 # The counter wraps the helper's `equihash_solve` HERE, in the per-demo driver,
 # rather than inside `script/equihash_register.rb` — that file is held in
@@ -78,7 +76,7 @@ def equihash_solve(challenge)
   equihash_solve_uncounted(challenge)
 end
 
-# The TOY counter the demo initializer's on_bad_proof writes (K-498):
+# The TOY counter the demo initializer's on_bad_proof writes:
 # PER-IDENTITY in sqlite (one abuser's rejections never appear in anyone
 # else's count), but still truncated at boot, no TTL, and read by nothing but
 # this driver. It exists so step 5 below can assert the server counted the
@@ -86,10 +84,10 @@ end
 # decayed, durable bad_proof_count a real provider needs.
 require_relative "../app/services/bad_proof_counter"
 # The path is OWNED by `rake demo:pow`, which exports it to the server it
-# spawns and to this driver (K-711). No default on purpose: this used to be a
-# second hand-typed literal, and a drift between the two copies opened an empty
-# sqlite here, read 0 for every count, and reported the zeros as a pass. A
-# KeyError is the only honest answer when nobody told this process where to look.
+# spawns and to this driver. No default on purpose: a second hand-typed literal
+# here can drift from the task's, open an empty sqlite, read 0 for every count
+# and report the zeros as a pass. A KeyError is the only honest answer when
+# nobody told this process where to look.
 BAD_PROOF_DB = ENV.fetch("KIOSK_BAD_PROOF_DB")
 
 def post_json(url, body, headers = {})
@@ -116,7 +114,7 @@ _key, reg = equihash_register(
 token    = reg.fetch("access_token")
 agent_id = reg.fetch("agent_id")
 
-# A second, INNOCENT identity (K-498): it registers and never submits a bad
+# A second, INNOCENT identity: it registers and never submits a bad
 # proof, so its per-identity count must still be 0 after this flow's wrong
 # nonce lands on the first identity's tally.
 _key2, reg2 = equihash_register(
@@ -171,14 +169,14 @@ abort "expected fresh 402 for negative test, got #{rc_neg_issue}" unless rc_neg_
 challenge_neg = resp_neg_issue["challenges"].first
 # A wrong nonce: right shape (distinct indices) but not a Wagner solution.
 bad_nonce = { "indices" => (1..(proofs.first[:nonce]["indices"].length)).to_a, "header_nonce" => 0 }
-# PoW proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022), not
+# PoW proof(s) ride in the Kiosk-PoW request header as raw JSON, not
 # in the request — the method, path and query string stay identical so the
 # challenge fingerprint matches.
 rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad_nonce }])
 unless rc_wrong == 403
   abort "expected HTTP 403 for wrong nonce, got #{rc_wrong}: #{JSON.generate(resp_wrong)}"
 end
-# PER-IDENTITY (K-498): the offender's count moved, the innocent identity's
+# PER-IDENTITY: the offender's count moved, the innocent identity's
 # did not — one bad client must not make everyone else suffer.
 bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, agent_id)
 unless bad_proof_count >= 1
@@ -207,7 +205,7 @@ puts JSON.generate(
   http_served_after_solve:    rc_served,
   http_wrong_nonce:           rc_wrong,
   served:                     served,
-  # EVERY solve the flow performed, register included (K-1221) — the count the
+  # EVERY solve the flow performed, register included — the count the
   # rake task prints and asserts, and the one a recording's runtime follows from.
   # The tolled query's own share is broken out beside it.
   proofs_solved:              POW_SOLVES[:total],
@@ -216,7 +214,7 @@ puts JSON.generate(
   bad_proof_count:            bad_proof_count,
   other_bad_proof_count:      other_bad_proof_count,
   availability_rows:          rows.size,
-  # THE PARAMETERS THE WIRE ACTUALLY SERVED (T-110), so `rake demo:pow`'s
+  # THE PARAMETERS THE WIRE ACTUALLY SERVED, so `rake demo:pow`'s
   # verdict can assert which toll was paid instead of printing what it hoped
   # for. Read off the challenge rather than from config: it follows an operator
   # override or a per-identity policy that a config read cannot see.

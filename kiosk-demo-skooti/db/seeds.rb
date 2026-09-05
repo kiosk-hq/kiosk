@@ -6,8 +6,8 @@
 # handshake) and get their OWN credential-less account row. The two humans here
 # are the other principal: they sign in at /users/sign_in with a real Devise
 # session, which is the channel the account-binding surfaces (device verify
-# page, link mint, unlink) authenticate — there is no stub user-IdP any more
-# (T-066), so without a seeded human those routed surfaces are unreachable.
+# page, link mint, unlink) authenticate — there is no stub user-IdP, so without
+# a seeded human those routed surfaces are unreachable.
 #
 # A coined Amsterdam micromobility fleet, priced in EUR cents per minute, with
 # named vehicles at named pickup docks — so a plain prompt like "rent an

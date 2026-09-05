@@ -125,8 +125,8 @@ boots no server at all — it drives the same verbs in-process
 (`script/pay_window.rb`, via `rails runner`) because the thing under test is the
 window BETWEEN a PSP capture and the settlement row that records it, and neither
 half of that window can be held open over HTTP. It is the regression that keeps
-a booking whose charge is in flight from publishing itself `unpaid` (K-853,
-protocol.md §11.6). The stray `[kiosk] WARNING` line is that `rails runner`
+a booking whose charge is in flight from publishing itself `unpaid`
+(protocol.md §11.6). The stray `[kiosk] WARNING` line is that `rails runner`
 booting a development process with an ephemeral signing key; it is in the block
 because it is in the output.
 

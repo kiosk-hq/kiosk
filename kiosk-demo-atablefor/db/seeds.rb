@@ -9,7 +9,7 @@
 # app/models/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
 # out for a given seating.
 #
-# NO AGENT IS SEEDED, and since T-104 none can be. An assistant EARNS its
+# NO AGENT IS SEEDED, and none can be. An assistant EARNS its
 # principal over the wire at /kiosk/auth/register (the proof-of-possession
 # handshake, Equihash-tolled), which mints its agent row plus a fresh headless
 # users row of its own — that is what satisfies `Booking belongs_to :user`

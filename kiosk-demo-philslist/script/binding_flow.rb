@@ -170,14 +170,14 @@ STDERR.puts "  Second assistant edited the household listing → #{rc}"
 # ══ UNLINK: the first assistant's TOKENS die, not just its next login. ══════
 #
 # Spec §6.3 / §15.4: "an unlinked key's tokens stop verifying and /auth/login
-# answers 404". This driver used to assert only the login half, and the token
-# half turned out to have a hole (K-835): the revocation watermark compares
-# `iat < watermark` on second-resolution JWT timestamps, so a token minted in
-# the SAME wall-clock second as the unlink slipped through — and since the key
-# can no longer log in, that token was the last one it would ever hold and kept
-# full access to the human's account for its whole hour. Both halves are pinned
-# here now, and the fresh token below is deliberately aligned to the boundary so
-# this beat exercises the aperture rather than stepping over it.
+# answers 404". BOTH halves are pinned here, and the token half is the one with
+# the sharp edge: the revocation watermark compares `iat < watermark` on
+# second-resolution JWT timestamps, so a token minted in the SAME wall-clock
+# second as the unlink can slip through — and since the key can no longer log
+# in, that token would be the last one it ever holds, keeping full access to
+# the human's account for its whole hour. The fresh token below is deliberately
+# aligned to the boundary so this beat exercises the aperture rather than
+# stepping over it.
 #
 # Align to the start of a second, then re-login and unlink back-to-back so the
 # fresh token's `iat` and the unlink instant land in the SAME second.
@@ -195,7 +195,7 @@ rc, = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token1}"
 results[:a1_token_after_unlink] = rc
 rc, = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token1_fresh}" })
 results[:a1_fresh_token_after_unlink] = rc
-# …and a write, so this is not "reads happen to be gated" (K-835).
+# …and a write, so this is not "reads happen to be gated".
 rc, = post_json("/kiosk/edit_listing", { listing_id: listing_id, price_text: "€1" },
                 { "Authorization" => "Bearer #{token1_fresh}" })
 results[:a1_fresh_token_write_after_unlink] = rc

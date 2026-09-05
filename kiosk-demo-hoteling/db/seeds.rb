@@ -7,10 +7,10 @@
 # handshake) and get their OWN credential-less account row. The two humans here
 # are the other principal: they sign in at /users/sign_in with a real Devise
 # session, which is the channel the account-binding surfaces (device verify
-# page, link mint, unlink) authenticate — there is no stub user-IdP any more
-# (T-066), so without a seeded human those routed surfaces are unreachable.
+# page, link mint, unlink) authenticate — there is no stub user-IdP, so without
+# a seeded human those routed surfaces are unreachable.
 #
-# T-042 / K-452 — SCALE. hoteling seeds ~100 coined Istanbul hotels so an
+# SCALE. hoteling seeds ~100 coined Istanbul hotels so an
 # unpaginated list would overwhelm an assistant (the "analysis paralysis /
 # silent truncation" case). That makes `search_hotels` (paginated,
 # multi-parameter) and `hotel_detail` (fetch one) genuinely necessary rather
@@ -24,7 +24,7 @@
 # these seeds share one closed vocabulary each. The assertion below is the half
 # a shared constant cannot do on its own: the five hand-written originals name
 # their district as a literal, and a typo there would seed a property no filter
-# value reaches. K-947.
+# value reaches.
 
 # ── Human guest accounts (Devise credentials) ───────────────────────────────
 # Demo-only credentials (development database, reset by every demo:setup).
@@ -68,7 +68,7 @@ originals = [
     rooms: [["Standard", 10000], ["Suite", 16000]] },
 ]
 
-# ── Seed-time vocabulary check (K-947) ──────────────────────────────────────
+# ── Seed-time vocabulary check ──────────────────────────────────────────────
 # The five originals above name their district as a literal, so a rename in
 # NEIGHBOURHOOD_POOL — or a typo here — would seed a property that the
 # search_hotels `neighbourhood` filter can never reach, silently. Fail the seed

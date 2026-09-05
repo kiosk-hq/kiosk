@@ -1,11 +1,11 @@
 # See https://help.github.com/articles/ignoring-files for more about ignoring files.
 #
 # LOCKSTEP ACROSS ALL EIGHT DEMOS — bin/check-demo-copies declares this path
-# :identical and fails the build when a copy drifts (K-629). Nothing in a
-# .gitignore is per-port or per-host, and a demo that quietly loses a line here
-# is how a `credentials.yml.enc` reached CI without its key once already (K-404).
+# :identical and fails the build when a copy drifts. Nothing in a .gitignore is
+# per-port or per-host, and a demo that quietly loses a line here is how a
+# `credentials.yml.enc` reaches CI without its key.
 # The repo-root .gitignore covers the machine-local files (mise.toml, .bundle,
-# .env, editor cruft) for every subtree, so they do not belong here (K-552).
+# .env, editor cruft) for every subtree, so they do not belong here.
 
 # Ignore bundler config.
 /.bundle
@@ -31,7 +31,7 @@
 
 # Ignore the master key and any other credentials key, and the encrypted
 # credentials file itself: an enc committed without its (ignored) key is an AEAD
-# boot failure, which is exactly how CI broke in K-404.
+# boot failure — CI goes red with no code change behind it.
 /config/master.key
 /config/*.key
 /config/credentials.yml.enc

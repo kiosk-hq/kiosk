@@ -27,8 +27,8 @@ class HomeController < ApplicationController
     # Set a Link header too, so a header-only agent finds the skill.
     # The url is `Kiosk.configuration.skill_url` — the VERSIONED cut this
     # operator pins, identical to the one `/.well-known/kiosk.json` carries
-    # under `skill`, never the mutable skill.md alias (K-927). Derived rather
-    # than restated so a cut is re-pinned in ONE place, the initializer.
+    # under `skill`, never the mutable skill.md alias. Derived rather than
+    # restated so a cut is re-pinned in ONE place, the initializer.
     response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 
@@ -53,12 +53,12 @@ class HomeController < ApplicationController
 
   helper_method :board_poster_name
 
-  # Public label for a listing's poster — THE SAME PSEUDONYM THE WIRE PUBLISHES
-  # (K-913), so the page and `browse_listings` cannot come to disagree about who
-  # a seller is. It used to be a masked email local-part (`al•••`), which is a
-  # thin mask: against a known domain it leaks two characters of a real address
-  # and confirms which addresses hold accounts. {User.public_handle} is derived
-  # from the account UUID and reveals nothing.
+  # Public label for a listing's poster — THE SAME PSEUDONYM THE WIRE PUBLISHES,
+  # so the page and `browse_listings` cannot come to disagree about who a seller
+  # is. NOT a masked email local-part (`al•••`), which is a thin mask: against a
+  # known domain it leaks two characters of a real address and confirms which
+  # addresses hold accounts. {User.public_handle} is derived from the account
+  # UUID and reveals nothing.
   #
   # Both of Alice's household assistants post under the SAME account, so both of
   # their listings read under one handle here — the household made visible, and

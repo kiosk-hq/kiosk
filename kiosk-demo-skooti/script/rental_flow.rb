@@ -3,8 +3,8 @@
 # Agent-side driver: no-human scooter rental end-to-end (Ed25519 offline token).
 #
 # Flow: register (PoW) → scooters_available → reserve → pay → start_rental →
-#       LockSim.unlock. There is NO KYC leg: licence-free scooters need none
-#       (K-442) — the KYC-gated motorcycle path is script/kyc_flow.rb.
+#       LockSim.unlock. There is NO KYC leg: licence-free scooters need none —
+#       the KYC-gated motorcycle path is script/kyc_flow.rb.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3004 \
@@ -85,7 +85,7 @@ user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
 
 # ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
-# Licence-free scooters need NO KYC (K-442) — the rental proceeds on ownership +
+# Licence-free scooters need NO KYC — the rental proceeds on ownership +
 # payment alone. KYC gates only the combustion motorcycle (see script/kyc_flow.rb).
 
 # ── Step 3: browse fleet via sanctioned query, then reserve ─────────────────

@@ -24,12 +24,11 @@
 # (SET LOCAL ROLE kiosk_getgrocery_app inside SessionContext). FORCE is emitted
 # so the overlay is production-identical.
 
-# ── The railtie did its job (K-504) ──────────────────────────────────────────
-# Until 2026-08-21 this app's config/initializers/kiosk.rb carried
-# `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` — an application patching a
-# framework class on a gem's behalf, hand-copied into four demos. kiosk-rls now
-# injects the five migration verbs from its OWN railtie, so the line is gone
-# from every initializer and nothing in this app wires it.
+# ── The railtie did its job ──────────────────────────────────────────────────
+# kiosk-rls injects the five migration verbs from its OWN railtie. No
+# initializer here carries `ActiveRecord::Migration.include(Kiosk::RLS::DSL)`:
+# an application patching a framework class on a gem's behalf is exactly what
+# the railtie makes unnecessary, so nothing in this app wires it.
 #
 # That claim is only true if a real boot actually produces it, and this script
 # IS a real boot — the sole place in the tree where a Rails app with kiosk-rls

@@ -32,7 +32,7 @@ class Kiosk::OrdersController < ActionController::API
   # payment_setup — the card-on-file readiness probe; canonical skill Step 5 runs
   # it before `pay`.
   #
-  # POLL CADENCE + STOP CONDITION (K-477): the wire has no server→assistant push,
+  # POLL CADENCE + STOP CONDITION: the wire has no server→assistant push,
   # so an assistant learns the human finished the hosted card entry ONLY by
   # re-calling this — and without a stated cadence AND terminal stop condition it
   # invents its own and can poll forever. The cadence is the skill's, verbatim
@@ -40,7 +40,7 @@ class Kiosk::OrdersController < ActionController::API
   # No CHECK COUNT: a count derives from the cadence and the horizon, so it goes
   # silently wrong the moment either moves.
   #
-  # SAFE TO RE-CALL (K-492): when setup is required the Stripe adapter reuses the
+  # SAFE TO RE-CALL: when setup is required the Stripe adapter reuses the
   # session already outstanding for this principal, so every poll returns the
   # SAME setup_url and a relayed link cannot bounce the human off the page they
   # are filling in.
@@ -124,7 +124,7 @@ class Kiosk::OrdersController < ActionController::API
                      type: "object", additionalProperties: false,
                      properties: {
                        sku: { type: "string", description: "Product sku from the catalog query." },
-                       # K-1047: the ceiling is DECLARED, because a refusal the
+                       # THE CEILING IS DECLARED, because a refusal the
                        # published schema does not predict is its own defect.
                        # `order_items.qty` is a PostgreSQL `integer`, so this is
                        # the column's own width and not an invented basket size.
@@ -145,7 +145,7 @@ class Kiosk::OrdersController < ActionController::API
                                      description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. Optional; omitting books tomorrow." },
                  delivery_address: { type: "string",
                                      description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
-                 # K-596: `pattern`/`format` so the DECLARED contract carries the shape the
+                 # `pattern`/`format` so the DECLARED contract carries the shape the
                  # handler enforces (UuidCheck), which a bare {type:"string"} does not.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: UuidCheck::JSON_SCHEMA_PATTERN,
@@ -164,7 +164,7 @@ class Kiosk::OrdersController < ActionController::API
                   pay_hint:    { type: "string", description: "The mandate this order expects, in words." },
                 },
                 required: %w[order_id total_cents total_eur currency slot_at pay_hint]
-  # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN (K-972): a literal here would
+  # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
   # publish a `delivery_date` the operation refuses as past. `slot_at` derives
   # from the SAME day and the slot id beside it, so they cannot drift apart.
   example_params({
@@ -205,7 +205,7 @@ class Kiosk::OrdersController < ActionController::API
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # K-596: same uuid shape as create_order's order_id — see UuidCheck.
+                 # Same uuid shape as create_order's order_id — see UuidCheck.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: UuidCheck::JSON_SCHEMA_PATTERN,
                                      description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
@@ -227,7 +227,7 @@ class Kiosk::OrdersController < ActionController::API
                   rescheduled_at: { type: "string", description: "The NEW delivery window's start instant, ISO 8601 with offset." },
                 },
                 required: %w[order_id rescheduled_at]
-  # Resolved for {DeliverySlots.example_date}'s reason (K-972).
+  # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
@@ -274,11 +274,11 @@ class Kiosk::OrdersController < ActionController::API
   # `params` wraps every nested object in ActionController::Parameters, which is
   # NOT a Hash — and `items` is the one argument on this origin whose ELEMENT
   # TYPE the handler decides on: {WireArguments.items} answers a typed 400 for an
-  # element that is not a {sku, qty} object (K-693), and under the wrapper EVERY
+  # element that is not a {sku, qty} object, and under the wrapper EVERY
   # element fails that test, the happy path's included. So the wrapper comes off
   # HERE rather than teaching an Operation a controller type. Control flow, not
   # cosmetics: the `.inspect` SPELLING of a nested value inside an error message
-  # stays as Rails spells it (K-765).
+  # stays as Rails spells it.
   def kiosk_plain(value)
     case value
     when ActionController::Parameters then value.to_unsafe_h.deep_symbolize_keys

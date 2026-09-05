@@ -32,14 +32,14 @@
 #   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 #                           the rebind (principal change) → 401
 #   NoLoginAddressOnTheRoster — a co-member's list_members carries display names
-#                           and NO account address anywhere in the body (K-950)
+#                           and NO account address anywhere in the body
 #   ChosenNameNeverTheAddress — a visitor who signs up with a display name is
 #                           named by it on a roster, never by what they log in
 #                           with (the other end of the same rule)
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony (K-072, K-1128)
+#     while the role-less request still opens the ceremony
 #
 # Usage:
 #   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
@@ -57,7 +57,7 @@ require "securerandom"
 # The shared harness. Required HERE rather than beside the one framework beat
 # further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
 # assertion in this file now asks — is needed from the first hostile-input beat
-# onwards (T-121).
+# onwards.
 require "kiosk/redteam"
 
 SERVER   = ENV.fetch("SERVER_URL")
@@ -160,11 +160,11 @@ record(results, "ForgedUserId",
        "owner's lists #{o_ids.inspect} exclude the outsider's #{outsider_list.inspect}")
 
 # ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
-# K-581/K-582: tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
+# tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
 # KioskMembershipGate choke point every membership-gated verb opens with),
-# complete_todo's `todo_id`, and remove_member's `account_id`. Before the
-# UuidCheck guards, a malformed value made Postgres raise
-# InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
+# complete_todo's `todo_id`, and remove_member's `account_id`. Without the
+# UuidCheck guards a malformed value makes Postgres raise
+# InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500
 # carrying the PG message. Three properties are asserted, not one: the status is
 # 400 (a client mistake reported as such), the problem document's top-level
 # `code` is the typed `bad_request` an assistant can branch on, and NO SQL
@@ -184,7 +184,7 @@ uuid_probes = MALFORMED_IDS.flat_map do |junk|
      "remove_member"],
   ].map do |probe, verb|
     rc, resp = probe.call
-    # THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). tudu answers a bad id by
+    # THE SCAN IS TOLD WHAT THIS PROBE SENT. tudu answers a bad id by
     # NAMING it back (`list_id "…" is not a uuid`), so the bytes searched for
     # SQL_INTERNALS are partly the probe's own; without `supplied:` a junk id
     # spelling `PG::` would be reported as a BREACH on its own echo, under a
@@ -215,22 +215,21 @@ rc, = post_json("/kiosk/nope", {}, bearer(owner[:token]))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
-# T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
+# The 0.3 endpoints were a hard cut. `POST /kiosk/query` now reaches the per-verb
 # controller as a verb literally named "query", which nobody registered, so it
 # answers the ordinary 404 an AUTHENTICATED caller gets — no privileged
 # endpoint, no compatibility payload, no second conformance surface to attack.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
+# caller with no bearer never reaches the registry lookup that produces the 404 —
+# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
+# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
+# nothing tested the anonymous case.
 #
-# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
-# `run` are NAMES nobody registered, and the vocabulary now reserves
-# `not_found` for an argument that ADDRESSED something absent.
+# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
+# NAMES nobody registered, and the vocabulary reserves `not_found` for an
+# argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
   rc, body = post_json("/kiosk/#{name}", { name: "my_lists" }, bearer(owner[:token]))
   [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
@@ -272,7 +271,7 @@ rescue DeviseSession::SignInError => e
 end
 
 # RevokedAgentKey — link a fresh assistant to Alice, unlink it, login → 404.
-# K-688: a bare terminal 404 does not discriminate — AgentLogin's lookup
+# A bare terminal 404 does not discriminate — AgentLogin's lookup
 # (`WHERE public_key = … AND revoked_at IS NULL`) returns the identical 404
 # for a key that was NEVER linked, so a beat that only checks the last status
 # would still "pass" if link/claim silently failed. Assert every precondition
@@ -309,15 +308,15 @@ rc, = get_json("/kiosk/list_todos", { list_id: pl_list }, bearer(pl[:token]))
 record(results, "PreLinkTokenAfterLink", rc == 401,
        "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 
-# ── NoLoginAddressOnTheRoster (K-950) ────────────────────────────────────────
+# ── NoLoginAddressOnTheRoster ────────────────────────────────────────────────
 #
 # THE BEAT THAT HAS TO SURVIVE A REFACTOR, and tudu's twin of philslist's
 # NoSellerPiiOnTheOpenBoard. `list_members` is the most cross-principal verb
-# tudu has — the rows ARE other accounts — and until K-950 the column it
-# published was `users.email`, so every housemate on a shared list walked away
-# with every other housemate's LOGIN ADDRESS. Consent bought the roster; it
-# never bought the credential, and spec Section 7.2 now says so at EVERY reach
-# rather than only at `published`. The projection is one `pluck` line; nothing
+# tudu has — the rows ARE other accounts — so a projection that reached for
+# `users.email` would hand every housemate on a shared list every other
+# housemate's LOGIN ADDRESS. Consent bought the roster; it never bought the
+# credential, and spec Section 7.2 says so at EVERY reach rather than only at
+# `published`. The projection is one `pluck` line; nothing
 # but an assertion stops a future edit from putting the column back.
 #
 # THE PROBE RUNS AS AN ASSISTANT BOUND TO ALICE and reads the SEEDED household
@@ -325,7 +324,7 @@ record(results, "PreLinkTokenAfterLink", rc == 401,
 # HUMANS WITH ADDRESSES — the three fixture agents above are headless accounts
 # with no email at all, so a probe over their list would pass vacuously no
 # matter what the projection did. Alice reading Bob's row is exactly the
-# position the row was filed about: a consented co-member, learning what the
+# position that matters: a consented co-member, learning what the
 # verb tells it about the people it already shares a list with.
 #
 # Four things are asserted, and the last three are what make the first
@@ -405,7 +404,7 @@ record(results, "NoLoginAddressOnTheRoster",
        "household reading as Alice+Bob, and each headless account an opaque " \
        "`member-<12 hex>`)")
 
-# ── ChosenNameNeverTheAddress (K-950) ────────────────────────────────────────
+# ── ChosenNameNeverTheAddress ────────────────────────────────────────────────
 #
 # The other end of the same rule, and the reason tudu carries a `display_name`
 # field on its sign-up form when atablefor (whose diners are seeded) does not:
@@ -455,20 +454,18 @@ record(results, "ChosenNameNeverTheAddress",
        "#{members_html.gsub(/\s+/, ' ').strip.inspect} " \
        "(want the chosen name #{chosen_name.inspect} there and no address in it)")
 
-# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
+# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
 # The one beat in this file that is NOT hand-rolled: it comes from
 # `kiosk-redteam`, so every demo runs the SAME assertion about the
 # account-binding claim ceremony and a demo cannot be left out of it by
 # forgetting to copy a block.
 #
-# It exists because the coverage that was supposed to catch K-072 rested on a
-# condition nobody re-measured: the shared `PrivilegeSelfSelection` scenario
-# probes `/auth/register` only, and the ceremony beats written when K-072 was
-# fixed lived in ONE demo's suite. The other six were safe purely because each
-# declares a single role — which is exactly the mitigation the ledger row had
-# priced K-072 on, and which expired unnoticed the day a demo declared a
-# second one.
+# It exists because the coverage for role self-selection rested on a condition
+# nobody re-measured: the shared `PrivilegeSelfSelection` scenario probes
+# `/auth/register` only, and the ceremony beats lived in ONE demo's suite. The
+# other six were safe purely because each declares a single role — a mitigation
+# that expires unnoticed the day a demo declares a second one.
 #
 # `declared_roles` names what `config/initializers/kiosk.rb` declares here. The
 # scenario ALSO derives a declared role from the wire (the `role` claim of a

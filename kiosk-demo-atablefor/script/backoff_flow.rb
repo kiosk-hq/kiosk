@@ -52,7 +52,7 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # equihash_solve / equihash_register come from the shared helper; the solver
-# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem.
 require_relative "equihash_register"
 
 GRANT_COUNT = 3 # must match the Backoff policy's count: in config/initializers/kiosk.rb
@@ -119,7 +119,7 @@ abort "no challenges[] in 402 response" unless challenges.is_a?(Array) && challe
 # ── Step 3: solve → resubmit → expect 200 (grant set to GRANT_COUNT) ────────
 
 proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-# PoW proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022), not
+# PoW proof(s) ride in the Kiosk-PoW request header as raw JSON, not
 # in the request — the method, path and query string stay identical so the
 # challenge fingerprint matches.
 rc_solved, resp_solved = availability_once(proofs)

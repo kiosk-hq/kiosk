@@ -5,16 +5,15 @@
 # or a booked order. Run with:
 #   bundle exec rake demo:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
 #
-# WHY IT IS DB-FREE, and why that is the whole point (T-116). Every guard in
-# here is a PURE FUNCTION over its argument: `whole_number` reads no clock,
-# `items` opens no connection, `order_id` is a regexp. Until this file existed
-# the only executable coverage of any of them was `demo:redteam`, which needs a
-# booted origin, a seeded database and a live Equihash toll — so K-1020 and
-# K-1025 each had to pay for all three, and MUTATE a published `input_schema`,
-# to prove a table about ten literal values. The two cheaper siblings on this
-# demo (`DeliverySlots` → demo:slots_spec, `UuidCheck` → demo:cashier_spec)
-# already had this seam; the module that actually stands between the wire and
-# the order did not.
+# WHY IT IS DB-FREE, and why that is the whole point. Every guard in here is a
+# PURE FUNCTION over its argument: `whole_number` reads no clock, `items` opens
+# no connection, `order_id` is a regexp. Without this file the only executable
+# coverage of any of them would be `demo:redteam`, which needs a booted origin,
+# a seeded database and a live Equihash toll — so proving a table about ten
+# literal values would cost all three, and would mean MUTATING a published
+# `input_schema`. The two cheaper siblings on this demo (`DeliverySlots` →
+# demo:slots_spec, `UuidCheck` → demo:cashier_spec) already have this seam; the
+# module that actually stands between the wire and the order needs it most.
 #
 # WHAT IS ASSERTED. Not "something was refused" — the TYPE and the SHAPE of each
 # refusal:
@@ -22,14 +21,14 @@
 #     `status` resolves through getgrocery's own STATUSES map to `:bad_request`,
 #     so a code this demo never mapped would raise a KeyError here rather than
 #     at the wire;
-#   • no hostile shape RAISES. That is the class all of K-693/K-1020/K-1027 sit
-#     in: a bare `.to_i` (or `||`, or `.map`) answers some shapes with a 500 and
-#     mis-answers others, and a guard that raises is not a guard;
-#   • the SHAPE refusal and the RANGE refusal are DIFFERENT sentences (K-1025) —
+#   • no hostile shape RAISES. A bare `.to_i` (or `||`, or `.map`) answers some
+#     shapes with a 500 and mis-answers others, and a guard that raises is not
+#     a guard;
+#   • the SHAPE refusal and the RANGE refusal are DIFFERENT sentences —
 #     `1.5` is not "out of range", and a caller told the wrong one debugs the
 #     wrong thing;
 #   • the accepted shapes are exactly the published `input_schema`'s and nothing
-#     looser (K-1020: JSON Schema's `integer` is numeric, so `2.0` IS one) and
+#     looser (JSON Schema's `integer` is numeric, so `2.0` IS one) and
 #     nothing stricter.
 #
 # CART KEYS ARE SYMBOLS here because that is what {CreateOrderOperation} hands
@@ -87,7 +86,7 @@ def refusal_of(pair) = pair.is_a?(Array) ? pair[1] : pair
 def value_of(pair)   = pair.is_a?(Array) ? pair[0] : nil
 
 # Freeze "now" to a fixed Dublin instant, the way spec/delivery_slots_spec.rb
-# does — {WireArguments} reads the ORIGIN's clock (K-969) and never Date.today.
+# does — {WireArguments} reads the ORIGIN's clock and never Date.today.
 def at_dublin(iso)
   fixed = DeliverySlots.zone.parse(iso)
   DeliverySlots.define_singleton_method(:now) { fixed }
@@ -100,11 +99,11 @@ MAX = WireArguments::MAX_INT4
 
 # ── 1. whole_number/1 — JSON Schema's `integer`, in Ruby ─────────────────────
 #
-# K-1020's table. The two arguments in front of it (`qty`, `delivery_slot_id`)
-# are declared `{type: "integer"}`, and draft 2020-12 defines that NUMERICALLY —
+# The two arguments in front of it (`qty`, `delivery_slot_id`) are declared
+# `{type: "integer"}`, and draft 2020-12 defines that NUMERICALLY —
 # so `2.0` is a valid integer and a bare `is_a?(Integer)` would refuse a call the
 # published schema allows. Everything else JSON can carry is not a number at all.
-puts "\n── whole_number: the schema's `integer` and nothing looser (K-1020) ──"
+puts "\n── whole_number: the schema's `integer` and nothing looser ──"
 [
   # [raw, expected]
   [0,                     0],
@@ -131,7 +130,7 @@ puts "\n── whole_number: the schema's `integer` and nothing looser (K-1020) 
   ["abc",                 nil],
   [nil,                   nil],
   [true,                  nil],
-  [false,                 nil],       # K-1020's headline: `||` used to read this as absent
+  [false,                 nil],       # `||` reads this as ABSENT, so it may not be used here
   [[],                    nil],
   [[1],                   nil],
   [{},                    nil],
@@ -143,8 +142,8 @@ puts "\n── whole_number: the schema's `integer` and nothing looser (K-1020) 
          "whole_number(#{raw.inspect}) → #{want.inspect} (#{want.class}), got #{got.inspect} (#{got.class})")
 end
 
-# ── 2. delivery_slot_id/1 — SHAPE and RANGE are two answers (K-1025) ─────────
-puts "\n── delivery_slot_id: shape first, then range (K-1025) ──"
+# ── 2. delivery_slot_id/1 — SHAPE and RANGE are two answers ──────────────────
+puts "\n── delivery_slot_id: shape first, then range ──"
 (1..DeliverySlots::COUNT).each do |slot|
   pair = guard("delivery_slot_id(#{slot})") { WireArguments.delivery_slot_id(slot) }
   assert(refusal_of(pair).nil? && value_of(pair).eql?(slot),
@@ -166,9 +165,9 @@ assert(refusal_of(pair).nil? && value_of(pair).eql?(2),
 end
 
 # WRONG SHAPE — not a whole number at all. The SHAPE sentence, echoing the value.
-# `1.5` is the one K-1025 was filed for: `raw.to_s.to_i` made it slot 1 and it
-# was BOOKED, inside the declared range, by the layer that claims to be stricter
-# than the schema in front of it.
+# `1.5` is the one to watch: `raw.to_s.to_i` would make it slot 1 and BOOK it,
+# inside the declared range, from the layer that claims to be stricter than the
+# schema in front of it.
 [1.5, "1", "abc", "", nil, true, false, [], [1], {}, { "a" => 1 }].each do |raw|
   refusal = refusal_of(guard("delivery_slot_id(#{raw.inspect})") { WireArguments.delivery_slot_id(raw) })
   assert_typed_400(refusal, "delivery_slot_id(#{raw.inspect})")
@@ -179,7 +178,7 @@ end
          "  … the SHAPE sentence echoing the value: #{refusal.message.inspect}")
 end
 
-# ── 3. items/1 — the cart (K-693), and `qty` as strict as the schema (K-1020) ─
+# ── 3. items/1 — the cart, and `qty` as strict as the schema ──────────────────
 puts "\n── items: the cart guard, and both ends of qty's declared range ──"
 
 # NOT AN ARRAY. The class is named so the caller can see what it sent.
@@ -228,10 +227,11 @@ end
   assert(refusal.message == "each item needs a sku", "  … #{refusal.message.inspect}")
 end
 
-# qty, WRONG SHAPE. `false` and `1.5` are K-1020 itself: `(item[:qty] || 1).to_s.to_i`
-# read `false` as ABSENT and defaulted it to 1, and turned `1.5` into 1. An
-# ABSENT qty is refused too — `input_schema` makes it `required`, so a default
-# here would be a second, weaker contract nobody published.
+# qty, WRONG SHAPE. `false` and `1.5` are the two to watch:
+# `(item[:qty] || 1).to_s.to_i` reads `false` as ABSENT and defaults it to 1,
+# and turns `1.5` into 1. An ABSENT qty is refused too — `input_schema` makes
+# it `required`, so a default here would be a second, weaker contract nobody
+# published.
 [nil, false, true, 1.5, "1", "2", "abc", [], {}, [1], Float::NAN].each do |bad|
   item    = bad.nil? ? { sku: "bread" } : { sku: "bread", qty: bad }
   refusal = refusal_of(guard("items([#{item.inspect}])") { WireArguments.items([item]) })
@@ -251,7 +251,7 @@ end
   assert(refusal.message == "qty must be >= 1", "  … the RANGE floor: #{refusal.message.inspect}")
 end
 
-# qty, OUT OF RANGE at the top (K-1047) — `order_items.qty` is a 4-byte integer,
+# qty, OUT OF RANGE at the top — `order_items.qty` is a 4-byte integer,
 # and the bound is the COLUMN's, not a policy about basket size.
 [MAX + 1, 2**40, (MAX + 1).to_f].each do |bad|
   refusal = refusal_of(guard("items(qty: #{bad.inspect})") { WireArguments.items([{ sku: "bread", qty: bad }]) })
@@ -279,12 +279,12 @@ end)
 assert(refusal.is_a?(OperationResult) && refusal.message == "qty must be >= 1",
        "the FIRST bad item decides — a later 1.5 does not change the answer: #{refusal&.message.inspect}")
 
-# ── 4. priceable_total/1 — the half no per-item bound can express (K-1047) ───
+# ── 4. priceable_total/1 — the half no per-item bound can express ────────────
 #
 # The cart's TOTAL is `price_cents * qty` summed over the OPERATOR's catalogue,
 # so no JSON Schema keyword can bound it: at an 89-cent row it takes 24_129_030
 # units — a legal `order_items.qty` — to pass `orders.total_cents`.
-puts "\n── priceable_total: the ceiling `input_schema` cannot express (K-1047) ──"
+puts "\n── priceable_total: the ceiling `input_schema` cannot express ──"
 [0, 1, MAX].each do |total|
   assert(guard("priceable_total(#{total})") { WireArguments.priceable_total(total) }.nil?,
          "priceable_total(#{total}) → nil (the cart can be totalled)")
@@ -299,7 +299,7 @@ end
   assert(refusal.hint.to_s.include?("split the cart"), "  … carries a recoverable hint: #{refusal.hint}")
 end
 
-# ── 5. order_id/1 — the uuid shape guard, and its two tails (K-579) ──────────
+# ── 5. order_id/1 — the uuid shape guard, and its two tails ──────────────────
 #
 # ActiveRecord does not refuse junk, it CASTS it: `where(id: junk)` becomes NULL
 # and matches no row, so without this a typo comes back as an OWNERSHIP refusal
@@ -350,7 +350,7 @@ assert(WireArguments::HINT_ORDER_ID_REPLACE != WireArguments::HINT_ORDER_ID_MOVE
        "the two tails are different sentences — create_order may still REPLACE, " \
        "reschedule_delivery needs one that is already paid for")
 
-# ── 6. delivery_date/3 — the day, the default, and ONE clock (K-470, K-969) ──
+# ── 6. delivery_date/3 — the day, the default, and ONE clock ─────────────────
 #
 # `Date.parse` and NOT `Date.iso8601`, deliberately: what it loosely accepts is
 # published behaviour on this verb pair. The clock is the ORIGIN's — around
@@ -417,7 +417,7 @@ at_dublin("2026-08-07T11:00:00") do
          "a second caller's past_message is used verbatim too: #{refusal&.message.inspect}")
 end
 
-# THE CLOCK IS THE ORIGIN'S (K-969): move DeliverySlots.now and the SAME date
+# THE CLOCK IS THE ORIGIN'S: move DeliverySlots.now and the SAME date
 # flips from accepted to refused. Nothing here reads Date.today.
 DAY = Date.new(2026, 8, 7)
 at_dublin("2026-08-07T23:59:00") do
@@ -431,7 +431,7 @@ at_dublin("2026-08-08T00:01:00") do
          "is DeliverySlots.now and not the runner's")
 end
 
-# ── 7. past_date/1 and past_slot/3 — the domain, not an empty list (T-090) ───
+# ── 7. past_date/1 and past_slot/3 — the domain, not an empty list ───────────
 #
 # Spec §9.1's first branch: a value the verb's domain does not contain is a 400
 # naming what IS acceptable, never `200 []` — an empty list already means "that
@@ -468,7 +468,7 @@ at_dublin("2026-08-07T11:00:00") do
   end
 end
 
-# ── 8. served_zone/1 and missing_address/0 — ADDRESS-UPFRONT (K-468) ────────
+# ── 8. served_zone/1 and missing_address/0 — ADDRESS-UPFRONT ────────────────
 puts "\n── served_zone / missing_address: the one served-district rule ──"
 pair = guard("served_zone(in-zone)") { WireArguments.served_zone("42 Camden Street, Dublin 2") }
 assert(refusal_of(pair).nil? && value_of(pair) == "D02",
@@ -495,17 +495,16 @@ end
 # ── 10. The guards run in front of the database, not behind it ──────────────
 #
 # Every assertion above ran with ActiveRecord never loaded, which is only
-# possible if these checks precede the connection — the property K-579/K-1020
-# had to boot an origin to demonstrate.
+# possible if these checks precede the connection.
 puts "\n── the whole module ran with no database ──"
 assert(!defined?(ActiveRecord::Base),
        "every guard above answered without ActiveRecord loaded (they precede every cast and every lock)")
 
 if FAILURES.empty?
-  puts "\nWireArguments T-116 spec: ALL PASS"
+  puts "\nWireArguments spec: ALL PASS"
   exit 0
 else
-  puts "\nWireArguments T-116 spec: #{FAILURES.size} FAILURE(S)"
+  puts "\nWireArguments spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

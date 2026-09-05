@@ -18,8 +18,8 @@ class HomeController < ActionController::Base
     # Set a Link header too, so a header-only agent finds the skill.
     # The url is `Kiosk.configuration.skill_url` — the VERSIONED cut this
     # operator pins, identical to the one `/.well-known/kiosk.json` carries
-    # under `skill`, never the mutable skill.md alias (K-927). Derived rather
-    # than restated so a cut is re-pinned in ONE place, the initializer.
+    # under `skill`, never the mutable skill.md alias. Derived rather than
+    # restated so a cut is re-pinned in ONE place, the initializer.
     response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 
@@ -34,7 +34,7 @@ class HomeController < ActionController::Base
 
   # Upcoming confirmed reservations for the public board, spanning ALL
   # restaurants in the aggregator, joined to the diner's display name and to the
-  # ACCOUNT UUID the pseudonym is derived from when there is no name (K-973).
+  # ACCOUNT UUID the pseudonym is derived from when there is no name.
   # The login address is deliberately NOT selected: this query feeds a page
   # anyone can fetch, and a column that never leaves the SELECT cannot be
   # published by a later reader of it. Read-only — the board never mutates

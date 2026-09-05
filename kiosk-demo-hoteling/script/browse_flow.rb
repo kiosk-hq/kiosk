@@ -26,7 +26,7 @@ ISSUER  = ENV.fetch("KIOSK_ISSUER")
 BROWSES = Integer(ENV.fetch("BROWSES", "7"))
 
 # equihash_solve / equihash_register come from the shared helper; the solver
-# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem.
 require_relative "equihash_register"
 
 def post_json(url, body, headers = {})
@@ -66,7 +66,7 @@ BROWSES.times do |i|
     challenges = resp["challenges"]
     abort "browse #{i}: 402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-    # PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022),
+    # PoW proof rides in the Kiosk-PoW request header as raw JSON,
     # not the body — the REQUEST LINE and the arguments stay byte-identical so
     # the request fingerprint (`SHA256("GET properties\n{}")`) matches on retry.
     rc, resp = get_json(BROWSE_URL, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))

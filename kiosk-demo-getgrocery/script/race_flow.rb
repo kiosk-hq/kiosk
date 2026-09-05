@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Pay-path regression for getgrocery (K-544 concurrency, K-578 stuck-`paying`
-# reconciliation, K-579 typed 4xx on a malformed order_id).
+# Pay-path regression for getgrocery: concurrency, stuck-`paying`
+# reconciliation, and a typed 4xx on a malformed order_id.
 #
 # Runs IN-PROCESS against the real getgrocery Postgres schema (via
 # `bin/rails runner`), driving the REAL ValidatingPaymentProvider cashier check
@@ -11,18 +11,18 @@
 # counting stub (to see how many captures fire) — so we exercise the Kiosk
 # serialization, not Stripe.
 #
-# It proves the invariants the findings demand:
+# It proves the invariants the pay path has to hold:
 #   (a) SWAP: once a /pay for order O has begun (O is `paying`), a concurrent
 #       create_order{order_id:O, items:[expensive]} CANNOT rewrite O's items —
 #       so "pay €1, get €500" is impossible.
 #   (b) AT-MOST-ONCE: under N racing /pay for one order, exactly ONE captures;
 #       the rest are cleanly rejected.
-#   (c) TYPED REJECTION (K-579): a malformed order_id is a 400 bad_request at
+#   (c) TYPED REJECTION: a malformed order_id is a 400 bad_request at
 #       every place one reaches an `::uuid` cast — the cart (before anything is
 #       claimed or charged), create_order's replace path and reschedule_delivery
 #       — never a raw 500, which an assistant cannot distinguish from "the
 #       charge may have run".
-#   (d) RECONCILIATION (K-578): an order stranded in `paying` because the
+#   (d) RECONCILIATION: an order stranded in `paying` because the
 #       paid-flip was lost heals to `paid` from the settlement row (both at the
 #       next /pay and via the sweep), while one whose outcome only the PSP knows
 #       is reported UNRESOLVED and keeps its claim — never blind-released.
@@ -44,7 +44,7 @@ end
 
 conn = ActiveRecord::Base.connection
 
-# Shared quoting helper for every raw SQL string built below (K-715). A plain
+# Shared quoting helper for every raw SQL string built below. A plain
 # top-level local wouldn't reach the `def` methods further down — Ruby method
 # bodies don't close over top-level locals — so this is a top-level method,
 # callable from anywhere in this file.
@@ -79,11 +79,10 @@ end
 # Invoke the REAL create_order action with the GUCs set, exactly as the wire
 # would. Returns the action's result hash, with STRING keys.
 #
-# TWO THINGS THE T-057 MIGRATION CHANGED HERE, both of them properties of
-# driving a CONTROLLER instead of a block, and both of them things a second
-# surface on any demo has to get right (tudu found them first):
+# TWO PROPERTIES OF DRIVING A CONTROLLER INSTEAD OF A BLOCK, both of them
+# things a second surface on any demo has to get right:
 #
-#   · `CurrentRequest.with` is now required as well as `SessionContext.open`.
+#   · `CurrentRequest.with` is required as well as `SessionContext.open`.
 #     The GUCs are what the SQL-side scoping reads; the IDENTITY CARRIER is what
 #     `kiosk_identity` reads, and an INSERT has no predicate to hide the
 #     principal in, so `create_order` needs both. The wire sets the two together;
@@ -122,7 +121,7 @@ end
 
 # The `payment_state` the WIRE publishes for one order — read through the real
 # `my_orders` query with the GUCs set, not out of the table, because the
-# assertion is about what an assistant is TOLD (K-853).
+# assertion is about what an assistant is TOLD.
 def my_order_payment_state(order_id)
   rows = Kiosk::Server::CurrentRequest.with(identity: identity) do
     Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
@@ -219,7 +218,7 @@ check(o_after["total_cents"].to_i == CHEAP_PRICE,
 check(swap["order_id"] != order_id,
       "create_order did NOT mutate O — it minted a separate order (#{swap["order_id"]}) instead of rewriting the in-flight one")
 
-# ── K-853 (in-flight half): what my_orders publishes about O RIGHT NOW ───────
+# ── IN-FLIGHT: what my_orders publishes about O RIGHT NOW ────────────────────
 # The capture has STARTED and its outcome is unknown. protocol.md §11.6 forbids
 # this from reading as *not paid*: that is the answer that licenses an assistant
 # to sign a fresh mandate chain and charge its human a second time. It must be
@@ -238,7 +237,7 @@ check(blocking.charged_cents == CHEAP_PRICE,
       "the PSP was asked to charge the CHEAP amount (#{blocking.charged_cents}c), never the swapped-in expensive total")
 check(order_row(order_id)["status"] == "paid", "order O settled to `paid` after capture")
 
-# ── K-853 (phase-3 half): capture RETURNED, settlement row not yet written ───
+# ── PHASE 3: capture RETURNED, settlement row not yet written ────────────────
 # The cashier was driven DIRECTLY here, so the engine's executor phase 3 never
 # ran and no settlement row exists for O at all. That is the phase-3 window
 # exactly, and the capture-anchored marker is the only witness there is.
@@ -358,11 +357,11 @@ end
 replace_error = action_error("create_order",
                              { order_id: "not-a-uuid", items: [{ sku: CHEAP_SKU, qty: 1 }],
                                delivery_slot_id: 3, delivery_date: FUTURE, delivery_address: ADDRESS })
-# The CODE and the STATUS are the contract, not the exception class (T-054): a
-# migrated handler RENDERS its refusal and the dispatch seam turns that into a
-# `WireError` carrying the same code and status the raised `Errors::BadRequest`
-# used to. Asserting the class here would be asserting how the answer is
-# constructed rather than what it says.
+# The CODE and the STATUS are the contract, not the exception class: a handler
+# RENDERS its refusal and the dispatch seam turns that into a `WireError`
+# carrying the same code and status a raised `Errors::BadRequest` would.
+# Asserting the class here would be asserting how the answer is constructed
+# rather than what it says.
 check(replace_error.respond_to?(:code) && replace_error.code == "bad_request" && replace_error.http_status == 400,
       "create_order's replace path rejects a malformed order_id with a 400 bad_request (got #{replace_error.class})")
 
@@ -432,7 +431,7 @@ check(order_row(charged_order)["status"] == "paid",
 
 # (b) The sweep heals what local evidence proves — and REFUSES to guess on
 #     what it cannot, leaving the claim in place so no blind retry can
-#     double-charge (K-545).
+#     double-charge.
 strand_as_paying!(charged_order) # strand it again for the sweep
 
 o4 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,

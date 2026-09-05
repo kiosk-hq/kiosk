@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# K-698: `confirm_booking` returned a `confirmation_code` to the assistant that
-# nothing persisted — a fresh SecureRandom.uuid minted for the response while
-# the UPDATE wrote only status and updated_at, against a table that had no such
-# column. So the hotel issued a booking reference it kept no record of: a guest
+# `confirm_booking` returns a `confirmation_code` to the assistant, and without
+# this column nothing would persist it — a fresh SecureRandom.uuid minted for
+# the response while the UPDATE writes only status and updated_at. The hotel
+# would be issuing a booking reference it kept no record of, and a guest
 # presenting it at the desk could not be matched.
 #
 # The published narrative (before-after.md) promises the code as the outcome of

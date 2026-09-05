@@ -7,12 +7,12 @@
 # with no macros above it is a helper the wire cannot see.
 #
 # THE SUPERCLASS IS `ActionController::API` by decision, not omission: the mixin
-# leaves the base class to the operator (K-495), and getgrocery has no
+# leaves the base class to the operator, and getgrocery has no
 # `ApplicationController` at all — the HTML surfaces it DOES serve name
 # `ActionController::Base` themselves, because they render views.
 #
 # `kind :query` above each declaration is what puts it on `GET`; the kind belongs
-# to the DECLARATION, not to the class (K-921), so splitting the read and write
+# to the DECLARATION, not to the class, so splitting the read and write
 # halves is this demo's shape rather than a rule. The write verbs live next door
 # in Kiosk::OrdersController, and what the two halves share is their argument
 # vocabulary — an address is checked against the served Dublin districts here and
@@ -112,9 +112,9 @@ class Kiosk::StorefrontController < ActionController::API
                  delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
                },
                required: ["date", "delivery_address"]
-  # EMPTY is an honest answer here and, since T-090, ONLY here: every one of
-  # today's windows may already have begun, in which case the earliest bookable
-  # slot is on a later date. A date BEFORE today answers 400 instead.
+  # EMPTY is an honest answer here and ONLY here: every one of today's windows
+  # may already have begun, in which case the earliest bookable slot is on a
+  # later date. A date BEFORE today answers 400 instead.
   output_schema type: "array",
                 description: "The still-bookable delivery windows for the requested date and zone.",
                 items: {
@@ -128,7 +128,7 @@ class Kiosk::StorefrontController < ActionController::API
                   },
                   required: %w[delivery_slot_id date slot_at label zone],
                 }
-  # THE DATE IS RESOLVED, NOT WRITTEN DOWN (K-972): a calendar literal is an
+  # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
   # example that ages into a 400, since a date before today is REFUSED. These are
   # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
   # {DeliverySlots.example_date} — tomorrow in the operator's own clock.
@@ -145,7 +145,7 @@ class Kiosk::StorefrontController < ActionController::API
     # controller is the only place that can ask.
     return render_refusal(missing_param("date")) unless params.key?(:date)
 
-    # ADDRESS-UPFRONT (K-468): checked BEFORE the date, which is what forces the
+    # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.
     return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
 
@@ -160,16 +160,16 @@ class Kiosk::StorefrontController < ActionController::API
       ))
     end
 
-    # T-090 / spec §9.1: a date BEFORE today is outside this verb's domain and is
+    # Spec §9.1: a date BEFORE today is outside this verb's domain and is
     # refused by name, because `200 []` for it is indistinguishable from the
     # honest empty case immediately below.
     refusal = WireArguments.past_date(date)
     return render_refusal(refusal) if refusal
 
-    # PAST-SLOT FILTER (K-480): for TODAY, drop any slot whose start has already
-    # passed in the operator's locale; future dates keep all slots. An assistant
-    # should not see an un-bookable 08:00–10:00 window at 11:00. `date` on each
-    # row (K-470) is what create_order books.
+    # PAST-SLOT FILTER: for TODAY, drop any slot whose start has already passed
+    # in the operator's locale; future dates keep all slots. An assistant should
+    # not see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is
+    # what create_order books.
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)
       hour      = slot_time.hour
@@ -184,7 +184,7 @@ class Kiosk::StorefrontController < ActionController::API
   # ── my_orders — per-principal: the caller's OWN orders only. The caller
   # supplies no filter; the scope is provider-controlled and un-bypassable.
   #
-  # THE RECONCILIATION SURFACE (K-545, K-853): this is the "per-user query"
+  # THE RECONCILIATION SURFACE: this is the "per-user query"
   # protocol.md §11.6 sends an assistant to after a `pay` whose response it never
   # read, so what it publishes about money is normative. `payment_state` is a
   # TRI-state and not a boolean, because a boolean conflates "nothing was ever

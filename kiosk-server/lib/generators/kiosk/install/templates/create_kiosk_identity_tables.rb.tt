@@ -2,9 +2,9 @@
 
 # Migration 002 — Kiosk identity tables: agents, agent_tokens, agent_mappings.
 # `agents` carries kyc_verified_at, spending_cap_cents and human_label in the
-# CREATE: they are nullable, they cost an operator who never uses them nothing,
-# and until 2026-08-20 they arrived as three separate later migrations amending
-# this table (K-646).
+# CREATE: they are nullable and cost an operator who never uses them nothing, so
+# they belong here rather than in three separate later migrations amending this
+# table.
 class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
     execute Kiosk::Server::SchemaDefinitions.identity_tables_sql(

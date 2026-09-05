@@ -56,11 +56,10 @@ test: build
 # make crosscheck: Ruby OpenSSL Ed25519 sign → C verify MATCH
 #
 # READS the dev private key from ../config/dev_unlock_key.pem — the one file
-# the server, the KAT and the flow drivers all read (K-686). It used to inline
-# a COPY of that PEM here, which was both a second place the burned key was
-# published and a silent drift hazard: regenerating the key would have left
-# this target signing with the old one, and the header comment already claimed
-# it loaded the key from elsewhere. Signs a fresh message and passes the wire
+# the server, the KAT and the flow drivers all read. Do NOT inline a COPY of
+# that PEM here: that would be a second place a burned key is published and a
+# silent drift hazard, because regenerating the key would leave this target
+# signing with the old one. Signs a fresh message and passes the wire
 # token to the C verifier, proving C verifies a LIVE server-issued token, not
 # just the static vector. Relative path: make runs recipes in this directory.
 # --------------------------------------------------------------------------

@@ -19,14 +19,14 @@ class Order < ApplicationRecord
   # The states `create_order` will NOT swap the items of. `paying` is in this
   # list for a reason that is not tidiness: a /pay for the order is mid-flight
   # and its cart has already been checked against these items, so replacing them
-  # under it is exactly the K-544 swap — pay for the cheap basket, receive the
-  # expensive one.
+  # under it is exactly the swap this list exists to stop — pay for the cheap
+  # basket, receive the expensive one.
   UNREPLACEABLE = [PAID, PAYING, SCHEDULED, RESCHEDULED].freeze
 
   # One reschedule per order; further changes go through the operator.
   ALREADY_SCHEDULED = [SCHEDULED, RESCHEDULED].freeze
 
-  # ── What `my_orders` publishes about money (K-853) ─────────────────────────
+  # ── What `my_orders` publishes about money ─────────────────────────────────
   # The three answers protocol.md §11.6 allows a reconciliation surface to give.
   # `PENDING` is the third state the spec REQUIRES: a capture has been started
   # and its outcome is not known, which is neither paid nor not-paid, and which
@@ -39,9 +39,9 @@ class Order < ApplicationRecord
   has_many :order_items, dependent: :destroy
 
   # ── THE isolation predicate ────────────────────────────────────────────────
-  # When getgrocery's handlers stopped writing SQL (K-654) this is the one
-  # fragment that deliberately did NOT become a Ruby comparison, for the reason
-  # the philslist pilot settled.
+  # getgrocery's handlers do not write SQL, yet this one fragment deliberately
+  # stays a SQL predicate rather than a Ruby comparison, for the reason the
+  # philslist pilot settled.
   #
   # `kiosk.current_user_id()` is a STABLE Postgres function reading the
   # transaction-local GUC `app.current_user_id`, which kiosk-server's
@@ -84,8 +84,8 @@ class Order < ApplicationRecord
   # interpolation is exempt from the no-raw-SQL rule rather than an exception to
   # it. Expressed as Arel it would be four nested NamedFunction nodes spelling
   # out CAST/json_build_array/json_build_object, and the one property that has
-  # to survive this whole conversion — that the K-544/K-545 pay race is guarded
-  # by EXACTLY this containment — would be harder to read, not easier.
+  # to survive any rewrite — that the replace/pay race is guarded by EXACTLY
+  # this containment — would be harder to read, not easier.
   SETTLED_CART_REFERENCES_THIS_ROW = Arel.sql(
     "kiosk.cart_mandates.line_items @> " \
     "json_build_array(json_build_object('order_id', orders.id::text))::jsonb",
@@ -112,8 +112,8 @@ class Order < ApplicationRecord
 
   # The `paid` flag `my_orders` publishes, as a SELECT-list expression.
   #
-  # K-545: true when a settlement exists OR the order reached the terminal
-  # `paid` state at capture. The order flips to `paid` the instant the charge
+  # True when a settlement exists OR the order reached the terminal `paid`
+  # state at capture. The order flips to `paid` the instant the charge
   # succeeds — a hair before the engine writes the settlement row — so honouring
   # the status closes the window where a lost pay response would otherwise read
   # paid=false and tempt a double-charging retry.
@@ -121,7 +121,7 @@ class Order < ApplicationRecord
     arel_table[:status].eq(PAID).or(settling(settlements).arel.exists)
   end
 
-  # ── The one place "has money moved for this order" is decided (K-853) ──────
+  # ── The one place "has money moved for this order" is decided ──────────────
   #
   # {paid_flag} above closes HALF the window §11.6 cares about — the half after
   # the capture returns and before the settlement row lands. It does not close

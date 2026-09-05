@@ -49,9 +49,9 @@ Assistant (agent token → Kiosk API)
   └─ start_rental(reservation_id)
        │
        Gate 1:  reservation exists, belongs to this principal, status = 'reserved'
-       Gate 1b: the reserved vehicle is licence-FREE (K-687) — a motorcycle
+       Gate 1b: the reserved vehicle is licence-FREE — a motorcycle
                 is refused here and goes through rent_motorcycle, whose Gate 0
-                is the KYC one. start_rental has NO KYC gate (K-442).
+                is the KYC one. start_rental has NO KYC gate.
        Gate 2:  settled payment (settlement record) references THIS reservation_id
        │
        All gates pass →

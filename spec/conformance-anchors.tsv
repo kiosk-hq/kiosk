@@ -355,7 +355,7 @@ kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	# delivers in Dublin, so "08:00" means 08:00 in Europe/Dublin, and "now" for the
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	# handled automatically across DST. Previously slot_at built a NAIVE UTC time
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	# handled automatically across DST. A NAIVE UTC `slot_at`
 kiosk-demo-getgrocery/app/models/product.rb	def self.age_restricted?(value)
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
@@ -442,11 +442,11 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # T-090/K-969 — a past date is a named 400 on the read AND the write side
+kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
 kiosk-demo-getgrocery/script/redteam_suite.rb	  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
-kiosk-demo-getgrocery/script/redteam_suite.rb	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER (K-1239)
+kiosk-demo-getgrocery/script/redteam_suite.rb	# KYC here). The membership is `scenarios = [` further down, which is the single
+kiosk-demo-getgrocery/script/redteam_suite.rb	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
-kiosk-demo-getgrocery/script/redteam_suite.rb	KYC trio must SKIP (no KYC here). The membership is
 kiosk-demo-getgrocery/script/redteam_suite.rb	class WrongCurrencyCart < Kiosk::Redteam::Scenario
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
@@ -671,8 +671,8 @@ kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerLinkCannotCarryOwnerRole 
 kiosk-demo-stylish/script/redteam_suite.rb	#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
 kiosk-demo-stylish/script/redteam_suite.rb	#   OwnerLinkIgnoresForgedClaimBody — a genuine OWNER link smuggles a wider
 kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantCannotSelfSelectRole ──────────────────────────────────────────
-kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
-kiosk-demo-stylish/script/redteam_suite.rb	# ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
+kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
+kiosk-demo-stylish/script/redteam_suite.rb	# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantCannotSelfSelectRole",
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRebindCannotEscalate",
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRoleComesFromTheApprover",

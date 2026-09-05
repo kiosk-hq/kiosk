@@ -147,8 +147,8 @@
  *
  * This is the DEV key (config/dev_unlock_key.pem) — the value the host test
  * and the demo drivers use.  A REAL deployment flashes the public half of the
- * server's own KIOSK_UNLOCK_SIGNING_KEY_PEM here instead (K-686).  The value
- * that stood here before K-686 (8857880d…) is BURNED: its private half was
+ * server's own KIOSK_UNLOCK_SIGNING_KEY_PEM here instead.  An earlier value
+ * that stood here (8857880d…) is BURNED: its private half was
  * published in the repo, so any lock still carrying it accepts tokens anyone
  * can mint and must be reflashed.
  */

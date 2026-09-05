@@ -4,25 +4,24 @@
 # `app/services/demo_telemetry_middleware.rb` — `DemoTelemetryMiddleware`. Run:
 #   bundle exec rake demo:telemetry_spec   (or: ruby spec/telemetry_middleware_spec.rb)
 #
-# WHY THIS EXISTS (K-622). The middleware is what produces every real telemetry
-# event in the hosted deploy, and until this file NOTHING anywhere in the
-# monorepo executed it — `demo:telemetry` gates the STORE round-trip
-# (simulate! → aggregates), not the request path. That mattered more than usual
-# because the middleware is best-effort by construction: it rescues and carries
-# on, so a break in it reads to a visitor as "no activity yet" rather than as a
-# failure. Nothing could turn it red.
+# WHY THIS EXISTS. The middleware is what produces every real telemetry event in
+# the hosted deploy, and it is the one thing `demo:telemetry` cannot reach: that
+# task gates the STORE round-trip (simulate! → aggregates), not the request
+# path. Coverage matters more than usual here because the middleware is
+# best-effort by construction — it rescues and carries on, so a break in it
+# reads to a visitor as "no activity yet" rather than as a failure, and nothing
+# else can turn it red.
 #
-# It also HAD a defect that only an executable test would have caught: the outer
-# `rescue StandardError` sat below `status, headers, body = @app.call(env)` and
-# recovered with `@app.call(env)` — so any raise AFTER the app had already run
-# DISPATCHED THE WHOLE REQUEST A SECOND TIME. On /auth/register (the one path
-# that buffers the response body, and so the one with a raiser the module does
-# not individually rescue) that replay minted a SECOND agent.
+# THE FAILURE MODE THIS PINS. Put an outer `rescue StandardError` below
+# `status, headers, body = @app.call(env)` and recover with `@app.call(env)`,
+# and any raise AFTER the app has already run DISPATCHES THE WHOLE REQUEST A
+# SECOND TIME. On /auth/register (the one path that buffers the response body,
+# and so the one with a raiser the module does not individually rescue) that
+# replay mints a SECOND agent.
 #
 # What is pinned here:
-#   • the app is called EXACTLY ONCE, whatever telemetry does — the K-622
-#     regression, asserted for both a raising telemetry call and a raising
-#     response body;
+#   • the app is called EXACTLY ONCE, whatever telemetry does — asserted for
+#     both a raising telemetry call and a raising response body;
 #   • a telemetry failure returns the app's own status/headers/body unchanged;
 #   • the /auth/register buffering hands downstream the SAME BYTES, in a
 #     re-enumerable form, and closes the original body;
@@ -40,7 +39,7 @@ require "stringio"
 require "active_record"
 
 ENV["KIOSK_TELEMETRY"] = "1"
-# Three files since K-502, one per constant, so Zeitwerk can reach each by name
+# Three files, one per constant, so Zeitwerk can reach each by name
 # under app/services. This driver boots no Rails, so it names them itself.
 require_relative "../app/services/demo_telemetry"
 require_relative "../app/services/demo_telemetry_record"
@@ -72,7 +71,7 @@ end
 
 # The response body a broken/lazy app hands back: yields some chunks, then
 # raises. This is the raiser the module does NOT individually rescue, i.e. the
-# one that reached K-622's re-dispatch in production shape.
+# one that reaches the re-dispatch trap in production shape.
 class BodyBoom < StandardError; end
 
 class ExplodingBody
@@ -113,7 +112,7 @@ class ChunkedBody
   end
 end
 
-# Counts its own dispatches — the whole point of the K-622 regression — and
+# Counts its own dispatches — the whole point of the regression — and
 # reads rack.input the way a real Rails app does.
 class FakeApp
   attr_reader :calls, :registrations, :read_bodies
@@ -162,9 +161,9 @@ def run(app, path, method: "POST", body: nil, bearer: nil, verb_map: VERB_MAP)
 end
 
 # ═════════════════════════════════════════════════════════════════════════════
-# K-622 — THE APP IS DISPATCHED EXACTLY ONCE, WHATEVER TELEMETRY DOES
+# THE APP IS DISPATCHED EXACTLY ONCE, WHATEVER TELEMETRY DOES
 # ═════════════════════════════════════════════════════════════════════════════
-puts "\n── K-622: telemetry never re-dispatches the request ──"
+puts "\n── telemetry never re-dispatches the request ──"
 
 # (a1) A raising telemetry call on a non-buffered verb. Before the fix the outer
 #      rescue recovered with @app.call(env): a SECOND /pay.
@@ -172,7 +171,7 @@ $record_raises = true
 app = FakeApp.new
 status, headers, body = run(app, "/kiosk/pay", body: "{}", bearer: "tok-abc")
 assert(app.calls == 1,
-       "a raising telemetry write dispatches /pay ONCE (was #{app.calls}; re-dispatch = K-622)")
+       "a raising telemetry write dispatches /pay ONCE (was #{app.calls}; 2 = a re-dispatch)")
 assert(status == 200 && headers == { "content-type" => "application/json" },
        "  … and the app's own status/headers come back unchanged")
 assert(body_bytes(body).include?("agt_9f3"),
@@ -190,7 +189,7 @@ rescue StandardError => e
 end
 assert(app.calls == 1 && app.registrations == 1,
        "a response body that raises mid-buffering registers ONCE " \
-       "(calls=#{app.calls} registrations=#{app.registrations}; 2 = K-622's replayed registration)")
+       "(calls=#{app.calls} registrations=#{app.registrations}; 2 = a replayed registration)")
 assert(boom.is_a?(BodyBoom),
        "  … and the app's own body failure surfaces instead of being masked as a truncated 200 " \
        "(got #{boom.inspect})")
@@ -393,10 +392,10 @@ assert(app.calls == 1 && RECORDED.map { _1[:kind] } == ["ordered"],
 
 # ═════════════════════════════════════════════════════════════════════════════
 if FAILURES.empty?
-  puts "\ntelemetry middleware K-622 spec: ALL PASS"
+  puts "\ntelemetry middleware spec: ALL PASS"
   exit 0
 else
-  puts "\ntelemetry middleware K-622 spec: #{FAILURES.size} FAILURE(S)"
+  puts "\ntelemetry middleware spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

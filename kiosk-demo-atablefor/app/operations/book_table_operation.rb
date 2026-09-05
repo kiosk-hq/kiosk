@@ -17,7 +17,7 @@ class BookTableOperation
   # @param principal_id [String] the account the wire resolved. NEVER an
   #   argument off the request.
   #
-  #   An INSERT is the one place the principal is spelled in Ruby (K-654): the
+  #   An INSERT is the one place the principal is spelled in Ruby: the
   #   owner-scoped reads hide it in a WHERE (`owned_by_current_principal`), an
   #   INSERT has no predicate to hide it in. Both are un-forgeable — the identity
   #   comes from the Rack env the wire built, which no request argument can write
@@ -55,7 +55,7 @@ class BookTableOperation
       )
     end
 
-    # NOT PAST IS NOT THE SAME AS OFFERED (K-767): `availability` publishes a
+    # NOT PAST IS NOT THE SAME AS OFFERED: `availability` publishes a
     # ROLLING horizon, so a well-formed future date outside it must be refused
     # too — by the SAME helper `availability` filters its own `date` with.
     _in_horizon, refusal = WireArguments.seating_date(date, Seatings.upcoming)
@@ -127,30 +127,27 @@ class BookTableOperation
   private_class_method :missing
 
   # A restaurant or table identifier: SHAPE first, then RANGE — the same two
-  # steps in the same order {WireArguments.party_size} takes, and only since
-  # K-1028 (the two arguments K-1027's fix text did not name, same defect, same
-  # method, one line apart).
+  # steps in the same order {WireArguments.party_size} takes.
   #
-  # THIS PAIR READ A BARE `.to_i`, and MEASURED on the descriptor-less path —
-  # the only path where either argument is uncoerced, and the path
-  # {WireArguments}' own comment names as its reason to exist — that got two
-  # things wrong at once:
+  # A BARE `.to_i` HERE IS WRONG TWICE OVER on the descriptor-less path — the
+  # only path where either argument is uncoerced, and the path
+  # {WireArguments}' own comment names as its reason to exist:
   #
   #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` AT
-  #     ALL, so each raised `NoMethodError` — a `500 action_failed` for a value
+  #     ALL, so each raises `NoMethodError` — a `500 action_failed` for a value
   #     `input_schema` already forbids;
-  #   * `1.5.to_i` is 1, so a fractional id RESOLVED TO A ROW THE CALLER DID NOT
+  #   * `1.5.to_i` is 1, so a fractional id RESOLVES TO A ROW THE CALLER DID NOT
   #     NAME. Watched rather than argued: `BookTableOperation.call` with
   #     `restaurant_id: 1.5, restaurant_table_id: 1` returned a CONFIRMED
   #     BOOKING at restaurant 1 table 1, and `restaurant_table_id: 1.5` against
   #     restaurant 2 answered "no such table 1 at restaurant 2" — a refusal
-  #     naming a table nobody asked for. Which of the two a caller met was the
+  #     naming a table nobody asked for. Which of the two a caller meets is the
   #     SEEDED DATA's choice, not the guard's.
   #
   # The shape is {WireArguments.whole_number}'s, so it is json_schemer's own
   # `integer` and nothing looser: `2.0` still resolves to 2, exactly as `.to_i`
   # did and exactly as the declared `{type: "integer"}` in front of it allows
-  # (measured against this demo's bundle on K-1027). A bare `is_a?(Integer)`
+  # (measured against this demo's bundle). A bare `is_a?(Integer)`
   # here would refuse a body the published descriptor calls valid.
   #
   # THREE REFUSALS, ONE PER THING THAT CAN BE WRONG, and the split is behaviour
@@ -163,24 +160,22 @@ class BookTableOperation
   #   * GIVEN, OUT OF RANGE — a `0` or a negative id, which parsed fine and the
   #     guard has already read.
   #
-  # THE THIRD ONE ANSWERED "missing param: …" UNTIL K-1030 — a sentence that told
-  # the caller the argument had not been given when it had been, which is the
-  # K-581/K-582 class (an error body that misinforms rather than informs). It
-  # predated K-1028 and that SHAPE fix deliberately left it, so this is the same
-  # defect answered in its own wave. The wording is the one this demo had already
-  # chosen for the identical case one line down: {WireArguments.party_size}
-  # answers a zero party "party_size must be >= 1", and the fleet's other integer
-  # guards split the two cases the same way (getgrocery's `delivery_slot_id`,
-  # hoteling's `integer`).
+  # THE THIRD ONE MUST NOT ANSWER "missing param: …" — telling a caller that an
+  # argument was not given when it WAS is an error body that misinforms rather
+  # than informs. The wording is the one this demo already uses for the
+  # identical case one line down: {WireArguments.party_size} answers a zero
+  # party "party_size must be >= 1", and the fleet's other integer guards split
+  # the two cases the same way (getgrocery's `delivery_slot_id`, hoteling's
+  # `integer`).
   #
-  # NOTHING OBSERVABLE ON THE WIRE MOVED, and that is measured rather than
+  # NONE OF THIS IS OBSERVABLE ON THE WIRE, and that is measured rather than
   # assumed: both properties are declared `{type: "integer", minimum: 1}`
   # (`app/controllers/kiosk/bookings_controller.rb:47,:49`) and `input_schema` is
   # validated on every call, so a body carrying `0` is refused a layer earlier
-  # and no wire caller ever reached this arm. The descriptor-less path — this
-  # class's own `call`, the path the whole guard exists for — is where it was
-  # reachable, and a sentence that is only true while the layer in front of it
-  # holds is not a true sentence.
+  # and no wire caller reaches this arm. The descriptor-less path — this class's
+  # own `call`, the path the whole guard exists for — is where it IS reachable,
+  # and a sentence that is only true while the layer in front of it holds is not
+  # a true sentence.
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def self.identifier(name, raw)

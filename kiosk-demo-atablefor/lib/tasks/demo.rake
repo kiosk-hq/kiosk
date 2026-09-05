@@ -28,26 +28,26 @@
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable without
 # going through Rake.
 
-# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS (K-1043) ────────────────
+# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
 # Every flow-driver invocation in this file goes through here, for the one line
-# the shape it replaced did not have: `status.success?`.
+# a bare capture does not have: `status.success?`.
 #
-# That shape was a bare backtick capture feeding
-# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, and it never consulted `$?`.
-# A task's verdict therefore rested entirely on "did a line starting with `{`
-# appear", and two failures fall out of that. It FAILED OPEN: a driver that
-# printed its JSON line and THEN died was reported as a PASS — and that is not
+# The tempting shape is a backtick capture feeding
+# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, which never consults `$?`.
+# A task's verdict then rests entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILS OPEN: a driver that
+# prints its JSON line and THEN dies is reported as a PASS — and that is not
 # hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
-# line before `exit 1` on a breach. And when a driver died BEFORE printing one,
-# the operator's headline was a JSON parse error naming the driver's FIRST line
+# line before `exit 1` on a breach. And when a driver dies BEFORE printing one,
+# the operator's headline is a JSON parse error naming the driver's FIRST line
 # of output, which sends the reader to the wrong file instead of showing the
 # driver's own message.
 #
 # So: status first, and on a non-zero child the abort quotes the child's own
 # last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
-# merged stdout+stderr interleaving the transcript always had, and hands back
-# the status the backticks threw away.
+# merged stdout+stderr interleaving and hands back the status the backticks
+# throw away.
 #
 # NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
 # those capture with `2>&1` into a value that is then COMPARED, so a psql error

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# K-690: the room-night invariant `availability` has always queried — a room
-# type is offered only when NO live booking overlaps the requested nights — had
-# nothing behind it, so `reserve_room` could sell the same room-night twice and
-# the operator could settle both payments for one physical room.
+# The room-night invariant `availability` queries — a room type is offered only
+# when NO live booking overlaps the requested nights — needs something behind it
+# in the database. Without it `reserve_room` can sell the same room-night twice
+# and the operator settles both payments for one physical room.
 #
 # Postgres can state that invariant directly, which a plain unique index cannot:
 # overlap is a RANGE predicate, not equality. An EXCLUDE constraint over

@@ -5,7 +5,7 @@
 # each class-level macro records a declaration and the NEXT `def` claims it, so
 # a method with no macros above it is a helper the wire cannot see. `kind` is
 # what puts a declaration on `GET` or `POST`, and it belongs to the DECLARATION,
-# not to the class (K-921) — the write half simply lives next door.
+# not to the class — the write half simply lives next door.
 #
 # NOT ROUTABLE: config/routes.rb draws nothing here. Authentication, the
 # registration PoW gate and the GUC-scoped transaction all live in the wire, so
@@ -15,22 +15,22 @@ class Kiosk::BoardController < ApplicationController
 
   # browse_listings — the OPEN board. Any authenticated principal sees ALL
   # matching listings across ALL owners; `category_slug` and `keyword` are the
-  # two optional filters. There is deliberately no `status` filter (Phil,
-  # 2026-08-21): this verb IS the open board, so a status knob could only ask
-  # for rows it does not serve. "Did my listing sell?" is `my_listings`.
+  # two optional filters. There is deliberately no `status` filter: this verb IS
+  # the open board, so a status knob could only ask for rows it does not serve.
+  # "Did my listing sell?" is `my_listings`.
   #
   # No SQL is built by hand: the filters are ordinary ActiveRecord conditions
   # and the keyword search an Arel node, so caller values are adapter-quoted
-  # (K-654) — inlined rather than bound, since Rails 8.1 disables prepared
-  # statements by default. Quoting does NOT neutralise LIKE metacharacters,
-  # which is what `sanitize_sql_like` below is for (K-914).
+  # — inlined rather than bound, since Rails 8.1 disables prepared statements by
+  # default. Quoting does NOT neutralise LIKE metacharacters, which is what
+  # `sanitize_sql_like` below is for.
   #
-  # `reach :published` (K-949, ADR-0028) declares the departure from spec §7.2,
+  # `reach :published` (ADR-0028) declares the departure from spec §7.2,
   # whose default is that a verb touches only the calling principal's rows — an
   # open board showing you only your own listings would not be a board. It is
   # `published`, not `consented`: nobody consented, philslist publishes by its
   # own decision. §7.2 forbids a login identifier anywhere in a published row,
-  # which is why `owner_handle` is a pseudonym (K-913).
+  # which is why `owner_handle` is a pseudonym.
   kind :query
   reach :published
   description "Browse the public classifieds board across ALL sellers — this is the open board, not " \
@@ -41,7 +41,7 @@ class Kiosk::BoardController < ApplicationController
               "contact details they chose to publish in the listing text. Once the human picks a row, " \
               "`edit_listing` and `close_listing` act on it, and both are owner-only."
   # `category_slug`'s domain IS THE `categories` TABLE, so it is a PROC, not a
-  # literal list (K-922): the engine calls it when the catalog is served and
+  # literal list: the engine calls it when the catalog is served and
   # `schema_url`'s `?v=` moves with it, so adding a section needs no redeploy.
   # An inline `Category.pluck(:slug)` would run at class-body load instead —
   # `db:create` included. Ordered, so the published enum is byte-stable.
@@ -65,7 +65,7 @@ class Kiosk::BoardController < ApplicationController
                     price_text:    { type: %w[string null], description: "FREE-FORM display text, e.g. \"€300\" or \"Free\" — never a cents amount, and null when the seller gave none." },
                     category_slug: { type: "string", description: "The section it is posted in." },
                     status:        { type: "string", description: "Always `open` on this verb — the board carries open listings only." },
-                    # `string`, flatly (K-913): the handle is
+                    # `string`, flatly: the handle is
                     # {User.public_handle}, derived from the account UUID, and
                     # an account without a UUID cannot own a row.
                     owner_handle:  { type: "string", description: "The seller's PSEUDONYM on this board — stable for one account (so two rows sharing it are the same seller), opaque, and NOT an address: it is derived from the account id and reveals no email, phone or login. There is no verb that turns it back into a person. To reach a seller, use the contact details they chose to put in `body`; a listing with none names no way to contact its seller." },
@@ -89,7 +89,7 @@ class Kiosk::BoardController < ApplicationController
                    .order(created_at: :desc, id: :asc)
     board = board.where(categories: { slug: params[:category_slug].to_s }) if params[:category_slug].present?
     if params[:keyword].present?
-      # `sanitize_sql_like` FIRST, the surrounding `%` after it (K-914). Adapter
+      # `sanitize_sql_like` FIRST, the surrounding `%` after it. Adapter
       # quoting keeps the value inside the literal but does nothing about LIKE's
       # own metacharacters: an unescaped `_` or `%` would be a live wildcard.
       pattern = "%#{Listing.sanitize_sql_like(params[:keyword])}%"
@@ -101,7 +101,7 @@ class Kiosk::BoardController < ApplicationController
     # A projection, not model loading: naming the columns keeps the wire's field
     # names and their order this handler's decision, in one query.
     #
-    # `users.id`, NEVER `users.email` (K-913): this column is published to every
+    # `users.id`, NEVER `users.email`: this column is published to every
     # principal that can authenticate, and the id does not reach the wire either
     # — {User.public_handle} turns it into the board pseudonym first. The join
     # stays because a listing whose owner vanished should fall off the board.

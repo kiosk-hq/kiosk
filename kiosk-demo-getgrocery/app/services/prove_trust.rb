@@ -12,7 +12,7 @@ require "openssl"
 # Only the environment-INDEPENDENT identity values live here, as a plain module
 # rather than in Rails config, because the flow/redteam drivers load it OUTSIDE
 # a Rails boot. The trust MATERIAL — the broker public key and getgrocery's
-# intake secret — comes from Rails custom config (K-650) with NO shipped
+# intake secret — comes from Rails custom config with NO shipped
 # fallback for either.
 module ProveTrust
   module_function

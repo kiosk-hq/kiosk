@@ -5,7 +5,7 @@
 # :action` above each declaration. NOT ROUTABLE, see that controller.
 #
 # Each write reads its arguments off the request, hands them to an Operation and
-# renders what it answers (T-083); the business decisions live in
+# renders what it answers; the business decisions live in
 # app/operations/, callable from a console or a rake task as well as the wire.
 #
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
@@ -32,13 +32,13 @@ class Kiosk::ListingsController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # THE `categories` TABLE, not a copy of it (K-922) — same proc
+                 # THE `categories` TABLE, not a copy of it — same proc
                  # and same reason as `browse_listings`.
                  category_slug: { type: "string",
                                   enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "The section to post in (see browse_listings)." },
                  title:         { type: "string", description: "Short headline." },
-                 # THE ONLY CONTACT CHANNEL THIS BOARD HAS (K-913): sellers are
+                 # THE ONLY CONTACT CHANNEL THIS BOARD HAS: sellers are
                  # pseudonymous and there is no relayed-message verb, so the
                  # contact line is the human's choice and the human's words.
                  body:          { type: "string",

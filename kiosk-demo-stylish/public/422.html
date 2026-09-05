@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!--
-  Static 422 page (K-532/K-459). Rails' PublicExceptions serves this file in
-  production for any 422 that reaches the middleware — in practice the CSRF
-  forgery check on a human form. That check does NOT run "before a controller":
-  it raises ActionController::InvalidAuthenticityToken from a before_action
-  INSIDE the controller. So where a demo ships the K-459 signpost (an
+  Static 422 page. Rails' PublicExceptions serves this file in production for
+  any 422 that reaches the middleware — in practice the CSRF forgery check on a
+  human form. That check does NOT run "before a controller": it raises
+  ActionController::InvalidAuthenticityToken from a before_action INSIDE the
+  controller. So where a demo ships the CSRF signpost (an
   ApplicationController that rescues that exception — the Devise demos), a
   JSON-shaped caller is answered THERE with a JSON error body and never
   arrives here; this page is what the signpost RE-RAISES (browser-shaped
@@ -12,14 +12,10 @@
   this file the response is BODYLESS (text/html, Content-Length: 0). Static:
   keep every link relative.
 
-  THE WIRE'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS (K-1090). The note below used
-  to promise a JSON wrapper "including their errors", in the vocabulary of the
-  retired 0.3 error shape — deleted with the endpoints that served it (K-808,
-  T-074 = A). An error on the wire is a FLAT RFC 9457 problem document served as
-  application/problem+json, and the branch point is its top-level `code`,
-  exactly as <base>/auth.md teaches. T-068 slice 7 corrected this page's
-  endpoint list and left the retired word standing, which is the class K-1090
-  records; 404.html and 500.html carried it too and move in the same wave.
+  THE WIRE'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS. An error on the wire is a
+  FLAT problem document served as application/problem+json, and the branch
+  point is its top-level `code`, exactly as <base>/auth.md teaches — never the
+  retired 0.3 wrapper shape, and never a retired 0.3 endpoint name.
   bin/check-demo-copies reads the WHOLE file, comments included, because every
   byte of a static page is served to whoever fetched it.
 -->

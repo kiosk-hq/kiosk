@@ -4,26 +4,25 @@
 # — the shape guard every hoteling verb opens with. Run with:
 #   bundle exec rake demo:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
 #
-# WHY IT IS DB-FREE, and why that is the whole point (T-137, T-116's row one demo
-# over). Before this file, hoteling shipped NO `spec/` at all: all six of its CI
+# WHY IT IS DB-FREE, and why that is the whole point. All six of hoteling's CI
 # tasks (`demo:book`, `demo:isolation`, `demo:redteam`, `demo:schema`,
 # `demo:search`, `demo:browse`) need a booted origin, a seeded database and a
-# live Equihash toll, so the only executable coverage of {WireArguments.integer}'s
-# `max:` arm — added by T-125 and never exercised except through the red-team
-# battery — of `stay_dates`, `past_stay`, `example_check_in`/`example_check_out`
-# and `priceable_total` was `demo:redteam`. Every one of those is a PURE
-# FUNCTION: no connection, no clock but the property's, no state.
+# live Equihash toll, so without this file the only executable coverage of
+# {WireArguments.integer}'s `max:` arm, of `stay_dates`, `past_stay`,
+# `example_check_in`/`example_check_out` and `priceable_total` would be
+# `demo:redteam` — and that arm is otherwise reached only through the red-team
+# battery. Every one of those is a PURE FUNCTION: no connection, no clock but
+# the property's, no state.
 #
 # WHAT IS ASSERTED. Not "something was refused" — the TYPE and the SHAPE of each
 # refusal:
 #   • every refusal is an {OperationResult} whose `code` resolves through
 #     hoteling's own STATUSES map, so a code this demo never mapped would raise a
 #     KeyError here rather than at the wire. `property_not_found` is the one that
-#     is NOT a 400, and it is asserted as `not_found`/`:not_found` — the T-090
+#     is NOT a 400, and it is asserted as `not_found`/`:not_found` — the
 #     three-way rule (spec §9.1) lives or dies on that distinction;
-#   • no hostile shape RAISES. A guard that raises is not a guard: that is the
-#     class K-1027/K-1020 sit in one demo over, where a bare `.to_i` answered
-#     `true` and `[]` with a 500;
+#   • no hostile shape RAISES. A guard that raises is not a guard — a bare
+#     `.to_i` answers `true` and `[]` with a 500;
 #   • the SHAPE refusal and the MAGNITUDE refusal are DIFFERENT sentences —
 #     `"abc"` is not "out of range", and a caller told the wrong one debugs the
 #     wrong thing;
@@ -80,9 +79,9 @@ end
 # once per refusal rather than described once in prose.
 #
 # THIS HELPER IS BYTE-IDENTICAL to the one in getgrocery's and atablefor's copies
-# of this file, deliberately (T-137 copied the harness rather than inventing one,
-# and T-120's fragment rule is the mechanism that would hold them in lockstep if
-# `spec/` were a scanned root — it is not, see this wave's ledger note).
+# of this file, deliberately: the three share one harness, and
+# bin/check-demo-copies declares this path's shared units and holds them in
+# lockstep, so a copy whose body drifted from the other two would go red.
 def assert_typed_400(result, label)
   unless result.is_a?(OperationResult)
     return assert(false, "#{label} → an OperationResult, got #{result.class}")
@@ -93,7 +92,7 @@ def assert_typed_400(result, label)
 end
 
 # The 404 half, which hoteling alone needs: its WireArguments refuses with TWO
-# codes, and the T-090 three-way rule (spec §9.1) lives on the distinction.
+# codes, and the three-way rule (spec §9.1) lives on the distinction.
 def assert_typed_404(result, label)
   unless result.is_a?(OperationResult)
     return assert(false, "#{label} → an OperationResult, got #{result.class}")
@@ -129,7 +128,7 @@ HINT = WireArguments::HINT_PROPERTY_ID
 # into a much quieter wrong answer than a 400. Base 10 is EXPLICIT, so "0x10" is
 # refused rather than read as 16 — the one accepted-set claim in this guard's
 # header that a reader cannot check by eye.
-puts "\n── integer: the shape arm, and the base-10 promise (K-1025) ──"
+puts "\n── integer: the shape arm, and the base-10 promise ──"
 {
   "42"      => 42,
   "  42  "  => 42,   # surrounding space is tolerated, deliberately
@@ -182,7 +181,7 @@ assert(refusal_of(pair).is_a?(OperationResult) &&
 # "you did not give me one" rather than "you gave me the wrong thing". `true` is
 # NOT blank, so it lands on the shape arm above. That split is behaviour a caller
 # reads, so it is asserted at both ends.
-puts "\n── integer: absent is `missing field:`, and blank? decides which (K-654) ──"
+puts "\n── integer: absent is `missing field:`, and blank? decides which ──"
 [nil, "", "   ", false, [], {}].each do |raw|
   pair    = guard("integer(#{raw.inspect})") { WireArguments.integer(raw, field: "room_type_id", hint: HINT) }
   refusal = refusal_of(pair)
@@ -195,13 +194,13 @@ puts "\n── integer: absent is `missing field:`, and blank? decides which (K-
          "  … and carries no hint — \"where do I get one\" answers the wrong question here")
 end
 
-# ── 3. integer/4 — MAGNITUDE: the `max:` arm T-125 added ─────────────────────
+# ── 3. integer/4 — MAGNITUDE: the `max:` arm ─────────────────────────────────
 #
 # THE BOUND IS THE COLUMN'S, NOT A POLICY. `min_stars` and `max_price_cents` are
 # compared against 4-byte `integer` columns; `gteq(2**31)` is the RAISING shape,
 # so without this arm a well-formed argument a client simply got wrong is a 500
-# with the runtime's class name in the body (K-1047's class, one demo over).
-puts "\n── integer: the magnitude arm, and the ceiling is the column's (T-125, K-968) ──"
+# with the runtime's class name in the body.
+puts "\n── integer: the magnitude arm, and the ceiling is the column's ──"
 [MAX, MAX - 1, 0, -5].each do |raw|
   pair = guard("integer(#{raw}, max: MAX)") do
     WireArguments.integer(raw, field: "max_price_cents", hint: HINT, max: MAX)
@@ -248,24 +247,23 @@ pair = guard("integer(-2147483649, max: MAX)") do
 end
 assert(refusal_of(pair).nil? && value_of(pair).eql?(-2_147_483_649),
        "a value below -2**31 passes: this guard has NO `min:` — a floor here would be policy, " \
-       "and the descriptors own policy (T-125's second deliberate deviation), got #{pair.inspect}")
+       "and the descriptors own policy, got #{pair.inspect}")
 
 # ── 4. stay_dates/2 — `Date.iso8601`, NOT `Date.parse` (the SQLi tail) ───────
 #
 # `Date.parse` SCANS for a date rather than validating a format, so it accepts
 # `"2026-09-01'; --"` and `["2026-09-01"]` — and would turn a refusal into a
-# booking. It is also the demo's ONLY date guard since K-1234: `hotel_detail`
-# used to keep its own `Date.parse` and now calls this one, so a spelling
-# accepted for a stay is accepted for a room list too.
+# booking. It is also the demo's ONLY date guard: `hotel_detail` calls this one
+# rather than keeping a `Date.parse` of its own, so a spelling accepted for a
+# stay is accepted for a room list too.
 #
-# AND THE ACCEPTED SET IS NOW THE ONE THE REFUSAL NAMES (K-1230). It was not:
-# `Date.iso8601` is a FAMILY, and `"20260901"`, `"2026-09-01T10:00:00Z"`,
-# `"2026-W36-2"` and `"2026-244"` all parsed to 2026-09-01 where the sentence
-# said "use YYYY-MM-DD" — four undocumented spellings on the descriptor-less
-# `ReserveRoomOperation` path, two of which resolve to a day nobody reading the
-# booking would recognise and one of which silently discards a time. This spec
-# used to assert that looseness as published behaviour; it now asserts the
-# narrowing, and the four spellings are in the refusal battery below.
+# AND THE ACCEPTED SET IS THE ONE THE REFUSAL NAMES. `Date.iso8601` is a FAMILY:
+# `"20260901"`, `"2026-09-01T10:00:00Z"`, `"2026-W36-2"` and `"2026-244"` all
+# parse to 2026-09-01 where the sentence says "use YYYY-MM-DD" — four
+# undocumented spellings on the descriptor-less `ReserveRoomOperation` path, two
+# of which resolve to a day nobody reading the booking would recognise and one
+# of which silently discards a time. So the strict parse is asserted here, and
+# all four spellings are in the refusal battery below.
 puts "\n── stay_dates: the strict parse, and both missing halves ──"
 [["2026-09-01", "2026-09-04"]].each do |ci, co|
   pair = guard("stay_dates(#{ci.inspect}, #{co.inspect})") { WireArguments.stay_dates(ci, co) }
@@ -315,7 +313,7 @@ assert(refusal_of(pair).nil? && value_of(pair) == [Date.new(2026, 9, 4), Date.ne
        "a reversed pair PARSES here — the night count is the caller's question, not this " \
        "guard's, got #{value_of(pair).inspect}")
 
-# ── 5. today / zone / example_check_in / example_check_out (K-969, K-972) ────
+# ── 5. today / zone / example_check_in / example_check_out ───────────────────
 puts "\n── the property's clock, and the examples read off it ──"
 assert(WireArguments::ZONE_NAME == "Europe/Istanbul",
        "the floor is read in the PROPERTY's locale (#{WireArguments::ZONE_NAME}), never the caller's")
@@ -331,14 +329,14 @@ at_property_date("2026-03-15") do |fixed|
   assert(WireArguments.today == fixed, "the clock is frozen for this block (#{fixed})")
   assert(WireArguments.example_check_in == fixed + 1,
          "example_check_in is TOMORROW in the property's locale (#{WireArguments.example_check_in}) " \
-         "— never a calendar literal, which ages into a 400 the day the floor passes it (K-972)")
+         "— never a calendar literal, which ages into a 400 the day the floor passes it")
   assert(WireArguments.example_check_out == fixed + 4,
          "example_check_out is example_check_in + 3 (#{WireArguments.example_check_out})")
   assert((WireArguments.example_check_out - WireArguments.example_check_in).to_i == 3,
          "… a THREE-night stay, which is what the example_row beside it prices")
   assert(guard("past_stay(example_check_in)") { WireArguments.past_stay(WireArguments.example_check_in) }.nil?,
          "the published example is BOOKABLE at the same instant it is published — the property " \
-         "K-972 exists for, asserted against the same floor the verb uses")
+         "these examples exist for, asserted against the same floor the verb uses")
 end
 assert(WireArguments.today == WireArguments.zone.now.to_date,
        "and the real clock is back after the frozen block (#{WireArguments.today})")
@@ -388,7 +386,7 @@ end
 #
 # `bookings.total_cents` is a 4-byte integer, so a well-formed ISO check_in far
 # enough back used to price a stay past it and the INSERT raised
-# ActiveModel::RangeError — HTTP 500 for an argument a client got wrong (K-968).
+# ActiveModel::RangeError — HTTP 500 for an argument a client got wrong.
 # THE BOUND IS THE COLUMN'S: it invents no booking horizon.
 puts "\n── priceable_total: the ceiling is the column's, and the refusal is recoverable ──"
 [0, 1, MAX].each do |total|
@@ -410,7 +408,7 @@ end
 
 assert(WireArguments::MAX_INT4 == 2_147_483_647,
        "MAX_INT4 is PostgreSQL's `integer` ceiling, declared once for the three columns that " \
-       "share it (T-125 folded MAX_TOTAL_CENTS into it): #{WireArguments::MAX_INT4}")
+       "share it: #{WireArguments::MAX_INT4}")
 
 # ── 8. missing/1 and property_not_found/1 — the two canned sentences ─────────
 puts "\n── missing / property_not_found: one sentence each, and only ONE of them is a 400 ──"
@@ -424,7 +422,7 @@ end
 [7, 999_999, "abc"].each do |id|
   refusal = WireArguments.property_not_found(id)
   # NOT a bad_request: the value is well-formed and inside its declared type —
-  # what is absent is the thing it POINTS AT (spec §9.1's second branch, T-090).
+  # what is absent is the thing it POINTS AT (spec §9.1's second branch).
   assert_typed_404(refusal, "property_not_found(#{id.inspect})")
   assert(refusal.message == "hotel not found: #{id}", "  … #{refusal.message.inspect}")
   assert(refusal.hint.to_s.include?("search_hotels"),
@@ -459,18 +457,17 @@ end
 # ── 10. The guards run in front of the database, not behind it ──────────────
 #
 # Every assertion above ran with ActiveRecord never loaded, which is only
-# possible if these checks PRECEDE the connection — the property T-125 had to
-# boot an origin and mutate a published input_schema to demonstrate.
+# possible if these checks PRECEDE the connection.
 puts "\n── the whole module ran with no database ──"
 assert(!defined?(ActiveRecord::Base),
        "every guard above answered without ActiveRecord loaded (they precede every cast, every " \
        "comparison and every lock)")
 
 if FAILURES.empty?
-  puts "\nWireArguments T-137 spec: ALL PASS"
+  puts "\nWireArguments spec: ALL PASS"
   exit 0
 else
-  puts "\nWireArguments T-137 spec: #{FAILURES.size} FAILURE(S)"
+  puts "\nWireArguments spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

@@ -19,26 +19,26 @@
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.
 
-# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS (K-1043) ────────────────
+# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
 # Every flow-driver invocation in this file goes through here, for the one line
-# the shape it replaced did not have: `status.success?`.
+# a bare capture does not have: `status.success?`.
 #
-# That shape was a bare backtick capture feeding
-# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, and it never consulted `$?`.
-# A task's verdict therefore rested entirely on "did a line starting with `{`
-# appear", and two failures fall out of that. It FAILED OPEN: a driver that
-# printed its JSON line and THEN died was reported as a PASS — and that is not
+# The tempting shape is a backtick capture feeding
+# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, which never consults `$?`.
+# A task's verdict then rests entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILS OPEN: a driver that
+# prints its JSON line and THEN dies is reported as a PASS — and that is not
 # hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
-# line before `exit 1` on a breach. And when a driver died BEFORE printing one,
-# the operator's headline was a JSON parse error naming the driver's FIRST line
+# line before `exit 1` on a breach. And when a driver dies BEFORE printing one,
+# the operator's headline is a JSON parse error naming the driver's FIRST line
 # of output, which sends the reader to the wrong file instead of showing the
 # driver's own message.
 #
 # So: status first, and on a non-zero child the abort quotes the child's own
 # last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
-# merged stdout+stderr interleaving the transcript always had, and hands back
-# the status the backticks threw away.
+# merged stdout+stderr interleaving and hands back the status the backticks
+# throw away.
 #
 # NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
 # those capture with `2>&1` into a value that is then COMPARED, so a psql error
@@ -70,11 +70,11 @@ def stylish_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
   end
 end
 
-# The seeded credentials the drivers need, written ONCE (K-712, K-838).
+# The seeded credentials the drivers need, written ONCE.
 # `db/seeds.rb` OWNS these values; this file only re-states them so the
-# subprocess drivers can be handed them as env. Four tasks used to re-type the
-# same password literal and two re-typed the owner's address, so a seed change
-# had four places to reach in one file and nothing said so.
+# subprocess drivers can be handed them as env. Re-typing the same password
+# literal task by task gives a seed change several places to reach inside one
+# file, with nothing to say so.
 DEMO_CREDENTIALS = {
   password:    "combette-demo-password",
   owner_email: "owner@combette.example",
@@ -130,11 +130,11 @@ namespace :demo do
     log  = "/tmp/kiosk-stylish-isolation.log"
     db   = "kiosk_stylish_development"
 
-    # The two seeded humans behind the two assistants (db/seeds.rb). Since T-104
-    # the driver EARNS each principal through the shipped ceremony — register →
-    # the human's Devise sign-in → link → claim — so it needs real credentials,
-    # and they travel as env the way demo:binding's do rather than as literals
-    # inside script/isolation_flow.rb.
+    # The two seeded humans behind the two assistants (db/seeds.rb). The driver
+    # EARNS each principal through the shipped ceremony — register → the human's
+    # Devise sign-in → link → claim — so it needs real credentials, and they
+    # travel as env the way demo:binding's do rather than as literals inside
+    # script/isolation_flow.rb.
     alice_email   = DEMO_CREDENTIALS[:alice_email]
     bob_email     = DEMO_CREDENTIALS[:bob_email]
     demo_password = DEMO_CREDENTIALS[:password]
@@ -239,9 +239,9 @@ namespace :demo do
     end
 
     # ── Assertion 2c: ownership comes from the TOKEN — DB user_id on aB == B ──
-    # The token is one this provider MINTED for B's assistant (T-104), so this
-    # now says something a written-down bearer could not: the row's owner is the
-    # account the shipped binding ceremony resolved, not a string B chose.
+    # The token is one this provider MINTED for B's assistant, so this says
+    # something a written-down bearer could not: the row's owner is the account
+    # the shipped binding ceremony resolved, not a string B chose.
     db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM appointments WHERE id = '#{appt_id_b}'" 2>&1`.strip
     if db_user_id == user_id_b
       puts "  OK  Assertion 2c: DB appointments.user_id for aB == user_id_b (#{user_id_b}) — ownership is taken from the identity"
@@ -420,8 +420,8 @@ namespace :demo do
       check.call("link-code mint (session channel) → 201",         result["link_mint"] == 201)
       check.call("link-code redeem binds to the same account",     result["link_claim"] == [201, true])
       check.call("assistant 2 sees assistant 1's booking (same account)", result["a2_sees_booking"] == true)
-      # 204, not 200: unlink withdrew its undocumented `{ok: true}` body (K-870);
-      # protocol.md §6.2 states the 204 beside link's and claim's responses.
+      # 204, not 200: unlink answers with no body at all — protocol.md §6.2
+      # states the 204 beside link's and claim's responses.
       check.call("unlink assistant 1 → 204 (no body)",             result["unlink"] == 204)
       check.call("assistant 1 login after unlink → 404",           result["login_a1_after_unlink"] == 404)
       check.call("assistant 2 login still works → 200",            result["login_a2_still_works"] == 200)
@@ -512,8 +512,8 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url}"
 
-      # K-838: the driver reads its credentials from env like every sibling
-      # driver does — db/seeds.rb owns them, and a seed change must not leave a
+      # The driver reads its credentials from env like every sibling driver
+      # does — db/seeds.rb owns them, and a seed change must not leave a
       # sign-in failure inside script/roles_flow.rb naming nothing.
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
             "OWNER_EMAIL=#{DEMO_CREDENTIALS[:owner_email].shellescape} " \
@@ -539,10 +539,10 @@ namespace :demo do
       # is a live sum of real prices (not a fabricated number).
       check.call("owner salon_calendar carries a FORECAST summary", result["owner_sees_forecast"] == true)
 
-      # ── The K-437 regression, now the ONLY path. Without User#kiosk_role the
-      # Devise adapter resolves every real sign-in to roles.first (customer),
-      # so the owner's token comes back "customer" and the forecast disappears.
-      # There is no second channel left that could pass while this one fails.
+      # ── The role-resolution regression, on the ONLY path. Without
+      # User#kiosk_role the Devise adapter resolves every real sign-in to
+      # roles.first (customer), so the owner's token comes back "customer" and the
+      # forecast disappears. There is no second channel that could pass here.
       check.call("customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
       check.call("customer salon_calendar has NO forecast (owner-only)", result["devise_customer_sees_forecast"] == false)
     ensure
@@ -620,7 +620,7 @@ namespace :demo do
                the priced booking still succeed as positive controls
       BLOCKED  DeviceGrantRoleSelfSelection — the same assertion as the first
                Device-grant beat above, but taken from `kiosk-redteam` so every
-               demo runs it rather than this one alone (K-1128)
+               demo runs it rather than this one alone
 
     stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;
@@ -636,9 +636,9 @@ namespace :demo do
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
 
-    # The seeded humans the battery drives (db/seeds.rb). Since T-104 the suite
-    # EARNS its customer principals through the shipped ceremony instead of
-    # writing tokens down, so it needs credentials, passed as env the way
+    # The seeded humans the battery drives (db/seeds.rb). The suite EARNS its
+    # customer principals through the shipped ceremony instead of writing
+    # tokens down, so it needs credentials, passed as env the way
     # demo:binding's are.
     alice_email   = DEMO_CREDENTIALS[:alice_email]
     bob_email     = DEMO_CREDENTIALS[:bob_email]
@@ -707,8 +707,8 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
-      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header — it is public
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities`, and nowhere else
       • capabilities is the MODULE set schema/queries/actions and NOT events
       • schema.queries includes salons and my_appointments
       • schema.actions includes book_appointment
@@ -716,7 +716,7 @@ namespace :demo do
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
-        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+        `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -772,16 +772,16 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -844,8 +844,8 @@ namespace :demo do
     actions = action_specs.map { |a| a["name"] }
     capabilities = result["discovery_capabilities"] || []
 
-    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
-    # sends no Authorization header, so this status IS the public-access proof.
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL. The flow driver sends no
+    # Authorization header, so this status IS the public-access proof.
     if result["schema_status"] == 200
       puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
     else
@@ -853,9 +853,9 @@ namespace :demo do
       puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
 
-    # THE MODULE SET, at its one remaining home. It was published twice —
-    # `schema.verbs` and `kiosk.json` `capabilities` — from the same call, so
-    # `verbs` was dropped (T-095) and the property moved here intact.
+    # THE MODULE SET, at its ONE home: `kiosk.json` `capabilities`. It is not
+    # also published as `schema.verbs`, so there is no second copy of it that
+    # could drift out of step with this one.
     %w[schema queries actions].each do |v|
       if capabilities.include?(v)
         puts "  ✓  capabilities includes #{v}"
@@ -903,7 +903,7 @@ namespace :demo do
       end
     end
 
-    # T-042 / K-452: the primary read query (service_menu) and primary action
+    # The primary read query (service_menu) and primary action
     # (book_appointment) advertise the machine-readable descriptor extensions.
     {
       query_specs  => %w[service_menu],
@@ -922,7 +922,7 @@ namespace :demo do
       end
     end
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`

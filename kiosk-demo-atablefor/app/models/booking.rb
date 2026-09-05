@@ -20,9 +20,9 @@ class Booking < ApplicationRecord
   scope :confirmed, -> { where(status: CONFIRMED) }
 
   # ── THE isolation predicate ────────────────────────────────────────────────
-  # When atablefor's handlers stopped writing SQL (K-654) this is the fragment
-  # that deliberately did NOT become a Ruby comparison, for the reason the
-  # philslist pilot settled (see Listing#owned_by_current_principal).
+  # atablefor's handlers do not write SQL, yet this fragment deliberately stays
+  # a SQL predicate rather than a Ruby comparison, for the reason the philslist
+  # pilot settled (see Listing#owned_by_current_principal).
   #
   # `kiosk.current_user_id()` is a STABLE Postgres function reading the
   # transaction-local GUC `app.current_user_id`, which kiosk-server's

@@ -68,7 +68,7 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
       expect(response).to have_http_status(:bad_request)
     end
 
-    it "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery, K-550)" do
+    it "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)" do
       # Operator B (getgrocery) authenticates with its OWN bearer secret but asks
       # the broker to stamp operator A's (skooti's) audience into the attestation,
       # delivered to B's own callback. The broker derives `aud` from B's
@@ -152,7 +152,7 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
       expect(row.reload.status).to eq("confirmed")
     end
 
-    it "binds aud to the operator's REGISTERED audience, accepting a matching body declaration (K-550)" do
+    it "binds aud to the operator's REGISTERED audience, accepting a matching body declaration" do
       # The honest operator sends its own kyc_audience (== its registered audience)
       # in the intake body; the broker bind-AND-verifies it against the operator's
       # registration record and stamps THAT as `aud` — the value the operator's
@@ -195,7 +195,7 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
     # demos happen to use. `age_over_21` is the entry no shipped
     # operator requests; asking for it must work exactly like the ones that do,
     # question page included — that is what makes it an extension point rather
-    # than dead surface (K-599).
+    # than dead surface.
     it "answers a catalog claim no shipped operator requests (age_over_21)" do
       rid = open_request(requested_claims: ["age_over_21"])
 
@@ -221,21 +221,21 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
-    # K-705: the sequential test above only proves the FIRST-LEVEL guard
+    # The sequential test above only proves the FIRST-LEVEL guard
     # (#confirmable? on a row already flipped). It does NOT catch a
     # check-then-write TOCTOU, where two concurrent approvals both read the
-    # row as pending BEFORE either has written — exactly the shape K-542
-    # closed in kiosk-server's PoW spent-store. This test drives real
+    # row as pending BEFORE either has written — the same shape the PoW
+    # spent-store in kiosk-server has to close. This test drives real
     # concurrency: N genuinely racing POST /verify against the SAME pending
     # row, over separate connections/threads, so the DB (not an in-process
     # mock) is what serializes the claim. It needs the row to be actually
     # committed — see the `:real_concurrency` exception in spec_helper.rb —
     # and cleans up its own row since no transaction rolls it back.
-    it "is single-use under concurrency: N racing approvals mint exactly once (K-705)", :real_concurrency do
+    it "is single-use under concurrency: N racing approvals mint exactly once", :real_concurrency do
       rid = open_request
       begin
         # Widen the claim-vs-mint window deterministically (same technique as
-        # kiosk-server's pow_gate_spec slow_ok_backend for K-542): with no
+        # kiosk-server's pow_gate_spec slow_ok_backend): with no
         # delay the window is sub-millisecond and the race is a timing
         # coin-flip rather than a reliable assertion.
         allow(ProveKey).to receive(:mint).and_wrap_original do |original, **kwargs|

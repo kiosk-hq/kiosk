@@ -18,8 +18,8 @@
 #   MissingAuth      — a request with no Authorization → 401
 #   GarbageToken     — an unparseable bearer token → 401
 #   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
-#                      resolves to NO identity, in EVERY environment (K-539 /
-#                      T-104), while a genuinely-bound token is answered
+#                      resolves to NO identity, in EVERY environment, while a
+#                      genuinely-bound token is answered
 #   UnknownQuery     — an unregistered query name → 404
 #   UnknownAction    — an unregistered action name → 404
 #   RetiredWire      — the deleted 0.3 `POST /kiosk/{query,run}` answer the
@@ -30,20 +30,20 @@
 #   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings
 #                      `category_slug` outside the LIVE `categories` table is a
 #                      typed 400 naming the sections that exist, NEVER a 200
-#                      answering a different question (T-090, K-922)
+#                      answering a different question
 #   LikeMetacharactersAreEscaped — a browse_listings `keyword` carrying LIKE
 #                      metacharacters matches them LITERALLY: `_` and `%` are
 #                      not live wildcards, so a search is never answered a
-#                      WIDER question than it asked (K-914)
+#                      WIDER question than it asked
 #   NoSellerPiiOnTheOpenBoard — the cross-owner board names sellers by an
 #                      opaque, per-seller pseudonym and carries no account
-#                      address anywhere in the response (K-913)
+#                      address anywhere in the response
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony (K-072, K-1128)
+#     while the role-less request still opens the ceremony
 #
-# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob are bound
+# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED. Alice and Bob are bound
 # through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
 # real Devise sign-in → `/auth/link` → `/auth/claim` (script/bound_assistant.rb) —
 # because the dev-only parser that used to turn a written-down
@@ -68,7 +68,7 @@ require "uri"
 # The shared harness. Required HERE rather than beside the one framework beat
 # further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
 # assertion in this file now asks — is needed from the first hostile-input beat
-# onwards (T-121).
+# onwards.
 require "kiosk/redteam"
 
 require_relative "bound_assistant"
@@ -177,9 +177,9 @@ rc, _ = post_json("/kiosk/close_listing",
 record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk listing_id must be a typed 400, never a 500 ────
-# K-581/K-582: edit_listing and close_listing cast their listing_id `::uuid`.
-# Before the UuidCheck guard, a malformed value made Postgres raise
-# InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
+# edit_listing and close_listing cast their listing_id `::uuid`. Without the
+# UuidCheck guard a malformed value makes Postgres raise
+# InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500
 # carrying the PG message. Three properties are asserted, not one: the status is
 # 400 (a client mistake reported as such), the problem document's top-level
 # `code` is the typed `bad_request` an assistant can branch on, and NO SQL
@@ -187,7 +187,7 @@ record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{r
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE listings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
-# THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). philslist answers a bad
+# THE SCAN IS TOLD WHAT THIS PROBE SENT. philslist answers a bad
 # argument by NAMING the value it got — `listing_id "…" is not a uuid`, and
 # `unknown category_slug …` on the write path — so the bytes searched for
 # SQL_INTERNALS are partly the probe's own. Without `supplied:` a junk id
@@ -218,7 +218,7 @@ record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (wa
 rc, _ = get_json("/kiosk/browse_listings", {}, bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
-# ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
+# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
 # THE BEAT CHANGED SHAPE, AND THE CHANGE IS THE POINT. philslist used to compose
 # a hand-copied agent-IdP that parsed a self-asserted, UNSIGNED
@@ -269,22 +269,21 @@ rc, _ = post_json("/kiosk/nope", {}, ALICE.bearer)
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
-# T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
+# The 0.3 endpoints were a hard cut. `POST /kiosk/query` now reaches the per-verb
 # controller as a verb literally named "query", which nobody registered, so it
 # answers the ordinary 404 an AUTHENTICATED caller gets — no privileged
 # endpoint, no compatibility payload, no second conformance surface to attack.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
+# caller with no bearer never reaches the registry lookup that produces the 404 —
+# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
+# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
+# nothing tested the anonymous case.
 #
-# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
-# `run` are NAMES nobody registered, and the vocabulary now reserves
-# `not_found` for an argument that ADDRESSED something absent.
+# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
+# NAMES nobody registered, and the vocabulary reserves `not_found` for an
+# argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
   rc, body = post_json("/kiosk/#{name}", { name: "browse_listings" }, ALICE.bearer)
   [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
@@ -311,24 +310,24 @@ record(results, "MethodMismatch",
        "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
        "(want 405/\"method_not_allowed\"/POST)")
 
-# ── OutOfEnumFilterIsNotSilentlyReinterpreted (T-090, K-922) ─────────────────
+# ── OutOfEnumFilterIsNotSilentlyReinterpreted ────────────────────────────────
 #
-# THE WORST OF THE FOUR CASES T-090's SURVEY FOUND, and the reason it is in the
-# ADVERSARIAL battery rather than in a flow test. `browse_listings` used to run
-# `status = "open" unless Listing::STATUSES.include?(status)` — so
-# `status=deleted` came back 200 with the OPEN board. Not an empty list: a
-# successful-looking answer to a DIFFERENT QUESTION, with nothing in the
-# response saying the filter had been discarded. An assistant relaying it told
-# its human "here are the deleted listings" and was confidently wrong, which is
-# a worse failure than any refusal.
+# THE WORST SHAPE AN OUT-OF-ENUM FILTER CAN TAKE, and the reason it is in the
+# ADVERSARIAL battery rather than in a flow test. A handler that clamps an
+# unknown filter value back to its default — `status = "open" unless
+# Listing::STATUSES.include?(status)` — answers `status=deleted` with 200 and
+# the OPEN board. Not an empty list: a successful-looking answer to a DIFFERENT
+# QUESTION, with nothing in the response saying the filter had been discarded.
+# An assistant relaying it tells its human "here are the deleted listings" and
+# is confidently wrong, which is a worse failure than any refusal.
 #
 # THE SUBJECT MOVED, THE PROPERTY DID NOT. `status` is not a parameter of this
-# verb any more (Phil, 2026-08-21: on the open board it is «не нужен, и даже
-# вреден»), so the beat now drives the filter that IS there — `category_slug`,
-# whose domain is the LIVE `categories` table, declared as a proc (K-922). That
-# makes this a stronger test than the one it replaces: it asserts the refusal
-# AND that the refusal names the sections the database currently holds, which is
-# the whole point of deriving an enum from data instead of freezing it in code.
+# verb: on an open board a status knob is not merely useless but harmful. So the
+# beat drives the filter that IS there — `category_slug`, whose domain is the
+# LIVE `categories` table, declared as a proc. That makes this the stronger
+# test: it asserts the refusal AND that the refusal names the sections the
+# database currently holds, which is the whole point of deriving an enum from
+# data instead of freezing it in code.
 #
 # The positive control is what keeps it honest: a real section must still be
 # ANSWERED (200), or a handler that refused everything would pass.
@@ -344,7 +343,7 @@ record(results, "OutOfEnumFilterIsNotSilentlyReinterpreted",
        "CONTROL category_slug=bikes → #{rc_ctl}/#{ctl_rows.is_a?(Array) ? "array" : ctl_rows.class} " \
        "(want 400 bad_request naming the LIVE categories, and an ANSWERED control)")
 
-# ── LikeMetacharactersAreEscaped (K-914) ─────────────────────────────────────
+# ── LikeMetacharactersAreEscaped ─────────────────────────────────────────────
 #
 # NOT an injection test — record that, because the shape invites the misfiling.
 # Arel's `matches` inlines an ADAPTER-QUOTED literal, so a structural payload
@@ -366,7 +365,7 @@ record(results, "LikeMetacharactersAreEscaped",
        "CONTROL keyword=bike → #{rc_lit}/#{lit_rows.is_a?(Array) ? "#{lit_rows.length} rows" : lit_rows.class} " \
        "(want 0 rows for the escaped wildcard and a non-empty control)")
 
-# ── NoSellerPiiOnTheOpenBoard (K-913) ────────────────────────────────────────
+# ── NoSellerPiiOnTheOpenBoard ────────────────────────────────────────────────
 #
 # THE ONE BEAT THAT HAS TO SURVIVE A REFACTOR. `browse_listings` is deliberately
 # cross-owner — every authenticated principal sees every open listing — so
@@ -390,8 +389,8 @@ record(results, "LikeMetacharactersAreEscaped",
 #      A handler that dropped the field entirely would fail here, so the beat
 #      cannot be passed by publishing nothing.
 #   3. The handle is PER-SELLER: Alice's rows all share ONE handle and Bob's
-#      differs from it. That pins the tradeoff K-913 settled (a buyer can tell
-#      two listings are one seller) so a later switch to a per-listing or
+#      differs from it. That pins the accepted tradeoff (a buyer can tell two
+#      listings are one seller) so a later switch to a per-listing or
 #      per-request value is caught rather than silently shipped.
 rc_board, board_rows = get_json("/kiosk/browse_listings", {}, BOB.bearer)
 raw_board = JSON.generate(board_rows)
@@ -415,20 +414,18 @@ record(results, "NoSellerPiiOnTheOpenBoard",
        "(want 200, no account address anywhere, every handle an opaque " \
        "`seller-<12 hex>`, and ONE handle covering >= 2 of Alice's rows and not Bob's)")
 
-# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
+# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
 # The one beat in this file that is NOT hand-rolled: it comes from
 # `kiosk-redteam`, so every demo runs the SAME assertion about the
 # account-binding claim ceremony and a demo cannot be left out of it by
 # forgetting to copy a block.
 #
-# It exists because the coverage that was supposed to catch K-072 rested on a
-# condition nobody re-measured: the shared `PrivilegeSelfSelection` scenario
-# probes `/auth/register` only, and the ceremony beats written when K-072 was
-# fixed lived in ONE demo's suite. The other six were safe purely because each
-# declares a single role — which is exactly the mitigation the ledger row had
-# priced K-072 on, and which expired unnoticed the day a demo declared a
-# second one.
+# It exists because the coverage for role self-selection rested on a condition
+# nobody re-measured: the shared `PrivilegeSelfSelection` scenario probes
+# `/auth/register` only, and the ceremony beats lived in ONE demo's suite. The
+# other six were safe purely because each declares a single role — a mitigation
+# that expires unnoticed the day a demo declares a second one.
 #
 # `declared_roles` names what `config/initializers/kiosk.rb` declares here. The
 # scenario ALSO derives a declared role from the wire (the `role` claim of a

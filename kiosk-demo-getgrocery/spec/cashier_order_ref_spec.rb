@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Standalone (no rails boot, no DB) unit spec for the order-reference shape
-# check — the K-579 guard, `app/models/uuid_check.rb`. Run with:
+# check — `app/models/uuid_check.rb`. Run with:
 #   bundle exec rake demo:cashier_spec   (or: ruby spec/cashier_order_ref_spec.rb)
 #
 # `UuidCheck` guards the three places an agent-supplied id reaches an `::uuid`
@@ -19,11 +19,11 @@
 #     order_id) are unchanged and still ordered ahead of the shape check;
 #   • the accepted shape is exactly the one create_order hands out (every
 #     SecureRandom.uuid, case-insensitively) and nothing looser;
-#   • the guard is a GATE and not a formality (K-1061): with a stub `Order`
-#     standing in for the persistence boundary, a canonical uuid ARRIVES there
-#     (bound as `$1` in the claim UPDATE) and a malformed one never does. That
-#     pair goes red if the UuidCheck call is deleted; the negative-only
-#     assertion it replaced stayed green.
+#   • the guard is a GATE and not a formality: with a stub `Order` standing in
+#     for the persistence boundary, a canonical uuid ARRIVES there (bound as
+#     `$1` in the claim UPDATE) and a malformed one never does. That pair goes
+#     red if the UuidCheck call is deleted, where a negative-only assertion
+#     would stay green.
 # This is the DB-free test seam for the fix (getgrocery ships no rspec).
 
 require "securerandom"
@@ -128,7 +128,7 @@ assert(!UuidCheck.valid?(" #{SecureRandom.uuid} ") &&
 # Everything above ran with no persistence layer at all, so the accepted path
 # had nowhere to ARRIVE and the only sayable thing about it was the negative
 # "not a BadRequest" — which `nil`, any error raised BEFORE the guard, and a
-# DELETED guard call all satisfy equally (K-1061). So plant the boundary: a
+# DELETED guard call all satisfy equally. So plant the boundary: a
 # stub `Order` in the provider's own namespace, occupying the seam the
 # Rails-only constant occupies at runtime. It records the order_id bound into
 # the claim UPDATE as `$1` and answers "no row claimed", which sends the
@@ -173,10 +173,10 @@ assert(ValidatingPaymentProvider::Order::BOUND.empty? &&
        "got #{e.class}) — delete the UuidCheck call and THIS assertion goes red")
 
 if FAILURES.empty?
-  puts "\ncashier order-ref K-579 spec: ALL PASS"
+  puts "\ncashier order-ref spec: ALL PASS"
   exit 0
 else
-  puts "\ncashier order-ref K-579 spec: #{FAILURES.size} FAILURE(S)"
+  puts "\ncashier order-ref spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

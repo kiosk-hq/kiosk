@@ -34,8 +34,8 @@
 #         rather than the boolean → /agents/kyc accepts the attestation (the
 #         signature IS the broker's) but grants NOTHING, so the alcohol
 #         create_order goes BACK to 403 even for the agent that was cleared in
-#         PART A. The fail-closed property K-656 moved into the schema: the
-#         grant is a row's existence, and only the JSON boolean `true` writes
+#         PART A. The fail-closed property lives in the schema: the grant is a
+#         row's existence, and only the JSON boolean `true` writes
 #         one — `"true"`, `1`, `"yes"` are different jsonb values and none of
 #         them grant.
 #
@@ -175,9 +175,9 @@ STDERR.puts "  request_kyc: http=#{rc_req} verification_url=#{verification_url.i
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
 
-# A2b: THE OUTSTANDING-INTAKE CAP (K-586). Nothing meters this verb — this
-# origin's reputation policy challenges `:query` only and registration costs
-# one proof — so one registration used to buy unlimited broker intakes. Free
+# A2b: THE OUTSTANDING-INTAKE CAP. Nothing meters this verb — this origin's
+# reputation policy challenges `:query` only and registration costs one proof
+# — so without a cap one registration would buy unlimited broker intakes. Free
 # against a stub, a budget hole behind a PAID issuer. At most three may be
 # PENDING per account: the one opened above plus two more fill the allowance,
 # and the fourth is refused BEFORE the broker is called, which is what makes it
@@ -270,8 +270,8 @@ STDERR.puts "  forged attestation submit: http=#{rc_forged} (expect 403)"
 rc_rt_alcohol, _ = create_order(rt_token, alcohol_items)
 STDERR.puts "  alcohol create_order after forged KYC: http=#{rc_rt_alcohol} (expect 403 kyc_required)"
 
-# R3: a NON-CANONICAL BOOLEAN SPELLING, signed with the broker's REAL key
-# (K-656). R1 proves a bad signature grants nothing; this proves a GOOD
+# R3: a NON-CANONICAL BOOLEAN SPELLING, signed with the broker's REAL key.
+# R1 proves a bad signature grants nothing; this proves a GOOD
 # signature carrying `"true"` (a JSON string) instead of `true` grants nothing
 # either. It runs against the PART A agent, which is already cleared — so it
 # also proves the write REPLACES the grant set: the attestation is accepted,

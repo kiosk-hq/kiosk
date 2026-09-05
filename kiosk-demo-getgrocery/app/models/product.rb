@@ -34,17 +34,16 @@ class Product < ApplicationRecord
   # unrestricted that the gate then refuses is a wasted round trip; the reverse
   # — enforcing on a row the catalog never flagged — is worse.
   #
-  # FAIL-CLOSED BY CONSTRUCTION, which is K-724's lesson one demo over. The
-  # handler used to enumerate the truthy spellings it knew by hand
-  # (`== true || == "t" || == "true"`), correct against today's pg adapter and
-  # failing OPEN against any other: one adapter, cast or schema change yielding
+  # FAIL-CLOSED BY CONSTRUCTION. Enumerating the truthy spellings by hand
+  # (`== true || == "t" || == "true"`) is correct against today's pg adapter and
+  # fails OPEN against any other: one adapter, cast or schema change yielding
   # "TRUE" or 1, and the unrecognised value is treated as unrestricted — alcohol
   # sold past the age gate that exists to stop exactly that. So only a value
   # Rails recognises as literally FALSE (false, "f", "false", "0", 0, "") is
   # unrestricted; NULL, an unexpected spelling, or an `age_restricted` that
   # stopped being a boolean column is restricted, flagged in the catalog and
   # refused at the gate. On today's NOT NULL boolean column every reachable
-  # value answers exactly as the hand-written list did.
+  # value answers exactly as a hand-written list would.
   def self.age_restricted?(value)
     ActiveRecord::Type::Boolean.new.cast(value) != false
   end

@@ -6,9 +6,9 @@
 #
 # SEVEN GATES, in the order they are written below, and the order is behaviour
 # rather than tidiness — each one is the answer a caller gets when a later one
-# would also have refused: the cart's shape (K-693), delivery given and in-zone
-# (K-468), the window still bookable (K-470/480), the skus, the age gate, the
-# priceable total (K-1047), the replace lock. Gate 5 comes AFTER the sku
+# would also have refused: the cart's shape, delivery given and in-zone, the
+# window still bookable, the skus, the age gate, the priceable total, the
+# replace lock. Gate 5 comes AFTER the sku
 # resolution because it is a fact about the RESOLVED products, and BEFORE the
 # order_id shape check because an un-attested agent should be told to go and get
 # attested rather than told its id is malformed. Gate 6 can only be asked once
@@ -44,7 +44,7 @@ class CreateOrderOperation
     slot_id, refusal = WireArguments.delivery_slot_id(delivery_slot_id)
     return refusal if refusal
 
-    # ── Gate 3: the window, on the day the assistant saw it (K-470) ────────
+    # ── Gate 3: the window, on the day the assistant saw it ────────────────
     # An omitted delivery_date falls back to tomorrow, for callers that pre-date
     # the field — but a caller that saw a slot for a day SHOULD pass that day.
     date, refusal = WireArguments.delivery_date(
@@ -105,10 +105,10 @@ class CreateOrderOperation
 
       total_cents = items.sum { |item| by_sku[item[:sku]][:price_cents].to_i * item[:qty] }
 
-      # ── Gate 6: the cart has to be PRICEABLE (K-1047) ────────────────────
+      # ── Gate 6: the cart has to be PRICEABLE ─────────────────────────────
       # Every `qty` here is one the published descriptor calls valid, and the
       # SUM is still bounded by `orders.total_cents`. Without this the INSERT
-      # below raised `ActiveModel::RangeError` in Ruby and the wire answered
+      # below raises `ActiveModel::RangeError` in Ruby and the wire answers
       # `500 action_failed` for an argument a client simply got wrong.
       refusal = WireArguments.priceable_total(total_cents)
       next refusal if refusal
@@ -120,14 +120,14 @@ class CreateOrderOperation
 
       replaced = nil
       if order_id.present?
-        # K-579: ActiveRecord does not refuse junk, it CASTS it — an unparseable
-        # uuid becomes NULL and matches nothing, so without this check the caller
+        # ActiveRecord does not refuse junk, it CASTS it — an unparseable uuid
+        # becomes NULL and matches nothing, so without this check the caller
         # hears "not replaceable" rather than "that is not an id".
         order_id, refusal = WireArguments.order_id(order_id, hint: WireArguments::HINT_ORDER_ID_REPLACE)
         next refusal if refusal
 
-        # ── Gate 7: replaceable, AND held while we replace it (K-544) ──────
-        # Two conditions and one lock, and all three ARE the pay-race fix:
+        # ── Gate 7: replaceable, AND held while we replace it ──────────────
+        # Two conditions and one lock, and all three ARE the pay-race guard:
         #   · `replaceable` excludes `paying` as well as the terminal states — a
         #     /pay mid-flight has already checked its cart against these items,
         #     so swapping them now is "pay cheap, receive expensive";
@@ -164,7 +164,7 @@ class CreateOrderOperation
       # raises — unmapped in `rescue_responses`, so a 500 — into a
       # `RecordInvalid`, which Rails maps to 422 and the mixin's floor renders as
       # a 400. No `id` is supplied either: generating it belongs to the column
-      # DEFAULT (`gen_random_uuid()`), not to a caller-facing verb (K-654).
+      # DEFAULT (`gen_random_uuid()`), not to a caller-facing verb.
       new_order_id = replaced || Order.insert!(
         { user_id:     principal_id,
           status:      Order::CREATED,

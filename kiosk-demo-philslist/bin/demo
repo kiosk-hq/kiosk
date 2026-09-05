@@ -16,10 +16,9 @@ SERVER_URL="http://127.0.0.1:$PORT"
 
 # The seeded human this walkthrough acts for (db/seeds.rb). Her ASSISTANT's
 # token is minted below, after the server is up, by running the real binding
-# ceremony — see the "Binding" heading. Until T-104 this script wrote the
-# bearer down as `agent:u-<uuid>:a-<slug>:r-customer` and a dev-only parser in
-# the demo believed it; that parser is deleted, so the walkthrough now shows
-# the same thing a real assistant does to get a token.
+# ceremony — see the "Binding" heading. There is no self-asserted bearer this
+# script could write down instead: the demo carries no parser for one, so the
+# walkthrough does the same thing a real assistant does to get a token.
 ALICE_EMAIL="${ALICE_EMAIL:-alice@example.com}"
 DEMO_PASSWORD="${DEMO_PASSWORD:-philslist-demo-password}"
 

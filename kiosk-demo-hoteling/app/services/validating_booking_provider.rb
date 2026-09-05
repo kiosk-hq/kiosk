@@ -17,7 +17,7 @@
 # Any mismatch rejects the capture (403); the mandate trail is persisted,
 # nothing is charged.
 #
-# ── Per-booking serialization and the capture-anchored marker (K-853) ────────
+# ── Per-booking serialization and the capture-anchored marker ────────────────
 # The engine settles with the irreversible PSP capture BETWEEN two short DB
 # transactions (executor P1→P2→P3), so the settlement row written in P3 cannot
 # be the only "paid" marker: two /pay on two distinct chains would both charge,
@@ -86,7 +86,7 @@ class ValidatingBookingProvider
     deny "cart line_items must reference exactly one booking_id (see reserve_room's pay_hint)" unless refs.size == 1
     booking_id = refs.first
 
-    # K-581: the booking_id goes straight into an `::uuid` cast below, where a
+    # The booking_id goes straight into an `::uuid` cast below, where a
     # malformed one raises InvalidTextRepresentation and escapes as a 500 — the
     # worst answer on the pay path, since an assistant cannot tell "your input
     # was wrong" from "the charge may have gone through". A 400 and not the
@@ -99,13 +99,14 @@ class ValidatingBookingProvider
       )
     end
 
-    # CLAIM: unpaid → paying, race-free compare-and-set (K-853). Winning this
+    # CLAIM: unpaid → paying, race-free compare-and-set. Winning this
     # UPDATE is what serializes concurrent /pay for one booking, and it is taken
     # BEFORE the cashier check and before the capture, so a second chain never
     # reaches the PSP at all. RAW SQL because the ATOMICITY is the fix and
     # `update_all` has no RETURNING in Rails 8.1 — an ActiveRecord spelling would
     # be a SELECT then an UPDATE, i.e. the race back again. RAW BUT NOT
-    # INTERPOLATED (K-654): every value is a `$N` bind.
+    # INTERPOLATED: every value is a `$N` bind, so the statement text carries no
+    # value at all and there is no `conn.quote` to forget when this file is copied.
     claimed = Booking.lease_connection.exec_query(
       "UPDATE public.bookings SET payment_status = $1, " \
       "paid_by_user_id = $2::uuid, updated_at = now() " \
@@ -202,7 +203,7 @@ class ValidatingBookingProvider
     nil
   end
 
-  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT (K-654): both are
+  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT: both are
   # literal text with `$N` binds for every value, and the one difference between
   # them is a boolean at the call site rather than a SET fragment a caller could
   # grow.

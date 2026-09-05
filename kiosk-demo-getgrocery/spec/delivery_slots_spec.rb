@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Standalone (no rails boot, no DB) unit spec for the DeliverySlots helper —
-# the pure past-slot-filter + operator-locale-zone logic behind K-480. Run with:
+# the pure past-slot-filter + operator-locale-zone logic. Run with:
 #   bundle exec rake demo:slots_spec      (or: ruby spec/delivery_slots_spec.rb)
 #
 # It stubs "now in Dublin" to a fixed instant and asserts:
@@ -75,10 +75,10 @@ w1 = DeliverySlots.slot_at(winter_date, 1)
 assert(w1.utc_offset.zero?, "winter slot_at offset is +00:00 (GMT), not a hardcoded +1: #{w1.iso8601}")
 
 if FAILURES.empty?
-  puts "\nDeliverySlots K-480 spec: ALL PASS"
+  puts "\nDeliverySlots spec: ALL PASS"
   exit 0
 else
-  puts "\nDeliverySlots K-480 spec: #{FAILURES.size} FAILURE(S)"
+  puts "\nDeliverySlots spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

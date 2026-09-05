@@ -13,14 +13,14 @@ require "openssl"
 # a Rails boot. The environment-DEPENDENT trust material — the broker PUBLIC KEY
 # and skooti's intake SECRET — is set in config/environments/*.rb from the env
 # (Rails.configuration.x.kiosk.prove_public_key_pem / .prove_intake_secret),
-# with NO shipped fallback for either (K-650).
+# with NO shipped fallback for either.
 module ProveTrust
   module_function
 
   # The `iss` the broker signs into every claim; skooti sets c.kyc_issuer to it.
   # Both sides read KIOSK_PROVE_ISSUER and default to the SAME value, so plain
   # `rails s` (no env) and the deploy (one env for both apps) line up. Default is
-  # the origin the broker is deployed at (decided 2026-08-04).
+  # the origin the broker is deployed at.
   def issuer
     ENV.fetch("KIOSK_PROVE_ISSUER", "https://kyc.demo.kiosk.tech")
   end

@@ -17,7 +17,7 @@
 #
 # Not a Kiosk mechanism and not shipped by the gem — an ordinary Rails concern
 # in the operator's own app, which is the whole point of the mixin design
-# (K-495: the operator owns the structure).
+# — the operator owns the structure.
 module KioskRefusals
   extend ActiveSupport::Concern
 

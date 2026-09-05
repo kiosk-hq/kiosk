@@ -4,21 +4,15 @@
 #
 # Surface: catalog, delivery_slots, my_orders / create_order, reschedule_delivery
 #
-# THE PROFILE IS NOT MAPPED OUT HERE (K-1040 completing K-1037, the K-1035
-# class). This block used to name the verb bound to each generic role —
-# `per_user_query`, `forge_action`, `gated_action` — above a `requires_kyc` /
-# `pow_difficulty` pair, all five hand-copied from the one `Profile.new` further
-# down in this same file. `Profile.new` is now the single copy of all five: each
-# binding is stated at the constructor, beside the note this map was compressing
-# and beside the `*_args` lambda that shows what the verb actually takes, and
-# the run header prints the gate posture live off the object every scenario
-# reads. Nothing in the deleted map was FALSE — what it could not survive is a
-# RENAME, which is precisely what K-710 has done to a hand-kept list in these
-# suites twice already, and a stale map here would have a reader believe the
-# battery attacks a verb it no longer names. Orientation is not the cost it
-# looks like: six of the seven demo redteam suites carry no such map, hoteling
+# THE PROFILE IS NOT MAPPED OUT HERE. `Profile.new` further down is the single
+# copy of every binding — which verb plays each generic role, and the gate
+# posture — each stated at the constructor beside the `*_args` lambda that shows
+# what the verb actually takes; the run header prints the posture live off the
+# object every scenario reads. A map up here would be five hand-copied facts
+# that a RENAME turns into a reader believing the battery attacks a verb it no
+# longer names. Six of the seven demo redteam suites carry no such map, hoteling
 # and skooti included — the only other two that build a Profile at all — and
-# they are read from the constructor exactly as this one now is.
+# they are read from the constructor exactly as this one is.
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
@@ -36,28 +30,20 @@
 # survives a deletion, or lies about a resource that exists, is an attack
 # surface.
 #
-# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER (K-1239) — the same repair the
-# paragraph above records for the profile map (K-1040), for the same reason, in
-# the same file. The rule is: every APPLICABLE scenario must be BLOCKED and the
-# KYC trio must SKIP (no KYC here). The membership is `scenarios = [` further
-# down, which is the single copy.
+# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
+# is: every APPLICABLE scenario must be BLOCKED and the KYC trio must SKIP (no
+# KYC here). The membership is `scenarios = [` further down, which is the single
+# copy.
 #
-# This block used to enumerate the applicable ones by name, and it had already
-# gone stale in precisely the way a hand-kept list does. The array registers
-# `DeviceGrantRoleSelfSelection` — the shared, framework-side claim-ceremony
-# beat every demo runs (K-072, K-1128), the ONE beat here that is not local to
-# this suite — and the enumeration never learned of it, so the header advertised
-# eighteen applicable attacks where the battery runs nineteen. NOTHING WENT RED,
-# and that is the point: the run's totals are COMPUTED from the array, so no run
-# ever disagreed with itself; only the comment was wrong, and only a reader was
-# misled. K-1183 found the identical defect in philslist's README, the same beat
-# omitted from the same kind of list, and repaired it by eliding the numeral; that
-# it recurred here is why this list is DELETED rather than corrected.
+# An enumeration up here would go stale in the way a hand-kept list does, and
+# nothing would go red: the run's totals are COMPUTED from the array, so no run
+# can disagree with itself. Only the comment would be wrong, and only a reader
+# misled — which is the worst kind of defect to leave in a file whose whole job
+# is to say what is and is not covered.
 #
-# Read the membership off the array. Each entry there carries the finding it was
-# written for, which is more than this list ever said, and `EXPECTED_SKIP_NAMES`
-# beside it is what ASSERTS the applicable/skip split — so a silently disabled
-# gate fails the run, where a stale comment could only mislead a reader.
+# Read the membership off the array. `EXPECTED_SKIP_NAMES` beside it is what
+# ASSERTS the applicable/skip split — so a silently disabled gate fails the run,
+# where a stale comment could only mislead a reader.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \
@@ -85,16 +71,16 @@ profile = Kiosk::Redteam::Profile.new(
   # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
   # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
   # The claim ceremony's beat must name a role this origin ACTUALLY declares:
-  # an invented one was refused by the vulnerable code too, which is how a
-  # green battery sat on top of K-072 for nineteen days. The scenario also
-  # derives one off the wire, so a stale list here weakens the probe rather
-  # than emptying it.
+  # an invented one is refused even by an implementation that lets a DECLARED
+  # role through, so a battery probing only an invented role stays green over a
+  # real hole. The scenario also derives one off the wire, so a stale list here
+  # weakens the probe rather than emptying it.
   declared_roles: %w[customer],
   per_user_query: "my_orders",
 
   # result_id_key: create_order's response body IS the order object, so the key
   #                is read straight off it — body["order_id"] (0.4: no envelope)
-  # row_id_key:    my_orders rows carry an "order_id" field (K-482: matches the
+  # row_id_key:    my_orders rows carry an "order_id" field (it matches the
   #                consumer param name so an assistant copies the same key)
   result_id_key: "order_id",
   row_id_key:    "order_id",
@@ -159,7 +145,7 @@ profile = Kiosk::Redteam::Profile.new(
 
   # gated_action — gated on ownership + settled payment, and ONE reschedule per
   # order: the second attempt is the C3 spent-resource beat. (The verb is on the
-  # line below and is not repeated here, K-1040.)
+  # line below and is not repeated here.)
   gated_action: "reschedule_delivery",
   gated_args:   ->(owned_ref) {
     {
@@ -291,15 +277,13 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
 end
 
 # A cart of the wrong SHAPE is a client mistake and must come back as a typed
-# 400, never as a 500 (K-693). The shipped guard was `items.empty?` under a
-# message promising "a non-empty array": an emptiness check wearing a type
-# check's words. `items` is not validated at the wire either
-# (request_validation.rb: "ONLY the PoW proof(s) are validated"), so a String, a
-# Hash, or an array of Strings each reached `.map` / `it[:sku]` and raised a raw
-# NoMethodError or TypeError that executor.rb turned into ActionFailed — a 500
-# on the flagship demo's headline action, the one the onboarding page is
-# modelled on (which is how K-645 came to cite this handler as the CORRECT
-# contrast it was not).
+# 400, never as a 500. An `items.empty?` guard under a message promising "a
+# non-empty array" is an emptiness check wearing a type check's words, and
+# `items` is not validated at the wire either (request_validation.rb: "ONLY the
+# PoW proof(s) are validated"), so a String, a Hash, or an array of Strings
+# reaches `.map` / `it[:sku]` and raises a raw NoMethodError or TypeError that
+# executor.rb turns into ActionFailed — a 500 on this demo's headline action,
+# the one the onboarding page is modelled on.
 #
 # Since 0.4 the FIRST of these refusals comes from the schema layer rather than
 # from the handler: `input_schema` is validated on every call and `items`
@@ -348,7 +332,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
       resp = client.run(a, name: "create_order", **args)
       statuses << resp.status
       code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
-      # THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). {WireArguments.items}
+      # THE SCAN IS TOLD WHAT THIS PROBE SENT. {WireArguments.items}
       # names the element it rejected — `each item must be a {sku, qty} object
       # — got String ("sourdough-bread")` — so the bytes scanned for
       # RUBY_INTERNALS are partly the probe's own, and a cart whose sku spelled
@@ -382,23 +366,20 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
   end
 end
 
-# K-773 — THE STANDING HOSTILE-SHAPE BEAT.
+# THE STANDING HOSTILE-SHAPE BEAT.
 #
-# K-773 is the finding that Postgres used to do free shape-checking on wire
-# arguments and ActiveRecord does not. getgrocery is the demo where it measured
-# POSITIVE-PLUS-ONE: `order_id` was interpolated into a `::uuid` cast (class
-# one, closed by {UuidCheck}), and `delivery_slot_id` / `qty` were read with a
-# bare `.to_i` that `true`, `false`, an Array and an object all answer with
-# NoMethodError — a `500 action_failed` for an argument the published
-# `input_schema` already declares an integer (class two, closed by reading
-# through `.to_s` first). The row's own bar for closing was that those hostile
-# shapes be re-sent AS A STANDING BEAT rather than from the migration's
-# throwaway harness, and this is that beat. {MalformedItemsCart} stands for the
-# `items` CONTAINER (K-693) — a String, a bare Hash, an array of strings, `[]`,
-# absent; this one takes the scalar arguments it does not, AND the `qty` INSIDE
-# a well-formed element, which fell between the two beats until K-773's
-# 2026-08-25 reopen named it: `qty` is half of class two above and
-# `MalformedItemsCart` never varies an element's fields.
+# Postgres does free shape-checking on wire arguments and ActiveRecord does not,
+# and getgrocery has both classes of the consequence. `order_id` interpolated
+# into a `::uuid` cast is class one, held by {UuidCheck}. `delivery_slot_id` /
+# `qty` read with a bare `.to_i` — which `true`, `false`, an Array and an object
+# all answer with NoMethodError — is class two: a `500 action_failed` for an
+# argument the published `input_schema` already declares an integer, held by
+# reading through `.to_s` first. This is the standing beat that re-sends those
+# hostile shapes on every run. {MalformedItemsCart} stands for the `items`
+# CONTAINER — a String, a bare Hash, an array of strings, `[]`, absent; this one
+# takes the scalar arguments it does not, AND the `qty` INSIDE a well-formed
+# element, which otherwise falls between the two beats: `qty` is half of class
+# two above and `MalformedItemsCart` never varies an element's fields.
 #
 # WHAT IS PROBED, NAMED RATHER THAN CLAIMED. create_order: `items[].qty`,
 # `delivery_slot_id`, `delivery_date`, `delivery_address`. reschedule_delivery:
@@ -451,16 +432,16 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     # ── schema-declared integers and uuids ──────────────────────────────────
     #
-    # `delivery_slot_id`: BOTH LAYERS REFUSE ALL EIGHT SHAPES BELOW, and that
-    # sentence is only true since K-1025 — the same defect as `qty`'s below, one
-    # argument over. The guard read `raw.to_s.to_i`, and `"1.5".to_i` is 1,
-    # which lands INSIDE the declared 1..6: `1.5` was the one shape the schema
-    # alone refused, and without it in front the handler would have booked a
-    # fractional slot as slot 1. It goes through the same
-    # {WireArguments.whole_number} `qty` uses now, so `2.0` is still slot 2
+    # `delivery_slot_id`: BOTH LAYERS REFUSE ALL EIGHT SHAPES BELOW, and the
+    # second layer is what makes that worth asserting — the same trap as
+    # `qty`'s below, one argument over. A guard reading `raw.to_s.to_i` turns
+    # `"1.5"` into 1, which lands INSIDE the declared 1..6, so `1.5` is the one
+    # shape the schema alone refuses and, with nothing in front of it, the
+    # handler would book a fractional slot as slot 1. It goes through the same
+    # {WireArguments.whole_number} `qty` uses, so `2.0` is still slot 2
     # (json_schemer accepts it) and `1.5` is a 400 from either layer. The
-    # non-vacuity proof is K-1020's: drop `delivery_slot_id`'s declared type
-    # from both verbs' `input_schema` and these stay 400.
+    # non-vacuity proof: drop `delivery_slot_id`'s declared type from both
+    # verbs' `input_schema` and these stay 400.
     SHAPES.each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
@@ -483,21 +464,20 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #
     # The container is correct in every call here — one element, a real sku —
     # so the ONLY thing wrong is the element's own `qty`, which is class two of
-    # K-773's finding: the guard used to be a bare `.to_i`, and `true`/`false`/
-    # `[]`/`{}` have none, so each was a `500 action_failed` for a value
+    # the shape problem above: a bare `.to_i` guard, and `true`/`false`/`[]`/
+    # `{}` have none, so each is a `500 action_failed` for a value
     # `input_schema` already declares `{type: "integer", minimum: 1}`.
     #
-    # BOTH LAYERS REFUSE ALL TEN VALUES BELOW, and that sentence is only true
-    # since K-1020. The guard K-773 left behind read `(item[:qty] || 1).to_s.to_i`
-    # and it agreed with the schema on eight of them: `false` and `1.5` BOTH came
-    # out of it as a legal quantity 1 — `||` reads `false` as absent, and
-    # `"1.5".to_i` is 1 — so the schema alone was refusing those two while the
-    # comment here claimed a second, independent refusal and named only one
-    # exception. `wire_arguments.rb` now mirrors the schema's own `integer`
-    # (whole numbers, `2.0` included, because json_schemer accepts that — measured),
-    # so a 400 here is two refusals rather than one. The non-vacuity proof is
-    # K-773's own mutation: drop `qty`'s declared type from `input_schema` and
-    # these stay 400 instead of booking `false` and `1.5` as one unit.
+    # BOTH LAYERS REFUSE ALL TEN VALUES BELOW, and the second layer is easy to
+    # lose: a guard reading `(item[:qty] || 1).to_s.to_i` agrees with the schema
+    # on eight of them but lets `false` and `1.5` BOTH out as a legal quantity 1
+    # — `||` reads `false` as absent, and `"1.5".to_i` is 1 — leaving the schema
+    # as the only refusal for those two. `wire_arguments.rb` mirrors the schema's
+    # own `integer` instead (whole numbers, `2.0` included, because json_schemer
+    # accepts that — measured), so a 400 here is two refusals rather than one.
+    # The non-vacuity proof is a mutation: drop `qty`'s declared type from
+    # `input_schema` and these stay 400 instead of booking `false` and `1.5` as
+    # one unit.
     sku = catalog.first["sku"]
     (SHAPES + [0, -1]).each do |v|
       refused "create_order items[0].qty=#{v.inspect}",
@@ -506,13 +486,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               supplied: { sku: sku, qty: v }
     end
 
-    # ── MAGNITUDE, the axis every probe above misses (K-1047) ───────────────
+    # ── MAGNITUDE, the axis every probe above misses ────────────────────────
     #
     # Everything above varies `qty`'s TYPE, and `[0, -1]` sit just under the
-    # declared `minimum: 1`. No probe anywhere in this fleet had ever sent an
-    # integer LARGE enough to matter — which is exactly how a `500
-    # action_failed` for a body the published descriptor calls VALID survived
-    # three hostile-shape waves (K-773, K-1020, K-1025) in this very beat.
+    # declared `minimum: 1`. An integer LARGE enough to matter is a separate
+    # axis, and a beat can vary every shape there is without ever reaching it —
+    # which is how a `500 action_failed` for a body the published descriptor
+    # calls VALID hides behind a full set of type probes.
     #
     # TWO probes, because there are two bounded columns behind one argument and
     # they give way at different widths. Both numbers are DERIVED from the
@@ -521,8 +501,8 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #
     #   · UNPRICEABLE CART — `qty` is a legal `order_items.qty` (int4) and the
     #     cart still cannot be TOTALLED: `price_cents * qty` passes
-    #     `orders.total_cents`, also int4. MEASURED on a booted origin before
-    #     the fix, `qty: 30_000_000` of the 89-cent `milk-0.5l` →
+    #     `orders.total_cents`, also int4. MEASURED on a booted origin with no
+    #     total guard in front, `qty: 30_000_000` of the 89-cent `milk-0.5l` →
     #     `ActiveModel::RangeError: 2670000000 is out of range …` out of
     #     `Order.insert!`, served as **HTTP 500 `action_failed`**. The refusal
     #     it must be instead comes from {WireArguments.priceable_total}, which
@@ -532,7 +512,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #     per-property and so is refused by the descriptor's own `maximum`
     #     before the handler runs at all.
     #
-    # The non-vacuity proof is the K-773/K-1020 mutation, one bound at a time:
+    # The non-vacuity proof is a mutation, one bound at a time:
     # drop `maximum` from `qty` in `input_schema` and the second probe reaches
     # the handler; delete the `priceable_total` call from
     # {CreateOrderOperation} and the first goes back to 500.
@@ -590,13 +570,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   private
 
   # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker (T-121). getgrocery names the
-  # value it got — `invalid delivery_date: nope`, `qty must be a whole number
-  # >= 1 — got …` — so the bytes scanned for LEAKS are partly the probe's own,
-  # and a `delivery_address` spelling `PG::` would otherwise be reported as a
-  # BREACH on its own echo, under a runner whose prose says a BREACH means "fix
-  # the app, not the scenario". The default is nil, which is the pre-fix oracle
-  # exactly: forgetting to declare risks a FALSE BREACH, never a missed leak.
+  # leak assertion being decided by the attacker. getgrocery names the value it
+  # got — `invalid delivery_date: nope`, `qty must be a whole number >= 1 —
+  # got …` — so the bytes scanned for LEAKS are partly the probe's own, and a
+  # `delivery_address` spelling `PG::` would otherwise be reported as a BREACH
+  # on its own echo, under a runner whose prose says a BREACH means "fix the
+  # app, not the scenario". The default is nil, which discounts nothing:
+  # forgetting to declare risks a FALSE BREACH, never a missed leak.
   def refused(label, resp, supplied: nil)
     doc  = resp.body.is_a?(Hash) ? resp.body : {}
     scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
@@ -615,19 +595,18 @@ end
 
 # A retired endpoint that still answers is a second conformance surface, and a
 # second conformance surface is somewhere an attacker looks for the gate the
-# first one has. T-074 = A was a HARD CUT: `POST /kiosk/query` and
+# first one has. The 0.3 cutover was a HARD CUT: `POST /kiosk/query` and
 # `POST /kiosk/run` now reach the per-verb controller as verbs literally named
 # "query" and "run", which nobody registered, so they answer the ordinary 404 an
 # AUTHENTICATED caller gets — no privileged endpoint left, no compatibility
 # payload, no tombstone naming a replacement an attacker could probe.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
+# caller with no bearer never reaches the registry lookup that produces the 404 —
+# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
+# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
+# nothing tested the anonymous case.
 class RetiredWire < Kiosk::Redteam::Scenario
   RETIRED = %w[query run].freeze
 
@@ -707,7 +686,7 @@ class MethodMismatch < Kiosk::Redteam::Scenario
 end
 
 # A `date` in the PAST on `delivery_slots` must be a typed 400 naming the
-# earliest bookable day — not `200 []` (T-090, spec §9.1).
+# earliest bookable day — not `200 []` (spec §9.1).
 #
 # WHY THE ADVERSARIAL BATTERY OWNS THIS. The empty list this replaces was not a
 # missing check, it was an AMBIGUOUS ANSWER: `DeliverySlots.bookable_ids`
@@ -752,15 +731,14 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
     refused = bad.status == 400 && error_code(bad) == "bad_request" && named
     control = ctl.status == 200 && ctl.body.is_a?(Array) && ctl.body.any?
 
-    # ── THE WRITE HALF (K-969) ──────────────────────────────────────────────
+    # ── THE WRITE HALF ──────────────────────────────────────────────────────
     # The read side is the primary guarantee — an assistant must never SEE a
     # window it cannot book — but an assistant may name a date it never read
     # from a `delivery_slots` response, so the ORDER has to refuse it too. That
-    # is the belt to this beat's braces, and it was already true here
-    # ({WireArguments.delivery_date} refuses `date < Date.today`) while being
-    # pinned only CONDITIONALLY: `getgrocery_flow.rb`'s K-480 probe asserts the
-    # past-WINDOW guard and is a no-op before 08:00 Dublin. This half is
-    # unconditional and is about the past DAY.
+    # is the belt to this beat's braces: {WireArguments.delivery_date} refuses
+    # `date < Date.today`. `getgrocery_flow.rb` pins the past-WINDOW guard, but
+    # only CONDITIONALLY — its probe is a no-op before 08:00 Dublin. This half
+    # is unconditional and is about the past DAY.
     sku      = (client.query(a, name: "catalog").body.then { |b| b.is_a?(Array) ? b : [] }).first&.dig("sku")
     order    = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
                              delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: past)
@@ -806,18 +784,18 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
-  # `/auth/register`, where the role was never client-readable; this covers the
-  # door that WAS open (K-072) — the unauthenticated `device_authorization`
-  # request that opens the account-binding ceremony.
+  # `/auth/register`, where the role is never client-supplied; this covers the
+  # other door — the unauthenticated `device_authorization` request that opens
+  # the account-binding ceremony.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   WrongCurrencyCart.new,
   TamperedPriceCart.new,
   InflatedTotalCart.new,
-  MalformedItemsCart.new,   # K-693 — a mis-shaped `items` is a typed 400, never a 500
-  HostileArgShapes.new,     # K-773 — boolean/array/object/junk shapes on the other args → typed 400
-  RetiredWire.new,          # T-074 = A — the 0.3 pair is deleted, not tombstoned
+  MalformedItemsCart.new,   # a mis-shaped `items` is a typed 400, never a 500
+  HostileArgShapes.new,     # boolean/array/object/junk shapes on the other args → typed 400
+  RetiredWire.new,          # the 0.3 pair is deleted, not tombstoned
   MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
-  PastDeliveryDate.new,     # T-090/K-969 — a past date is a named 400 on the read AND the write side
+  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,
@@ -838,12 +816,12 @@ EXPECTED_SKIP_NAMES = %w[
 
 puts "\n── getgrocery redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-# K-1035 class — DERIVE BOTH, NEVER TYPE THEM.  `requires_kyc` was a typed
-# `false` sitting directly under a line that already read `profile.pow_difficulty`
-# off the object, so one flipped constructor argument 660 lines up left the banner
-# announcing the opposite of the battery it introduces.  The ON/OFF gloss is
-# derived for the same reason: `1 (register PoW ON)` and `0 (register PoW ON)`
-# were both printable, and only one of them is ever true.
+# DERIVE BOTH, NEVER TYPE THEM.  A typed `requires_kyc: false` sitting directly
+# under a line that already reads `profile.pow_difficulty` off the object lets
+# one flipped constructor argument 660 lines up leave the banner announcing the
+# opposite of the battery it introduces.  The ON/OFF gloss is derived for the
+# same reason: `1 (register PoW ON)` and `0 (register PoW ON)` are both
+# printable, and only one of them is ever true.
 #
 # These are the values every generic scenario reads to decide whether it is
 # applicable — RegistrationWithoutPow skips on 0, the KYC trio skips on false —

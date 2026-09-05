@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 #
-# Agent-side driver: PROVE search_hotels pagination + hotel_detail (T-042 / K-452).
+# Agent-side driver: PROVE search_hotels pagination + hotel_detail.
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING — including `limit` and `cursor`, which are RESERVED names
 # the wire always accepts and `search_hotels` deliberately does NOT declare
-# (K-798). There is ONE page shape since T-092: the BODY is always the bare
-# array every query answers, and truncation is said in the RESPONSE HEADERS —
+# at all. There is ONE page shape: the BODY is always the bare array every
+# query answers, and truncation is said in the RESPONSE HEADERS —
 # `Link: <…?cursor=…>; rel="next"` (RFC 8288) plus `X-Total-Count`.
 #
 # Registers a fresh agent (registration IS PoW-gated; equihash_register
@@ -18,9 +18,9 @@
 #   3. A filtered search that fits in one page → the same bare array with NO
 #      `Link` at all (complete).
 #   4. hotel_detail on a summary row's property_id → a ONE-ROW ARRAY carrying
-#      the full property (K-794: a detail-by-id query answers rows like any
+#      the full property (a detail-by-id query answers rows like any
 #      other query).
-#   5. hotel_detail on an id nobody has → 404 not_found (T-090, spec §9.1:
+#   5. hotel_detail on an id nobody has → 404 not_found (spec §9.1:
 #      that argument ADDRESSES a property, so an empty array would be a
 #      false statement rather than an empty result).
 #
@@ -66,8 +66,8 @@ def get_url(url, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {}), res]
 end
 
-# ONE page shape (T-092): the body is the array, always. What used to be a
-# branch on `Hash` vs `Array` is gone with the object.
+# ONE page shape: the body is the array, always — there is no `Hash`-vs-`Array`
+# branch to make.
 def page_rows(body) = Array(body)
 
 # The `rel="next"` target out of an RFC 8288 `Link` field value, or nil.
@@ -118,7 +118,7 @@ LIMIT = 20
 
 # ── 1. Full first page → carries `next` (truncated) ─────────────────────────
 # `limit` rides the query string as a RESERVED parameter: search_hotels does not
-# declare it (K-798), the wire accepts it anyway and the decoder coerces it to
+# declare it, the wire accepts it anyway and the decoder coerces it to
 # an integer from ArgumentDecoder::RESERVED.
 rc1, p1, res1 = query_json("search_hotels", { limit: LIMIT }, bearer: token)
 abort "search page1 failed (#{rc1}): #{JSON.generate(p1)}" unless rc1 == 200
@@ -164,22 +164,22 @@ detail_room_count = (detail["room_types"] || []).size
 STDERR.puts "  Detail for id=#{detail_id}: #{detail["name"]}, #{detail_room_count} room type(s) " \
             "in a #{detail_row_count}-row array"
 
-# ── 4b. hotel_detail for an id nobody has → 404 not_found (T-090) ──────────
+# ── 4b. hotel_detail for an id nobody has → 404 not_found ──────────────────
 # `property_id` ADDRESSES a property here, so the honest answer is that the
-# property is not here — spec §9.1. The one-row ARRAY shape K-794 shipped is
-# untouched by that; the two questions are independent.
+# property is not here — spec §9.1. The one-row ARRAY shape is untouched by
+# that; the two questions are independent.
 rc5, p5, _res5 = query_json("hotel_detail", { property_id: 999_999_999 }, bearer: token)
 STDERR.puts "  Detail for an unknown id: HTTP #{rc5}, code=#{p5["code"].inspect}"
 
-# ── 4c. availability for the SAME unknown id → 404 too (T-090) ─────────────
-# The pair that made this Phil's call: two verbs of one origin used to disagree
-# about the same argument, one answering 404 and the other `200 []`.
+# ── 4c. availability for the SAME unknown id → 404 too ─────────────────────
+# THE PAIR IS THE POINT: two verbs of one origin must not disagree about the
+# same argument, one answering 404 and the other `200 []`.
 #
-# THE DATES ARE COMPUTED, NOT WRITTEN DOWN (K-969). `availability` now refuses a
-# past `check_in` BEFORE it asks whether the property exists — that ordering is
+# THE DATES ARE COMPUTED, NOT WRITTEN DOWN. `availability` refuses a past
+# `check_in` BEFORE it asks whether the property exists — that ordering is
 # deliberate, an argument outside the verb's domain is answered before a lookup
-# — so a literal date would have turned this 404 assertion into a 400 on the day
-# it went stale, and the failure would have named the wrong thing entirely.
+# — so a literal date would turn this 404 assertion into a 400 on the day it
+# went stale, and the failure would name the wrong thing entirely.
 DETAIL_IN  = (Date.today + 30).iso8601
 DETAIL_OUT = (Date.today + 33).iso8601
 rc6, p6, _res6 = query_json(
@@ -189,7 +189,7 @@ rc6, p6, _res6 = query_json(
 )
 STDERR.puts "  Availability for an unknown id: HTTP #{rc6}, code=#{p6["code"].inspect}"
 
-# ── 4d. A FILTER that matched nothing → 200 with an EMPTY array (T-090) ────
+# ── 4d. A FILTER that matched nothing → 200 with an EMPTY array ────────────
 # Spec §9.1 rule 3, and the OTHER side of the discriminator 4b/4c just proved.
 # `neighbourhood` and `max_price_cents` FILTER a collection — they do not
 # address an entity — so a combination nothing satisfies is an honest empty

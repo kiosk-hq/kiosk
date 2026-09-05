@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# K-853: hoteling had no payment lifecycle at all. The ONLY record that money
-# had moved for a booking was the engine's `kiosk.settlements` row, which is
-# written AFTER the irreversible capture — so between the capture returning and
-# that row landing, hoteling's own records said "no settlement for this
-# booking", and `my_bookings` published nothing about money whatsoever.
+# Without a payment lifecycle of its own, the ONLY record that money had moved
+# for a booking would be the engine's `kiosk.settlements` row, which is written
+# AFTER the irreversible capture — so between the capture returning and that row
+# landing, hoteling's own records would say "no settlement for this booking",
+# and `my_bookings` would publish nothing about money whatsoever.
 #
 # protocol.md §11.6 forbids exactly that answer: paid state MUST be anchored to
 # the CAPTURE, not to the settlement record, and an operator MUST NOT report a

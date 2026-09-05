@@ -9,10 +9,10 @@
 # The superclass is `ActionController::API` and not an `ApplicationController`:
 # hoteling is `config.api_only = true` with no Devise and no
 # ApplicationController at all, and the mixin leaves the base class to the
-# operator (K-495).
+# operator.
 #
 # `kind :query` is what puts a declaration on `GET`, and the kind belongs to the
-# DECLARATION rather than the class (K-921), so one controller may declare both
+# DECLARATION rather than the class, so one controller may declare both
 # — keeping the write half next door in Kiosk::ReservationsController is this
 # demo's shape, not a rule. The two halves share an argument vocabulary: the
 # shape guard is {WireArguments} (which renders nothing, so the Operations use
@@ -58,7 +58,7 @@ class Kiosk::HotelsController < ActionController::API
 
   # ── availability — the OFFER: room types of one property with no live booking
   # overlapping the requested nights. `RoomType.free_for` is that predicate, and
-  # `reserve_room` sells against the same scope, so the two cannot disagree (K-690).
+  # `reserve_room` sells against the same scope, so the two cannot disagree.
   kind :query
   description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
               "means that hotel is SOLD OUT for those nights, not that it has no rooms. There is no " \
@@ -85,7 +85,7 @@ class Kiosk::HotelsController < ActionController::API
                },
                required: ["property_id", "check_in", "check_out"]
   # The OFFER, not the catalogue. Empty means the property is sold out for those
-  # nights and, since T-090, that is the ONLY thing empty means here — an unknown
+  # nights, and that is the ONLY thing empty means here — an unknown
   # `property_id` is 404.
   output_schema type: "array",
                 description: "Room types free for the requested nights, cheapest first.",
@@ -111,14 +111,14 @@ class Kiosk::HotelsController < ActionController::API
     dates, refusal = WireArguments.stay_dates(params[:check_in], params[:check_out])
     return render_refusal(refusal) if refusal
 
-    # K-969: a past `check_in` is outside this verb's domain (§9.1's first
-    # branch), so it is a named 400 rather than the `[]` that already means SOLD
-    # OUT here — the two must not be confusable. `reserve_room` refuses the same
-    # class from the same guard.
+    # A past `check_in` is outside this verb's domain (§9.1's first branch), so
+    # it is a named 400 rather than the `[]` that already means SOLD OUT here —
+    # the two must not be confusable. `reserve_room` refuses the same class from
+    # the same guard.
     refusal = WireArguments.past_stay(dates.first)
     return render_refusal(refusal) if refusal
 
-    # T-090 / spec §9.1: `property_id` ADDRESSES a property before anything is
+    # Spec §9.1: `property_id` ADDRESSES a property before anything is
     # filtered, so an id nobody has is `404 not_found` and NOT an empty list —
     # empty is reserved for its one honest meaning here, that the property exists
     # and is SOLD OUT for the requested nights.
@@ -142,7 +142,7 @@ class Kiosk::HotelsController < ActionController::API
   # `owned_by_current_principal` is the ONE place the identity predicate is
   # written (see Booking for why it stays SQL-side).
   #
-  # THE RECONCILIATION SURFACE (K-853): this is the "per-user query" protocol.md
+  # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
   # §11.6 sends an assistant to after a `pay` whose response it never read, so
   # what it publishes about money is normative. `payment_state` is a TRI-state on
   # purpose — §11.6 requires a third answer distinct from paid and not-paid,
@@ -199,7 +199,7 @@ class Kiosk::HotelsController < ActionController::API
                         }
   end
 
-  # ── search_hotels — paginated, multi-parameter search (T-042 / K-452) ────────
+  # ── search_hotels — paginated, multi-parameter search ────────────────────────
   #
   # The fleet's ONLY paginating verb: the one handler that answers with
   # `render_kiosk_page`. Per RFC 8288 the opaque cursor rides in a
@@ -209,11 +209,11 @@ class Kiosk::HotelsController < ActionController::API
   HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
   HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
 
-  # The «what should I have sent» tails for this verb's three INTEGER arguments
-  # (K-1025). {WireArguments.integer} takes a hint because a refusal that only
-  # says «not an integer» leaves the caller to guess the domain; each of these
-  # names it, and `limit`'s names the clamp so a caller does not read its
-  # refusal as «this page size is too big».
+  # The «what should I have sent» tails for this verb's three INTEGER arguments.
+  # {WireArguments.integer} takes a hint because a refusal that only says «not an
+  # integer» leaves the caller to guess the domain; each of these names it, and
+  # `limit`'s names the clamp so a caller does not read its refusal as «this page
+  # size is too big».
   HINT_SEARCH_LIMIT     = "`limit` is a whole number of rows, e.g. 20. It is CLAMPED to " \
                           "1..#{HOTELING_SEARCH_MAX} — an integer outside that range is adjusted, " \
                           "never refused; this refusal is about the SHAPE."
@@ -252,7 +252,7 @@ class Kiosk::HotelsController < ActionController::API
                  amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
                },
                # `limit` and `cursor` ARE NOT DECLARED HERE, and their absence is the
-               # declaration (K-798): spec §8.1 item 6 and §8.4 make them RESERVED names
+               # declaration: spec §8.1 item 6 and §8.4 make them RESERVED names
                # the wire always accepts and a verb never declares, so a schema shows an
                # assistant this verb's BUSINESS parameters only. The decoder still coerces
                # them, the validator exempts them from `additionalProperties: false`, and
@@ -290,17 +290,16 @@ class Kiosk::HotelsController < ActionController::API
   def search_hotels
     # ── THE THREE INTEGERS THIS VERB READS GO THROUGH THE DEMO'S OWN GUARD ────
     #
-    # K-1025. They used to read `params[…].to_s.to_i`, and `to_s` before `to_i`
-    # is enough to stop the `NoMethodError` a JSON `true` or `[3]` would raise
-    # on a bare `.to_i` — it is NOT enough to agree with the `{type: "integer"}`
-    # declared in front of them. `.to_i` answers 0 for `"abc"` and 1 for
-    # `"1.5"`, so a junk filter became «no floor at all» or a floor nobody
-    # asked for, silently, and a junk `limit` became the default page size. This
-    # demo already WROTE DOWN its answer to that exact question one file over:
-    # {WireArguments.integer} is `Integer(raw, 10)` with base 10 explicit so
-    # `"0x10"` is refused rather than read as 16, and it is what `property_id`
-    # and `room_type_id` have always used. These three were the only readers of
-    # a declared integer on this surface that bypassed it.
+    # NOT `params[…].to_s.to_i`. `to_s` before `to_i` is enough to stop the
+    # `NoMethodError` a JSON `true` or `[3]` would raise on a bare `.to_i` — it
+    # is NOT enough to agree with the `{type: "integer"}` declared in front of
+    # them. `.to_i` answers 0 for `"abc"` and 1 for `"1.5"`, so a junk filter
+    # would become «no floor at all» or a floor nobody asked for, silently, and
+    # a junk `limit` the default page size. This demo writes its answer to that
+    # question down one file over: {WireArguments.integer} is `Integer(raw, 10)`
+    # with base 10 explicit so `"0x10"` is refused rather than read as 16, and
+    # it is what `property_id` and `room_type_id` use. Every reader of a
+    # declared integer on this surface goes through it.
     #
     # NOT REACHABLE FROM THE WIRE — said out loud rather than left as a puzzle.
     # `search_hotels` is `kind :query`, so {Kiosk::Server::ArgumentDecoder} has
@@ -316,7 +315,7 @@ class Kiosk::HotelsController < ActionController::API
     # A non-integer is not «a value outside that range» — it is not a page size
     # at all, and the engine in front of this line already answers it 400.
     #
-    # SO `limit` TAKES NO `max:` (T-125), and that is a decision rather than an
+    # SO `limit` TAKES NO `max:`, and that is a decision rather than an
     # omission: it is the one integer on this surface that reaches no COLUMN —
     # it becomes `.limit()`, bounded by construction two lines below — and
     # refusing a `limit` of 2**31 would contradict the sentence above, which the
@@ -417,9 +416,9 @@ class Kiosk::HotelsController < ActionController::API
                                 description: "Optional checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
                required: ["property_id"]
-  # A ONE-ROW ARRAY, not a bare object (K-794). Spec §8.2: a query answers a JSON
-  # ARRAY of rows, and a detail-by-id query is still a query. The MISS is a
-  # separate question from the SHAPE (T-090): an id nobody has is `404 not_found`
+  # A ONE-ROW ARRAY, not a bare object. Spec §8.2: a query answers a JSON ARRAY
+  # of rows, and a detail-by-id query is still a query. The MISS is a separate
+  # question from the SHAPE: an id nobody has is `404 not_found`
   # (spec §9.1), because an empty one-row array would state that the property
   # exists and merely has no detail.
   output_schema type: "array",
@@ -458,7 +457,7 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[property_id name neighbourhood stars address amenities currency
                                room_types_scope check_in check_out room_types],
                 }
-  # THE STAY IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here ages
+  # THE STAY IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here ages
   # into a 400, because a `check_in` before today is REFUSED. `example_params`
   # and `example_row` are RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so
   # both name {WireArguments.example_check_in}/{WireArguments.example_check_out},
@@ -484,7 +483,7 @@ class Kiosk::HotelsController < ActionController::API
   def hotel_detail
     return unless kiosk_present?(params[:property_id], "property_id")
 
-    # ── Optional date filter (K-690) ─────────────────────────────────────────
+    # ── Optional date filter ─────────────────────────────────────────────────
     # With both dates this applies `availability`'s exclusion — the SAME
     # `RoomType.free_for` scope, not a second copy of the predicate. Without them
     # the list is a CATALOGUE, and the response says so rather than implying an
@@ -500,31 +499,27 @@ class Kiosk::HotelsController < ActionController::API
       ))
     end
     if dated
-      # CONVERGED ON {WireArguments.stay_dates} (K-1234). This kept its own
-      # `Date.parse` on the argument that what the verb accepts is «already
-      # published behaviour», and deferred the convergence as a decision. K-1230
-      # then narrowed `stay_dates` to `\A\d{4}-\d{2}-\d{2}\z`, leaving ONE demo
-      # with two date guards that disagreed about what a date is while carrying
-      # the SAME refusal sentence.
+      # ONE DATE GUARD FOR THE WHOLE ORIGIN: {WireArguments.stay_dates}, which
+      # accepts `\A\d{4}-\d{2}-\d{2}\z` and nothing else. A local `Date.parse`
+      # here would be a second guard disagreeing with it about what a date is
+      # while carrying the SAME refusal sentence.
       #
-      # THE DECISION, and the measurement that settles it. Documenting the
-      # looseness the way getgrocery does was the other option offered, and it is
-      # not available here: `Date.parse` SCANS rather than validates, so
-      # `"x2026-09-01x"`, `"2026-09-01'; --"` and `["2026-09-01"].to_s` all parse;
-      # `"09/01/2026"` is read as 9 January, not the 1 September an assistant
-      # sending it means; and `"Tue"`, `"sep"` and `"1st"` are COMPLETED FROM
-      # TODAY'S CLOCK. There is no set to name — the accepted set depends on the
-      # day the call is made.
+      # WHY THE STRICT SPELLING, rather than documenting `Date.parse`'s
+      # looseness the way getgrocery documents its own: `Date.parse` SCANS
+      # rather than validates, so `"x2026-09-01x"`, `"2026-09-01'; --"` and
+      # `["2026-09-01"].to_s` all parse; `"09/01/2026"` is read as 9 January,
+      # not the 1 September an assistant sending it means; and `"Tue"`, `"sep"`
+      # and `"1st"` are COMPLETED FROM TODAY'S CLOCK. There is no set to name —
+      # the accepted set would depend on the day the call is made.
       #
-      # And the «published behaviour» that argument protected is the DESCRIPTOR
-      # above, which declares `format: "date"` on both arguments. Measured
-      # against this demo's own json_schemer 2.5.0, the only spelling that
-      # REACHES this line through the wire is YYYY-MM-DD naming a real day —
-      # `"20260901"`, `"2026-244"`, `"09/01/2026"` and `"2026-02-30"` are all
-      # refused before the handler runs — and this controller is NOT ROUTABLE by
-      # any other path (see the class header). So converging changes what this
-      # verb accepts by nothing an assistant can observe, and it makes the
-      # sentence below and the guard above it say the same thing.
+      # And what the DESCRIPTOR above publishes is `format: "date"` on both
+      # arguments. Measured against this demo's own json_schemer 2.5.0, the only
+      # spelling that REACHES this line through the wire is YYYY-MM-DD naming a
+      # real day — `"20260901"`, `"2026-244"`, `"09/01/2026"` and `"2026-02-30"`
+      # are all refused before the handler runs — and this controller is NOT
+      # ROUTABLE by any other path (see the class header). So the strict guard
+      # costs an assistant nothing it can observe, and it makes the sentence
+      # below and the guard above it say the same thing.
       dates, refusal = WireArguments.stay_dates(ci_raw, co_raw)
       return render_refusal(refusal) if refusal
 
@@ -534,7 +529,7 @@ class Kiosk::HotelsController < ActionController::API
           code: "bad_request", message: "check_out must be after check_in",
         ))
       end
-      # K-969: WITH dates this verb becomes an availability statement, so a past
+      # WITH dates this verb becomes an availability statement, so a past
       # `check_in` would publish a free-rooms list for nights nobody can book.
       # Same guard as `availability` and `reserve_room` — one floor per origin.
       refusal = WireArguments.past_stay(ci)
@@ -549,7 +544,7 @@ class Kiosk::HotelsController < ActionController::API
     # carrying Rails' own message, which says nothing an assistant can act on.
     # The refusal below is the same status with this origin's sentence in it.
     prop = Property.where(id: property_id).pick(:id, :name, :neighbourhood, :stars, :address, :amenities)
-    # NO SUCH HOTEL IS 404 (T-090, spec §9.1). Not confusable with the 404 the
+    # NO SUCH HOTEL IS 404 (spec §9.1). Not confusable with the 404 the
     # wire answers for an UNREGISTERED VERB: that one names the verb and carries
     # the registry's hint, this one names the id.
     return render_refusal(WireArguments.property_not_found(property_id)) if prop.nil?
@@ -557,7 +552,7 @@ class Kiosk::HotelsController < ActionController::API
     rooms = RoomType.where(property_id: property_id)
     rooms = rooms.free_for(property_id, ci, co) if dated
     # `amenities` is jsonb and ActiveRecord already hands back a Ruby Array. The
-    # brackets are K-794's one-row array: §8.2, a query answers rows.
+    # brackets are the one-row array §8.2 requires: a query answers rows.
     render json: [{
       property_id:      prop[0],
       name:             prop[1],

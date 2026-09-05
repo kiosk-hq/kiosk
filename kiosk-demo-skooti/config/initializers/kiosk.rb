@@ -46,13 +46,13 @@ require "kiosk/user_identity_providers/devise"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 SKOOTI_REGISTRATION_POW_PARAMS = PowDifficulty.params
 
-# ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
+# ── PoW HMAC secret ─────────────────────────────────────────────────────────
 # The HMAC key the engine signs every PoW challenge with. Required in
 # production, stable (non-secret) default in dev/test — that posture lives in
 # config/environments/*; here we only read the resolved value.
 pow_secret = Rails.configuration.x.kiosk.pow_secret
 
-# ── Ed25519 unlock signing key (K-686/K-650) ────────────────────────────────
+# ── Ed25519 unlock signing key ──────────────────────────────────────────────
 # Same shape: the PEM is resolved per environment (dev/test read the shipped
 # config/dev_unlock_key.pem, production requires KIOSK_UNLOCK_SIGNING_KEY_PEM
 # and crash-checks it at boot), and this file only parses the resolved value.
@@ -119,12 +119,12 @@ Kiosk.configure do |c|
   # role separation in this demo). Set app_role to the same role so the
   # `GRANT TO app_role` statements in `enable_rls_on` are no-ops on a
   # role that already has all privileges via ownership.
-  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # ── Postgres role names ──────────────────────────────────────────────────
   # Resolved in config/environments/*, like every other env input; read here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
 
-  # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
+  # ── Issuer origin ─────────────────────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,
   # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
   # assistant proof-of-possession. Required in production, localhost default
@@ -236,7 +236,7 @@ Kiosk.configure do |c|
   # 127.0.0.1 / skooti.demo.kiosk.tech harness ports.
   c.kyc_audience  = ProveTrust.operator_id
 
-  # ── Ed25519 rental-token signing key (K-686/K-650) ────────────────────────
+  # ── Ed25519 rental-token signing key ──────────────────────────────────────
   # The key every offline rental token is signed with, and whose public half is
   # baked into each lock at provisioning. Resolved per environment
   # (config/environments/*, read as config.x.kiosk above): dev/test load the

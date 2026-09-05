@@ -11,10 +11,8 @@
 # and emits ONE JSON line the demo:schema rake task asserts on.
 #
 # The `pay`-absent proof reads the ONE self-description that carries the module
-# set. `schema` published a byte-identical copy of it as `verbs` until T-095 —
-# the same `Array(config.capabilities)` call, so it was one value under two
-# names — and the field is gone. The honest assertion is therefore
-# `capabilities == [schema, queries, actions]` in `/.well-known/kiosk.json`,
+# set: `/.well-known/kiosk.json`. `schema` does not publish a second copy of it,
+# so the honest assertion is `capabilities == [schema, queries, actions]` there,
 # and no payments block in agents.json / agents.txt. atablefor books tables — a
 # reservation takes no money.
 #
@@ -41,18 +39,18 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── The schema verb — UNAUTHENTICATED, and that IS the assertion (T-094) ─────
+# ── The schema verb — UNAUTHENTICATED, and that IS the assertion ─────────────
 #
-# This call carried a Bearer token until 2026-08-19. `GET <endpoint>/schema` is
-# PUBLIC now: the catalogue holds no per-agent value and no secret, it is
-# derived once at boot and served from memory, so gating it bought nothing.
-# Sending NO Authorization header is what proves it — a 200 with the catalogue
-# in the body is the whole test, and a regression to the gate would be a 401.
+# `GET <endpoint>/schema` is PUBLIC: the catalogue holds no per-agent value and
+# no secret, it is derived once at boot and served from memory, so gating it
+# would buy nothing. Sending NO Authorization header is what proves it — a 200
+# with the catalogue in the body is the whole test, and a regression to a gate
+# would be a 401.
 rc, body = get_json("#{SERVER}/kiosk/schema")
 abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
-# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY — the 0.3
-# `{ok, kind, value}` envelope was retired at the cutover, and `verbs` went in
-# T-095: it rendered the same call `capabilities` renders, below.
+# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY: no
+# `{ok, kind, value}` envelope, and no `verbs` — the module set is what
+# `capabilities` renders, below.
 schema_value = body || {}
 
 # ── /.well-known/kiosk.json — the advertised capability set ──────────────────

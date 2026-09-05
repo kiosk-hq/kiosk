@@ -4,12 +4,12 @@ module Admin
   # Read-only orders view for the GetGrocery provider operator.
   # Shows recent orders with payment status, address, slot, and line items.
   #
-  # THE SECOND SURFACE, and the reason this file changed with the wire (T-057 /
-  # K-654). "Is this order paid" is a fact BOTH an assistant and the operator ask
-  # for, and until the handlers left the initializer the two asked it in two
-  # hand-written SQL strings — the same jsonb containment over
-  # kiosk.settlements → kiosk.cart_mandates, spelled twice, free to drift.
-  # It is now {Order.settling}, once, and each surface hands it the settlements
+  # THE SECOND SURFACE, and the reason it borrows the wire's containment rather
+  # than writing its own. "Is this order paid" is a fact BOTH an assistant and
+  # the operator ask for, and two hand-written SQL strings — the same jsonb
+  # containment over kiosk.settlements → kiosk.cart_mandates, spelled twice —
+  # would be free to drift apart.
+  # It is {Order.settling}, once, and each surface hands it the settlements
   # it is entitled to read: the wire passes `Settlement.of_current_principal`, so
   # an assistant learns only its own orders' paid state; this page passes
   # `Settlement.all`, because a back office that could see one principal's

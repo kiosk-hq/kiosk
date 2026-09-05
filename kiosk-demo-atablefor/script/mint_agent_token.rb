@@ -2,10 +2,10 @@
 
 # Mint ONE agent bearer for a shell driver, over the real wire.
 #
-# bin/demo is a curl tour, and since T-104 there is no bearer a shell script can
-# simply write down. The engine's own `DefaultAgentIdp` verifies kiosk-pop JWTs
-# and nothing else — the self-asserted `agent:u-…:a-…:r-…` string the tour used
-# to carry resolves to no identity at all now — so a token has to be EARNED at
+# bin/demo is a curl tour, and there is no bearer a shell script can simply
+# write down. The engine's own `DefaultAgentIdp` verifies kiosk-pop JWTs and
+# nothing else — a self-asserted `agent:u-…:a-…:r-…` string resolves to no
+# identity at all — so a token has to be EARNED at
 # `/kiosk/auth/register`: an RSA keypair, a signed possession proof, and
 # whatever Equihash the operator tolls the handshake with. None of that is
 # curl-shaped, so the tour shells out here ONCE and carries the result in its

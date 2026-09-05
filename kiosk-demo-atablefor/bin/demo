@@ -7,8 +7,8 @@
 #
 # This tour books one real table under ONE assistant that EARNS its principal:
 # script/mint_agent_token.rb runs the shipped `/kiosk/auth/register` handshake
-# and prints the kiosk-pop token the engine minted (T-104 — there is no
-# self-asserted bearer a shell script can write down any more). Registration
+# and prints the kiosk-pop token the engine minted (there is no self-asserted
+# bearer a shell script can write down). Registration
 # creates that assistant's own account row, so no human and no seeded principal
 # is involved; `Booking belongs_to :user` is satisfied by the row register
 # created. The book/my_bookings steps ASSERT their results and exit non-zero on

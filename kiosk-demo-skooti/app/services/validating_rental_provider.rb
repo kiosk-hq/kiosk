@@ -27,7 +27,7 @@
 # Any mismatch rejects the capture (403 Forbidden); the mandate trail is
 # persisted, nothing is charged.
 #
-# ── Per-reservation serialization and the capture-anchored marker (K-853) ────
+# ── Per-reservation serialization and the capture-anchored marker ────────────
 # The engine settles across two short DB transactions with the irreversible PSP
 # capture BETWEEN them (executor P1→P2→P3), so a settlement row written in P3 is
 # too late to close two holes protocol.md §11.6 names:
@@ -118,7 +118,7 @@ class ValidatingRentalProvider
     # The reservation_id goes straight into an `::uuid` cast below, where a
     # malformed one raises InvalidTextRepresentation — and on the pay path a 500
     # is the worst answer there is, because an assistant cannot tell "your input
-    # was wrong" from "the charge may have gone through" (K-581). So the SHAPE is
+    # was wrong" from "the charge may have gone through". So the SHAPE is
     # rejected before a connection is even taken, and as a 400 rather than the
     # cashier's 403: a malformed argument, not a refusal to serve a well-formed
     # one, and it says nothing about whether any reservation exists. The message
@@ -131,7 +131,7 @@ class ValidatingRentalProvider
       )
     end
 
-    # CLAIM: unpaid → paying, race-free compare-and-set (K-853). Winning this
+    # CLAIM: unpaid → paying, race-free compare-and-set. Winning this
     # UPDATE is what serializes concurrent /pay for one reservation — only one
     # caller can flip 'unpaid' — and it is taken BEFORE the cashier check and
     # before the capture, so a second chain never reaches the PSP at all. The
@@ -140,7 +140,7 @@ class ValidatingRentalProvider
     #
     # Raw SQL, deliberately: the ATOMICITY is the point, `update_all` has no
     # RETURNING in Rails 8.1, and an ActiveRecord spelling would be a SELECT then
-    # an UPDATE — the race back again. Raw but NOT interpolated (K-654): every
+    # an UPDATE — the race back again. Raw but NOT interpolated: every
     # value is a `$N` bind, so the statement text carries no value at all and
     # there is no `conn.quote` to forget when this file is copied.
     claimed = Reservation.lease_connection.exec_query(
@@ -248,7 +248,7 @@ class ValidatingRentalProvider
     nil
   end
 
-  # Two WHOLE statements rather than one plus a spliced SET fragment (K-654):
+  # Two WHOLE statements rather than one plus a spliced SET fragment:
   # every reader sees a complete statement, both are literal text with `$N` binds
   # for every value, and the one difference between them — whether the payer is
   # cleared — is a boolean at the call site rather than a string a caller could

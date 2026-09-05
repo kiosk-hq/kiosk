@@ -3,7 +3,7 @@ require_relative "boot"
 require "rails"
 # Pick the frameworks you want:
 require "active_model/railtie"
-# active_job/railtie is NOT loaded (K-885): no demo in the fleet defines a job or
+# active_job/railtie is NOT loaded: no demo in the fleet defines a job or
 # enqueues one, and the frameworks this app does not use stay unloaded the same
 # way active_storage/action_mailer/action_mailbox/action_text/action_cable do
 # below. Re-add the require in the same commit that adds the first job class.
@@ -30,16 +30,15 @@ module KioskDemoSkooti
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
     #
-    # SINCE K-861 `lib/` HOLDS ONLY `lib/tasks/`, and that is the point: the
-    # three helpers that used to live here — DevUnlockKey, LockSim,
-    # ProveTestIssuer — are FLOW-ONLY (a demo driver and a rake task are their
-    # only callers), yet nothing excluded them, so `rails server` eager-loaded
-    # all three in production, DevUnlockKey included. They now sit in `script/`
+    # `lib/` HOLDS ONLY `lib/tasks/`, and that is the point: three FLOW-ONLY
+    # helpers — DevUnlockKey, LockSim, ProveTestIssuer, whose only callers are
+    # a demo driver and a rake task — would otherwise be eager-loaded into the
+    # production image by `rails server`, DevUnlockKey included, because
+    # nothing in the ignore list above excludes them. They sit in `script/`
     # beside the drivers that use them and are named by `require_relative`, so
-    # the app no longer carries demo scaffolding into its production image and
-    # no loader has to be guessed at. Same argument as K-856/K-659/K-502 one
-    # demo over. A NEW helper here must earn the app's load path or go to
-    # `script/`.
+    # the app carries no demo scaffolding into its production image and no
+    # loader has to be guessed at. A NEW helper here must earn the app's load
+    # path or go to `script/`.
     config.autoload_lib(ignore: %w[assets tasks])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to
@@ -48,7 +47,7 @@ module KioskDemoSkooti
     # `finisher`, i.e. AFTER config/initializers have run, so a constant in a
     # normal autoload path is simply not resolvable from an initializer; that,
     # not "lib/ is not autoloaded", is what the hand-written
-    # `require Rails.root.join("lib/...")` lines used to buy (K-502).
+    # `require Rails.root.join("lib/...")` lines used to buy.
     # `autoload_once_paths` is Rails' own answer: the once autoloader is set up
     # in `bootstrap`, BEFORE initializers, "so that engines and applications
     # are able to autoload from these paths during initialization". It also

@@ -12,7 +12,7 @@ class OperationResult < Kiosk::OperationResult
   # turning a typo into a loud KeyError is the point of writing it out.
   # `kyc_required` and `forbidden` are BOTH 403, so the code is not derivable
   # from the status: it is the only thing that tells an assistant "go and get
-  # attested" apart from "this is not yours". `quota_exceeded` (K-586, the
+  # attested" apart from "this is not yours". `quota_exceeded` (the
   # per-principal cap on outstanding broker intakes) is the one refusal here
   # that means "come back later" rather than "no": 429 is the status §9 gives
   # it, and the only one an assistant can read as temporary without parsing

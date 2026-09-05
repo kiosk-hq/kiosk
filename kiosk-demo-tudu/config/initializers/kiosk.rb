@@ -31,7 +31,7 @@ require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-# ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
+# ── PoW HMAC secret ─────────────────────────────────────────────────────────
 # The HMAC key the engine signs every PoW challenge with. Required in
 # production, stable (non-secret) default in dev/test — that posture lives in
 # config/environments/*; here we only read the resolved value.
@@ -60,12 +60,12 @@ Kiosk.configure do |c|
   # `Membership.reachable?` runs for every list-scoped verb in the two handler
   # controllers named above) — so app_role and system_role are set to the same
   # role only to satisfy the config; no enable_rls_on / GRANT statements run here.
-  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # ── Postgres role names ──────────────────────────────────────────────────
   # Resolved in config/environments/*, like every other env input; read here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
 
-  # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
+  # ── Issuer origin ─────────────────────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,
   # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
   # assistant proof-of-possession. Required in production, localhost default

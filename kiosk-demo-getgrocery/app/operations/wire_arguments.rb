@@ -5,7 +5,7 @@
 # halves of the origin use them — the query handlers directly, the write
 # Operations before they touch a transaction.
 #
-# WHY A UUID GUARD, when the database has a uuid type (K-579/K-654):
+# WHY A UUID GUARD, when the database has a uuid type:
 # `where(id: junk)` does not raise. ActiveRecord does not refuse junk, it CASTS
 # it — an unparseable value becomes NULL and matches no row, so without the check
 # a typo is answered as an OWNERSHIP refusal (403) rather than a shape one (400).
@@ -14,13 +14,13 @@
 #
 # The second class of guard is not about SQL: a bare `.to_i` is answered by every
 # String, Integer and Float and by no Array, Hash or boolean, so a hostile shape
-# came back 500 for an argument the published `input_schema` says is an integer.
+# comes back 500 for an argument the published `input_schema` says is an integer.
 # Reading through `to_s` first is the whole fix FOR THE 500 — it is not the whole
 # fix for the guard's own contract, and BOTH declared integers on this surface
-# said so (K-1020's `items[].qty`, K-1025's `delivery_slot_id`): a coercion that
-# answers everything also ACCEPTS shapes the schema refuses, which reads as
-# defence in depth while being nothing of the kind. Both now go through
-# {#whole_number}, which is JSON Schema's own `integer` and nothing looser.
+# (`items[].qty` and `delivery_slot_id`) say so: a coercion that answers
+# everything also ACCEPTS shapes the schema refuses, which reads as defence in
+# depth while being nothing of the kind. Both go through {#whole_number}, which
+# is JSON Schema's own `integer` and nothing looser.
 module WireArguments
   # The two "where do I get one of these" tails. Both verbs take an `order_id`
   # but ask for different things — create_order one it may still replace,
@@ -35,22 +35,21 @@ module WireArguments
   # `order_items.qty` and `orders.total_cents`, which is why one constant serves
   # the two bounds below and the descriptor that declares the first of them.
   #
-  # THE BOUND IS THE COLUMN'S AND NOT A POLICY. That is K-968's rule, taken
-  # from the demo one over that learned it: this refuses exactly what cannot be
-  # REPRESENTED and invents no basket size, so every cart that used to work
-  # still works and only the ones that used to CRASH are refused.
+  # THE BOUND IS THE COLUMN'S AND NOT A POLICY: this refuses exactly what cannot
+  # be REPRESENTED and invents no basket size, so every cart the columns can
+  # hold still works and only the ones that would CRASH are refused.
   MAX_INT4 = 2_147_483_647
 
-  # ── K-1047: A CART NOBODY CAN PRICE IS A 400, NOT A 500 ───────────────────
+  # ── A CART NOBODY CAN PRICE IS A 400, NOT A 500 ───────────────────────────
   #
   # Every `qty` the descriptor declares valid is a body the wire ACCEPTS, and
   # the order's total is `price_cents * qty` summed — which passes
   # `orders.total_cents` long before any single `qty` reaches its own ceiling:
   # at the catalogue's cheapest 89-cent row it takes 24_129_030 units, a legal
-  # `order_items.qty`. `Order.insert!` then raised `ActiveModel::RangeError` in
-  # RUBY, before any SQL (`insert_all` type-casts its values), and the executor's
-  # `rescue StandardError` served that as `500 action_failed` — a crash for an
-  # argument a client simply got wrong.
+  # `order_items.qty`. `Order.insert!` would then raise `ActiveModel::RangeError`
+  # in RUBY, before any SQL (`insert_all` type-casts its values), and the
+  # executor's `rescue StandardError` would serve that as `500 action_failed` —
+  # a crash for an argument a client simply got wrong.
   #
   # WHY THIS IS NOT IN `input_schema`, where `qty`'s own ceiling now is: the
   # bound is on a SUM of the OPERATOR's catalogue prices, and no per-property
@@ -97,23 +96,22 @@ module WireArguments
   # delivery_address: ""}` is answered about the ADDRESS, and folding presence in
   # here would reorder that.
   #
-  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s (K-1025 — the sibling of K-1020's
-  # `qty`, and the same defect one argument over). This read `raw.to_s.to_i`,
-  # which is enough to stop the 500s the header describes and NOT enough to
-  # agree with the `{type: "integer", minimum: 1, maximum: 6}` declared in front
-  # of it: `1.5.to_s.to_i` is 1, so a fractional slot came out of this line
-  # INSIDE the declared range — booked as slot 1 rather than refused. Every other
-  # hostile shape (`true`, `false`, `[]`, `{}`, `[1]`, `{"a" => 1}`, `"abc"`)
-  # collapsed to 0 and the range arm below caught it, so `1.5` was the single
-  # value on which this layer disagreed with the one in front of it — which is
-  # exactly as much disagreement as a defence-in-depth layer is allowed to have.
-  # Not reachable on the wire either way: both verbs are `kind :action`, so a
-  # real `1.5` is a JSON number the validator refuses before this line. That is
-  # WHY it had to be fixed rather than left — a layer that only holds while the
-  # layer in front of it holds is not a second layer at all.
+  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s. A `raw.to_s.to_i` is enough to stop
+  # the 500s the header describes and NOT enough to agree with the
+  # `{type: "integer", minimum: 1, maximum: 6}` declared in front of it:
+  # `1.5.to_s.to_i` is 1, so a fractional slot comes out of that line INSIDE the
+  # declared range — booked as slot 1 rather than refused. Every other hostile
+  # shape (`true`, `false`, `[]`, `{}`, `[1]`, `{"a" => 1}`, `"abc"`) collapses
+  # to 0 and the range arm below catches it, so `1.5` is the single value on
+  # which the looser spelling would disagree with the layer in front of it —
+  # which is exactly as much disagreement as a defence-in-depth layer is allowed
+  # to have. Not reachable on the wire either way: both verbs are `kind :action`,
+  # so a real `1.5` is a JSON number the validator refuses before this line. That
+  # is WHY the strict spelling matters — a layer that only holds while the layer
+  # in front of it holds is not a second layer at all.
   #
   # {#whole_number} and not `is_a?(Integer)`: `2.0` is still slot 2 here, because
-  # json_schemer says a JSON `2.0` is a valid `integer` (measured on K-1020).
+  # json_schemer says a JSON `2.0` is a valid `integer` (measured).
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def delivery_slot_id(raw)
@@ -132,7 +130,7 @@ module WireArguments
     )]
   end
 
-  # The DAY of the slot the assistant chose (K-470), or the default when omitted.
+  # The DAY of the slot the assistant chose, or the default when omitted.
   #
   # `Date.parse`, deliberately, and NOT the stricter `Date.iso8601`: what it
   # loosely accepts — a `["2026-09-01"]`, a bare `"20260101"` — is published
@@ -153,7 +151,7 @@ module WireArguments
         message: "invalid delivery_date: #{raw} — use YYYY-MM-DD from the delivery_slots row you chose",
       )]
     end
-    # ONE CLOCK FOR THE WHOLE ORIGIN (K-969). `DeliverySlots.now` and not
+    # ONE CLOCK FOR THE WHOLE ORIGIN. `DeliverySlots.now` and not
     # `Date.today`, which reads the SERVER process's zone: this and {#past_date}
     # answer the same «is this day already gone?», and around midnight a
     # server-zone answer differs from the Europe/Dublin one — so `delivery_slots`
@@ -163,7 +161,7 @@ module WireArguments
     [nil, OperationResult.refused(code: "bad_request", message: past_message.call(date))]
   end
 
-  # A window that has already begun is no longer bookable (K-480), and BOTH verbs
+  # A window that has already begun is no longer bookable, and BOTH verbs
   # re-validate it so neither lands on a window `delivery_slots` would now hide.
   # Whole past DAYS are caught above; this is a past TIME-OF-DAY today.
   #
@@ -178,7 +176,7 @@ module WireArguments
     )
   end
 
-  # ── T-090: A DELIVERY DATE IN THE PAST IS OUTSIDE ITS DOMAIN ─────────────
+  # ── A DELIVERY DATE IN THE PAST IS OUTSIDE ITS DOMAIN ────────────────────
   #
   # Spec §9.1's first branch: a value the verb's domain does not contain is
   # `400 bad_request` naming what is acceptable, never an empty list — `200 []`
@@ -201,7 +199,7 @@ module WireArguments
     )
   end
 
-  # ADDRESS-UPFRONT (K-468). Every surface that takes a delivery address checks
+  # ADDRESS-UPFRONT. Every surface that takes a delivery address checks
   # it against the SAME served-Dublin-district rule, so an address that got slots
   # can always be ordered to. FORMAT + ZONE only: the operator cannot tell a
   # plausible in-zone address from a real one — the human must confirm it.
@@ -225,29 +223,29 @@ module WireArguments
     )
   end
 
-  # The cart (K-693). The declared `input_schema` says `array of {sku, qty}` and
+  # The cart. The declared `input_schema` says `array of {sku, qty}` and
   # nothing at the wire enforces it, so this is where `items: "x"`,
   # `items: {sku: …}` and `items: ["bread"]` become a 400 instead of walking into
   # `.map` / `it[:sku]` and raising a 500 out of the headline action.
   #
-  # `qty` IS AS STRICT HERE AS IN THE SCHEMA, and that is the point (K-1020).
-  # This used to read `(item[:qty] || 1).to_s.to_i`, which stopped the 500s the
-  # header describes but let exactly two shapes through as a legal quantity:
-  # `false`, because `||` reads it as absent and defaults to 1, and `1.5`,
-  # because `"1.5".to_i` is 1. Neither is reachable on the wire — `input_schema`
-  # declares `qty` `{type: "integer", minimum: 1}` and `required`, and it is
-  # validated on every call — so this layer was never the thing refusing them.
-  # That is precisely why it had to be fixed rather than left: a defence-in-depth
-  # layer whose whole claim is «the schema is not the only thing standing here»
-  # is worth nothing if the schema is, in fact, the only thing standing. An
-  # ABSENT `qty` is refused too, for the same reason: the schema requires it, so
-  # a default here would be a second, weaker contract nobody published.
+  # `qty` IS AS STRICT HERE AS IN THE SCHEMA, and that is the point. A
+  # `(item[:qty] || 1).to_s.to_i` stops the 500s the header describes but lets
+  # exactly two shapes through as a legal quantity: `false`, because `||` reads
+  # it as absent and defaults to 1, and `1.5`, because `"1.5".to_i` is 1.
+  # Neither is reachable on the wire — `input_schema` declares `qty`
+  # `{type: "integer", minimum: 1}` and `required`, and it is validated on every
+  # call — so this layer would never be the thing refusing them. That is
+  # precisely why it is written strictly: a defence-in-depth layer whose whole
+  # claim is «the schema is not the only thing standing here» is worth nothing
+  # if the schema is, in fact, the only thing standing. An ABSENT `qty` is
+  # refused too, for the same reason: the schema requires it, so a default here
+  # would be a second, weaker contract nobody published.
   #
-  # BOTH ENDS OF THE DECLARED RANGE, and the upper one is K-1047: `qty` is
+  # BOTH ENDS OF THE DECLARED RANGE: `qty` is
   # `{type: "integer", minimum: 1, maximum: MAX_INT4}`, so this layer carries a
-  # `<= MAX_INT4` arm as well as its `>= 1` one. Leaving it off would have been
-  # exactly the K-1020 defect again — a second layer weaker than the schema in
-  # front of it, on the argument that row was about. What this layer CANNOT
+  # `<= MAX_INT4` arm as well as its `>= 1` one. Leaving it off would be the
+  # same defect one bound over — a second layer weaker than the schema in
+  # front of it. What this layer CANNOT
   # check is the other half of the same bug: the cart's TOTAL, which is not a
   # fact about any single item. {#priceable_total} answers that one, later,
   # once the catalogue prices are resolved.

@@ -33,11 +33,10 @@ gem "kiosk-redteam",            path: "../kiosk-redteam"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 
 # Opt-in request-shape validation (c.validate_requests = true) — kiosk-server
-# lazily requires json_schemer only when the flag is on (UNIFORM-VALIDATION
-# slice-1, K-479).
+# lazily requires json_schemer only when the flag is on.
 gem "json_schemer"
 
-# K-661: `UUID.validate` backs UuidCheck's canonical-uuid guard (K-579/K-596).
+# `UUID.validate` backs UuidCheck's canonical-uuid guard.
 # Pinned to the final release (2.3.9, 2018-05-15) — upstream repo archived
 # 2024-01-01, nothing newer to move to. `require: false`: UuidCheck requires
 # it explicitly rather than at boot. Pulls macaddr -> systemu (MAC-address

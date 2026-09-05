@@ -6,12 +6,12 @@ Rails.application.routes.draw do
   # diner uses to bind their AI assistant to their restaurant account. Walked
   # end-to-end by `rake demo:binding`. The sessions controller is overridden
   # ONLY to answer a JSON-shaped `DELETE /users/sign_out` with a JSON courtesy
-  # body pointing at the wire, instead of a bodyless 401 (K-533). NOT «the Kiosk
-  # error envelope», which is what this comment used to call it: that phrase
-  # names the wire CONTRACT, and the wire's is a FLAT RFC 9457 problem document
-  # served as `application/problem+json` (K-1092) — see
-  # `app/controllers/users/sessions_controller.rb`, which says the same thing at
-  # the render site. Every other Devise behaviour is inherited untouched.
+  # body pointing at the wire, instead of a bodyless 401. That body is NOT «the
+  # Kiosk error envelope»: that phrase names the wire CONTRACT, and the wire's
+  # is a FLAT RFC 9457 problem document served as `application/problem+json` —
+  # see `app/controllers/users/sessions_controller.rb`, which says the same
+  # thing at the render site. Every other Devise behaviour is inherited
+  # untouched.
   devise_for :users, controllers: { sessions: "users/sessions" }
 
   # Public root page: what this demo is + the assistant-facing "point your AI
@@ -58,7 +58,7 @@ Rails.application.routes.draw do
   # a claim that this origin takes money: discovery drops `pay` from
   # `capabilities`, `demo:schema` asserts its absence, and the endpoint answers
   # `403 no payment_provider configured` on the FIRST look — before it asks for
-  # mandates it could never settle (K-800).
+  # mandates it could never settle.
   post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
@@ -83,8 +83,8 @@ Rails.application.routes.draw do
   # (schema tagged service-desc), served by the same DiscoveryController.
   get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
 
-  # /kiosk/openapi.json — the DERIVED OpenAPI description of the per-verb wire
-  # (T-071 = C). It MUST be drawn above the per-verb pair: Rails appends
+  # /kiosk/openapi.json — the DERIVED OpenAPI description of the per-verb wire.
+  # It MUST be drawn above the per-verb pair: Rails appends
   # `(.:format)` to `/kiosk/:kiosk_verb`, so without this line the path reads as
   # the verb `openapi` in the `json` format and answers 404.
   get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"

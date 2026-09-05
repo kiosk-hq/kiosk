@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# ── Rolling-current seatings source of truth (K-446, K-480 pattern) ──────────
+# ── Rolling-current seatings source of truth ─────────────────────────────────
 # atablefor books restaurant tables for EVENING SEATINGS. Instead of seeding
 # date-bearing slot rows that go stale on the hosted deploy, the seatings are
 # COMPUTED relative to NOW, in the operator's locale (Europe/Lisbon), and the
@@ -36,15 +36,13 @@ module Seatings
     zone.now
   end
 
-  # THE DAY A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the operator's own
-  # locale.
+  # THE DAY A PUBLISHED EXAMPLE NAMES: tomorrow, in the operator's own locale.
   #
   # A descriptor's `example_params`/`example_row` say «copy this verbatim», and
-  # a calendar literal there stops being true on a day nobody notices — this
-  # demo's examples named 2026-08-08, which {past?} had been refusing for a
-  # fortnight. Tomorrow rather than today because ALL THREE of a future day's
-  # seatings are still bookable, while today's example goes wrong at 21:00
-  # Lisbon.
+  # a calendar literal there stops being true on a day nobody notices — {past?}
+  # then refuses the very example the descriptor tells a caller to copy.
+  # Tomorrow rather than today because ALL THREE of a future day's seatings are
+  # still bookable, while today's example goes wrong at 21:00 Lisbon.
   #
   # Read through a proc from the declaration, never called at class-body load —
   # see {Kiosk::Server::SchemaSlots}.

@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-# Shape check for the order uuids that arrive from the wire (K-579).
+# Shape check for the order uuids that arrive from the wire.
 #
 # getgrocery takes agent-supplied ids on the wire — the `order_id` in
 # create_order / reschedule_delivery args, and the `{"order_id":…}` entry inside
 # a signed cart mandate's line_items. BOTH modes below are live here: the verb
-# handlers are ActiveRecord since K-654, while app/services/validating_payment_provider.rb
+# handlers are ActiveRecord, while app/services/validating_payment_provider.rb
 # still builds `::uuid` casts on the pay path — and there a 500 is the worst
 # possible answer, because an assistant cannot tell it from "the charge may
 # have happened".
@@ -20,13 +20,13 @@
 #     as a raw HTTP 500: a client mistake reported as a server fault, and one
 #     that leaks SQL internals ("invalid input syntax for type uuid") to the
 #     wire.
-#   * ACTIVE RECORD (K-654) — the ORM CASTS a malformed literal to NULL rather
+#   * ACTIVE RECORD — the ORM CASTS a malformed literal to NULL rather
 #     than raising, so the owner-scoped query matches nothing and the caller is
 #     REFUSED. That is strictly worse for the agent reading it than the 500: a
 #     wrong 403/404 is indistinguishable from a genuine ownership refusal, so a
 #     caller with a typo'd id is told it does not own a row that never existed.
 #     Moving off raw SQL therefore STRENGTHENS the case for this guard instead
-#     of retiring it (K-772).
+#     of retiring it.
 #
 # Callers validate the shape first and raise a typed 4xx instead.
 #
@@ -34,9 +34,9 @@
 # row exists or belongs to the caller; the ownership/state SQL still decides that.
 #
 # A copy of this module lives in every demo that casts a wire-supplied id
-# (skooti, hoteling, atablefor, tudu, philslist — K-581/K-582); they are
-# identical apart from JSON_SCHEMA_PATTERN, which only getgrocery needs because
-# only getgrocery declares an `input_schema` for an id param today (T-050).
+# (skooti, hoteling, atablefor, tudu, philslist); they are identical apart
+# from JSON_SCHEMA_PATTERN, which only getgrocery needs because only
+# getgrocery declares an `input_schema` for an id param today.
 # bin/check-demo-copies holds the other five to each other and records THIS copy
 # as the one declared exception, so the divergence stays the one we chose.
 # Each demo is a standalone Rails app with its own Gemfile, so the alternative to
@@ -44,12 +44,11 @@
 # fix-wave one. Same arrangement as app/services/pow_difficulty.rb and
 # script/equihash_register.rb.
 #
-# K-661: shape recognition below delegates to the `uuid` gem (pinned 2.3.9 —
-# see the Gemfile comment for why). Its own `UUID.validate` is looser than
-# this guard has ever been (it also accepts compact/un-hyphenated and
-# `urn:uuid:` spellings), so PATTERN stays as the second, narrowing check —
-# `valid?` requires both, which keeps the canonical-only rejection this
-# module has always enforced (K-579) unchanged.
+# Shape recognition below delegates to the `uuid` gem (pinned 2.3.9 — see
+# the Gemfile comment for why). Its own `UUID.validate` is looser than this
+# guard (it also accepts compact/un-hyphenated and `urn:uuid:` spellings),
+# so PATTERN stays as the second, narrowing check — `valid?` requires both,
+# and that is what keeps the rejection canonical-only.
 require "uuid"
 
 module UuidCheck
@@ -60,14 +59,14 @@ module UuidCheck
   # hands out, so the rejection can name exactly what to send back.
   PATTERN = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
-  # The same shape written for JSON Schema (K-596). ECMA-262, so `\h` and `\A`/`\z`
+  # The same shape written for JSON Schema. ECMA-262, so `\h` and `\A`/`\z`
   # are spelled out; `^…$` is anchored because json_schemer's `pattern` is a
   # search, not a full match. Lives here, next to PATTERN, so the DECLARED
   # contract and the RUNTIME guard cannot drift apart unnoticed.
   #
   # It is a declaration, NOT a second enforcement point: kiosk-server validates
   # nothing against `input_schema` today — `c.validate_requests` (slice-1)
-  # covers the `Kiosk-PoW` header only, and policing verb arguments is T-045(a).
+  # covers the `Kiosk-PoW` header only.
   # So this tells an assistant reading GET /kiosk/schema what shape to send, and
   # `UuidCheck.valid?` in the handler is what actually rejects a bad one.
   JSON_SCHEMA_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"

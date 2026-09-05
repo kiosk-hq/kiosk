@@ -12,16 +12,14 @@ SERVER_URL="http://127.0.0.1:$PORT"
 
 # The seeded humans this walkthrough acts for (db/seeds.rb). Their ASSISTANTS'
 # tokens are minted below, after the server is up, by running the real binding
-# ceremony — see the "Binding" heading. Until T-104 this script wrote the two
-# bearers down as `agent:u-<uuid>:a-<slug>:r-customer` and a dev-only parser in
-# the demo believed them; that parser is deleted, so the walkthrough now shows
-# the same thing a real assistant does to get a token.
-# The slot this walkthrough books, COMPUTED rather than written down (K-969).
-# `book_appointment` refuses an instant that has already passed, and the literal
-# that used to sit here — 2026-07-01 — was itself in the past, so the
-# walkthrough's headline action would have printed a 400. `date -v` is BSD/macOS
-# and `date -d` is GNU; trying both is the portable idiom and keeps this script
-# free of a Ruby boot just to add thirty days.
+# ceremony — see the "Binding" heading. There is no self-asserted bearer this
+# script could write down instead: the demo carries no parser for one, so the
+# walkthrough does the same thing a real assistant does to get a token.
+# The slot this walkthrough books, COMPUTED rather than written down.
+# `book_appointment` refuses an instant that has already passed, so a calendar
+# literal here ages into a 400 on the walkthrough's headline action. `date -v`
+# is BSD/macOS and `date -d` is GNU; trying both is the portable idiom and keeps
+# this script free of a Ruby boot just to add thirty days.
 DEMO_SLOT="$(date -u -v+30d '+%Y-%m-%dT14:00:00Z' 2>/dev/null \
              || date -u -d '+30 days' '+%Y-%m-%dT14:00:00Z')"
 

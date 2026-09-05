@@ -6,10 +6,9 @@
 # "already paid" answerable at all.
 #
 # An engine-owned table with no engine-owned reader, the {Settlement} / {Agent}
-# shape: kiosk-server writes the row, and until K-654 the last readers of it
-# were `conn.execute` strings in the initializer, the pay-path decorator and the
-# back office. Promoting it into the engine is a public-API decision, not a
-# handler conversion.
+# shape: kiosk-server writes the row, and this demo's order verbs, pay-path
+# decorator and back office read it. Promoting it into the engine is a
+# public-API decision, not a handler conversion.
 class CartMandate < ApplicationRecord
   self.table_name = "kiosk.cart_mandates"
 
@@ -24,10 +23,10 @@ class CartMandate < ApplicationRecord
   # `order_id` is CALLER-SUPPLIED, so it is a QUOTED node the adapter escapes
   # rather than an interpolated fragment. It has already passed
   # {WireArguments.order_id} by the time it gets here; the quoting is what makes
-  # that a defence in depth rather than the only defence. The `::jsonb` cast the
-  # hand-written SQL carried is gone because Postgres resolves the untyped
-  # literal to jsonb from the left operand — the OPERATOR is unchanged, and
-  # K-544's replace guard and K-545's pay race both rest on it being unchanged.
+  # that a defence in depth rather than the only defence. No `::jsonb` cast is
+  # needed on the right operand — Postgres resolves the untyped literal to jsonb
+  # from the left one — but the CONTAINMENT OPERATOR must stay exactly what it
+  # is: the replace guard and the pay race both rest on these semantics.
   #
   # The correlated form of the same predicate — "the cart references the order
   # row this SELECT is looking at", which has no caller value in it at all —

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Realistic-content columns for the atablefor redesign (K-435 demo redesign):
+# Realistic-content columns for the atablefor demo:
 #   - users.display_name  — the diner's public name shown on the read-only
 #     reservations board (so the board reads "party 2 · Terrace 2 · 20:00 ·
 #     Diego", not a raw email). NULLable: assistant accounts have no name.

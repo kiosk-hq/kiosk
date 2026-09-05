@@ -2,16 +2,14 @@
 #
 # Agent-side driver: the PER-ASSISTANT SPENDING CAP, and the one property that
 # makes it a cap rather than a suggestion — that two spellings of one ISO 4217
-# code are ONE tally (T-154, from K-1251).
+# code are ONE tally.
 #
-# WHY THIS EXISTS. `config.spending_cap` is a pay-path control the engine has
-# shipped for months, and until this driver NO demo and NO e2e origin
-# configured it: `git grep -nE "\.spending_cap[[:space:]]*=" -- 'kiosk-demo-*'
-# 'e2e'` found one COMMENT and no assignment, so `Executor#enforce_spending_cap!`
-# returned at its first line everywhere in the fleet. That is exactly what let
-# K-1251 sit unnoticed — a cap defeatable by capitalisation, live for any
-# operator who configured the control and for nobody here. The fix has a gem
-# suite behind it (SPEC-186) and, until now, nothing that BOOTS.
+# WHY THIS EXISTS. `config.spending_cap` is a pay-path control the engine
+# ships, and this is the ONE origin in the fleet that configures it. Everywhere
+# else `Executor#enforce_spending_cap!` returns at its first line, so a defect
+# in the cap — a tally defeatable by capitalisation, say — is live for any
+# operator who turns the control on and invisible to every run here. The gem
+# suite behind it is SPEC-186; this is the part that BOOTS.
 #
 # WHAT IT PROVES, in one chain, against a real origin with a real Equihash
 # registration and the shipped ValidatingBookingProvider:
@@ -19,7 +17,7 @@
 #   1. a spend UNDER the cap settles;
 #   2. a spend that would CROSS it is refused `403 spending_cap_exceeded`,
 #      with nothing persisted and nothing captured;
-#   3. THE K-1251 PROPERTY — the crossing spend is spelled "EUR" while the
+#   3. THE CASE-FOLDING PROPERTY — the crossing spend is spelled "EUR" while the
 #      settled one was "eur". A byte-scoped tally sees an empty history for
 #      "EUR" and lets the charge through; the folded tally counts it against
 #      the same cap. So step 2 going red IS the regression detector, and it is
@@ -55,7 +53,7 @@ DB     = ENV.fetch("HOTELING_DB", "kiosk_hoteling_development")
 
 # A window of its own, well clear of script/hoteling_flow.rb's today+30..+33.
 # `demo:book` takes that property's whole inventory for those nights and the
-# unpaid hold is never released (K-936, K-1044); a driver that shared the
+# unpaid hold is never released; a driver that shared the
 # window would inherit that exhaustion for no reason.
 CHECK_IN  = (Date.today + 90).to_s
 CHECK_OUT = (Date.today + 92).to_s
@@ -84,7 +82,7 @@ end
 # Write the assistant's cap the way the operator would — into the column the
 # engine's batteries-included seam reads. The id is asserted to be a uuid
 # BEFORE it reaches the statement: it comes from the wire, and a value from the
-# wire never goes into SQL text on trust (K-654's rule, applied to a driver).
+# wire never goes into SQL text on trust.
 def set_cap!(agent_id, cents)
   unless agent_id =~ /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
     abort "refusing to write a cap for a non-uuid agent_id #{agent_id.inspect}"

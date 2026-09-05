@@ -12,8 +12,7 @@
 # Run it directly (`ruby script/rental_token_issuer_kat.rb`) or via the wired
 # rake task (`rake demo:kat`). Exit status is nonzero on any failed assertion.
 #
-# Known-answer vector (firmware host-test fixtures — MUST NOT CHANGE, and the
-# one time it did change is recorded below):
+# Known-answer vector (firmware host-test fixtures — MUST NOT CHANGE):
 #   dev_private_pem  = config/dev_unlock_key.pem (via DevUnlockKey.private_key)
 #   scooter_code     = "SK-001"
 #   reservation_id   = "resv-1"
@@ -24,13 +23,13 @@
 #   signature b64url: SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg
 #   pubkey hex      : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 #
-# THE VECTOR MOVED ONCE, at K-686, and every site below moved with it: the dev
-# keypair was REGENERATED because the old private half (public 8857880d…) had
-# shipped hard-coded in lib/dev_unlock_key.rb of a PUBLIC repo *and* was wired
-# as the production signer, so it is burned. The signature and pubkey here, the
-# byte arrays and wire tokens in firmware/{host_test.c,skooti_lock.ino,
-# crosscheck_main.c}, and firmware/README.md were recomputed from the new key —
-# never hand-edited. Any lock still provisioned with 8857880d… must be reflashed.
+# THE VECTOR IS DERIVED FROM THE KEY, NEVER HAND-EDITED. It moved once, when
+# the dev keypair was regenerated: an earlier private half (public 8857880d…)
+# had shipped hard-coded in a PUBLIC repo *and* was wired as the production
+# signer, so it is burned — any lock still provisioned with 8857880d… must be
+# reflashed. Whenever the key moves, the signature and pubkey here, the byte
+# arrays and wire tokens in firmware/{host_test.c,skooti_lock.ino,
+# crosscheck_main.c} and firmware/README.md are all recomputed from it together.
 
 require "openssl"
 require "base64"
@@ -63,8 +62,8 @@ end
 # This KAT runs as bare `ruby script/rental_token_issuer_kat.rb`, with no Rails
 # and no autoloader, so it NAMES both files it needs rather than relying on a
 # load path Rails happens to have set up: RentalTokenIssuer is app code and
-# lives under app/services (K-502); DevUnlockKey is a flow-only helper and now
-# sits beside this driver in script/ (K-861), so it is a plain require_relative.
+# lives under app/services; DevUnlockKey is a flow-only helper and sits beside
+# this driver in script/, so it is a plain require_relative.
 require_relative "dev_unlock_key"
 require File.expand_path("../app/services/rental_token_issuer", __dir__)
 

@@ -3,8 +3,8 @@
 # Self-discovery proof driver — verifies the `schema` verb over HTTP.
 #
 # Boots against a running stylish server and calls, with no credential at all:
-#   GET /kiosk/schema            (unauthenticated — it is public since T-094)
-#   GET /.well-known/kiosk.json  (the module set, since `verbs` went in T-095)
+#   GET /kiosk/schema            (unauthenticated — the catalogue is public)
+#   GET /.well-known/kiosk.json  (the one document carrying the module set)
 # and emits ONE JSON line the demo:schema rake task asserts on.
 #
 # Usage:
@@ -27,23 +27,22 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Call schema — UNAUTHENTICATED, and that IS the assertion (T-094) ─────────
+# ── Call schema — UNAUTHENTICATED, and that IS the assertion ─────────────────
 #
-# This call carried a Bearer token until 2026-08-19. `GET <endpoint>/schema` is
-# PUBLIC now: the catalogue holds no per-agent value and no secret, it is
-# derived once at boot and served from memory, so gating it bought nothing.
-# Sending NO Authorization header here is what proves it — a 200 with the
-# catalogue in the body is the whole test, and a regression to the gate would
-# be a 401 the rake task reports.
+# `GET <endpoint>/schema` is PUBLIC: the catalogue holds no per-agent value and
+# no secret, it is derived once at boot and served from memory, so gating it
+# would buy nothing. Sending NO Authorization header here is what proves it — a
+# 200 with the catalogue in the body is the whole test, and a regression to a
+# gate would be a 401 the rake task reports.
 rc, body = get_json("#{SERVER}/kiosk/schema")
 abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
 
-# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY — the 0.3
-# `{ok, kind, value}` envelope was retired at the cutover, and `verbs` was
-# dropped in T-095 (it duplicated `capabilities` byte for byte).
+# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY: no
+# `{ok, kind, value}` envelope, and no `verbs` — that would only duplicate
+# `capabilities` byte for byte.
 schema_value = body || {}
 
-# ── /.well-known/kiosk.json — where the MODULE set lives (T-095) ─────────────
+# ── /.well-known/kiosk.json — where the MODULE set lives ─────────────────────
 wk_rc, wk = get_json("#{SERVER}/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []

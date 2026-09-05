@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# THE CAPTURE→SETTLEMENT WINDOW, pinned (K-853 / protocol.md §11.6).
+# THE CAPTURE→SETTLEMENT WINDOW, pinned (protocol.md §11.6).
 #
 # Runs IN-PROCESS against the real hoteling Postgres schema (via
 # `bin/rails runner`), driving the REAL `reserve_room` / `my_bookings` /
@@ -11,8 +11,8 @@
 #     its outcome is unknown;
 #   · calling the provider DIRECTLY means the engine's executor phase 3 never
 #     runs, so the capture RETURNS with no settlement row in existence. That is
-#     the phase-3 window exactly, and it is the state hoteling used to publish as
-#     "no settlement for this booking".
+#     the phase-3 window exactly, and reading it as "no settlement for this
+#     booking" is precisely the mistake §11.6 names.
 #
 # §11.6 forbids both of those from reading as *not paid*: "Absence of a
 # settlement record is not evidence that no money moved, and an operator that
@@ -114,10 +114,10 @@ def reserve!
             check_in: check_in, check_out: check_out)
 end
 
-# A migrated handler RENDERS its refusal and the dispatch seam turns that into a
+# A handler RENDERS its refusal and the dispatch seam turns that into a
 # `WireError`, so a refusal ARRIVES as a raised object carrying `code`,
-# `http_status` and `message` — the contract, rather than the exception class
-# (T-054). Returns the error, or nil when the call succeeded.
+# `http_status` and `message` — the contract, rather than the exception class.
+# Returns the error, or nil when the call succeeded.
 def verb_error(registry, name, args)
   call_verb(registry, name, args)
   nil

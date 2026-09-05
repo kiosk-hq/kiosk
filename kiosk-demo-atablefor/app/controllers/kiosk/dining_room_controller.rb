@@ -7,7 +7,7 @@
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot
 # see; `kind :query` is what puts a declaration on `GET`, and the kind belongs
-# to the DECLARATION rather than the class (K-921), so one controller may
+# to the DECLARATION rather than the class, so one controller may
 # declare both. Splitting the halves is this demo's shape, not a rule: the
 # writes live in Kiosk::BookingsController, the refusal SENTENCES in
 # {WireArguments} and the RENDERER in {KioskRefusals}, and the rolling upcoming
@@ -32,7 +32,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # (table, seating_at), so a fully-booked seating is legitimately absent.
   #
   # No caller value is ever spliced into SQL — the filters below are ordinary
-  # ActiveRecord conditions (K-654). The result is small and NOT paginated.
+  # ActiveRecord conditions. The result is small and NOT paginated.
   # ADR-0023: the description carries semantics only; `input_schema` declares
   # what each filter accepts and refuses, `output_schema` names every row field.
   kind :query
@@ -48,7 +48,7 @@ class Kiosk::DiningRoomController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # K-1047: the same declared ceiling `book_table` carries —
+                 # THE SAME DECLARED CEILING `book_table` carries —
                  # a party this verb would SHOW a table for is one that verb can
                  # book, so the two descriptors have to agree. It is the width of
                  # `restaurant_tables.capacity`, the column the filter compares
@@ -56,14 +56,14 @@ class Kiosk::DiningRoomController < ApplicationController
                  party_size:   { type: "integer", minimum: 1,
                                  maximum: WireArguments::MAX_INT4,
                                  description: "Number of guests." },
-                 # T-090: the served set is DB-derived (an operator adds one by
+                 # The served set is DB-derived (an operator adds one by
                  # inserting a restaurant), so it cannot be an `enum` here and
                  # the handler guard is the only place the refusal can live.
                  neighborhood: { type: "string",
                                  description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\". " \
                                               "Must be one this aggregator serves — an unserved name is " \
                                               "refused with the current ones named." },
-                 # K-717: a CLOSED SET, so an `enum` and not a pattern — the
+                 # A CLOSED SET, so an `enum` and not a pattern — the
                  # refusal is then the schema layer's, uniformly, rather than an
                  # empty list an assistant cannot tell from a sold-out night.
                  time:         { type: "string", enum: Seatings::TIMES,
@@ -97,7 +97,7 @@ class Kiosk::DiningRoomController < ApplicationController
                                table_label capacity seating_date seating_time seating_at deposit_eur],
                 }
   example_params({ party_size: 2, neighborhood: "Alfama" })
-  # The seating is RESOLVED, not written down (K-972): this row is what an
+  # The seating is RESOLVED, not written down: this row is what an
   # assistant carries straight into `book_table`, whose own guard refuses a
   # seating that has passed. See {Seatings.example_date}.
   example_row({
@@ -118,7 +118,7 @@ class Kiosk::DiningRoomController < ApplicationController
     party_size, refusal = WireArguments.party_size(params[:party_size])
     return render_refusal(refusal) if refusal
 
-    # T-090: an unserved neighbourhood is a typed 400 naming the served ones,
+    # An unserved neighbourhood is a typed 400 naming the served ones,
     # not `200 []`. `Restaurant.served_neighborhoods` is read once, so the
     # refusal and the query below can never name different sets.
     nbhd_filter, refusal = WireArguments.neighborhood(params[:neighborhood],
@@ -127,7 +127,7 @@ class Kiosk::DiningRoomController < ApplicationController
 
     upcoming = Seatings.upcoming
 
-    # K-717: an invalid filter value is a typed 400 NAMING the valid values,
+    # An invalid filter value is a typed 400 NAMING the valid values,
     # never an empty list. Both refusals live in {WireArguments}.
     time_filter, refusal = WireArguments.seating_time(params[:time])
     return render_refusal(refusal) if refusal
@@ -139,8 +139,8 @@ class Kiosk::DiningRoomController < ApplicationController
     seatings = seatings.select { |_d, t|   t == time_filter } unless time_filter.empty?
     seatings = seatings.select { |d, _t| d.iso8601 == date_filter } unless date_filter.empty?
     # Only an HONEST empty reaches here: an invalid `time` or `date` was refused
-    # above with a typed 400 (K-717), so what is left is a seating that exists
-    # and was overtaken while the request was in flight.
+    # above with a typed 400, so what is left is a seating that exists and was
+    # overtaken while the request was in flight.
     return render(json: []) if seatings.empty?
 
     # Every physical table seating >= party, optionally in one neighbourhood.
@@ -207,7 +207,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # provider-controlled; the agent supplies no filter. The principal can only
   # see rows where user_id matches kiosk.current_user_id(), enforced in the
   # query itself — `owned_by_current_principal` is the ONE place that predicate
-  # is written (K-654).
+  # is written.
   # ADR-0023: semantics only; naming the follow-on VERB in the description is
   # the sanctioned form, naming its argument is not.
   kind :query

@@ -15,7 +15,7 @@
 #     input contract (400 bad_request naming user_id)
 #   Assertion 5b: and B's legitimate order is owned by B in the DB — the
 #     principal comes from the token, and is not an input at all
-#   Assertion 6: a re-pay of an already-settled order → 403 WITH a body (K-472)
+#   Assertion 6: a re-pay of an already-settled order → 403 WITH a body
 #
 # Positive controls that must simply succeed (A reschedules own paid order;
 # B creates, pays and reschedules own order) abort this flow directly on
@@ -252,9 +252,9 @@ abort "order_id_b missing" unless order_id_b
 rc, _pay_b = pay_for_order(SERVER, ISSUER, token_b, key_b, user_id_b, agent_id_b, order_id_b, total_cents_b, mirror_items)
 abort "B pay failed (#{rc})" unless rc == 200
 
-# ── Step 10b (K-472): a re-pay of an ALREADY-SETTLED order must return a
-# problem document with a body, never an empty/bodiless response. This is the
-# exact detour from the K-471 live run: an agent mistakes reschedule for
+# ── Step 10b: a re-pay of an ALREADY-SETTLED order must return a problem
+# document with a body, never an empty/bodiless response. This is a detour a
+# real assistant takes: it mistakes reschedule for
 # "pay again," posts a second /pay for a paid order, and the operator rejects
 # it (403 order already settled). Assert the REJECTION CARRIES A BODY so an
 # agent can branch on its top-level `code`. We inspect the raw HTTP response

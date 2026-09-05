@@ -113,7 +113,6 @@ CREATE TABLE kiosk.agents (
     user_id uuid NOT NULL,
     allowed_roles text[] DEFAULT '{}'::text[] NOT NULL,
     public_key text,
-    notification_pubkey text,
     human_label text,
     spending_cap_cents bigint,
     kyc_verified_at timestamp with time zone,

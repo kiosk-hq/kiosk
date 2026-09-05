@@ -130,6 +130,30 @@ module Kiosk
       #   human_label        — a human-friendly name for the manage-assistants
       #                        page.
       #
+      # `notification_pubkey` WAS HERE AND IS GONE (K-1290, Phil 2026-09-05:
+      # «Мёртвую колонку прибери. Убери из миграции, переделай миграции демо с
+      # нуля»). It was provisioned for a push mechanism nobody ever designed and
+      # it had ZERO readers and ZERO writers tree-wide — eight occurrences at the
+      # time, every one of them this declaration or a `db/structure.sql` copy of
+      # it. The T-046 events design does not resolve it either: that socket is
+      # bearer-authenticated over TLS like every other verb, and a signed or
+      # encrypted event envelope is on its not-building list. A schema is read as
+      # a promise, and this one promised an out-of-band channel to an assistant
+      # that does not exist.
+      #
+      # NO `DROP COLUMN` REPAIR SHIPS WITH THE REMOVAL, and that is a decision
+      # rather than an oversight. `20260827000002_drop_kiosk_settlement_raw_jws`
+      # exists because `settlements.raw_jws` was `text NOT NULL` with no DEFAULT:
+      # head's INSERT stopped naming it, so Postgres refused EVERY settlement on
+      # a box that still had it. This column is nullable and nothing writes the
+      # table's row list by position, so a box that keeps it is not walled by it
+      # — the `kyc_attributes` shape (K-656), not the `raw_jws` one. The demos'
+      # databases are disposable (`demo:setup` is drop/create/schema:load/seed),
+      # so their migration history simply never creates it again; the leftover on
+      # a box of an older vintage is DECLARED, with this row id, in
+      # `bin/check-migration-replay`'s ACCEPTED_LEFTOVERS, and leaves on the next
+      # `deploy/demo-reset.sh`.
+      #
       # THE THREE `ADD COLUMN IF NOT EXISTS` LINES BELOW ARE THE OTHER HALF OF
       # THAT FOLD, AND THEY ARE NOT DECORATION (K-1083). Folding three amendment
       # migrations into this `CREATE` is only lossless for a database built FROM
@@ -153,7 +177,6 @@ module Kiosk
             user_id             #{col_type} NOT NULL REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
             allowed_roles       text[] NOT NULL DEFAULT '{}'::text[],
             public_key          text,
-            notification_pubkey text,
             human_label         text,
             spending_cap_cents  bigint,
             kyc_verified_at     timestamptz,

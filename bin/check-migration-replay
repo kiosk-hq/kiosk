@@ -177,6 +177,14 @@ ACCEPTED_LEFTOVERS = {
          "same reason. Five of its columns are NOT NULL with no DEFAULT, which is what used to be " \
          "reported as a HAZARD; there is no INSERT to refuse, because head has no such table.",
   },
+  "column|kiosk.agents.notification_pubkey" => {
+    row: "K-1290",
+    why: "provisioned for a push channel nobody ever designed, and never wired: at removal it had zero " \
+         "readers and zero writers tree-wide, every occurrence being this declaration or a copy of it in " \
+         "a db/structure.sql. It is nullable, so unlike settlements.raw_jws it walls no INSERT and needs " \
+         "no shipped DROP; the demos' migration history simply stops creating it and a box of an older " \
+         "vintage loses it on the next deploy/demo-reset.sh. Object-scoped, because kiosk.agents is live.",
+  },
   "column|kiosk.agents.kyc_attributes" => {
     row: "K-656",
     why: "the jsonb blob the KYC attributes were kept in before they became rows in kiosk.kyc_attributes. " \
@@ -204,6 +212,61 @@ end
 
 def accepted_leftover(key)
   ACCEPTED_LEFTOVERS[accepted_key(key)]
+end
+
+# ── A DECLARATION MUST NOT EXCUSE SOMETHING HEAD STILL CREATES (K-1293) ──────
+#
+# Every ACCEPTED_LEFTOVERS entry says "an older box kept this and head does not
+# make it any more". That sentence has a checkable half, and until this ran it
+# was checked by nothing: if head's own DDL still EMITS the object, then what
+# the replay found is not a leftover at all -- it is a live object that
+# structure.sql fails to declare, which is a different and worse defect wearing
+# the declaration as cover.
+#
+# MEASURED, and this is why the check exists rather than being a nicety: on
+# 2026-09-05, with `notification_pubkey` planted back into schema_definitions.rb
+# and the seven regenerated structure.sql left without it, `check-migration-
+# replay` stayed at EXIT 0 -- and so did the kiosk-server suite (1552 examples),
+# check-demo-copies, check-demo-derivations, check-prose-counts,
+# check-publication-paths and check-derived-counts. Seven gates, seven greens,
+# on a column the tree had just removed. The K-1290 declaration added hours
+# earlier to make the removal SAFE is exactly what made the removal UNHELD.
+#
+# What this reads is the DDL SOURCE, one file, the single place these objects
+# are emitted -- not a live migrate from empty, which would catch the same class
+# and cost a database run per demo. Stated so the limit is not inferred: a
+# declared object created somewhere OTHER than schema_definitions.rb would slip
+# past this, and the fix for that is to keep emitting schema from one place.
+SCHEMA_DDL = File.expand_path("../kiosk-server/lib/kiosk/server/schema_definitions.rb", __dir__)
+
+def ddl_emits?(key, ddl)
+  kind, ident = key.split("|", 2)
+  ident ||= kind
+  parts = ident.split(".")
+  if key.start_with?("column|") && parts.length == 3
+    # `kiosk.agents.notification_pubkey` -> the column name as the DDL writes it,
+    # at the start of a line inside a CREATE TABLE body.
+    ddl.match?(/^\s+#{Regexp.escape(parts[2])}\s+\S/)
+  else
+    # a table: `kiosk.actions` -> the unqualified name after CREATE TABLE
+    ddl.match?(/CREATE TABLE[^\n]*\b#{Regexp.escape(parts.last)}\b/)
+  end
+end
+
+def check_declarations_are_dead(ddl_path = SCHEMA_DDL)
+  unless File.exist?(ddl_path)
+    return ["ACCEPTED_LEFTOVERS cannot be checked: no DDL source at #{ddl_path}"]
+  end
+
+  ddl = File.read(ddl_path)
+  ACCEPTED_LEFTOVERS.keys.filter_map do |key|
+    next unless ddl_emits?(key, ddl)
+
+    "ACCEPTED_LEFTOVERS declares #{key} (#{ACCEPTED_LEFTOVERS[key][:row]}) as a leftover an older " \
+      "box kept, but head's own DDL STILL EMITS IT -- so it is not a leftover, it is a live object " \
+      "that db/structure.sql does not declare. Either remove it from the DDL (which is what the " \
+      "declaring row said was done) or drop the declaration and fix structure.sql."
+  end
 end
 
 # Named objects only — never row contents, never physical ordering. Each row is
@@ -567,6 +630,11 @@ unless ACCEPTED_LEFTOVERS.empty? || options[:list]
        "starts after the last fleet rebuild; it is never a failure, because a declaration can only " \
        "be exercised by the defect it declares."
 end
+
+# K-1293: every declaration must still be DEAD at head. Appended to `failures`
+# so it exits through the same path and prints with the same shape -- a check
+# that reports on its own channel is one a reader learns to scroll past.
+failures.concat(check_declarations_are_dead) unless options[:list]
 
 if failures.empty?
   puts "check-migration-replay: OK — #{replays} replay(s) across #{demos.length} demo(s), " \

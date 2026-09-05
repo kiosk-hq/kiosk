@@ -127,7 +127,6 @@ CREATE TABLE kiosk.agents (
     user_id uuid NOT NULL,
     allowed_roles text[] DEFAULT '{}'::text[] NOT NULL,
     public_key text,
-    notification_pubkey text,
     human_label text,
     spending_cap_cents bigint,
     kyc_verified_at timestamp with time zone,
@@ -572,7 +571,7 @@ ALTER TABLE ONLY public.ar_internal_metadata
 --
 
 ALTER TABLE ONLY public.bookings
-    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY (ARRAY[('reserved'::character varying)::text, ('confirmed'::character varying)::text])));
+    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY ((ARRAY['reserved'::character varying, 'confirmed'::character varying])::text[])));
 
 
 --

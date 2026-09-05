@@ -2115,6 +2115,32 @@ end
             "template any more — drop the entry."
 end
 
+# ── NO LEDGER ID IN A SHIPPED GENERATOR TEMPLATE (K-1298) ────────────────────
+#
+# These templates are not read, they are WRITTEN -- `kiosk:install` copies them
+# into a third party's own repository. A `(K-830)` in one of them is therefore
+# not the demo-comment leak one directory over: it lands in SOMEBODY ELSE'S
+# codebase, pointing at a private ledger they cannot open and never will.
+#
+# The demo tree was scrubbed of ledger ids on 2026-09-05 and this survived it,
+# because the scrub's file set was `kiosk-demo-*` and this file is not there.
+# Measured when the arm was written: one occurrence across the six templates,
+# and zero after. A live TODO/FIXME still requires its id -- that is the
+# constitution's rule -- so the ban is on the id, not on the marker that needs
+# one, and a template growing a real TODO should declare it here rather than
+# losing the reference that makes it actionable.
+tpl_files.sort.each do |name|
+  path = File.join(GENERATOR_TEMPLATES_DIR, name)
+  File.read(File.join(ROOT, path)).each_line.with_index(1) do |line, lineno|
+    next unless line =~ /\b[KT]-\d{3,4}\b/
+    next if line =~ /\b(TODO|FIXME)\b/
+
+    errors << "#{path}:#{lineno}: a ledger id in a template the install generator WRITES INTO A " \
+              "CONSUMER'S REPOSITORY -- they cannot resolve it and it is not theirs to carry. " \
+              "Say the reason instead of citing the row: #{line.strip[0, 90]}"
+  end
+end
+
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
 
 GENERATOR_TEMPLATES.each do |name, entry|

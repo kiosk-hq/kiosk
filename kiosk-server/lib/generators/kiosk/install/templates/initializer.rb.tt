@@ -109,7 +109,7 @@ Kiosk.configure do |c|
   # column these migrations create — and the `current_agent_id()` helper RLS
   # policies call — is typed `uuid`, with no equivalent of `user_id_type` to
   # widen it, so an opaque external agent identifier has to be mapped onto a
-  # local uuid inside the adapter (K-830).
+  # local uuid inside the adapter.
   #   # c.agent_idp = MyExternalAgentIdp.new   # your Kiosk::AgentIdentityProviders::Base subclass
   #
   # USER-IdP (c.user_idp) — binds a real HUMAN account (and optionally its role)

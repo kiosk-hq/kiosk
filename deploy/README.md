@@ -86,10 +86,21 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
    apps later with no DNS change) or one A record per subdomain above.
 2. **Provision the VPS** (2–4 GB; all 8 apps at the shipped `WEB_CONCURRENCY=1`
    × ~250 MB RSS ≈ 2 GB Puma, so 4 GB is comfortable once Postgres and Caddy
-   take their share). Install Postgres 17, Caddy **with the `caddy-ratelimit`
-   module** (see "Edge rate-limit — REQUIRED" below; stock Caddy has no
-   rate-limiting), Ruby (`.mise.toml` pins the version), and a non-login `kiosk`
-   service user.
+   take their share). Install Postgres 17, a **stock** Caddy (no module: there
+   is no default edge throttle — see "Edge rate-limit" below), Ruby
+   (`.mise.toml` pins the version), and a non-login `kiosk` service user.
+
+   **What the box we actually run IS, measured over ssh 2026-09-06 and written
+   down because until now nothing anywhere recorded it:** an **OVH** VPS (the
+   host itself is `deploy-caddy.sh`'s default), **2 vCPU** (`nproc` → 2;
+   `/proc/cpuinfo` model name "Intel Core Processor (Haswell, no TSX)") and
+   **3814 MB** of RAM (`free -m` total), i.e. the low end of the range above,
+   running every deployed app plus Postgres plus Caddy. Every throughput figure
+   in this repository — 4.46 ms to verify a proof, 60 registrations/s, 1075
+   reads/s on one worker — was taken on a developer laptop, NOT here, and this
+   box has a quarter of that laptop's cores. Any sizing argument that has been made from those numbers was
+   guessing at this line; scale them before reusing them, or better, measure on
+   the box.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
    secret, a Stripe **test** key for getgrocery only). Copy to
@@ -277,40 +288,32 @@ compares the WHOLE file against the box and probes the live wire, so a
 divergence in either direction shows up as a diff. Its `--self-test` holds the
 repo posture (HSTS declared, limiter not enabled) and runs in CI.
 
-## HSTS — shipped in the template, ABSENT from the live box (K-1295)
+## HSTS -- live on all eight origins (K-1295)
 
-**Measured 2026-09-05, every origin `deploy/Caddyfile` declares: not one of them
-sends `Strict-Transport-Security` at all.** The template is not the defect —
-`deploy/Caddyfile`'s `(kioskproxy)` snippet has emitted the header, enabled and
-needing no module, since K-916, and a box built from this file has it. The
-deployed box is not built from this file: `/etc/caddy/Caddyfile` on the VPS is
-hand-maintained, also serves other sites, and does not import the snippet. This
-is the same split the rate limit has, and this section exists because the README
-used to state only the template half — calling the Caddyfile "the fleet's only
-source of `Strict-Transport-Security`", which is a claim about the fleet that
-the fleet does not honour.
+**Measured 2026-09-06, every origin `deploy/Caddyfile` declares: all 8 answer
+`strict-transport-security: max-age=31536000; includeSubDomains`.**
+`deploy/check-live-hsts.sh` exits 0, 8 of 8.
+
+**It got there by the deploy, not by a checklist tick, and that distinction is
+the whole finding.** `deploy/Caddyfile`'s `(kioskproxy)` snippet has emitted the
+header, enabled and needing no module, since K-916 -- and for a month the fleet
+sent none of it, because `/etc/caddy/Caddyfile` was hand-maintained and nothing
+applied the template. What closed it was `deploy-caddy.sh` installing this file
+whole. So the mechanism is: **the repo is the source of truth and a deploy is
+what makes the box match it**; the header cannot be pasted onto the box, because
+the next `--apply` overwrites the file it was pasted into.
 
 What the header buys is one request: `config.force_ssl` is deliberately OFF in
 every app behind this proxy (Caddy already terminates TLS and redirects
-`:80`→`:443`, and the apps run with `assume_ssl`), so without HSTS a client typing a bare hostname
-makes its FIRST request in plaintext, before the redirect. That first request is
-the window HSTS closes and the only thing this line buys.
+`:80`→`:443`, and the apps run with `assume_ssl`), so without HSTS a client
+typing a bare hostname makes its FIRST request in plaintext, before the
+redirect. That first request is the window HSTS closes and the only thing this
+line buys.
 
-**On the live box, paste this into every demo vhost block in
-`/etc/caddy/Caddyfile`, immediately inside the opening brace:**
-
-```
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-```
-
-One block per vhost that `deploy/Caddyfile` declares — the demo subdomains and
-the KYC broker; `check-live-hsts.sh` derives that list from the same file, so it
-names any you miss. Then:
+Re-check it any time, from anywhere, no ssh needed:
 
 ```sh
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-/srv/kiosk/deploy/check-live-hsts.sh          # must print OK for all 8
+deploy/check-live-hsts.sh          # must print OK for all 8
 ```
 
 `preload` is deliberately absent: submitting to the browser preload list is
@@ -321,15 +324,18 @@ created yet, and if one is ever added it must serve TLS.
 
 **Why a script and not a checklist line, said plainly.** The other half of this
 class -- the edge rate limit -- got a script and it landed; HSTS got a line in
-`CHECKLIST.md`, which is 0 ticked of 45, so its tick state carries no
+`CHECKLIST.md`, which is 0 ticked of 45, so its tick state carried no
 information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
-because a config check run against this template would have said OK for as long
-as the box was serving without the header.
+because a config check run against this template would have said OK for the
+whole month the box was serving without the header -- and a deploy proves the
+header arrived at the moment it ran, which is a different question from whether
+it still arrives now.
 
 **`kiosk.tech` itself is a different owner's setting.** It answers no HSTS
-either, but it is served by GitHub Pages, not by this box — nothing in this
+either, but it is served by GitHub Pages, not by this box -- nothing in this
 directory can fix it, and `check-live-hsts.sh` only reports it if you pass the
 hostname explicitly.
+
 
 ## Scaling past one worker — shared stores REQUIRED (K-738)
 

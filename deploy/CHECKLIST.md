@@ -10,8 +10,13 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
       Or per-app A records (`getgrocery.demo.kiosk.tech`, …).
 
 ## 2. Provision the VPS (one small box, ~2–4 GB)
-- [ ] Install: **Caddy**, **PostgreSQL** (17 preferred; on 16 strip the one `SET transaction_timeout`
-      line from each `structure.sql` — it is the only PG17-ism), **Ruby 4.0.1** via **mise**, git.
+- [ ] Install: **Caddy** (stock — there is no rate-limit module to add, see §6), **PostgreSQL**
+      (17 preferred; on 16 strip the one `SET transaction_timeout` line from each `structure.sql`
+      — it is the only PG17-ism), **Ruby 4.0.1** via **mise**, git.
+- [ ] For comparison, the box this fleet actually runs on, MEASURED over ssh 2026-09-06: an OVH VPS
+      with **2 vCPU** (`nproc`) and **3814 MB** RAM (`free -m` total), carrying every deployed app
+      plus Postgres plus Caddy. Every throughput number written down in this repository was taken on a
+      developer laptop with four times the cores; do not size from them without saying so.
 - [ ] **No Python/numpy needed on the server** — it only *verifies* proofs (cheap, pure Ruby). numpy is
       the client's *solver* (`solve.py`); install it on the box ONLY if you want to run the solve-side
       demo smoke tests (`demo:shop`/`demo:book`/`demo:backoff`) there.

@@ -16,11 +16,19 @@ class OperationResult < Kiosk::OperationResult
   # yours". `quota_exceeded` (K-586) is the per-principal cap on outstanding
   # broker intakes: 429 is the status §9 gives it, and the only refusal on this
   # origin an assistant can read as "come back later" rather than "no".
+  # `module_not_served` and `action_failed` are the KYC broker's two absences:
+  # 501 when this deployment opens no verifications at all — the
+  # same code the engine answers for the submit half of the module — and 500
+  # when the broker simply did not complete this request. The 500 is a
+  # DELIBERATE refusal rather than an escaped exception, which is the whole
+  # difference: it carries a sentence and a hint instead of a Ruby class.
   STATUSES = {
-    "bad_request"    => :bad_request,
-    "forbidden"      => :forbidden,
-    "not_found"      => :not_found,
-    "kyc_required"   => :forbidden,
-    "quota_exceeded" => :too_many_requests,
+    "bad_request"       => :bad_request,
+    "forbidden"         => :forbidden,
+    "not_found"         => :not_found,
+    "kyc_required"      => :forbidden,
+    "quota_exceeded"    => :too_many_requests,
+    "action_failed"     => :internal_server_error,
+    "module_not_served" => :not_implemented,
   }.freeze
 end

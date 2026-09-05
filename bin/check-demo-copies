@@ -477,7 +477,7 @@ if ARGV.include?("--self-test")
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a legitimate divergence inside a `:coincidence` — the OTHER diagnosis, not drift",
       ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
-              "    \"quota_exceeded\" => :too_many_requests,\n", ""]],
+              "    \"quota_exceeded\"    => :too_many_requests,\n", ""]],
       expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,skooti\] as a `:coincidence` and the coincidence has ended/ },
     { id: "coincidence-over-the-cap", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
@@ -843,15 +843,19 @@ OPERATION_RESULT_AGREE = {
   %w[getgrocery skooti] => {
     rule: :coincidence,
     why:  "THE COINCIDENCE THIS ENTRY HAS ARGUED SINCE K-792, NOW DECLARED INSTEAD OF ONLY " \
-          "DESCRIBED. Both maps carry the same five codes ending in `kyc_required` and " \
-          "`quota_exceeded` — and they carry them for unrelated reasons: getgrocery gates alcohol, " \
-          "skooti gates a motorcycle licence, and each arrived at its own set by asking which " \
-          "refusals ITS verbs can make. `:coincidence` rather than `:lockstep` precisely because " \
-          "«even the one match today would be a coincidence to enshrine»: holding these two in " \
-          "lockstep would make a legitimate divergence — one origin adding a refusal the other " \
-          "cannot make — read as drift. What IS held is the membership: a THIRD demo landing on the " \
-          "same five codes is not an accident twice over, and the pair ceasing to agree drops this " \
-          "group in the same commit.",
+          "DESCRIBED. Both maps carry the same codes — through `kyc_required` and " \
+          "`quota_exceeded` and, since the broker-absence refusals, `action_failed` and " \
+          "`module_not_served` — and they carry them for unrelated reasons: getgrocery gates " \
+          "alcohol, skooti gates a motorcycle licence, and each arrived at its own set by asking " \
+          "which refusals ITS verbs can make. The last two are the closest thing to a shared " \
+          "cause the pair has ever had, and they are still not one: both demos call the SAME " \
+          "hand-copied broker client, which is itself held `:code`, so the maps agreeing is a " \
+          "consequence of that copy rather than of a decision taken twice. `:coincidence` rather " \
+          "than `:lockstep` precisely because «even the one match today would be a coincidence to " \
+          "enshrine»: holding these two in lockstep would make a legitimate divergence — one " \
+          "origin adding a refusal the other cannot make — read as drift. What IS held is the " \
+          "membership: a THIRD demo landing on the same set is not an accident twice over, and " \
+          "the pair ceasing to agree drops this group in the same commit.",
   },
   %w[philslist tudu] => {
     rule: :coincidence,
@@ -1275,8 +1279,10 @@ COPIES = {
           "different sets. stylish lists ONE (nothing on that origin ever fills up and its write " \
           "is caller-scoped by construction, so `bad_request` is the only refusal it can make); " \
           "tudu and philslist two; atablefor three, ending in `conflict`; skooti and getgrocery " \
-          "FIVE, ending in `kyc_required` and `quota_exceeded` (K-586's per-principal cap on " \
-          "outstanding broker intakes, the only 429 in the fleet); hoteling four, ending in " \
+          "SEVEN — through `kyc_required` and `quota_exceeded` (K-586's per-principal cap on " \
+          "outstanding broker intakes, the only 429 in the fleet) to the KYC broker's two " \
+          "absences, `module_not_served` when this deployment opens no verifications at all and " \
+          "`action_failed` when the broker simply did not complete one; hoteling four, ending in " \
           "`not_found` — the one map " \
           "whose contents have moved TWICE (K-794 removed `not_found` when `hotel_detail` started " \
           "answering an unknown id with an empty array; T-090's three-way rule, spec §9.1, put it " \
@@ -3617,6 +3623,21 @@ FRAGMENTS = {
            "`licence_category:A` for a motorcycle. Declared here so the unit rule records it as a " \
            "decision rather than reporting it as drift.",
   },
+  "app/operations/request_kyc_operation.rb#broker_refusal" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "THE WIRE'S ANSWER WHEN THE BROKER IS NOT THERE, and it is held in lockstep because " \
+           "the two demos must not disagree about WHICH refusal an absent broker is. Both map " \
+           "`NotConfigured` to `501 module_not_served` — the code the ENGINE already answers for " \
+           "the submit half of the same module, so the two halves agree — and every other broker " \
+           "failure to a DELIBERATE `500 action_failed` with a sentence and a hint, because a " \
+           "transient outage must not be told to an assistant in a status that is cacheable by " \
+           "default. Before this method both demos let three raises escape and answered a Ruby " \
+           "class name in `detail`, one of them carrying the operator's own broker host and port. " \
+           "A one-sided edit here would make one origin permanently unavailable and the other " \
+           "temporarily so for the same fact, which is precisely the thing an assistant branches " \
+           "on.",
+  },
   "app/operations/request_kyc_operation.rb#call" => {
     rule:  :per_demo,
     ships: KYC_DEMOS,
@@ -3738,9 +3759,12 @@ FRAGMENTS = {
   "app/operations/request_kyc_operation.rb#private_class_method" => {
     rule:  :code,
     ships: KYC_DEMOS,
-    why:   "`private_class_method :outstanding_for_current_principal` — the visibility half of the " \
-           "K-586 intake cap, identical in both. The method itself is declared just below; this " \
-           "line is what keeps it off the class's public surface, and losing it in one copy makes " \
+    why:   "`private_class_method :outstanding_for_current_principal, :broker_refusal` — the " \
+           "visibility half of the K-586 intake cap AND of the broker-absence refusal, identical " \
+           "in both. ONE macro line naming both methods rather than two: a class-body macro is " \
+           "reached by its NAME here, so a second `private_class_method` line would be a second " \
+           "unit of the same name in the same file. Both methods are declared above it; this line " \
+           "is what keeps them off the class's public surface, and losing it in one copy makes " \
            "the two demos' operations answer different APIs while every test still passes.",
   },
 
@@ -3773,7 +3797,7 @@ FRAGMENTS = {
     agree: OPERATION_RESULT_AGREE,
     rule:  :per_demo,
     ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:   "The five different status maps the file-level entry above enumerates and argues for — " \
+    why:   "The five DIFFERENT status maps the file-level entry above enumerates and argues for — " \
            "a code an app never produces has no business having a mapping. Declared here for the " \
            "same reason as home_controller's `index`: it puts a file whose shared half was already " \
            "PROMOTED into kiosk-server (K-792) under the discovery rule, so the next method that " \

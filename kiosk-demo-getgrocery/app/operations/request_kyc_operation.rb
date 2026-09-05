@@ -47,12 +47,19 @@ class RequestKycOperation
     end
 
     callback_base = Kiosk.configuration.issuer.to_s.chomp("/")
-    broker = ProveBrokerClient.start_verification(
-      callback_url:     "#{callback_base}/kyc/callback",
-      requested_claims: REQUESTED_CLAIMS,
-      subject_handle:   principal_id.to_s,
-    )
+    broker = begin
+      ProveBrokerClient.start_verification(
+        callback_url:     "#{callback_base}/kyc/callback",
+        requested_claims: REQUESTED_CLAIMS,
+        subject_handle:   principal_id.to_s,
+      )
+    rescue ProveBrokerClient::Unavailable => e
+      return broker_refusal(e)
+    end
 
+    # Safe `fetch`es: {ProveBrokerClient} refuses an intake response missing
+    # either field, so the only way to get here is with both present. The check
+    # lives there because that is where the broker can be named.
     request_id       = broker.fetch("request_id")
     verification_url = broker.fetch("verification_url")
     nonce            = broker["nonce"].to_s
@@ -77,6 +84,48 @@ class RequestKycOperation
     })
   end
 
+  # THE BROKER IS A SECOND SERVICE, AND ITS ABSENCE MAY NOT REACH THE WIRE AS A
+  # RUBY EXCEPTION. Three unrescued raises used to leave this verb answering
+  # `500 action_failed` with a Ruby class name in `detail` — and, when the
+  # broker's port was refused, with this operator's own broker host in it. That
+  # is the opaque-500 shape the wire exists to replace, on a no-argument verb an
+  # assistant can call before anything else.
+  #
+  # TWO ANSWERS, because they ask the assistant to do different things:
+  #
+  #   module_not_served (501) — this deployment opens no verifications at all.
+  #     The same sentence and the same code the engine's KycVerifier already
+  #     answers when no `kyc_public_key` is set, so the two halves of the KYC
+  #     module agree; 501 is cacheable by default, which is right for a property
+  #     of the origin.
+  #   action_failed (500) — the broker did not complete this request. Transient,
+  #     so it must not be the cacheable 501, and it says so in words rather than
+  #     leaving an assistant to guess from a status.
+  #
+  # Neither sentence names the broker's URL, its response body or a Ruby class:
+  # what the operator needs for that is written to the log instead, which is
+  # where the diagnostic belonged all along.
+  def self.broker_refusal(error)
+    Rails.logger.warn("[request_kyc] broker intake refused: #{error.class}: #{error.message}")
+
+    if error.is_a?(ProveBrokerClient::NotConfigured)
+      OperationResult.refused(
+        code:    "module_not_served",
+        message: "this operator does not serve the KYC module",
+        hint:    "no verification can be opened at this origin and retrying will not help — " \
+                 "proceed as you would at an operator that offers none.",
+      )
+    else
+      OperationResult.refused(
+        code:    "action_failed",
+        message: "the verification service this operator uses did not open a request",
+        hint:    "nothing about your call is wrong and nothing here is yours to fix. Try " \
+                 "`request_kyc` again shortly; until one succeeds, treat this account as " \
+                 "unverified.",
+      )
+    end
+  end
+
   # Live intakes this principal is already holding. Counted through the SAME
   # isolation predicate `kyc_status` reads with, so the cap is per principal by
   # construction rather than by a `user_id` argument a caller could forget.
@@ -85,5 +134,5 @@ class RequestKycOperation
                           .where(status: KycVerificationRequest::PENDING)
                           .count
   end
-  private_class_method :outstanding_for_current_principal
+  private_class_method :outstanding_for_current_principal, :broker_refusal
 end

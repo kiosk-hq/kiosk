@@ -1222,6 +1222,11 @@ namespace :demo do
                                         404 an assistant would read as "cannot do that"
       BLOCKED  PastDeliveryDate       — a delivery date in the past is a named 400,
                                         never an ambiguous 200 []
+      BLOCKED  KycBrokerUnwired       — with no KYC broker configured (which is how THIS
+                                        task boots the origin, and how a plain `rails s`
+                                        does), request_kyc answers 501 module_not_served
+                                        with a hint saying retrying will not help —
+                                        never a 500 carrying a Ruby exception message
       BLOCKED  RegistrationWithoutPow — register without a valid PoW proof rejected
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:

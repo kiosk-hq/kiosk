@@ -3,31 +3,38 @@
 #
 # WHY THIS EXISTS, and it is a diagnosis rather than a feature request. Two
 # halves of one class were filed together: the edge rate limit and HSTS. The
-# rate limit got a SCRIPT -- deploy/check-edge-ratelimit.sh, built for K-976 --
-# and it landed. HSTS got a line in deploy/CHECKLIST.md, which is 0 ticked of
-# 45, so its tick state carries no information at all. A checklist line is not
-# a mechanism.
+# rate limit got a SCRIPT and it landed. HSTS got a line in deploy/CHECKLIST.md,
+# which is 0 ticked of 45, so its tick state carried no information at all. A
+# checklist line is not a mechanism.
 #
-# MEASURED 2026-09-05, all seven demo origins:
+# MEASURED 2026-09-05, all eight origins:
 #   curl -sSI https://<host>/ | grep -ci '^strict-transport-security'  ->  0
 #
-# while deploy/Caddyfile's (kioskproxy) snippet has shipped the header, ENABLED,
-# since K-916. The template is right and the box is stale -- the same split the
-# rate limit has, for the same reason: /etc/caddy/Caddyfile on the VPS is
-# hand-maintained, also serves other sites, and does not import this snippet.
+# while deploy/Caddyfile's (kioskproxy) snippet had shipped the header, ENABLED,
+# since K-916. The template was right and the box was stale, because nothing
+# deployed the template: /etc/caddy/Caddyfile was hand-maintained.
 #
-# WHY IT PROBES THE WIRE WHERE ITS SIBLING PARSES A CONFIG. check-edge-ratelimit
-# answers "does this config reach a directive", which is the right question for
+# FIXED 2026-09-06 by deploy/deploy-caddy.sh, which installs this directory's
+# Caddyfile whole and verifies the wire. Re-measured the same day: 8 of 8 send
+# the header. THIS SCRIPT IS NOT RETIRED BY THAT and must not be -- the deploy
+# proves the header arrives at the moment it runs, and this proves it still
+# arrives now, from anywhere, without ssh.
+#
+# WHY IT PROBES THE WIRE RATHER THAN PARSING A CONFIG. Its retired sibling
+# (deploy/check-edge-ratelimit.sh, gone with the default throttle it asserted)
+# answered "does this config reach a directive", which is the right question for
 # a directive that cannot be observed without flooding the box. HSTS is on every
 # single response, so the strongest available oracle is the response itself --
-# and it is the oracle that would have caught this: a config check run on the
-# template would have said OK for as long as the box has been serving without it.
+# and it is the oracle that caught this: a config check run on the template
+# would have said OK for as long as the box was serving without it.
 #
 # WHAT IT CANNOT SEE, said plainly:
 #   * Anything about a response the origin did not produce. An edge-generated
-#     refusal is invisible here, and deliberately so: reaching one would cost
-#     60+ requests against a bucket shared across every demo vhost, i.e. a
-#     self-inflicted outage on the whole fleet to observe one header.
+#     refusal is invisible here. When the fleet ran a per-IP throttle that was
+#     deliberate -- reaching one would have cost 60+ requests against a bucket
+#     shared across every demo vhost, i.e. a self-inflicted outage on the whole
+#     fleet to observe one header. There is no default throttle any more
+#     (T-171), so today it is simply out of scope rather than avoided.
 #   * Whether HSTS came from Caddy, from a CDN, or from the app. It answers
 #     "does the client get one", which is the only thing a client can act on.
 #   * kiosk.tech itself, unless you pass it. That host is GitHub Pages, not this
@@ -131,19 +138,18 @@ probe() {
     echo
     echo "check-live-hsts: FAIL — ${bad} of ${n} origin(s) send no usable HSTS."
     echo
-    echo "  deploy/Caddyfile's (kioskproxy) snippet ships the header ENABLED, so a box built"
-    echo "  from the template has it. The live VPS is NOT built from the template: its"
-    echo "  /etc/caddy/Caddyfile is hand-maintained and also serves other sites (the DRIFT"
-    echo "  NOTE in the Caddyfile header), so the line has to be added there BY HAND."
+    echo "  deploy/Caddyfile's (kioskproxy) snippet ships the header ENABLED and every vhost"
+    echo "  imports that snippet, so a box running this file has it. If an origin above does"
+    echo "  not, the box is NOT running this file."
     echo
-    echo "  Paste this line into EVERY demo vhost block in /etc/caddy/Caddyfile, immediately"
-    echo "  inside the opening brace:"
+    echo "  Do not paste the header onto the box by hand -- the next deploy overwrites the"
+    echo "  whole file and the fix disappears. Deploy the repo copy instead:"
     echo
-    echo "      header Strict-Transport-Security \"max-age=31536000; includeSubDomains\""
+    echo "      deploy/deploy-caddy.sh            # diff + remote validate, changes nothing"
+    echo "      deploy/deploy-caddy.sh --apply    # install, reload, verify, roll back on failure"
     echo
-    echo "  then:  sudo caddy validate --config /etc/caddy/Caddyfile"
-    echo "         sudo systemctl reload caddy"
-    echo "         /srv/kiosk/deploy/check-live-hsts.sh"
+    echo "  then re-run this script. If the diff is empty and the header is still missing,"
+    echo "  the snippet or its import has been removed from deploy/Caddyfile itself."
     echo
     echo "  A host that is simply unreachable is reported here too, and on purpose: this"
     echo "  script cannot tell 'no header' from 'no answer', and neither can a browser."

@@ -132,56 +132,46 @@ For EACH of the 7 apps:
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 
 ## 6. Front with Caddy (auto-TLS)
-- [ ] **Edge rate-limit module — REQUIRED, do this BEFORE installing the Caddyfile (K-540):**
-      `sudo caddy add-package github.com/mholt/caddy-ratelimit` (Caddy ≥ 2.7 swaps in a plugin-included
-      binary; `xcaddy build --with github.com/mholt/caddy-ratelimit` is the stable equivalent if you compile
-      your own) · `sudo systemctl restart caddy` · confirm with `caddy list-modules | grep rate_limit`.
-      A stock Caddy has **no** rate-limiting at all, and at the shipped `WEB_CONCURRENCY=1` a plain flood of
-      *any* endpoint saturates the single worker. `POST /kiosk/auth/register` runs the PoW gate
-      UNAUTHENTICATED, and PoW prices the attacker's *solve*, never our *verify* — a garbage proof now costs
-      0.30 ms instead of 18.7 ms (K-540, cheapest-first + lazy hashing), so it is no longer the cheapest
-      lever, but nothing in the app bounds the request RATE. Nothing in the app substitutes for this.
-      **Acceptable alternative:** a per-IP rate rule on `/kiosk/*` at a CDN/WAF in front of the box — then
-      skip the module and leave the Caddy snippet commented. Deploying with **neither** is the one
-      unacceptable option. Detail: `deploy/README.md` §"Edge rate-limit — REQUIRED".
-- [ ] Install `deploy/Caddyfile` (**8** vhosts → loopback ports: getgrocery/atablefor/hoteling/skooti/
-      stylish/philslist/tudu + `kyc` for the KYC broker). Certs issue automatically.
-- [ ] **Uncomment the rate-limit (only after the module is installed):** in `/etc/caddy/Caddyfile` uncomment
-      `import ratelimit` inside `(kioskproxy)` AND the whole `(ratelimit)` snippet. They ship **commented**
-      because `rate_limit` is not a stock directive — a stock binary refuses the WHOLE config
-      ("unrecognized directive: rate_limit", verified on Caddy v2.11.2) and then no site serves at all.
-      Then `sudo caddy validate --config /etc/caddy/Caddyfile` · `sudo systemctl reload caddy`.
-- [ ] **Prove the edge is limited — do not take the two ticks above on trust (K-976):**
-      `/srv/kiosk/deploy/check-edge-ratelimit.sh` · it reads `/etc/caddy/Caddyfile` and names every vhost
-      that does not reach a `rate_limit` directive, exit 1 if any does. The uncommenting is a manual step
-      and skipping it is otherwise SILENT — the box comes up, all eight sites serve, and nothing anywhere
-      says the register endpoint is unbounded. If you took the CDN/WAF route instead, declare it rather
-      than skipping the tick: `KIOSK_EDGE_RATELIMIT=external /srv/kiosk/deploy/check-edge-ratelimit.sh`.
-- [ ] **HSTS — one `header` line, and it must reach the LIVE Caddyfile too (K-916):** `deploy/Caddyfile`'s
-      `(kioskproxy)` snippet emits `Strict-Transport-Security: max-age=31536000; includeSubDomains`, ENABLED
-      (unlike the rate-limit above, `header` is a stock directive and needs no module). Without it a client
-      typing a bare hostname makes its FIRST request in plaintext, before the `:80`→`:443` redirect — the
-      window HSTS exists to close. `config.force_ssl` is deliberately OFF in every app behind the proxy
-      (K-439: Caddy already terminates TLS and redirects, and the apps run with `assume_ssl`), so the edge
-      is the ONLY place this header can come from. **On the current live box the hand-maintained
-      `/etc/caddy/Caddyfile` does not import this snippet** (see the ⚠ below), so paste this line by hand
-      into EVERY vhost block there, immediately inside the opening brace:
-
-          header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-
-      then `sudo caddy validate --config /etc/caddy/Caddyfile` · `sudo systemctl reload caddy`.
+- [ ] **Deploy the Caddyfile with `deploy/deploy-caddy.sh`, from a workstation that can ssh to the
+      box — NOT by hand on the box.** `deploy/deploy-caddy.sh` alone stages the file, has the BOX's
+      own caddy validate it and prints the diff, changing nothing; `--apply` backs up
+      `/etc/caddy/Caddyfile`, installs, reloads, verifies the LIVE WIRE and rolls back if the wire
+      disagrees. It ships the whole file or nothing — no patched lines, no merge — so `deploy/Caddyfile`
+      is the source of truth and a hand-edit on the box is something the next `--apply` silently
+      reverts.
+      <!-- count: 8 ¦ from: grep -cE '^[a-z0-9.-]+\.demo\.kiosk\.tech \{' deploy/Caddyfile -->
+      **8** vhosts → loopback ports (getgrocery/atablefor/hoteling/skooti/stylish/philslist/
+      tudu + `kyc` for the KYC broker); certs issue automatically on first request.
+- [ ] **There is NO edge rate-limit module to install, and no snippet to uncomment.** The per-IP
+      throttle is deliberately not a default (Phil, 2026-09-05: «Делать по дефолту throttle - не
+      надо»). `deploy/Caddyfile` ships `import ratelimit` and the whole `(ratelimit)` snippet
+      COMMENTED, that file is what the box runs, and `--apply`'s wire check bursts an origin 75 times
+      and fails if a 429 comes back. Do not tick this as a skipped step — there is no step.
+      The exposure it used to cover has not gone away and the analysis is kept beside the commented
+      block in `deploy/Caddyfile` and in `deploy/README.md` §"Edge rate-limit"; if the box ever
+      actually falls over, re-enable it IN THE REPO and deploy, then pick the bound from a burst
+      rather than from either number written down (1 req/s live, 60/min in the snippet, neither
+      derived from a measurement).
+- [ ] **HSTS arrives because the Caddyfile carries it, not because you pasted it (K-916, K-1295).**
+      `deploy/Caddyfile`'s `(kioskproxy)` snippet emits
+      `Strict-Transport-Security: max-age=31536000; includeSubDomains`, ENABLED — `header` is a stock
+      directive and needs no module — and every vhost imports that snippet. Without it a client typing
+      a bare hostname makes its FIRST request in plaintext, before the `:80`→`:443` redirect, which is
+      the window HSTS exists to close. `config.force_ssl` is deliberately OFF in every app behind the
+      proxy (K-439: Caddy already terminates TLS and redirects, and the apps run with `assume_ssl`), so
+      the edge is the ONLY place this header can come from.
 - [ ] **Prove HSTS actually arrives — do not take the tick above on trust (K-1295):**
-      `/srv/kiosk/deploy/check-live-hsts.sh` · it probes every vhost `deploy/Caddyfile` declares and names
-      each origin that does not answer `max-age >= 31536000; includeSubDomains`, exit 1 if any does not.
-      This tick exists because the one above did not: it was written, never ticked, and MEASURED
-      2026-09-05 not one deployed origin sent the header — for as long as the box has been serving. A
-      checklist line is not a mechanism; the reason the rate-limit half of this class landed is that it
-      got a script.
-- [ ] Verify the limit bites: hammer `/kiosk/auth/register` from one IP and confirm 429 well before the box slows.
-- [ ] ⚠ On the CURRENT live box the `/etc/caddy/Caddyfile` is hand-maintained and also serves other sites —
-      do NOT overwrite it with `deploy/Caddyfile` (you would drop the other vhosts). Hand-add the blocks in its
-      style instead. See the DRIFT NOTE (K-463) in the Caddyfile header.
-
+      `deploy/check-live-hsts.sh` · it probes every vhost `deploy/Caddyfile` declares and names each
+      origin that does not answer `max-age >= 31536000; includeSubDomains`, exit 1 if any does not.
+      This tick exists because an earlier one did not: HSTS was in the template from K-916, the tick
+      was written, never ticked, and MEASURED 2026-09-05 not one deployed origin sent the header — for
+      as long as the box had been serving. A checklist line is not a mechanism.
+- [ ] **Prove the throttle is really off, and burst before you probe the sibling (T-171):** the bucket
+      was per-IP across every vhost, so 60+ sequential requests to one origin used to 429 the other
+      seven — but it drained in under a minute, so a sibling probed AFTER the burst answers 200
+      whether or not a limiter exists. Probe the sibling while the burst is still running, or a
+      removed limiter and a drained window read identically. `deploy-caddy.sh --apply` does exactly
+      that, inside its verify step.
 ## 7. Deploy new code (push-to-deploy) + housekeeping
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,

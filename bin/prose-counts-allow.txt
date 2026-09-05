@@ -79,7 +79,6 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb ¦ six migrations
 
 deploy/CHECKLIST.md ¦ six demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | grep -v skooti | wc -l ¦ the operator demos other than skooti, which is the only one with firmware locks.
 deploy/CHECKLIST.md ¦ three demos ¦ how many demos one eager-load defect took down in a past deployment; a fact about that day, not a population of this tree.
-deploy/CHECKLIST.md ¦ eight sites ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ one served site per deployed app, template for template.
 deploy/README.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/app/services/pow_difficulty.rb' | wc -l ¦ the demos that honour the difficulty knob, counted by the service that reads it.
 deploy/README.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything provisioned on the box, one environment template each.
 deploy/README.md ¦ three documents ¦ the always-free documents are named in full in the same sentence; they are routes of the engine rather than a file set.

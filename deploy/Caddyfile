@@ -58,40 +58,50 @@
 	email admin@kiosk.tech
 }
 
-# Reusable snippet: shared proxy + the per-IP edge rate-limit.
+# Reusable snippet: shared proxy + the per-IP edge rate-limit, which is OFF.
 #
-# ── THE EDGE RATE-LIMIT IS REQUIRED, NOT GARNISH (K-540) ─────────────────────
-# Do NOT read the commented lines below as "optional, the PoW covers it". PoW
-# does NOT cover it, and this note previously said it did.
+# ── THERE IS NO DEFAULT THROTTLE, AND THAT IS A DECISION (T-171) ─────────────
+# Phil, 2026-09-05: «Наш PoW проверяется за миллисекунды. Ну, пускай сыплют
+# мусором. Посмотрим, как реагировать. Делать по дефолту throttle - не надо.»
+# The `import ratelimit` line and the (ratelimit) snippet below are commented
+# out, this whole file is what the box runs (deploy/deploy-caddy.sh installs it
+# entire), and the deploy's own wire check bursts an origin 75 times and fails
+# if a 429 comes back. So the commented lines are the DEPLOYED posture, not an
+# unfinished step.
 #
+# THEY ARE KEPT RATHER THAN DELETED. «Посмотрим, как реагировать» is removing
+# the default, not forswearing protection: leaving the block here, commented,
+# with the analysis beside it is what makes the next decision cheap.
+#
+# ── The exposure the limiter was for, which has not gone away (K-540) ────────
 # `POST /kiosk/auth/register` runs the PoW gate UNAUTHENTICATED, ahead of any
 # key verification: anyone can take a free 402 challenge and resubmit it with a
 # valid HMAC sig but garbage indices. PoW prices the attacker's SOLVE; it never
-# prices our VERIFY.
+# prices our VERIFY. And at the shipped WEB_CONCURRENCY=1 a plain flood of ANY
+# endpoint — a 404, the 402 issue path itself — saturates the single worker just
+# as well. The app can make each request cheaper; only something in FRONT of the
+# app bounds the request RATE.
 #
-# The app-side half is shipped and measured (n=168 k=7, one box): one issued
-# challenge drives at most one verify, and the verifier checks cheapest-first
-# and hashes lazily, so a garbage proof costs 0.30 ms — or 0.012 ms if the
-# attacker did not even order the indices — instead of the 18.7 ms it cost when
-# every proof paid the full 128-hash loop. A real proof still costs ~18 ms.
-# Worker saturation on this path therefore moved from ~54 req/s to ~3.3k req/s.
+# ── Why the arithmetic changed ───────────────────────────────────────────────
+# The app-side half of K-540 is shipped and measured (n=168 k=7, one box): one
+# issued challenge drives at most one verify, and the verifier checks
+# cheapest-first and hashes lazily, so a garbage proof costs 0.30 ms — or
+# 0.012 ms if the attacker did not even order the indices — instead of the
+# 18.7 ms it cost when every proof paid the full 128-hash loop. A real proof
+# still costs ~18 ms. Worker saturation on this path moved from ~54 req/s to
+# ~3.3k req/s. A proof verifies in 4.46 ms at the params this fleet runs, one
+# worker completes a full registration 60 times a second and a plain read 1075
+# times a second — and the limit that used to run on the box was ONE request a
+# second, keyed per-IP across every vhost, so bursting one demo refused the
+# other seven. That is a self-inflicted outage on the traffic these demos exist
+# to receive, which is the other half of why it came off.
 #
-# THAT DOES NOT REMOVE THE CEILING, and the conclusion is unchanged: at the
-# shipped WEB_CONCURRENCY=1 a plain flood of ANY endpoint — a 404, the 402
-# issue path itself — saturates the single worker just as well. The app can
-# make each request cheaper; only something in FRONT of the app bounds the
-# request RATE. Deploy without one and a single laptop can take the box down.
-#
-# ── Why the directive ships commented out ────────────────────────────────────
+# ── If you do turn it back on ────────────────────────────────────────────────
 # `rate_limit` is NOT a stock Caddy directive — it comes from the third-party
 # module github.com/mholt/caddy-ratelimit. A stock binary REFUSES to load a
 # config naming it ("unrecognized directive: rate_limit" — verified on Caddy
 # v2.11.2), so uncommenting it without the module means Caddy does not start and
-# NO site serves at all. Shipping it live would trade a DoS gap for a guaranteed
-# outage, so enabling it is a required RUNBOOK step (deploy/README.md step 4)
-# rather than a default in this file.
-#
-# TO DEPLOY — do both, before `systemctl reload caddy`:
+# NO site serves at all. So:
 #
 #   1. Get a Caddy that HAS the module, e.g.
 #        sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
@@ -99,23 +109,17 @@
 #      or build one:  xcaddy build --with github.com/mholt/caddy-ratelimit
 #      Confirm:       caddy list-modules | grep rate_limit
 #   2. Uncomment `import ratelimit` in (kioskproxy) AND the whole (ratelimit)
-#      snippet below, then `caddy validate --config /etc/caddy/Caddyfile`.
-#   3. Run `deploy/check-edge-ratelimit.sh` against the INSTALLED file. Step 2
-#      is a manual edit, and skipping it is otherwise silent: Caddy starts,
-#      all eight sites serve, and nothing says the edge is open (K-976).
+#      snippet below IN THIS FILE, then deploy/deploy-caddy.sh --apply. Do not
+#      hand-edit /etc/caddy/Caddyfile: the next --apply would overwrite it, and
+#      the deploy's wire check would then fail on the 429 it finds.
+#   3. Pick the bound from a measurement, not from this file. The retired live
+#      limit was 1 req/s and the snippet below says 60/min, and neither number
+#      has a recorded derivation. Burst the origin and find where it degrades.
 #
-# ALTERNATIVE (equally acceptable): a per-IP rate rule on `/kiosk/*` at a CDN /
-# WAF in front of this box. NEITHER IS THE DEFAULT, and that is a decision
-# rather than an omission (Phil, 2026-09-05: «Наш PoW проверяется за
-# миллисекунды. Ну, пускай сыплют мусором. Посмотрим, как реагировать. Делать по
-# дефолту throttle - не надо.»). The measurements behind it: a proof verifies in
-# 4.46 ms, one worker completes a full registration 60 times a second and a
-# plain read 1075 times a second, and the limit that used to be here was ONE
-# request a second. It also keyed per-IP across every vhost, so bursting one
-# demo refused the other seven. What was NOT acceptable was
-# nor with "probably one of those", which is what an unchecked box is. If you
-# took this route, say so where the check can see it:
-#   KIOSK_EDGE_RATELIMIT=external deploy/check-edge-ratelimit.sh
+# ALTERNATIVE, equally acceptable: a per-IP rate rule on `/kiosk/*` at a CDN or
+# WAF in front of this box. Nothing here can see that one, so if you take that
+# route write it down where the next operator will read it — deploy/README.md
+# under "Edge rate-limit".
 #
 # ── HSTS (K-916) ─────────────────────────────────────────────────────────────
 # Every vhost below imports this snippet, so the header is emitted once for the
@@ -143,17 +147,19 @@
 (kioskproxy) {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	# import ratelimit          # REQUIRED — uncomment once the module is installed, then run deploy/check-edge-ratelimit.sh
+	# import ratelimit          # OFF BY DECISION (T-171). See the note above before re-enabling.
 	# Caddy forwards X-Forwarded-For/Proto/Host to the upstream by default.
 	reverse_proxy {args[0]}
 }
 
 # (snippet) per-IP 60 req/min backstop — requires github.com/mholt/caddy-ratelimit.
-# Uncomment together with the `import ratelimit` line above. 60/min per IP is
-# far above any honest agent's pace (register once, then solve one PoW per tolled
-# call — sub-second at the hosted `low`, ~10 s at `high`, on the M-series laptop
-# core kiosk-pow-equihash/bench/README.md names) and far below what it takes to
-# saturate a worker.
+# NOT DEPLOYED and not a pending step: see the T-171 note above. If you ever
+# uncomment it, uncomment the `import ratelimit` line above with it, and treat
+# the 60/min as a placeholder rather than a finding — it is far above any honest
+# agent's pace (register once, then solve one PoW per tolled call — sub-second at
+# the hosted `low`, ~10 s at `high`, on the M-series laptop core
+# kiosk-pow-equihash/bench/README.md names) and far below what it takes to
+# saturate a worker, but no measurement chose it.
 # (ratelimit) {
 # 	rate_limit {
 # 		zone kiosk_per_ip {

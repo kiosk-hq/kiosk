@@ -11,14 +11,14 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 
 | File | What it is |
 |------|-----------|
-| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. Emits **HSTS** (stock `header` directive, enabled). Carries the **required** per-IP edge rate-limit, shipped commented (needs the `caddy-ratelimit` module — see below). |
+| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. Emits **HSTS** (stock `header` directive, enabled). Carries the per-IP edge rate-limit **commented out and deliberately so** — there is no default throttle (see below). This file is the source of truth for `/etc/caddy/Caddyfile`; do not hand-edit the box. |
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `telemetry-init.sql` | The ONE shared live-activity store: `kiosk_demo_telemetry` DB + `kiosk_telemetry` login role + the append-only events table. Only needed if you turn telemetry on — see [Live-activity telemetry](#live-activity-telemetry--wired-opt-in). |
 | `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box (K-509/K-540): strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
-| `check-edge-ratelimit.sh` | **Run it on the box after any Caddyfile change.** Reads `/etc/caddy/Caddyfile` and answers whether every proxied vhost actually reaches a `rate_limit` directive, naming the ones that do not. The backstop ships commented (see below), so skipping the runbook step used to be SILENT — the box came up, every site served, and nothing said the edge was open (K-976). `--self-test` proves the check both ways and runs in CI. `KIOSK_EDGE_RATELIMIT=external` is the declared escape hatch for a CDN/WAF in front. |
-| `check-live-hsts.sh` | **Run it on the box after any Caddyfile change, and from anywhere to audit the fleet.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. Its sibling above parses a config; this one reads the WIRE, because a config check on the template would have said OK for as long as the box has been serving without the header — which is exactly what happened (K-1295). `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
+| `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
+| `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template would have said OK for as long as the box was serving without the header — which is exactly what happened (K-1295). `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
 | `demo-reset.sh` | Run ON THE BOX to put demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (its orders are real third-party assistant runs and seeding cannot reproduce one); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
 | `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1` (K-594). |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
@@ -179,24 +179,22 @@ done
 #    Check: systemctl status kiosk-demo@getgrocery ; journalctl -u kiosk-demo@skooti -f
 
 
-# 4. Caddy: install the edge rate-limit module, then point it at this Caddyfile.
-#    Caddy fetches a cert per subdomain on first request (HTTP-01). For a single
-#    wildcard cert instead, see the DNS-01 note in the Caddyfile header.
+# 4. Caddy: deploy this directory's Caddyfile, declaratively. Run it from a
+#    workstation that can ssh to the box, NOT on the box -- it is the thing
+#    that talks to the box. Caddy fetches a cert per subdomain on first request
+#    (HTTP-01). For a single wildcard cert instead, see the DNS-01 note in the
+#    Caddyfile header.
 
-#    STEP 4a IS REQUIRED — see "Edge rate-limit" below. Skipping it leaves
-#    /kiosk/auth/register as an unauthenticated CPU sink with nothing bounding
-#    the request rate.
-sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
-sudo systemctl restart caddy
-caddy list-modules | grep rate_limit                      # must print the module
-sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
-#    Now uncomment `import ratelimit` + the (ratelimit) snippet in
-#    /etc/caddy/Caddyfile (they ship commented so a stock binary still boots).
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-#    Then PROVE the edge is actually limited — the uncommenting above is a
-#    manual step and skipping it is otherwise silent (K-976):
-/srv/kiosk/deploy/check-edge-ratelimit.sh
+#    There is NO module to install and no snippet to uncomment: the per-IP edge
+#    throttle is deliberately NOT a default (see "Edge rate-limit" below). Do
+#    not hand-edit /etc/caddy/Caddyfile either -- deploy/Caddyfile is the
+#    source of truth and --apply overwrites the whole file.
+deploy/deploy-caddy.sh            # CHECK: remote validate + diff, changes nothing
+deploy/deploy-caddy.sh --apply    # install, reload, verify the wire, roll back on failure
+#    --apply verifies the LIVE RESPONSE rather than the installed file: every
+#    vhost it derives from the Caddyfile must answer, must send HSTS, and must
+#    NOT answer 429 during a 75-request burst. If any of that disagrees it
+#    restores the backup it took and reloads, so a bad config does not stick.
 
 # 5. Housekeeping: NOTHING TO INSTALL. There is no cron and no timer here, and
 #    nothing in this repo reclaims demo ACCOUNTS — on a schedule or otherwise.
@@ -215,54 +213,69 @@ sudo systemctl reload caddy
 ```
 
 
-## Edge rate-limit — REQUIRED (K-540)
+## Edge rate-limit -- NOT a default, and that is a decision (T-171)
 
-**Proof-of-work does not remove the need for a limiter in front of the app.**
-`POST /kiosk/auth/register` runs the PoW gate **unauthenticated**, before any
-key verification: anyone can take a free 402 challenge and resubmit it with a
-valid HMAC sig and garbage indices. PoW prices the attacker's **solve**; it
-never prices our **verify**.
+**There is no per-IP throttle on this fleet.** Phil, 2026-09-05: «Наш PoW
+проверяется за миллисекунды. Ну, пускай сыплют мусором. Посмотрим, как
+реагировать. Делать по дефолту throttle - не надо.» `deploy/Caddyfile` ships the
+`(ratelimit)` snippet and its `import` line **commented out**, the box runs
+exactly that file, and `deploy-caddy.sh --apply` verifies on the wire that no
+429 comes back during a 75-request burst.
 
-The app-side half is shipped and measured (`n=168 k=7`, one box): an issued
-challenge drives at most one verify, and the verifier checks cheapest-first and
-hashes lazily, so a garbage proof costs **0.30 ms** — 0.012 ms if the attacker
-did not even order the indices — instead of the **18.7 ms** it cost when every
-proof paid the full 128-hash loop. A real proof still costs ~18 ms. Worker
-saturation on this path moved from ~54 req/s to ~3.3k req/s.
+The snippet is **kept, not deleted** -- «посмотрим, как реагировать» is removing
+the default, not forswearing protection. What follows is the analysis you need
+to decide whether to reach for it, and the numbers that say why the default came
+off. None of it is a runbook step any more.
 
-That lowers the ceiling; it does not remove it. At the shipped
-`WEB_CONCURRENCY=1` a plain flood of *any* endpoint saturates the single worker
-just as well, and only something in front of the app bounds the request RATE.
-The operator-side half is yours, and there is no app setting that substitutes
-for it. Pick one:
+**Why it was there.** `POST /kiosk/auth/register` runs the PoW gate
+**unauthenticated**, before any key verification: anyone can take a free 402
+challenge and resubmit it with a valid HMAC sig and garbage indices. PoW prices
+the attacker's **solve**; it never prices our **verify**. And at the shipped
+`WEB_CONCURRENCY=1` a plain flood of *any* endpoint -- a 404, the 402 issue path
+itself -- saturates the single worker just as well, so only something in FRONT
+of the app bounds the request RATE (K-540).
 
-- **Caddy module** (what step 4 above does): `caddy add-package
-  github.com/mholt/caddy-ratelimit` (Caddy ≥ 2.7 swaps in a plugin-included
-  binary from the official download API — Caddy flags the subcommand
-  EXPERIMENTAL, so `xcaddy build --with github.com/mholt/caddy-ratelimit` is the
-  stable equivalent if you compile your own), then uncomment
-  `import ratelimit` and the `(ratelimit)` snippet in the Caddyfile. They ship
-  **commented** because `rate_limit` is not a stock directive — a stock binary
-  refuses the whole config ("unrecognized directive: rate_limit") and would not
-  start at all, which is why enabling it is a runbook step and not a default.
+**Why it came off anyway, measured.** A proof verifies in **4.46 ms** at the
+params the fleet runs. One worker completes a full registration **60 times a
+second** and a plain read **1075 times a second**. The limit that used to run on
+the box was **one request a second**, keyed per-IP across every vhost -- so
+bursting one demo refused the other seven, which is a self-inflicted outage on
+the traffic these demos exist to receive. The app-side half of K-540 is what
+changed the arithmetic: an issued challenge drives at most one verify, and the
+verifier checks cheapest-first and hashes lazily, so a garbage proof costs
+**0.30 ms** -- 0.012 ms if the attacker did not even order the indices --
+instead of the **18.7 ms** it cost when every proof paid the full 128-hash loop.
+A real proof still costs ~18 ms. Worker saturation on this path moved from ~54
+req/s to ~3.3k req/s.
+
+**If the box actually falls over, two options, either is fine.**
+
+- **Caddy module:** `caddy add-package github.com/mholt/caddy-ratelimit` (Caddy
+  >= 2.7 swaps in a plugin-included binary from the official download API --
+  Caddy flags the subcommand EXPERIMENTAL, so `xcaddy build --with
+  github.com/mholt/caddy-ratelimit` is the stable equivalent if you compile your
+  own), then uncomment `import ratelimit` and the `(ratelimit)` snippet in
+  `deploy/Caddyfile` -- **in the repo**, and deploy it, not by hand on the box.
+  They ship commented because `rate_limit` is not a stock directive: a stock
+  binary refuses the whole config ("unrecognized directive: rate_limit") and
+  would not start at all, so the module has to be installed first.
 - **CDN / WAF** in front of the box (Cloudflare et al.) with a per-IP rate rule
-  on `/kiosk/*`. Equally acceptable; then leave the Caddy snippet commented.
+  on `/kiosk/*`. Nothing on this box can see that one, so write down that you
+  did it.
 
-Deploying with **neither** is the one unacceptable option — and until K-976 it
-was also the *quiet* option, because a box with the snippet still commented
-comes up healthy and says nothing. So verify, in both senses:
+**And pick a bound from a measurement.** The retired limit was 1 req/s against a
+worker that serves 1075 reads a second; the commented snippet says 60/min for no
+recorded reason either. Whatever you turn on, burst the origin first and find
+the rate at which it actually degrades.
 
-```sh
-# cheap, deterministic, run it after every Caddyfile change
-/srv/kiosk/deploy/check-edge-ratelimit.sh          # reads /etc/caddy/Caddyfile
-
-# if you took the CDN/WAF route instead, declare it — the script cannot see it
-KIOSK_EDGE_RATELIMIT=external /srv/kiosk/deploy/check-edge-ratelimit.sh
-```
-
-and then once, live: hammer `/kiosk/auth/register` from one IP and confirm you
-are cut off (429) well before the box slows down. The script proves the config
-says the right thing; only the flood proves the edge does it.
+**A note for whoever re-checks this.** `deploy/check-edge-ratelimit.sh` used to
+assert the limiter was PRESENT and is **retired** as of this change: with no
+default throttle its assertion is the wrong direction, and inverting it would
+have gone red the day someone correctly turned the throttle back on. What
+replaced it is not another config parse -- it is `deploy-caddy.sh`, which
+compares the WHOLE file against the box and probes the live wire, so a
+divergence in either direction shows up as a diff. Its `--self-test` holds the
+repo posture (HSTS declared, limiter not enabled) and runs in CI.
 
 ## HSTS — shipped in the template, ABSENT from the live box (K-1295)
 
@@ -307,11 +320,11 @@ willing to remember; `includeSubDomains` covers a sub-subdomain nobody has
 created yet, and if one is ever added it must serve TLS.
 
 **Why a script and not a checklist line, said plainly.** The other half of this
-class — the edge rate limit — got `check-edge-ratelimit.sh` and it landed. HSTS
-got a line in `CHECKLIST.md`, which is 0 ticked of 45, so its tick state carries
-no information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
+class -- the edge rate limit -- got a script and it landed; HSTS got a line in
+`CHECKLIST.md`, which is 0 ticked of 45, so its tick state carries no
+information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
 because a config check run against this template would have said OK for as long
-as the box has been serving without the header.
+as the box was serving without the header.
 
 **`kiosk.tech` itself is a different owner's setting.** It answers no HSTS
 either, but it is served by GitHub Pages, not by this box — nothing in this

@@ -1186,34 +1186,44 @@ jobs:
       - name: check-redteam-headers self-test
         run: ./bin/check-redteam-headers --self-test
 
-  # Does the deploy runbook's edge-rate-limit check still work? (K-976)
+  # Does the declarative Caddy deploy still decide correctly? (T-171, K-1295)
   #
-  # deploy/Caddyfile ships its per-IP backstop COMMENTED, and it has to: a
-  # stock Caddy binary refuses to load a config naming `rate_limit`, so
-  # shipping it enabled would break a default install at boot. That makes
-  # enabling it a manual runbook step, and skipping a manual step was SILENT —
-  # the box came up, all eight sites served, and nothing anywhere said the
-  # register endpoint was unbounded. deploy/check-edge-ratelimit.sh is the loud
-  # half, and an operator-facing script nothing exercises is a script that
-  # rots, so its own --self-test runs here: it asserts the shipped template is
-  # reported UNPROTECTED, the same file with the two blocks uncommented is
-  # reported PROTECTED, a site that proxies past the snippet is caught even
-  # when a rate_limit exists elsewhere in the file, and the declared-external
-  # escape hatch is honoured. Four assertions, no Ruby, no database, ~0.1 s.
+  # THIS JOB REPLACED `deploy-edge-ratelimit`, WHICH RAN THE RETIRED
+  # deploy/check-edge-ratelimit.sh. That script asserted the per-IP edge
+  # throttle was PRESENT, and Phil retired the default throttle on 2026-09-05
+  # («Делать по дефолту throttle - не надо»), so the assertion inverted into
+  # wrong advice: run on the box it exited 1 and printed a TO FIX block telling
+  # the operator to install the module and uncomment the snippet. It was not
+  # inverted, because the snippet is deliberately KEPT for the day abuse
+  # arrives — an inverted gate would go RED on the correct response to abuse.
   #
-  # Note the direction: assertion 1 means this job goes RED if anyone ever
-  # uncomments the backstop in the REPO, which is the mistake that would break
-  # every stock install.
-  deploy-edge-ratelimit:
-    name: the deploy edge-rate-limit check works (deploy/check-edge-ratelimit.sh)
+  # What it usefully asserted is held here instead, and each of the three was
+  # checked rather than assumed: (1) the repo template must not ship the
+  # limiter enabled — the same polarity as the old assertion 1, which the old
+  # job's comment called "the direction that matters"; (2) the template must
+  # still declare HSTS, or applying it would undo K-1295; (3) the vhost list
+  # the deploy verifies must be DERIVED from the file and must be non-empty,
+  # because a derivation that matches nothing makes the live verify loop pass
+  # over zero hosts. The per-site "does this vhost reach the shared snippet"
+  # question the old script parsed out of the config graph is now answered ON
+  # THE WIRE, per host, by deploy/check-live-hsts.sh and by this script's own
+  # verify_live — a parse said the config should work, a probe says the header
+  # arrives.
+  #
+  # ONLY THE --self-test RUNS HERE, for the reason its HSTS sibling states: the
+  # deploy talks to a VPS over ssh, and a build must not depend on a box this
+  # repository does not deploy. The self-test touches no host and says so in
+  # its own final line.
+  deploy-caddy:
+    name: the declarative Caddy deploy works (deploy/deploy-caddy.sh)
     runs-on: ubuntu-latest
     # The daily schedule exists for solver-pin-live; don't rebuild the world.
     if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v7
 
-      - name: check-edge-ratelimit self-test
-        run: ./deploy/check-edge-ratelimit.sh --self-test
+      - name: deploy-caddy self-test
+        run: ./deploy/deploy-caddy.sh --self-test
 
   # ITS SIBLING, FOR THE OTHER HALF OF THE SAME CLASS (K-1295). The edge rate
   # limit got the script above and it landed; HSTS got a line in

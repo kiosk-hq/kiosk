@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-05 at 9175e154
+# recorded: 2026-09-05 at 3bd1f002 -- K-1294 house sentence + K-1300 scrub residue judged
 # 1663 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
@@ -295,7 +295,7 @@ kiosk-core/spec/spec_helper.rb	89b6fb3eb0110a54	require "kiosk"
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	0a5c20b8bd765250	rollingly in Europe/Lisbon; "tonight at 8" lands on an open 2-top at 20:00.
 kiosk-demo-atablefor/app/controllers/home_controller.rb	7dfe7b130b376c50	# Set a Link header too, so a header-only agent finds the skill.
-kiosk-demo-atablefor/app/controllers/home_controller.rb	41b6be8a099ddb63	def index
+kiosk-demo-atablefor/app/controllers/home_controller.rb	e1c6e973207420ea	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	e0c84228969a0be8	def reservations
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	9b6d4a727c7d4701	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	265158f7c3a2f964	def cancel_booking
@@ -354,10 +354,10 @@ kiosk-demo-getgrocery/README.md	a3b975a5437c2099	kiosk-redteam battery — every
 kiosk-demo-getgrocery/README.md	1842a868952933d6	silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	2ce8cf5e940a88a2	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	b443eb6fef40c1ce	def catalog
-kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	a4a5a553b839658f	def delivery_slots
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	38e308d07ac35b7c	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	8caef642def88909	def my_orders
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	2ecef41d22e6ba96	# delivers in Dublin, so "08:00" means 08:00 in Europe/Dublin, and "now" for the
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	a34698d2f4c4f9a0	# handled automatically across DST. Previously slot_at built a NAIVE UTC time
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	e907e0bee6014c5c	# handled automatically across DST. A NAIVE UTC `slot_at`
 kiosk-demo-getgrocery/app/models/product.rb	28034c62d01fc9fe	def self.age_restricted?(value)
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	9f37247c0fbf6e31	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	be808cb3c245c79d	if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
@@ -444,11 +444,11 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	6a7854f239745c43	  # Not applicabl
 kiosk-demo-getgrocery/script/redteam_suite.rb	a800ffdb68bd4ed2	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
 kiosk-demo-getgrocery/script/redteam_suite.rb	3240e2a7251caca7	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	d4ab4169afe601fc	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-kiosk-demo-getgrocery/script/redteam_suite.rb	34502e8a32e94b7d	  PastDeliveryDate.new,     # T-090/K-969 — a past date is a named 400 on the read AND the write side
+kiosk-demo-getgrocery/script/redteam_suite.rb	626bc07508a06830	  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
 kiosk-demo-getgrocery/script/redteam_suite.rb	f612500b09335b30	  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
-kiosk-demo-getgrocery/script/redteam_suite.rb	be88b0c26bac6cf7	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER (K-1239)
+kiosk-demo-getgrocery/script/redteam_suite.rb	01e297ebd712fa62	# KYC here). The membership is `scenarios = [` further down, which is the single
+kiosk-demo-getgrocery/script/redteam_suite.rb	f18051cfbb2baa2f	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
 kiosk-demo-getgrocery/script/redteam_suite.rb	6174c6c7ad9881bb	EXPECTED_SKIP_NAMES = %w[
-kiosk-demo-getgrocery/script/redteam_suite.rb	14619ef8cf3d625b	KYC trio must SKIP (no KYC here). The membership is
 kiosk-demo-getgrocery/script/redteam_suite.rb	e51f1d84ab87ce25	class WrongCurrencyCart < Kiosk::Redteam::Scenario
 kiosk-demo-hoteling/README.md	2b66cd139eda8f90	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	3c33884461557395	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
@@ -531,12 +531,12 @@ kiosk-demo-philslist/script/binding_flow.rb	030b89ac67a8c984	results[:a2_edit] =
 kiosk-demo-philslist/script/binding_flow.rb	87d58f9695cf3eb6	results[:a2_sees_listing] = rc == 200 && Array(mine2).any? { |r| r["listing_id"] == listing_id }
 kiosk-demo-philslist/script/binding_flow.rb	345c135b18f808af	results[:unlink_same_second] = (jwt_claims(token1_fresh)["iat"] == Time.now.to_i) if token1_fresh
 kiosk-demo-philslist/script/redteam_suite.rb	0a1a5e686a7aae9c	record(results, "NoSellerPiiOnTheOpenBoard",
-kiosk-demo-prove/README.md	9ce55712fe86fd49	  `KycVerifier` **also** enforces this at the wire (ADR-0020): every
+kiosk-demo-prove/README.md	faa431869db8c698	  `KycVerifier` **also** enforces this at the wire: every
 kiosk-demo-prove/README.md	74addcc68b814268	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
 kiosk-demo-prove/README.md	5d3949ff29c6c42d	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
 kiosk-demo-prove/README.md	500519b55f315d89	# kiosk-demo-prove
 kiosk-demo-prove/README.md	100db29d360b2883	## The three legs
-kiosk-demo-prove/README.md	ebaa00bc9ebb20de	- **No replay across operators.** The claim carries `operator`/`aud`; the
+kiosk-demo-prove/README.md	0148332b3350de10	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	f4c0288ba2074cb5	Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
 kiosk-demo-prove/README.md	169e1e8d38bd3ab8	`base_url` — the origin the request arrived on — **not** the deploy origin. The
 kiosk-demo-prove/README.md	3be9a6254148cf42	and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
@@ -613,7 +613,7 @@ kiosk-demo-skooti/script/rental_flow.rb	2a152c83d0115a9c	Issued by start_rental 
 kiosk-demo-skooti/script/rental_flow.rb	f155f17e6e9921a7	Step 6: LockSim offline verify
 kiosk-demo-stylish/Gemfile	63c394298fb1dd6d	gem "kiosk-rls",
 kiosk-demo-stylish/README.md	6f82b8a0ddb61065	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
-kiosk-demo-stylish/README.md	19b1f9bb76958c78	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** a shortcut here any more: this demo sets **nothing**
+kiosk-demo-stylish/README.md	5e571c450bd2c31a	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** a shortcut here any more: this demo sets **nothing**
 kiosk-demo-stylish/README.md	223ae174b5aafda1	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
 kiosk-demo-stylish/README.md	14205ae0968874fd	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-dept
 kiosk-demo-stylish/README.md	14205ae0968874fd	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
@@ -642,12 +642,12 @@ kiosk-demo-stylish/config/initializers/kiosk.rb	fb3696cce43b8185	  c.registratio
 kiosk-demo-stylish/config/initializers/kiosk.rb	80044787b554ec9a	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-stylish/config/routes.rb	79944800bb94e62f	  post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
 kiosk-demo-stylish/lib/tasks/demo.rake	077239e31356294d	  task :walkthrough do
-kiosk-demo-stylish/lib/tasks/demo.rake	54cec4590f151597	  task binding: :setup do
-kiosk-demo-stylish/lib/tasks/demo.rake	80545a0cf84a036d	  task isolation: :setup do
-kiosk-demo-stylish/lib/tasks/demo.rake	a9a5ba94d2cd3d2e	  task redteam: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	4907020add0bbbe4	  task binding: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	051e145f7c6f7f48	  task isolation: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	4151f75dcede896a	  task redteam: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	fdc93cf5f90c815a	  task register: :setup do
-kiosk-demo-stylish/lib/tasks/demo.rake	e96d56d598895211	  task roles: :setup do
-kiosk-demo-stylish/lib/tasks/demo.rake	51242b23de230c0d	  task schema: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	7c264e0286b62f14	  task roles: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	00c38f8b54128528	  task schema: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	5a0a0bfbbf15e1bd	DB kiosk.agents.spending_cap_cents for assistant 1 == 12345
 kiosk-demo-stylish/lib/tasks/demo.rake	56e7ea9f575166a9	DB owner-agent allowed_roles == {owner} (inherited from IdP)
 kiosk-demo-stylish/lib/tasks/demo.rake	86fe36ffcae0638f	assistant 2 sees assistant 1's booking (same account)
@@ -661,8 +661,8 @@ kiosk-demo-stylish/lib/tasks/demo.rake	25858f4b78dc716c	result["devise_customer_
 kiosk-demo-stylish/lib/tasks/demo.rake	c21f8416d533306f	result["owner_sees_forecast"] == true
 kiosk-demo-stylish/lib/tasks/demo.rake	db6b4f3d59460584	set spending cap via the manage page → 200
 kiosk-demo-stylish/lib/tasks/demo.rake	077239e31356294d	task :walkthrough do
-kiosk-demo-stylish/lib/tasks/demo.rake	54cec4590f151597	task binding: :setup do
-kiosk-demo-stylish/lib/tasks/demo.rake	e96d56d598895211	task roles: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	4907020add0bbbe4	task binding: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	7c264e0286b62f14	task roles: :setup do
 kiosk-demo-stylish/script/descriptor_examples.rb	fe4f7bc139e138a7	asserted almost nothing (T-097)
 kiosk-demo-stylish/script/descriptor_examples.rb	91c1d41fa6c5f359	example_params satisfies its own input_schema
 kiosk-demo-stylish/script/descriptor_examples.rb	baf9c2f01091bc00	example_row satisfies its own output_schema
@@ -673,8 +673,8 @@ kiosk-demo-stylish/script/redteam_suite.rb	3aba1d1aae4b1486	#   CustomerLinkCann
 kiosk-demo-stylish/script/redteam_suite.rb	eccb92c4bf70f45f	#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
 kiosk-demo-stylish/script/redteam_suite.rb	3e3ddaeea1af47a4	#   OwnerLinkIgnoresForgedClaimBody — a genuine OWNER link smuggles a wider
 kiosk-demo-stylish/script/redteam_suite.rb	b27c0afd1ef9a934	# ── DeviceGrantCannotSelfSelectRole ──────────────────────────────────────────
-kiosk-demo-stylish/script/redteam_suite.rb	af93f3c112c5a817	# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
-kiosk-demo-stylish/script/redteam_suite.rb	a209398ecc8c8b3b	# ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
+kiosk-demo-stylish/script/redteam_suite.rb	2b05d9f026f9717c	# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
+kiosk-demo-stylish/script/redteam_suite.rb	c45c506c73bd4e0d	# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 kiosk-demo-stylish/script/redteam_suite.rb	dfd1e1b509c99539	record(results, "DeviceGrantCannotSelfSelectRole",
 kiosk-demo-stylish/script/redteam_suite.rb	83543d08af77f2a4	record(results, "DeviceGrantRebindCannotEscalate",
 kiosk-demo-stylish/script/redteam_suite.rb	188069f72b63e915	record(results, "DeviceGrantRoleComesFromTheApprover",
@@ -710,10 +710,10 @@ kiosk-demo-tudu/config/initializers/kiosk.rb	80044787b554ec9a	Kiosk::Reputation:
 kiosk-demo-tudu/lib/tasks/demo.rake	075682dd02a1d985	    PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's
 kiosk-demo-tudu/lib/tasks/demo.rake	dd98b92b00b8a3c4	    check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
 kiosk-demo-tudu/lib/tasks/demo.rake	48d8dfaf143acc91	  task collab: :setup do
-kiosk-demo-tudu/lib/tasks/demo.rake	6770d4b946f73702	  task isolation: :setup do
-kiosk-demo-tudu/lib/tasks/demo.rake	e9cbccca25ea0afd	  task link: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	27aaa210cb6eb626	  task isolation: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	8a70e89b33d78bf8	  task link: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	56c4cac13b331014	  task redteam: :setup do
-kiosk-demo-tudu/lib/tasks/demo.rake	98bb98e0612c66a6	  task schema: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	57e57e9df92cbccc	  task schema: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	2d8e548f969e1ef0	Assertion 8a: the catalog declares
 kiosk-demo-tudu/lib/tasks/demo.rake	92b615178b423f66	Assertion 8b: no principal-reach verb returned
 kiosk-demo-tudu/lib/tasks/demo.rake	59bcf7f075ca9ec1	check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
@@ -721,7 +721,7 @@ kiosk-demo-tudu/lib/tasks/demo.rake	b9d17e4d51b23689	check.call("agents.txt carr
 kiosk-demo-tudu/lib/tasks/demo.rake	dd98b92b00b8a3c4	check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
 kiosk-demo-tudu/lib/tasks/demo.rake	48d8dfaf143acc91	task collab: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	1a6fa97bb1ddaa54	task demo: ["demo:setup", "demo:collab"]
-kiosk-demo-tudu/lib/tasks/demo.rake	98bb98e0612c66a6	task schema: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	57e57e9df92cbccc	task schema: :setup do
 kiosk-demo-tudu/script/redteam_suite.rb	c831e03fe3b4a26c	#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 kiosk-demo-tudu/script/redteam_suite.rb	274c4a7ee69cb819	record(results, "ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	e8992a3885a28dcd	record(results, "NoLoginAddressOnTheRoster",
@@ -1078,7 +1078,7 @@ kiosk-server/lib/kiosk/server/executor.rb	63c64d64e09cb831	def enforce_spending_
 kiosk-server/lib/kiosk/server/handler_mixin.rb	7650144dd2d52240	RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	8300e07d877e59d3	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	1748afe12d8ea210	      def mark_kyc_verified!(agent_id, attributes: {})
-kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	53278ac70ec44d10	class KycAttestationController < ::ActionController::API
+kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	c8ec590d2badf149	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	438b4dece2f0cc39	            "KYC attestation attributes must be an object of {name: true} booleans",
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	baf4660cd19a542e	        if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	e62470c9c7770aec	      def verified_attributes(raw)
@@ -1168,7 +1168,7 @@ kiosk-server/lib/kiosk/server/wire_controller.rb	536d8490d34743d3	Wire response 
 kiosk-server/lib/kiosk/server/wire_controller.rb	d10ffc9603b172a5	def render_wire_error(error)
 kiosk-server/lib/kiosk/server/wire_controller.rb	2b6130fb818aa623	def schema
 kiosk-server/lib/kiosk/server/wire_controller.rb	6bc2b004e6137bf1	pow = PowGate.proofs_from_header(
-kiosk-server/lib/kiosk/server/wire_controller.rb	3f9af85331b58c80	rescue_from ::ActionDispatch::Http::Parameters::ParseError do |error|
+kiosk-server/lib/kiosk/server/wire_controller.rb	3b7615f5d3b5f8b1	rescue_from ::ActionDispatch::Http::Parameters::ParseError do
 kiosk-server/lib/kiosk/server/wire_controller.rb	fec9dc521f103ce6	rescue_from Errors::Base, with: :render_wire_error
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	00e7455c8127a547	does not fire assistant_claimed for a fresh key (nothing was re-bound)
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	c0d5082154066a2e	fires assistant_claimed(agent:, previous_user_id:, user_id:)

@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-04 at 83abb555
+# recorded: 2026-09-05 at 9175e154
 # 1663 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
@@ -1129,7 +1129,7 @@ kiosk-server/lib/kiosk/server/registration_pow.rb	6b7d82e8b64deb43	def gate(publ
 kiosk-server/lib/kiosk/server/schema_definitions.rb	0111da54a0526fe3	          CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
 kiosk-server/lib/kiosk/server/schema_definitions.rb	c9f358706502d7c9	      # `agents` — credential per (user × agent host); `agent_tokens` —
 kiosk-server/lib/kiosk/server/schema_definitions.rb	64248e38c864f087	      # ─── 002 create_kiosk_identity_tables ──────────────────────────────
-kiosk-server/lib/kiosk/server/schema_definitions.rb	955361f465f6f595	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
+kiosk-server/lib/kiosk/server/schema_definitions.rb	0b6811ed6c48dee4	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
 kiosk-server/lib/kiosk/server/schema_definitions.rb	d2977f67f2416238	      def mandates_sql(schema: nil, user_id_type: nil)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	873a680d1e98872a	    #   005 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	afa1629f1747eaa7	.current_user_id() RETURNS 

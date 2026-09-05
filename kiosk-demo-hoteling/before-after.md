@@ -301,7 +301,7 @@ class Kiosk::HotelsController < ActionController::API
 
   # ── availability — the OFFER: room types of one property with no live booking
   # overlapping the requested nights. `RoomType.free_for` is that predicate, and
-  # `reserve_room` sells against the same scope, so the two cannot disagree (K-690).
+  # `reserve_room` sells against the same scope, so the two cannot disagree.
   kind :query
   description "…"   # elided — see the shipped file
   input_schema type: "object",
@@ -313,7 +313,7 @@ class Kiosk::HotelsController < ActionController::API
                },
                required: ["property_id", "check_in", "check_out"]
   # The OFFER, not the catalogue. Empty means the property is sold out for those
-  # nights and, since T-090, that is the ONLY thing empty means here — an unknown
+  # nights, and that is the ONLY thing empty means here — an unknown
   # `property_id` is 404.
   output_schema type: "array",
                 items: {
@@ -362,7 +362,7 @@ class Kiosk::HotelsController < ActionController::API
   # `owned_by_current_principal` is the ONE place the identity predicate is
   # written (see Booking for why it stays SQL-side).
   #
-  # THE RECONCILIATION SURFACE (K-853): this is the "per-user query" protocol.md
+  # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
   # §11.6 sends an assistant to after a `pay` whose response it never read, so
   # what it publishes about money is normative. `payment_state` is a TRI-state on
   # purpose — §11.6 requires a third answer distinct from paid and not-paid,
@@ -443,7 +443,7 @@ class Kiosk::ReservationsController < ActionController::API
   # the two identity values below are read from the identity the wire resolved
   # rather than from arguments, which is what makes a forged `user_id` in the
   # body inert. The descriptor deliberately does NOT promise the hold expires on
-  # its own: the deadline is recorded and no sweep enforces it (K-936).
+  # its own: the deadline is recorded and no sweep enforces it.
   kind :action
   description "…"   # elided — see the shipped file
   input_schema type: "object",

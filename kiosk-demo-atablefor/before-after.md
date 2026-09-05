@@ -170,18 +170,18 @@ class Kiosk::DiningRoomController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # K-1047: the same declared ceiling `book_table` carries —
+                 # THE SAME DECLARED CEILING `book_table` carries —
                  # a party this verb would SHOW a table for is one that verb can
                  # book, so the two descriptors have to agree. It is the width of
                  # `restaurant_tables.capacity`, the column the filter compares
                  # against, and not an invented house limit.
                  party_size:   { type: "integer", minimum: 1,
                                  maximum: WireArguments::MAX_INT4 },
-                 # T-090: the served set is DB-derived (an operator adds one by
+                 # The served set is DB-derived (an operator adds one by
                  # inserting a restaurant), so it cannot be an `enum` here and
                  # the handler guard is the only place the refusal can live.
                  neighborhood: { type: "string" },
-                 # K-717: a CLOSED SET, so an `enum` and not a pattern — the
+                 # A CLOSED SET, so an `enum` and not a pattern — the
                  # refusal is then the schema layer's, uniformly, rather than an
                  # empty list an assistant cannot tell from a sold-out night.
                  time:         { type: "string", enum: Seatings::TIMES },
@@ -211,7 +211,7 @@ class Kiosk::DiningRoomController < ApplicationController
                                table_label capacity seating_date seating_time seating_at deposit_eur],
                 }
   example_params({ party_size: 2, neighborhood: "Alfama" })
-  # The seating is RESOLVED, not written down (K-972): this row is what an
+  # The seating is RESOLVED, not written down: this row is what an
   # assistant carries straight into `book_table`, whose own guard refuses a
   # seating that has passed. See {Seatings.example_date}.
   example_row({
@@ -232,7 +232,7 @@ class Kiosk::DiningRoomController < ApplicationController
     party_size, refusal = WireArguments.party_size(params[:party_size])
     return render_refusal(refusal) if refusal
 
-    # T-090: an unserved neighbourhood is a typed 400 naming the served ones,
+    # An unserved neighbourhood is a typed 400 naming the served ones,
     # not `200 []`. `Restaurant.served_neighborhoods` is read once, so the
     # refusal and the query below can never name different sets.
     nbhd_filter, refusal = WireArguments.neighborhood(params[:neighborhood],
@@ -254,7 +254,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # provider-controlled; the agent supplies no filter. The principal can only
   # see rows where user_id matches kiosk.current_user_id(), enforced in the
   # query itself — `owned_by_current_principal` is the ONE place that predicate
-  # is written (K-654).
+  # is written.
   # ADR-0023: semantics only; naming the follow-on VERB in the description is
   # the sanctioned form, naming its argument is not.
   kind :query
@@ -339,7 +339,7 @@ class Kiosk::BookingsController < ApplicationController
   # upcoming seating, for the authenticated principal. The (restaurant_id,
   # restaurant_table_id) come from an availability row; the (date, time) seating
   # is re-validated through the same app/models/seatings.rb helper `availability`
-  # filters with, so it must be one of the CURRENT upcoming seatings (K-767).
+  # filters with, so it must be one of the CURRENT upcoming seatings.
   # Contention is finite: a UNIQUE index on (restaurant_table_id, seating_at)
   # among confirmed rows makes a table already held a clean 409 Conflict. No
   # payment — any deposit shown is settled at the restaurant.
@@ -354,7 +354,7 @@ class Kiosk::BookingsController < ApplicationController
                  restaurant_table_id: { type: "integer", minimum: 1 },
                  date:                { type: "string", format: "date" },
                  time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$" },
-                 # K-1047: the ceiling is DECLARED, not merely enforced — a
+                 # THE CEILING IS DECLARED, not merely enforced — a
                  # refusal the published schema does not predict is its own
                  # defect. It is the width of `bookings.party_size` (and of the
                  # `restaurant_tables.capacity` this is compared against), so it
@@ -380,7 +380,7 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
                              date time seating_at status]
-  # THE SEATING IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here
+  # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
   # ages into a 400 the day that seating passes, so `example_params` and
   # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
   # same {Seatings} helpers `availability` uses — the three cannot drift.

@@ -339,9 +339,9 @@ class Kiosk::StorefrontController < ActionController::API
                  delivery_address: { type: "string" },
                },
                required: ["date", "delivery_address"]
-  # EMPTY is an honest answer here and, since T-090, ONLY here: every one of
-  # today's windows may already have begun, in which case the earliest bookable
-  # slot is on a later date. A date BEFORE today answers 400 instead.
+  # EMPTY is an honest answer here and ONLY here: every one of today's windows
+  # may already have begun, in which case the earliest bookable slot is on a
+  # later date. A date BEFORE today answers 400 instead.
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
@@ -354,7 +354,7 @@ class Kiosk::StorefrontController < ActionController::API
                   },
                   required: %w[delivery_slot_id date slot_at label zone],
                 }
-  # THE DATE IS RESOLVED, NOT WRITTEN DOWN (K-972): a calendar literal is an
+  # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
   # example that ages into a 400, since a date before today is REFUSED. These are
   # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
   # {DeliverySlots.example_date} — tomorrow in the operator's own clock.
@@ -371,7 +371,7 @@ class Kiosk::StorefrontController < ActionController::API
     # controller is the only place that can ask.
     return render_refusal(missing_param("date")) unless params.key?(:date)
 
-    # ADDRESS-UPFRONT (K-468): checked BEFORE the date, which is what forces the
+    # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.
     return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
 
@@ -386,10 +386,10 @@ class Kiosk::StorefrontController < ActionController::API
     # empty case below. The method then ends with the lines below, which ARE the
     # shipped ones.
 
-    # PAST-SLOT FILTER (K-480): for TODAY, drop any slot whose start has already
-    # passed in the operator's locale; future dates keep all slots. An assistant
-    # should not see an un-bookable 08:00–10:00 window at 11:00. `date` on each
-    # row (K-470) is what create_order books.
+    # PAST-SLOT FILTER: for TODAY, drop any slot whose start has already passed
+    # in the operator's locale; future dates keep all slots. An assistant should
+    # not see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is
+    # what create_order books.
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)
       hour      = slot_time.hour
@@ -404,7 +404,7 @@ class Kiosk::StorefrontController < ActionController::API
   # ── my_orders — per-principal: the caller's OWN orders only. The caller
   # supplies no filter; the scope is provider-controlled and un-bypassable.
   #
-  # THE RECONCILIATION SURFACE (K-545, K-853): this is the "per-user query"
+  # THE RECONCILIATION SURFACE: this is the "per-user query"
   # protocol.md §11.6 sends an assistant to after a `pay` whose response it never
   # read, so what it publishes about money is normative. `payment_state` is a
   # TRI-state and not a boolean, because a boolean conflates "nothing was ever
@@ -511,7 +511,7 @@ class Kiosk::OrdersController < ActionController::API
                      type: "object", additionalProperties: false,
                      properties: {
                        sku: { type: "string" },
-                       # K-1047: the ceiling is DECLARED, because a refusal the
+                       # THE CEILING IS DECLARED, because a refusal the
                        # published schema does not predict is its own defect.
                        # `order_items.qty` is a PostgreSQL `integer`, so this is
                        # the column's own width and not an invented basket size.
@@ -526,7 +526,7 @@ class Kiosk::OrdersController < ActionController::API
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6 },
                  delivery_date:    { type: "string" },
                  delivery_address: { type: "string" },
-                 # K-596: `pattern`/`format` so the DECLARED contract carries the shape the
+                 # `pattern`/`format` so the DECLARED contract carries the shape the
                  # handler enforces (UuidCheck), which a bare {type:"string"} does not.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: UuidCheck::JSON_SCHEMA_PATTERN },
@@ -543,7 +543,7 @@ class Kiosk::OrdersController < ActionController::API
                   pay_hint:    { type: "string" },
                 },
                 required: %w[order_id total_cents total_eur currency slot_at pay_hint]
-  # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN (K-972): a literal here would
+  # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
   # publish a `delivery_date` the operation refuses as past. `slot_at` derives
   # from the SAME day and the slot id beside it, so they cannot drift apart.
   example_params({
@@ -577,7 +577,7 @@ class Kiosk::OrdersController < ActionController::API
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # K-596: same uuid shape as create_order's order_id — see UuidCheck.
+                 # Same uuid shape as create_order's order_id — see UuidCheck.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: UuidCheck::JSON_SCHEMA_PATTERN },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6 },
@@ -594,7 +594,7 @@ class Kiosk::OrdersController < ActionController::API
                   rescheduled_at: { type: "string" },
                 },
                 required: %w[order_id rescheduled_at]
-  # Resolved for {DeliverySlots.example_date}'s reason (K-972).
+  # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",

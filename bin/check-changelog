@@ -70,9 +70,23 @@
 #         record, or a declared courtesy record.
 #   CL-6  Every directory that ships a gemspec has a changelog, because that
 #         file is inside the package it publishes.
+#   CL-7  Every top-level entry of the REPOSITORY record opens with its ISO
+#         date. This is the one arm that reads an entry, and it reads exactly
+#         one thing about it: whether it says WHEN. The repository record has
+#         no release sections -- it is a flat, newest-first journal -- so the
+#         date is its only ordering affordance, and two entries had quietly
+#         lost theirs among 459 that had one (K-1330). It is scoped to that
+#         file on purpose: a gem record carries its date on the `## [x.y.z] -
+#         DATE` release heading, where the same rule would be wrong.
 #
-# WHAT IT CANNOT SEE, stated because an over-claimed gate is worse than none. It
-# does not read a single entry: an entry filed under the wrong kind, an entry
+# WHAT IT CANNOT SEE, stated because an over-claimed gate is worse than none.
+# ENTRY LENGTH IS DELIBERATELY NOT CHECKED. The repository record is a dated
+# engineering journal whose entries run to several sentences by design -- its
+# header now says so, MEASURED -- and a length gate over 461 standing entries
+# would be red on arrival, which is a gate someone switches off. The header was
+# corrected to describe the file instead; that is the whole of K-1330 that is
+# not CL-7. Apart from the date, it does not read an entry: an entry filed
+# under the wrong kind, an entry
 # that describes the change's content rather than its intent, a change that got
 # no entry at all, and a duplicate entry under one correct heading are all
 # invisible here. Two release sections whose names merely DIFFER (`## [0.2.0]`
@@ -201,6 +215,23 @@ ARMS = [
     },
   },
   {
+    id: "CL-7",
+    what: "a top-level entry in the repository record that does not open with its ISO date",
+    repair: "prefix the entry with the date the change landed, as `- YYYY-MM-DD: ` -- read it " \
+            "off the commit that introduced the line (`git log -S`), never off today",
+    plant: lambda { |dir|
+      write(dir, "CHANGELOG.md", <<~MD)
+        # Changelog
+
+        The repository record: a dated journal, newest entry first.
+
+        - 2026-01-03: **a later thing.** Intent: it says why.
+        - an entry that never says when it happened, filed above one that does.
+        - 2026-01-02: **something changed.** Intent: it says why.
+      MD
+    },
+  },
+  {
     id: "CL-6",
     what: "a gem directory with no changelog, although its gemspec publishes one",
     repair: "add <gem>/CHANGELOG.md; it is inside the package and is what an installer reads",
@@ -268,6 +299,38 @@ def headings(path)
   out
 end
 
+# The TOP-LEVEL entries of a flat journal: lines that open a list item at column
+# zero, outside fenced code. A nested bullet is indented and a continuation line
+# is not a bullet at all, so neither is an entry. Same fence tracker as
+# `headings`, and the same honest limit: an unbalanced fence hides what follows.
+Entry = Struct.new(:line, :text)
+
+def top_level_entries(path)
+  out   = []
+  fence = nil
+  File.readlines(path, chomp: true).each_with_index do |line, i|
+    if (m = line.match(/\A {0,3}(`{3,}|~{3,})/))
+      marker = m[1][0]
+      if fence.nil?
+        fence = marker
+      elsif fence == marker
+        fence = nil
+      end
+      next
+    end
+    next if fence
+    next unless line.start_with?("- ")
+
+    out << Entry.new(i + 1, line)
+  end
+  out
+end
+
+# `- YYYY-MM-DD: ` and nothing looser. A bare year, a `[2026-09-06]` bracket or a
+# date in the middle of the sentence all fail: the point is that a reader scanning
+# the left margin can order the file, and only the prefix does that.
+DATED = /\A- \d{4}-\d{2}-\d{2}: /
+
 def normalise_heading(text)
   text.downcase.gsub(/\s+/, " ").strip
 end
@@ -310,6 +373,8 @@ def scan(root)
   roles      = Hash.new(0)
   releases   = 0
   subsects   = 0
+  entries    = 0
+  dated      = 0
 
   changelogs, gem_dirs = corpus(root)
 
@@ -321,6 +386,23 @@ def scan(root)
       next
     end
     roles[role] += 1
+
+    # CL-7 is scoped to the repository record. A gem record dates its RELEASE
+    # heading, not its bullets, so the same rule there would be simply wrong.
+    if role == :repository
+      top_level_entries(File.join(root, rel)).each do |e|
+        entries += 1
+        if e.text.match?(DATED)
+          dated += 1
+        else
+          arm = arm_for("CL-7")
+          findings << {
+            path: rel, line: e.line, id: arm[:id], repair: arm[:repair],
+            what: "entry opens `#{e.text[0, 60].strip}` with no `YYYY-MM-DD:` date",
+          }
+        end
+      end
+    end
 
     release      = nil
     seen_release = {}
@@ -386,7 +468,8 @@ def scan(root)
   end
 
   { findings: findings, covered: covered, roles: roles, files: changelogs.length,
-    gems: gem_dirs.length, releases: releases, subsections: subsects }
+    gems: gem_dirs.length, releases: releases, subsections: subsects,
+    entries: entries, dated: dated }
 end
 
 def arm_for(id)
@@ -402,6 +485,8 @@ def report(result, quiet:)
          "#{r[:repository]} repository record, #{r[:gem]} gem package record(s) " \
          "for #{result[:gems]} gem(s), #{r[:courtesy]} declared courtesy record(s)"
     puts "  #{result[:releases]} release section(s), #{result[:subsections]} subsection heading(s)"
+    puts "  #{result[:entries]} top-level entry(ies) in the repository record, " \
+         "#{result[:dated]} carrying an ISO date"
     COURTESY.each do |entry|
       puts format("  courtesy %-42s covered %d", entry[:path], result[:covered][entry[:path]])
     end
@@ -410,9 +495,10 @@ def report(result, quiet:)
   if result[:findings].empty?
     unless quiet
       puts
-      puts "check-changelog: OK -- every release section answers each kind once, and every tracked " \
-           "changelog has a declared role."
-      puts "(Structure only: this reads no entry. See the header for what it cannot see.)"
+      puts "check-changelog: OK -- every release section answers each kind once, every tracked " \
+           "changelog has a declared role, and every repository-record entry says when."
+      puts "(Structure plus one fact per entry: its DATE. Entry LENGTH is deliberately not read " \
+           "-- see the header for why, and for what else this cannot see.)"
     end
     return 0
   end
@@ -542,6 +628,9 @@ def self_test_fixture(failures)
     unless out.include?("subsection heading(s)")
       failures << "the guard printed no subsection count, so non-vacuity cannot be read off it"
     end
+    unless out.include?("carrying an ISO date")
+      failures << "the guard printed no entry-date census, so CL-7's non-vacuity cannot be read off it"
+    end
 
     keep = GREEN.keys.to_h { |rel| [rel, File.binread(File.join(dir, rel))] }
 
@@ -609,8 +698,12 @@ def run_self_test
   if result[:subsections] < 20
     failures << "the real tree found #{result[:subsections]} subsection heading(s) -- the kind arms are vacuous here"
   end
+  if result[:entries] < 100
+    failures << "the real tree found #{result[:entries]} repository-record entry(ies) -- CL-7 is vacuous here"
+  end
   puts "  real tree: #{result[:files]} changelog(s), #{result[:releases]} release section(s), " \
-       "#{result[:subsections]} subsection heading(s) -- non-vacuous"
+       "#{result[:subsections]} subsection heading(s), #{result[:dated]} of " \
+       "#{result[:entries]} repository entry(ies) dated -- non-vacuous"
 
   status = report(result, quiet: true)
   failures << "the guard is not green over this repository (exit #{status})" unless status.zero?
@@ -618,8 +711,9 @@ def run_self_test
 
   if failures.empty?
     puts
-    puts "check-changelog --self-test: OK -- red on a plant of every arm, green on every legitimate " \
-         "shape including headings inside a fence, and non-vacuous over this repository."
+    puts "check-changelog --self-test: OK -- red on a plant of every arm (CL-1..CL-7), green on " \
+         "every legitimate shape including headings inside a fence and an undated bullet in a GEM " \
+         "record, and non-vacuous over this repository."
     return 0
   end
 

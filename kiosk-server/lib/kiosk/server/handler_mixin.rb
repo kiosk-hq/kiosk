@@ -524,6 +524,12 @@ module Kiosk
             "verb #{kiosk_wire_name.inspect} answered #{code} for #{exception.class}", exception
           )
 
+          # Hand the exception to {HandlerDispatch} so the wire error it builds
+          # for this render carries it as `cause` (K-1311). Operator-side only:
+          # it reaches the audit sink and nothing else, because a `cause` is not
+          # part of any problem document.
+          request.env[HandlerDispatch::RESCUED_KEY] = exception
+
           render json: {
             ok:    false,
             error: Kiosk::Server::Errors.rescued_wire(code, verb: kiosk_wire_name),

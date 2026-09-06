@@ -1113,6 +1113,16 @@ assert "audit: …and the FAILED invocation emitted an event too" \
   "$(event_count '.status == "error"')" "1"
 assert "audit: …carrying the error class and message" \
   "$(event_count '.status == "error" and (.error_class | length > 0) and (.error_message | length > 0)')" "1"
+# …AND THE HANDLER'S OWN EXCEPTION, NOT ONLY THE WIRE'S WRAPPER (K-1311). The
+# wire error is `action_failed` naming the exception CLASS and nothing else,
+# because since K-1307 a handler's arbitrary sentence is not this protocol's to
+# publish to an untrusted caller. A sink is the operator's own process, so it
+# gets the wrapped exception too — which is the thing alerting is actually
+# built on.
+assert "audit: …and the handler's OWN error as the cause, not only the wrapper" \
+  "$(event_count '.status == "error" and (.cause_class | length > 0) and (.cause_message | length > 0)')" "1"
+assert "audit: …the wrapper and the cause are different exceptions" \
+  "$(event_count '.status == "error" and .cause_class != .error_class')" "1"
 assert "audit: …and nothing was booked for the missing salon" \
   "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments WHERE salon_id = 987654")" "0"
 assert "audit: the sink saw exactly that one more invocation" \

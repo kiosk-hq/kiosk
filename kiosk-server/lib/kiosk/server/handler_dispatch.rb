@@ -64,6 +64,14 @@ module Kiosk
       IDENTITY_KEY = "kiosk.identity"
       DISPATCH_KEY = "kiosk.dispatch"
       PAGE_KEY     = "kiosk.page"
+      # What `kiosk_rescue_to_wire` was handling when it rendered a refusal
+      # (K-1311). The wire error this seam raises for that render is built HERE,
+      # in a frame where nothing is being rescued, so Ruby would attach no
+      # `cause` and the handler's own exception would be unreachable to
+      # {ActionEvent} — which is what an operator's audit sink is built on. The
+      # mixin leaves it on the sub-request env, this seam raises with it, and
+      # nothing about the WIRE changes: `cause` is not serialised anywhere.
+      RESCUED_KEY  = "kiosk.rescued"
 
       # Keys copied from the wire request into the sub-request, so a handler
       # sees the caller's headers, address and request id. Everything else is
@@ -137,7 +145,7 @@ module Kiosk
         env = build_env(controller, args)
         status, headers, body = controller.action(@method_name).call(env)
         publish_headers(status, headers)
-        payload = decode(status, read_body(body))
+        payload = decode(status, read_body(body), rescued: env[RESCUED_KEY])
 
         env[PAGE_KEY] ? paginate(payload) : payload
       end
@@ -258,7 +266,11 @@ module Kiosk
       # error the answer NAMES (an explicit vocabulary `error.code` matching
       # the rendered status), or failing that the status' lone wire code
       # ({Errors::STATUS_CODES}) — see the Errors section of the class doc.
-      def decode(status, raw)
+      # `rescued` is the exception the mixin's `rescue_from` seam mapped onto
+      # this status, when that is how the non-2xx came about. It becomes the
+      # raised wire error's `cause` and travels no further: {ActionEvent} reads
+      # it for the operator's audit sink (K-1311), and no wire body carries it.
+      def decode(status, raw, rescued: nil)
         return parse_json(raw) if status >= 200 && status < 300
 
         parsed = begin
@@ -266,7 +278,8 @@ module Kiosk
         rescue Errors::Base
           nil
         end
-        raise wire_error(status, parsed)
+        error = wire_error(status, parsed)
+        rescued.is_a?(::Exception) ? raise(error, cause: rescued) : raise(error)
       end
 
       # The {Errors::Base} a rendered non-2xx becomes. An explicit body code

@@ -47,6 +47,8 @@ RSpec.describe Kiosk::Server::AuditSink do
         status:        "ok",
         error_class:   nil,
         error_message: nil,
+        cause_class:   nil,
+        cause_message: nil,
         invoked_at:    invoked_at,
       )
     end
@@ -65,6 +67,60 @@ RSpec.describe Kiosk::Server::AuditSink do
       expect(failed).to be_error
       expect(failed.error_class).to eq("ArgumentError")
       expect(failed.error_message.length).to eq(5_000)
+    end
+
+    # WHAT THE NAME ABOVE PROMISES, THROUGH THE PATH THAT ACTUALLY EMITS
+    # (K-1311). The arm above hands `build` a bare exception; the Executor
+    # hands it the WRAPPER, because since K-1307 the handler's own sentence is
+    # not the wire's to publish. That is right for the wire and wrong for a
+    # sink — operator-side, in the operator's own process, already holding the
+    # arguments in full — so the wrapped exception travels beside the wrapper
+    # rather than instead of it.
+    describe "a wrapped handler failure, which is what the Executor emits" do
+      let(:wrapped) do
+        long = "y" * 5_000
+        error =
+          begin
+            begin
+              raise ArgumentError, long
+            rescue ArgumentError
+              raise Kiosk::Server::Errors::ActionFailed.new(
+                'Action "place_order" raised ArgumentError',
+                hint: "See server logs for the backtrace.",
+              )
+            end
+          rescue Kiosk::Server::Errors::ActionFailed => e
+            e
+          end
+        described_class.build(identity: identity, name: "place_order", args: {},
+                              status: described_class::ERROR, error: error)
+      end
+
+      it "still names what the WIRE refused with — a sink alerting on it keeps meaning it" do
+        expect(wrapped.error_class).to eq("Kiosk::Server::Errors::ActionFailed")
+        expect(wrapped.error_message).to eq('Action "place_order" raised ArgumentError')
+      end
+
+      it "carries the handler's OWN class and its UNTRUNCATED message as the cause" do
+        expect(wrapped.cause_class).to eq("ArgumentError")
+        expect(wrapped.cause_message.length).to eq(5_000)
+      end
+
+      it "leaves the pair nil when the raise wraps nothing, rather than inventing one" do
+        bare = described_class.build(identity: identity, name: "place_order", args: {},
+                                     status: described_class::ERROR, error: ArgumentError.new("x"))
+        expect(bare.cause_class).to be_nil
+        expect(bare.cause_message).to be_nil
+      end
+
+      it "never reports an exception as its own cause" do
+        selfish = Class.new(StandardError) do
+          def cause = self
+        end.new("loop")
+        built = described_class.build(identity: identity, name: "place_order", args: {},
+                                      status: described_class::ERROR, error: selfish)
+        expect(built.cause_class).to be_nil
+      end
     end
 
     it "keeps a role-less principal's role nil — there is no column to satisfy" do
@@ -224,6 +280,12 @@ RSpec.describe Kiosk::Server::AuditSink do
       # operator-side before it re-raises, which the stderr expectation below
       # asserts in the same breath, so a reader can see both halves of the
       # split in one example.
+      #
+      # AND SINCE K-1311 IT IS NOT LOST TO THE SINK EITHER. The split above was
+      # about the WIRE; a sink is the operator's own process and there is
+      # nothing there to protect it from, so the wrapped exception rides along
+      # as `cause_class`/`cause_message` — beside the wire error, never in
+      # place of it.
       it "emits for a FAILED action too, carrying the WIRE error, and re-raises untouched" do
         declare_action("place_order") { raise "inventory exploded" }
 
@@ -238,6 +300,55 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.error_message).to eq('Action "place_order" raised RuntimeError')
         expect(events.first.error_message).not_to include("inventory exploded")
         expect(events.first.args).to eq(sku: "ABC", slot: "2026-06-15T14:00:00Z")
+      end
+
+      it "…and hands the sink the handler's OWN error as the cause (K-1311)" do
+        declare_action("place_order") { raise "inventory exploded" }
+
+        expect {
+          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        }.to output(/inventory exploded/).to_stderr
+
+        expect(events.first.cause_class).to eq("RuntimeError")
+        expect(events.first.cause_message).to eq("inventory exploded")
+      end
+
+      # THE SECOND FAILURE ROUTE, and the one that needed threading rather than
+      # reading. A raise Rails knows a status for is mapped by the mixin's
+      # `rescue_from` seam, which RENDERS — so the wire error is rebuilt by
+      # HandlerDispatch in a frame where nothing is being rescued, and Ruby
+      # attaches no `cause` of its own. Without the hand-off the sink would see
+      # only `verb "…" rejected the request as malformed`, which names nothing
+      # an operator can act on. Measured on the e2e harness before the hand-off
+      # existed: a failing booking's event carried no cause at all.
+      it "carries the cause through the rescue_from seam too, which renders rather than raises" do
+        declare_action("place_order") { raise ArgumentError, "salon must exist" }
+        ActionDispatch::ExceptionWrapper.rescue_responses["ArgumentError"] = :unprocessable_entity
+
+        expect { run! }.to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("bad_request")
+          expect(e.message).not_to include("salon must exist")
+        }
+
+        expect(events.first.error_class).to eq("Kiosk::Server::Errors::WireError")
+        expect(events.first.cause_class).to eq("ArgumentError")
+        expect(events.first.cause_message).to eq("salon must exist")
+      ensure
+        ActionDispatch::ExceptionWrapper.rescue_responses.delete("ArgumentError")
+      end
+
+      it "leaves the cause pair nil for a refusal the handler MEANT — nothing is wrapped" do
+        declare_action("place_order") do
+          raise Kiosk::Server::Errors::Forbidden.new("assistants may not do that",
+                                                     hint: "ask your human")
+        end
+
+        expect { run! }.to raise_error(Kiosk::Server::Errors::Forbidden)
+
+        expect(events.first.error_class).to eq("Kiosk::Server::Errors::Forbidden")
+        expect(events.first.error_message).to eq("assistants may not do that")
+        expect(events.first.cause_class).to be_nil
+        expect(events.first.cause_message).to be_nil
       end
 
       it "symbolizes the wire's string keys, as the handler sees them" do

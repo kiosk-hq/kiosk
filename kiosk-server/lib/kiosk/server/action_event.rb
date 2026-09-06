@@ -73,15 +73,41 @@ module Kiosk
     # @!attribute [r] error_message
     #   The raised exception's message, UNTRUNCATED (the old 500-char cap was
     #   a `text` column's problem, not yours), else nil.
+    # @!attribute [r] cause_class
+    #   The class name of what the error above WRAPS, when it wraps anything —
+    #   see the note below. nil on the {OK} branch and on a raise with no cause.
+    # @!attribute [r] cause_message
+    #   That exception's message, UNTRUNCATED, else nil.
     # @!attribute [r] invoked_at
     #   When the invocation STARTED — not when the sink was called.
+    #
+    # ── THE CAUSE, BECAUSE THE ERROR IS OFTEN A WRAPPER (K-1311) ─────────
+    #
+    # {Executor} emits whatever reached its audit seam, and on the failure
+    # branch that is usually a Kiosk wrapper rather than the handler's own
+    # exception: an unhandled raise becomes `Errors::ActionFailed` reading
+    # `Action "place_order" raised RuntimeError`, because since K-1307 the
+    # handler's sentence is not the wire's to publish. That is right FOR THE
+    # WIRE and wrong here — a sink is operator-side, in the operator's own
+    # process, already receiving the arguments in full, and it is what an
+    # operator builds alerting on.
+    #
+    # Ruby sets `Exception#cause` to whatever was being handled when the
+    # wrapper was raised, so the handler's own error is already attached and
+    # nothing has to be threaded through the Executor to get it here. It is
+    # carried as its OWN pair rather than replacing {#error_class}: the two
+    # answer different questions — what the wire refused with, and what
+    # actually went wrong — and a sink that alerts on `error_class` today keeps
+    # meaning what it meant. Only the IMMEDIATE cause travels; a deeper chain
+    # is still reachable through the exception the operator's own logger got.
     #
     # Declared as a CLASS over `Data.define` rather than as `Name = Data.define
     # do … end`: a constant assigned inside that block belongs to the LEXICAL
     # scope ({Kiosk::Server}), not to the value class, so `ActionEvent::OK`
     # would not resolve.
     class ActionEvent < Data.define(:action, :user_id, :agent_id, :role, :actor, :args,
-                                    :status, :error_class, :error_message, :invoked_at)
+                                    :status, :error_class, :error_message,
+                                    :cause_class, :cause_message, :invoked_at)
       OK    = "ok"
       ERROR = "error"
 
@@ -94,6 +120,7 @@ module Kiosk
       # @param error [Exception, nil]
       # @param invoked_at [Time]
       def self.build(identity:, name:, args:, status:, error: nil, invoked_at: Time.now)
+        cause = cause_of(error)
         new(
           action:        name.to_s,
           user_id:       identity.user_id,
@@ -104,8 +131,24 @@ module Kiosk
           status:        status.to_s,
           error_class:   error && error.class.name,
           error_message: error && error.message.to_s,
+          cause_class:   cause && cause.class.name,
+          cause_message: cause && cause.message.to_s,
           invoked_at:    invoked_at,
         )
+      end
+
+      # The exception `error` wraps, or nil. Guarded rather than read straight
+      # off `#cause`: an exception re-raised inside its own `rescue` is its own
+      # cause in some Ruby versions, and reporting a wrapper as the thing it
+      # wraps would be worse than reporting nothing.
+      #
+      # @param error [Exception, nil]
+      # @return [Exception, nil]
+      def self.cause_of(error)
+        return nil unless error.is_a?(::Exception)
+
+        cause = error.cause
+        cause.is_a?(::Exception) && !cause.equal?(error) ? cause : nil
       end
 
       def ok?    = status == OK

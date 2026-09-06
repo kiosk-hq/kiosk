@@ -95,13 +95,16 @@ STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 # operator returns 400 before it will show any slots. This is a real, in-zone
 # Dublin address; in a live run the ASSISTANT obtains it from its human (never
 # invents one) — the operator validates zone/format but cannot verify it is real.
-# Query for TODAY (the live-run scenario) so the assertion below catches any
-# date drift — create_order must book the SAME day the slot was shown for, not
-# a fixed +1.
-# delivery_slots hides today's already-started windows. If this runs
-# late enough in Dublin's day that today is sold out, fall back to tomorrow so
-# the happy-path proof is robust to wall-clock time; the no-drift assertion below
-# copies whatever date the returned row carries, so it holds for either day.
+# `delivery_date` below is read by exactly ONE call: the negative control that
+# immediately follows (measured — `command grep -n delivery_date` over this
+# file). An out-of-zone address must be refused whatever date rides along with
+# it, so the client’s own Date.today is the right thing to send there and its
+# timezone does not matter to the outcome.
+# THE HAPPY PATH SENDS NO DATE AT ALL — the block above that request says why.
+# This header used to say the driver queries for TODAY and falls back to
+# tomorrow when today is sold out. Both halves stopped being true when K-1302
+# made `date` optional and deleted the retry; the sentence outlived the fix and
+# was found by that row’s verify pass, still contradicting the file 25 lines on.
 delivery_address = "42 Camden Street, Dublin 2"
 delivery_date    = Date.today.to_s
 
@@ -146,7 +149,6 @@ slots = query_slots.call(nil)
 # same day. There is no sold-out fallback here any more: "soonest" already
 # means the soonest day with windows left, so an empty answer would be a
 # defect in the operator rather than a case for the client to handle.
-delivery_date = slots.first["date"] if slots.any?
 abort "delivery_slots returned empty" if slots.empty?
 abort "delivery_slots rows must carry the resolved zone" unless slots.all? { |s| s["zone"].to_s.start_with?("D") }
 slot          = slots.first

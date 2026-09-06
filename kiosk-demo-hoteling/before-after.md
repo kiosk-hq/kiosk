@@ -43,9 +43,24 @@ covers, and everything past that is the `abridged:` field's claim and a human's
 signature. The identifiers are that run's; the dates are
 `Date.today + 30` / `+ 33`, so they move with the day it is run.
 
+**The first line of the block was re-spelled after the recording, and saying so
+is cheaper than pretending otherwise.** Where the recording printed `(add to
+/etc/hosts: 127.0.0.1 hoteling.demo.kiosk.tech — using 127.0.0.1)`, this
+document carries the line the task prints today. The host lookup that line belongs to is now OPT-IN: unguarded, a local run of
+this task sent a DNS query for a `demo.kiosk.tech` subdomain on every
+invocation — an outbound query to the project's production domain, for a
+value the run discards on any machine without the hosts entry — so the query
+now happens only when `KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint
+had to name that variable as well as the hosts entry, because on its own the
+hosts entry no longer changes anything, and an instruction that does not do
+what it says is worse than no instruction. The run was not repeated for it and
+no other line in the block moved; `bin/check-demo-derivations` holds this line,
+like every other one here, to a literal the current rake task prints, which is
+what makes this note checkable rather than a promise.
+
 <!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/hoteling_flow.rb, script/equihash_register.rb, script/pay_window.rb, config/environments/development.rb | keys_from: app/controllers/kiosk/hotels_controller.rb, app/controllers/kiosk/reservations_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->
 ```
-  (add to /etc/hosts: 127.0.0.1 hoteling.demo.kiosk.tech — using 127.0.0.1)
+  (using 127.0.0.1 — to reach hoteling.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)
 
 ══ RUN 1: Happy path ══
   Server up at http://127.0.0.1:3003

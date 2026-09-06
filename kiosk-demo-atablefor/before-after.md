@@ -36,13 +36,28 @@ That is a membership test, and membership runs one way only — it cannot show
 that no line is MISSING. So «the task's own stdout, start to finish» is the
 `abridged:` field's claim and a human's signature, not something this repository
 proves. The identifiers and the seating dates are that run's — the seatings roll
-forward daily, so they move with the day it is run — and the `/etc/hosts` line
-appears because this machine has no entry for the demo host, which is the
-branch the task takes on any checkout that has not added one.
+forward daily, so they move with the day it is run — and the first line appears
+because this machine has no entry for the demo host, which is the branch the
+task takes on any checkout that has not added one.
+
+**That first line was re-spelled after the recording, and saying so is cheaper
+than pretending otherwise.** Where the recording printed `add to /etc/hosts:
+127.0.0.1 atablefor.demo.kiosk.tech`, this document carries the line the task
+prints today. The host lookup that line belongs to is now OPT-IN: unguarded, a local run of
+this task sent a DNS query for a `demo.kiosk.tech` subdomain on every
+invocation — an outbound query to the project's production domain, for a
+value the run discards on any machine without the hosts entry — so the query
+now happens only when `KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint
+had to name that variable as well as the hosts entry, because on its own the
+hosts entry no longer changes anything, and an instruction that does not do
+what it says is worse than no instruction. The run was not repeated for it and
+no other line in the block moved; `bin/check-demo-derivations` holds this line,
+like every other one here, to a literal the current rake task prints, which is
+what makes this note checkable rather than a promise.
 
 <!-- derived: transcript | task: bundle exec rake demo:book | from: lib/tasks/demo.rake, script/book_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/dining_room_controller.rb, app/controllers/kiosk/bookings_controller.rb | abridged: none -->
 ```
-  add to /etc/hosts:  127.0.0.1 atablefor.demo.kiosk.tech
+  using 127.0.0.1 -- to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1
 
 ── Starting atablefor on http://127.0.0.1:3002 ──
   Server up at http://127.0.0.1:3002

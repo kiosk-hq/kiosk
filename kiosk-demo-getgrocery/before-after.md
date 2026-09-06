@@ -52,16 +52,32 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
-**One LINE in the block below was re-spelled after the recording, and saying so
-is cheaper than pretending otherwise.** Two later changes moved it. The slot
+**TWO LINES in the block below were re-spelled after the recording, and saying so
+is cheaper than pretending otherwise.** The FIRST is the `/etc/hosts` hint at the
+top. Where the recording printed `(add to /etc/hosts: 127.0.0.1
+getgrocery.demo.kiosk.tech -- using 127.0.0.1)`, this document carries the line
+the task prints today. The host lookup that line belongs to is now OPT-IN:
+unguarded, a local run of this task sent a DNS query for a
+`demo.kiosk.tech` subdomain on every
+invocation — an outbound query to the project's production domain, for a
+value the run discards on any machine without the hosts entry — so the query
+now happens only when `KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint
+had to name that variable as well as the hosts entry, because on its own the
+hosts entry no longer changes anything, and an instruction that does not do
+what it says is worse than no instruction. The run was not repeated for it;
+`bin/check-demo-derivations` holds this line, like every other one here, to a
+literal the current rake task prints, which is what makes this note checkable
+rather than a promise.
+
+The SECOND is the delivery-slot row, which two later changes moved. The slot
 row's published field used to be named `zone` while `DeliverySlots.zone` in the
 same demo is an IANA time zone — one word for a postal district and for a clock
 — so the wire field became `district`; and the row's `label`, a bare
 `08:00–10:00` that a customer in another zone reads as their own morning, grew
 the zone it is written in. The driver's own summary line carries both, so where
 the recording printed `08:00–10:00 zone=D02` this document reads `08:00–10:00
-(Europe/Dublin) district=D02`. The run was not repeated for it and nothing else
-in the block was touched; every other line is what the task printed on the day.
+(Europe/Dublin) district=D02`. The run was not repeated for that either; apart
+from these two lines, every line is what the task printed on the day.
 `bin/check-demo-derivations` holds all of them — including this one — to a
 literal the current driver prints, which is what makes this note checkable
 rather than a promise.
@@ -77,7 +93,7 @@ key whenever one is present.
 <!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/getgrocery_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/storefront_controller.rb, app/controllers/kiosk/orders_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->
 ```
   (no STRIPE_SECRET_KEY — running against stripe-mock at http://127.0.0.1:12111, no real charge)
-  (add to /etc/hosts: 127.0.0.1 getgrocery.demo.kiosk.tech -- using 127.0.0.1)
+  (using 127.0.0.1 -- to reach getgrocery.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)
 
 -- Starting getgrocery on http://127.0.0.1:3001 --
   Server up at http://127.0.0.1:3001

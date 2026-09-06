@@ -125,12 +125,38 @@ namespace :demo do
     # a public IP, not an error. Only 127.0.0.1 is accepted, which is exactly
     # what an /etc/hosts entry produces: a local harness can never be steered
     # onto the deployed host by whatever DNS happens to answer.
+    #
+    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT (K-1318). Unguarded, every local
+    # run of every task in this file sent a DNS query for a `demo.kiosk.tech`
+    # subdomain: an outbound query to the project's production domain, on each
+    # invocation, for a value the run discards unless this machine has an
+    # /etc/hosts entry. Set KIOSK_DEMO_HOST_LOOKUP=1 to ask for it. Without it
+    # nothing here queries a resolver and the run dials 127.0.0.1 -- which is
+    # what CI and a fresh checkout got out of the lookup anyway, so the default
+    # costs nobody a branch they were reaching.
+    #
+    # AND THE RESCUE NAMES StandardError, BECAUSE `Resolv::ResolvError` COULD NOT
+    # FIRE ON THE FAILURE THIS BLOCK EXISTS FOR. `Resolv::ResolvTimeout` is NOT a
+    # `Resolv::ResolvError` -- measured on the shipped interpreter, its ancestors
+    # are [Resolv::ResolvTimeout, Timeout::Error, RuntimeError, StandardError] --
+    # so on a black-holed resolver, which is precisely the closed network this
+    # fallback is written for, the narrower rescue let the exception out of the
+    # rake task instead of falling back to 127.0.0.1. No resolver timeout is
+    # configured anywhere here, so that stall is whatever the platform default is.
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       if addr == "127.0.0.1"
         "atablefor.demo.kiosk.tech"
       else
-        puts "  add to /etc/hosts:  127.0.0.1 atablefor.demo.kiosk.tech"
+        puts "  using 127.0.0.1 -- to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1"
         "127.0.0.1"
       end
     end
@@ -317,7 +343,15 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-pow-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
@@ -534,7 +568,15 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-reputation-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
@@ -667,7 +709,15 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-backoff-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
@@ -808,7 +858,15 @@ namespace :demo do
     holder_password = "atablefor-demo-password"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
@@ -919,11 +977,19 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-isolation.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       if addr == "127.0.0.1"
         "atablefor.demo.kiosk.tech"
       else
-        puts "  add to /etc/hosts:  127.0.0.1 atablefor.demo.kiosk.tech"
+        puts "  using 127.0.0.1 -- to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1"
         "127.0.0.1"
       end
     end
@@ -1079,7 +1145,15 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-schema.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
@@ -1389,7 +1463,15 @@ namespace :demo do
     holder_password   = "atablefor-demo-password"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("atablefor.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
       addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 

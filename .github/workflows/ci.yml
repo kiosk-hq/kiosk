@@ -896,6 +896,158 @@ jobs:
   # `tasks:` list nor the entry's `ungated:` map with a reason — and when the
   # "Which of these run in CI" table it generates in each demo README is stale.
   # Stdlib Ruby only: no bundle, no services, no database, ~0.1 s.
+  # THE DECLARED RUBY FLOOR IS NOW EXERCISED, NOT MERELY DECLARED (K-1321).
+  #
+  # All fourteen gemspecs declare `required_ruby_version = ">= 3.2.0"`, and until
+  # this job every `setup-ruby` step in this file pinned 4.0.1 with no Ruby
+  # dimension anywhere — so a published gem's advertised floor was a claim its
+  # own CI contradicted by omission, and the eight demo READMEs advertise that
+  # same floor because `bin/check-demo-prereqs` derives it from the gemspec.
+  #
+  # WHY THE FLOOR IS TESTED RATHER THAN RAISED. The other honest repair was to
+  # raise `required_ruby_version` to what CI actually runs. It was rejected on
+  # the numbers: `~> 8.1` railties itself declares `>= 3.2.0`, so 3.2 is the
+  # framework's own floor and not an invention of ours, while a floor of 4.0
+  # would exclude essentially every existing Rails app — the audience this
+  # project's onboarding page is addressed to — in order to make a CI pin true.
+  # Measured before the job was written, on Ruby 3.2.2 with a local Postgres:
+  # all fourteen suites green, 2,526 rspec examples and 27 minitest runs, zero
+  # failures. The floor was real; it was simply never run.
+  #
+  # THE VERSION IS DERIVED FROM A GEMSPEC AT JOB TIME, never typed here. A
+  # hand-copied floor in this file is the same defect one level out: raise the
+  # gemspec and this leg silently keeps testing the old number. The step also
+  # asserts that all fourteen gemspecs agree, because a leg that tests one floor
+  # while a sibling gem ships another is worse than no leg.
+  #
+  # ONE JOB, NOT A SECOND MATRIX: fourteen more runners to re-answer one
+  # question is not what the question is worth. The loop keeps going after a
+  # failure and reports every gem at the end, so this behaves like
+  # `fail-fast: false` rather than stopping at the first.
+  #
+  # WHAT IT DELIBERATELY DOES NOT INSTALL: stripe-mock. That is a Go binary
+  # built from source, and the group it unlocks pins Stripe's own fixture
+  # shapes — not a Ruby-version question. Python + numpy IS installed, because
+  # without it kiosk-redteam's client errors rather than skipping.
+  ruby-floor:
+    name: every gem suite on the declared Ruby floor
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the declared floor out of the gemspecs (never typed here)
+        id: floor
+        run: |
+          set -uo pipefail
+          floors="$(sed -n 's/.*required_ruby_version[[:space:]]*=[[:space:]]*">=[[:space:]]*\([0-9][0-9.]*\)".*/\1/p' ./*/*.gemspec | sort -u)"
+          # `|| true`: grep exits 1 on zero matches, and a zero here has to reach the
+          # explicit check below rather than abort the step with grep's silence --
+          # which is the shape that reads like "there was nothing to test".
+          count="$(printf '%s\n' "$floors" | grep -c . || true)"
+          specs="$(ls ./*/*.gemspec | wc -l | tr -d ' ')"
+          declared="$(grep -l required_ruby_version ./*/*.gemspec | wc -l | tr -d ' ')"
+          if [ "$specs" = "0" ]; then
+            echo "::error::no gemspec matched ./*/*.gemspec -- this leg would have tested nothing and exited 0." >&2
+            exit 1
+          fi
+          echo "gemspecs: $specs, declaring a floor: $declared, distinct floors: $count ($floors)"
+          if [ "$specs" != "$declared" ]; then
+            echo "::error::$((specs - declared)) gemspec(s) declare no required_ruby_version; the floor is not a repository-wide fact." >&2
+            exit 1
+          fi
+          if [ "$count" != "1" ]; then
+            echo "::error::gemspecs declare $count different Ruby floors; there is no single floor for this leg to test." >&2
+            exit 1
+          fi
+          echo "version=$floors" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Ruby (the declared floor)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ steps.floor.outputs.version }}
+          bundler-cache: false
+
+      # kiosk-redteam's client solves a real Equihash toll through the bundled
+      # numpy solver, and kiosk-pow-equihash's :parity specs live-solve the
+      # shipped params. Without numpy the first ERRORS and the second silently
+      # skips, so the leg would be quieter than the 4.0.1 one for a reason that
+      # has nothing to do with Ruby.
+      - name: Set up Python (Equihash solver)
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install numpy (Equihash solver)
+        run: python -m pip install numpy
+
+      - name: Every gem suite, on the floor
+        env:
+          # The value the previous step DERIVED, so the assertion below compares
+          # the running interpreter against the gemspecs rather than against a
+          # number typed here.
+          FLOOR: ${{ steps.floor.outputs.version }}
+        run: |
+          set -uo pipefail
+          ruby -v
+          version="$(ruby -e 'print RUBY_VERSION')"
+          # setup-ruby resolves a request into a build, and a request it cannot
+          # satisfy exactly is the one way this leg could run a DIFFERENT Ruby
+          # and still report success -- the whole point of the job lost in
+          # silence. Compare, and say so.
+          if [ "$version" != "$FLOOR" ]; then
+            echo "::error::this leg is running Ruby $version but the gemspecs declare $FLOOR -- it is not testing the floor." >&2
+            exit 1
+          fi
+          failed=""
+          ran=0
+          for dir in ./*/*.gemspec; do
+            gem="$(basename "$(dirname "$dir")")"
+            cmd="bundle exec rspec"
+            if [ "$gem" = "kiosk-rls-minitest" ]; then cmd="bundle exec rake test"; fi
+            echo "::group::$gem"
+            ( cd "$gem" && bundle install --quiet && $cmd )
+            status=$?
+            echo "::endgroup::"
+            ran=$((ran + 1))
+            if [ $status -ne 0 ]; then
+              echo "::error::$gem exited $status on Ruby $version" >&2
+              failed="$failed $gem"
+            fi
+          done
+          # A loop whose file set came out empty exits 0 and reads exactly like a
+          # green tree. It cannot, here: this says so instead.
+          if [ "$ran" = "0" ]; then
+            echo "::error::no gem directory was visited -- this step proved nothing." >&2
+            exit 1
+          fi
+          if [ -n "$failed" ]; then
+            echo "$ran suite(s) attempted on Ruby $version; FAILED:$failed" >&2
+            exit 1
+          fi
+          echo "all $ran gem suite(s) green on Ruby $version, the floor every gemspec declares."
+
   ci-task-coverage:
     name: CI task coverage (bin/check-ci-tasks)
     runs-on: ubuntu-latest

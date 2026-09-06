@@ -12,6 +12,17 @@
 # ── Toolchain version pins (machine-local; managed per developer) ────────────
 # The maintainer uses mise; `mise.toml.example` is the tracked template — the
 # real `mise.toml` / `.mise.toml` is local and must not ship.
+#
+# THIS WAS RE-DECIDED RATHER THAN INHERITED (K-1321). A fresh clone carries no
+# tracked Ruby pin of any kind, so an rbenv or asdf user gets no hint from the
+# tree — which is a real cost, and it was weighed against tracking one. The
+# answer is to keep these ignored and state the supported RANGE instead:
+# README.md#install states the supported range, the gemspecs declare the
+# floor, and `ci.yml`'s `ruby-floor` job RUNS every gem suite on it, derived
+# from a gemspec at job time. A range both ends of which are on the merge gate
+# is worth more to a contributor than one pinned patch release that a version
+# manager they do not use will silently ignore. The eight `.ruby-version`
+# files on the maintainer's disk are `rails new` scaffolding, not a decision.
 .mise.toml
 mise.toml
 .ruby-version

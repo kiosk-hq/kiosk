@@ -1240,8 +1240,11 @@ jobs:
 
       # Its own step, for the reason the publication-paths, prose-counts and
       # demo-derivations self-tests each have one — and here the argument is the
-      # COUNT. This one script holds twenty independent invariants behind the one
-      # exit code above, so a reverted regex takes one of them out of service
+      # COUNT. This one script holds many independent invariants behind the one
+      # exit code above — how many is derived by `--self-test --list` and
+      # deliberately not typed here or in the script, because a typed cardinal of
+      # itself is what K-1340 found wrong twice — so a reverted regex takes one
+      # of them out of service
       # while the step above stays green; K-1240 measured exactly that shape one
       # repository over. The self-test copies this checkout into throwaway
       # directories, plants one faithful break per invariant (a one-sided edit, a

@@ -43,18 +43,33 @@
 # the same banners and therefore had to ask the question: the K-962
 # lockfile-PLATFORMS parity rule is written with a `# -- … --` banner rather than
 # a `# ── … ──` one, so the derivation cannot see it. It is an independent
-# invariant on the same corpus by every test the others meet. The honest total is
-# TWENTY, the sentence above is left as written because a ledger row cites it, and
-# `--self-test --list` prints all twenty with the arms that cover each.
+# invariant on the same corpus by every test the others meet. The sentence above
+# is left as written because a ledger row cites it.
 #
-# The nineteen share the manifest, the discovery pass and the normalisation, so
-# nineteen scripts would re-declare the demo corpus nineteen times — which is
-# precisely the drift this file exists to stop. What a sibling may not share is
-# its INPUT: a script that compares two different pairs of things cannot tell a
+# AND THE CORRECTION IS NOT A NEW CARDINAL, BECAUSE THAT IS THE DEFECT THIS FILE
+# EXISTS TO PREVENT (K-1340). The correction that used to stand here announced an
+# «honest total» of its own, as a typed cardinal, and was overtaken within days:
+# the file then carried TWO wrong counts of itself plus a note explaining why one
+# of them was wrong — in the guard whose whole subject is inventories that drift
+# because somebody keeps them by hand.
+#
+# THE COUNT IS DERIVED, AND THE DERIVATION IS THE ANSWER: run
+#
+#     ./bin/check-demo-copies --self-test --list
+#
+# whose FIRST line reports how many arms cover how many bannered invariants plus
+# the unbannered ones, from this file's own banners rather than from a list — so
+# a rule added below reads as UNCOVERED rather than as absent, and a number that
+# has moved cannot go stale in a paragraph. Do not copy that number back up here.
+#
+# They all share the manifest, the discovery pass and the normalisation, so one
+# script per invariant would re-declare the demo corpus once per invariant —
+# which is precisely the drift this file exists to stop. What a sibling may not
+# share is its INPUT: a script that compares two different pairs of things cannot tell a
 # reader which pair disagreed, and no amount of output formatting fixes that,
 # whereas a second invariant over the SAME corpus costs nothing but a section.
 #
-# The cost of holding twenty behind one exit code is real and is not argued
+# The cost of holding them all behind one exit code is real and is not argued
 # away here: CI cannot distinguish a failing prose claim from a failing
 # migration pair without reading the output, and `--write` can rewrite copies
 # for a reason the operator did not intend. If that becomes the thing that
@@ -172,10 +187,12 @@ ROOT = File.expand_path("..", __dir__)
 # this section does not lean on it. Two facts about THIS script are the whole
 # argument (K-1267):
 #
-#   * IT CARRIES NINETEEN INDEPENDENT INVARIANTS BEHIND ONE EXIT CODE, and a bare
+#   * IT CARRIES MANY INDEPENDENT INVARIANTS BEHIND ONE EXIT CODE — `--list`
+#     below derives how many, and the number is deliberately not typed here
+#     (K-1340) — and a bare
 #     run answers ONE question about all of them at once: is the tree clean today.
 #     It cannot answer the other one — does arm N still go RED on the break it was
-#     written for. With nineteen of them a single reverted regex takes one
+#     written for. At that many, a single reverted regex takes one
 #     invariant out of service while the exit code stays 0, which is not a
 #     hypothesis: K-1240 measured exactly that, one repository over, where a bare
 #     run stayed green while `--self-test` went red on 22 arms.
@@ -227,8 +244,10 @@ ROOT = File.expand_path("..", __dir__)
 #     because of it.
 #   * The `:vacuity` arms prove the GUARD fires when its counter reads zero. They
 #     do NOT prove the counter tracks what its name says.
-#   * Fifteen of the twenty rules have an in-band vacuity guard and only four of
-#     those guards have an arm here. `--self-test --list` prints the coverage
+#   * Most rules carry an in-band vacuity guard and only some of those guards
+#     have an arm here; neither count is typed, for K-1340's reason — `--list`
+#     marks a vacuity arm `V` and a break arm `B`, so both are read off the
+#     table. `--self-test --list` prints the coverage
 #     table — which rules have an arm, of which kind — derived from this file's
 #     own `# ── … ──` banners rather than from a list, so a rule added later reads
 #     as UNCOVERED rather than as absent.

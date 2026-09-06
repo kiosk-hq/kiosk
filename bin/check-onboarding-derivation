@@ -103,6 +103,10 @@
 #   * A verb the page teaches that has no counterpart here at all.
 #   * The page agreeing with a getgrocery that is itself wrong. Consistency,
 #     never truth.
+#   * Whether the FLOOR is right. RAILS_FLOOR and RUBY_FLOOR hold the page to
+#     what the gemspecs DECLARE. Whether the declaration is itself honest is a
+#     different question, answered by the CI leg that runs the suites on the
+#     declared Ruby floor -- not by this script.
 #   * Whether the SERVED page equals the sibling's working tree. `--network`
 #     answers about the served bytes and the default mode about the tree; they
 #     are two questions and the run says which one it asked.
@@ -126,6 +130,16 @@ GENERATOR_INITIALIZER = "kiosk-server/lib/generators/kiosk/install/templates/ini
 GETGROCERY_STOREFRONT = "kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb"
 GETGROCERY_ORDERS     = "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb"
 GETGROCERY_INITIALIZER = "kiosk-demo-getgrocery/config/initializers/kiosk.rb"
+# The engine's gemspec is the ONLY one that names Rails at all, so it is the
+# single authority for the floor an adopting operator has to clear (K-1320).
+SERVER_GEMSPEC = "kiosk-server/kiosk-server.gemspec"
+# kiosk-core's `required_ruby_version` is the floor every gemspec declares, and
+# is the same source `bin/check-demo-prereqs` derives its Ruby line from -- so
+# the page and the eight demo READMEs cannot drift apart (K-1321).
+CORE_GEMSPEC = "kiosk-core/kiosk-core.gemspec"
+# The one place either published repository states publication status and the
+# canonical install form; the page points at it and must agree with it (K-1319).
+MONOREPO_README = "README.md"
 
 PAGE_URL      = "https://kiosk.tech/onboarding.html"
 PAGE_BASENAME = "onboarding.html"
@@ -348,6 +362,43 @@ def handler_names(src)
   src.scan(/c\.handlers\s*=\s*%w\[([^\]]*)\]/).map { |m| m[0].split }
 end
 
+# The Rails MAJOR.MINOR the engine's gemspec declares. Every Rails component it
+# names must agree: a gemspec pinning railties at `~> 8.1` and activerecord at
+# `~> 8.0` has no single floor to state, so this returns nil and the rule that
+# needs it reports itself VACUOUS rather than picking one.
+RAILS_COMPONENTS = %w[railties actionpack activerecord activesupport].freeze
+
+def rails_floor(gemspec_src)
+  found = RAILS_COMPONENTS.filter_map do |c|
+    m = gemspec_src.match(/add_dependency\s+"#{c}"\s*,\s*"~>\s*(\d+\.\d+)"/)
+    m && m[1]
+  end
+  return nil if found.empty?
+
+  found.uniq.length == 1 ? found.first : nil
+end
+
+# The Ruby floor a gemspec declares, as it is written: `>= 3.2.0`.
+def ruby_floor(gemspec_src)
+  m = gemspec_src.match(/required_ruby_version\s*=\s*">=\s*(\d+\.\d+\.\d+)"/)
+  m && m[1]
+end
+
+# The canonical install's SOURCE QUALIFIER, read off the meta-gem line in the
+# monorepo README: ["github", "kiosk-hq/kiosk"]. When the gems are published and
+# that line loses its qualifier this returns nil, and INSTALL_SOURCE reports
+# itself vacuous -- which is the correct moment for a human to restate the rule,
+# not a moment to pass quietly.
+def canonical_install_source(readme_src)
+  m = readme_src.match(/^gem\s+"kiosk-all"\s*,\s*(github|git|path|source):\s*"([^"]+)"/)
+  m && [m[1], m[2]]
+end
+
+# Every Gemfile line in the page's Ruby that installs a Kiosk gem.
+def page_gem_lines(page)
+  page_ruby(page).lines.select { |l| l.match?(/^\s*gem\s+"kiosk-[a-z0-9-]+"/) }
+end
+
 # ── The rules ────────────────────────────────────────────────────────────────
 #
 # Each returns [ok, description, detail]. `detail` is printed either way, so a
@@ -517,6 +568,73 @@ def rule_no_require_optional(page, sources)
         hits.empty? ? "derived from #{GETGROCERY_STOREFRONT}" : "#{hits.size} site(s)")
 end
 
+# R8 -- the page states the Rails floor the engine's gemspec declares.
+#
+# THE DEFECT THIS CLOSES (K-1320): `kiosk-server` requires Rails `~> 8.1`, which
+# excludes 7.x and 8.0.x -- most of the "existing Rails apps" this page is
+# addressed to -- and the page, whose whole framing is "assuming a working Rails
+# + Postgres app you already know", never mentioned the one constraint most
+# likely to disqualify the reader's app. Bundler's refusal is the only place it
+# was stated, at the end of `bundle install`.
+def rule_rails_floor(page, sources)
+  floor = rails_floor(sources[:server_gemspec])
+  if floor.nil?
+    return vacuous!("RAILS_FLOOR",
+                    "#{SERVER_GEMSPEC} declares no single `~> MAJOR.MINOR` shared by " \
+                    "#{RAILS_COMPONENTS.join(", ")}")
+  end
+  return vacuous!("RAILS_FLOOR", "the page does not mention Rails at all") unless page.include?("Rails")
+
+  hits = page.scan("Rails #{floor}").length
+  check("RAILS_FLOOR",
+        hits.positive?,
+        "the page names Rails #{floor} (#{hits} occurrence(s))",
+        hits.positive? ? "derived from #{SERVER_GEMSPEC}" : "the page names Rails but never `Rails #{floor}`")
+end
+
+# R9 -- and the Ruby floor every gemspec declares.
+def rule_ruby_floor(page, sources)
+  floor = ruby_floor(sources[:core_gemspec])
+  return vacuous!("RUBY_FLOOR", "#{CORE_GEMSPEC} declares no `required_ruby_version = \">= X.Y.Z\"`") if floor.nil?
+  return vacuous!("RUBY_FLOOR", "the page does not mention Ruby at all") unless page.include?("Ruby")
+
+  hits = page.scan("Ruby #{floor}").length
+  check("RUBY_FLOOR",
+        hits.positive?,
+        "the page names Ruby #{floor} (#{hits} occurrence(s))",
+        hits.positive? ? "derived from #{CORE_GEMSPEC}" : "the page names Ruby but never `Ruby #{floor}`")
+end
+
+# R10 -- every Kiosk gem the page tells an operator to add carries the SOURCE
+# QUALIFIER the monorepo README declares canonical.
+#
+# THE DEFECT THIS CLOSES (K-1319): four different install instructions lived
+# across the two published repositories, two of them resolving against RubyGems,
+# where no Kiosk gem is published -- and nothing said so in either direction.
+# Publication status and the canonical form are now stated ONCE, in the
+# monorepo README; this holds the page to that one statement instead of to a
+# second copy of it.
+def rule_install_source(page, sources)
+  canonical = canonical_install_source(sources[:readme])
+  if canonical.nil?
+    return vacuous!("INSTALL_SOURCE",
+                    "#{MONOREPO_README} declares no canonical `gem \"kiosk-all\", <source>: \"...\"` " \
+                    "line -- if the gems have been published and the qualifier is gone, restate " \
+                    "this rule rather than leaving it matching nothing")
+  end
+
+  key, value = canonical
+  lines = page_gem_lines(page)
+  return vacuous!("INSTALL_SOURCE", "the page's Ruby carries no `gem \"kiosk-...\"` line") if lines.empty?
+
+  qualifier = "#{key}: \"#{value}\""
+  bad = lines.reject { |l| l.include?(qualifier) }
+  check("INSTALL_SOURCE",
+        bad.empty?,
+        "all #{lines.length} `gem \"kiosk-*\"` line(s) carry `#{qualifier}`",
+        bad.empty? ? "derived from #{MONOREPO_README}" : "#{bad.length} without it: #{bad.map(&:strip).join(" | ")}")
+end
+
 RULES = [
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
@@ -525,13 +643,19 @@ RULES = [
   [:rule_frozen_date,        "FROZEN_DATE",         "ban",        "a YYYY-MM-DD literal, which the verb refuses once it is past"],
   [:rule_getgrocery_handlers, "GETGROCERY_HANDLERS", "derivation", "the handler classes getgrocery's own initializer registers"],
   [:rule_no_require_optional, "REQUIRE_OPTIONAL",    "ban",        "params.require on an argument getgrocery leaves optional"],
+  [:rule_rails_floor,        "RAILS_FLOOR",         "derivation", "the Rails MAJOR.MINOR kiosk-server's gemspec declares"],
+  [:rule_ruby_floor,         "RUBY_FLOOR",          "derivation", "the Ruby floor kiosk-core's gemspec declares"],
+  [:rule_install_source,     "INSTALL_SOURCE",      "derivation", "the install source qualifier the monorepo README declares canonical"],
 ].freeze
 
 def load_sources
   { generator:       repo_read(GENERATOR_INITIALIZER),
     storefront:      repo_read(GETGROCERY_STOREFRONT),
     orders:          repo_read(GETGROCERY_ORDERS),
-    getgrocery_init: repo_read(GETGROCERY_INITIALIZER) }
+    getgrocery_init: repo_read(GETGROCERY_INITIALIZER),
+    server_gemspec:  repo_read(SERVER_GEMSPEC),
+    core_gemspec:    repo_read(CORE_GEMSPEC),
+    readme:          repo_read(MONOREPO_README) }
 end
 
 def run_rules(page, sources)
@@ -547,7 +671,8 @@ def run_list
   end
   puts
   puts "Derivation sources:"
-  [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER].each do |rel|
+  [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
+   SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README].each do |rel|
     puts "  #{File.exist?(File.join(ROOT, rel)) ? "present" : "MISSING"}  #{rel}"
   end
   0
@@ -600,7 +725,10 @@ def derived_facts(sources)
     properties: props,
     optional: props - req,
     integers: ints,
-    getgrocery: handler_names(sources[:getgrocery_init]).first }
+    getgrocery: handler_names(sources[:getgrocery_init]).first,
+    rails: rails_floor(sources[:server_gemspec]),
+    ruby: ruby_floor(sources[:core_gemspec]),
+    install: canonical_install_source(sources[:readme]) }
 end
 
 # A minimal page that satisfies all seven rules by construction, so the arms
@@ -626,7 +754,11 @@ def fixture_page(f)
       end
     end
   RUBY
+  key, value = f[:install]
+  gemfile = %(# Gemfile\ngem "kiosk-all", #{key}: "#{value}"\n)
   [%(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
+   %(<p>Needs Rails #{f[:rails]} and Ruby #{f[:ruby]}.</p>),
+   %(<pre><code class="language-ruby">#{gemfile}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_init}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_verb}</code></pre>)].join("\n")
 end
@@ -634,7 +766,8 @@ end
 def run_self_test
   sources = load_sources
   f       = derived_facts(sources)
-  if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? || f[:integers].empty?
+  if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? ||
+     f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -666,6 +799,17 @@ def run_self_test
                         page.gsub(divergent, "the read controller"), sources, "GETGROCERY_HANDLERS")
   arms << self_test_arm("params.require(:#{opt}) back in the handler",
                         page.sub("params[:#{opt}]", "params.require(:#{opt})"), sources, "REQUIRE_OPTIONAL")
+  # gsub, not sub: the page names each floor more than once, and a plant that
+  # leaves one copy standing proves nothing about the rule.
+  arms << self_test_arm("the page names a Rails line the gemspec excludes",
+                        page.gsub("Rails #{f[:rails]}", "Rails 7.1"), sources, "RAILS_FLOOR")
+  arms << self_test_arm("the page names a Ruby below the declared floor",
+                        page.gsub("Ruby #{f[:ruby]}", "Ruby 2.7.0"), sources, "RUBY_FLOOR")
+  # sub, not gsub: ONE gem line loses the qualifier while its siblings keep it.
+  # That is the half-relink shape -- the one a wave actually ships -- and a gsub
+  # plant would never exercise it.
+  arms << self_test_arm("one gem line loses the canonical source qualifier",
+                        page.sub(%(#{f[:install][0]}: "#{f[:install][1]}"), ""), sources, "INSTALL_SOURCE")
 
   puts "── vacuity (derivation side blanked) ──"
   arms << self_test_arm("generator template loses its c.handlers example", page,
@@ -683,6 +827,12 @@ def run_self_test
                         sources.merge(getgrocery_init: sources[:getgrocery_init].sub(divergent, f[:handlers].first)), "GETGROCERY_HANDLERS")
   arms << self_test_arm("getgrocery requires every #{WORKED_VERB} parameter", page,
                         sources.merge(storefront: sources[:storefront].sub(req_lit, "required: [#{f[:properties].map(&:inspect).join(", ")}]")), "REQUIRE_OPTIONAL")
+  arms << self_test_arm("the engine's gemspec stops naming Rails", page,
+                        sources.merge(server_gemspec: sources[:server_gemspec].gsub(/add_dependency\s+"(?:#{RAILS_COMPONENTS.join("|")})"[^\n]*/, "# removed")), "RAILS_FLOOR")
+  arms << self_test_arm("kiosk-core stops declaring required_ruby_version", page,
+                        sources.merge(core_gemspec: sources[:core_gemspec].gsub(/required_ruby_version[^\n]*/, "# removed")), "RUBY_FLOOR")
+  arms << self_test_arm("the README's canonical line loses its source qualifier", page,
+                        sources.merge(readme: sources[:readme].gsub(/^gem\s+"kiosk-all"[^\n]*/, %(gem "kiosk-all"))), "INSTALL_SOURCE")
 
   FAILURES.clear
   puts

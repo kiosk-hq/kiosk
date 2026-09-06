@@ -44,6 +44,27 @@
 #   tudu     — the housemate board (`/shared`) and the fleet's ONLY open
 #              sign-up. See below for why it is here.
 #
+# WHAT `validate_responses` COSTS HERE: NOTHING, AND IT WAS MEASURED (K-1332)
+# ----------------------------------------------------------------------------
+# The seven demos used to set `c.validate_responses = true` unconditionally, and
+# they now set `!Rails.env.production?` — so this script, which is the only
+# thing in CI that boots a demo in production mode, is the one place that could
+# have lost the per-verb output-schema assertion. It did not, because it never
+# had it. MEASURED at the change: this file makes exactly ONE request carrying
+# an `Authorization:` header, and it is the FORGED bearer asserted to answer
+# 401. No assertion anywhere below drives a query or an action to a SUCCESS
+# body, so the Executor never renders a payload here and the response validator
+# never ran, in production mode or any other.
+#
+# That is not a gap this script should close by growing a registration: the
+# per-verb conformance proof is each demo's own task list, which runs in
+# development where the flag is on, and duplicating it against a smoke database
+# would be a second, slower copy of a check that already exists. What this
+# script is for is the four PRODUCTION-ONLY classes above, none of which is
+# about descriptor conformance. If a future assertion here does drive a verb to
+# a 200, note that it is doing so with response validation OFF — the same
+# posture the deployed fleet runs.
+#
 # WHY THE ROSTER GREW, AND THE PREMISE IT COST (K-1085)
 # ----------------------------------------------------
 # The rule above used to read «one demo per unique human-facing HTML surface»

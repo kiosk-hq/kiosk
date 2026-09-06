@@ -145,7 +145,16 @@ Kiosk.configure do |c|
   # request check — nothing a caller sends can trigger it — and it is what
   # makes this demo's own CI task list a per-verb conformance proof of the
   # descriptors rather than a smoke test.
-  c.validate_responses = true
+  #
+  # OFF IN PRODUCTION, and the engine's own file is why (K-1332): with it on,
+  # a descriptor typo becomes a 500 for a caller who did nothing wrong. This
+  # demo is DEPLOYED — its env template sets RAILS_ENV=production — so leaving
+  # it unconditional shipped exactly the posture
+  # kiosk-server/lib/kiosk/server/response_validation.rb warns against, on the
+  # public endpoint an assistant is pointed at, in the file an operator is sent
+  # here to copy. Nothing is lost from the proof: every demo task list runs in
+  # development, so all of the per-verb conformance survives.
+  c.validate_responses = !Rails.env.production?
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer

@@ -39,9 +39,25 @@ module Kiosk
     # `validate_responses` defaults to FALSE. It is a DEVELOPMENT/CI assertion,
     # not a request check: nothing a caller sends can trigger it, and turning it
     # on in production would convert a descriptor typo into a 500 for a caller
-    # who did nothing wrong. All seven demos, the e2e fixture origin and the
-    # generated app turn it on, which is what makes each demo's own CI task list
-    # a per-verb conformance proof rather than a smoke test.
+    # who did nothing wrong. The seven demos and the e2e fixture origin turn it
+    # on, which is what makes each demo's own CI task list a per-verb
+    # conformance proof rather than a smoke test.
+    #
+    # THE DEMOS SPELL IT `!Rails.env.production?`, NOT `true` (K-1332). They are
+    # DEPLOYED — every one of the env templates sets `RAILS_ENV=production` — so
+    # the warning two sentences up was aimed at them and hit: the live demo
+    # subdomains an assistant is pointed at ran with the flag on, where an
+    # operator's descriptor typo answers a 500 to a caller who did nothing
+    # wrong. Nothing is lost from the proof, because the task lists that ARE the
+    # proof run in development. And it matters that the demo initializer is the
+    # artefact `onboarding.html` sends an adopting operator to copy: an example
+    # is also an instruction.
+    #
+    # THE INSTALL GENERATOR SETS NEITHER THIS FLAG NOR `validate_requests`.
+    # Measured: its initializer template contains no `validate` at all, so a
+    # freshly generated app inherits the default above and opts in when it wants
+    # the assertion. (An earlier revision of this paragraph said the generated
+    # app turned it on. It never did.)
     #
     # `pay` and `schema` are engine verbs with no operator descriptor, so they
     # are not validated here; their shapes are fixed by the spec and asserted

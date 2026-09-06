@@ -7,10 +7,11 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 **No Kiosk gem is on RubyGems.** MEASURED 2026-09-06: every gem name in the
 tables below answers HTTP 404 from `https://rubygems.org/api/v1/gems/<name>.json`
 against a control of `rails` → HTTP 200; this repository carries no release tag,
-and no gemspec sets `allowed_push_host`. So `bundle add kiosk-all` and a bare
-`gem "kiosk-all"` do **not** resolve today — **git is the only install that
-works.** This section is the one place in either published repository that
-states publication status; every install snippet elsewhere points here.
+and no gemspec sets `allowed_push_host`. So a bare `gem "kiosk-all"`, and
+`bundle add` of any of these names, do **not** resolve today — **git is the only
+install that works.** This section is the one place in either published
+repository that states publication status; every install snippet elsewhere
+points here.
 
 The canonical install is one line — the meta-gem, from git:
 

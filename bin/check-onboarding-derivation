@@ -693,7 +693,17 @@ def run_self_test
 
   bad = arms.count(false)
   puts
-  puts "#{arms.size} arms, #{bad} did not go red; unplanted run #{clean ? "clean" : "RED"}"
+  # Name the flag in the output. A run that never says it self-tested is no
+  # evidence the flag did anything, because a script that IGNORES an
+  # unrecognised flag and performs its ordinary run looks identical from
+  # outside -- so the line below is the only thing distinguishing the two.
+  if bad.zero? && clean
+    puts "check-onboarding-derivation --self-test: OK — #{arms.size} arm(s) " \
+         "(#{arms.size - RULES.size} planted breaks, #{RULES.size} vacuity), every one caught."
+  else
+    puts "check-onboarding-derivation --self-test: FAIL — #{arms.size} arm(s), " \
+         "#{bad} did not go red; unplanted run #{clean ? "clean" : "RED"}."
+  end
   bad.zero? && clean ? 0 : 1
 end
 

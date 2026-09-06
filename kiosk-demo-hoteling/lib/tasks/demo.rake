@@ -1431,8 +1431,15 @@ namespace :demo do
     burst of `properties` queries where the first few are free and each extra
     one costs escalating proof-of-work (price depth, don't ban it).
 
+    Then drives ONE ACTION (`reserve_room`) through the same gate: the policy
+    hook's write kind is `:run`, not the `:action` an operator declares above
+    the handler, and a policy that branched on `:action` would return nil
+    forever without an error or a failing test (K-1329).
+
     Asserts: a non-empty free prefix, the demanded proof count becomes positive,
-    and the curve is monotonic non-decreasing. Requires python3 + numpy.
+    the curve is monotonic non-decreasing, and an un-proofed `reserve_room` is
+    answered 402 with challenges and then 200 once they are solved. Requires
+    python3 + numpy.
   DESC
   task browse: :setup do
     require "net/http"; require "uri"; require "json"; require "shellwords"
@@ -1490,6 +1497,34 @@ namespace :demo do
       else
         failures << "expected a monotonic curve, got #{result["curve"].inspect}"
         puts "  FAIL  proof count not monotonic"
+      end
+
+      # ── THE WRITE BRANCH FIRES (K-1329) ────────────────────────────────
+      #
+      # The policy hook receives one of Executor::VERBS — `%i[query run pay]` —
+      # while a handler DECLARES `kind :query` / `kind :action`. Only `:query`
+      # is spelled the same in both, so a policy branching on `:action` returns
+      # nil forever: no error, no log line, no failing test, and the toll never
+      # reaches a write. The 402 below is the discriminator — a 200 on the
+      # un-proofed reserve_room is exactly what the broken spelling produces.
+      if result["write_first_status"] == 402 && result["write_challenge_count"].to_i >= 1
+        puts "  OK  an un-proofed action is 402 with #{result["write_challenge_count"]} challenge(s) " \
+             "— `:run` reached the policy"
+      else
+        failures << "expected reserve_room without a proof to be 402 with challenges, got " \
+                    "#{result["write_first_status"].inspect} / " \
+                    "#{result["write_challenge_count"].inspect} challenge(s) — a 200 means the " \
+                    "policy's write branch never fired (the `:action` spelling)"
+        puts "  FAIL  un-proofed action not tolled (#{result["write_first_status"].inspect})"
+      end
+      # The other half: the toll is PRICED, not a wall. Solving it must get the
+      # write through, or «tolled» would be indistinguishable from «refused».
+      if result["write_status"] == 200 && !result["write_booking_id"].to_s.empty?
+        puts "  OK  …and solving it books the room (booking_id=#{result["write_booking_id"]})"
+      else
+        failures << "expected the proofed reserve_room to be 200 with a booking_id, got " \
+                    "#{result["write_status"].inspect} / #{result["write_booking_id"].inspect}"
+        puts "  FAIL  proofed action not served (#{result["write_status"].inspect})"
       end
     ensure
       begin

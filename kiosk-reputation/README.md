@@ -214,7 +214,11 @@ class MyPolicy < Kiosk::Reputation::Policy
   # @param verb     [Symbol]  the WIRE command — :query, :run or :pay. Not the
   #   declaration name: a verb a handler declares as `kind :action` in
   #   kiosk-server arrives here as :run (VerbController#create serves
-  #   `serve(:run)`), so branch on :run rather than on :action.
+  #   `serve(:run)`), so branch on :run rather than on :action. The protocol
+  #   states the same mapping in its Reputation section, and kiosk-demo-hoteling
+  #   is the worked example that EXERCISES a :run branch (rake demo:browse) —
+  #   because branching on :action is silent: it matches nothing, so the toll
+  #   never applies to a write and no error, log line or test says so.
   # @param factors  [Factors] reputation inputs
   # @return [Hash{alg:, params:, count:}] challenge spec, or nil to serve without challenge
   #   (`count` is optional; the gate defaults it to 1 when omitted)

@@ -4,10 +4,10 @@
 # No KYC, no hardware unlock. TWO PoW gates run here and their default postures
 # are OPPOSITE: the BROWSE toll is off by default and switched on with
 # KIOSK_POW_BROWSE_DEMO=1, which prices the browse-heavy QUERY endpoints by
-# request rate with escalating Equihash proofs, sized by whatever
-# KIOSK_POW_DIFFICULTY selects (see the browse gate below, exercised by
-# demo:browse); the REGISTRATION gate is ALWAYS ON, with no env flag to set or
-# to forget. Each gate's own section below owns its detail; neither is restated
+# request rate with escalating Equihash proofs — and, at a flat one proof, the
+# ACTIONS beside them — sized by whatever KIOSK_POW_DIFFICULTY selects (see the
+# browse gate below, exercised by demo:browse); the REGISTRATION gate is ALWAYS
+# ON, with no env flag to set or to forget. Each gate's own section below owns its detail; neither is restated
 # here.
 #
 # NAMING THE GATE IS THE POINT OF THAT SENTENCE (K-1041). It used to make the
@@ -72,6 +72,7 @@ EQUIHASH_BROWSE_PARAMS = PowDifficulty.params
 HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
 HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier
 HOTELING_MAX_PROOFS    = 5
+HOTELING_WRITE_PROOFS  = 1    # flat toll on an action (`:run`) — a hold, not a read
 
 # ── Registration PoW gate — ALWAYS ON — POW-VERB-GATING (K-487)
 #
@@ -93,17 +94,49 @@ if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   HOTELING_BROWSE_COUNT = Hash.new(0)  # agent_id => availability queries so far
 
   # Priced-pagination policy: free below the allowance, then proof count rises
-  # with the query rate. Only reads are priced — the policy is advertised for
-  # the `:query` POLICY KIND (Executor::VERBS, the coarse kind of a call, not a
-  # wire path), so every `GET /kiosk/<query-name>` is tolled and actions and
-  # `pay` are never gated here.
+  # with the query rate. The policy is advertised for a POLICY KIND — one of
+  # `Kiosk::Server::Executor::VERBS`, the coarse kind of a call, not a wire
+  # path — so `:query` reaches every `GET /kiosk/<query-name>` and `:run` every
+  # `POST /kiosk/<action-name>`.
+  #
+  # ── THE NAME OF THE WRITE KIND IS `:run`, NOT `:action` (K-1329) ──────────
+  #
+  # THE TWO VOCABULARIES DO NOT MATCH, AND ONLY ONE OF THEIR THREE WORDS DOES.
+  # What an operator DECLARES above a handler is `kind :query` / `kind :action`;
+  # what this hook RECEIVES is one of `Executor::VERBS` — `%i[query run pay]`.
+  # So an `action` arrives here as **`:run`**, and `pay` arrives as its own
+  # third kind rather than as a write. `:query` is spelled identically in both,
+  # which is exactly what makes the mismatch invisible: a policy that branches
+  # on `verb == :query` looks like it was written against the declaration
+  # vocabulary and happens to be right.
+  #
+  # A WRONG BRANCH IS SILENT. `challenge_for` returning nil is the ordinary «do
+  # not toll this one» answer, so `verb == :action` — which can never be true —
+  # produces no error, no log line and no failing test: the toll simply never
+  # applies to writes, which is the direction that matters, and the origin
+  # looks configured. The mapping is stated in the spec's policy section and in
+  # kiosk-reputation's README; this demo is the worked example that EXERCISES
+  # it, so a `:run` branch that stopped firing would fail `demo:browse` rather
+  # than going quiet.
+  #
+  # WHY WRITES ARE PRICED AT ALL, on a browse-priced origin: `reserve_room`
+  # holds real inventory. Depth costs an escalating number of proofs because a
+  # scraper reads linearly and forever; a HOLD costs a flat one because the
+  # thing being rationed is the room, not the reading. `:pay` is deliberately
+  # NOT tolled — a settlement is the transaction this origin exists to take,
+  # and the toll belongs before it, not on it.
   class HotelingBrowsePolicy < Kiosk::Reputation::Policy
     def initialize(params)
       @params = params
     end
 
     def challenge_for(identity:, verb:, factors:)
+      # `:run` is the WRITE kind. See the vocabulary note above before changing
+      # this to `:action`, which is what the handler declares and what this hook
+      # never receives.
+      return { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: HOTELING_WRITE_PROOFS } if verb == :run
       return nil unless verb == :query
+
       rate = factors.request_rate_per_min.to_i
       return nil if rate <= HOTELING_FREE_BROWSES
 

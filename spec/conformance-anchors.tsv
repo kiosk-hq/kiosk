@@ -1103,8 +1103,8 @@ kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	is not ac
 kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	public_key parameter required
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	grant_type required
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	only the device_code grant is served here — 
+kiosk-server/lib/kiosk/server/pop_verifier.rb	PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
 kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.configuration.issuer
-kiosk-server/lib/kiosk/server/pop_verifier.rb	required_claims: %w[aud nonce jti]
 kiosk-server/lib/kiosk/server/pow_gate.rb	            # :bad_params (K-541) joins them deliberately: a challenge naming
 kiosk-server/lib/kiosk/server/pow_gate.rb	            expect:               { alg: spec[:alg] || spec["alg"], params: spec[:params] || spec["params"] },
 kiosk-server/lib/kiosk/server/pow_gate.rb	          # K-542: atomically claim the id as spent BEFORE the expensive verify.

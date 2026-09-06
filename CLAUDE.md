@@ -70,7 +70,11 @@ universal agent skill is `skill.md` on the same site.
   its reason, in the same file's `SKELETON_NOT_COMPARED`; the skeleton paths
   with no per-demo dimension (the T-048 statics, the three error pages,
   `puma.rb`, `environments/{test,production}.rb`) ARE declared in the manifest,
-  `:identical` with prove as the stated exception (K-643).
+  `:identical` with prove as the stated exception (K-643) — as are `bin/setup`
+  and `bin/dev`, which stopped being generator output when K-1315 pointed setup
+  at the demo's own `demo:setup`. Beside that manifest, the same script derives
+  one thing from the scripts themselves: every `bin/<name>` a demo's `bin/`
+  scripts or its README NAME must resolve to an existing, executable file.
 - The four `kiosk-demo-*/before-after.md` are a PUBLISHED narrative and every
   fenced block in them DERIVES from something in the same demo, declared in a
   comment above the fence: `<!-- derived: transcript | task: … | from: … |

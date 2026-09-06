@@ -557,6 +557,39 @@ if ARGV.include?("--self-test")
       what: "one lockfile loses a platform, so that demo alone cannot be installed frozen",
       ops:  [[:edit, "kiosk-demo-philslist/Gemfile.lock", "\n  x86_64-linux\n", "\n"]],
       expect: /philslist: Gemfile\.lock PLATFORMS differs from the other demos/ },
+
+    { id: "exec-target-missing", kind: :break,
+      rule: "Every `bin/` script a demo names EXISTS and is runnable (K-1315)",
+      what: "a demo stops shipping the bin/dev its own bin/setup exec's — K-1315's exact shape, " \
+            "in four of seven demos at head for as long as bin/setup existed",
+      ops:  [[:delete, "kiosk-demo-hoteling/bin/dev"]],
+      expect: /hoteling: kiosk-demo-hoteling\/bin\/setup names `bin\/dev`, which exists neither in hoteling's own bin\/ nor at the repo root/ },
+    { id: "exec-target-not-executable", kind: :break,
+      rule: "Every `bin/` script a demo names EXISTS and is runnable (K-1315)",
+      what: "a shipped bin/ script loses its executable bit — tudu tracked three of them 100644, " \
+            "so `./bin/setup` there was EACCES rather than ENOENT and no rule read a mode",
+      ops:  [[:chmod, "kiosk-demo-tudu/bin/dev", 0o644]],
+      expect: /tudu: kiosk-demo-tudu\/bin\/dev is not executable \(mode 644\)/ },
+    { id: "validate-responses-unconditional", kind: :break,
+      rule: "`validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332)",
+      what: "a demo goes back to `= true`, so the deployed subdomain answers 500 for an " \
+            "operator's descriptor typo — the state all seven were in",
+      ops:  [[:edit, "kiosk-demo-skooti/config/initializers/kiosk.rb",
+              "c.validate_responses = !Rails.env.production?", "c.validate_responses = true"]],
+      expect: /skooti: config\/initializers\/kiosk\.rb sets `c\.validate_responses = true`, not/ },
+    { id: "validate-responses-unbound", kind: :vacuity,
+      rule: "`validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332)",
+      what: "the engine stops documenting the production hazard, leaving seven initializers " \
+            "enforcing a posture their own producer no longer claims",
+      ops:  [[:edit, "kiosk-server/lib/kiosk/server/response_validation.rb",
+              "on in production would convert a descriptor typo into a 500 for a caller",
+              "in production is fine for a caller"]],
+      expect: /response_validation\.rb no longer says .+ \(K-1332\)/ },
+    { id: "readme-names-absent-script", kind: :break,
+      rule: "Every `bin/` script a demo names EXISTS and is runnable (K-1315)",
+      what: "a README tells the operator to run a script the demo does not ship",
+      ops:  [[:edit, "kiosk-demo-skooti/README.md", "bin/rails demo:setup", "bin/reset-fleet"]],
+      expect: /skooti: kiosk-demo-skooti\/README\.md names `bin\/reset-fleet`, which exists neither/ },
   ].freeze
 
   # ── coverage, derived from this file's own banners ────────────────────────
@@ -662,7 +695,9 @@ if ARGV.include?("--self-test")
               rel = op[0] == :copy ? op[2] : op[1]
               saved[rel] = nil unless saved.key?(rel)
               path = File.join(tree, rel)
-              saved[rel] ||= File.exist?(path) ? File.binread(path) : nil
+              # Content AND mode: the `:chmod` arm plants a mode, and a restore that
+              # only rewrote bytes would leave the fixture tree permanently altered.
+              saved[rel] ||= File.exist?(path) ? [File.binread(path), File.stat(path).mode & 0o7777] : nil
             end
 
             out, code = nil, nil
@@ -681,6 +716,9 @@ if ARGV.include?("--self-test")
                 when :write
                   FileUtils.mkdir_p(File.dirname(path))
                   File.write(path, op[2])
+                when :chmod
+                  trouble ||= "#{rel} is absent, so there is nothing to chmod" unless File.exist?(path)
+                  File.chmod(op[2], path) if File.exist?(path)
                 when :delete
                   trouble ||= "#{rel} is already absent, so the deletion plants nothing" unless File.exist?(path)
                   FileUtils.rm_f(path)
@@ -693,9 +731,14 @@ if ARGV.include?("--self-test")
               end
               out, code = st_run.call(tree) if trouble.nil?
             ensure
-              saved.each do |rel, body|
+              saved.each do |rel, snap|
                 p = File.join(tree, rel)
-                body.nil? ? FileUtils.rm_f(p) : File.binwrite(p, body)
+                if snap.nil?
+                  FileUtils.rm_f(p)
+                else
+                  File.binwrite(p, snap[0])
+                  File.chmod(snap[1], p)
+                end
               end
             end
 
@@ -814,6 +857,8 @@ EXTRA_SCANNED = [
   "config/puma.rb",
   "config/environments/test.rb",
   "config/environments/production.rb",
+  "bin/setup",
+  "bin/dev",
 ].freeze
 
 # The one reason six `except:` entries below share (K-643): prove is not a
@@ -824,6 +869,12 @@ EXTRA_SCANNED = [
 # The two demos that carry a KYC surface, and the one reason all four of their
 # KYC files declare `ships:` (K-657). Stated once so four copies of it cannot
 # drift apart, the same way PROVE_SKELETON is.
+# The seven OPERATOR demos, by short name — the set every `ships:` that means
+# "all of them but the KYC broker" spells. Declared HERE, above COPIES, because
+# entries in that manifest need it (bin/setup, bin/dev) as well as the K-1069
+# corpus far below; NON_OPERATOR_DEMOS names the other side of the same split.
+OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
+
 KYC_DEMOS = %w[getgrocery skooti].freeze
 KYC_SHIPS =
   "`ships:` pins the set to getgrocery and skooti deliberately (K-657). Phil has DECIDED that " \
@@ -1017,6 +1068,26 @@ COPIES = {
           "that toll queries and count rejected proofs. The per-identity keying IS the fix (one " \
           "abuser must not inflate anyone else's count), so a copy that drifts could silently " \
           "regrow the shared-counter bug.",
+  },
+  "bin/setup" => {
+    rule:  :identical,
+    ships: OPERATOR_SEVEN,
+    why:  "THE FIRST COMMAND A RAILS DEVELOPER TYPES, and until K-1315 it was the Rails generator's " \
+          "own script doing two wrong things in a demo app. It ran `db:prepare` — schema, no seeds, " \
+          "no `app_role` — so the app came up answering nothing; and it ended `exec \"bin/dev\"`, " \
+          "which four of the seven demos did not ship, so it died of Errno::ENOENT on its last line " \
+          "in the MAJORITY of its copies while this file recorded it as inert generator output. It " \
+          "is hand-written now, it runs the demo's own `demo:setup`, and there is nothing per-demo " \
+          "in it: no port, no persona, no app name. :identical, in all seven.",
+  },
+  "bin/dev" => {
+    rule:  :identical,
+    ships: OPERATOR_SEVEN,
+    why:  "The exec target of bin/setup's last line. It shipped in three demos and was named by " \
+          "seven copies of bin/setup (K-1315) — the whole defect. `ships:` is the EXISTENCE half of " \
+          "the repair (a demo that stops shipping it fails here); the derived exec-target block at " \
+          "the bottom of this file is the other half, and it is the one that would have caught this " \
+          "without anyone declaring anything.",
   },
   "script/bound_assistant.rb" => {
     rule:  :identical,
@@ -1518,10 +1589,6 @@ SKELETON_NOT_COMPARED = {
     "output as well would only restate that, and each demo's own tables differ anyway.",
   "bin/rails" => "Rails generator output, identical in all eight.",
   "bin/rake" => "Rails generator output, identical in all eight.",
-  "bin/setup" =>
-    "Rails generator output. Two variants, differing only by a five-line commented-out \"Copying " \
-    "sample files\" block that hoteling's and skooti's generator did not emit — inert either way.",
-  "bin/dev" => "Rails generator output, identical where shipped (a one-line exec of bin/rails server).",
   "bin/demo" => "Per-demo entry point into that demo's own flow tasks.",
   "log/.keep" => "Empty placeholder.",
   "tmp/.keep" => "Empty placeholder.",
@@ -4474,6 +4541,66 @@ if initializer_demos.zero? && errors.empty?
             "nothing passes everything."
 end
 
+# ── `validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332) ──
+#
+# The engine's own file says turning it on in production converts a descriptor
+# typo into a 500 for a caller who did nothing wrong — and all seven demos set
+# it `= true` unconditionally while every one of their deploy env templates sets
+# `RAILS_ENV=production`. So the deployed fleet ran the posture its own engine
+# warns against, on the public endpoints an assistant is pointed at, in the file
+# `onboarding.html` sends an adopting operator to COPY.
+#
+# `config/initializers/kiosk.rb` is `:per_demo` and rightly so — capabilities,
+# verbs, PoW policy and adapters differ per storefront — so nothing above
+# compares this line. It is asserted here for the same reason the telemetry
+# wiring is: the FILE is per-demo, one LINE in it is not.
+#
+# BOUND TO THE ENGINE, not to a remembered rule. If `response_validation.rb`
+# stops documenting the hazard, this assertion is enforcing a posture its own
+# producer no longer claims, and that is a failure rather than a silent pass —
+# the `source:` idea from the K-1069 block, applied to one line of config.
+VALIDATE_RESPONSES_WANT   = "!Rails.env.production?"
+VALIDATE_RESPONSES_ENGINE = "kiosk-server/lib/kiosk/server/response_validation.rb"
+VALIDATE_RESPONSES_HAZARD = "on in production would convert a descriptor typo into a 500 for a caller"
+
+vr_engine = File.join(ROOT, VALIDATE_RESPONSES_ENGINE)
+if !File.file?(vr_engine)
+  errors << "#{VALIDATE_RESPONSES_ENGINE} is not in the tree — the K-1332 rule is bound to a file " \
+            "that no longer exists. Re-aim it or delete it."
+elsif !File.read(vr_engine).include?(VALIDATE_RESPONSES_HAZARD)
+  errors << "#{VALIDATE_RESPONSES_ENGINE} no longer says #{VALIDATE_RESPONSES_HAZARD.inspect} " \
+            "(K-1332). Seven demo initializers gate this flag on that sentence; if the engine has " \
+            "changed its mind, the demos are the thing to change, not this rule to delete."
+end
+
+vr_demos = 0
+operator_demos.each do |demo|
+  path = File.join(ROOT, demo, "config", "initializers", "kiosk.rb")
+  next unless File.file?(path)
+
+  values = File.read(path).scan(/^[ \t]*c\.validate_responses\s*=\s*(.+?)[ \t]*$/).flatten
+  if values.empty?
+    errors << "#{short.(demo)}: config/initializers/kiosk.rb sets no `c.validate_responses` at all. " \
+              "The engine defaults it to FALSE, so this demo's CI task list has quietly stopped " \
+              "being a per-verb conformance proof of its own descriptors (K-1332, T-068 slice 3)."
+  elsif values.uniq != [VALIDATE_RESPONSES_WANT]
+    errors << "#{short.(demo)}: config/initializers/kiosk.rb sets " \
+              "`c.validate_responses = #{values.uniq.join(' / ')}`, not " \
+              "`#{VALIDATE_RESPONSES_WANT}` (K-1332). This demo is DEPLOYED under " \
+              "RAILS_ENV=production; unconditional means a descriptor typo answers 500 to a caller " \
+              "who did nothing wrong, which is exactly what #{VALIDATE_RESPONSES_ENGINE} warns " \
+              "against. Development keeps the assertion — that is where the task lists run."
+  else
+    vr_demos += 1
+  end
+end
+
+if vr_demos.zero? && errors.empty?
+  errors << "check-demo-copies: the K-1332 rule read NO operator initializer, so it asserted " \
+            "nothing about a posture that ships to the public demo subdomains. A rule that " \
+            "inspects nothing passes everything."
+end
+
 # ── The e2e harness's fixtures, paired with the demo files they came from ────
 #    (T-118, generalising the hand-written arms of K-504/K-699, K-1009/K-1011
 #    and K-1021)
@@ -5072,7 +5199,6 @@ end
 # prose. It is excluded by `ships:`, not by an exception.
 FRAMEWORK_CORPUS_RUBY = ["config/routes.rb"].freeze
 FRAMEWORK_CORPUS_TEXT = ["before-after.md"].freeze
-OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 BEFORE_AFTER_FOUR = %w[atablefor getgrocery hoteling skooti].freeze
 
 FRAMEWORK_CLAIMS = {
@@ -5438,6 +5564,95 @@ if house_spellings.size > 1
             "Ruby KeyError message on the auth plane — and nothing in this file could see it."
 end
 
+# ── Every `bin/` script a demo names EXISTS and is runnable (K-1315) ─────────
+#
+# WHAT WENT WRONG. All seven copies of `bin/setup` ended `exec "bin/dev"`, and
+# `bin/dev` shipped in three demos. In the other four the first command a Rails
+# developer types died of `Errno::ENOENT` on its last line — and this file,
+# which is the one place that looks at those scripts at all, recorded `bin/dev`
+# as "Rails generator output, identical where shipped" and never asked whether
+# it was shipped. A byte-identity check over the copies that exist certifies
+# nothing about the copies that do not. tudu had the same defect in a second
+# spelling: `bin/setup`, `bin/rake` and `bin/dev` were tracked mode 100644, so
+# there the script was not `ENOENT` but `EACCES`, and no rule here read a mode.
+#
+# WHY IT IS DERIVED RATHER THAN DECLARED. `ships:` on the two COPIES entries
+# above is the declared half and it is real — a demo that drops `bin/dev` fails
+# there. But it only holds the paths somebody thought to declare, and the defect
+# was precisely that nobody had. This block asks the question the scripts
+# themselves ask: every `bin/<name>` a demo's own `bin/` scripts or its README
+# NAME must resolve — in that demo's `bin/`, or at the repo root's `bin/` — and
+# the file it resolves to must be executable. Nothing has to be declared for a
+# new reference to be checked, and nothing has to be remembered when one moves.
+#
+# HONEST SCOPE. It reads REFERENCES, not reachability: a `bin/` script nothing
+# names is not reported here (the COPIES `ships:` sets are what hold those), and
+# a name built at runtime from a variable is invisible. Comment-only lines are
+# dropped from the scripts before scanning — a path discussed in a comment is
+# not a path executed — but NOT from the README, where a `bin/…` in prose is an
+# instruction to the operator and is exactly the thing that must resolve.
+BIN_REF_RE = %r{(?<=[`"'\s(])(?:\./)?bin/([a-z0-9_][a-z0-9_-]*)}
+
+bin_ref_files = 0
+bin_refs      = 0
+bin_local     = 0
+demos.each do |dir|
+  label   = short.(File.basename(dir))
+  sources = Dir[File.join(dir, "bin", "*")].select { |f| File.file?(f) }.sort
+  sources.each do |script|
+    next if File.executable?(script)
+
+    errors << "#{label}: #{script.delete_prefix("#{ROOT}/")} is not executable (mode " \
+              "#{format('%o', File.stat(script).mode & 0o7777)}). A `bin/` script a demo ships is a " \
+              "script an operator runs; tudu tracked three of them 100644 and `./bin/setup` answered " \
+              "Permission denied there (K-1315)."
+  end
+
+  readme     = File.join(dir, "README.md")
+  bin_corpus = sources.map { |f| [f, File.readlines(f).reject { |l| l =~ /\A\s*#/ }.join] }
+  bin_corpus << [readme, File.read(readme)] if File.file?(readme)
+
+  bin_corpus.each do |path, body|
+    bin_ref_files += 1
+    body.scan(BIN_REF_RE).flatten.uniq.each do |name|
+      bin_refs += 1
+      in_demo = File.join(dir, "bin", name)
+      at_root = File.join(ROOT, "bin", name)
+      where   = File.file?(in_demo) ? in_demo : (File.file?(at_root) ? at_root : nil)
+      bin_local += 1 if where == in_demo
+
+      if where.nil?
+        errors << "#{label}: #{path.delete_prefix("#{ROOT}/")} names `bin/#{name}`, which exists " \
+                  "neither in #{label}'s own bin/ nor at the repo root. This is K-1315's exact " \
+                  "shape — seven copies of bin/setup exec'ing a bin/dev four of them did not ship. " \
+                  "Ship the file or stop naming it."
+      elsif !File.executable?(where)
+        errors << "#{label}: #{path.delete_prefix("#{ROOT}/")} names `bin/#{name}` and " \
+                  "#{where.delete_prefix("#{ROOT}/")} is not executable — the reference resolves to " \
+                  "a file the operator cannot run (EACCES, not ENOENT, and just as fatal)."
+      end
+    end
+  end
+end
+
+# VACUITY, both halves. A regex that stops matching reads exactly like a tree
+# with nothing to complain about — the failure this repository has recorded
+# four times over. The corpus must be the one in front of us, and it must
+# actually contain the cross-file references this rule exists for.
+expected_ref_files = demos.sum do |dir|
+  Dir[File.join(dir, "bin", "*")].count { |f| File.file?(f) } + (File.file?(File.join(dir, "README.md")) ? 1 : 0)
+end
+if bin_ref_files != expected_ref_files
+  errors << "check-demo-copies: the bin/-reference scan read #{bin_ref_files} file(s) where the tree " \
+            "holds #{expected_ref_files}. A corpus that lost a document passes vacuously for it."
+end
+if bin_local.zero?
+  errors << "check-demo-copies: the bin/-reference scan resolved NO reference to a demo's own bin/ " \
+            "script. Either every demo stopped naming its own scripts — which is not a state this " \
+            "repository has ever been in — or BIN_REF_RE stopped matching. A rule that matches " \
+            "nothing is not a rule (K-1315)."
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
@@ -5481,7 +5696,11 @@ if errors.empty?
        "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason), " \
        "one spelling (#{house_spellings.first.inspect}) of the absent-field refusal read off " \
        "#{house_sentence_sites.length} producer(s) — #{house_ships ? house_ships.length : 0} demo(s) " \
-       "plus the engine"
+       "plus the engine, " \
+       "#{bin_refs} `bin/` reference(s) in #{bin_ref_files} demo script(s) and README(s) resolved to " \
+       "an existing executable (#{bin_local} of them to the demo's own bin/), " \
+       "`validate_responses` gated off production in #{vr_demos} operator initializer(s) against " \
+       "the engine's own hazard sentence"
   exit 0
 end
 

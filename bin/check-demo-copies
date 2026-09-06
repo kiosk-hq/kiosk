@@ -160,6 +160,7 @@
 
 require "digest"
 require "erb"
+require "open3"
 require "ripper"
 
 ROOT = File.expand_path("..", __dir__)
@@ -590,6 +591,32 @@ if ARGV.include?("--self-test")
       what: "a README tells the operator to run a script the demo does not ship",
       ops:  [[:edit, "kiosk-demo-skooti/README.md", "bin/rails demo:setup", "bin/reset-fleet"]],
       expect: /skooti: kiosk-demo-skooti\/README\.md names `bin\/reset-fleet`, which exists neither/ },
+
+    # K-1335 is an ABSENCE rule over a corpus that holds ZERO of its subject, so
+    # its arms carry the whole weight: the break arm is the only place a real
+    # orphan is ever constructed, and the two vacuity arms are the only thing
+    # standing between "no container file in the tree" and "a detector that
+    # stopped recognising one".
+    { id: "orphan-container-ignore", kind: :break,
+      rule: "No orphaned container tooling from the `rails new` skeleton (K-1335)",
+      what: "a demo grows back the `.dockerignore` two earlier passes deleted one demo at a time",
+      ops:  [[:write, "kiosk-demo-hoteling/.dockerignore",
+              "# See https://docs.docker.com/engine/reference/builder/#dockerignore-file\n/.git/\n/tmp/*\n"]],
+      expect: /kiosk-demo-hoteling\/\.dockerignore is an ORPHAN/ },
+    { id: "vacuity-container-detector", kind: :vacuity,
+      rule: "No orphaned container tooling from the `rails new` skeleton (K-1335)",
+      what: "the ignore-file pattern stops matching its own subject — the zero that reads like a clean tree",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "CONTAINER_IGNORE_RE = /\\A\\.(?:docker|container|podman)ignore\\z/",
+              "CONTAINER_IGNORE_RE = /\\A\\.nothing-matches-this\\z/"]],
+      expect: /the container-tooling detector reads "\.dockerignore" as neither/ },
+    { id: "vacuity-container-corpus", kind: :vacuity,
+      rule: "No orphaned container tooling from the `rails new` skeleton (K-1335)",
+      what: "the file walk comes back empty by EITHER route, so every ignore file in the tree is invisible",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "container_tracked = container_git.success? ? container_ls.split(\"\\0\").reject(&:empty?) : container_walk(ROOT)",
+              "container_tracked = []"]],
+      expect: /the container-tooling rule walked 0 (?:tracked|working-tree) path\(s\)/ },
   ].freeze
 
   # ── coverage, derived from this file's own banners ────────────────────────
@@ -5653,6 +5680,116 @@ if bin_local.zero?
             "nothing is not a rule (K-1315)."
 end
 
+# ── No orphaned container tooling from the `rails new` skeleton (K-1335) ─────
+#
+# WHAT WENT WRONG, THREE TIMES. `rails new` emits a `.dockerignore` NEXT TO the
+# `Dockerfile` it also emits. These demos keep neither — nothing here is built
+# as an image — but the two files were dropped in separate waves, and the
+# ignore-file outlived the recipe in one demo at a time. K-180 deleted it from
+# two demos that have since been retired; K-271 deleted it from hoteling; and
+# skooti's copy, 39 lines of untouched scaffolding that ignores Kamal files a
+# build nothing can run would have read, survived both passes and was still
+# tracked at K-1335. Neither pass looked at the demo the next one found,
+# because nothing looked at the CLASS — each was a hand sweep of the demos
+# somebody happened to open.
+#
+# THE RULE. A container IGNORE file is an instruction to a container BUILD. It
+# is meaningful exactly when a recipe that build could run sits beside it, and
+# is dead configuration otherwise. So: every tracked ignore file must have a
+# recipe in its own directory or in one of its ancestors up to the repository
+# root. Nothing has to be declared — a demo that grows a real `Dockerfile`
+# keeps its `.dockerignore` and this rule goes quiet on it by construction,
+# which is what keeps this from standing in the way of the separate question of
+# whether a self-hostable reference ought to ship a container recipe at all.
+#
+# NON-VACUITY IS THE HARD HALF HERE, and it is why the block below asserts
+# against a TRUTH TABLE rather than against a count. This is an ABSENCE rule:
+# the tree it polices holds ZERO container files today and the fix that closed
+# K-1335 is what made that true, so «how many did we find» can never be the
+# non-vacuity signal — a detector edited into matching nothing would report the
+# same zero as a clean tree. Instead the rule proves its own detector on four
+# constructed names every run, and separately proves that the corpus it walked
+# is the one git carries.
+CONTAINER_IGNORE_RE = /\A\.(?:docker|container|podman)ignore\z/
+CONTAINER_RECIPE_RE = /\A(?:Dockerfile|Containerfile)(?:\..+)?\z|\A.+\.(?:dockerfile|containerfile)\z|\A(?:docker-)?compose(?:\..+)?\.ya?ml\z/
+
+container_truth = [
+  [".dockerignore",    :ignore], [".containerignore", :ignore],
+  ["Dockerfile",       :recipe], ["compose.yaml",     :recipe],
+  ["docker-compose.yml", :recipe], ["Dockerfile.prod", :recipe],
+  ["dockerignore",     :neither], ["README.md",        :neither],
+]
+container_truth.each do |name, want|
+  got = if name =~ CONTAINER_IGNORE_RE then :ignore
+        elsif name =~ CONTAINER_RECIPE_RE then :recipe
+        else :neither
+        end
+  next if got == want
+
+  errors << "check-demo-copies: the container-tooling detector reads #{name.inspect} as #{got} where " \
+            "it must read #{want} (K-1335). This rule polices an ABSENCE — the tree holds no container " \
+            "file at all — so a detector that has stopped recognising its own subject reports the same " \
+            "zero as a clean tree, forever, and nothing else here would say so."
+end
+
+# THE CORPUS IS WHAT GIT CARRIES, because what ships is what git carries — but
+# this guard's own `--self-test` runs it inside a plain file copy that is NOT a
+# git repository, where `git ls-files` exits 128 and returns nothing. A rule
+# that answered "nothing to check" there would be untestable by the one
+# mechanism that proves it works, so the fallback walks the working tree
+# instead and the census says which corpus answered.
+CONTAINER_PRUNE = %w[.git .gems node_modules tmp log storage coverage public/assets].freeze
+
+def container_walk(root)
+  out   = []
+  stack = [root]
+  until stack.empty?
+    dir = stack.pop
+    Dir.children(dir).each do |name|
+      abs = File.join(dir, name)
+      if File.directory?(abs)
+        stack << abs unless CONTAINER_PRUNE.include?(name)
+      elsif File.file?(abs)
+        out << abs.delete_prefix("#{root}/")
+      end
+    end
+  end
+  out
+rescue SystemCallError
+  []
+end
+
+container_ls, container_git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z")
+container_source  = container_git.success? ? "tracked" : "working-tree"
+container_tracked = container_git.success? ? container_ls.split("\0").reject(&:empty?) : container_walk(ROOT)
+if container_tracked.length < 500
+  errors << "check-demo-copies: the container-tooling rule walked #{container_tracked.length} " \
+            "#{container_source} path(s), which is not this repository. The scan lost its corpus (K-1335), " \
+            "and an empty corpus reports the same clean zero as a tree with nothing wrong in it."
+end
+
+container_ignores = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IGNORE_RE }
+container_recipes = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_RECIPE_RE }
+container_dirs    = container_recipes.each_with_object({}) { |rel, h| h[File.dirname(rel)] = true }
+
+container_ignores.each do |rel|
+  dir  = File.dirname(rel)
+  kin  = []
+  walk = dir
+  loop do
+    kin << walk if container_dirs.key?(walk)
+    break if walk == "."
+    walk = File.dirname(walk)
+  end
+  next unless kin.empty?
+
+  errors << "#{rel} is an ORPHAN: it tells a container build what to leave out, and there is no " \
+            "Dockerfile, Containerfile or compose file in #{dir == '.' ? 'the repository root' : dir} " \
+            "nor in any directory above it. This is K-1335's exact shape — `rails new` scaffolding " \
+            "whose recipe was deleted and whose ignore-file was not, three times in three demos. " \
+            "Delete it, or ship the recipe it is written for."
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
@@ -5700,7 +5837,10 @@ if errors.empty?
        "#{bin_refs} `bin/` reference(s) in #{bin_ref_files} demo script(s) and README(s) resolved to " \
        "an existing executable (#{bin_local} of them to the demo's own bin/), " \
        "`validate_responses` gated off production in #{vr_demos} operator initializer(s) against " \
-       "the engine's own hazard sentence"
+       "the engine's own hazard sentence, " \
+       "no orphaned container tooling in #{container_tracked.length} #{container_source} path(s) " \
+       "(#{container_ignores.length} ignore file(s), #{container_recipes.length} recipe(s); " \
+       "detector proved on #{container_truth.length} constructed names)"
   exit 0
 end
 

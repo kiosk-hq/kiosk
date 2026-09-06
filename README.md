@@ -2,6 +2,64 @@
 
 Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an AI-assistant surface (REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail). Where this is heading: [ROADMAP.md](ROADMAP.md).
 
+## Install
+
+**No Kiosk gem is on RubyGems.** MEASURED 2026-09-06: every gem name in the
+tables below answers HTTP 404 from `https://rubygems.org/api/v1/gems/<name>.json`
+against a control of `rails` → HTTP 200; this repository carries no release tag,
+and no gemspec sets `allowed_push_host`. So `bundle add kiosk-all` and a bare
+`gem "kiosk-all"` do **not** resolve today — **git is the only install that
+works.** This section is the one place in either published repository that
+states publication status; every install snippet elsewhere points here.
+
+The canonical install is one line — the meta-gem, from git:
+
+```ruby
+# Gemfile
+gem "kiosk-all", github: "kiosk-hq/kiosk"
+```
+
+```bash
+bundle install
+bin/rails generate kiosk:install   # the initializer + the kiosk migrations
+bin/rails db:migrate
+```
+
+`kiosk-all` is `kiosk-core` + `kiosk-server` — the data plane, and nothing else.
+The RLS backstop, the PoW backends and the IdP/PSP adapters are deliberately
+separate gems you add per stack, each from the same source; `kiosk-all/README.md`
+says which and why. When the gems are published this section is where the
+`github:` qualifier comes off, and the snippets that point here inherit it.
+
+### What an adopting app needs before that line
+
+| Requirement | Why, and what it rules out |
+|---|---|
+| **Rails `~> 8.1`** | `kiosk-server` declares `railties`, `actionpack`, `activerecord` and `activesupport` at `~> 8.1`, and it is the only gemspec that names Rails at all. **That excludes Rails 7.x and 8.0.x** — bundler will refuse to resolve against an app on either, so this is a precondition and not a footnote. Older Rails lines are untested here, so they are not claimed; widening the floor means adding a CI leg first. |
+| **Ruby `>= 3.2.0`** | Every gemspec declares this floor, and CI exercises **both ends** of the range: one leg on the declared floor, read out of a gemspec at job time, and one on the newest release the demos run. The floor is a tested number rather than an asserted one. |
+| **PostgreSQL** | The kiosk schema, the identity tables and the optional RLS backstop are Postgres. No other database is supported. |
+| **An existing account model** | `c.user_model` names it, and `c.user_id_type` must match its primary key. Kiosk adds an assistant identity beside your users; it does not replace them. |
+
+No toolchain pin ships in this repository, and that is a decision rather than an
+omission: `.ruby-version`, `mise.toml` and `.mise.toml` are gitignored so each
+developer manages their own (`kiosk-demo-getgrocery/mise.toml.example` is the
+tracked template). The range above is the contract, both ends of it are on the
+merge gate, and that is worth more to a contributor than one pinned patch
+release a version manager may or may not honour.
+
+### Inside this repository it is `path:`, and that form does not travel
+
+Every Gemfile here consumes its siblings by `path:` — `gem "kiosk-server",
+path: "../kiosk-server"` — which serves the working tree rather than a built
+package. That is deliberate: it is how a change across gems is tested end to
+end. It is also a blind spot, because nothing resolving by `path:` can tell a
+file that EXISTS from a file that is PACKAGED, which is why
+`bin/check-gem-packaging` exists (below). Do not copy the `path:` form into an
+app outside this repository.
+
+The step-by-step operator walkthrough — install through a served wire, with a
+worked verb — is [kiosk.tech/onboarding.html](https://kiosk.tech/onboarding.html).
+
 ## Layout
 
 **The gem tables and the demo table are scored on DIFFERENT axes, so their values
@@ -19,7 +77,7 @@ settled the `alpha` engine underneath it is.
 | `kiosk-core` | Value types, abstract bases, GUC constants, configuration. No Rails dep. | alpha |
 | `kiosk-rls` | Opt-in RLS DSL + migration helpers (`rake kiosk:rls:{show,check}` planned, lands in a follow-up) | alpha |
 | `kiosk-server` | Rails engine, routes, kiosk-pop auth surface, executor | alpha |
-| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server | alpha |
+| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server — **once the gems are published**; today it is one `github:` line, see [Install](#install) | alpha |
 | `kiosk-test-support` | Shared test helpers, factories, RSpec matchers | alpha |
 
 ### Plugins & adapters

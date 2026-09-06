@@ -12,6 +12,8 @@ The adapter is **agnostic about how the user logged in**: Devise's `database_aut
 
 ## Install
 
+> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
 Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are opt-in per provider:
 
 ```ruby

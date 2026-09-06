@@ -26,14 +26,34 @@ kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord an
 
 ## Install
 
+> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
+### Preconditions
+
+**Rails `~> 8.1`.** This gemspec pins `railties`, `actionpack`, `activerecord`
+and `activesupport` at `~> 8.1`, and it is the only Kiosk gemspec that names
+Rails at all. **Rails 7.x and 8.0.x are excluded** — bundler refuses to resolve
+against an app on either, so for most "add Kiosk to an existing Rails app" this
+is the first thing to check, not a footnote. Older Rails lines are untested
+here, so they are not claimed; widening the floor means adding a CI leg first.
+
+**Ruby `>= 3.2.0`**, the floor every Kiosk gemspec declares — and one CI leg
+runs the suites on exactly that floor, read out of a gemspec at job time, so it
+is a tested number rather than an asserted one.
+
+**PostgreSQL.** The kiosk schema, the identity tables and the optional RLS
+backstop are Postgres; no other database is supported.
+
+### The line
+
 ```ruby
-gem "kiosk-server"
+gem "kiosk-server", github: "kiosk-hq/kiosk"
 ```
 
 Or, via the meta-gem:
 
 ```ruby
-gem "kiosk-all"
+gem "kiosk-all", github: "kiosk-hq/kiosk"
 ```
 
 ## Configure

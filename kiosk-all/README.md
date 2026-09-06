@@ -13,6 +13,8 @@ Requiring `kiosk-all` loads `Kiosk` and `Kiosk::Server`.
 
 ## Install
 
+> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
 ```ruby
 gem "kiosk-all"
 ```

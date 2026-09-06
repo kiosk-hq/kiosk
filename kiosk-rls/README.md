@@ -60,6 +60,8 @@ rename_kiosk_policy_on   :rentals, from: :select, to: "rentals_select_owner_or_a
 
 ## Install (opt-in)
 
+> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
 `kiosk-rls` is NOT pulled in by `kiosk-server` or `kiosk-all` — opting in
 means adding the gem yourself:
 

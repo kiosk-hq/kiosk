@@ -8,6 +8,8 @@ Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mi
 
 You normally don't install this gem directly — install one of the harnesses:
 
+> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
 ```ruby
 group :test do
   gem "kiosk-rls-rspec"       # RSpec

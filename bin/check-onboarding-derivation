@@ -3,7 +3,8 @@
 
 # check-onboarding-derivation -- the operator onboarding guide published on
 # kiosk.tech teaches a worked verb whose ORIGINAL lives in this repository, and
-# until this script nothing compared the two (K-1324, K-1325, K-1326).
+# until this script nothing compared the two (K-1324, K-1325, K-1326;
+# extended to the WRITE verbs by K-1338 and K-1339).
 #
 # THE DEFECT, measured rather than argued. `kiosk.tech/onboarding.html` is the
 # page an operator follows from `bundle install` to a served wire. It carries a
@@ -29,6 +30,28 @@
 #     `Kiosk::CatalogController`, and `git grep -n "CatalogController"` over
 #     this repository answers with the e2e fixture, this gem's README, the
 #     install-generator template and specs -- none of them getgrocery.
+#
+# Two more were found one verb over on 2026-09-06, and they are why the rules
+# below are no longer scoped to a single named verb:
+#
+#   * The page REQUIRED `delivery_date` on both write verbs. getgrocery
+#     requires it on neither -- omitting it books tomorrow, for the same reason
+#     `delivery_slots` leaves its own `date` optional: the caller cannot compute
+#     the operator's today. So the page taught a stricter contract than the
+#     origin it was copied from (K-1338).
+#   * The page's `create_order` indexed every cart entry without checking it is
+#     a Hash, so `items: ["bread"]` -- a well-formed request with the wrong
+#     shape -- raised inside the handler and reached the caller as a 500 about
+#     the operator's server, where getgrocery's own guard answers a typed 400
+#     naming the shape it wanted (K-1339).
+#
+# The first of those also found a bug in this script rather than only on the
+# page: `required_list` returned the FIRST `required:` in a verb's region, which
+# for `create_order` is the ITEM schema's `required: ["sku", "qty"]`, nested two
+# braces down. Both sides answered with that nested list, so the comparison was
+# two copies of one irrelevant fact and passed on a page that required an
+# argument getgrocery leaves optional. `top_level_required` walks brace depth
+# instead; the plant that exposed it is a self-test arm.
 #
 # NOTHING HELD ANY OF IT, IN EITHER REPOSITORY. `bin/check-demo-derivations`
 # compares each demo's `before-after.md` against THAT demo's own producers and
@@ -294,12 +317,38 @@ def input_schema_ranges(mask)
   ranges
 end
 
-# `required: ["a", "b"]` or `required: %w[a b]`, as a list of names.
-def required_list(slice)
-  m = slice.match(/required:\s*(\[[^\]]*\]|%w\[[^\]]*\])/m)
-  return nil if m.nil?
-
-  m[1].scan(/[a-z_][a-zA-Z0-9_]*/)
+# `required: ["a", "b"]` or `required: %w[a b]`, as a list of names -- the one
+# at the TOP LEVEL of the slice, never a nested one.
+#
+# THE DEPTH IS THE WHOLE POINT, AND THE FIRST WRITING OF THIS FUNCTION DID NOT
+# HAVE IT. A plain "first `required:` in the region" reads
+# `create_order`'s ITEM schema -- `required: ["sku", "qty"]`, nested two braces
+# down inside `items:` -- and never reaches the argument list the verb actually
+# requires. Both sides answered `["sku", "qty"]`, so a rule comparing them
+# compared two copies of the same nested fact and passed on a page that
+# required an argument getgrocery leaves optional. That is the identical shape
+# this file's own header records about reading values off the masked copy: two
+# nothings, equal, green.
+#
+# Structure is walked on the MASKED copy (a bracket inside a description
+# sentence is not depth) and the literal is read off the ORIGINAL at the same
+# index (the names live inside string literals, which the mask blanks).
+def top_level_required(mask_slice, src_slice)
+  depth = 0
+  i     = 0
+  while i < mask_slice.length
+    c = mask_slice[i]
+    if ["{", "["].include?(c)
+      depth += 1
+    elsif ["}", "]"].include?(c)
+      depth -= 1
+    elsif depth.zero? && mask_slice[i, 9] == "required:"
+      m = src_slice[i..].match(/\Arequired:\s*(\[[^\]]*\]|%w\[[^\]]*\])/m)
+      return m[1].scan(/[a-z_][a-zA-Z0-9_]*/) if m
+    end
+    i += 1
+  end
+  nil
 end
 
 # The property names declared at the TOP level of a `properties: {...}` hash.
@@ -325,6 +374,91 @@ def property_names(slice)
     i += 1
   end
   names
+end
+
+# The top-level entries of a `properties: {...}` hash as {name => Range}, where
+# the Range spans that property's own brace-balanced body. Structure is walked
+# on the MASKED copy and the range indexes the ORIGINAL, which is the same
+# discipline `verb_input_schema` uses: a `{` inside a description sentence is
+# not structure, and a `type: "array"` inside a string literal is not readable
+# from the mask.
+def property_body_ranges(mask, base)
+  slice = mask[base]
+  at    = slice.index(/properties:\s*\{/)
+  return {} if at.nil?
+
+  open  = slice.index("{", at)
+  depth = 0
+  out   = {}
+  i     = open
+  while i < slice.length
+    c = slice[i]
+    if c == "{"
+      depth += 1
+    elsif c == "}"
+      depth -= 1
+      break if depth.zero?
+    elsif depth == 1 && (m = slice[i..].match(/\A([a-z_][a-zA-Z0-9_]*):\s*\{/)) &&
+          (i.zero? || slice[i - 1] =~ /[\s{,]/)
+      bstart = i + m[0].length - 1
+      d      = 0
+      j      = bstart
+      while j < slice.length
+        d += 1 if slice[j] == "{"
+        if slice[j] == "}"
+          d -= 1
+          break if d.zero?
+        end
+        j += 1
+      end
+      out[m[1]] = ((base.first + bstart)..(base.first + j))
+    end
+    i += 1
+  end
+  out
+end
+
+# Every INPUT parameter a source declares as an ARRAY OF OBJECTS -- the subject
+# list of the element-shape ban, derived rather than typed. A declaration whose
+# own body says both `type: "array"` and `type: "object"` is an array whose
+# elements are objects, which is exactly the shape a handler may not index
+# without checking (K-1339).
+def array_of_object_param_names(src)
+  names = Set.new
+  mask  = masked(src)
+  input_schema_ranges(mask).each do |range|
+    property_body_ranges(mask, range).each do |name, body|
+      text = src[body]
+      names << name if text.include?('type: "array"') && text.include?('type: "object"')
+    end
+  end
+  names
+end
+
+# Every VERB a source declares: the mixin's contract is that each class-level
+# `kind :` macro is claimed by the NEXT `def`, so that pairing is the whole
+# rule. A `def` that no macro reaches -- a private helper, a plain module
+# function -- is not a verb and is not returned, which is why this cannot be
+# replaced by "every def in the file".
+def declared_verbs(src)
+  mask  = masked(src)
+  kinds = mask.enum_for(:scan, /^\s*kind\s+:/).map { Regexp.last_match.begin(0) }
+  defs  = mask.enum_for(:scan, /^\s*def ([a-z_][a-zA-Z0-9_]*)/)
+              .map { [Regexp.last_match.begin(0), Regexp.last_match(1)] }
+  kinds.filter_map { |k| defs.find { |(at, _)| at > k }&.last }.uniq
+end
+
+# The BODY a `def <verb>` opens, as a Range: from the def line to whatever ends
+# the declaration -- the next `kind :` macro, or the `private` keyword that
+# opens the helper section. Scoping a ban to one verb's body is what keeps
+# "this argument is optional HERE" from being read against a verb that requires
+# the same name.
+def handler_body_range(mask, verb)
+  at = mask.index(/^\s*def #{Regexp.escape(verb)}\b/)
+  return nil if at.nil?
+
+  stop = mask.index(/^\s*(?:kind\s+:|private\s*$)/, at + 1)
+  (at...(stop || mask.length))
 end
 
 # Every parameter name declared `type: "integer"` in a source's INPUT schemas.
@@ -445,10 +579,12 @@ def verb_input_schema(src, verb)
   range = input_schema_range(mask, decl)
   return nil if range.nil?
 
-  # `required:` off the ORIGINAL (its names live inside string literals);
-  # `properties:` off the MASKED copy (its names are identifiers, and a brace
-  # inside a description sentence must not be counted as structure).
-  [required_list(src[range]), property_names(mask[range])]
+  # `required:` at the TOP LEVEL of the input_schema, located on the masked copy
+  # and read off the ORIGINAL (its names live inside string literals); a nested
+  # `required:` -- an item schema's, say -- is a different fact and is not this
+  # one. `properties:` off the MASKED copy (its names are identifiers, and a
+  # brace inside a description sentence must not be counted as structure).
+  [top_level_required(mask[range], src[range]), property_names(mask[range])]
 end
 
 # R2 -- the worked verb's REQUIRED list is getgrocery's.
@@ -544,28 +680,168 @@ def rule_getgrocery_handlers(page, sources)
         missing.empty? ? "derived from #{GETGROCERY_INITIALIZER}" : "not named on the page: #{missing.join(", ")}")
 end
 
+# The (required, properties) pair getgrocery declares for a verb, wherever the
+# verb lives -- the read surface or the write surface. One lookup, so a rule
+# reaches every verb the two controllers declare instead of one named constant.
+def demo_input_schema(sources, verb)
+  verb_input_schema(sources[:storefront], verb) || verb_input_schema(sources[:orders], verb)
+end
+
+# Every verb BOTH getgrocery and the page declare. The subject list for the
+# verb-by-verb rules below, derived on both sides: a verb renamed in either
+# place leaves the set rather than silently keeping a stale comparison alive.
+def shared_verbs(page, sources)
+  demo = declared_verbs(sources[:storefront]) | declared_verbs(sources[:orders])
+  demo & declared_verbs(page_ruby(page))
+end
+
 # R7 -- BAN. The page must not make required, in the HANDLER, an argument
 # getgrocery's own declaration leaves optional. This is the half of K-1325 that
 # lived in code rather than in the schema.
+#
+# EVERY SHARED VERB, EACH SCOPED TO ITS OWN HANDLER BODY (K-1338). It used to
+# derive from one named verb and scan the whole page, which could not have
+# reached the write verbs -- and must not be widened by unioning the optional
+# sets either: `delivery_address` is optional on `reschedule_delivery` and
+# REQUIRED on `create_order`, so a page-wide ban on requiring it would be red
+# for doing the right thing one verb over.
 def rule_no_require_optional(page, sources)
-  demo = verb_input_schema(sources[:storefront], WORKED_VERB)
-  return vacuous!("REQUIRE_OPTIONAL", "no `#{WORKED_VERB}` input_schema in #{GETGROCERY_STOREFRONT}") if demo.nil?
+  shared = shared_verbs(page, sources)
+  return vacuous!("REQUIRE_OPTIONAL", "no verb is declared on both sides") if shared.empty?
 
-  req, props = demo
-  return vacuous!("REQUIRE_OPTIONAL", "getgrocery's #{WORKED_VERB} declares no properties/required pair") if props.nil? || req.nil?
+  mask     = masked(page_ruby(page))
+  subjects = 0
+  hits     = []
+  shared.each do |verb|
+    demo = demo_input_schema(sources, verb)
+    next if demo.nil?
 
-  optional = props - req
-  if optional.empty?
-    return vacuous!("REQUIRE_OPTIONAL",
-                    "getgrocery's #{WORKED_VERB} now requires every parameter it declares, so this ban has no subject")
+    req, props = demo
+    next if req.nil? || props.nil?
+
+    optional = props - req
+    next if optional.empty?
+
+    body = handler_body_range(mask, verb)
+    next if body.nil?
+
+    subjects += optional.size
+    pattern = /params\.require\(:(?:#{optional.map { |n| Regexp.escape(n) }.join("|")})\)/
+    mask[body].scan(pattern) { hits << "#{verb}: #{Regexp.last_match(0)}" }
   end
 
-  pattern = /params\.require\(:(?:#{optional.map { |n| Regexp.escape(n) }.join("|")})\)/
-  hits    = masked(page_ruby(page)).scan(pattern)
+  if subjects.zero?
+    return vacuous!("REQUIRE_OPTIONAL",
+                    "no verb of #{shared.join(", ")} leaves a declared parameter optional in getgrocery, " \
+                    "so this ban has no subject")
+  end
+
   check("REQUIRE_OPTIONAL",
         hits.empty?,
-        "no `params.require` on #{WORKED_VERB}'s optional #{optional.sort.join(", ")}",
-        hits.empty? ? "derived from #{GETGROCERY_STOREFRONT}" : "#{hits.size} site(s)")
+        "no `params.require` on the #{subjects} optional argument(s) of #{shared.sort.join(", ")}",
+        hits.empty? ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_ORDERS}" : hits.join(" | "))
+end
+
+# R11 -- every verb both sides declare REQUIRES what getgrocery requires, and
+# nothing more (K-1338).
+#
+# THE DEFECT THIS CLOSES: the page required `delivery_date` on BOTH write verbs
+# where getgrocery requires it on neither -- omitting it books tomorrow, for the
+# same reason `delivery_slots` leaves its own `date` optional (the caller cannot
+# compute the operator's today). An operator copying the page shipped a stricter
+# contract than the origin it was copied from, and the schema half of K-1325 one
+# verb over had no rule reaching it.
+#
+# TWO DIRECTIONS, because one of them alone is half a comparison:
+#   OVER   the page requires a name getgrocery does not -- the K-1338 shape.
+#   UNDER  the page DECLARES a parameter getgrocery requires and leaves it
+#          optional -- a cart an operator's own origin would refuse.
+# A parameter the page does not declare at all is neither: the page teaches a
+# deliberately smaller surface (it does not show `create_order`'s replace-an-
+# unpaid-order `order_id`), and that is a simplification, not drift.
+def rule_write_required(page, sources)
+  shared = shared_verbs(page, sources)
+  return vacuous!("WRITE_REQUIRED", "no verb is declared on both sides") if shared.empty?
+
+  ruby     = page_ruby(page)
+  compared = []
+  derived  = 0
+  bad      = []
+  shared.each do |verb|
+    demo = demo_input_schema(sources, verb)
+    mine = verb_input_schema(ruby, verb)
+    next if demo.nil? || mine.nil?
+
+    dreq, = demo
+    mreq, mprops = mine
+    next if dreq.nil? || mreq.nil? || mprops.nil?
+
+    compared << verb
+    derived  += dreq.size
+    over  = mreq - dreq
+    under = (dreq & mprops) - mreq
+    bad << "#{verb} requires #{over.sort.inspect}, which getgrocery leaves optional" if over.any?
+    bad << "#{verb} leaves #{under.sort.inspect} optional, which getgrocery requires" if under.any?
+  end
+
+  if compared.empty? || derived.zero?
+    return vacuous!("WRITE_REQUIRED",
+                    "none of #{shared.join(", ")} declares a non-empty input_schema `required:` on " \
+                    "getgrocery's side, so there is nothing to hold the page to")
+  end
+
+  check("WRITE_REQUIRED",
+        bad.empty?,
+        "#{compared.size} shared verb(s) (#{compared.sort.join(", ")}) require exactly what getgrocery requires " \
+        "(#{derived} name(s) derived)",
+        bad.empty? ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_ORDERS}" : bad.join(" | "))
+end
+
+# R12 -- BAN. A handler that indexes the elements of a declared ARRAY OF
+# OBJECTS must check the element IS one first (K-1339).
+#
+# THE DEFECT THIS CLOSES: the page's `create_order` ran `item[:sku]` over every
+# cart entry with no shape check, so `items: ["bread"]` -- a well-formed request
+# with the wrong shape, which an assistant does send -- raised inside the
+# handler and reached the caller as a 500 about the operator's server.
+# getgrocery answers a typed 400 naming the shape it wanted. The page is what an
+# operator copies, so the page taught the 500.
+#
+# The subject list is DERIVED: every input parameter getgrocery declares whose
+# own body says both `type: "array"` and `type: "object"`. A site is a page verb
+# whose handler body reads `params[:<that name>]`; the guard the site must carry
+# is `is_a?(Hash)`, read off the MASKED body so a comment explaining the idiom
+# cannot stand in for running it.
+def rule_item_shape(page, sources)
+  names = array_of_object_param_names(sources[:storefront]) | array_of_object_param_names(sources[:orders])
+  return vacuous!("ITEM_SHAPE", "getgrocery declares no array-of-objects input parameter") if names.empty?
+
+  ruby  = page_ruby(page)
+  mask  = masked(ruby)
+  sites = []
+  declared_verbs(ruby).each do |verb|
+    body = handler_body_range(mask, verb)
+    next if body.nil?
+
+    text = mask[body]
+    names.each do |name|
+      next unless text.include?("params[:#{name}]")
+
+      sites << [verb, name, text.include?("is_a?(Hash)")]
+    end
+  end
+
+  if sites.empty?
+    return vacuous!("ITEM_SHAPE",
+                    "no page handler reads any of getgrocery's array-of-objects parameters " \
+                    "(#{names.to_a.sort.join(", ")})")
+  end
+
+  missing = sites.reject { |(_v, _n, ok)| ok }
+  check("ITEM_SHAPE",
+        missing.empty?,
+        "#{sites.size} site(s) reading #{names.to_a.sort.join(", ")} guard the element with `is_a?(Hash)`",
+        missing.empty? ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_ORDERS}" : "unguarded: #{missing.map { |(v, n, _)| "#{v}/#{n}" }.join(", ")}")
 end
 
 # R8 -- the page states the Rails floor the engine's gemspec declares.
@@ -646,6 +922,8 @@ RULES = [
   [:rule_rails_floor,        "RAILS_FLOOR",         "derivation", "the Rails MAJOR.MINOR kiosk-server's gemspec declares"],
   [:rule_ruby_floor,         "RUBY_FLOOR",          "derivation", "the Ruby floor kiosk-core's gemspec declares"],
   [:rule_install_source,     "INSTALL_SOURCE",      "derivation", "the install source qualifier the monorepo README declares canonical"],
+  [:rule_write_required,     "WRITE_REQUIRED",      "derivation", "the input_schema `required:` list of every verb both sides declare"],
+  [:rule_item_shape,         "ITEM_SHAPE",          "ban",        "indexing an element of a declared array-of-objects without checking it is a Hash"],
 ].freeze
 
 def load_sources
@@ -725,13 +1003,24 @@ def derived_facts(sources)
     properties: props,
     optional: props - req,
     integers: ints,
+    # The write-surface facts. `orders_schemas` is every verb getgrocery's
+    # orders controller declares, with its top-level (required, properties)
+    # pair; `arrays` is every input parameter declared as an array of objects.
+    # Both are derived, so a rename in getgrocery reddens an arm rather than
+    # quietly emptying it.
+    orders_schemas: declared_verbs(sources[:orders]).filter_map { |v|
+      sch = verb_input_schema(sources[:orders], v)
+      [v, sch] if sch && !sch[0].nil? && !sch[1].nil?
+    }.to_h,
+    arrays: (array_of_object_param_names(sources[:storefront]) |
+             array_of_object_param_names(sources[:orders])).to_a.sort,
     getgrocery: handler_names(sources[:getgrocery_init]).first,
     rails: rails_floor(sources[:server_gemspec]),
     ruby: ruby_floor(sources[:core_gemspec]),
     install: canonical_install_source(sources[:readme]) }
 end
 
-# A minimal page that satisfies all seven rules by construction, so the arms
+# A minimal page that satisfies every rule by construction, so the arms
 # below are testing the RULES rather than the fixture.
 def fixture_page(f)
   ruby_init = "Kiosk.configure do |c|\n  c.handlers = %w[#{f[:handlers].join(" ")}]\nend\n"
@@ -760,14 +1049,46 @@ def fixture_page(f)
    %(<p>Needs Rails #{f[:rails]} and Ruby #{f[:ruby]}.</p>),
    %(<pre><code class="language-ruby">#{gemfile}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_init}</code></pre>),
-   %(<pre><code class="language-ruby">#{ruby_verb}</code></pre>)].join("\n")
+   %(<pre><code class="language-ruby">#{ruby_verb}</code></pre>),
+   %(<pre><code class="language-ruby">#{fixture_write_surface(f)}</code></pre>)].join("\n")
+end
+
+# The write half of the fixture: one declaration per verb getgrocery's orders
+# controller declares, carrying that verb's own required list and parameters.
+# WRITE_REQUIRED and ITEM_SHAPE have nothing to hold without it -- and a fixture
+# that made them VACUOUS would fail the unplanted arm rather than pass it, which
+# is the point of the vacuity tier.
+def fixture_write_surface(f)
+  blocks = f[:orders_schemas].map do |verb, (req, props)|
+    prop_lines = props.map { |n| "                 #{n}: { type: \"string\" }," }.join("\n")
+    # A verb that declares an array-of-objects parameter reads it the way the
+    # ban requires: element shape checked before anything indexes it.
+    reads = (props & f[:arrays]).map { |n|
+      "    return if params[:#{n}].is_a?(Array) && params[:#{n}].all? { |item| item.is_a?(Hash) }"
+    }.join("\n")
+    <<~VERB
+      kind :action
+        input_schema type: "object", additionalProperties: false,
+                     properties: {
+      #{prop_lines}
+                     },
+                     required: [#{req.map(&:inspect).join(", ")}]
+        example_params({})
+        def #{verb}
+      #{reads}
+        end
+    VERB
+  end
+  "class #{f[:handlers].last} &lt; ApplicationController\n  include Kiosk::Handler\n\n  " +
+    blocks.join("\n  ") + "end\n"
 end
 
 def run_self_test
   sources = load_sources
   f       = derived_facts(sources)
   if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? ||
-     f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil?
+     f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil? ||
+     f[:orders_schemas].empty? || f[:arrays].empty?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -782,6 +1103,16 @@ def run_self_test
   opt      = f[:optional].first
   req_lit  = "required: [#{f[:required].map(&:inspect).join(", ")}]"
   divergent = (f[:getgrocery] - f[:handlers]).first
+
+  # The WRITE_REQUIRED plant needs a required name that belongs to exactly ONE
+  # verb, so the substitution below cannot land on another verb's list. Derived
+  # by counting names across every required list this checkout declares --
+  # never typed, because a typed "items" would go on matching a verb that had
+  # been renamed and the arm would pass while covering nothing.
+  all_required = f[:orders_schemas].values.map(&:first) + [f[:required]]
+  write_anchor = f[:orders_schemas].values.map(&:first).flatten
+                                   .find { |n| all_required.count { |l| l.include?(n) } == 1 }
+  array_param  = f[:arrays].first
 
   puts "── planted breaks (page side) ──"
   arms = []
@@ -810,6 +1141,25 @@ def run_self_test
   # plant would never exercise it.
   arms << self_test_arm("one gem line loses the canonical source qualifier",
                         page.sub(%(#{f[:install][0]}: "#{f[:install][1]}"), ""), sources, "INSTALL_SOURCE")
+  # K-1338's shape: ONE verb's required list gains a name getgrocery does not
+  # require. Renaming the anchor inside the list produces both halves at once —
+  # a name required here and nowhere in getgrocery, and a name getgrocery
+  # requires that the page now declares but no longer requires.
+  arms << self_test_arm("#{write_anchor.inspect} required under another name",
+                        page.sub(/(required:\s*\[[^\]]*)"#{Regexp.escape(write_anchor)}"/) {
+                          "#{Regexp.last_match(1)}\"#{write_anchor}_planted\""
+                        }, sources, "WRITE_REQUIRED")
+  # And the other direction, the one a "page requires too much" rule alone
+  # would miss: an argument getgrocery REQUIRES, still declared on the page,
+  # demoted to optional.
+  arms << self_test_arm("#{write_anchor.inspect} demoted to optional on the page",
+                        page.sub(/(required:\s*\[[^\]]*)"#{Regexp.escape(write_anchor)}",\s*/) {
+                          Regexp.last_match(1)
+                        }, sources, "WRITE_REQUIRED")
+  # K-1339's shape: the element-shape guard removed from the handler that
+  # indexes a declared array of objects.
+  arms << self_test_arm("the #{array_param} element-shape guard removed",
+                        page.gsub("is_a?(Hash)", "respond_to?(:[])"), sources, "ITEM_SHAPE")
 
   puts "── vacuity (derivation side blanked) ──"
   arms << self_test_arm("generator template loses its c.handlers example", page,
@@ -825,14 +1175,39 @@ def run_self_test
                         page.gsub("example_params(", "example_args("), sources, "FROZEN_DATE")
   arms << self_test_arm("getgrocery registers exactly the page's classes", page,
                         sources.merge(getgrocery_init: sources[:getgrocery_init].sub(divergent, f[:handlers].first)), "GETGROCERY_HANDLERS")
-  arms << self_test_arm("getgrocery requires every #{WORKED_VERB} parameter", page,
-                        sources.merge(storefront: sources[:storefront].sub(req_lit, "required: [#{f[:properties].map(&:inspect).join(", ")}]")), "REQUIRE_OPTIONAL")
+  # REQUIRE_OPTIONAL's subject is «an argument some SHARED verb leaves
+  # optional», so blanking one verb no longer empties it -- the ban reaches
+  # every verb both sides declare. This makes EVERY verb of both controllers
+  # require every parameter it declares, verb by verb, off its own derived
+  # (required, properties) pair.
+  require_everything = lambda do |src|
+    declared_verbs(src).reduce(src) do |acc, verb|
+      sch = verb_input_schema(src, verb)
+      next acc if sch.nil? || sch[0].nil? || sch[1].nil? || sch[1].empty?
+
+      acc.sub("required: [#{sch[0].map(&:inspect).join(", ")}]",
+              "required: [#{sch[1].map(&:inspect).join(", ")}]")
+    end
+  end
+  arms << self_test_arm("every getgrocery verb requires every parameter it declares", page,
+                        sources.merge(storefront: require_everything.call(sources[:storefront]),
+                                      orders: require_everything.call(sources[:orders])), "REQUIRE_OPTIONAL")
   arms << self_test_arm("the engine's gemspec stops naming Rails", page,
                         sources.merge(server_gemspec: sources[:server_gemspec].gsub(/add_dependency\s+"(?:#{RAILS_COMPONENTS.join("|")})"[^\n]*/, "# removed")), "RAILS_FLOOR")
   arms << self_test_arm("kiosk-core stops declaring required_ruby_version", page,
                         sources.merge(core_gemspec: sources[:core_gemspec].gsub(/required_ruby_version[^\n]*/, "# removed")), "RUBY_FLOOR")
   arms << self_test_arm("the README's canonical line loses its source qualifier", page,
                         sources.merge(readme: sources[:readme].gsub(/^gem\s+"kiosk-all"[^\n]*/, %(gem "kiosk-all"))), "INSTALL_SOURCE")
+  # Both write-surface rules derive their SUBJECT from getgrocery, so blanking
+  # that side must make them say so rather than pass. A renamed verb on the demo
+  # side leaves nothing shared to compare.
+  renamed = ->(src) { src.gsub(/^(\s*)def ([a-z_][a-zA-Z0-9_]*)$/) { "#{Regexp.last_match(1)}def #{Regexp.last_match(2)}_renamed" } }
+  arms << self_test_arm("getgrocery declares no verb the page also declares", page,
+                        sources.merge(storefront: renamed.call(sources[:storefront]),
+                                      orders: renamed.call(sources[:orders])), "WRITE_REQUIRED")
+  arms << self_test_arm("getgrocery declares no array-of-objects parameter", page,
+                        sources.merge(storefront: sources[:storefront].gsub('type: "array"', 'type: "string"'),
+                                      orders: sources[:orders].gsub('type: "array"', 'type: "string"')), "ITEM_SHAPE")
 
   FAILURES.clear
   puts

@@ -452,7 +452,7 @@ kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — rec
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
 kiosk-demo-hoteling/README.md	Hotel booking demo operator for Kiosk.
 kiosk-demo-hoteling/README.md	always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-kiosk-demo-hoteling/README.md	bin/rails demo:book        # the headline: register → availability → reserve_room → pay → confirm_booking (plus the paym
+kiosk-demo-hoteling/README.md	bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the paym
 kiosk-demo-hoteling/README.md	bin/rails demo:setup       # create + load schema + seed the properties and rooms
 kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/models/room_hold.rb	  # this as an expiry: nothing enforces it.
@@ -563,7 +563,7 @@ kiosk-demo-skooti/README.md	Reserve a vehicle by its code (inserts a `status='re
 kiosk-demo-skooti/README.md	Scooter rental demo operator for Kiosk.
 kiosk-demo-skooti/README.md	Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation)
 kiosk-demo-skooti/README.md	attestation proves the assistant is *eligible* — that a valid category-A licence
-kiosk-demo-skooti/README.md	bin/rails demo:rideflow    # the headline: register → scooters_available → reserve → pay → start_rental → offline unlock (no KYC leg — see demo:kyc; plus the negative gates)
+kiosk-demo-skooti/README.md	bin/rails demo:rideflow    # the headline: register → scooters_available → reserve → payment_setup → pay → start_rental → offline unlock (no KYC leg — see demo:kyc; plus the negative gates)
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	  REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
@@ -606,7 +606,7 @@ kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=p
 kiosk-demo-skooti/script/pay_window.rb	start_rental does NOT answer «no settlement for this reservation» about an in-flight charge
 kiosk-demo-skooti/script/pay_window.rb	start_rental issues the rental token on the capture-anchored witness alone, no settlement row
 kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture instead of answering «no settlement»
-kiosk-demo-skooti/script/rental_flow.rb	# Flow: register (PoW) → scooters_available → reserve → pay → start_rental →
+kiosk-demo-skooti/script/rental_flow.rb	# Flow: register (PoW) → scooters_available → reserve → payment_setup → pay → start_rental →
 kiosk-demo-skooti/script/rental_flow.rb	# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
 kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, self-verifying unlock credential.
 kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify

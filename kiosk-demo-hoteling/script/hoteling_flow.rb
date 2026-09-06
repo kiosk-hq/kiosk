@@ -124,6 +124,35 @@ STDERR.puts "  Reserved: booking_id=#{booking_id} total=#{format("€%.2f", tota
 # Calculate nights for the cart
 nights = (Date.parse(check_out) - Date.parse(check_in)).to_i
 
+# ── Step 4b: payment_setup — the card check that MUST precede pay (K-1327) ─
+#
+# This origin publishes `payment_setup` and its own descriptor says «The
+# assistant should call this before `pay`», which is also the canonical skill's
+# Step 5. Until K-1327 no driver here ever called it: the verb was declared,
+# served, and asserted PRESENT in /kiosk/schema by a catalogue check, so its
+# poll cadence, its stop condition and its ready payload were never executed in
+# CI or anywhere. A presence assertion is not a behaviour assertion.
+#
+# UNCONDITIONAL, outside the SKIP_PAY branch below, and that is the point: the
+# question this verb answers is «does THIS PRINCIPAL have a card on file», which
+# is a property of the principal rather than of the payment about to happen. So
+# the payment-gate negative run exercises it too, and a `setup_required` that
+# only appeared when a pay followed would have nowhere to hide.
+#
+# Under this demo's StubPsp `setup_required?` is always false, so it is one
+# request and an immediate {status: "ready"} — the branch an assistant needs in
+# order to proceed. The `setup_required` + `setup_url` branch is declared in the
+# output schema for parity with the other two payment demos and is unreachable
+# here; nothing below pretends otherwise.
+rc_setup, setup_resp = post_json(
+  "#{SERVER}/kiosk/payment_setup",
+  {},
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "payment_setup failed (#{rc_setup}): #{JSON.generate(setup_resp)}" unless rc_setup == 200
+setup_status = setup_resp["status"]
+STDERR.puts "  payment_setup: #{setup_status.inspect}"
+
 # ── Step 5: pay ───────────────────────────────────────────────────────────
 
 rc_pay   = nil
@@ -214,6 +243,8 @@ puts JSON.generate(
   http_properties:      rc_props,
   http_availability:    rc_avail,
   http_reserve_room:    rc_rsv,
+  http_payment_setup:   rc_setup,
+  payment_setup_status: setup_status,
   http_pay:             rc_pay,
   http_confirm_booking: rc_confirm,
   user_id:              user_id,

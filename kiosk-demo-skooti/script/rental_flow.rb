@@ -128,6 +128,33 @@ price_per_min_eur = format("€%.2f", price_per_min.to_i / 100.0)
 
 STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min_eur}/min"
 
+# ── Step 3b: payment_setup — the card check that MUST precede pay (K-1327) ───
+#
+# skooti publishes `payment_setup` and its own descriptor says «The assistant
+# should call this before `pay`», which is also the canonical skill's Step 5.
+# Until K-1327 no driver here ever called it: the verb was declared, served, and
+# asserted PRESENT in /kiosk/schema by a catalogue check, so its poll cadence,
+# its stop condition and its ready payload were never executed in CI or
+# anywhere. A presence assertion is not a behaviour assertion.
+#
+# UNCONDITIONAL, outside the SKIP_PAY branch below, and that is the point: the
+# question this verb answers is «does THIS PRINCIPAL have a card on file», a
+# property of the principal rather than of the payment about to happen. So the
+# payment-gate negative run exercises it too.
+#
+# Under this demo's StubPsp `setup_required?` is always false, so it is one
+# request and an immediate {status: "ready"}. The `setup_required` + `setup_url`
+# branch is declared in the output schema for parity with the other two payment
+# demos and is unreachable here; nothing below pretends otherwise.
+rc_setup, setup_resp = post_json(
+  "#{SERVER}/kiosk/payment_setup",
+  {},
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "payment_setup failed (#{rc_setup}): #{JSON.generate(setup_resp)}" unless rc_setup == 200
+setup_status = setup_resp["status"]
+STDERR.puts "  payment_setup: #{setup_status.inspect}"
+
 # ── Step 4: pay ──────────────────────────────────────────────────────────────
 
 rc_pay   = nil
@@ -243,6 +270,8 @@ puts JSON.generate(
   http_register:          rc_register,
   http_browse:            rc_browse,
   http_reserve:           rc_rsv,
+  http_payment_setup:     rc_setup,
+  payment_setup_status:   setup_status,
   http_pay:               rc_pay,
   http_start_rental:      rc_rental,
   user_id:                user_id,

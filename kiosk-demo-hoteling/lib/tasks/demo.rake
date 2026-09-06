@@ -235,6 +235,13 @@ namespace :demo do
       check.call("http_properties",     result["http_properties"],     200)
       check.call("http_availability",   result["http_availability"],   200)
       check.call("http_reserve_room",   result["http_reserve_room"],   200)
+      # payment_setup is CALLED, not merely catalogued (K-1327). The origin
+      # publishes the verb and its descriptor tells an assistant to call it
+      # before `pay`; until this line the only proof it worked was that its name
+      # appeared in /kiosk/schema. Both halves are asserted, because a 200
+      # carrying no `status` is exactly the shape an assistant cannot act on.
+      check.call("http_payment_setup",  result["http_payment_setup"],  200)
+      check.call("payment_setup_status", result["payment_setup_status"], "ready")
       check.call("http_pay",            result["http_pay"],            200)
       check.call("http_confirm_booking", result["http_confirm_booking"], 200)
       check.call("confirm_status",      result["confirm_status"],      "confirmed")
@@ -319,6 +326,20 @@ namespace :demo do
       else
         failures << "skip_pay: http_confirm_booking expected 403, got #{result["http_confirm_booking"].inspect}"
         puts "  FAIL  SKIP_PAY: expected 403, got #{result["http_confirm_booking"].inspect}"
+      end
+
+      # payment_setup answers about the PRINCIPAL, not about a payment that is
+      # about to happen — so it must answer the same in the run where no pay
+      # follows. Without this the verb would be exercised on the happy path
+      # only, and «ready» would be indistinguishable from «ready because we
+      # were about to pay».
+      if result["http_payment_setup"] == 200 && result["payment_setup_status"] == "ready"
+        puts "  OK  SKIP_PAY: payment_setup still 200/ready (it answers about the principal)"
+      else
+        failures << "skip_pay: payment_setup expected 200/ready, got " \
+                    "#{result["http_payment_setup"].inspect}/#{result["payment_setup_status"].inspect}"
+        puts "  FAIL  SKIP_PAY: payment_setup expected 200/ready, got " \
+             "#{result["http_payment_setup"].inspect}/#{result["payment_setup_status"].inspect}"
       end
     end
 

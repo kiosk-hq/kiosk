@@ -104,6 +104,7 @@
 
 require "digest"
 require "open3"
+require "openssl"
 require "fileutils"
 require "rbconfig"
 require "tmpdir"
@@ -119,7 +120,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "20b4e67efd11ad5ede40c0d7defe88274c97aa2f6c74bc1ead4629a7797e6a55"
+TWIN_DIGEST = "d991d68601e5e2c5d10e14a85d365ed3e299e0337af91844854743bc19f3f1df"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -180,6 +181,79 @@ PATTERNS = [
   },
 ].freeze
 # <<< PATTERN TABLE -- END
+
+# ── KEY: a private key committed to a repository that is about to be public ──
+#
+# WHAT THIS ANSWERS, AND WHAT IT DOES NOT. Two dev keypairs are tracked here on
+# purpose, and the reasons are recorded beside them in the files themselves.
+# Their EXPLOITABILITY is closed by other means and stays closed: both apps
+# refuse to boot in production without an explicit variable, both refuse the
+# shipped key itself when one is pasted into that variable, and both files
+# carry a do-not-use banner. What this arm answers is the DIFFERENT question
+# that nothing here asked before: is a private key that shows up in this
+# repository a key somebody DECLARED, or one that arrived because a
+# development convenience got committed? A third one would have shipped
+# unremarked -- no secret pattern existed in any gate, and CI runs no scanner.
+#
+# WHY THE TWO DECLARED ONES ARE NOT SIMPLY DELETED, measured rather than
+# assumed. Renaming them to `.pem.example` moves nothing: every scanner worth
+# running matches the ARMOR IN THE CONTENT and never consults the extension.
+# Generating them at setup breaks the one that is a PUBLISHED TEST VECTOR --
+# the Ed25519 key's public half and one signature are reproduced in the
+# firmware sources, the C host test and its README, and the crosscheck target
+# signs with the private half and has the C verifier check it against the
+# baked public half, so a per-machine key turns those red on every clone. And
+# neither removal reaches the stated harm anyway: both files entered history
+# in commits that are ancestors of the published branch, and this project does
+# not rewrite published history, so any scan that walks history finds them
+# whatever the working tree says. What IS achievable is that a key here is
+# always a DECLARED key -- which is this arm.
+#
+# THE ARMOR IS NEVER SPELLED IN THIS FILE. The detector is written so its own
+# source text does not match it, which is why it needs no exemption block: a
+# gate that had to be exempted from itself would be a gate with a hole in the
+# shape of its own subject. The pattern demands REAL key material -- armor at
+# the start of a line, then at least one line of nothing but base64 -- so a
+# commented paste-your-key-here placeholder in a deployment template is not a
+# key, which is a distinction the tree needs today and a bare armor match
+# would get wrong.
+KEY_BLOCK_RE = /^-{5}BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-{5}[ \t]*\r?\n(?:[A-Za-z0-9+\/=]{16,}[ \t]*\r?\n)+-{5}END (?:[A-Z0-9 ]+ )?PRIVATE KEY-{5}/.freeze
+
+# Every tracked private key in this repository, with the reason it is here.
+# A path not on this list is a finding, and so is a path on it whose file has
+# lost the banner -- the declaration and the warning travel together or the
+# entry means nothing.
+KEY_BANNER = "DO NOT use in production"
+DECLARED_DEV_KEYS = {
+  "kiosk-demo-skooti/config/dev_unlock_key.pem" =>
+    "the fixed Ed25519 rental-token vector: its public half and one signature are reproduced in " \
+    "the lock firmware, the C host test and the known-answer test, so it cannot be per-machine",
+  "kiosk-demo-prove/config/dev_prove_key.pem" =>
+    "the fixed RSA broker key the development and test environments sign attestations with, so a " \
+    "restart keeps the key a locally-pinned operator already trusts",
+}.freeze
+
+# NON-VACUITY, run on EVERY invocation and in BOTH repositories. One of the two
+# copies of this script sits in a repository with no key in it at all, where a
+# count can never prove the detector still works -- and an absence rule whose
+# detector has quietly stopped matching reports the same clean zero as a clean
+# tree. So the rule proves itself against a key generated on the spot and
+# against a placeholder that is deliberately not one. Neither fixture is
+# stored: the positive is a throwaway keypair minted in memory, and the
+# negative is built out of that same key's own armor lines.
+def key_detector_faults
+  probe  = OpenSSL::PKey.generate_key("ED25519").private_to_pem
+  lines  = probe.lines
+  placeholder = "#   SOME_VAR=\"#{lines.first.chomp}\n#   ...\n#   #{lines.last.chomp}\"\n"
+
+  faults = []
+  faults << "a freshly generated private key PEM is NOT recognised as one, so this arm would pass " \
+            "over every key in the tree" unless probe =~ KEY_BLOCK_RE
+  faults << "a commented placeholder carrying only the armor and no key material IS recognised as " \
+            "a key, so the arm reddens on deployment templates that teach an operator what to paste" \
+            if placeholder =~ KEY_BLOCK_RE
+  faults
+end
 
 # ALLOW-LIST. One id per exemption, each with the reason it was granted, because
 # an exemption nobody can audit is how a gate gets switched off within a week.
@@ -248,6 +322,17 @@ ALLOW = [
          "spelled in those two blocks and the SELF-SCAN below asserts they appear nowhere else in " \
          "this file -- so this is a bounded, checked exemption rather than a file-level pass. If a " \
          "block marker goes missing the whole file is scanned again and this run turns red.",
+    match: nil,
+  },
+  {
+    id: "AL-7",
+    scope: "the declared development keypairs (DECLARED_DEV_KEYS)",
+    arms: :key,
+    why: "two dev keypairs are tracked deliberately and the reason is written into the files " \
+         "themselves. The exemption is NOT the path alone: the file must also still carry its " \
+         "do-not-use banner, because a declaration that has lost its warning is a key somebody will " \
+         "copy. Every run prints how many it suppressed, so a declared path that stops carrying a key " \
+         "shows up as a zero rather than as silence.",
     match: nil,
   },
 ].freeze
@@ -400,6 +485,7 @@ def scan_repo(index, index_note)
   suppressed = Hash.new(0)
   cites      = 0
   files      = 0
+  keys       = 0
   self_ranges = self_exempt_ranges
 
   tracked_files(REPO).each do |rel|
@@ -412,6 +498,34 @@ def scan_repo(index, index_note)
     files += 1
     path_allow = ALLOW.select { |a| a[:match] && a[:match].call(rel, nil) }
     lines = text.lines.map { |l| l.chomp("\n") }
+
+    # The KEY arm is FILE-level, not line-level: a private key is a BLOCK, and a
+    # line-based scan of one reports its armor while saying nothing about whether
+    # there is key material under it -- which is the difference between a key and
+    # a deployment template teaching an operator what to paste.
+    if (key_hit = KEY_BLOCK_RE.match(text))
+      keys += 1
+      declared = DECLARED_DEV_KEYS.key?(rel)
+      if declared && text.include?(KEY_BANNER)
+        suppressed["AL-7"] += 1
+      else
+        findings << {
+          path: rel, line: text[0...key_hit.begin(0)].count("\n") + 1, id: "KEY-1",
+          what: declared ? "a declared development keypair that has lost its do-not-use banner" :
+                           "a PRIVATE KEY committed to a repository that is published",
+          repair: declared ?
+                    "restore the banner. The declaration and the warning travel together; a declared " \
+                    "key file without one is a key somebody will copy" :
+                    "do not commit it -- read it from the environment, or generate it at setup. If it " \
+                    "is genuinely a fixed test vector, add it to DECLARED_DEV_KEYS with the reason and " \
+                    "give the file the banner. Note what committing it costs even once: this project " \
+                    "does not rewrite published history, so a key that reaches a pushed commit stays " \
+                    "reachable there whatever a later commit deletes",
+          text: "#{rel}: a private-key block with key material under it starts here",
+          wrapped: false,
+        }
+      end
+    end
 
     lines.each_with_index do |line, i|
       lineno = i + 1
@@ -521,7 +635,7 @@ def scan_repo(index, index_note)
     end
   end
 
-  [findings, suppressed, files, cites, index_note]
+  [findings, suppressed, files, cites, index_note, keys]
 end
 
 # ── the twin ─────────────────────────────────────────────────────────────────
@@ -614,11 +728,25 @@ def run_check(quiet: false)
   end
 
   index, note = resolve_index
-  findings, suppressed, files, cites, _ = scan_repo(index, note)
+  findings, suppressed, files, cites, _, keys = scan_repo(index, note)
+
+  # The KEY arm's detector proves itself on every run, in both repositories --
+  # see the banner above {key_detector_faults} for why a count cannot.
+  key_faults = key_detector_faults
+  key_faults.each do |fault|
+    findings << { path: SELF_REL, line: 0, id: "KEY-0",
+                  what: "the tracked-key detector is broken: #{fault}",
+                  repair: "repair KEY_BLOCK_RE. Until it is repaired this arm reports a clean zero " \
+                          "over every file in the tree, which is indistinguishable from a tree with " \
+                          "no key in it",
+                  text: "KEY_BLOCK_RE failed its own two-sided probe", wrapped: false }
+  end
 
   unless quiet
     puts "check-publication-paths: #{files} tracked text file(s), #{cites} section citation(s) " \
-         "resolved against #{index.size} published section number(s)"
+         "resolved against #{index.size} published section number(s), #{keys} private-key block(s) " \
+         "(#{DECLARED_DEV_KEYS.size} declared here; detector " \
+         "#{key_faults.empty? ? 'RE-PROVED this run' : 'BROKEN -- see KEY-0 below'})"
     puts "  section index: #{note}"
     puts "  twin: #{twin ? "byte-identical to #{twin}" : 'sibling repository not checked out here, ' \
                                                           'body digest matches TWIN_DIGEST only'}"
@@ -753,6 +881,17 @@ RED_EXTRA = [
 ].freeze
 # <<< SELF-TEST FIXTURES -- END
 
+# A key file shaped exactly like the two this repository declares: a prose
+# preamble, the banner, then real key material. The keypair is minted here and
+# thrown away with the fixture tree -- no key material is stored in this file,
+# which is the same rule the arm itself enforces.
+def fixture_key_file(banner:)
+  pem = OpenSSL::PKey.generate_key("ED25519").private_to_pem
+  head = +"Throwaway keypair minted by --self-test. Never used for anything.\n"
+  head << "#{KEY_BANNER}: it exists for the length of one temporary directory.\n" if banner
+  "#{head}\n#{pem}"
+end
+
 def plant(dir, rel, lines)
   abs = File.join(dir, rel)
   FileUtils.mkdir_p(File.dirname(abs))
@@ -770,6 +909,14 @@ def build_fixture_repo(dir)
     File.write(File.join(dir, SPEC_SOURCE_REL), File.binread(File.join(REPO, SPEC_SOURCE_REL)))
   end
   GREEN_FIXTURES.each { |rel, lines| plant(dir, rel, lines) }
+  # The declared keypairs, at their declared paths and carrying the banner:
+  # the green tree must be green BECAUSE AL-7 fired, and the counted-work
+  # assertion below reads that back off the suppression counts.
+  DECLARED_DEV_KEYS.each_key do |rel|
+    abs = File.join(dir, rel)
+    FileUtils.mkdir_p(File.dirname(abs))
+    File.write(abs, fixture_key_file(banner: true))
+  end
   _, err, st = Open3.capture3("git", "-C", dir, "init", "-q")
   raise "git init failed: #{err}" unless st.success?
 end
@@ -874,7 +1021,8 @@ def run_self_test
     # exemption stopped firing the tree would redden -- and reading the
     # per-entry suppression counts back says WHICH entry did the work.
     counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
-    { "AL-1" => 1, "AL-2" => 1, "AL-3" => 3, "AL-4" => 2 }.each do |id, want|
+    { "AL-1" => 1, "AL-2" => 1, "AL-3" => 3, "AL-4" => 2,
+      "AL-7" => DECLARED_DEV_KEYS.size }.each do |id, want|
       got = counted[id].to_i
       if got < want
         failures << "#{id} suppressed #{got} on the fixture tree, expected at least #{want} -- its " \
@@ -886,6 +1034,10 @@ def run_self_test
 
     cases = PATTERNS.map { |p| [p[:id], "lib/plant_#{p[:id].downcase.tr('-', '_')}.rb", p[:example]] }
     cases += RED_EXTRA.map { |id, rel, lines| [id, rel, lines] }
+    # The KEY arm, both of its shapes. Built here rather than in the fixture
+    # table above because the material is minted per run and never stored.
+    cases << ["KEY-1", "config/some_service_key.pem", fixture_key_file(banner: true).lines.map(&:chomp)]
+    cases << ["KEY-1", DECLARED_DEV_KEYS.keys.first, fixture_key_file(banner: false).lines.map(&:chomp)]
 
     cases.each do |id, rel, lines|
       plant(dir, rel, lines)
@@ -913,7 +1065,7 @@ def run_self_test
   # NON-VACUITY over the REAL tree. A guard whose file set is empty exits 0 and
   # reads exactly like a clean repository.
   index, note = resolve_index
-  _, _, files, cites, _ = scan_repo(index, note)
+  _, _, files, cites, _, keys = scan_repo(index, note)
   failures << "the real tree scanned #{files} files -- the file set is empty or nearly so" if files < 50
   failures << "the real tree examined #{cites} section citations -- the section arm is vacuous here" if cites < 1
   puts "  real tree: #{files} tracked text file(s), #{cites} section citation(s) examined -- non-vacuous"

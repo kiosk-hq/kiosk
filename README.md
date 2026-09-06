@@ -126,6 +126,35 @@ constraints in the gemspecs and the pinned `skill_url`. Releases are cut as
 path-scoped git tags (e.g. `kiosk-core/v0.4.0`) off each subdir's authoritative
 `*.gemspec`.
 
+## The two development keypairs this repo tracks on purpose
+
+`kiosk-demo-skooti/config/dev_unlock_key.pem` (Ed25519) and
+`kiosk-demo-prove/config/dev_prove_key.pem` (RSA) are private keys, they are
+committed, and that is deliberate. Read the header of either file: it says what
+the key is for, that it is world-readable, and that it must never sign
+anything real. Both applications enforce that rather than asking — production
+refuses to boot without an explicit key in the environment, and refuses again
+if the key it is given is the shipped one, compared on the public half in DER
+so a re-serialised copy cannot slip past.
+
+The Ed25519 one cannot be generated per machine: it is a KNOWN-ANSWER VECTOR.
+Its public half and one signature are reproduced in the lock firmware, in the C
+host test that firmware ships with, and in the demo's own known-answer test, and
+the crosscheck target signs a live message with the private half for the C
+verifier to check. A per-machine key turns all of that red on a fresh clone.
+
+**Do not read this as licence to commit a key.** A scanner pointed at this repo
+will flag both files, and that is the correct behaviour — which is why
+`.github/secret_scanning.yml` names exactly these two paths and nothing else.
+`bin/check-publication-paths` fails on any OTHER tracked private key, and on
+either of these two if it ever loses its do-not-use banner; it re-proves that
+detector against a freshly minted key on every run, so it cannot rot into a
+gate that quietly matches nothing. And note the part that no later commit
+repairs: this project does not rewrite published history, so a key that reaches
+a pushed commit stays reachable in that history whatever a subsequent commit
+deletes. Generate at setup or read from the environment; if a fixed vector is
+genuinely unavoidable, declare it in that script with the reason.
+
 ## License
 
 Apache-2.0 for every gem in this repo. See each gem's `LICENSE.txt`.

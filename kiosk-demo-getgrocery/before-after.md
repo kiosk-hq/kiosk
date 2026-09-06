@@ -186,9 +186,12 @@ versioned RubyGems). Not all nine are the minimum: `kiosk-core` +
 `kiosk-server` is the engine, `kiosk-pay-stripe` is what makes this the demo
 that takes real money, `kiosk-pow-equihash`/`kiosk-reputation` carry the
 registration and catalogue tolls, `kiosk-redteam` is the adversarial battery,
-`kiosk-user-idp-devise` the human-session channel, `kiosk-rls` the optional
-Postgres backstop, and `json_schemer` is required only because this origin turns
-`c.validate_requests` on.
+`kiosk-user-idp-devise` the human-session channel, and `kiosk-rls` the optional
+Postgres backstop. `json_schemer` is not one of the nine and is not optional
+either: `kiosk-server` declares it as a runtime dependency, because every 0.4
+verb's `input_schema` is validated before the handler sees an argument, behind
+no flag at all. Bundler would install it transitively; the line above only makes
+it explicit.
 
 **2. Run the generator**
 

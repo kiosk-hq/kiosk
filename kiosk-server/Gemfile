@@ -13,9 +13,13 @@ gem "kiosk-pow",          path: "../kiosk-pow"
 gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",   path: "../kiosk-reputation"
 
-# Opt-in request-validation (validate_requests) path dep — available in specs;
-# NOT a runtime dependency of the gem (lazily required in lib only when the flag
-# is on). A host that enables validate_requests adds it to its own Gemfile.
+# `json_schemer` is a RUNTIME dependency of this gem, so `gemspec` above already
+# brings it and this line is redundant — kept only so the development bundle
+# names it. kiosk-server.gemspec says why it is one: every 0.4 verb's
+# `input_schema` is validated before the handler sees an argument, behind no
+# flag at all. A host does NOT add it to enable anything; it is still required
+# lazily in lib so a checkout without it gets a ConfigurationError naming the
+# gem rather than a LoadError at boot.
 gem "json_schemer"
 
 # THE CONFORMANCE TEST for the derived OpenAPI document (T-068 slice 4,

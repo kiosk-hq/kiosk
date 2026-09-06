@@ -175,9 +175,12 @@ the monorepo checkout; in production they are versioned RubyGems). Not all eight
 are the minimum: `kiosk-core` + `kiosk-server` is the engine,
 `kiosk-pow-equihash`/`kiosk-reputation` are what the registration toll and the
 browse toll need, `kiosk-redteam` is the adversarial battery, `kiosk-rls` the
-optional Postgres backstop, `kiosk-user-idp-devise` the human-session channel,
-and `json_schemer` is required only because this origin turns
-`c.validate_requests` on. The `kiosk-pay-stripe` adapter swaps in for real
+optional Postgres backstop, and `kiosk-user-idp-devise` the human-session
+channel. `json_schemer` is not one of the eight and is not optional either:
+`kiosk-server` declares it as a runtime dependency, because every 0.4 verb's
+`input_schema` is validated before the handler sees an argument, behind no flag
+at all. Bundler would install it transitively; the line above only makes it
+explicit. The `kiosk-pay-stripe` adapter swaps in for real
 payments; this demo does not carry it, and uses a stub PSP instead.
 
 **2. Run the generator**

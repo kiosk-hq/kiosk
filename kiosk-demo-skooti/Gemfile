@@ -32,8 +32,12 @@ gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-redteam",            path: "../kiosk-redteam"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 
-# Opt-in request-shape validation (c.validate_requests = true) — kiosk-server
-# lazily requires json_schemer only when the flag is on.
+# Request-shape validation. `json_schemer` is a RUNTIME dependency of
+# kiosk-server, not an opt-in extra: every 0.4 verb's `input_schema` is
+# validated before the handler sees an argument, behind no flag at all
+# (`c.validate_requests` is the SEPARATE opt-in PoW-shape check, and it does
+# not switch that off). So bundler would install it transitively anyway; the
+# line is pinned here so a vendored checkout is explicit about it.
 gem "json_schemer"
 
 group :development, :test do

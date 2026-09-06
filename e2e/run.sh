@@ -140,7 +140,28 @@ ok "$APP_NAME generated"
 
 # ─── Gemfile patch (path overrides) ─────────────────────────────────────
 
-cat >> Gemfile <<RUBY
+# THE DELIMITER IS QUOTED, AND THAT IS LOAD-BEARING (K-1337). With an
+# UNQUOTED `<<RUBY` the shell runs parameter expansion AND COMMAND
+# SUBSTITUTION over the heredoc BODY before writing it -- so a backticked
+# span in a COMMENT is executed. It was: every run of this harness printed
+#   e2e/run.sh: line NNN: c.validate_requests: command not found
+#   e2e/run.sh: line NNN: add_dependency: command not found
+# on stderr while run.sh still exited 0, and the two comments below reached
+# the generated Gemfile with the backticked text replaced by the empty
+# output of the command that failed. Prose in a generated file is prose;
+# nothing in it may be executable, and the next comment someone writes here
+# must not be able to run anything.
+#
+# The one value that has to vary is the sibling-checkout path, and it is
+# spliced in AFTERWARDS, by Ruby, on an unmistakable placeholder -- so no
+# shell expansion is needed in this body at all. Ruby is already a hard
+# prerequisite of this script, and a literal string gsub has no
+# metacharacter of its own to get wrong. A replacement STRING does: sed
+# and Ruby's own String#sub both read `&` and a backslash-digit in the
+# REPLACEMENT as backreferences, and a path is attacker-shaped input the
+# day someone runs this from a directory with a `&` in its name -- hence
+# gsub's BLOCK form below, which takes the path as a literal.
+cat >> Gemfile <<'RUBY'
 
 # Kiosk OSS gems via path overrides (sibling clone of kiosk-hq/kiosk).
 # kiosk-rls is REQUIRED even though this fixture does not use RLS: it is the
@@ -149,13 +170,13 @@ cat >> Gemfile <<RUBY
 # kiosk-reputation + kiosk-pow-equihash back the register-time Equihash PoW
 # gate (registration_pow_count=1 in the initializer); neither is a transitive
 # dep of kiosk-all, so both must be path-overridden explicitly (same as demos).
-gem "kiosk-all",           path: "$KIOSK_OSS/kiosk-all"
-gem "kiosk-core",          path: "$KIOSK_OSS/kiosk-core"
-gem "kiosk-rls",           path: "$KIOSK_OSS/kiosk-rls"
-gem "kiosk-server",        path: "$KIOSK_OSS/kiosk-server"
-gem "kiosk-reputation",    path: "$KIOSK_OSS/kiosk-reputation"
-gem "kiosk-pow-equihash",  path: "$KIOSK_OSS/kiosk-pow-equihash"
-gem "kiosk-user-idp-devise", path: "$KIOSK_OSS/kiosk-user-idp-devise"
+gem "kiosk-all",           path: "@KIOSK_OSS@/kiosk-all"
+gem "kiosk-core",          path: "@KIOSK_OSS@/kiosk-core"
+gem "kiosk-rls",           path: "@KIOSK_OSS@/kiosk-rls"
+gem "kiosk-server",        path: "@KIOSK_OSS@/kiosk-server"
+gem "kiosk-reputation",    path: "@KIOSK_OSS@/kiosk-reputation"
+gem "kiosk-pow-equihash",  path: "@KIOSK_OSS@/kiosk-pow-equihash"
+gem "kiosk-user-idp-devise", path: "@KIOSK_OSS@/kiosk-user-idp-devise"
 
 # Devise backs the HUMAN half of the account-binding ceremony. The adapter above
 # only reads the request's Warden user, so the provider's own Devise install is
@@ -175,12 +196,32 @@ gem "devise"
 gem "json_schemer"
 RUBY
 
+# Splice the sibling-checkout path into the block just written. Fails loudly
+# when the placeholder is gone: a substitution that silently matches nothing
+# would leave a literal placeholder in the Gemfile and `bundle install` would
+# fail somewhere far away from the cause.
+SPLICED="$(ruby -e '
+  path, file = ARGV
+  src = File.read(file)
+  hits = src.scan("@KIOSK_OSS@").size
+  abort "no @KIOSK_OSS@ placeholder in #{file} -- the Gemfile block did not get written" if hits.zero?
+  File.write(file, src.gsub("@KIOSK_OSS@") { path })
+  puts hits
+' "$KIOSK_OSS" Gemfile)" || fail "could not splice KIOSK_OSS into the generated Gemfile"
+ok "Gemfile written verbatim; $SPLICED path override(s) point at $KIOSK_OSS"
+
 log "bundle install (this can take a moment on a cold cache)"
 bundle install --quiet
 ok "bundle complete"
 
 # ─── DB config ──────────────────────────────────────────────────────────
 
+# UNQUOTED on purpose, unlike the Gemfile block above (K-1337): this body is
+# three deliberate expansions and no prose, so there is nothing here for
+# command substitution to reach. THE MOMENT A COMMENT GOES IN, quote the
+# delimiter and splice the values the way that block does -- a backtick in a
+# YAML comment would run, and the only symptom would be a line on stderr
+# under an exit 0.
 cat > config/database.yml <<YML
 default: &default
   adapter: postgresql

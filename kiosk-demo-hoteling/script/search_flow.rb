@@ -23,6 +23,11 @@
 #   5. hotel_detail on an id nobody has → 404 not_found (spec §9.1:
 #      that argument ADDRESSES a property, so an empty array would be a
 #      false statement rather than an empty result).
+#   6. the published CLAMP at both bounds (K-1328): `limit=0` and a negative
+#      `limit` come back as ONE row and `limit=500` as fifty — «a value outside
+#      that range is clamped, never refused», which is the sentence the
+#      descriptor, its refusal hint and kiosk.tech's descriptor house style all
+#      publish and which nothing sent a value below 1 to test.
 #
 # Usage (invoked by rake demo:search — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
@@ -231,6 +236,32 @@ bad_detail  = bad_problem["detail"].to_s
 STDERR.puts "  Out-of-domain neighbourhood: HTTP #{rc9}, code=#{bad_problem["code"].inspect}, " \
             "detail=#{bad_detail.inspect}"
 
+# ── 4f. THE CLAMP'S LOWER BOUND — `limit=0` and a NEGATIVE (K-1328) ────────
+# The descriptor, its refusal hint and kiosk.tech's descriptor house style all
+# publish «CLAMPED to 1..50 — a value outside that range is clamped, never
+# refused», and until K-1328 nothing anywhere sent a value below 1. The code
+# mapped 0 and every negative to the DEFAULT page size, so the one sentence
+# three surfaces agree on was false at its lower bound and no run could see it.
+#
+# BOTH ENDS OF «outside that range» ARE DRIVEN, because a floor that only holds
+# for 0 is not a floor: `limit=0` is the boundary value and `limit=-5` is the
+# rest of the half-line below it. A page of 20 rows here is the old behaviour;
+# a 400 would be the other wrong answer the sentence forbids («never refused»).
+rc10, p10, res10 = query_json("search_hotels", { limit: 0 }, bearer: token)
+zero_rows  = page_rows(p10)
+zero_total = total_count(res10)
+STDERR.puts "  limit=0: HTTP #{rc10}, #{zero_rows.size} row(s), X-Total-Count=#{zero_total.inspect}"
+
+rc11, p11, _res11 = query_json("search_hotels", { limit: -5 }, bearer: token)
+neg_rows = page_rows(p11)
+STDERR.puts "  limit=-5: HTTP #{rc11}, #{neg_rows.size} row(s)"
+
+# The CEILING for the same reason — one probe, so the two bounds of the
+# published range are asserted by the same run rather than one of them.
+rc12, p12, _res12 = query_json("search_hotels", { limit: 500 }, bearer: token)
+over_rows = page_rows(p12)
+STDERR.puts "  limit=500: HTTP #{rc12}, #{over_rows.size} row(s)"
+
 puts JSON.generate(
   http_page1:        rc1,
   http_page2:        rc2,
@@ -265,4 +296,11 @@ puts JSON.generate(
   bad_enum_detail:           bad_detail,
   bad_enum_names_values:     %w[Sultanahmet Beyoğlu Kadıköy].all? { |v| bad_detail.include?(v) },
   bad_enum_echoes_bad_value: bad_detail.include?("Atlantis"),
+  http_limit_zero:           rc10,
+  limit_zero_count:          zero_rows.size,
+  limit_zero_total:          zero_total,
+  http_limit_negative:       rc11,
+  limit_negative_count:      neg_rows.size,
+  http_limit_over_max:       rc12,
+  limit_over_max_count:      over_rows.size,
 )

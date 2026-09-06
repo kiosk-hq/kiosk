@@ -1157,6 +1157,11 @@ namespace :demo do
         `property_id` is 404 (above), a FILTER that matched nothing is 200 with
         an empty array, and a value outside its declared domain is 400 whose
         detail NAMES THE VALID VALUES.
+      • the PUBLISHED CLAMP at BOTH bounds (K-1328): `limit=0` and a negative
+        `limit` are clamped to ONE row — never refused, and never the default
+        page of 20, which is a third behaviour neither bound describes — and
+        `limit=500` is clamped to 50, while X-Total-Count keeps counting the
+        whole matching set.
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -1346,6 +1351,42 @@ namespace :demo do
                "…and it lists the DOMAIN rather than echoing what was sent",
                "the 400's detail contains the rejected value itself, so 'names the valid " \
                "values' may be satisfied by an echo: #{result["bad_enum_detail"].inspect}")
+
+    # ── THE PUBLISHED CLAMP, AT BOTH BOUNDS (K-1328) ────────────────────────
+    #
+    # `search_hotels` publishes «Page size defaults to 20 and is CLAMPED to
+    # 1..50 — a value outside that range is clamped, never refused», and the
+    # descriptor house style on kiosk.tech carries the same sentence verbatim
+    # as the worked example operators copy. Until this run nothing sent a value
+    # below 1 anywhere in the demo or the e2e harness, and the handler mapped
+    # `limit=0` and every negative to the DEFAULT page size — twenty rows for a
+    # caller who asked for zero, which is neither bound of the published range.
+    #
+    # ONE ROW is the whole assertion, and it is not vacuous: the catalogue holds
+    # ~100 hotels, so 1 cannot be «the page happened to be short». Twenty rows
+    # is exactly the pre-fix behaviour and a 400 is the other forbidden answer,
+    # so the two ways to get this wrong land on two different failures.
+    check.call(result["http_limit_zero"] == 200 && result["limit_zero_count"] == 1,
+               "limit=0 is CLAMPED to the floor — one row, not refused and not the default page",
+               "limit=0 answered http=#{result["http_limit_zero"].inspect} with " \
+               "#{result["limit_zero_count"].inspect} row(s) — the descriptor says clamped to 1..50 " \
+               "(20 rows is the default page size, which is a third behaviour neither bound describes)")
+    # The header still counts the MATCHING SET, so a one-row page is a page of a
+    # larger result rather than a search that suddenly matched one hotel.
+    check.call(result["limit_zero_total"].to_i > 1,
+               "…and X-Total-Count (#{result["limit_zero_total"].inspect}) still counts the whole matching set",
+               "limit=0 reported X-Total-Count #{result["limit_zero_total"].inspect} — a clamped PAGE " \
+               "must not shrink the count of what matched")
+    check.call(result["http_limit_negative"] == 200 && result["limit_negative_count"] == 1,
+               "a NEGATIVE limit is clamped to the same floor (never refused)",
+               "limit=-5 answered http=#{result["http_limit_negative"].inspect} with " \
+               "#{result["limit_negative_count"].inspect} row(s) (want 200 / 1)")
+    # The ceiling, in the same run: without it «clamped to 1..50» would be half
+    # proven, and a floor that works while the cap is broken is not the contract.
+    check.call(result["http_limit_over_max"] == 200 && result["limit_over_max_count"] == 50,
+               "limit=500 is clamped to the ceiling — 50 rows, not refused",
+               "limit=500 answered http=#{result["http_limit_over_max"].inspect} with " \
+               "#{result["limit_over_max_count"].inspect} row(s) (want 200 / 50)")
 
     if failures.empty?
       puts "\n  All pagination + detail assertions passed."

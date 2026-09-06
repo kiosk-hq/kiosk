@@ -329,8 +329,20 @@ class Kiosk::HotelsController < ActionController::API
 
       limit = requested
     end
-    limit = HOTELING_SEARCH_PAGE if limit <= 0
-    limit = HOTELING_SEARCH_MAX  if limit > HOTELING_SEARCH_MAX
+    # THE FLOOR IS 1, NOT THE DEFAULT PAGE SIZE (K-1328). `limit=0` and every
+    # negative integer are «a value outside that range», so the published
+    # sentence says what happens to them: they are CLAMPED into 1..50. Mapping
+    # them to HOTELING_SEARCH_PAGE — which this line did until K-1328 — is a
+    # THIRD behaviour that neither bound describes: a caller asking for zero
+    # rows got twenty, silently, and three published sentences (this verb's
+    # `description`, {HINT_SEARCH_LIMIT}, and the descriptor house style
+    # published on kiosk.tech, whose worked hotel-search example carries that
+    # same sentence verbatim as the model every operator is told to copy) all
+    # said 1. Three surfaces agreeing is what put the code on the wrong side.
+    # `script/search_flow.rb` sends `limit=0` and demo:search asserts the
+    # one-row page, so the floor is a behaviour assertion rather than prose.
+    limit = 1 if limit < 1
+    limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
 
     # A cursor is OPAQUE by contract and `Cursor.decode_offset` is deliberately
     # lenient — garbage decodes to the first page. The clamp covers the one input

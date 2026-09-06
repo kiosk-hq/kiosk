@@ -117,7 +117,16 @@ universal agent skill is `skill.md` on the same site.
   CI job) builds all 14 gems and asserts every tracked file is packaged or
   declared in its `NOT_PACKAGED` manifest with a reason, and that every
   `__dir__`-relative path resolves inside the package. Adding an asset a gem
-  reads at runtime means adding it to `spec.files`.
+  reads at runtime means adding it to `spec.files`. Its third rule is about the
+  same reader rather than the same bytes: a PACKAGED file that teaches
+  installing a Kiosk gem — a `gem "kiosk-…"` line, a `bundle add`, a `gem
+  install` — must point at the monorepo README's Install section, which is the
+  one place publication status is stated, because someone holding the built gem
+  has that file and nothing else. The pointer is DERIVED from that README (the
+  canonical line's `github:` slug plus its own heading), so the day the gems are
+  published the rule fails and asks to be restated rather than passing quietly;
+  a mention that is prose about the resolver rather than an instruction is
+  declared in `INSTALL_MENTION_ONLY` with its reason, and goes stale loudly.
 - Version parity is a build gate, not prose. The spec (§14.1) binds the
   protocol, this implementation and the skill to one MAJOR.MINOR — read it from
   `kiosk-core/lib/kiosk/protocol.rb`'s `API_VERSION`, or from the guard's own

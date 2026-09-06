@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
 # kiosk-all — meta-gem for the Kiosk production stack.
-# `bundle add kiosk-all` pulls in kiosk-core + kiosk-server.
+# Requiring it pulls in kiosk-core + kiosk-server.
+#
+# NOT ON RUBYGEMS YET, so `bundle add kiosk-all` does not resolve. Publication
+# status and the canonical install line are stated once, in the monorepo
+# README's Install section: https://github.com/kiosk-hq/kiosk#install
+#
 # See https://kiosk.tech.
 #
 # Not pulled in (intentional):

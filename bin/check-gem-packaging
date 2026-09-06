@@ -26,8 +26,9 @@
 # "Someone must remember that spec.files is a hand-maintained list" becomes
 # "CI notices when it stopped being complete".
 #
-# THE TWO RULES IT ENFORCES. They approach the same invariant from opposite
-# ends, and the kiosk-server defect was visible from both:
+# THE RULES IT ENFORCES. The first two approach one invariant from opposite
+# ends, and the kiosk-server defect was visible from both; the third asks a
+# different question of the same package:
 #
 #   A. COMPLETENESS — from the FILES.  Every git-tracked file under a gem
 #      directory must be either in the built package, or matched by a pattern in
@@ -45,13 +46,26 @@
 #      `append_view_path File.expand_path("../../../app/views", __dir__)` was
 #      written, without anyone having to think about packaging at all.
 #
+#   C. THE INSTALL POINTER — from the PROSE (K-1343). A packaged file that
+#      TEACHES an install of a Kiosk gem must, in that same file, point at the
+#      one place publication status is stated. Same reader, same reason as A
+#      and B: someone holding the built gem has this file and nothing else, so
+#      an unqualified `bundle add kiosk-all` in it is an instruction that
+#      answers 404 with no way to find out why. The monorepo README says of its
+#      own Install section that it «is the one place in either published
+#      repository that states publication status; every install snippet
+#      elsewhere points here» — this rule is what makes that sentence true
+#      rather than hopeful. It is a THIRD invariant behind this exit code
+#      because its SUBJECT is the same one: what a RubyGems reader receives.
+#
 # WHY BOTH. A alone passes a gem that packages every file it owns and then
 # reaches for a file it does not own (kiosk-redteam did exactly this until its
 # solver reach moved behind Kiosk::Pow::Equihash.solver_path on a declared
 # dependency — see OUT_OF_GEM). B alone passes a gem whose runtime paths all
 # resolve but whose README, generator templates or data files were dropped.
 # Neither subsumes the other, and the defect that motivated this was in the
-# intersection.
+# intersection. C is orthogonal to both: the file is packaged and every path in
+# it resolves, and it still tells the reader to run a command that cannot work.
 #
 # WHAT THIS IS NOT. It is not proof the gem WORKS when installed — nothing here
 # boots Rails against an installed gem or renders a template. It asserts the
@@ -74,13 +88,19 @@
 # generator templates whose OUTPUT lands in the host application, so a __dir__
 # in one resolves against the host's db/migrate, not against this package.
 #
-# BOTH MANIFESTS ARE CHECKED FOR STALENESS, and for the same reason: an entry
+# EVERY MANIFEST IS CHECKED FOR STALENESS, and for the same reason: an entry
 # that no longer guards anything is an entry nobody will re-read, and it is a
 # standing lie about the state of the tree. A NOT_PACKAGED pattern matching no
-# file, and an OUT_OF_GEM literal no packaged file reaches for any more, are
-# both errors. OUT_OF_GEM especially: its entries exist to be DELETED when the
+# file, an OUT_OF_GEM literal no packaged file reaches for any more, and an
+# INSTALL_MENTION_ONLY entry whose file no longer mentions an install, are all
+# errors. OUT_OF_GEM especially: its entries exist to be DELETED when the
 # decision they record lands, and if the code changed first nothing else would
 # notice.
+#
+# Rule C carries one more guard the other two do not need, because its polarity
+# is opposite: A and B are BANS, where «nothing matched» is the tree being
+# clean, while C is a PRESENCE requirement, where «nothing matched» is the rule
+# not running. So a run in which NO packaged file teaches an install FAILS.
 #
 # Stdlib only (rubygems + tmpdir), no bundle, no database. It shells out to
 # `gem build` once per gem — deliberately the real builder rather than a
@@ -163,11 +183,76 @@ RESOLVABLE = [
 # excluded on purpose — see THE FAIL-OPEN GUARD in the header.
 RUBY_BEARING = /\.(rb|erb|rake|ru|gemspec)\z/.freeze
 
+# ── Rule C: the install pointer (K-1343) ─────────────────────────────────────
+#
+# THE POINTER IS DERIVED, NEVER TYPED. Both halves come out of the monorepo
+# README: the repository slug off the CANONICAL install line it declares, and
+# the anchor off its own Install heading. So the day the gems are published and
+# that line loses its `github:` qualifier, this rule reports that it can no
+# longer compute its subject and FAILS — which is the moment a human restates
+# it, not a moment to pass quietly. (Same discipline, and the same reason, as
+# the staleness checks on NOT_PACKAGED and OUT_OF_GEM below.)
+MONOREPO_README    = "README.md"
+CANONICAL_GEM_LINE = /^gem\s+"kiosk-all"\s*,\s*github:\s*"([A-Za-z0-9._\/-]+)"/
+INSTALL_HEADING    = /^##\s+Install\s*$/
+
+# What counts as TEACHING an install. Three shapes, because there are three
+# ways to say it and a reader follows any of them: the Gemfile line, and the
+# two commands. Deliberately not anchored to a fenced block — the shape that
+# started this was a `#` comment in a packaged `.rb`, with no fence in sight.
+INSTALL_TEACHING = [
+  /^\s*gem\s+"kiosk-[a-z0-9-]+"/,
+  /bundle add\s+kiosk[a-z0-9-]*/,
+  /gem install\s+kiosk[a-z0-9-]*/,
+].freeze
+
+# Packaged files the pointer rule reads. A file it cannot decode as UTF-8 is an
+# ERROR rather than a skip, for the reason THE FAIL-OPEN GUARD gives for Rule B:
+# "the regex found nothing because nobody opened the file" is the failure this
+# script exists to make impossible.
+TEXT_BEARING = /\.(md|rb|erb|rake|ru|gemspec|txt|py|yml|yaml|tt)\z/.freeze
+
+# gem => { packaged path => reason } for a file that MENTIONS an install
+# command without instructing anyone to run it. An entry here says "this
+# occurrence is prose ABOUT the resolver, not a snippet a reader will copy".
+# Checked for staleness like every other manifest in this file: an entry whose
+# file no longer matches any INSTALL_TEACHING shape, or is no longer packaged,
+# is a recorded exception for a problem that has gone away.
+INSTALL_MENTION_ONLY = {
+  "kiosk-server" => {
+    "lib/kiosk/server/request_validation.rb" =>
+      "the ConfigurationError rationale explains what a MISSING runtime dependency means by " \
+      "naming the resolution `gem install kiosk-server` performs. It is a statement about the " \
+      "gemspec, mid-sentence, and instructs the reader to run `bundle install` — never to " \
+      "install this gem from a registry that does not have it.",
+  },
+}.freeze
+
 errors = []
 used_patterns = {}
 used_out_of_gem = {}
+used_mention_only = {}
 listing = []
 packaged_index = {}
+pointer_subjects = 0
+
+# ── Rule C's derivation, once, before any gem is built ───────────────────────
+readme_src   = File.read(File.join(ROOT, MONOREPO_README))
+slug         = readme_src[CANONICAL_GEM_LINE, 1]
+has_heading  = readme_src.match?(INSTALL_HEADING)
+install_ref  = (slug && has_heading) ? "https://github.com/#{slug}#install" : nil
+
+if slug.nil?
+  errors << "#{MONOREPO_README} declares no canonical `gem \"kiosk-all\", github: \"...\"` line, so " \
+            "Rule C cannot derive where an install snippet should point. If the gems have been " \
+            "PUBLISHED and the qualifier is gone, that is the moment to restate this rule in " \
+            "bin/check-gem-packaging — not the moment for it to match nothing and pass."
+end
+if !has_heading
+  errors << "#{MONOREPO_README} has no `## Install` heading, so Rule C cannot derive the anchor " \
+            "an install snippet should point at. Restore the heading or re-derive the anchor in " \
+            "bin/check-gem-packaging."
+end
 
 gemspecs = Dir[File.join(ROOT, "*", "*.gemspec")].sort
 abort "check-gem-packaging: no */*.gemspec under #{ROOT}" if gemspecs.empty?
@@ -270,6 +355,36 @@ Dir.mktmpdir do |tmp|
                 "`File.expand_path(\"literal\", __dir__)`, or teach RESOLVABLE the new shape."
     end
 
+    # ── Rule C: the install pointer ───────────────────────────────────────
+    packaged.grep(TEXT_BEARING).each do |rel|
+      src = File.read(File.join(unpacked, rel), encoding: "UTF-8")
+      unless src.valid_encoding?
+        errors << "#{gem}: `#{rel}` has a #{TEXT_BEARING.source} extension but is not valid UTF-8, " \
+                  "so Rule C could not read it and cannot say whether it teaches an install. An " \
+                  "unreadable file must not pass silently — give it an extension outside " \
+                  "TEXT_BEARING in bin/check-gem-packaging, with the reason."
+        next
+      end
+      next unless INSTALL_TEACHING.any? { |re| src.match?(re) }
+
+      pointer_subjects += 1
+      if (reason = INSTALL_MENTION_ONLY.dig(gem, rel))
+        errors << "#{gem}: INSTALL_MENTION_ONLY entry for `#{rel}` carries no reason" if reason.strip.empty?
+        (used_mention_only[gem] ||= []) << rel
+        next
+      end
+      next if install_ref && src.include?(install_ref)
+      next if install_ref.nil? # already reported once, above; do not repeat it per file
+
+      errors << "#{gem}: `#{rel}` is IN THE BUILT GEM and teaches an install of a Kiosk gem, but " \
+                "does not point at #{install_ref}. No Kiosk gem is on RubyGems, so a reader who " \
+                "has only this package follows an instruction that answers 404 and has nowhere to " \
+                "find out why. Add the pointer to that section — it is the one place publication " \
+                "status is stated — or, if this occurrence is prose ABOUT the resolver rather " \
+                "than a snippet anyone will copy, declare it in INSTALL_MENTION_ONLY in " \
+                "bin/check-gem-packaging with the reason."
+    end
+
     packaged_index[gem] = packaged
     listing << [gem, packaged.size, tracked.size, reaches]
   end
@@ -301,6 +416,34 @@ OUT_OF_GEM.each do |gem, literals|
   end
 end
 
+# Rule C's own staleness and vacuity, in that order.
+INSTALL_MENTION_ONLY.each do |gem, files|
+  unless listing.any? { |(g, *)| g == gem }
+    errors << "INSTALL_MENTION_ONLY names #{gem}, which has no gemspec in this repo — stale entry."
+    next
+  end
+
+  (files.keys - (used_mention_only[gem] || [])).each do |rel|
+    errors << "INSTALL_MENTION_ONLY declares `#{rel}` for #{gem}, but that file is no longer " \
+              "packaged, or no longer mentions installing a Kiosk gem at all. Either the sentence " \
+              "was rewritten — delete the entry — or the mention moved to a shape " \
+              "INSTALL_TEACHING cannot see, which is the exemption outliving the thing it excused."
+  end
+end
+
+# VACUITY, and note the polarity: Rule C is a PRESENCE requirement, so «the
+# detector matched nothing» is not the rule being obeyed — it is the rule not
+# running. Eleven gem READMEs teach an install today; a run that finds zero has
+# lost its subject, not gained a clean tree.
+if install_ref && pointer_subjects.zero?
+  errors << "Rule C examined every packaged file in #{listing.size} gems and found NONE that " \
+            "teaches an install of a Kiosk gem. That is not a pass: this rule is a presence " \
+            "requirement, so an empty subject set means INSTALL_TEACHING has stopped matching " \
+            "the shapes people write, and the rule is holding nothing. Fix the patterns in " \
+            "bin/check-gem-packaging, or — if no packaged file really teaches an install any " \
+            "more — retire the rule deliberately."
+end
+
 if ARGV.include?("--list")
   puts format("%-22s %5s %5s  %-46s %s", "GEM", "PKG", "REPO", "REACHED FROM __dir__", "IN THE GEM?")
   listing.each do |(gem, npkg, ntracked, reaches)|
@@ -326,7 +469,9 @@ end
 
 if errors.empty?
   puts "check-gem-packaging: OK — #{listing.size} gems build; every tracked file is packaged or " \
-       "declared, and every __dir__-relative path resolves inside the package"
+       "declared, and every __dir__-relative path resolves inside the package; " \
+       "#{pointer_subjects} packaged file(s) teach an install and each points at #{install_ref} " \
+       "(derived from #{MONOREPO_README}) or is declared prose-only"
   exit 0
 end
 

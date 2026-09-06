@@ -77,6 +77,16 @@ Gem::Specification.new do |spec|
   # install-time lie paid for at request time. `validate_responses` (the
   # development/CI output check) uses the same validator.
   #
+  # «UNCONDITIONALLY» IS LITERAL AND IS NOT ABOUT THE TWO CONFIG FLAGS, which
+  # is a conflation this sentence has already caused once (K-1336). The
+  # obligation is enforced in `VerbController#arguments_for`, which calls
+  # `RequestValidation.validate_arguments!` behind no flag at all, so a freshly
+  # generated app carries it with an empty initializer — `validate_requests` is
+  # the separate opt-in PoW-SHAPE check in front of the gate, and
+  # `validate_responses` polices the OPERATOR's own output. Both are written by
+  # `bin/rails g kiosk:install` as a starting posture; neither can switch the
+  # sentence above off.
+  #
   # It stays LAZILY REQUIRED in the code — the ConfigurationError naming the
   # gem is still there — because a host may vendor a checkout without it, and
   # a clear message beats a LoadError at boot.

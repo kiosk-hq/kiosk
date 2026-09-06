@@ -35,6 +35,38 @@ Kiosk.configure do |c|
   #   c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]
   c.handlers = []
 
+  # ─── Validation ──────────────────────────────────────────────────────
+  # WHAT IS NOT A SETTING, so you know what these two flags are NOT for:
+  # coerce-then-validate on the per-verb wire is UNCONDITIONAL. Every call to
+  # <mount>/<verb-name> has its arguments coerced and checked against that
+  # verb's declared `input_schema` before your handler sees one, whatever is
+  # written here — spec §8.1 item 5 makes that an operator obligation, so a
+  # flag that could switch it off would be a flag for serving a non-conformant
+  # origin. It is why `json_schemer` is a real dependency of kiosk-server
+  # rather than an optional extra. The two flags below are different, smaller
+  # things, and both are opt-in with a default of `false`.
+
+  # The PoW-SHAPE check in front of the proof-of-work gate. A `Kiosk-PoW`
+  # header whose proofs cannot be parsed otherwise yields a fresh 402
+  # challenge, forever, with no diagnostic — the caller retries into a silent
+  # loop and nothing in your logs says why. On, a malformed shape is a clear
+  # 400 naming the shape it expected. It is NOT the gate: a well-formed but
+  # forged proof still fails the real cryptographic check. An absent proof is
+  # untouched, so the ordinary first no-pow request still gets its 402.
+  c.validate_requests = true
+
+  # Every query/action ANSWER validated against the `output_schema` that verb
+  # declares, so a descriptor that lies about its handler fails loudly instead
+  # of shipping a wrong shape to an assistant.
+  #
+  # NOT `true`, and the reason is the one kiosk-server's own
+  # response_validation.rb gives: with it on in production a descriptor typo
+  # becomes a 500 for a caller who did nothing wrong. Nothing a caller sends
+  # can trigger this check — the failure it reports is always yours — so it
+  # belongs in development and CI, where it is cheap to fix, and not in front
+  # of a live assistant. Your test suite keeps the whole assertion.
+  c.validate_responses = !Rails.env.production?
+
   # ─── Postgres surface ────────────────────────────────────────────────
   # GUC namespace used in SET LOCAL statements (and RLS policies, if you
   # opt in). Default "app" — change if your backend already uses app.*.

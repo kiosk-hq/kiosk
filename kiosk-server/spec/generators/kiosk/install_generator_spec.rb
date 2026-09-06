@@ -103,6 +103,68 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       body = read("config/initializers/kiosk.rb")
       expect(body).to include("c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]")
     end
+
+    # ── the validation posture a generated app starts with (K-1336) ───────
+    #
+    # The generator used to write NEITHER flag, so a fresh app got the engine
+    # defaults (both false) while all seven shipped demos set both — and the
+    # demo initializer is the artefact `onboarding.html` sends an adopting
+    # operator to copy. The generated app now starts in the same posture the
+    # demos ended up in after K-1332, which is the posture we would recommend:
+    # the caller-facing shape check on, the operator-facing output check on
+    # everywhere except production.
+    describe "validation flags" do
+      let(:engine_hazard_file) do
+        File.expand_path("../../../lib/kiosk/server/response_validation.rb", __dir__)
+      end
+      # The engine's own sentence, verbatim — the same one `bin/check-demo-copies`
+      # binds the seven demos to. BOUND rather than remembered: if the engine
+      # stops warning about the hazard, this spec is enforcing a posture whose
+      # producer no longer claims it, and that must be a failure rather than a
+      # silent pass.
+      hazard = "on in production would convert a descriptor typo into a 500 for a caller"
+
+      it "reads the engine's hazard sentence it is bound to (vacuity)" do
+        expect(File.read(engine_hazard_file)).to include(hazard),
+          "response_validation.rb no longer says #{hazard.inspect}; if the engine changed its " \
+          "mind, the thing to change is what the generator writes, not this binding"
+      end
+
+      # Line-anchored, not `include`: the same bytes appear in the explanatory
+      # comment above the setting, so a substring match would pass on a
+      # commented-out line — which is exactly the shape the arm below refuses.
+      it "turns the PoW-shape check on, so a malformed proof is a 400 and not a silent 402 loop" do
+        invoke!
+        expect(read("config/initializers/kiosk.rb"))
+          .to match(/^\s*c\.validate_requests\s*=\s*true\s*$/)
+      end
+
+      it "gates response validation off production — the engine's own hazard, in a fresh app" do
+        invoke!
+        body = read("config/initializers/kiosk.rb")
+        expect(body).to match(/^\s*c\.validate_responses\s*=\s*!Rails\.env\.production\?\s*$/)
+        expect(body).not_to match(/^\s*c\.validate_responses\s*=\s*true\s*$/)
+      end
+
+      it "writes both as ACTIVE lines — a commented posture is not a posture" do
+        invoke!
+        body = read("config/initializers/kiosk.rb")
+        expect(body).not_to match(/^\s*#\s*c\.validate_requests\s*=/)
+        expect(body).not_to match(/^\s*#\s*c\.validate_responses\s*=/)
+      end
+
+      # The gemspec calls coerce-then-validate unconditional. It IS — enforced
+      # in VerbController behind no flag — and a reader who met the two flags
+      # above with no explanation could reasonably conclude the obligation was
+      # one of them. K-1336 is that conflation, made by a reader of the
+      # gemspec; the generated file is where the next one would make it.
+      it "says outright that per-verb input validation is NOT one of these flags" do
+        invoke!
+        body = read("config/initializers/kiosk.rb")
+        expect(body).to include("coerce-then-validate on the per-verb wire is UNCONDITIONAL")
+        expect(body).to include("input_schema")
+      end
+    end
   end
 
   describe "migrations" do

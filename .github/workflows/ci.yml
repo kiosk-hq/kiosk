@@ -459,7 +459,15 @@ jobs:
             # to 0 and the unproven register returns 201.
             # Both reseed (`: :setup`), so they go after demo:walkthrough, which
             # has no prerequisite and lives off the job-level demo:setup.
-            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema demo:roles demo:register
+            # demo:clock_spec goes FIRST and is the cheapest signal in the list:
+            # DB-free, no server, no PoW, ~0.5 s, and it runs the same file under
+            # TZ=Etc/GMT-11 and TZ=Etc/GMT+2 because the defect it holds — a
+            # zoneless `slot` read in the SERVER PROCESS's zone rather than the
+            # salon's — is invisible from inside any single run.
+            # Watched fail: drop `zone.iso8601` from SalonClock.parse_slot so the
+            # stdlib parse is the value again, and 4 assertions go red under both
+            # TZ values (exit 1); restoring the file returns 0.
+            tasks: demo:clock_spec demo:walkthrough demo:isolation demo:redteam demo:schema demo:roles demo:register
             ungated:
               demo:binding: >-
                 timing-sensitive: the account-binding ceremony polls on the

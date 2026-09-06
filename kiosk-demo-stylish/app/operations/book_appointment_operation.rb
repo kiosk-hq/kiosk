@@ -37,7 +37,7 @@ class BookAppointmentOperation
       return refused("missing field: slot — an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
     slot_at = begin
-      Time.iso8601(slot.to_s)
+      SalonClock.parse_slot(slot)
     rescue ArgumentError, TypeError
       return refused("invalid slot #{slot.inspect} — pass an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
@@ -48,11 +48,15 @@ class BookAppointmentOperation
     #
     # This verb takes an INSTANT, not a date like hoteling's, so its floor is an
     # instant: at or before NOW has passed, later today has not. A timestamp WITH
-    # an offset compares exactly from any caller's clock; one WITHOUT is read in
-    # the app's own zone (UTC here), which is why the refusal echoes back the
-    # instant it understood. No read-side counterpart, deliberately: `availability`
-    # publishes the service MENU, not a calendar, so there are no dated rows to
-    # filter and this is the only place the floor can live.
+    # an offset compares exactly from any caller's clock; one WITHOUT is read AT
+    # THE SALON, which is where the chair is and which is what {SalonClock} names
+    # — never in whatever zone the server process happens to run in, which is
+    # what the parse above used to do while the sentence here claimed it was UTC.
+    # The refusal echoes back the instant it understood, so a caller that meant
+    # another one can see which clock it got. No read-side counterpart,
+    # deliberately: `availability` publishes the service MENU, not a calendar, so
+    # there are no dated rows to filter and this is the only place the floor can
+    # live.
     if slot_at <= Time.current
       return refused(
         "slot #{slot_at.iso8601} has already passed — book a time in the future " \

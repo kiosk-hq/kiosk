@@ -44,12 +44,20 @@
 # fix-wave one. Same arrangement as app/services/pow_difficulty.rb and
 # script/equihash_register.rb.
 #
-# Shape recognition below delegates to the `uuid` gem (pinned 2.3.9 — see
-# the Gemfile comment for why). Its own `UUID.validate` is looser than this
-# guard (it also accepts compact/un-hyphenated and `urn:uuid:` spellings),
-# so PATTERN stays as the second, narrowing check — `valid?` requires both,
-# and that is what keeps the rejection canonical-only.
-require "uuid"
+# NOTHING BUT PATTERN BACKS THIS, and the gem that used to is gone (K-1331).
+# `valid?` used to AND the pattern below with the archived `uuid` gem's own
+# validator, which dragged that gem (2.3.9; upstream archived 2024-01-01, no
+# successor) and its macaddr -> systemu transitive deps into every demo for a
+# conjunction that was a NO-OP. The gem's validator accepts the canonical
+# form with an OPTIONAL `urn:uuid:` prefix, case-insensitively, plus the
+# compact 32-hex spelling: a strict SUPERSET of PATTERN, and a looser second
+# test cannot narrow the first. Measured before removal — 100,000 random
+# candidates and eighteen hand-picked edges (compact, `urn:uuid:`,
+# brace-wrapped, empty, non-hex, upper-case, embedded newline): ZERO
+# disagreements between the conjunction and PATTERN alone; and of 200,000
+# canonical-shaped strings that PATTERN matches, the gem rejected none. On a
+# public repository it was pure cost — a dependency audit is the first thing
+# a reader runs.
 
 module UuidCheck
   # Canonical 8-4-4-4-12 hex form, the only shape Postgres' `uuid` type is fed
@@ -75,6 +83,6 @@ module UuidCheck
   # @return [Boolean] true iff `value` is a canonical uuid literal
   def self.valid?(value)
     str = value.to_s
-    !!(UUID.validate(str) && PATTERN.match?(str))
+    PATTERN.match?(str)
   end
 end

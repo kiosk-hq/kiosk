@@ -52,19 +52,19 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
-**TWO LINES in the block below were re-spelled after the recording, and saying so
-is cheaper than pretending otherwise.** The FIRST is the `/etc/hosts` hint at the
-top. Where the recording printed `(add to /etc/hosts: 127.0.0.1
-getgrocery.demo.kiosk.tech -- using 127.0.0.1)`, this document carries the line
-the task prints today. The host lookup that line belongs to is now OPT-IN:
-unguarded, a local run of this task sent a DNS query for a
-`demo.kiosk.tech` subdomain on every
-invocation — an outbound query to the project's production domain, for a
-value the run discards on any machine without the hosts entry — so the query
-now happens only when `KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint
-had to name that variable as well as the hosts entry, because on its own the
-hosts entry no longer changes anything, and an instruction that does not do
-what it says is worse than no instruction. The run was not repeated for it;
+**TWO LINES in the block below were re-spelled after the recording, and saying
+so is cheaper than pretending otherwise.** The FIRST is the `/etc/hosts` hint
+at the top. Where the recording printed `(add to /etc/hosts: 127.0.0.1
+getgrocery.demo.kiosk.tech -- using 127.0.0.1)`, this document carries the
+line the task prints today. The host lookup that line belongs to is now
+OPT-IN: unguarded, a local run of this task sent a DNS query for a
+`demo.kiosk.tech` subdomain on every invocation — an outbound query to the
+project's production domain, for a value the run discards on any machine
+without the hosts entry — so the query now happens only when
+`KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint had to name that
+variable as well as the hosts entry, because on its own the hosts entry no
+longer changes anything, and an instruction that does not do what it says is
+worse than no instruction. The run was not repeated for it;
 `bin/check-demo-derivations` holds this line, like every other one here, to a
 literal the current rake task prints, which is what makes this note checkable
 rather than a promise.

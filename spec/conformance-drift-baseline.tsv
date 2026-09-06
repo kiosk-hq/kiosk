@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-06 at 73b20084
+# recorded: 2026-09-06 at ede32f70
 # 1664 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
@@ -354,7 +354,7 @@ kiosk-demo-getgrocery/README.md	a3b975a5437c2099	kiosk-redteam battery — every
 kiosk-demo-getgrocery/README.md	1842a868952933d6	silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	2ce8cf5e940a88a2	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	b443eb6fef40c1ce	def catalog
-kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	38e308d07ac35b7c	def delivery_slots
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	8a9705a9e142adb9	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	8caef642def88909	def my_orders
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	2ecef41d22e6ba96	# delivers in Dublin, so "08:00" means 08:00 in Europe/Dublin, and "now" for the
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	e907e0bee6014c5c	# handled automatically across DST. A NAIVE UTC `slot_at`

@@ -128,7 +128,10 @@ class Kiosk::StorefrontController < ActionController::API
                     delivery_slot_id: { type: "integer", description: "Pass to create_order as `delivery_slot_id`." },
                     date:             { type: "string", description: "YYYY-MM-DD — pass to create_order as `delivery_date` so the booking lands on the day you saw." },
                     slot_at:          { type: "string", description: "The window's start instant, ISO 8601 with offset." },
-                    label:            { type: "string", description: "The window rendered for a human, e.g. \"08:00–10:00\"." },
+                    label:            { type: "string", description: "The window rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                    "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\". The wall clock " \
+                                                                    "is the delivery address's, not the caller's; `slot_at` carries " \
+                                                                    "the same instant with its resolved offset." },
                     district:         { type: "string", description: "The served Dublin postal district the address routed to (e.g. \"D02\") — a ROUTING key, not a time zone." },
                   },
                   required: %w[delivery_slot_id date slot_at label district],
@@ -142,7 +145,7 @@ class Kiosk::StorefrontController < ActionController::API
   example_row({ delivery_slot_id: 1,
                 date:    -> { DeliverySlots.example_date.iso8601 },
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
-                label: "08:00–10:00", district: "D02" })
+                label: "08:00–10:00 (#{DeliverySlots::ZONE_NAME})", district: "D02" })
   def delivery_slots
     # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
     # you can deliver". The caller cannot compute this operator's today: it
@@ -344,7 +347,14 @@ class Kiosk::StorefrontController < ActionController::API
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
-        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+        # THE ZONE IS PART OF THE LABEL, because the label is the field a human
+        # is actually read out. A bare "08:00–10:00" is a wall clock with no
+        # clock named, and a customer three hours away reads it as THEIR 08:00.
+        # `slot_at` has carried the resolved offset all along, but nobody says
+        # an offset out loud; the IANA name is what makes the sentence the
+        # assistant speaks a true one.
+        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00 " \
+                      "(#{DeliverySlots::ZONE_NAME})",
         "district" => district }
     }
   end

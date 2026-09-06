@@ -52,16 +52,19 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
-**One token in the block below was re-spelled after the recording, and saying so
-is cheaper than pretending otherwise.** The slot row's published field used to be
-named `zone` while `DeliverySlots.zone` in the same demo is an IANA time zone —
-one word for a postal district and for a clock — so the wire field became
-`district`, and the driver's own summary line moved with it. The recording was
-not re-run for that; the `zone=D02` it printed on the day reads `district=D02`
-here, and nothing else in the block was touched. Every other line is what the
-task printed, and `bin/check-demo-derivations` still holds all of them —
-including that one — to a literal the current driver prints, which is what makes
-this note checkable rather than a promise.
+**One LINE in the block below was re-spelled after the recording, and saying so
+is cheaper than pretending otherwise.** Two later changes moved it. The slot
+row's published field used to be named `zone` while `DeliverySlots.zone` in the
+same demo is an IANA time zone — one word for a postal district and for a clock
+— so the wire field became `district`; and the row's `label`, a bare
+`08:00–10:00` that a customer in another zone reads as their own morning, grew
+the zone it is written in. The driver's own summary line carries both, so where
+the recording printed `08:00–10:00 zone=D02` this document reads `08:00–10:00
+(Europe/Dublin) district=D02`. The run was not repeated for it and nothing else
+in the block was touched; every other line is what the task printed on the day.
+`bin/check-demo-derivations` holds all of them — including this one — to a
+literal the current driver prints, which is what makes this note checkable
+rather than a promise.
 
 **This recording is the secret-free path**, the one CI runs: with no
 `STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,
@@ -84,7 +87,7 @@ key whenever one is present.
   Catalog: 16 in-stock products (EUR)
   Ordering: sku=apple-juice, sku=banana, sku=butter-250g
   delivery_slots (district-less address): http=400 code=bad_request (rejected, as expected)
-  Delivery slot: id=1 08:00–10:00 district=D02 on 2026-08-27 (2026-08-27T08:00:00+01:00)
+  Delivery slot: id=1 08:00–10:00 (Europe/Dublin) district=D02 on 2026-08-27 (2026-08-27T08:00:00+01:00)
   create_order: order_id=1af6fb28-c05a-416b-adb6-a6965251808d total=€8.47 slot_at=2026-08-27T08:00:00+01:00
   payment_setup: ready
   pay: settlement_id=ebac3e74-9087-4560-adb3-14157fc4f48b psp_reference=pi_RGA0cgHgjoCS0YF
@@ -373,7 +376,7 @@ class Kiosk::StorefrontController < ActionController::API
   example_row({ delivery_slot_id: 1,
                 date:    -> { DeliverySlots.example_date.iso8601 },
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
-                label: "08:00–10:00", district: "D02" })
+                label: "08:00–10:00 (#{DeliverySlots::ZONE_NAME})", district: "D02" })
   def delivery_slots
     # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
     # you can deliver". The caller cannot compute this operator's today: it
@@ -412,7 +415,8 @@ class Kiosk::StorefrontController < ActionController::API
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
-        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00 " \
+                      "(#{DeliverySlots::ZONE_NAME})",
         "district" => district }
     }
   end

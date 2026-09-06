@@ -58,6 +58,16 @@ module Seatings
     TIMES[1]
   end
 
+  # A seating rendered for a HUMAN, with the zone it is written in beside it —
+  # "20:00 (Europe/Lisbon)". One place, because every verb that publishes a
+  # seating publishes the same sentence, and because a bare "20:00" is a wall
+  # clock with no clock named: a caller two hours east reads it as their own
+  # evening. `seating_at` has always carried the resolved offset, but an offset
+  # is not what anyone says out loud — the IANA name is.
+  def label(time)
+    "#{time} (#{ZONE_NAME})"
+  end
+
   # A seating's start as a zoned Time in the operator's locale (Lisbon),
   # DST-correct. `time` is one of TIMES ("19:00"). Its .iso8601 carries the real
   # offset (+01:00 summer / +00:00 winter) so an assistant reads an unambiguous

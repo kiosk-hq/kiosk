@@ -118,10 +118,19 @@ invent a placeholder.
 ## Delivery-slot times and the past-slot filter (operator locale = Dublin)
 
 Slot wall-clock times are the **operator's local time**: getgrocery delivers in
-Dublin, so a slot labelled `08:00–10:00` means 08:00 **Europe/Dublin**, and each
-`delivery_slots` row's `slot_at` carries the real offset (`+01:00` in summer IST,
-`+00:00` in winter GMT). The real IANA zone is used — not a fixed offset — so DST
-is handled automatically (`app/models/delivery_slots.rb`).
+Dublin, so a slot labelled `08:00–10:00 (Europe/Dublin)` means 08:00 in Dublin,
+and each `delivery_slots` row's `slot_at` carries the real offset (`+01:00` in
+summer IST, `+00:00` in winter GMT). The real IANA zone is used — not a fixed
+offset — so DST is handled automatically (`app/models/delivery_slots.rb`).
+
+**The `label` names its zone, and that is the point of it.** `slot_at` has
+always been unambiguous, but nobody says an offset out loud: the field a human
+is actually read out is `label`, and a bare `08:00–10:00` is a wall clock with
+no clock named — a customer three hours away hears their own 08:00. The row
+also carries `district` (the served postal district, `D02`), which is a ROUTING
+key and not a time zone; it used to be called `zone`, in a row that also
+publishes a delivery window, which is precisely where that word means something
+else.
 
 `delivery_slots` returns only **still-bookable** windows: for **today**, a slot
 whose start has already passed in Dublin is dropped (querying at 11:00 hides

@@ -39,7 +39,9 @@ the result (no envelope).
 - `GET /kiosk/availability?party_size=2[&neighborhood=&time=&date=]` — open tables
   **across all restaurants** for the upcoming seatings that seat the party;
   answers a bare array whose rows carry `restaurant_id`, `restaurant_table_id`,
-  `seating_date`, `seating_time`, `seating_at`, and any EUR no-show hold
+  `seating_date`, `seating_time`, `seating_label` (the seating with the zone it
+  is written in — `20:00 (Europe/Lisbon)`, because a bare `20:00` is a wall
+  clock with no clock named), `seating_at`, and any EUR no-show hold
 - `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped), with table + restaurant
 - `POST /kiosk/book_table {restaurant_id, restaurant_table_id, date, time, party_size}` —
   reserve a specific table at a chosen restaurant for a chosen seating; a table

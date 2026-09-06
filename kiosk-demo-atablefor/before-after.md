@@ -204,11 +204,12 @@ class Kiosk::DiningRoomController < ApplicationController
                     capacity:            { type: "integer" },
                     seating_date:        { type: "string" },
                     seating_time:        { type: "string" },
+                    seating_label:       { type: "string" },
                     seating_at:          { type: "string" },
                     deposit_eur:         { type: "integer" },
                   },
                   required: %w[restaurant neighborhood cuisine restaurant_id restaurant_table_id
-                               table_label capacity seating_date seating_time seating_at deposit_eur],
+                               table_label capacity seating_date seating_time seating_label seating_at deposit_eur],
                 }
   example_params({ party_size: 2, neighborhood: "Alfama" })
   # The seating is RESOLVED, not written down: this row is what an
@@ -219,6 +220,7 @@ class Kiosk::DiningRoomController < ApplicationController
     cuisine: "Portuguese tavern", restaurant_id: 1,
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
     seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
     seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
     deposit_eur: 10,
   })
@@ -279,10 +281,11 @@ class Kiosk::DiningRoomController < ApplicationController
                     status:              { type: "string" },
                     seating_date:        { type: "string" },
                     seating_time:        { type: "string" },
+                    seating_label:       { type: "string" },
                     seating_at:          { type: "string" },
                   },
                   required: %w[booking_id restaurant_id restaurant neighborhood restaurant_table_id
-                               table_label party_size status seating_date seating_time seating_at],
+                               table_label party_size status seating_date seating_time seating_label seating_at],
                 }
   def my_bookings
     render json: Booking.owned_by_current_principal
@@ -308,6 +311,7 @@ class Kiosk::DiningRoomController < ApplicationController
                             status:              status,
                             seating_date:        local.strftime("%Y-%m-%d"),
                             seating_time:        local.strftime("%H:%M"),
+                            seating_label:       Seatings.label(local.strftime("%H:%M")),
                             seating_at:          Booking.publish_instant(seating_at) }
                         }
   end

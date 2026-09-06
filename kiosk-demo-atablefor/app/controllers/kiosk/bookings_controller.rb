@@ -73,8 +73,11 @@ class Kiosk::BookingsController < ApplicationController
                   restaurant_id:       { type: "integer", description: "The restaurant booked." },
                   restaurant_table_id: { type: "integer", description: "The table held." },
                   party_size:          { type: "integer", description: "Guests the booking holds the table for." },
-                  date:                { type: "string", description: "The seating date, YYYY-MM-DD." },
-                  time:                { type: "string", description: "The seating time, HH:MM (24-hour)." },
+                  date:                { type: "string", description: "The seating date, YYYY-MM-DD, #{Seatings::ZONE_NAME}." },
+                  time:                { type: "string", description: "The seating time, HH:MM (24-hour), #{Seatings::ZONE_NAME} — " \
+                                                                      "the table is there, so that is the clock. `seating_at` is the " \
+                                                                      "same instant with its resolved offset; `availability`'s " \
+                                                                      "`seating_label` is this time with the zone written beside it." },
                   seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
                   status:              { type: "string", description: "confirmed." },
                 },

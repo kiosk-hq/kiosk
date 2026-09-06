@@ -89,12 +89,17 @@ class Kiosk::DiningRoomController < ApplicationController
                     table_label:         { type: "string", description: "The table's in-house label." },
                     capacity:            { type: "integer", description: "Seats at this table." },
                     seating_date:        { type: "string", description: "YYYY-MM-DD — book_table's `date`." },
-                    seating_time:        { type: "string", description: "HH:MM (24-hour) — book_table's `time`." },
+                    seating_time:        { type: "string", description: "HH:MM (24-hour), #{Seatings::ZONE_NAME} — book_table's `time`." },
+                    seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                        "e.g. \"20:00 (#{Seatings::ZONE_NAME})\". The table is in " \
+                                                                        "#{Seatings::ZONE_NAME}, so the wall clock is the restaurant's " \
+                                                                        "and not the caller's; `seating_at` carries the same instant " \
+                                                                        "with its resolved offset." },
                     seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
                     deposit_eur:         { type: "integer", description: "No-show hold in whole EUR (0 = none), settled at the restaurant." },
                   },
                   required: %w[restaurant neighborhood cuisine restaurant_id restaurant_table_id
-                               table_label capacity seating_date seating_time seating_at deposit_eur],
+                               table_label capacity seating_date seating_time seating_label seating_at deposit_eur],
                 }
   example_params({ party_size: 2, neighborhood: "Alfama" })
   # The seating is RESOLVED, not written down: this row is what an
@@ -105,6 +110,7 @@ class Kiosk::DiningRoomController < ApplicationController
     cuisine: "Portuguese tavern", restaurant_id: 1,
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
     seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
     seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
     deposit_eur: 10,
   })
@@ -194,6 +200,7 @@ class Kiosk::DiningRoomController < ApplicationController
           capacity:            capacity,
           seating_date:        date.iso8601,
           seating_time:        time,
+          seating_label:       Seatings.label(time),
           seating_at:          seating_at.iso8601,
           deposit_eur:         deposit_eur,
         }
@@ -235,12 +242,14 @@ class Kiosk::DiningRoomController < ApplicationController
                     table_label:         { type: "string", description: "The table's in-house label." },
                     party_size:          { type: "integer", description: "Guests the booking holds the table for." },
                     status:              { type: "string", description: "confirmed | cancelled." },
-                    seating_date:        { type: "string", description: "YYYY-MM-DD, Europe/Lisbon." },
-                    seating_time:        { type: "string", description: "HH:MM (24-hour), Europe/Lisbon." },
+                    seating_date:        { type: "string", description: "YYYY-MM-DD, #{Seatings::ZONE_NAME}." },
+                    seating_time:        { type: "string", description: "HH:MM (24-hour), #{Seatings::ZONE_NAME}." },
+                    seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                        "e.g. \"20:00 (#{Seatings::ZONE_NAME})\"." },
                     seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
                   },
                   required: %w[booking_id restaurant_id restaurant neighborhood restaurant_table_id
-                               table_label party_size status seating_date seating_time seating_at],
+                               table_label party_size status seating_date seating_time seating_label seating_at],
                 }
   def my_bookings
     render json: Booking.owned_by_current_principal
@@ -266,6 +275,7 @@ class Kiosk::DiningRoomController < ApplicationController
                             status:              status,
                             seating_date:        local.strftime("%Y-%m-%d"),
                             seating_time:        local.strftime("%H:%M"),
+                            seating_label:       Seatings.label(local.strftime("%H:%M")),
                             seating_at:          Booking.publish_instant(seating_at) }
                         }
   end

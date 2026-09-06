@@ -2,6 +2,7 @@
 
 require "kiosk/server/audit_sink"
 require "kiosk/server/errors"
+require "kiosk/server/failure_log"
 require "kiosk/server/response_validation"
 require "kiosk/server/result"
 require "kiosk/server/session_context"
@@ -764,18 +765,15 @@ module Kiosk
       # promised "See server logs for the backtrace" since before anything
       # wrote one.
       #
-      # Same shape as {AuditSink}'s `report`: Rails' logger when the host app
-      # has booted, `Kernel#warn` otherwise (rake tasks, consoles, this gem's
-      # own specs), and a logger that itself raises must not turn one failure
-      # into two.
+      # The line itself is built by {FailureLog}, which is the ONE place that
+      # knows what a dropped message looks like in an operator's log — Rails'
+      # logger when the host app has booted, `Kernel#warn` otherwise (rake
+      # tasks, consoles, this gem's own specs), and a logger that itself raises
+      # must not turn one failure into two. It was inlined here until K-1310
+      # gave the mixin's `rescue_from` seam the same promise to keep, and two
+      # spellings of one log format are two things to hold in step.
       def report_handler_failure(kind, name, error)
-        message = "[kiosk-server] #{kind} #{name.inspect} raised " \
-                  "#{error.class}: #{error.message}\n  " \
-                  "#{Array(error.backtrace).first(20).join("\n  ")}"
-        logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
-        logger ? logger.error(message) : warn(message)
-      rescue StandardError
-        nil
+        FailureLog.report("#{kind} #{name.inspect} raised #{error.class}", error)
       end
 
       def symbolize(value)

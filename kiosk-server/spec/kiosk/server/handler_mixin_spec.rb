@@ -378,6 +378,14 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
   end
 
   describe "Rails-native raises (the T-054 rescue_from seam)" do
+    # `expect(e.message).to include("sku")` was the old assertion, and what it
+    # was asserting — MEASURED at head on 2026-09-06, before the fix — was
+    # `detail: "param is missing or the value is empty or invalid: sku"`:
+    # actionpack's own sentence, verbatim, on a 400 problem document (K-1310).
+    # This branch exists for exceptions the operator did NOT author, so the
+    # sentence it rendered was always some library's. INVERTED, so a revert
+    # reddens here: the wire carries this protocol's words and the library's
+    # go to the operator's log.
     it "maps params.require's ParameterMissing to bad_request — no Kiosk classes in the handler" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Handler
@@ -392,12 +400,20 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       end
       stub_const("SpecStrictController", klass)
 
-      expect { execute(:run, { name: "strict" }) }
-        .to raise_error(Kiosk::Server::Errors::Base) { |e|
-          expect(e.code).to eq("bad_request")
-          expect(e.http_status).to eq(400)
-          expect(e.message).to include("sku")
-        }
+      expect {
+        expect { execute(:run, { name: "strict" }) }
+          .to raise_error(Kiosk::Server::Errors::Base) { |e|
+            expect(e.code).to eq("bad_request")
+            expect(e.http_status).to eq(400)
+            expect(e.message).to eq('verb "strict" rejected the request as malformed')
+            expect(e.hint).to eq(Kiosk::Server::Errors::RESCUED_HINTS.fetch("bad_request"))
+            # actionpack's sentence, and the fragment the old assertion read.
+            expect(e.message).not_to include("param is missing")
+            expect(e.message).not_to include("sku")
+            expect(e.to_problem[:detail]).not_to include("param is missing")
+          }
+      }.to output(/\[kiosk-server\] verb "strict" answered bad_request for ActionController::ParameterMissing: param is missing/)
+        .to_stderr
     end
 
     it "maps an exception the HOST registered in rescue_responses, Pundit-style" do
@@ -405,6 +421,14 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       # `config.action_dispatch.rescue_responses` entries (a policy library's
       # NotAuthorizedError → :forbidden, Active Record's RecordNotFound →
       # :not_found) reach the wire with zero Kiosk configuration.
+      #
+      # THE COST OF K-1310, PINNED RATHER THAN DESCRIBED. `"policy said no"` was
+      # written by whoever registered the class, and nothing in that table
+      # distinguishes a host's own class from a library's — Rails documents it
+      # as the place an app registers ITS LIBRARIES' exceptions. So the CODE
+      # still travels and the SENTENCE does not; the sentence is in the
+      # operator's log, and the two ways to put one on the wire on purpose are
+      # the two specs below.
       stub_const("SpecVetoError", Class.new(StandardError))
       ActionDispatch::ExceptionWrapper.rescue_responses["SpecVetoError"] = :forbidden
       klass = Class.new(ApplicationController) do
@@ -417,14 +441,71 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       end
       stub_const("SpecVetoedController", klass)
 
-      expect { execute(:run, { name: "vetoed" }) }
-        .to raise_error(Kiosk::Server::Errors::Base) { |e|
-          expect(e.code).to eq("forbidden")
-          expect(e.http_status).to eq(403)
-          expect(e.message).to eq("policy said no")
-        }
+      expect {
+        expect { execute(:run, { name: "vetoed" }) }
+          .to raise_error(Kiosk::Server::Errors::Base) { |e|
+            expect(e.code).to eq("forbidden")
+            expect(e.http_status).to eq(403)
+            expect(e.message).to eq('verb "vetoed" refused the request')
+            expect(e.hint).to eq(Kiosk::Server::Errors::RESCUED_HINTS.fetch("forbidden"))
+            expect(e.message).not_to include("policy said no")
+          }
+      }.to output(/\[kiosk-server\] verb "vetoed" answered forbidden for SpecVetoError: policy said no/)
+        .to_stderr
     ensure
       ActionDispatch::ExceptionWrapper.rescue_responses.delete("SpecVetoError")
+    end
+
+    # ── the two routes the redaction above deliberately does not touch ────
+    #
+    # Both are documented on {HandlerMixin}, both are what an operator uses when
+    # they MEAN to speak to the agent, and neither reaches
+    # `kiosk_rescue_to_wire` at all — the first never raises, the second is
+    # re-raised on its first line. They are asserted HERE, beside the loss,
+    # because a cost is only priced when the alternative is proven to work.
+    it "still lets an operator SPEAK to the agent by rendering the envelope" do
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Handler
+        kind :action
+        description "Refuses in the operator's own words, Rails-natively."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
+        def vetoed_politely
+          render json: { ok: false,
+                         error: { code: "forbidden", message: "policy said no",
+                                  hint: "ask your human to raise the limit" } },
+                 status: :forbidden
+        end
+      end
+      stub_const("SpecPoliteVetoController", klass)
+
+      expect { execute(:run, { name: "vetoed_politely" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("forbidden")
+          expect(e.message).to eq("policy said no")
+          expect(e.hint).to eq("ask your human to raise the limit")
+        }
+    end
+
+    it "still lets an operator SPEAK to the agent by raising a Kiosk wire error" do
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Handler
+        kind :action
+        description "Refuses in the operator's own words, by raising."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
+        def vetoed_by_raise
+          raise Kiosk::Server::Errors::Forbidden.new("policy said no",
+                                                     hint: "ask your human to raise the limit")
+        end
+      end
+      stub_const("SpecRaisedVetoController", klass)
+
+      expect { execute(:run, { name: "vetoed_by_raise" }) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
+          expect(e.message).to eq("policy said no")
+          expect(e.hint).to eq("ask your human to raise the limit")
+        }
     end
 
     it "lets the operator's own rescue_from win over the mixin's floor" do

@@ -66,14 +66,32 @@ require "json"
 # caller's own bytes straight back out. A bare `rescue => e` names nothing, so
 # it is foreign too.
 #
-# WHAT THIS SWEEP DOES NOT SEE, said out loud rather than left to be found:
+# TWO CONSTRUCTIONS, NOT ONE, AND THE SECOND WAS ADDED BY THE ROUTE THIS
+# SWEEP'S OWN SCOPE NOTE SAID IT COULD NOT SEE (K-1310).
+#
+# The note used to read «a foreign message reaching the wire by a route that is
+# not an `Errors` constructor — `HandlerMixin#kiosk_rescue_to_wire` renders
+# `message: exception.message` into the sub-dispatch envelope and
+# `HandlerDispatch#error_message` re-wraps that as the wire `detail`». That was
+# TRUE, it was written honestly, and it was still a hole: a scope note that
+# names a live leak documents the leak instead of holding it, and the leak was
+# live — actionpack's «param is missing or the value is empty or invalid: sku»
+# on a 400, MEASURED at head the day the note was read back.
+#
+# So `render` is the second construction. Every `render` in `kiosk-server/lib`
+# is a controller answering a caller, and the sub-dispatch envelope is a wire
+# error by a shorter road: {HandlerDispatch#decode} turns a non-2xx render into
+# an {Errors::Base} and its `message` into the problem document's `detail`. The
+# ownership rule is identical, so the same walker answers both — and it answers
+# `render` even when the render carries no `error` key at all, because a body
+# is a body.
+#
+# WHAT THIS SWEEP STILL DOES NOT SEE, said out loud rather than left to be
+# found — and this list is a statement about the DETECTOR, never a licence for
+# the paths it names:
 #
 #   * a message laundered through a local first (`detail = e.message` a line
 #     up, `Errors::BadRequest.new(detail)` a line down);
-#   * a foreign message reaching the wire by a route that is not an `Errors`
-#     constructor — `HandlerMixin#kiosk_rescue_to_wire` renders
-#     `message: exception.message` into the sub-dispatch envelope and
-#     `HandlerDispatch#error_message` re-wraps that as the wire `detail`;
 #   * `#{e.class}`, which is a class NAME and not a sentence: it cannot carry
 #     the caller's bytes and does not move with a dependency's wording. Two
 #     500 paths keep it deliberately, with the message beside it in the log.
@@ -195,6 +213,27 @@ module KioskWireErrorSweep
     nil
   end
 
+  # The second construction (K-1310): `render …` — parenthesised or not. No
+  # receiver, so it is an `fcall`/`command` on the bare name, which is what a
+  # controller writes and what {HandlerMixin} wrote the leak in. The BODY is
+  # not inspected for an `error` key: `render json: { message: e.message }`
+  # with no envelope around it would reach a caller just as directly, and a
+  # detector that required the envelope would be checking the shape of a leak
+  # rather than the leak.
+  def render_arguments(node)
+    if node[0] == :method_add_arg && node[1].is_a?(Array) && node[1][0] == :fcall
+      name = node[1][1]
+      return node[2] if name.is_a?(Array) && name[0] == :@ident && name[1] == "render"
+    end
+
+    if node[0] == :command
+      ident = node[1]
+      return node.last if ident.is_a?(Array) && ident[0] == :@ident && ident[1] == "render"
+    end
+
+    nil
+  end
+
   def raised_wire_error?(args)
     return false unless args.is_a?(Array)
 
@@ -222,20 +261,30 @@ module KioskWireErrorSweep
     args = constructor_arguments(node)
     if args
       result[:sites] += 1
-      message_sends(args, env).each do |(line, name, ownership)|
-        found = Offence.new(path, line, lines[line - 1].to_s.strip, name)
-        (ownership == :owned ? result[:owned] : result[:offences]) << found
-      end
+      collect(args, env, result, lines, path)
+    end
+
+    rendered = render_arguments(node)
+    if rendered
+      result[:renders] += 1
+      collect(rendered, env, result, lines, path)
     end
 
     node.each { |child| walk(child, env, result, lines, path) if child.is_a?(Array) }
+  end
+
+  def collect(args, env, result, lines, path)
+    message_sends(args, env).each do |(line, name, ownership)|
+      found = Offence.new(path, line, lines[line - 1].to_s.strip, name)
+      (ownership == :owned ? result[:owned] : result[:offences]) << found
+    end
   end
 
   def scan(source, path: "(fixture)")
     tree = Ripper.sexp(source)
     raise ArgumentError, "#{path} does not parse" if tree.nil?
 
-    result = { sites: 0, offences: [], owned: [] }
+    result = { sites: 0, renders: 0, offences: [], owned: [] }
     walk(tree, {}, result, source.lines, path)
     result[:offences].uniq!
     result[:owned].uniq!
@@ -386,6 +435,45 @@ RSpec.describe "the malformed-request sentences on the wire" do
     end
   end
 
+  # ── the third sentence: a Rails-native raise (K-1310) ─────────────────────
+  describe "Kiosk::Server::Errors.rescued_wire" do
+    it "words the refusal itself and names the verb, so nothing of the exception travels" do
+      built = Kiosk::Server::Errors.rescued_wire("bad_request", verb: "strict")
+      expect(built[:code]).to eq("bad_request")
+      expect(built[:message]).to eq('verb "strict" rejected the request as malformed')
+      expect(built[:hint]).to eq(Kiosk::Server::Errors::RESCUED_HINTS.fetch("bad_request"))
+    end
+
+    it "says `this verb` when the dispatch name is unknown, rather than rendering nil" do
+      expect(Kiosk::Server::Errors.rescued_wire("not_found")[:message])
+        .to eq("this verb found no such record")
+      expect(Kiosk::Server::Errors.rescued_wire("not_found", verb: "")[:message])
+        .to eq("this verb found no such record")
+    end
+
+    # THE TABLE IS THE CONTRACT. `kiosk_rescue_to_wire` reaches this builder for
+    # whatever code {STATUS_CODES} decides, so a code that table can produce and
+    # this one cannot word would be a `KeyError` at request time — a 500 in
+    # place of the 4xx the seam had already chosen.
+    it "words every code the rescue seam can decide, and invents none" do
+      reachable = Kiosk::Server::Errors::STATUS_CODES.values.uniq.sort
+      expect(Kiosk::Server::Errors::RESCUED_DETAILS.keys.sort).to eq(reachable)
+      expect(Kiosk::Server::Errors::RESCUED_HINTS.keys.sort).to eq(reachable)
+    end
+
+    it "carries no Ruby, no library and no exception wording in any entry" do
+      Kiosk::Server::Errors::STATUS_CODES.values.uniq.each do |code|
+        built = Kiosk::Server::Errors.rescued_wire(code, verb: "v")
+        expect(built[:message]).not_to be_empty
+        expect(built[:hint]).not_to be_empty
+        RUBY_LEAKS.each do |leak|
+          expect(built[:message]).not_to match(leak)
+          expect(built[:hint]).not_to match(leak)
+        end
+      end
+    end
+  end
+
   # ── the sweep: no site may build either sentence for itself ───────────────
   #
   # The behavioural arms above cover the endpoints somebody remembered to
@@ -476,14 +564,21 @@ RSpec.describe "the malformed-request sentences on the wire" do
     # ordinary editing does not move it, and well above zero so a sweep that has
     # stopped recognising constructors cannot pass by finding nothing to judge.
     MINIMUM_CONSTRUCTOR_SITES = 80
+    # Measured at head when the `render` arm was added (K-1310): 31 render
+    # sites (114 constructor sites beside them). Same reasoning as the floor above — well
+    # below the count so ordinary editing does not move it, well above zero so
+    # a walker that has stopped recognising `render` cannot pass by judging
+    # nothing.
+    MINIMUM_RENDER_SITES = 10
 
     let(:gem_root) { File.expand_path("../../..", __dir__) }
     let(:sources)  { Dir.glob("#{gem_root}/lib/**/*.rb").sort }
 
     let(:census) do
-      sources.each_with_object({ sites: 0, offences: [], owned: [] }) do |path, acc|
+      sources.each_with_object({ sites: 0, renders: 0, offences: [], owned: [] }) do |path, acc|
         found = KioskWireErrorSweep.scan(File.read(path), path: path.delete_prefix("#{gem_root}/"))
-        acc[:sites] += found[:sites]
+        acc[:sites]   += found[:sites]
+        acc[:renders] += found[:renders]
         acc[:offences].concat(found[:offences])
         acc[:owned].concat(found[:owned])
       end
@@ -515,6 +610,12 @@ RSpec.describe "the malformed-request sentences on the wire" do
       expect(census[:sites]).to be >= MINIMUM_CONSTRUCTOR_SITES,
         "the sweep found #{census[:sites]} constructor sites in lib/ — it has stopped " \
         "recognising them, and an empty offence list means nothing until it does"
+    end
+
+    it "still recognises `render` sites in the shipped source (vacuity)" do
+      expect(census[:renders]).to be >= MINIMUM_RENDER_SITES,
+        "the sweep found #{census[:renders]} render sites in lib/ — the K-1310 arm has " \
+        "stopped recognising them, and it is the arm that covers the sub-dispatch envelope"
     end
 
     it "still finds one of OUR OWN messages reaching a wire error, or the carve-out guards nothing (vacuity)" do
@@ -589,6 +690,62 @@ RSpec.describe "the malformed-request sentences on the wire" do
         end
       RUBY
       expect(KioskWireErrorSweep.scan(source, path: "(self-test)")[:offences].size).to eq(1)
+    end
+
+    # ── the K-1310 arm: the sub-dispatch envelope is a wire error too ──────
+
+    it "reports a foreign message rendered into the sub-dispatch envelope (self-test)" do
+      # The leak verbatim, as `handler_mixin.rb` carried it: no `Errors`
+      # constructor anywhere on the line, which is exactly why the old sweep's
+      # scope note had to name this route instead of holding it.
+      source = <<~'RUBY'
+        begin
+          nil
+        rescue StandardError => exception
+          render json: {
+            ok:    false,
+            error: { code: code, message: exception.message },
+          }, status: 400
+        end
+      RUBY
+      found = KioskWireErrorSweep.scan(source, path: "(self-test)")
+      expect(found[:offences].size).to eq(1)
+      expect(found[:renders]).to eq(1)
+    end
+
+    it "reports one rendered by a method PARAMETER, which no rescue owns (self-test)" do
+      # `rescue_from(StandardError, with: :kiosk_rescue_to_wire)` hands the
+      # exception in as an argument, so there is no `rescue` in the method at
+      # all — and an unknown receiver is foreign, which is what makes this
+      # shape visible rather than excused.
+      source = <<~'RUBY'
+        def kiosk_rescue_to_wire(exception)
+          render(json: { error: { message: exception.message } }, status: 400)
+        end
+      RUBY
+      expect(KioskWireErrorSweep.scan(source, path: "(self-test)")[:offences].size).to eq(1)
+    end
+
+    it "excuses a Kiosk-owned message in a render, on the same terms (self-test)" do
+      source = <<~'RUBY'
+        begin
+          nil
+        rescue Kiosk::PaymentProviders::PaymentFailed => e
+          render json: { error: { message: e.message } }, status: 402
+        end
+      RUBY
+      found = KioskWireErrorSweep.scan(source, path: "(self-test)")
+      expect(found[:offences]).to be_empty
+      expect(found[:owned].size).to eq(1)
+    end
+
+    it "leaves a render that carries no exception message alone (self-test)" do
+      source = <<~'RUBY'
+        render json: { ok: false, error: Errors.rescued_wire(code, verb: name) }, status: 400
+      RUBY
+      found = KioskWireErrorSweep.scan(source, path: "(self-test)")
+      expect(found[:offences]).to be_empty
+      expect(found[:renders]).to eq(1)
     end
 
     it "leaves a non-wire error alone, which is where its scope line falls (self-test)" do

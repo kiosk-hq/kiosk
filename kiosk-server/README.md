@@ -436,6 +436,15 @@ assistant branches on. Three Rails-native moves cover all of it:
   policy libraries use) — is mapped to that status' wire code by one
   `rescue_from` the include installs. Your own `rescue_from` declarations win
   over it. Anything unregistered stays a 500 `action_failed`.
+  **The CODE travels; the exception's own SENTENCE does not.** That branch is
+  for exceptions you did not author, so the message would be some library's
+  wording — actionpack's «param is missing or the value is empty or invalid:
+  sku» is what `params.require` used to put on a 400 — and it moves when a
+  dependency moves. The caller gets a Kiosk sentence and a `hint` for that
+  code; the exception's class, message and backtrace go to your `Rails.logger`.
+  When you mean to say something to the assistant, say it: render the envelope,
+  or raise a `Kiosk::Server::Errors` class with your own `message:` and
+  `hint:`. Both carry your words verbatim.
 - For a code a bare status cannot name — `rls_denied`, or a *specific* 402
   (`payment_setup_required` vs `payment_failed` vs `pow_required`) — render
   the code explicitly:

@@ -294,6 +294,97 @@ module Kiosk
         BadRequest.new("invalid JSON body", hint: hint)
       end
 
+      # ── THE SENTENCE A RAILS-NATIVE RAISE ANSWERS WITH (K-1310) ─────────────
+      #
+      # {HandlerMixin::InstanceMethods#kiosk_rescue_to_wire} is the seam that
+      # turns a raise Rails knows a status for — `params.require`'s
+      # `ParameterMissing`, Active Record's `RecordNotFound`, whatever the host
+      # registered in `config.action_dispatch.rescue_responses` — into a wire
+      # code, with NO Kiosk classes in the handler. It used to render
+      # `exception.message` into the sub-dispatch envelope, and
+      # {HandlerDispatch#error_message} re-wrapped that as the wire `detail`:
+      # MEASURED at head on 2026-09-06, a `params.require(:sku)` handler
+      # answered `"detail":"param is missing or the value is empty or invalid:
+      # sku"` — actionpack's own sentence, verbatim, on a 400.
+      #
+      # Same class as the two sentences above and as the nine sites K-1307
+      # closed: the text is not ours, it moves when a dependency is upgraded,
+      # and on a path a caller can reach it can echo the caller's own bytes back
+      # out. So the seam publishes OUR sentence for the code it decided, and the
+      # exception's own class, message and backtrace go to the operator's log
+      # ({FailureLog}) — which is where {Executor}'s two 500 paths already send
+      # theirs.
+      #
+      # WHAT THIS DOES NOT SILENCE, because it is the reason the redaction is
+      # safe to make wholesale: an operator who MEANS to speak to the agent has
+      # two documented routes that never reach this code, and both are exercised
+      # by the handler-mixin suite. Rendering the envelope explicitly
+      # (`render json: { error: { code:, message:, hint: } }, status:`) never
+      # raises, so this seam never sees it; and raising a {Base} is re-raised
+      # untouched on `kiosk_rescue_to_wire`'s first line. This route exists ONLY
+      # for exceptions the operator did not author — that is its stated purpose —
+      # so redacting it silences a library, not an operator.
+      #
+      # THE ONE COST, PRICED RATHER THAN HIDDEN: a host that registers its OWN
+      # exception class in `rescue_responses` and raises it with a sentence
+      # meant for the agent loses that sentence here. It is undocumented usage,
+      # nothing distinguishes a host's class from a library's in that table
+      # (Rails' own doc for it is about libraries), the two routes above remain
+      # open to it, and a library sentence on an unauthenticated path is the
+      # larger risk. The suite pins BOTH halves — the loss, and the recovery.
+      #
+      # One entry per {STATUS_CODES} value, asserted by the suite: a code that
+      # seam can decide and this table cannot word would fall back to a
+      # `KeyError` at request time.
+
+      # The DETAIL, as a clause the verb's name opens. Says what the origin did,
+      # in this protocol's words, and nothing about which library was involved.
+      RESCUED_DETAILS = {
+        "bad_request"        => "rejected the request as malformed",
+        "unauthenticated"    => "requires a credential this request did not carry",
+        "forbidden"          => "refused the request",
+        "not_found"          => "found no such record",
+        "method_not_allowed" => "does not accept the request as sent",
+        "conflict"           => "refused the request as conflicting with current state",
+        "quota_exceeded"     => "refused the request because a quota is exhausted",
+      }.freeze
+
+      # The HINT: what the CALLER does next. Addressed to the assistant, so
+      # none of these mentions the operator's log — the diagnostic half of this
+      # refusal is not the caller's business and it could not act on it anyway.
+      RESCUED_HINTS = {
+        "bad_request"        => "check the arguments against this verb's input_schema — " \
+                                "GET .../schema publishes it.",
+        "unauthenticated"    => "present a valid access token for this origin and retry.",
+        "forbidden"          => "this principal may not make this call; retrying it unchanged " \
+                                "will be refused again.",
+        "not_found"          => "an argument names something this origin does not have; " \
+                                "re-read it from a query before retrying.",
+        "method_not_allowed" => "a query is GET .../<query-name> and an action is " \
+                                "POST .../<action-name>; GET .../schema says which each verb is.",
+        "conflict"           => "the state moved under you; re-read it with a query and retry " \
+                                "with what it says.",
+        "quota_exceeded"     => "the operator sets this quota; wait before retrying.",
+      }.freeze
+
+      # The sub-dispatch envelope's `error` object for a Rails-native raise.
+      #
+      # Returns the HASH rather than an {Base}: the seam renders it into the
+      # internal `{ok:, error:}` protocol between a handler and
+      # {HandlerDispatch}, which decodes it and builds the {Base} itself. The
+      # wording lives here anyway, with the other two sentences, so there stays
+      # exactly one file to read to know what this engine says when it refuses.
+      #
+      # @param code [String] a {STATUS_CODES} value
+      # @param verb [String, nil] the wire name this dispatch arrived under
+      # @return [Hash] `{code:, message:, hint:}`
+      def self.rescued_wire(code, verb: nil)
+        subject = verb.nil? || verb.to_s.empty? ? "this verb" : "verb #{verb.to_s.inspect}"
+        { code:    code,
+          message: "#{subject} #{RESCUED_DETAILS.fetch(code)}",
+          hint:    RESCUED_HINTS.fetch(code) }
+      end
+
       # Base class. `rescue Kiosk::Server::Errors::Base` catches every Kiosk
       # error without leaking unrelated StandardErrors.
       class Base < StandardError

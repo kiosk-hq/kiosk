@@ -4,6 +4,7 @@ require "action_controller"
 require "action_dispatch"
 require "kiosk/server/actions"
 require "kiosk/server/errors"
+require "kiosk/server/failure_log"
 require "kiosk/server/queries"
 require "kiosk/server/handler_dispatch"
 
@@ -499,6 +500,19 @@ module Kiosk
         #     guessed.
         #   * anything else — re-raised, so the {Executor} wraps it as
         #     `action_failed` exactly as it always has.
+        #
+        # THE EXCEPTION'S OWN SENTENCE DOES NOT TRAVEL (K-1310). This branch
+        # exists for exceptions the operator did NOT author — «no Kiosk classes
+        # in the handler» is its whole purpose — so the message it used to
+        # render was some library's wording: MEASURED at head, a
+        # `params.require(:sku)` handler put actionpack's «param is missing or
+        # the value is empty or invalid: sku» on a 400 problem document. The
+        # wire gets {Errors.rescued_wire}'s sentence and hint for the code this
+        # seam decided; the class, the message and the backtrace go to the
+        # operator's log ({FailureLog}), the way {Executor}'s two 500 paths
+        # already send theirs. An operator who means to SPEAK to the agent has
+        # two routes that never reach this line — render the envelope, or raise
+        # an {Errors::Base} — and both are pinned by the suite.
         def kiosk_rescue_to_wire(exception)
           raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
 
@@ -506,9 +520,13 @@ module Kiosk
           code   = Kiosk::Server::Errors::STATUS_CODES[::Rack::Utils.status_code(status)]
           raise exception if code.nil?
 
+          Kiosk::Server::FailureLog.report(
+            "verb #{kiosk_wire_name.inspect} answered #{code} for #{exception.class}", exception
+          )
+
           render json: {
             ok:    false,
-            error: { code: code, message: exception.message },
+            error: Kiosk::Server::Errors.rescued_wire(code, verb: kiosk_wire_name),
           }, status: Kiosk::Server::Errors::CODES.fetch(code)
         end
 

@@ -52,6 +52,17 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
+**One token in the block below was re-spelled after the recording, and saying so
+is cheaper than pretending otherwise.** The slot row's published field used to be
+named `zone` while `DeliverySlots.zone` in the same demo is an IANA time zone —
+one word for a postal district and for a clock — so the wire field became
+`district`, and the driver's own summary line moved with it. The recording was
+not re-run for that; the `zone=D02` it printed on the day reads `district=D02`
+here, and nothing else in the block was touched. Every other line is what the
+task printed, and `bin/check-demo-derivations` still holds all of them —
+including that one — to a literal the current driver prints, which is what makes
+this note checkable rather than a promise.
+
 **This recording is the secret-free path**, the one CI runs: with no
 `STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,
 so `psp_reference` is a `stripe-mock` PaymentIntent and `settled_amount_cents`
@@ -73,7 +84,7 @@ key whenever one is present.
   Catalog: 16 in-stock products (EUR)
   Ordering: sku=apple-juice, sku=banana, sku=butter-250g
   delivery_slots (district-less address): http=400 code=bad_request (rejected, as expected)
-  Delivery slot: id=1 08:00–10:00 zone=D02 on 2026-08-27 (2026-08-27T08:00:00+01:00)
+  Delivery slot: id=1 08:00–10:00 district=D02 on 2026-08-27 (2026-08-27T08:00:00+01:00)
   create_order: order_id=1af6fb28-c05a-416b-adb6-a6965251808d total=€8.47 slot_at=2026-08-27T08:00:00+01:00
   payment_setup: ready
   pay: settlement_id=ebac3e74-9087-4560-adb3-14157fc4f48b psp_reference=pi_RGA0cgHgjoCS0YF
@@ -129,7 +140,7 @@ Dublin afternoon and both controls fire.
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGrocery issuer and surface.
 2. **Self-register, and pay the toll** — generated an RSA-2048 keypair and proved possession of the private key: `GET /kiosk/auth/challenge?public_key=<urlencoded pem>` (the query parameter is REQUIRED — without it the endpoint answers `400 missing public_key query parameter`) → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`. **That first POST comes back `402`**: registration here is uniformly tolled (`c.registration_pow_count = 1`, `config/initializers/kiosk.rb`), and the 402 is an RFC 9457 problem document carrying a top-level `challenges` array the SERVER minted — so nothing can be solved in advance. The client solves each challenge and re-POSTs the SAME signed body with the proof in the `Kiosk-PoW` header → HTTP 201 → `agent_id`, `user_id`, `access_token`. The transcript shows only the `201`, because `http_register` is what the driver reports for the second POST. No existing account. No human login. No OTP. No bot screen.
 3. **Browse catalog** — `GET /kiosk/catalog` returned 16 in-stock products, sorted by name — the 15 groceries plus the age-restricted House Table Red Wine 750ml, which is the row that makes the age-gate beat below work (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
-4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=<today>&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned the windows still bookable for that day, each carrying its resolved Dublin zone; the driver picked the first. The driver asks for TODAY on purpose, so the assertion below it catches any drift between the day the slot was shown for and the day `create_order` books — and when today comes back EMPTY, which is what «all windows started» means and what happened in the run above, it re-asks for tomorrow, exactly as a live assistant would. That is why the recording shows `delivery_slot_id=1`, the 08:00–10:00 window in zone D02 on `2026-08-27`.
+4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=<today>&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned the windows still bookable for that day, each carrying its resolved Dublin postal district; the driver picked the first. The driver asks for TODAY on purpose, so the assertion below it catches any drift between the day the slot was shown for and the day `create_order` books — and when today comes back EMPTY, which is what «all windows started» means and what happened in the run above, it re-asks for tomorrow, exactly as a live assistant would. That is why the recording shows `delivery_slot_id=1`, the 08:00–10:00 window in district D02 on `2026-08-27`.
 5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:1, delivery_date:"2026-08-27", delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847` (with `total_eur:"€8.47"` and `currency`), `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`), and passed back the DATE the slot was shown for so the booking cannot drift a day.
 6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → the settlement itself: `{settlement_id, psp_reference, settled_amount_cents, currency:"eur"}`. Against real Stripe the settled amount is the order's own 847; the recording above ran on `stripe-mock`, whose fixture always reports `0`.
 7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/reschedule_delivery {order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
@@ -349,9 +360,9 @@ class Kiosk::StorefrontController < ActionController::API
                     date:             { type: "string" },
                     slot_at:          { type: "string" },
                     label:            { type: "string" },
-                    zone:             { type: "string" },
+                    district:         { type: "string" },
                   },
-                  required: %w[delivery_slot_id date slot_at label zone],
+                  required: %w[delivery_slot_id date slot_at label district],
                 }
   # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
   # example that ages into a 400, since a date before today is REFUSED. These are
@@ -362,7 +373,7 @@ class Kiosk::StorefrontController < ActionController::API
   example_row({ delivery_slot_id: 1,
                 date:    -> { DeliverySlots.example_date.iso8601 },
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
-                label: "08:00–10:00", zone: "D02" })
+                label: "08:00–10:00", district: "D02" })
   def delivery_slots
     # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
     # you can deliver". The caller cannot compute this operator's today: it
@@ -380,8 +391,8 @@ class Kiosk::StorefrontController < ActionController::API
     # assistant to obtain the address from its human before it can see slots.
     return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
 
-    zone, zone_refusal = WireArguments.served_zone(params[:delivery_address])
-    return render_refusal(zone_refusal) if zone_refusal
+    district, district_refusal = WireArguments.served_zone(params[:delivery_address])
+    return render_refusal(district_refusal) if district_refusal
 
     # ── GUARDS ELIDED HERE (this comment is the document's, not the file's) ──
     # What follows in the shipped file is the date parse — an unparseable value
@@ -399,10 +410,10 @@ class Kiosk::StorefrontController < ActionController::API
       slot_time = DeliverySlots.slot_at(date, slot_id)
       hour      = slot_time.hour
       { "delivery_slot_id" => slot_id,
-        "date"    => date.iso8601,
-        "slot_at" => slot_time.iso8601,
-        "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
-        "zone"    => zone }
+        "date"     => date.iso8601,
+        "slot_at"  => slot_time.iso8601,
+        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+        "district" => district }
     }
   end
 

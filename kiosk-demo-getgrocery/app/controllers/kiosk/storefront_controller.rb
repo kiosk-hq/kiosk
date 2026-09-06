@@ -121,7 +121,7 @@ class Kiosk::StorefrontController < ActionController::API
   # may already have begun, in which case the earliest bookable slot is on a
   # later date. A date BEFORE today answers 400 instead.
   output_schema type: "array",
-                description: "The still-bookable delivery windows for the requested date and zone.",
+                description: "The still-bookable delivery windows for the requested date and district.",
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
@@ -129,9 +129,9 @@ class Kiosk::StorefrontController < ActionController::API
                     date:             { type: "string", description: "YYYY-MM-DD — pass to create_order as `delivery_date` so the booking lands on the day you saw." },
                     slot_at:          { type: "string", description: "The window's start instant, ISO 8601 with offset." },
                     label:            { type: "string", description: "The window rendered for a human, e.g. \"08:00–10:00\"." },
-                    zone:             { type: "string", description: "The served Dublin postal district the address routed to." },
+                    district:         { type: "string", description: "The served Dublin postal district the address routed to (e.g. \"D02\") — a ROUTING key, not a time zone." },
                   },
-                  required: %w[delivery_slot_id date slot_at label zone],
+                  required: %w[delivery_slot_id date slot_at label district],
                 }
   # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
   # example that ages into a 400, since a date before today is REFUSED. These are
@@ -142,7 +142,7 @@ class Kiosk::StorefrontController < ActionController::API
   example_row({ delivery_slot_id: 1,
                 date:    -> { DeliverySlots.example_date.iso8601 },
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
-                label: "08:00–10:00", zone: "D02" })
+                label: "08:00–10:00", district: "D02" })
   def delivery_slots
     # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
     # you can deliver". The caller cannot compute this operator's today: it
@@ -160,8 +160,8 @@ class Kiosk::StorefrontController < ActionController::API
     # assistant to obtain the address from its human before it can see slots.
     return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
 
-    zone, zone_refusal = WireArguments.served_zone(params[:delivery_address])
-    return render_refusal(zone_refusal) if zone_refusal
+    district, district_refusal = WireArguments.served_zone(params[:delivery_address])
+    return render_refusal(district_refusal) if district_refusal
 
     # OMITTED means "the soonest day you can deliver", so an exhausted today is
     # not an answer -- it is the operator's job to step over it. Returning an
@@ -174,7 +174,7 @@ class Kiosk::StorefrontController < ActionController::API
     unless params.key?(:date)
       soonest = DeliverySlots.now.to_date
       soonest += 1 if DeliverySlots.bookable_ids(soonest).empty?
-      return render_slots(soonest, zone)
+      return render_slots(soonest, district)
     end
 
     date = begin
@@ -195,7 +195,7 @@ class Kiosk::StorefrontController < ActionController::API
     # in the operator's locale; future dates keep all slots. An assistant should
     # not see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is
     # what create_order books.
-    render_slots(date, zone)
+    render_slots(date, district)
   end
 
   # ── my_orders — per-principal: the caller's OWN orders only. The caller
@@ -329,15 +329,23 @@ class Kiosk::StorefrontController < ActionController::API
   # omits the date is not getting a lesser response, it is getting the same one
   # for the day the operator picked. `date` on each row is what create_order
   # books, so it is the omitting caller's way of learning which day it got.
-  def render_slots(date, zone)
+  # THE ROW SAYS `district` AND THE MODULE SAYS `zone`, DELIBERATELY. The
+  # published field is a POSTAL DISTRICT — `D02`, a routing key — while
+  # `DeliverySlots.zone` in this same demo is an `ActiveSupport::TimeZone`. One
+  # word for both was readable here, where a human knows which file they are in,
+  # and unreadable on the wire, where an assistant has only the field name: a row
+  # carrying a delivery window is exactly where a reader expects `zone` to mean
+  # the clock the window is written in. So the wire spells the routing key out
+  # and the internal accessor keeps the IANA name.
+  def render_slots(date, district)
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)
       hour      = slot_time.hour
       { "delivery_slot_id" => slot_id,
-        "date"    => date.iso8601,
-        "slot_at" => slot_time.iso8601,
-        "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
-        "zone"    => zone }
+        "date"     => date.iso8601,
+        "slot_at"  => slot_time.iso8601,
+        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+        "district" => district }
     }
   end
 

@@ -150,12 +150,12 @@ slots = query_slots.call(nil)
 # means the soonest day with windows left, so an empty answer would be a
 # defect in the operator rather than a case for the client to handle.
 abort "delivery_slots returned empty" if slots.empty?
-abort "delivery_slots rows must carry the resolved zone" unless slots.all? { |s| s["zone"].to_s.start_with?("D") }
+abort "delivery_slots rows must carry the resolved district" unless slots.all? { |s| s["district"].to_s.start_with?("D") }
 slot          = slots.first
 slot_id       = slot.fetch("delivery_slot_id")
 slot_date     = slot.fetch("date")     # the day the assistant sees for this slot
 chosen_slot_at = slot.fetch("slot_at") # its exact start time — create_order must match
-STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} zone=#{slot["zone"]} on #{slot_date} (#{chosen_slot_at})"
+STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} district=#{slot["district"]} on #{slot_date} (#{chosen_slot_at})"
 
 # Negative control: delivery_slots must HIDE already-started windows, and
 # create_order must REJECT one with a clean 400 (never book an un-bookable past

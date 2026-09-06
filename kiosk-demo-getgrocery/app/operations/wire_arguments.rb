@@ -206,7 +206,8 @@ module WireArguments
   #
   # @return [Array(String, nil), Array(nil, OperationResult)] the canonical `D0N`
   #   routing key the address resolved to, or a refusal naming what is needed.
-  #   `delivery_slots` publishes the zone; the order verbs only need one to exist.
+  #   `delivery_slots` publishes that key as the row's `district`; the order
+  #   verbs only need one to exist.
   def served_zone(address)
     result = DublinZones.check(address)
     return [result.zone, nil] if result.ok?

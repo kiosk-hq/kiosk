@@ -73,7 +73,6 @@ key whenever one is present.
   Catalog: 16 in-stock products (EUR)
   Ordering: sku=apple-juice, sku=banana, sku=butter-250g
   delivery_slots (district-less address): http=400 code=bad_request (rejected, as expected)
-  delivery_slots: today is sold out (all windows started) — querying 2026-08-27
   Delivery slot: id=1 08:00–10:00 zone=D02 on 2026-08-27 (2026-08-27T08:00:00+01:00)
   create_order: order_id=1af6fb28-c05a-416b-adb6-a6965251808d total=€8.47 slot_at=2026-08-27T08:00:00+01:00
   payment_setup: ready
@@ -338,7 +337,7 @@ class Kiosk::StorefrontController < ActionController::API
                  date:             { type: "string", format: "date" },
                  delivery_address: { type: "string" },
                },
-               required: ["date", "delivery_address"]
+               required: ["delivery_address"]
   # EMPTY is an honest answer here and ONLY here: every one of today's windows
   # may already have begun, in which case the earliest bookable slot is on a
   # later date. A date BEFORE today answers 400 instead.
@@ -365,11 +364,17 @@ class Kiosk::StorefrontController < ActionController::API
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
                 label: "08:00–10:00", zone: "D02" })
   def delivery_slots
-    # `params.key?` and not `blank?`: an ABSENT date is "missing param: date"
-    # while one that is present and empty falls through to the parser and is
-    # "invalid date: ". That is a question about the request ENVELOPE, which the
-    # controller is the only place that can ask.
-    return render_refusal(missing_param("date")) unless params.key?(:date)
+    # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
+    # you can deliver". The caller cannot compute this operator's today: it
+    # delivers in Europe/Dublin, and between 23:00 and 00:00 UTC an assistant's
+    # own date is a different day. Requiring the field made that gap the
+    # CALLER's problem and there was no way for the caller to solve it -- it
+    # would have to trust a timezone named in a description string, carry tzdata,
+    # and still race the boundary. The operator knows its own date; so it uses it.
+    #
+    # A date that IS sent is still validated exactly as before, past dates
+    # included, because "deliver on Friday" is a different request from "deliver
+    # as soon as you can" and only the caller knows which one it is making.
 
     # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.

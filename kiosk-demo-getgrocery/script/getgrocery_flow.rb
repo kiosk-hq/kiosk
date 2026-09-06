@@ -118,52 +118,35 @@ abort "out-of-zone delivery_slots expected 400 bad_request, got #{rc_bad} #{bad_
 STDERR.puts "  delivery_slots (district-less address): http=#{rc_bad} code=#{bad_code} (rejected, as expected)"
 
 rc_slots = nil
-# THE CLIENT'S "TODAY" AND THE OPERATOR'S ARE NOT THE SAME DAY, and between
-# 23:00 and 00:00 UTC they differ. `Date.today` here is the CALLER's date; the
-# operator resolves the day in Europe/Dublin, so a run at 23:05 UTC asks for a
-# date that is already yesterday in Dublin and is refused 400 `bad_request`.
-# That is not a defect in the operator -- its refusal is exactly what a refusal
-# should be, naming its own today, its zone, and what to send instead:
+# NO DATE IS SENT, and that is the whole point. This client cannot know what
+# day it is at the shop -- getgrocery delivers in Europe/Dublin, so between
+# 23:00 and 00:00 UTC its today and ours are different dates. Omitting `date`
+# asks for the soonest day it can deliver and is correct at every hour.
 #
-#   "date 2026-09-05 is in the past — getgrocery delivers from 2026-09-06
-#    onwards (Europe/Dublin)"
-#
-# So the fix belongs HERE, and it is the whole point of a reference driver: an
-# assistant meeting this reads the operator's date out of the refusal and
-# retries. It does NOT guess a timezone it was never told -- the served
-# descriptor names Dublin only in prose -- and it does not blindly add a day,
-# which would be right for one hour and wrong for the offset it did not check.
-# Measured: CI failed exactly this way at 23:05 UTC on 2026-09-05, and both
-# directions are reproducible with `TZ=Etc/GMT+2 bin/rails demo:shop`.
-OPERATOR_DATE = /delivers from (\d{4}-\d{2}-\d{2})/.freeze
-
-query_slots = lambda do |date_str, retried: false|
+# An earlier version of this file sent Date.today and RETRIED when the operator
+# refused it as past. That worked and was still wrong: a retry is a second
+# round trip to learn something the operator could have been asked properly the
+# first time, and a reference driver is what an assistant copies. The verb now
+# makes `date` optional, so the round trip is gone rather than handled.
+query_slots = lambda do |date_str|
+  args = { delivery_address: delivery_address }
+  args[:date] = date_str if date_str
   rc_slots, resp = get_json(
     "#{SERVER}/kiosk/delivery_slots",
     { "Authorization" => "Bearer #{token}" },
-    { date: date_str, delivery_address: delivery_address },
+    args,
   )
-  if rc_slots == 400 && !retried
-    named = "#{resp["detail"]} #{resp["hint"]}"[OPERATOR_DATE, 1]
-    if named && named != date_str
-      STDERR.puts "  delivery_slots: #{date_str} is already past for the operator — it says its " \
-                  "own first deliverable day is #{named}; retrying with that"
-      delivery_date = named
-      return query_slots.call(named, retried: true)
-    end
-  end
   abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(resp)}" unless rc_slots == 200
   Array(resp)
 end
 
-slots = query_slots.call(delivery_date)
-if slots.empty?
-  # Today's windows have all already started in Dublin — the earliest
-  # bookable slot is tomorrow. A live agent would do exactly this.
-  delivery_date = (Date.today + 1).to_s
-  STDERR.puts "  delivery_slots: today is sold out (all windows started) — querying #{delivery_date}"
-  slots = query_slots.call(delivery_date)
-end
+slots = query_slots.call(nil)
+# The rows carry the day the operator picked -- that is how a caller that
+# omitted the date learns which day it got, and create_order must book that
+# same day. There is no sold-out fallback here any more: "soonest" already
+# means the soonest day with windows left, so an empty answer would be a
+# defect in the operator rather than a case for the client to handle.
+delivery_date = slots.first["date"] if slots.any?
 abort "delivery_slots returned empty" if slots.empty?
 abort "delivery_slots rows must carry the resolved zone" unless slots.all? { |s| s["zone"].to_s.start_with?("D") }
 slot          = slots.first

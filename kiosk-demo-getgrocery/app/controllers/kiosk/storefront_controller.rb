@@ -106,12 +106,17 @@ class Kiosk::StorefrontController < ActionController::API
                additionalProperties: false,
                properties: {
                  date:             { type: "string", format: "date",
-                                     description: "Delivery date, YYYY-MM-DD. TODAY or later " \
-                                                  "(Europe/Dublin); an earlier date is refused " \
-                                                  "with the earliest bookable one named." },
+                                     description: "OPTIONAL. Delivery date, YYYY-MM-DD. OMIT IT for " \
+                                                  "the soonest day this shop can deliver -- you " \
+                                                  "cannot compute that yourself, because the day " \
+                                                  "rolls over in the shop's own locale and not in " \
+                                                  "yours. Send one only when your human named a " \
+                                                  "day. TODAY or later; an earlier date is refused " \
+                                                  "with the earliest bookable one named. Every row " \
+                                                  "carries the date it is for." },
                  delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
                },
-               required: ["date", "delivery_address"]
+               required: ["delivery_address"]
   # EMPTY is an honest answer here and ONLY here: every one of today's windows
   # may already have begun, in which case the earliest bookable slot is on a
   # later date. A date BEFORE today answers 400 instead.
@@ -139,11 +144,17 @@ class Kiosk::StorefrontController < ActionController::API
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
                 label: "08:00–10:00", zone: "D02" })
   def delivery_slots
-    # `params.key?` and not `blank?`: an ABSENT date is "missing param: date"
-    # while one that is present and empty falls through to the parser and is
-    # "invalid date: ". That is a question about the request ENVELOPE, which the
-    # controller is the only place that can ask.
-    return render_refusal(missing_param("date")) unless params.key?(:date)
+    # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
+    # you can deliver". The caller cannot compute this operator's today: it
+    # delivers in Europe/Dublin, and between 23:00 and 00:00 UTC an assistant's
+    # own date is a different day. Requiring the field made that gap the
+    # CALLER's problem and there was no way for the caller to solve it -- it
+    # would have to trust a timezone named in a description string, carry tzdata,
+    # and still race the boundary. The operator knows its own date; so it uses it.
+    #
+    # A date that IS sent is still validated exactly as before, past dates
+    # included, because "deliver on Friday" is a different request from "deliver
+    # as soon as you can" and only the caller knows which one it is making.
 
     # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.
@@ -151,6 +162,20 @@ class Kiosk::StorefrontController < ActionController::API
 
     zone, zone_refusal = WireArguments.served_zone(params[:delivery_address])
     return render_refusal(zone_refusal) if zone_refusal
+
+    # OMITTED means "the soonest day you can deliver", so an exhausted today is
+    # not an answer -- it is the operator's job to step over it. Returning an
+    # empty list here would hand the caller back the very problem it omitted the
+    # date to avoid: it would have to work out the operator's tomorrow, which it
+    # cannot do without the operator's locale.
+    #
+    # Only one step is needed: every window of a future day is still bookable,
+    # so the day after today always has slots. A loop would suggest otherwise.
+    unless params.key?(:date)
+      soonest = DeliverySlots.now.to_date
+      soonest += 1 if DeliverySlots.bookable_ids(soonest).empty?
+      return render_slots(soonest, zone)
+    end
 
     date = begin
       Date.parse(params[:date].to_s)
@@ -170,15 +195,7 @@ class Kiosk::StorefrontController < ActionController::API
     # in the operator's locale; future dates keep all slots. An assistant should
     # not see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is
     # what create_order books.
-    render json: DeliverySlots.bookable_ids(date).map { |slot_id|
-      slot_time = DeliverySlots.slot_at(date, slot_id)
-      hour      = slot_time.hour
-      { "delivery_slot_id" => slot_id,
-        "date"    => date.iso8601,
-        "slot_at" => slot_time.iso8601,
-        "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
-        "zone"    => zone }
-    }
+    render_slots(date, zone)
   end
 
   # ── my_orders — per-principal: the caller's OWN orders only. The caller
@@ -306,6 +323,23 @@ class Kiosk::StorefrontController < ActionController::API
   end
 
   private
+
+  # One place that renders a slot row, because the date-supplied and
+  # date-omitted paths must answer in exactly the same shape -- a caller that
+  # omits the date is not getting a lesser response, it is getting the same one
+  # for the day the operator picked. `date` on each row is what create_order
+  # books, so it is the omitting caller's way of learning which day it got.
+  def render_slots(date, zone)
+    render json: DeliverySlots.bookable_ids(date).map { |slot_id|
+      slot_time = DeliverySlots.slot_at(date, slot_id)
+      hour      = slot_time.hour
+      { "delivery_slot_id" => slot_id,
+        "date"    => date.iso8601,
+        "slot_at" => slot_time.iso8601,
+        "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+        "zone"    => zone }
+    }
+  end
 
   # `delivery_slots` says "missing PARAM" where every other verb on this origin
   # says "missing field": published behaviour, not an inconsistency to tidy away.

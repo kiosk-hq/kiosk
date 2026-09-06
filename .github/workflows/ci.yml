@@ -1137,6 +1137,64 @@ jobs:
       - name: check-demo-derivations self-test
         run: ./bin/check-demo-derivations --self-test
 
+  # Does the operator onboarding guide published on kiosk.tech still teach the
+  # verb this repository actually serves? (K-1324, K-1325, K-1326)
+  #
+  # THE CHECK ABOVE STOPS AT THE REPOSITORY BOUNDARY and the drift did not.
+  # `kiosk.tech/onboarding.html` carries a full controller pair as copyable
+  # Ruby, every line of it a copy of something here — the class names the
+  # kiosk:install generator writes, the domain kiosk-demo-getgrocery serves. On
+  # 2026-09-06 it was found teaching `required: ["date"]` for a verb this repo
+  # had made date-OPTIONAL ten hours earlier (ede32f70), reading a declared
+  # integer with `.to_i`, and naming getgrocery's handlers as classes getgrocery
+  # does not register. Nothing in either repository compared a byte:
+  # bin/check-demo-derivations' file set is this repo, and the sibling's
+  # bin/check-derived-counts holds typed cardinals, not code blocks.
+  #
+  # WHY IT RUNS IN THIS REPOSITORY. The drift is AUTHORED here — a commit that
+  # moves a demo verb is what makes the page wrong — so this is where it can be
+  # caught at the commit that causes it. The sibling's CI would only ever see it
+  # on a push to the sibling, which is the wave that already fixed it.
+  #
+  # TWO STEPS, TWO TRIGGERS, and the split is the same one solver-pin-live
+  # documents below:
+  #
+  #   * `--self-test` needs NO network and NO sibling checkout — when no page
+  #     resolves it plants into a fixture built from this repo's own
+  #     derivations — so it is blocking on every push. It is the half that
+  #     keeps the rules from quietly matching nothing, which is how a guard one
+  #     repository over covered no live sentence for its entire existence.
+  #   * the live comparison needs the network. Deliberately NOT on push: it
+  #     would gate every merge here on a third-party fetch, and between a
+  #     commit that moves a verb and the sibling's deploy of the matching page
+  #     it is CORRECTLY red. Daily and on demand, failing hard, exactly as
+  #     solver-pin-live does — a scheduled workflow red on the default branch
+  #     notifies, and continue-on-error would make the guard invisible.
+  #
+  # This job therefore runs on BOTH schedule and push, which is the one
+  # exception to the "skipped on a schedule run" comment every other job here
+  # carries. Stdlib Ruby only: no bundle, no services, no database.
+  onboarding-derivation:
+    name: the onboarding guide derives from this repo (bin/check-onboarding-derivation)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: check-onboarding-derivation self-test (no network, no sibling)
+        if: github.event_name != 'schedule'
+        run: ./bin/check-onboarding-derivation --self-test
+
+      - name: The published guide against this checkout
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: ./bin/check-onboarding-derivation --network
+
   # Do the demo READMEs state the prerequisites the demos actually have, and
   # does each one disclose that its setup DROPS the database? (K-1316, K-1317)
   #

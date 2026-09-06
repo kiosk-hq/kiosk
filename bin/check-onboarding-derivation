@@ -1,0 +1,736 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-onboarding-derivation -- the operator onboarding guide published on
+# kiosk.tech teaches a worked verb whose ORIGINAL lives in this repository, and
+# until this script nothing compared the two (K-1324, K-1325, K-1326).
+#
+# THE DEFECT, measured rather than argued. `kiosk.tech/onboarding.html` is the
+# page an operator follows from `bundle install` to a served wire. It carries a
+# full controller pair as copyable Ruby, and every line of it is a copy of
+# something here: the class names are the ones the `kiosk:install` generator
+# writes into an initializer as its worked example, and the domain -- catalogue,
+# delivery windows, settlement-gated reschedule -- is kiosk-demo-getgrocery's.
+#
+# On 2026-09-06 three drifts were found there by a human reading the page:
+#
+#   * getgrocery's `delivery_slots` had made `date` OPTIONAL and
+#     `delivery_address` REQUIRED, for a reason its own code states -- the
+#     caller cannot compute the operator's today. The page still taught
+#     `required: ["date"]`, called `params.require(:date)`, had no
+#     `delivery_address` at all, and froze a calendar literal into
+#     `example_params` -- a date already in the past, which the live verb
+#     refuses. The drift landed in `ede32f70` and was found TEN HOURS later.
+#   * The page taught `params[:delivery_slot_id].to_i`, which turns `"1.5"`
+#     into slot 1 inside the declared 1..6 range. Both demo origins refuse it,
+#     and one of them names the idiom outright.
+#   * The page said getgrocery's handlers were the classes it shows. They are
+#     not: getgrocery registers `Kiosk::StorefrontController`, the page shows
+#     `Kiosk::CatalogController`, and `git grep -n "CatalogController"` over
+#     this repository answers with the e2e fixture, this gem's README, the
+#     install-generator template and specs -- none of them getgrocery.
+#
+# NOTHING HELD ANY OF IT, IN EITHER REPOSITORY. `bin/check-demo-derivations`
+# compares each demo's `before-after.md` against THAT demo's own producers and
+# its file set is this repository; `kiosk.tech/bin/check-derived-counts` holds
+# typed cardinals, not code blocks, and its own header records why it did not
+# reach across the boundary for one. So the guide could drift from its source
+# indefinitely, and it did -- onto a published page.
+#
+# ── WHY IT LIVES HERE, AND WHAT THAT COSTS ──────────────────────────────────
+#
+# The comparison needs a file from each repository, and neither CI has the
+# other checked out. MEASURED at head 2026-09-06 with `command grep -c
+# "repository:"`: `.github/workflows/ci.yml` here -> 0, and the five workflow
+# files in the sibling -> 0 between them. So a checkout-based reach would run
+# on a developer's machine and silently no-op in every CI job, which is the
+# "reads as coverage, holds nothing" shape this workspace keeps re-discovering.
+# `check-derived-counts` weighed exactly this and declined it for a cardinal.
+#
+# What it did not weigh is the OTHER reach, and this repository already uses
+# it: `bin/check-solver-pin --network` fetches what kiosk.tech actually serves,
+# because a commit in that repository can break a pin here without triggering
+# this workflow. The direction is INVERTED for the onboarding page -- a commit
+# HERE breaks a page THERE -- so this script belongs on this side, where the
+# drift is authored, next to the derivation check whose boundary it extends.
+#
+# THE PAGE IS RESOLVED IN A STATED ORDER, AND THE ORDER IS PRINTED:
+#
+#   1. `--page PATH`                 -- an explicit file.
+#   2. `$KIOSK_TECH_DIR/onboarding.html`
+#   3. `../kiosk.tech/onboarding.html` -- the sibling checkout, which is what a
+#      workspace session and the convergence loop have. Tree against tree: this
+#      mode is never spuriously red.
+#   4. `--network`                   -- https://kiosk.tech/onboarding.html, what
+#      an operator is actually reading. 3 attempts with backoff, so a blip does
+#      not read as drift.
+#
+# IF NONE OF THEM RESOLVES, THIS EXITS 1 AND SAYS THE CHECK DID NOT RUN. It
+# does not skip. A guard that quietly no-ops when its subject is absent is
+# indistinguishable from a guard that passed, and that is the failure this
+# script exists to close rather than to commit.
+#
+# THE COST OF `--network`, stated so nobody is surprised by it: between a
+# commit here that moves a verb and the sibling's deploy of the matching page,
+# it is CORRECTLY red. That is why it is not on `push` -- it would gate every
+# merge in this repository on a third-party fetch, which is the trade
+# `check-solver-pin` already declined in writing -- and why the CI job runs it
+# on the daily schedule, where a red default branch notifies, exactly as
+# `solver-pin-live` does. The `--self-test` arm has no such dependency and DOES
+# run on every push, because a rule that has stopped matching anything is the
+# other way this goes quietly green.
+#
+# ── WHAT A RULE IS ──────────────────────────────────────────────────────────
+#
+# A rule DERIVES a fact from this repository and holds the page to it. Nothing
+# below is ever compared to a second hand-typed copy of the same fact, because
+# that moves the defect rather than closing it. Two kinds:
+#
+#   DERIVATION  the page must AGREE with a value read out of this repository.
+#   BAN         the page must not contain a construct this repository refuses.
+#               A ban's subject list is derived too, so it cannot rot into a
+#               list of names nobody maintains.
+#
+# THE VACUITY ARM. Every rule declares what it needs to find in order to be
+# holding anything at all -- a derivation that computes, a live site in the
+# page, a non-empty derived subject list. A rule that finds none of that FAILS
+# and names itself, rather than passing. That is not decoration: one repository
+# over, a relink rule required a word that no live sentence used, so it matched
+# nothing for its entire existence and nothing said so.
+#
+# WHAT THIS CANNOT CATCH, so nothing here is overtrusted:
+#   * Prose. The page's sentences about the verb are not derived from anything.
+#   * A verb the page teaches that has no counterpart here at all.
+#   * The page agreeing with a getgrocery that is itself wrong. Consistency,
+#     never truth.
+#   * Whether the SERVED page equals the sibling's working tree. `--network`
+#     answers about the served bytes and the default mode about the tree; they
+#     are two questions and the run says which one it asked.
+#
+# Stdlib only: no bundle, no services, no database. It reads files, and reaches
+# the network only under `--network`.
+#
+#   bin/check-onboarding-derivation             # sibling checkout
+#   bin/check-onboarding-derivation --network   # the published page
+#   bin/check-onboarding-derivation --list      # every rule and what it derives
+#   bin/check-onboarding-derivation --self-test # red on a plant of every rule
+
+require "net/http"
+require "uri"
+require "set"
+
+ROOT = File.expand_path("..", __dir__)
+
+# The three files in THIS repository every rule below derives from.
+GENERATOR_INITIALIZER = "kiosk-server/lib/generators/kiosk/install/templates/initializer.rb.tt"
+GETGROCERY_STOREFRONT = "kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb"
+GETGROCERY_ORDERS     = "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb"
+GETGROCERY_INITIALIZER = "kiosk-demo-getgrocery/config/initializers/kiosk.rb"
+
+PAGE_URL      = "https://kiosk.tech/onboarding.html"
+PAGE_BASENAME = "onboarding.html"
+
+# The verb both sides declare, and the one K-1325's drift was in.
+WORKED_VERB = "delivery_slots"
+
+# ── Reading the sources ──────────────────────────────────────────────────────
+
+def repo_read(rel)
+  path = File.join(ROOT, rel)
+  raise "derivation source missing: #{rel}" unless File.file?(path)
+
+  File.read(path)
+end
+
+# GET with retries. A transient blip must not read as drift, so "could not
+# reach it" and "reached it and the bytes are wrong" stay different answers.
+def fetch(url, attempts: 3)
+  last = nil
+  attempts.times do |i|
+    sleep(2**i) if i.positive?
+    begin
+      res = Net::HTTP.get_response(URI(url))
+      return [res.body, nil] if res.is_a?(Net::HTTPOK)
+
+      last = "HTTP #{res.code}"
+    rescue StandardError => e
+      last = "#{e.class}: #{e.message}"
+    end
+  end
+  [nil, "unreachable after #{attempts} attempts (#{last})"]
+end
+
+# The page, plus a sentence saying WHERE it came from. Never a silent skip:
+# every branch either returns bytes with a provenance or returns the reason
+# there are none, and the caller exits 1 on the second.
+def resolve_page(explicit:, network:)
+  if explicit
+    return [nil, nil, "--page #{explicit} does not exist"] unless File.file?(explicit)
+
+    return [File.read(explicit), "--page #{explicit}", nil]
+  end
+
+  env_dir = ENV["KIOSK_TECH_DIR"]
+  if env_dir && !env_dir.empty?
+    path = File.join(env_dir, PAGE_BASENAME)
+    return [nil, nil, "KIOSK_TECH_DIR is set but #{path} does not exist"] unless File.file?(path)
+
+    return [File.read(path), "KIOSK_TECH_DIR #{path}", nil]
+  end
+
+  sibling = File.expand_path("../kiosk.tech/#{PAGE_BASENAME}", ROOT)
+  return [File.read(sibling), "sibling checkout #{sibling}", nil] if File.file?(sibling) && !network
+
+  if network
+    body, err = fetch(PAGE_URL)
+    return [nil, nil, "#{PAGE_URL}: #{err}"] if body.nil?
+
+    return [body, "the published page #{PAGE_URL} (#{body.bytesize} bytes)", nil]
+  end
+
+  [nil, nil,
+   "no sibling checkout at #{sibling}, no KIOSK_TECH_DIR, no --network. " \
+   "THIS CHECK DID NOT RUN -- it is not a pass."]
+end
+
+# ── Ruby-source parsing, shared by both sides ────────────────────────────────
+#
+# Everything below is a static read of declaration text. It never evaluates
+# anything, and it is deliberately narrow: it looks only at the constructs both
+# sides actually use, and a construct it does not recognise makes the rule that
+# needed it VACUOUS (and therefore red) rather than absent.
+
+# Strip Ruby comments and the contents of double-quoted strings, so a `{` in a
+# description sentence cannot be mistaken for a hash brace. Bytes are replaced
+# rather than removed, so every index still lines up with the original.
+def masked(src)
+  out    = src.dup
+  i      = 0
+  len    = out.length
+  in_str = false
+  while i < len
+    c = out[i]
+    if in_str
+      if c == "\\"
+        out[i] = " "
+        out[i + 1] = " " if i + 1 < len && out[i + 1] != "\n"
+        i += 2
+        next
+      end
+      if c == '"'
+        in_str = false
+      elsif c != "\n"
+        out[i] = " "
+      end
+    elsif c == '"'
+      in_str = true
+    elsif c == "#"
+      # A comment runs to end of line. Blank it, newline kept so line numbers
+      # and every later index still line up with the original.
+      while i < len && out[i] != "\n"
+        out[i] = " "
+        i += 1
+      end
+      next
+    end
+    i += 1
+  end
+  out
+end
+
+# STRUCTURE IS FOUND ON THE MASKED COPY, VALUES ARE READ OFF THE ORIGINAL.
+# `masked` preserves every byte position, so a range located in one indexes the
+# other. Reading a value off the masked copy is how the first writing of this
+# script derived `required: []` from a line that plainly says
+# `required: ["delivery_address"]` -- the quoted names had been blanked, both
+# sides came back empty, and the rule compared two nothings and passed.
+#
+# The declaration text a `def <name>` claims: from the `kind :` macro that
+# opens it up to the `def` line itself, as a Range.
+def declaration_range(mask, verb)
+  at = mask.index(/^\s*def #{Regexp.escape(verb)}\b/)
+  return nil if at.nil?
+
+  kinds = mask[0...at].enum_for(:scan, /^\s*kind\s+:/).map { Regexp.last_match.begin(0) }
+  return nil if kinds.empty?
+
+  (kinds.last...at)
+end
+
+# The `input_schema ...` part of a declaration -- up to whatever macro comes
+# next, so `output_schema`'s own `required:` can never be read as the input's.
+def input_schema_range(mask, decl_range)
+  region = mask[decl_range]
+  from   = region.index(/^\s*input_schema\b/)
+  return nil if from.nil?
+
+  stop = region.index(/^\s*(?:output_schema|example_params|example_row|reach|def)\b/, from + 1)
+  base = decl_range.first + from
+  (base...(stop ? decl_range.first + stop : decl_range.last))
+end
+
+# Every `input_schema ...` region in a whole source, as Ranges.
+def input_schema_ranges(mask)
+  ranges = []
+  mask.enum_for(:scan, /^\s*input_schema\b/).each do
+    from = Regexp.last_match.begin(0)
+    stop = mask.index(/^\s*(?:output_schema|example_params|example_row|reach|def)\b/, from + 1)
+    ranges << (from...(stop || mask.length))
+  end
+  ranges
+end
+
+# `required: ["a", "b"]` or `required: %w[a b]`, as a list of names.
+def required_list(slice)
+  m = slice.match(/required:\s*(\[[^\]]*\]|%w\[[^\]]*\])/m)
+  return nil if m.nil?
+
+  m[1].scan(/[a-z_][a-zA-Z0-9_]*/)
+end
+
+# The property names declared at the TOP level of a `properties: {...}` hash.
+def property_names(slice)
+  at = slice.index(/properties:\s*\{/)
+  return nil if at.nil?
+
+  open  = slice.index("{", at)
+  depth = 0
+  names = []
+  i     = open
+  while i < slice.length
+    c = slice[i]
+    if c == "{"
+      depth += 1
+    elsif c == "}"
+      depth -= 1
+      break if depth.zero?
+    elsif depth == 1 && (m = slice[i..].match(/\A([a-z_][a-zA-Z0-9_]*):\s*\{/)) &&
+          (i.zero? || slice[i - 1] =~ /[\s{,]/)
+      names << m[1]
+    end
+    i += 1
+  end
+  names
+end
+
+# Every parameter name declared `type: "integer"` in a source's INPUT schemas.
+# The subject list of the coercion ban, derived rather than typed, so a rename
+# here reddens the rule instead of emptying it. Input schemas only: an output
+# `price_cents: { type: "integer" }` is a field the operator RENDERS, never an
+# argument anything coerces, and the first writing of this rule swept four
+# names in where two belong.
+def integer_param_names(src)
+  names = Set.new
+  mask  = masked(src)
+  input_schema_ranges(mask).each do |range|
+    src[range].scan(/([a-z_][a-zA-Z0-9_]*):\s*\{[^{}]*type:\s*"integer"/m) { names << Regexp.last_match(1) }
+  end
+  names
+end
+
+# The page ships its Ruby inside `<pre><code class="language-ruby">` with five
+# characters entity-escaped. Rules about CODE read this, not the raw HTML: a
+# `-&gt;` lambda and an `&amp;&amp;` would otherwise parse as neither Ruby nor
+# prose, and a sentence in the surrounding page would be searched as if it were
+# a handler.
+ENTITIES = { "&lt;" => "<", "&gt;" => ">", "&quot;" => '"', "&#39;" => "'", "&amp;" => "&" }.freeze
+
+def page_ruby(page)
+  page.scan(%r{<code class="language-ruby">(.*?)</code>}m)
+      .flatten
+      .map { |b| b.gsub(/&(?:lt|gt|quot|#39|amp);/) { |e| ENTITIES[e] } }
+      .join("\n")
+end
+
+# The class names a `c.handlers = %w[...]` line registers, in order. Reads a
+# commented example too, which is what the generator template carries.
+def handler_names(src)
+  src.scan(/c\.handlers\s*=\s*%w\[([^\]]*)\]/).map { |m| m[0].split }
+end
+
+# ── The rules ────────────────────────────────────────────────────────────────
+#
+# Each returns [ok, description, detail]. `detail` is printed either way, so a
+# green run is a measurement and not only an exit code.
+
+FAILURES = []
+
+def check(name, ok, what, detail)
+  status = ok ? "ok  " : "FAIL"
+  puts format("  %s %-22s %s", status, name, what)
+  puts "         #{detail}" unless detail.to_s.empty?
+  FAILURES << "#{name}: #{what} -- #{detail}" unless ok
+  ok
+end
+
+def vacuous!(name, why)
+  puts format("  %s %-22s VACUOUS -- holds nothing", "FAIL", name)
+  puts "         #{why}"
+  FAILURES << "#{name}: VACUOUS -- #{why}"
+  false
+end
+
+# R1 -- the page's handler class names are the generator's worked example.
+def rule_handler_names(page, sources)
+  derived = handler_names(sources[:generator]).first
+  return vacuous!("HANDLER_NAMES", "no `c.handlers = %w[...]` in #{GENERATOR_INITIALIZER}") if derived.nil? || derived.empty?
+
+  found = handler_names(page_ruby(page))
+  return vacuous!("HANDLER_NAMES", "the page declares no `c.handlers = %w[...]` line") if found.empty?
+
+  bad = found.reject { |list| list == derived }
+  check("HANDLER_NAMES",
+        bad.empty?,
+        "#{found.size} c.handlers line(s) name #{derived.join(" ")}",
+        bad.empty? ? "derived from #{GENERATOR_INITIALIZER}" : "page names #{bad.map { |b| b.join(" ") }.uniq.join(" | ")}")
+end
+
+# The input_schema of one verb, in one source: [required list, property names].
+def verb_input_schema(src, verb)
+  mask  = masked(src)
+  decl  = declaration_range(mask, verb)
+  return nil if decl.nil?
+
+  range = input_schema_range(mask, decl)
+  return nil if range.nil?
+
+  # `required:` off the ORIGINAL (its names live inside string literals);
+  # `properties:` off the MASKED copy (its names are identifiers, and a brace
+  # inside a description sentence must not be counted as structure).
+  [required_list(src[range]), property_names(mask[range])]
+end
+
+# R2 -- the worked verb's REQUIRED list is getgrocery's.
+def rule_slots_required(page, sources)
+  demo = verb_input_schema(sources[:storefront], WORKED_VERB)
+  return vacuous!("SLOTS_REQUIRED", "no `#{WORKED_VERB}` input_schema in #{GETGROCERY_STOREFRONT}") if demo.nil?
+  return vacuous!("SLOTS_REQUIRED", "no input_schema `required:` on getgrocery's #{WORKED_VERB}") if demo[0].nil? || demo[0].empty?
+
+  mine = verb_input_schema(page_ruby(page), WORKED_VERB)
+  return vacuous!("SLOTS_REQUIRED", "the page declares no `#{WORKED_VERB}` input_schema") if mine.nil?
+  return vacuous!("SLOTS_REQUIRED", "the page's #{WORKED_VERB} declares no input_schema `required:`") if mine[0].nil?
+
+  check("SLOTS_REQUIRED",
+        mine[0].sort == demo[0].sort,
+        "#{WORKED_VERB} required: #{demo[0].sort.inspect}",
+        "page says #{mine[0].sort.inspect} (derived from #{GETGROCERY_STOREFRONT})")
+end
+
+# R3 -- and the same verb declares the same PARAMETERS.
+def rule_slots_properties(page, sources)
+  demo = verb_input_schema(sources[:storefront], WORKED_VERB)
+  return vacuous!("SLOTS_PROPERTIES", "no `#{WORKED_VERB}` input_schema in #{GETGROCERY_STOREFRONT}") if demo.nil?
+  return vacuous!("SLOTS_PROPERTIES", "no input_schema `properties:` on getgrocery's #{WORKED_VERB}") if demo[1].nil? || demo[1].empty?
+
+  mine = verb_input_schema(page_ruby(page), WORKED_VERB)
+  return vacuous!("SLOTS_PROPERTIES", "the page declares no `#{WORKED_VERB}` input_schema") if mine.nil?
+  return vacuous!("SLOTS_PROPERTIES", "the page's #{WORKED_VERB} declares no input_schema `properties:`") if mine[1].nil?
+
+  check("SLOTS_PROPERTIES",
+        mine[1].sort == demo[1].sort,
+        "#{WORKED_VERB} parameters: #{demo[1].sort.inspect}",
+        "page declares #{mine[1].sort.inspect} (derived from #{GETGROCERY_STOREFRONT})")
+end
+
+# R4 -- BAN. No declared-integer argument is read with `.to_i`.
+#
+# Over the page's Ruby with COMMENTS MASKED, deliberately: the page explains
+# why `.to_i` is not the spelling it uses, and quoting the idiom in order to
+# refuse it is the opposite of teaching it. What is banned is the executable
+# line, which is the only thing an operator copies.
+def rule_integer_coercion(page, sources)
+  names = integer_param_names(sources[:storefront]) | integer_param_names(sources[:orders])
+  return vacuous!("INTEGER_COERCION", "getgrocery declares no `type: \"integer\"` input parameter") if names.empty?
+
+  code = masked(page_ruby(page))
+  live = names.select { |n| code.include?(n) }
+  if live.empty?
+    return vacuous!("INTEGER_COERCION",
+                    "none of getgrocery's integer parameters (#{names.to_a.sort.join(", ")}) is read in the page's Ruby")
+  end
+
+  pattern = /\[:(?:#{live.map { |n| Regexp.escape(n) }.join("|")})\]\s*(?:&\.|\.)to_i\b/
+  hits    = code.scan(pattern)
+  check("INTEGER_COERCION",
+        hits.empty?,
+        "no `.to_i` on #{live.sort.join(", ")} (#{live.size} live of #{names.size} derived)",
+        hits.empty? ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_ORDERS}" : "#{hits.size} site(s): #{hits.uniq.join(", ")}")
+end
+
+# R5 -- BAN. No frozen calendar literal, anywhere on the page.
+def rule_frozen_date(page, _sources)
+  unless page.include?("example_params(")
+    return vacuous!("FROZEN_DATE", "the page declares no `example_params(`, so there is nothing this ban protects")
+  end
+
+  hits = page.scan(/(?<![0-9a-fA-F-])20[0-9]{2}-[0-9]{2}-[0-9]{2}/)
+  check("FROZEN_DATE",
+        hits.empty?,
+        "no YYYY-MM-DD literal on the page",
+        hits.empty? ? "a literal ages into the 400 the verb answers a past date with" : "#{hits.size} literal(s): #{hits.uniq.join(", ")}")
+end
+
+# R6 -- the page must NAME getgrocery's real handler classes wherever they
+# differ from the ones it teaches, so it cannot present one as the other.
+def rule_getgrocery_handlers(page, sources)
+  demo = handler_names(sources[:getgrocery_init]).first
+  return vacuous!("GETGROCERY_HANDLERS", "no `c.handlers = %w[...]` in #{GETGROCERY_INITIALIZER}") if demo.nil? || demo.empty?
+
+  mine = handler_names(page_ruby(page)).first
+  return vacuous!("GETGROCERY_HANDLERS", "the page declares no `c.handlers = %w[...]` line") if mine.nil? || mine.empty?
+
+  if demo.sort == mine.sort
+    return vacuous!("GETGROCERY_HANDLERS",
+                    "getgrocery now registers exactly the classes the page teaches (#{demo.join(" ")}); " \
+                    "this rule held the DIFFERENCE and now holds nothing -- restate it or delete it")
+  end
+
+  divergent = demo - mine
+  missing   = divergent.reject { |c| page.include?(c) }
+  check("GETGROCERY_HANDLERS",
+        missing.empty?,
+        "the page names getgrocery's own #{divergent.join(", ")}",
+        missing.empty? ? "derived from #{GETGROCERY_INITIALIZER}" : "not named on the page: #{missing.join(", ")}")
+end
+
+# R7 -- BAN. The page must not make required, in the HANDLER, an argument
+# getgrocery's own declaration leaves optional. This is the half of K-1325 that
+# lived in code rather than in the schema.
+def rule_no_require_optional(page, sources)
+  demo = verb_input_schema(sources[:storefront], WORKED_VERB)
+  return vacuous!("REQUIRE_OPTIONAL", "no `#{WORKED_VERB}` input_schema in #{GETGROCERY_STOREFRONT}") if demo.nil?
+
+  req, props = demo
+  return vacuous!("REQUIRE_OPTIONAL", "getgrocery's #{WORKED_VERB} declares no properties/required pair") if props.nil? || req.nil?
+
+  optional = props - req
+  if optional.empty?
+    return vacuous!("REQUIRE_OPTIONAL",
+                    "getgrocery's #{WORKED_VERB} now requires every parameter it declares, so this ban has no subject")
+  end
+
+  pattern = /params\.require\(:(?:#{optional.map { |n| Regexp.escape(n) }.join("|")})\)/
+  hits    = masked(page_ruby(page)).scan(pattern)
+  check("REQUIRE_OPTIONAL",
+        hits.empty?,
+        "no `params.require` on #{WORKED_VERB}'s optional #{optional.sort.join(", ")}",
+        hits.empty? ? "derived from #{GETGROCERY_STOREFRONT}" : "#{hits.size} site(s)")
+end
+
+RULES = [
+  [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
+  [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
+  [:rule_slots_properties,   "SLOTS_PROPERTIES",    "derivation", "getgrocery's #{WORKED_VERB} input_schema property names"],
+  [:rule_integer_coercion,   "INTEGER_COERCION",    "ban",        "every parameter getgrocery declares `type: \"integer\"`"],
+  [:rule_frozen_date,        "FROZEN_DATE",         "ban",        "a YYYY-MM-DD literal, which the verb refuses once it is past"],
+  [:rule_getgrocery_handlers, "GETGROCERY_HANDLERS", "derivation", "the handler classes getgrocery's own initializer registers"],
+  [:rule_no_require_optional, "REQUIRE_OPTIONAL",    "ban",        "params.require on an argument getgrocery leaves optional"],
+].freeze
+
+def load_sources
+  { generator:       repo_read(GENERATOR_INITIALIZER),
+    storefront:      repo_read(GETGROCERY_STOREFRONT),
+    orders:          repo_read(GETGROCERY_ORDERS),
+    getgrocery_init: repo_read(GETGROCERY_INITIALIZER) }
+end
+
+def run_rules(page, sources)
+  RULES.each { |m, _n, _k, _d| send(m, page, sources) }
+end
+
+# ── --list ───────────────────────────────────────────────────────────────────
+
+def run_list
+  puts "#{RULES.size} rules, each deriving from this repository:"
+  RULES.each do |_m, name, kind, what|
+    puts format("  %-22s %-11s %s", name, kind, what)
+  end
+  puts
+  puts "Derivation sources:"
+  [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER].each do |rel|
+    puts "  #{File.exist?(File.join(ROOT, rel)) ? "present" : "MISSING"}  #{rel}"
+  end
+  0
+end
+
+# ── --self-test ──────────────────────────────────────────────────────────────
+#
+# Each arm plants ONE faithful break -- the shape a ledger row actually
+# recorded, never a token nobody would type -- and asserts the rule goes red on
+# it. Nothing on disk is touched: every plant is a string transformation of an
+# in-memory copy. A VACUITY arm per rule blanks the DERIVATION side instead, so
+# a rule that has stopped being able to compute its own subject fails rather
+# than passing.
+#
+# IT RUNS WITH NO SIBLING AND NO NETWORK, which is the whole reason it can be
+# the push-blocking half of the CI job. When no page resolves it plants into a
+# FIXTURE built from these same derivations -- so the fixture cannot rot, and
+# the run says in its first line which of the two it used. The derivation side
+# is always the real checkout, in both cases.
+#
+# THE PLANTS ARE DERIVED, not typed. A plant table naming `date` and
+# `delivery_address` would be a hand-kept copy of the very facts these rules
+# exist to stop being hand-kept: rename a parameter in getgrocery and the arm
+# would quietly stop matching, go green, and read as coverage.
+
+def self_test_arm(label, page, sources, expect_rule)
+  FAILURES.clear
+  quiet { run_rules(page, sources) }
+  hit = FAILURES.any? { |f| f.start_with?("#{expect_rule}:") }
+  puts format("  %s  %-48s %s", hit ? "red " : "GREEN", label, hit ? "-> #{expect_rule}" : "!! #{expect_rule} stayed green")
+  hit
+end
+
+def quiet
+  old = $stdout
+  $stdout = File.open(File::NULL, "w")
+  yield
+ensure
+  $stdout.close
+  $stdout = old
+end
+
+# Every value the plants and the fixture are built from, read out of the repo.
+def derived_facts(sources)
+  handlers = handler_names(sources[:generator]).first
+  req, props = verb_input_schema(sources[:storefront], WORKED_VERB)
+  ints = (integer_param_names(sources[:storefront]) | integer_param_names(sources[:orders])).to_a.sort
+  { handlers: handlers,
+    required: req,
+    properties: props,
+    optional: props - req,
+    integers: ints,
+    getgrocery: handler_names(sources[:getgrocery_init]).first }
+end
+
+# A minimal page that satisfies all seven rules by construction, so the arms
+# below are testing the RULES rather than the fixture.
+def fixture_page(f)
+  ruby_init = "Kiosk.configure do |c|\n  c.handlers = %w[#{f[:handlers].join(" ")}]\nend\n"
+  props     = f[:properties].map { |n| "                 #{n}: { type: \"string\" }," }.join("\n")
+  reads     = f[:integers].map { |n| "    #{n} = whole_number(params[:#{n}])" }.join("\n")
+  ruby_verb = <<~RUBY
+    class #{f[:handlers].first} &lt; ApplicationController
+      include Kiosk::Handler
+
+      kind :query
+      input_schema type: "object", additionalProperties: false,
+                   properties: {
+    #{props}
+                   },
+                   required: [#{f[:required].map(&:inspect).join(", ")}]
+      example_params({})
+      def #{WORKED_VERB}
+    #{reads}
+        Date.parse(params[:#{f[:optional].first}].to_s)
+      end
+    end
+  RUBY
+  [%(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
+   %(<pre><code class="language-ruby">#{ruby_init}</code></pre>),
+   %(<pre><code class="language-ruby">#{ruby_verb}</code></pre>)].join("\n")
+end
+
+def run_self_test
+  sources = load_sources
+  f       = derived_facts(sources)
+  if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? || f[:integers].empty?
+    warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
+    return 1
+  end
+
+  page, provenance, = resolve_page(explicit: nil, network: false)
+  real = !page.nil?
+  page ||= fixture_page(f)
+  puts "page side: #{real ? provenance : "BUILT-IN FIXTURE (no page resolved; derivation side is still this checkout)"}"
+  puts
+
+  int      = f[:integers].include?("delivery_slot_id") ? "delivery_slot_id" : f[:integers].first
+  opt      = f[:optional].first
+  req_lit  = "required: [#{f[:required].map(&:inspect).join(", ")}]"
+  divergent = (f[:getgrocery] - f[:handlers]).first
+
+  puts "── planted breaks (page side) ──"
+  arms = []
+  arms << self_test_arm("a handler class the generator does not teach",
+                        page.sub(f[:handlers].first, "Kiosk::PlantedController"), sources, "HANDLER_NAMES")
+  arms << self_test_arm("#{WORKED_VERB} requires #{opt.inspect} instead",
+                        page.sub(req_lit, "required: [#{opt.inspect}]"), sources, "SLOTS_REQUIRED")
+  arms << self_test_arm("the #{opt.inspect} parameter renamed away",
+                        page.sub(/\b#{Regexp.escape(opt)}:(\s*)\{(\s*)type:/, "#{opt}_planted:\\1{\\2type:"), sources, "SLOTS_PROPERTIES")
+  arms << self_test_arm("#{int} read with .to_i again",
+                        page.sub("whole_number(params[:#{int}])", "params[:#{int}].to_i"), sources, "INTEGER_COERCION")
+  arms << self_test_arm("a calendar literal frozen into example_params",
+                        page.sub("example_params({", 'example_params({ planted: "2026-08-12",'), sources, "FROZEN_DATE")
+  arms << self_test_arm("getgrocery's own #{divergent} un-named",
+                        page.gsub(divergent, "the read controller"), sources, "GETGROCERY_HANDLERS")
+  arms << self_test_arm("params.require(:#{opt}) back in the handler",
+                        page.sub("params[:#{opt}]", "params.require(:#{opt})"), sources, "REQUIRE_OPTIONAL")
+
+  puts "── vacuity (derivation side blanked) ──"
+  arms << self_test_arm("generator template loses its c.handlers example", page,
+                        sources.merge(generator: sources[:generator].gsub(/c\.handlers\s*=\s*%w\[[^\]]*\]/, "c.handlers = []")), "HANDLER_NAMES")
+  arms << self_test_arm("getgrocery's #{WORKED_VERB} loses required:", page,
+                        sources.merge(storefront: sources[:storefront].sub(req_lit, "")), "SLOTS_REQUIRED")
+  arms << self_test_arm("getgrocery's #{WORKED_VERB} is renamed away", page,
+                        sources.merge(storefront: sources[:storefront].sub(/^(\s*)def #{WORKED_VERB}$/, "\\1def #{WORKED_VERB}_renamed")), "SLOTS_PROPERTIES")
+  arms << self_test_arm("getgrocery declares no integer input parameter", page,
+                        sources.merge(storefront: sources[:storefront].gsub('type: "integer"', 'type: "number"'),
+                                      orders: sources[:orders].gsub('type: "integer"', 'type: "number"')), "INTEGER_COERCION")
+  arms << self_test_arm("the page loses every example_params",
+                        page.gsub("example_params(", "example_args("), sources, "FROZEN_DATE")
+  arms << self_test_arm("getgrocery registers exactly the page's classes", page,
+                        sources.merge(getgrocery_init: sources[:getgrocery_init].sub(divergent, f[:handlers].first)), "GETGROCERY_HANDLERS")
+  arms << self_test_arm("getgrocery requires every #{WORKED_VERB} parameter", page,
+                        sources.merge(storefront: sources[:storefront].sub(req_lit, "required: [#{f[:properties].map(&:inspect).join(", ")}]")), "REQUIRE_OPTIONAL")
+
+  FAILURES.clear
+  puts
+  puts "── unplanted ──"
+  run_rules(page, sources)
+  clean = FAILURES.empty?
+  puts "  #{clean ? "ok" : "FAIL"}   #{real ? "the working tree" : "the built-in fixture"} holds all #{RULES.size} rules"
+
+  bad = arms.count(false)
+  puts
+  puts "#{arms.size} arms, #{bad} did not go red; unplanted run #{clean ? "clean" : "RED"}"
+  bad.zero? && clean ? 0 : 1
+end
+
+# ── main ─────────────────────────────────────────────────────────────────────
+
+network  = ARGV.delete("--network")
+list     = ARGV.delete("--list")
+selftest = ARGV.delete("--self-test")
+explicit = nil
+if (i = ARGV.index("--page"))
+  explicit = ARGV[i + 1]
+  ARGV.slice!(i, 2)
+end
+unless ARGV.empty?
+  warn "unknown argument(s): #{ARGV.join(" ")}"
+  exit 2
+end
+
+exit run_list if list
+exit run_self_test if selftest
+
+page, provenance, reason = resolve_page(explicit: explicit, network: !network.nil?)
+if page.nil?
+  warn "check-onboarding-derivation: #{reason}"
+  exit 1
+end
+
+puts "onboarding.html read from #{provenance}"
+puts "derivations read from this checkout (#{ROOT})"
+puts
+sources = load_sources
+run_rules(page, sources)
+puts
+if FAILURES.empty?
+  puts "#{RULES.size} rules, all held."
+  exit 0
+end
+puts "#{FAILURES.size} of #{RULES.size} rules FAILED:"
+FAILURES.each { |f| puts "  - #{f}" }
+exit 1

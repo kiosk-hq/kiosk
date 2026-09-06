@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 #
 # Agent-side driver: no-human hotel booking end-to-end.
-# Flow: register → properties → availability → reserve_room → pay → confirm_booking
+# Flow: register → properties → availability → reserve_room → payment_setup → pay → confirm_booking
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its

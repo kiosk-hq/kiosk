@@ -89,7 +89,7 @@ From this directory:
 ```
 bin/rails demo:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
-bin/rails demo:book        # the headline: register → availability → reserve_room → pay → confirm_booking (plus the payment-gate negative)
+bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
 bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
 bin/rails demo:isolation   # cross-tenant denial (a booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery

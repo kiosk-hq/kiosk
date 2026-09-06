@@ -224,6 +224,99 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
+  # ── THE OPERATOR'S ONLY DIAGNOSTIC FOR A CRASH IN THEIR OWN HANDLER ──────
+  #
+  # Since K-1307 the wire error names the exception CLASS and stops. That makes
+  # this report the ONE place the message and the backtrace survive, and it is
+  # not a nice-to-have: both 500 paths raise `hint: "See server logs for the
+  # backtrace."`, so an operator who finds nothing in the log has been sent to
+  # a place the server promised to write to and did not. The audit event is no
+  # substitute — it is built from the wire error, not from the cause — and
+  # neither is the exception's own `#cause`, which nothing on the wire renders.
+  #
+  # The four properties below are the ones that make it a diagnostic rather
+  # than a line of output: WHAT it says, WHERE it goes when the host app has a
+  # logger, that it is BOUNDED, and that it can never turn one failure into
+  # two. The last is the reason `report_handler_failure` ends in a bare rescue,
+  # and a bare rescue is exactly the kind of code that is never exercised until
+  # it matters — {AuditSink}'s sibling guarantee is asserted the same way, one
+  # file over.
+  describe "reporting a handler's crash to the operator" do
+    let(:logger) { instance_double(Logger, error: nil) }
+
+    def run_boom(kind: :run)
+      kind == :run ? declare_action("boom") { raise "kaboom" } : declare_query("boom") { raise "kaboom" }
+      described_class.call(kind: kind, args: {}, name: "boom",
+                           identity: identity, connection: connection)
+    end
+
+    it "warns the verb, the class, the MESSAGE and the backtrace when the host has no logger" do
+      # Rails is loaded in this suite (ActionController::Base is), and
+      # `Rails.logger` is nil until an application boots — which is also a rake
+      # task, a console and an operator's own script. `Kernel#warn` is the
+      # fallback, the same one AuditSink#report takes.
+      expect(::Rails.logger).to be_nil
+
+      expect { expect { run_boom }.to raise_error(Kiosk::Server::Errors::ActionFailed) }
+        .to output(/\[kiosk-server\] Action "boom" raised RuntimeError: kaboom\n  .*executor_spec\.rb/)
+        .to_stderr
+    end
+
+    it "reports a QUERY's crash too — both 500 paths, not just the audited one" do
+      expect { expect { run_boom(kind: :query) }.to raise_error(Kiosk::Server::Errors::ActionFailed) }
+        .to output(/\[kiosk-server\] Query "boom" raised RuntimeError: kaboom/).to_stderr
+    end
+
+    it "sends it to Rails.logger.error, and NOT to stderr, once an app has booted" do
+      allow(::Rails).to receive(:logger).and_return(logger)
+
+      expect { expect { run_boom }.to raise_error(Kiosk::Server::Errors::ActionFailed) }
+        .not_to output.to_stderr
+
+      expect(logger).to have_received(:error) { |message|
+        expect(message).to include('Action "boom" raised RuntimeError: kaboom')
+        expect(message).to include("executor_spec.rb")
+      }
+    end
+
+    it "BOUNDS the backtrace — a report is a pointer, not the whole stack" do
+      allow(::Rails).to receive(:logger).and_return(logger)
+      declare_action("deep") do
+        recurse = ->(n) { n.zero? ? raise("kaboom") : recurse.call(n - 1) }
+        recurse.call(60)
+      end
+
+      expect {
+        described_class.call(kind: :run, args: {}, name: "deep",
+                             identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+
+      expect(logger).to have_received(:error) { |message|
+        # One headline line plus at most the 20 frames the reporter keeps —
+        # the raise above supplies more than 60, so an unbounded report would
+        # be caught here rather than in someone's log rotation.
+        expect(message.lines.size).to eq(21)
+      }
+    end
+
+    it "does not turn one failure into two when the LOGGER is the thing that raises" do
+      allow(::Rails).to receive(:logger).and_return(logger)
+      allow(logger).to receive(:error).and_raise(IOError, "the log volume is gone")
+
+      # The ACTION's failure reaches the caller unchanged; the logger's does
+      # not reach it at all.
+      expect { run_boom }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+        expect(e.message).to eq('Action "boom" raised RuntimeError')
+      }
+    end
+
+    it "does not turn one failure into two when STDERR is the thing that raises" do
+      allow_any_instance_of(described_class).to receive(:warn).and_raise(IOError, "stderr is gone")
+
+      expect { run_boom }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+    end
+  end
+
   # The `events` verb was removed (never a capability). It is
   # now an unknown verb → a clean 400 BadRequest, not a raw NotImplementedError.
   describe "removed :events verb" do

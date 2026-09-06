@@ -11,7 +11,7 @@
 #   rake demo        setup + test
 
 namespace :demo do
-  desc "Create + load schema + seed the KYC broker database (idempotent)."
+  desc "DROP and recreate the KYC broker database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end

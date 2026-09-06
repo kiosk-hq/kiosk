@@ -107,7 +107,7 @@ def philslist_boot_server(log:, port:, extra_env: {})
 end
 
 namespace :demo do
-  desc "Create + load schema + seed the demo database (idempotent)."
+  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
        "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \

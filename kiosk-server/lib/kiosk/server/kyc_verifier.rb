@@ -32,6 +32,12 @@ module Kiosk
     # value (false / string / number) is dropped, so a caller cannot smuggle
     # a truthy-but-not-true grant past a downstream `== true` gate.
     module KycVerifier
+      # The claims an attestation MUST carry, named ONCE so the decode below
+      # and the hint the wire publishes cannot drift (K-1307). The JWT gem's
+      # own wording is not published here: it is that library's sentence, not
+      # this protocol's, and it moves when the dependency is upgraded.
+      REQUIRED_CLAIMS = %w[exp iss aud sub].freeze
+
       module_function
 
       # @param raw_jws  [String]          compact JWS string
@@ -61,7 +67,7 @@ module Kiosk
           raw_jws, key, true,
           algorithms:       ["RS256"],
           verify_expiration: true,
-          required_claims:  ["exp", "iss", "aud", "sub"],
+          required_claims:  REQUIRED_CLAIMS,
         )
         payload  = payload.transform_keys(&:to_sym)
 
@@ -113,10 +119,17 @@ module Kiosk
         payload
       rescue ::JWT::ExpiredSignature
         raise Errors::Forbidden.new("KYC attestation expired")
-      rescue ::JWT::MissingRequiredClaim => e
-        raise Errors::Forbidden.new("KYC attestation missing required claim: #{e.message}")
-      rescue ::JWT::DecodeError => e
-        raise Errors::Forbidden.new("KYC attestation signature invalid: #{e.message}")
+      rescue ::JWT::MissingRequiredClaim
+        raise Errors::Forbidden.new(
+          "KYC attestation missing a required claim",
+          hint: "an attestation carries #{REQUIRED_CLAIMS.join(", ")}",
+        )
+      rescue ::JWT::DecodeError
+        raise Errors::Forbidden.new(
+          "KYC attestation signature invalid",
+          hint: "an attestation is a compact RS256 JWS signed by the issuer this origin " \
+                "is configured to trust",
+        )
       end
 
       # Reduce a raw `attributes` claim to a String-keyed hash of the names the

@@ -47,6 +47,22 @@ module Kiosk
         "sign `aud` = the origin you connected to, taken from your own request " \
         "URL — never from a value echoed back in a response"
 
+      # The claims a proof MUST carry, named ONCE so the decode below and the
+      # hint the wire publishes cannot drift apart (K-1307). The JWT gem's own
+      # "Missing required claim …" wording is not published: it is that
+      # library's sentence, not this protocol's, and this path is reachable
+      # before any credential is presented.
+      PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
+
+      PROOF_CLAIMS_HINT =
+        "a proof's payload carries #{PROOF_REQUIRED_CLAIMS.join(", ")} — `aud` is the origin " \
+        "you connected to, `nonce` the value GET /auth/challenge just issued for this key, " \
+        "`jti` a unique id for this proof"
+
+      PROOF_SIGNATURE_HINT =
+        "a proof is a compact RS256 JWS — header.payload.signature — signed with the " \
+        "private key matching the public_key you sent"
+
       module_function
 
       def verify!(public_key_pem:, signed:)
@@ -55,7 +71,7 @@ module Kiosk
 
         payload, = ::JWT.decode(
           signed.to_s, key, true,
-          algorithms: ["RS256"], required_claims: %w[aud nonce jti],
+          algorithms: ["RS256"], required_claims: PROOF_REQUIRED_CLAIMS,
         )
         payload = payload.transform_keys(&:to_sym)
 
@@ -70,10 +86,10 @@ module Kiosk
         end
 
         payload
-      rescue ::JWT::MissingRequiredClaim => e
-        raise Errors::Unauthenticated.new("proof missing claim: #{e.message}")
-      rescue ::JWT::DecodeError => e
-        raise Errors::Unauthenticated.new("proof signature invalid: #{e.message}")
+      rescue ::JWT::MissingRequiredClaim
+        raise Errors::Unauthenticated.new("proof is missing a required claim", hint: PROOF_CLAIMS_HINT)
+      rescue ::JWT::DecodeError
+        raise Errors::Unauthenticated.new("proof signature invalid", hint: PROOF_SIGNATURE_HINT)
       end
 
       # Operator-side diagnostic for an audience mismatch (K-511 half two).
@@ -118,8 +134,14 @@ module Kiosk
           )
         end
         rsa
-      rescue OpenSSL::PKey::PKeyError => e
-        raise Errors::BadRequest.new("invalid public key: #{e.message}")
+      rescue OpenSSL::PKey::PKeyError
+        # OpenSSL's error text names its own internals and is not published
+        # here (K-1307); the hint names what a usable key looks like instead.
+        raise Errors::BadRequest.new(
+          "invalid public key",
+          hint: "send a PEM-encoded RSA public key of at least " \
+                "#{SigningKey::MIN_KEY_BITS} bits (-----BEGIN PUBLIC KEY----- …)",
+        )
       end
     end
   end

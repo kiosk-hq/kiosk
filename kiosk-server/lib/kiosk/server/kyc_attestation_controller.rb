@@ -27,7 +27,7 @@ module Kiosk
       def create
         identity = authenticate!
         body     = parse_body!
-        raw_jws  = body[:kyc_jws] or raise Errors::BadRequest.new("missing field: kyc_jws")
+        raw_jws  = body[:kyc_jws] or raise Errors.missing_field("kyc_jws")
 
         claims = KycVerifier.verify(raw_jws: raw_jws, identity: identity)
         mark_kyc_verified!(identity.agent_id, attributes: claims[:attributes] || {})

@@ -94,9 +94,13 @@ module Kiosk
       # `Rack::BadRequest` and all mean the same thing on the wire.
       def parse!(query_string)
         Rack::Utils.parse_nested_query(query_string.to_s)
-      rescue ::Rack::BadRequest => e
+      rescue ::Rack::BadRequest
+        # Rack's own message is not appended (K-1307). The three refusals "all
+        # mean the same thing on the wire" — the sentence above says so four
+        # lines up — so the caller's remedy is SHAPE_HINT's grammar, not a
+        # library sentence that changes with the Rack version.
         raise Errors::BadRequest.new(
-          "the query string could not be decoded: #{e.message}",
+          "the query string could not be decoded",
           hint: SHAPE_HINT,
         )
       end

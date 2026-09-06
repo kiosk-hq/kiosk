@@ -66,9 +66,23 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
       expect(decode("amenity=pool", declared)).to eq(amenity: %w[pool])
     end
 
+    # WHAT THIS EXAMPLE USED TO ASSERT, AND WHY IT IS THE OPPOSITE NOW (K-1307).
+    # It matched `/amenity/`, and the only thing supplying that word was RACK's
+    # own refusal — measured on the shipped Rack 3.2.6: `expected Array (got
+    # String) for param `amenity'` — which the decoder spliced onto its
+    # sentence. So an example written to prove the refusal was informative was
+    # in fact PINNING a library's wording to this protocol's wire, on a path
+    # any caller reaches with a hand-typed query string. It now asserts the
+    # published sentence, the published hint, and that not one byte of Rack's
+    # copy is in either: restoring the splice reddens it.
     it "refuses a name used as both scalar and array in one query string" do
       expect { decode("amenity=pool&amenity%5B%5D=spa", declared) }
-        .to raise_error(Kiosk::Server::Errors::BadRequest, /amenity/)
+        .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+          expect(e.message).to eq("the query string could not be decoded")
+          expect(e.hint).to eq(described_class::SHAPE_HINT)
+          expect(e.hint).to include("a name is one shape or the other, never both")
+          expect("#{e.message} #{e.hint}").not_to match(/expected Array|got String|amenity/)
+        }
     end
   end
 
@@ -292,13 +306,38 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
     end
   end
 
+  # "Its three refusals … all mean the same thing on the wire" is a claim
+  # {ArgumentDecoder#parse!} makes in prose four lines above its rescue, and
+  # since K-1307 it is also the reason none of the three publishes Rack's own
+  # words. Both halves are asserted here: ONE sentence out of all three, and
+  # none of the three library messages in it.
   describe "the refusals Rack itself raises" do
+    def expect_one_sentence(query_string)
+      expect { decode(query_string) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+          expect(e.message).to eq("the query string could not be decoded")
+          expect(e.hint).to eq(described_class::SHAPE_HINT)
+          yield e if block_given?
+        }
+    end
+
     it "answers Rack's own nesting-depth limit with a 400 rather than a 500" do
       # Rack::QueryParser::QueryLimitError is a Rack::BadRequest, like the
       # scalar-vs-array conflict above; both mean the same thing on the wire
       # and neither may escape as an uncaught 500.
       deep = "a#{"%5Bb%5D" * 40}=1"
-      expect { decode(deep) }.to raise_error(Kiosk::Server::Errors::BadRequest)
+      expect_one_sentence(deep) do |e|
+        expect("#{e.message} #{e.hint}").not_to match(/exceeded available parameter|depth/)
+      end
+    end
+
+    it "answers an undecodable percent escape with the same sentence, not Rack's" do
+      # Measured on the shipped Rack 3.2.6: `invalid %-encoding (a%ZZ)`. It
+      # quotes the CALLER'S OWN BYTES back at an unauthenticated caller, which
+      # is the sharper half of why K-1307 called this class major.
+      expect_one_sentence("a%ZZ=1") do |e|
+        expect("#{e.message} #{e.hint}").not_to match(/invalid %-encoding|a%ZZ/)
+      end
     end
   end
 end

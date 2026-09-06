@@ -359,9 +359,21 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
         }
     end
 
+    # `/raised RuntimeError: boom/` was the old assertion, and the ": boom"
+    # half of it was the operator's own `raise "boom"` on the wire (K-1307).
+    # The class stays — an operator reading a problem document wants to know
+    # a RuntimeError escaped, and a class name cannot carry the caller's bytes
+    # — and the sentence goes to the log instead, which is what the hint has
+    # promised all along.
     it "turns an unhandled exception into action_failed, not a silent success" do
-      expect { execute(:run, { name: "explode" }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed, /raised RuntimeError: boom/)
+      expect {
+        expect { execute(:run, { name: "explode" }) }
+          .to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+            expect(e.message).to eq('Action "explode" raised RuntimeError')
+            expect(e.message).not_to include("boom")
+            expect(e.hint).to eq("See server logs for the backtrace.")
+          }
+      }.to output(/\[kiosk-server\] Action "explode" raised RuntimeError: boom/).to_stderr
     end
   end
 

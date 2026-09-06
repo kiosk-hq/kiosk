@@ -181,7 +181,8 @@ module Kiosk
         rescue Errors::Base
           raise
         rescue StandardError => e
-          raise Errors::ActionFailed.new("Query #{name.inspect} raised #{e.class}: #{e.message}",
+          report_handler_failure("Query", name, e)
+          raise Errors::ActionFailed.new("Query #{name.inspect} raised #{e.class}",
                                          hint: "See server logs for the backtrace.")
         end
 
@@ -208,8 +209,9 @@ module Kiosk
         rescue Errors::Base
           raise
         rescue StandardError => e
+          report_handler_failure("Action", name, e)
           raise Errors::ActionFailed.new(
-            "Action #{name.inspect} raised #{e.class}: #{e.message}",
+            "Action #{name.inspect} raised #{e.class}",
             hint: "See server logs for the backtrace.",
           )
         end
@@ -748,6 +750,33 @@ module Kiosk
       end
 
       # ─── helpers ───────────────────────────────────────────────────────
+
+      # A handler raised something that is not an {Errors::Base}. The WIRE gets
+      # the verb and the exception CLASS; the exception's own MESSAGE goes to
+      # the operator's log and no further (K-1307).
+      #
+      # The message is an arbitrary Ruby or library sentence — on any verb that
+      # echoes an argument it can carry the caller's own bytes back out, and it
+      # moves whenever a dependency is upgraded, so it is an undeclared and
+      # unversioned part of the wire. It is also the ONLY diagnostic the
+      # operator has for a crash in their own handler, which is why it is
+      # logged rather than dropped: the `hint` these two sites raise has
+      # promised "See server logs for the backtrace" since before anything
+      # wrote one.
+      #
+      # Same shape as {AuditSink}'s `report`: Rails' logger when the host app
+      # has booted, `Kernel#warn` otherwise (rake tasks, consoles, this gem's
+      # own specs), and a logger that itself raises must not turn one failure
+      # into two.
+      def report_handler_failure(kind, name, error)
+        message = "[kiosk-server] #{kind} #{name.inspect} raised " \
+                  "#{error.class}: #{error.message}\n  " \
+                  "#{Array(error.backtrace).first(20).join("\n  ")}"
+        logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
+        logger ? logger.error(message) : warn(message)
+      rescue StandardError
+        nil
+      end
 
       def symbolize(value)
         case value

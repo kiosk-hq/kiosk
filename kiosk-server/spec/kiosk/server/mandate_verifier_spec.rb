@@ -80,10 +80,35 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /payment key|revoked|unknown/)
     end
 
+    # THE THREE PRESENCE EXAMPLES, AND WHAT CHANGED UNDER THEM (K-1307).
+    #
+    # They used to match `/exp/i`, `/id/i`, `/iat/i`, and the word each looked
+    # for came from the JWT GEM: `Missing required claim exp`, spliced into the
+    # refusal. So three examples about THIS protocol's required claims were in
+    # fact holding a third-party library's sentence onto the wire — on the
+    # payment path, where the refusal is read by whatever signed the mandate.
+    #
+    # Each still proves the same behaviour and proves it the same way: an
+    # otherwise fully valid payload (correct key, iss, principal, exp) minus
+    # exactly ONE claim must be refused, so only the presence check can be
+    # refusing it. What they assert about the WORDS is now inverted — the
+    # published sentence, the published hint spelling out the required claims
+    # from OUR OWN list (so the hint cannot drift from what the decode
+    # enforces), and no byte of the gem's wording anywhere in either.
+    def expect_missing_required_claim
+      expect { yield }
+        .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
+          expect(e.message).to eq("mandate missing a required claim")
+          expect(e.hint).to include("id", "user_id", "agent_id", "iss", "iat", "exp")
+          expect("#{e.message} #{e.hint}").not_to include("Missing required claim")
+        }
+    end
+
     it "rejects a mandate with no exp claim" do
       no_exp = intent_payload.reject { |k, _| k == :exp }
-      expect { described_class.verify_intent(raw_jws: sign(no_exp), identity: identity) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /exp/i)
+      expect_missing_required_claim do
+        described_class.verify_intent(raw_jws: sign(no_exp), identity: identity)
+      end
     end
 
     # id and iat are spec-MUST claims. The payloads below are otherwise
@@ -91,14 +116,27 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # exp-only check and must now be rejected on presence alone.
     it "rejects a mandate with no id claim" do
       no_id = intent_payload.reject { |k, _| k == :id }
-      expect { described_class.verify_intent(raw_jws: sign(no_id), identity: identity) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /id/i)
+      expect_missing_required_claim do
+        described_class.verify_intent(raw_jws: sign(no_id), identity: identity)
+      end
     end
 
     it "rejects a mandate with no iat claim" do
       no_iat = intent_payload.reject { |k, _| k == :iat }
-      expect { described_class.verify_intent(raw_jws: sign(no_iat), identity: identity) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /iat/i)
+      expect_missing_required_claim do
+        described_class.verify_intent(raw_jws: sign(no_iat), identity: identity)
+      end
+    end
+
+    # The hint is not decoration: it is the ONLY place the wire now names the
+    # claims, so it must name the ones the decode actually requires and not a
+    # hand-kept second list beside them.
+    it "publishes the claims the decode enforces, not a copy of them" do
+      no_exp = intent_payload.reject { |k, _| k == :exp }
+      expect { described_class.verify_intent(raw_jws: sign(no_exp), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
+          expect(e.hint).to eq("a mandate carries #{described_class::REQUIRED_CLAIMS.join(", ")}")
+        }
     end
 
     it "rejects when agent_id in the payload does not match the authenticated identity" do
@@ -480,7 +518,13 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     it "applies the shared decode checks (missing exp rejected)" do
       no_exp = cart_payload.reject { |k, _| k == :exp }
       expect { described_class.verify_cart(raw_jws: sign(no_exp), identity: identity, intent: intent) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /exp/i)
+        .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
+          # `/exp/i` here was the JWT gem's `Missing required claim exp`
+          # reaching the wire (K-1307), not anything this file writes.
+          expect(e.message).to eq("mandate missing a required claim")
+          expect(e.hint).to include("exp")
+          expect("#{e.message} #{e.hint}").not_to include("Missing required claim")
+        }
     end
 
     it "applies the shared decode checks (principal mismatch rejected)" do
@@ -649,7 +693,11 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     it "applies the shared decode checks (missing exp rejected)" do
       no_exp = payment_payload.reject { |k, _| k == :exp }
       expect { described_class.verify_payment(raw_jws: sign(no_exp), identity: identity, cart: cart_mandate) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /exp/i)
+        .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
+          expect(e.message).to eq("mandate missing a required claim")
+          expect(e.hint).to include("exp")
+          expect("#{e.message} #{e.hint}").not_to include("Missing required claim")
+        }
     end
 
     it "applies the shared decode checks (wrong issuer rejected)" do

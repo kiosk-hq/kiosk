@@ -296,9 +296,11 @@ module Kiosk
         return nil if raw.nil? || raw.strip.empty?
 
         JSON.parse(raw)
-      rescue JSON::ParserError => e
+      rescue JSON::ParserError
+        # The json gem's parse text is not appended (K-1307): the hint below
+        # already names the one thing the operator has to change.
         raise Errors::ActionFailed.new(
-          "#{@kind} #{@wire_name.inspect} rendered a non-JSON body: #{e.message}",
+          "#{@kind} #{@wire_name.inspect} rendered a non-JSON body",
           hint: "a Kiosk handler answers with `render json:` — HTML, redirects and " \
                 "`send_file` have no place on the wire",
         )

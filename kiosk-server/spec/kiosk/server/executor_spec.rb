@@ -86,13 +86,29 @@ RSpec.describe Kiosk::Server::Executor do
       }.to raise_error(Kiosk::Server::Errors::RLSDenied)
     end
 
+    # THE WIRE GETS THE CLASS, THE OPERATOR GETS THE SENTENCE (K-1307).
+    #
+    # This example matched `/kaboom/` — the handler's OWN words, spliced into
+    # the refusal — so it asserted that an arbitrary Ruby message reaches the
+    # caller, which is the thing K-465, K-1294 and K-1307 each closed one batch
+    # of. It now asserts the opposite in both directions: the sentence names
+    # the exception CLASS (deliberately kept: a class name carries none of the
+    # caller's bytes and does not move when a dependency is upgraded), carries
+    # no syllable of the message, and the message is on the operator's log
+    # where the `hint` has always promised the backtrace would be.
     it "wraps StandardError raised inside the query as ActionFailed" do
       declare_query("boom") { raise "kaboom" }
 
       expect {
-        described_class.call(kind: :query, args: {}, name: "boom",
-                             identity: identity, connection: connection)
-      }.to raise_error(Kiosk::Server::Errors::ActionFailed, /kaboom/)
+        expect {
+          described_class.call(kind: :query, args: {}, name: "boom",
+                               identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+          expect(e.message).to eq('Query "boom" raised RuntimeError')
+          expect(e.message).not_to include("kaboom")
+          expect(e.hint).to eq("See server logs for the backtrace.")
+        }
+      }.to output(/\[kiosk-server\] Query "boom" raised RuntimeError: kaboom/).to_stderr
     end
 
     # ── cursor pagination seam (ADR-0021 / T-042) ─────────────────────────
@@ -188,13 +204,23 @@ RSpec.describe Kiosk::Server::Executor do
       }.to raise_error(Kiosk::Server::Errors::RLSDenied)
     end
 
+    # Same split as the query branch above, and it is asserted twice because
+    # the two rescues are two pieces of code: a fix applied to one of them and
+    # not the other is exactly the half-done shape this class keeps recurring
+    # as.
     it "wraps StandardError raised inside the action as ActionFailed" do
       declare_action("boom") { raise "kaboom" }
 
       expect {
-        described_class.call(kind: :run, args: {}, name: "boom",
-                             identity: identity, connection: connection)
-      }.to raise_error(Kiosk::Server::Errors::ActionFailed, /kaboom/)
+        expect {
+          described_class.call(kind: :run, args: {}, name: "boom",
+                               identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+          expect(e.message).to eq('Action "boom" raised RuntimeError')
+          expect(e.message).not_to include("kaboom")
+          expect(e.hint).to eq("See server logs for the backtrace.")
+        }
+      }.to output(/\[kiosk-server\] Action "boom" raised RuntimeError: kaboom/).to_stderr
     end
   end
 

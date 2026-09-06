@@ -336,9 +336,14 @@ module Kiosk
         end
 
         proofs.empty? ? nil : proofs
-      rescue JSON::ParserError => e
+      rescue JSON::ParserError
+        # The json gem's own parser text is deliberately NOT appended (K-1307):
+        # it is that library's sentence rather than this protocol's, it moves
+        # when the dependency is upgraded, and it echoes the caller's own bytes
+        # back on a header path reachable before any credential is presented.
+        # POW_HEADER_HINT already names the shape the header must have.
         raise Errors::BadRequest.new(
-          "malformed Kiosk-PoW header: #{e.message}",
+          "malformed Kiosk-PoW header",
           hint: POW_HEADER_HINT,
         )
       end

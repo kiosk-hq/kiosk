@@ -33,6 +33,216 @@ require "rack/mock"
 require "ripper"
 require "json"
 
+# THE CLASS THE TWO SENTENCES ABOVE ARE ONE INSTANCE OF (K-1307).
+#
+# K-465 fixed the sites it found; K-1294 fixed five more; the pass that filed
+# K-1307 found three more by grepping `.message` rather than by re-reading
+# either row. A fourth recurrence is the default outcome unless the CLASS is
+# held by something, so the rule below is about a SHAPE and not about a
+# sentence:
+#
+#   AN EXCEPTION MESSAGE THIS REPOSITORY DOES NOT OWN MAY NOT REACH THE
+#   CONSTRUCTOR OF A WIRE ERROR.
+#
+# "Wire error" is asked of Ruby rather than listed here: a class is in scope
+# when it descends from `Kiosk::Server::Errors::Base`, because `Base#to_problem`
+# copies its `message` into the problem document's `detail` and nothing between
+# there and the socket redacts it. `Errors::ConfigurationError` is therefore
+# NOT in scope and its `#{e.message}` is not an offence — it is a bare
+# StandardError with no code, no status and no `to_problem`, raised while an
+# operator's own configuration is being read. The day someone gives it one it
+# enters scope by itself, with nothing here to edit.
+#
+# "Does not own" is asked of the RESCUE rather than of an allowlist: the
+# message is permitted when the variable it is read from was bound by a
+# `rescue` whose every named class sits under `Kiosk::`. Our adapters raise our
+# own exceptions carrying sentences we wrote and version — the PSP-agnostic
+# `Kiosk::PaymentProviders::PaymentFailed` the pay path re-raises is the live
+# instance — and banning those would only push the same text through a
+# laundering builder. Everything else (`JSON::ParserError`, `JWT::DecodeError`,
+# `OpenSSL::PKey::PKeyError`, `Rack::BadRequest`, a bare `StandardError`) is
+# some other library's wording: it moves when that dependency is upgraded and,
+# on the paths reachable before any credential is presented, it can echo the
+# caller's own bytes straight back out. A bare `rescue => e` names nothing, so
+# it is foreign too.
+#
+# WHAT THIS SWEEP DOES NOT SEE, said out loud rather than left to be found:
+#
+#   * a message laundered through a local first (`detail = e.message` a line
+#     up, `Errors::BadRequest.new(detail)` a line down);
+#   * a foreign message reaching the wire by a route that is not an `Errors`
+#     constructor — `HandlerMixin#kiosk_rescue_to_wire` renders
+#     `message: exception.message` into the sub-dispatch envelope and
+#     `HandlerDispatch#error_message` re-wraps that as the wire `detail`;
+#   * `#{e.class}`, which is a class NAME and not a sentence: it cannot carry
+#     the caller's bytes and does not move with a dependency's wording. Two
+#     500 paths keep it deliberately, with the message beside it in the log.
+module KioskWireErrorSweep
+  module_function
+
+  Offence = Struct.new(:path, :line, :source, :variable)
+
+  def const_lookup(name)
+    Object.const_get(name, false)
+  rescue ::NameError, ::TypeError, ::LoadError
+    nil
+  end
+
+  # What an `Errors::X` / bare `X` / fully-qualified spelling names, resolved
+  # the way the `module Kiosk; module Server` nesting of the file it was read
+  # from would resolve it.
+  def resolve(path)
+    joined = path.join("::")
+    ["Kiosk::Server::Errors::#{joined}", "Kiosk::Server::#{joined}", joined].each do |candidate|
+      found = const_lookup(candidate)
+      return found if found
+    end
+    nil
+  end
+
+  # In scope: everything whose `message` can become a problem document's
+  # `detail` — the error classes themselves, and the `Errors` module, whose
+  # builders return them.
+  def in_scope?(const)
+    return false if const.nil?
+    return true if const.equal?(Kiosk::Server::Errors)
+
+    # `<=` answers nil, not false, for two unrelated classes; a predicate
+    # that can answer nil is a predicate whose negative nobody can assert.
+    const.is_a?(Class) && !(const <= Kiosk::Server::Errors::Base).nil? &&
+      const <= Kiosk::Server::Errors::Base
+  end
+
+  def const_path(node)
+    return nil unless node.is_a?(Array)
+
+    case node[0]
+    when :var_ref, :const_ref, :top_const_ref
+      inner = node[1]
+      inner.is_a?(Array) && inner[0] == :@const ? [inner[1]] : nil
+    when :@const
+      [node[1]]
+    when :const_path_ref
+      left  = const_path(node[1])
+      right = node[2]
+      left && right.is_a?(Array) && right[0] == :@const ? left + [right[1]] : nil
+    end
+  end
+
+  # Whole paths only: `::JWT::MissingRequiredClaim` is one answer, not two.
+  def maximal_const_paths(node, acc = [])
+    return acc unless node.is_a?(Array)
+
+    path = const_path(node)
+    return acc << path if path
+
+    node.each { |child| maximal_const_paths(child, acc) if child.is_a?(Array) }
+    acc
+  end
+
+  def owned_rescue?(exception_node)
+    paths = maximal_const_paths(exception_node)
+    !paths.empty? && paths.all? { |path| path.first == "Kiosk" }
+  end
+
+  # Every `<receiver>.message` in a subtree, with the line, the receiver's name
+  # when it is a plain local, and what the enclosing rescues bound it to. An
+  # unknown receiver stays unknown, and unknown is treated as foreign.
+  def message_sends(node, env, acc = [])
+    return acc unless node.is_a?(Array)
+
+    if node[0] == :call
+      receiver = node[1]
+      meth     = node[3]
+      if meth.is_a?(Array) && meth[0] == :@ident && meth[1] == "message"
+        name = receiver.is_a?(Array) && receiver[0] == :var_ref &&
+               receiver[1].is_a?(Array) && receiver[1][0] == :@ident ? receiver[1][1] : nil
+        acc << [meth[2][0], name, env[name]]
+      end
+    end
+
+    node.each { |child| message_sends(child, env, acc) if child.is_a?(Array) }
+    acc
+  end
+
+  # The two-and-a-half spellings that build a wire error: `Errors::X.new(…)`
+  # and `Errors.builder(…)`; `raise Errors::X, "…"`; and the same raise with
+  # parentheses.
+  def constructor_arguments(node)
+    if node[0] == :method_add_arg && node[1].is_a?(Array)
+      head = node[1]
+      if head[0] == :call
+        target = const_path(head[1])
+        meth   = head[3]
+        const  = target && resolve(target)
+        if meth.is_a?(Array) && meth[0] == :@ident && in_scope?(const) &&
+           (meth[1] == "new" || const.equal?(Kiosk::Server::Errors))
+          return node[2]
+        end
+      elsif head[0] == :fcall && head[1].is_a?(Array) && head[1][1] == "raise"
+        return node[2] if raised_wire_error?(node[2])
+      end
+    end
+
+    if node[0] == :command || node[0] == :command_call
+      ident = node[0] == :command ? node[1] : node[3]
+      if ident.is_a?(Array) && ident[0] == :@ident && ident[1] == "raise"
+        args = node.last
+        return args if raised_wire_error?(args)
+      end
+    end
+
+    nil
+  end
+
+  def raised_wire_error?(args)
+    return false unless args.is_a?(Array)
+
+    list  = args[0] == :arg_paren ? args[1] : args
+    list  = list[1] if list.is_a?(Array) && list[0] == :args_add_block
+    first = list.is_a?(Array) ? list[0] : nil
+    path  = first.is_a?(Array) ? const_path(first) : nil
+    !path.nil? && in_scope?(resolve(path))
+  end
+
+  def walk(node, env, result, lines, path)
+    return unless node.is_a?(Array)
+
+    if node[0] == :rescue
+      _, exception_node, var, body, following = node
+      name = var.is_a?(Array) && var[0] == :var_field && var[1].is_a?(Array) &&
+             var[1][0] == :@ident ? var[1][1] : nil
+      inner = name ? env.merge(name => (owned_rescue?(exception_node) ? :owned : :foreign)) : env
+      walk(exception_node, env, result, lines, path)
+      walk(body, inner, result, lines, path)
+      walk(following, env, result, lines, path)
+      return
+    end
+
+    args = constructor_arguments(node)
+    if args
+      result[:sites] += 1
+      message_sends(args, env).each do |(line, name, ownership)|
+        found = Offence.new(path, line, lines[line - 1].to_s.strip, name)
+        (ownership == :owned ? result[:owned] : result[:offences]) << found
+      end
+    end
+
+    node.each { |child| walk(child, env, result, lines, path) if child.is_a?(Array) }
+  end
+
+  def scan(source, path: "(fixture)")
+    tree = Ripper.sexp(source)
+    raise ArgumentError, "#{path} does not parse" if tree.nil?
+
+    result = { sites: 0, offences: [], owned: [] }
+    walk(tree, {}, result, source.lines, path)
+    result[:offences].uniq!
+    result[:owned].uniq!
+    result
+  end
+end
+
 RSpec.describe "the malformed-request sentences on the wire" do
   let(:user_id) { "11111111-1111-1111-1111-111111111111" }
 
@@ -215,14 +425,23 @@ RSpec.describe "the malformed-request sentences on the wire" do
       end
     end
 
-    it "builds `missing field:` and `invalid JSON body` nowhere but errors.rb, and never by interpolation" do
+    # LITERAL OR INTERPOLATED, and the difference is why this arm was 15/0 with
+    # the defect in front of it (K-1306). It used to skip every line without a
+    # `#{`, so it hunted the SPLICE and was blind to the other way of breaking
+    # the same rule: `kyc_attestation_controller.rb` simply typed the sentence
+    # out — `raise Errors::BadRequest.new("missing field: kyc_jws")` — which is
+    # the correct sentence today and a second place for it to drift from
+    # tomorrow, while `errors.rb` two files away declared the sentences "BUILT
+    # HERE AND NOWHERE ELSE". A declaration nothing can falsify is the shape
+    # this whole file exists to stop, so the rule is now what the declaration
+    # says: outside errors.rb these bytes do not appear at all.
+    it "builds `missing field:` and `invalid JSON body` nowhere but errors.rb, literal or interpolated" do
       offenders = sources.flat_map do |path|
         rel = path.delete_prefix("#{gem_root}/")
         next [] if rel == BUILDER_FILE
 
         code_without_comments(path).lines.each_with_index.filter_map do |line, idx|
           next unless HOUSE_SENTENCES.any? { |s| line.include?(s) }
-          next unless line.include?('#{')
 
           "#{rel}:#{idx + 1}: #{line.strip}"
         end
@@ -244,6 +463,145 @@ RSpec.describe "the malformed-request sentences on the wire" do
         end
       end
       expect(offenders).to be_empty
+    end
+  end
+
+  # ── the K-1307 sweep: no FOREIGN message reaches a wire error ─────────────
+  #
+  # The rule, its scope line and the two things it deliberately cannot see are
+  # written out on {KioskWireErrorSweep} at the top of this file.
+  describe "kiosk-server's wire errors" do
+    # Measured at head when this arm was written: 113 constructor sites and one
+    # message excused by ownership. The floor is set well below the count so
+    # ordinary editing does not move it, and well above zero so a sweep that has
+    # stopped recognising constructors cannot pass by finding nothing to judge.
+    MINIMUM_CONSTRUCTOR_SITES = 80
+
+    let(:gem_root) { File.expand_path("../../..", __dir__) }
+    let(:sources)  { Dir.glob("#{gem_root}/lib/**/*.rb").sort }
+
+    let(:census) do
+      sources.each_with_object({ sites: 0, offences: [], owned: [] }) do |path, acc|
+        found = KioskWireErrorSweep.scan(File.read(path), path: path.delete_prefix("#{gem_root}/"))
+        acc[:sites] += found[:sites]
+        acc[:offences].concat(found[:offences])
+        acc[:owned].concat(found[:owned])
+      end
+    end
+
+    it "never lets an exception message this repository does not own reach a wire error" do
+      expect(census[:offences].map { |o| "#{o.path}:#{o.line}: #{o.source}" }).to be_empty
+    end
+
+    # ── vacuity ────────────────────────────────────────────────────────────
+    #
+    # The failure this workspace repeats is a rule that matches NOTHING while
+    # reading as coverage: a pattern that required a word no live sentence used
+    # guarded nothing for its entire existence, and nothing said so. Three arms,
+    # one per way this sweep could quietly stop seeing.
+
+    it "resolves the constants it keys on, and draws its scope line where it says it does (vacuity)" do
+      expect(KioskWireErrorSweep.resolve(%w[Errors BadRequest]))
+        .to be(Kiosk::Server::Errors::BadRequest)
+      expect(KioskWireErrorSweep.resolve(%w[Errors])).to be(Kiosk::Server::Errors)
+      expect(KioskWireErrorSweep.in_scope?(Kiosk::Server::Errors::BadRequest)).to be(true)
+      expect(KioskWireErrorSweep.in_scope?(Kiosk::Server::Errors)).to be(true)
+      # The boundary this sweep documents: ConfigurationError has no `to_problem`
+      # and never becomes a document, so its message is not the wire's business.
+      expect(KioskWireErrorSweep.in_scope?(Kiosk::Server::Errors::ConfigurationError)).to be(false)
+    end
+
+    it "still recognises wire-error constructors in the shipped source (vacuity)" do
+      expect(census[:sites]).to be >= MINIMUM_CONSTRUCTOR_SITES,
+        "the sweep found #{census[:sites]} constructor sites in lib/ — it has stopped " \
+        "recognising them, and an empty offence list means nothing until it does"
+    end
+
+    it "still finds one of OUR OWN messages reaching a wire error, or the carve-out guards nothing (vacuity)" do
+      expect(census[:owned]).not_to be_empty,
+        "no shipped site re-raises a Kiosk-owned exception's message any more — the ownership " \
+        "carve-out now excuses nothing that exists, so re-aim it or delete it"
+    end
+
+    # ── self-test: the detector reports what it says it reports ─────────────
+
+    it "reports a foreign message spliced into a wire error (self-test)" do
+      source = <<~'RUBY'
+        module Kiosk
+          module Server
+            module Probe
+              def self.call
+                JSON.parse("x")
+              rescue JSON::ParserError => e
+                raise Errors::BadRequest.new("malformed: #{e.message}")
+              end
+            end
+          end
+        end
+      RUBY
+      found = KioskWireErrorSweep.scan(source, path: "(self-test)")
+      expect(found[:offences].size).to eq(1)
+      expect(found[:offences].first.line).to eq(7)
+      expect(found[:owned]).to be_empty
+    end
+
+    it "reports one spliced into a HINT, which reaches the wire too (self-test)" do
+      source = <<~'RUBY'
+        rescue Rack::BadRequest => e
+          raise Errors::BadRequest.new("undecodable", hint: "rack said #{e.message}")
+        end
+      RUBY
+      expect(KioskWireErrorSweep.scan("begin\n#{source}", path: "(self-test)")[:offences].size).to eq(1)
+    end
+
+    it "reports the comma form, which carries no `.new` to key on (self-test)" do
+      source = <<~'RUBY'
+        begin
+          nil
+        rescue StandardError => e
+          raise Errors::Unauthenticated, "proof rejected: #{e.message}"
+        end
+      RUBY
+      expect(KioskWireErrorSweep.scan(source, path: "(self-test)")[:offences].size).to eq(1)
+    end
+
+    it "excuses a Kiosk-owned message, and ONLY a Kiosk-owned one (self-test)" do
+      ours = <<~'RUBY'
+        begin
+          nil
+        rescue Kiosk::PaymentProviders::PaymentFailed => e
+          raise Errors::PaymentFailed.new(e.message, hint: "retry")
+        end
+      RUBY
+      theirs = ours.sub("Kiosk::PaymentProviders::PaymentFailed", "StandardError")
+
+      expect(KioskWireErrorSweep.scan(ours, path: "(self-test)")[:offences]).to be_empty
+      expect(KioskWireErrorSweep.scan(ours, path: "(self-test)")[:owned].size).to eq(1)
+      expect(KioskWireErrorSweep.scan(theirs, path: "(self-test)")[:offences].size).to eq(1)
+    end
+
+    it "treats a bare `rescue => e`, which names nothing, as foreign (self-test)" do
+      source = <<~'RUBY'
+        begin
+          nil
+        rescue => e
+          raise Errors::BadRequest.new("no: #{e.message}")
+        end
+      RUBY
+      expect(KioskWireErrorSweep.scan(source, path: "(self-test)")[:offences].size).to eq(1)
+    end
+
+    it "leaves a non-wire error alone, which is where its scope line falls (self-test)" do
+      source = <<~'RUBY'
+        begin
+          nil
+        rescue NameError => e
+          raise Errors::ConfigurationError, "does not resolve (#{e.class}: #{e.message})"
+        end
+      RUBY
+      found = KioskWireErrorSweep.scan(source, path: "(self-test)")
+      expect(found[:offences]).to be_empty
+      expect(found[:sites]).to eq(0)
     end
   end
 end

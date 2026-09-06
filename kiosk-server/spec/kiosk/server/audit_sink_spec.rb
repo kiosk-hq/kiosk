@@ -213,15 +213,30 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.invoked_at).to be_within(60).of(Time.now)
       end
 
-      it "emits for a FAILED action too, carrying the error, and re-raises untouched" do
+      # WHAT THE EVENT CARRIES SINCE K-1307, and why this example inverted.
+      #
+      # The event is built from the exception that ESCAPED the invocation, and
+      # that is the wire error — so it carries what the wire carries: the verb,
+      # the exception CLASS, and none of the handler's own sentence. This
+      # example used to assert `include("inventory exploded")`, i.e. it pinned
+      # the handler's arbitrary Ruby message into the refusal an unauthenticated
+      # caller can read back. The sentence is not lost: `Executor` reports it
+      # operator-side before it re-raises, which the stderr expectation below
+      # asserts in the same breath, so a reader can see both halves of the
+      # split in one example.
+      it "emits for a FAILED action too, carrying the WIRE error, and re-raises untouched" do
         declare_action("place_order") { raise "inventory exploded" }
 
-        expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        expect {
+          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        }.to output(/\[kiosk-server\] Action "place_order" raised RuntimeError: inventory exploded/)
+          .to_stderr
 
         expect(events.size).to eq(1)
         expect(events.first).to be_error
         expect(events.first.error_class).to eq("Kiosk::Server::Errors::ActionFailed")
-        expect(events.first.error_message).to include("inventory exploded")
+        expect(events.first.error_message).to eq('Action "place_order" raised RuntimeError')
+        expect(events.first.error_message).not_to include("inventory exploded")
         expect(events.first.args).to eq(sku: "ABC", slot: "2026-06-15T14:00:00Z")
       end
 
@@ -276,12 +291,33 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(result.payload).to eq("id" => 7)
       end
 
+      # The discriminator used to be `/inventory exploded/` — the ACTION's
+      # words as against the SINK's "kafka is down" — and it worked only for
+      # as long as the wire carried the splice (K-1307). It is now the wire
+      # sentence itself, with BOTH foreign messages asserted absent from it and
+      # both present on the operator's stderr, in the order they are reported:
+      # the handler's crash from inside `verb_run`, the sink's from the audit
+      # seam that wraps it.
       it "still raises the ACTION's error, not the sink's, on the failure branch" do
         declare_action("place_order") { raise "inventory exploded" }
 
-        expect { run! }
-          .to raise_error(Kiosk::Server::Errors::ActionFailed, /inventory exploded/)
-          .and output(/audit_sink raised/).to_stderr
+        expect {
+          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+            expect(e.message).to eq('Action "place_order" raised RuntimeError')
+            expect(e.message).not_to include("inventory exploded")
+            expect(e.message).not_to include("kafka is down")
+          }
+        }.to output(/raised RuntimeError: inventory exploded/).to_stderr
+      end
+
+      it "reports BOTH failures to the operator — the handler's and the sink's" do
+        declare_action("place_order") { raise "inventory exploded" }
+
+        expect {
+          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        }.to output(
+          %r{Action "place_order" raised RuntimeError: inventory exploded.*audit_sink raised for action "place_order": RuntimeError: kafka is down}m,
+        ).to_stderr
       end
     end
 
@@ -297,7 +333,14 @@ RSpec.describe Kiosk::Server::AuditSink do
       it "writes nothing to any table on the failure branch either" do
         declare_action("place_order") { raise "inventory exploded" }
 
-        expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        # The stderr expectation is not decoration: `Executor` reports the
+        # handler's crash to the operator whether or not a sink is configured
+        # (K-1307), and leaving it uncaptured would spatter a backtrace across
+        # this suite's output for a property this example is not about.
+        expect {
+          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        }.to output(/raised RuntimeError: inventory exploded/).to_stderr
+
         expect(connection.all_sql).not_to include("action_log")
       end
     end
@@ -368,9 +411,11 @@ RSpec.describe Kiosk::Server::AuditSink do
       end
 
       expect {
-        Kiosk::Server::Executor.call(kind: :run, args: { sku: "ABC" }, name: "place_order",
-                                     identity: identity, connection: connection)
-      }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        expect {
+          Kiosk::Server::Executor.call(kind: :run, args: { sku: "ABC" }, name: "place_order",
+                                       identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+      }.to output(/raised RuntimeError: too late/).to_stderr
 
       expect(widget_count).to eq(0)  # the action really rolled back …
       expect(events.size).to eq(1)   # … and the event was emitted anyway

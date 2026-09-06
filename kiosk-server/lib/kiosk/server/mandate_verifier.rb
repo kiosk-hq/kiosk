@@ -453,10 +453,19 @@ module Kiosk
         payload
       rescue ::JWT::ExpiredSignature
         raise Errors::Forbidden.new("mandate expired")
-      rescue ::JWT::MissingRequiredClaim => e
-        raise Errors::Forbidden.new("mandate missing required claim: #{e.message}")
-      rescue ::JWT::DecodeError => e
-        raise Errors::Forbidden.new("mandate signature invalid: #{e.message}")
+      rescue ::JWT::MissingRequiredClaim
+        # The JWT gem's own "Missing required claim …" text is not published
+        # (K-1307) — REQUIRED_CLAIMS above is this protocol's own answer to
+        # the same question and cannot drift from what the decode enforces.
+        raise Errors::Forbidden.new(
+          "mandate missing a required claim",
+          hint: "a mandate carries #{REQUIRED_CLAIMS.join(", ")}",
+        )
+      rescue ::JWT::DecodeError
+        raise Errors::Forbidden.new(
+          "mandate signature invalid",
+          hint: "a mandate is a compact RS256 JWS signed with the agent's payment key",
+        )
       rescue Kiosk::AgentIdentityProviders::InvalidToken
         # agent_payment_key raises this when the authenticated agent_id has no
         # live kiosk.agents row (revoked or deleted between auth and now). It is

@@ -20,7 +20,7 @@ class RescheduleDeliveryOperation
     # ADDRESS-UPFRONT: a NEW address must also be an in-zone Dublin one.
     # Omitted → the order keeps the address it has.
     if delivery_address.present?
-      _zone, refusal = WireArguments.served_zone(delivery_address)
+      _district, refusal = WireArguments.served_district(delivery_address)
       return refusal if refusal
     end
 

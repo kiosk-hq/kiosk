@@ -163,7 +163,7 @@ class Kiosk::StorefrontController < ActionController::API
     # assistant to obtain the address from its human before it can see slots.
     return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
 
-    district, district_refusal = WireArguments.served_zone(params[:delivery_address])
+    district, district_refusal = WireArguments.served_district(params[:delivery_address])
     return render_refusal(district_refusal) if district_refusal
 
     # OMITTED means "the soonest day you can deliver", so an exhausted today is
@@ -332,14 +332,17 @@ class Kiosk::StorefrontController < ActionController::API
   # omits the date is not getting a lesser response, it is getting the same one
   # for the day the operator picked. `date` on each row is what create_order
   # books, so it is the omitting caller's way of learning which day it got.
-  # THE ROW SAYS `district` AND THE MODULE SAYS `zone`, DELIBERATELY. The
-  # published field is a POSTAL DISTRICT — `D02`, a routing key — while
-  # `DeliverySlots.zone` in this same demo is an `ActiveSupport::TimeZone`. One
-  # word for both was readable here, where a human knows which file they are in,
-  # and unreadable on the wire, where an assistant has only the field name: a row
+  # THE ROW SAYS `district` AND SO DOES EVERY NAME BEHIND IT. The published
+  # field is a POSTAL DISTRICT — `D02`, a routing key — while
+  # `DeliverySlots.zone` in this same demo is an `ActiveSupport::TimeZone`. K-1346
+  # split the two on the wire, where an assistant has only the field name: a row
   # carrying a delivery window is exactly where a reader expects `zone` to mean
-  # the clock the window is written in. So the wire spells the routing key out
-  # and the internal accessor keeps the IANA name.
+  # the clock the window is written in. K-1349 finished the split INSIDE the demo
+  # — `DublinZones::Result#district`, {DublinZones.extract_district},
+  # {WireArguments.served_district} — because "readable here, where a human knows
+  # which file they are in" was the argument for leaving it, and the demo is the
+  # file an operator reads to learn the pattern. Only the IANA accessor keeps the
+  # name `zone`, which is the one thing it can honestly mean.
   def render_slots(date, district)
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)

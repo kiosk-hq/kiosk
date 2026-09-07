@@ -400,7 +400,7 @@ end
 # delivery horizon rolls forward every midnight and the served zone is a list of
 # Dublin districts. Every string reaches getgrocery's OWN guards, so
 # `delivery_date: "nope"` is refused by {WireArguments.delivery_date} and an
-# out-of-zone address by {WireArguments.served_zone}, and nothing but those
+# out-of-zone address by {WireArguments.served_district}, and nothing but those
 # guards stands behind either.
 class HostileArgShapes < Kiosk::Redteam::Scenario
   ADDRESS = "2 Redteam Row, Dublin 2"

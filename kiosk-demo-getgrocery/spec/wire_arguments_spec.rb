@@ -468,20 +468,20 @@ at_dublin("2026-08-07T11:00:00") do
   end
 end
 
-# ── 8. served_zone/1 and missing_address/0 — ADDRESS-UPFRONT ────────────────
-puts "\n── served_zone / missing_address: the one served-district rule ──"
-pair = guard("served_zone(in-zone)") { WireArguments.served_zone("42 Camden Street, Dublin 2") }
+# ── 8. served_district/1 and missing_address/0 — ADDRESS-UPFRONT ────────────
+puts "\n── served_district / missing_address: the one served-district rule ──"
+pair = guard("served_district(in-zone)") { WireArguments.served_district("42 Camden Street, Dublin 2") }
 assert(refusal_of(pair).nil? && value_of(pair) == "D02",
        "an in-zone address resolves to its canonical routing key (D02), got #{pair.inspect}")
 
 ["Dublin 24", "10 Downing St, London", "123 Demo Street, Dublin", "", nil].each do |bad|
-  refusal = refusal_of(guard("served_zone(#{bad.inspect})") { WireArguments.served_zone(bad) })
-  assert_typed_400(refusal, "served_zone(#{bad.inspect})")
+  refusal = refusal_of(guard("served_district(#{bad.inspect})") { WireArguments.served_district(bad) })
+  assert_typed_400(refusal, "served_district(#{bad.inspect})")
 end
 
 assert_typed_400(WireArguments.missing_address, "missing_address")
 assert(WireArguments.missing_address.message ==
-       DublinZones.reject_message(DublinZones::Result.new(ok: false, zone: nil, reason: :blank)),
+       DublinZones.reject_message(DublinZones::Result.new(ok: false, district: nil, reason: :blank)),
        "missing_address is the SAME sentence DublinZones gives for an address it never got")
 
 # ── 9. missing/1 — the sentence every verb answers an absent argument with ───

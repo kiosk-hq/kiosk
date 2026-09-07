@@ -38,7 +38,7 @@ class CreateOrderOperation
     return WireArguments.missing("delivery_slot_id — delivery is part of the order") if delivery_slot_id.nil?
     return WireArguments.missing("delivery_address — delivery is part of the order") if delivery_address.blank?
 
-    _zone, refusal = WireArguments.served_zone(delivery_address)
+    _district, refusal = WireArguments.served_district(delivery_address)
     return refusal if refusal
 
     slot_id, refusal = WireArguments.delivery_slot_id(delivery_slot_id)

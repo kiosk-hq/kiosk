@@ -25,6 +25,15 @@
 # address (`D02 XY45` → district `D02`). getgrocery serves the inner + inner-
 # suburban districts below; the far outer districts are intentionally NOT
 # served so the out-of-zone path is demonstrable.
+#
+# THAT SENTENCE EXPLAINS THE MODULE'S NAME AND NOTHING ELSE (K-1349). The
+# VALUE this module resolves an address to is spelled `district` everywhere it
+# is named — the `Result` member, {.extract_district}, {WireArguments.served_district}
+# and the wire field `delivery_slots` publishes — because `DeliverySlots.zone`
+# in this same demo is an `ActiveSupport::TimeZone`, and one word for a routing
+# key and a clock is unreadable three lines apart. The area sense ("in-zone",
+# "out-of-zone") keeps the word: an address is inside or outside the served
+# area, which is not a value anything reads off a row.
 module DublinZones
   # Served Dublin postal districts (routing-key form, zero-padded two digits).
   # A deliberately partial list: D18/D22/D24 (outer suburbs) are NOT served, so
@@ -34,18 +43,18 @@ module DublinZones
   ].freeze
 
   # A parsed, validated result. `ok:` true only when a served district was
-  # found. `zone` is the canonical `D0N` routing key (nil when not resolvable).
-  Result = Struct.new(:ok, :zone, :reason, keyword_init: true) do
+  # found. `district` is the canonical `D0N` routing key (nil when not resolvable).
+  Result = Struct.new(:ok, :district, :reason, keyword_init: true) do
     def ok? = ok
   end
 
   module_function
 
-  # Parse a free-text delivery address (or a bare zone/postcode string) and
+  # Parse a free-text delivery address (or a bare district/postcode string) and
   # decide whether it names a SERVED Dublin district.
   #
-  #   DublinZones.check("42 Camden Street, Dublin 2")        # ok,  zone "D02"
-  #   DublinZones.check("5 Rock Rd, Dublin 4, D04 XY45")     # ok,  zone "D04"
+  #   DublinZones.check("42 Camden Street, Dublin 2")        # ok,  district "D02"
+  #   DublinZones.check("5 Rock Rd, Dublin 4, D04 XY45")     # ok,  district "D04"
   #   DublinZones.check("Dublin 24")                         # out-of-zone (D24 not served)
   #   DublinZones.check("123 Demo Street, Dublin")           # malformed (no district)
   #   DublinZones.check("10 Downing St, London")             # out-of-zone (not Dublin)
@@ -53,27 +62,27 @@ module DublinZones
   # @return [Result]
   def check(address)
     s = address.to_s.strip
-    return Result.new(ok: false, zone: nil, reason: :blank) if s.empty?
+    return Result.new(ok: false, district: nil, reason: :blank) if s.empty?
 
-    zone = extract_zone(s)
-    if zone.nil?
+    district = extract_district(s)
+    if district.nil?
       # No Dublin district anywhere in the string. Distinguish "names Dublin but
       # gave no district" from "not a Dublin address at all" for a clearer hint.
       reason = s.match?(/\bdublin\b/i) ? :no_district : :not_dublin
-      return Result.new(ok: false, zone: nil, reason: reason)
+      return Result.new(ok: false, district: nil, reason: reason)
     end
 
-    unless SERVED.include?(zone)
-      return Result.new(ok: false, zone: zone, reason: :out_of_zone)
+    unless SERVED.include?(district)
+      return Result.new(ok: false, district: district, reason: :out_of_zone)
     end
 
-    Result.new(ok: true, zone: zone, reason: nil)
+    Result.new(ok: true, district: district, reason: nil)
   end
 
   # Extract a canonical `D0N` routing key from an address, or nil.
   # Accepts: "Dublin 2", "Dublin D2", "D02", "D2", or an Eircode routing key
   # embedded as the first token (`D02 XY45`). District 0 is invalid.
-  def extract_zone(str)
+  def extract_district(str)
     s = str.to_s
     # Eircode / routing-key form: D02, D6W-style single/double digit at a word
     # boundary (D6W is a real half-district but we normalise to D06 family — for
@@ -114,7 +123,7 @@ module DublinZones
       "delivery_address is not a Dublin address — getgrocery delivers only within " \
         "Dublin (served districts #{served}). Confirm the real delivery address with your human."
     when :out_of_zone
-      "delivery_address is in #{result.zone}, which getgrocery does not deliver to — " \
+      "delivery_address is in #{result.district}, which getgrocery does not deliver to — " \
         "served districts are #{served}. Ask your human for an in-zone Dublin address."
     else
       "delivery_address is not a served Dublin address (served districts #{served})."

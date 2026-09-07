@@ -207,10 +207,11 @@ module WireArguments
   # @return [Array(String, nil), Array(nil, OperationResult)] the canonical `D0N`
   #   routing key the address resolved to, or a refusal naming what is needed.
   #   `delivery_slots` publishes that key as the row's `district`; the order
-  #   verbs only need one to exist.
-  def served_zone(address)
+  #   verbs only need one to exist. THE METHOD IS NAMED FOR WHAT IT RETURNS
+  #   (K-1349): a routing key, never the clock `DeliverySlots.zone` names.
+  def served_district(address)
     result = DublinZones.check(address)
-    return [result.zone, nil] if result.ok?
+    return [result.district, nil] if result.ok?
 
     [nil, OperationResult.refused(code: "bad_request", message: DublinZones.reject_message(result))]
   end
@@ -220,7 +221,7 @@ module WireArguments
   def missing_address
     OperationResult.refused(
       code:    "bad_request",
-      message: DublinZones.reject_message(DublinZones::Result.new(ok: false, zone: nil, reason: :blank)),
+      message: DublinZones.reject_message(DublinZones::Result.new(ok: false, district: nil, reason: :blank)),
     )
   end
 

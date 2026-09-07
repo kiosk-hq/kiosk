@@ -413,7 +413,7 @@ class Kiosk::StorefrontController < ActionController::API
     # assistant to obtain the address from its human before it can see slots.
     return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
 
-    district, district_refusal = WireArguments.served_zone(params[:delivery_address])
+    district, district_refusal = WireArguments.served_district(params[:delivery_address])
     return render_refusal(district_refusal) if district_refusal
 
     # ── GUARDS ELIDED HERE (this comment is the document's, not the file's) ──

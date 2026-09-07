@@ -358,10 +358,4 @@ class Kiosk::StorefrontController < ActionController::API
         "district" => district }
     }
   end
-
-  # `delivery_slots` says "missing PARAM" where every other verb on this origin
-  # says "missing field": published behaviour, not an inconsistency to tidy away.
-  def missing_param(field)
-    OperationResult.refused(code: "bad_request", message: "missing param: #{field}")
-  end
 end

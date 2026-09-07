@@ -154,7 +154,7 @@ namespace :demo do
       if addr == "127.0.0.1"
         "atablefor.demo.kiosk.tech"
       else
-        puts "  using 127.0.0.1 -- to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1"
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
         "127.0.0.1"
       end
     end
@@ -342,7 +342,12 @@ namespace :demo do
       else
         ""
       end
-      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
+      if addr == "127.0.0.1"
+        "atablefor.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -567,7 +572,12 @@ namespace :demo do
       else
         ""
       end
-      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
+      if addr == "127.0.0.1"
+        "atablefor.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -708,7 +718,12 @@ namespace :demo do
       else
         ""
       end
-      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
+      if addr == "127.0.0.1"
+        "atablefor.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -857,7 +872,12 @@ namespace :demo do
       else
         ""
       end
-      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
+      if addr == "127.0.0.1"
+        "atablefor.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -979,7 +999,7 @@ namespace :demo do
       if addr == "127.0.0.1"
         "atablefor.demo.kiosk.tech"
       else
-        puts "  using 127.0.0.1 -- to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1"
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
         "127.0.0.1"
       end
     end
@@ -1144,7 +1164,12 @@ namespace :demo do
       else
         ""
       end
-      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
+      if addr == "127.0.0.1"
+        "atablefor.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -1460,7 +1485,12 @@ namespace :demo do
       else
         ""
       end
-      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
+      if addr == "127.0.0.1"
+        "atablefor.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
     end
 
     server_url   = "http://#{host}:#{port}"

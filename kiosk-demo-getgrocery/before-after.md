@@ -93,7 +93,7 @@ key whenever one is present.
 <!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/getgrocery_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/storefront_controller.rb, app/controllers/kiosk/orders_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->
 ```
   (no STRIPE_SECRET_KEY — running against stripe-mock at http://127.0.0.1:12111, no real charge)
-  (using 127.0.0.1 -- to reach getgrocery.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)
+  (using 127.0.0.1 — to reach getgrocery.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)
 
 -- Starting getgrocery on http://127.0.0.1:3001 --
   Server up at http://127.0.0.1:3001

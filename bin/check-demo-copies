@@ -436,6 +436,37 @@ if ARGV.include?("--self-test")
               "  puts json_line if json_line\n  warn \"tudu: no JSON line\" if json_line.nil?\n"]],
       expect: /lib\/tasks\/demo\.rake: every `<demo>_run_flow` — variants included — must handle the child's exit status/ },
 
+    { id: "host-block-silent-again", kind: :break,
+      rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
+      what: "one demo's copies go back to the SILENT ternary — the form thirteen of the twenty-five sites carried",
+      ops:  [[:edit, "kiosk-demo-skooti/lib/tasks/demo.rake",
+              "      if addr == \"127.0.0.1\"\n        \"skooti.demo.kiosk.tech\"\n      else\n        puts \"  (using 127.0.0.1 — to reach skooti.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)\"\n        \"127.0.0.1\"\n      end\n",
+              "      addr == \"127.0.0.1\" ? \"skooti.demo.kiosk.tech\" : \"127.0.0.1\"\n"]],
+      expect: /lib\/tasks\/demo\.rake: every `host = begin` block must agree once the demo's own vanity host is substituted/ },
+    { id: "host-block-hint-respelled", kind: :break,
+      rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
+      what: "one demo re-spells the operator hint's dash — getgrocery's exact form at four sites, and invisible to every other rule",
+      ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
+              "(using 127.0.0.1 \u2014 to reach", "(using 127.0.0.1 -- to reach"]],
+      expect: /lib\/tasks\/demo\.rake: every `host = begin` block must agree once the demo's own vanity host is substituted/ },
+    { id: "host-block-ships-stray", kind: :break,
+      rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
+      what: "a demo that detects its host drops out of the declared set — K-860/K-883's shape on this construct",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling skooti].freeze",
+              "HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling].freeze"]],
+      expect: /skooti: lib\/tasks\/demo\.rake detects a demo host but is not in the host-detection rule's declared/ },
+    { id: "host-block-ships-gone", kind: :break,
+      rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
+      what: "a declared demo loses every copy of the block, so the rule silently holds one demo fewer",
+      ops:  [[:edit, "kiosk-demo-skooti/lib/tasks/demo.rake", "    host = begin\n", "    demo_host = begin\n"]],
+      expect: /skooti: the host-detection rule names it in HOST_BLOCK_SHIPS/ },
+    { id: "vacuity-host-blocks", kind: :vacuity,
+      rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
+      what: "the extractor stops counting, so a lockstep rule with nothing left to compare must say so",
+      ops:  [[:edit, "bin/check-demo-copies", "  host_block_sites += found.size\n", ""]],
+      expect: /the K-1353 host-detection rule read 0 blocks/ },
+
     { id: "unit-one-sided-edit", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "one of the six held `devise` lines gains a module — K-1263's own gate",
@@ -2987,6 +3018,137 @@ if flow_tail_groups.size > 1
             "child's exit status with the SAME lines, and they do not: #{listed}. A helper may " \
             "differ in how it builds the child; what it does with the child's status is the one " \
             "thing K-1043 closed, and it is the reason a task can fail at all (K-1046)."
+end
+
+# ── The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)
+#
+# THE SECOND construct in `lib/tasks/*.rake`, and it is here for the reason the
+# flow-runner rule above is: that directory sits outside SCAN_ROOTS because a
+# demo's rake file IS per-demo task by task, and a construct hand-copied across
+# four of them is nevertheless a hand-copied construct with nothing watching it.
+# The demos in HOST_BLOCK_SHIPS below boot their servers on a vanity
+# `<demo>.demo.kiosk.tech` host, and every task that boots one opens with the
+# same block: an OPT-IN resolver
+# lookup (KIOSK_DEMO_HOST_LOOKUP unset means no outbound DNS query at all), a
+# `rescue StandardError` that is deliberately wider than `Resolv::ResolvError`
+# because `Resolv::ResolvTimeout` is not one of those, and the 127.0.0.1
+# fallback with the /etc/hosts hint an operator needs to reach the vanity name.
+#
+# WHAT IT LOOKED LIKE WHEN THIS RULE WAS WRITTEN, and why a scan-root change was
+# not the answer. MEASURED by extracting all twenty-five blocks, substituting the
+# demo's own name and grouping: FOUR distinct forms — thirteen a silent ternary,
+# six printing the operator hint with an em dash, four with a double hyphen, two
+# without the parentheses. Whether the run told an operator how to reach the
+# vanity host depended on which task they happened to run, which is an accident
+# rather than a decision. The obvious homes were both measured wrong before this
+# one was written: adding `lib/tasks/` to SCAN_ROOTS is a NO-OP, because the scan
+# globs `**/*.rb` and `kiosk-demo-*/lib/tasks/**/*.rb` matches zero files; and
+# teaching that glob `.rake` would then whole-file-compare eight rake files that
+# are per-demo by construction, which is the signal-drowning this file's own
+# header declines in writing. So: the construct is declared, and only it.
+#
+# WHAT IS COMPARED, AND WHY IT IS THE BLOCK'S MEANING RATHER THAN ITS BYTES.
+# Every block is read from its `host = begin` to the `end` at the same
+# indentation, the demo's OWN vanity host is substituted for a placeholder, and
+# what is left must agree across every site in every demo that ships one. The
+# substitution is the whole of the difference between bytes and meaning here:
+# the host name is the one thing that legitimately varies, and normalising it is
+# what makes «these four demos detect their host the same way» a checkable claim
+# instead of a diff. It also means a block naming a SIBLING's host — hoteling's
+# copy reaching for skooti's name — is red, because the substitution cannot
+# cancel a name that is not this demo's.
+#
+# NO `variants:` MAP, deliberately, and that is a difference from the flow-runner
+# rule rather than an oversight: tudu's flow helper is a genuine variant because
+# it builds the child process differently, whereas there is no way for one demo
+# to legitimately detect its own host differently from another. If one ever needs
+# to, the map is the change to make and the reason is the thing to write down.
+#
+# `ships:` is the same declaration the COPIES entries carry, for the same reason
+# (K-860, K-883): a demo that grows a host-detecting task without being listed
+# fails here rather than becoming another copy nobody reasoned about, and a
+# listed demo that loses its last one fails too.
+HOST_BLOCK_REL   = "lib/tasks/demo.rake"
+HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling skooti].freeze
+HOST_BLOCK_OPEN  = /\A(\s*)host = begin\s*\z/
+HOST_BLOCK_NAME  = "<demo>.demo.kiosk.tech"
+
+# Every host-detection block in one demo's rake file, as [line, normalised text].
+# `nil` means the extractor lost its footing — an opener with no `end` at its own
+# indentation — which is reported rather than silently read as «no blocks».
+def host_detection_blocks(path, demo)
+  lines = File.readlines(path)
+  out   = []
+  lines.each_with_index do |line, i|
+    m = HOST_BLOCK_OPEN.match(line) or next
+
+    indent = m[1]
+    j      = i + 1
+    j += 1 while j < lines.size && lines[j] != "#{indent}end\n"
+    return nil if j >= lines.size
+
+    out << [i + 1, lines[i..j].join.gsub("#{demo}.demo.kiosk.tech", HOST_BLOCK_NAME)]
+  end
+  out
+end
+
+host_block_sites   = 0
+host_blocks        = {}   # demo => [[line, text], ...]
+host_block_broken  = []
+demos.each do |dir|
+  demo = short.(File.basename(dir))
+  path = File.join(dir, HOST_BLOCK_REL)
+  next unless File.exist?(path)
+
+  found = host_detection_blocks(path, demo)
+  if found.nil?
+    host_block_broken << demo
+    next
+  end
+  next if found.empty?
+
+  host_blocks[demo] = found
+  host_block_sites += found.size
+end
+
+unless host_block_broken.empty?
+  errors << "#{host_block_broken.sort.join(', ')}: #{HOST_BLOCK_REL} opens a `host = begin` block " \
+            "the extractor could not close — no `end` at the opener's own indentation — so the " \
+            "host-detection rule compared NOTHING for that demo. Fix the extraction in " \
+            "bin/check-demo-copies, do not drop the rule (K-1353)."
+end
+
+host_stray = host_blocks.keys - HOST_BLOCK_SHIPS
+host_gone  = HOST_BLOCK_SHIPS - host_blocks.keys
+unless host_stray.empty?
+  errors << "#{host_stray.sort.join(', ')}: #{HOST_BLOCK_REL} detects a demo host but " \
+            "#{host_stray.size == 1 ? 'is' : 'are'} not in the host-detection rule's declared " \
+            "`ships:` set (#{HOST_BLOCK_SHIPS.join(', ')}). A copy of this block is not free — add " \
+            "the demo to HOST_BLOCK_SHIPS in bin/check-demo-copies so its copies are held in " \
+            "lockstep with the others (K-1353)."
+end
+unless host_gone.empty?
+  errors << "#{host_gone.sort.join(', ')}: the host-detection rule names #{host_gone.size == 1 ? 'it' : 'them'} " \
+            "in HOST_BLOCK_SHIPS, but #{HOST_BLOCK_REL} there detects no demo host any more. Either " \
+            "that demo stopped booting a server on its vanity name — update the declared set — or " \
+            "the block was lost and its tasks now dial whatever the last edit left behind (K-1353)."
+end
+
+if host_block_sites < 2
+  errors << "check-demo-copies: the K-1353 host-detection rule read #{host_block_sites} " \
+            "block#{host_block_sites == 1 ? '' : 's'} — the construct has moved out of " \
+            "#{HOST_BLOCK_REL}, and a lockstep rule with nothing to compare passes everything."
+end
+
+host_flat = host_blocks.flat_map { |demo, found| found.map { |line, text| ["#{demo}:#{line}", text] } }
+host_groups = host_flat.group_by { |_where, text| text }
+if host_groups.size > 1
+  listed = host_groups.values.map { |g| "[#{g.map { |w, _| w }.sort.join(',')}]" }.sort.join(" ")
+  errors << "#{HOST_BLOCK_REL}: every `host = begin` block must agree once the demo's own vanity " \
+            "host is substituted, and they do not: #{listed}. This block is hand-copied into every " \
+            "task that boots a server — propagate the edit to all of them. Whether the run tells " \
+            "an operator how to reach the vanity host may not depend on which task they ran " \
+            "(K-1353)."
 end
 
 # ── A shared UNIT inside a `:per_demo` file (T-120) ──────────────────────────
@@ -5835,6 +5997,8 @@ if errors.empty?
        "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
        "with its exit-status tail compared in all #{flow_tails.size}, " \
+       "#{host_block_sites} host-detection block(s) in #{host_blocks.size} demo(s) held in one form " \
+       "modulo each demo's own vanity host, " \
        "#{prose_path_cites} source-path and #{prose_code_refs} `{Constant}` citation(s) in the " \
        "comments of #{prose_corpus.size} compared file(s) resolved against the tree, " \
        "#{E2E_FIXTURES.size} e2e harness fixture(s) declared " \

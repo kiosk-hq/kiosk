@@ -53,21 +53,21 @@ paragraph is the whole of its provenance.
 
 <!-- derived: transcript | task: bundle exec rake demo:book | from: lib/tasks/demo.rake, script/book_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/dining_room_controller.rb, app/controllers/kiosk/bookings_controller.rb | abridged: none -->
 ```
-  using 127.0.0.1 -- to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1
+  (using 127.0.0.1 — to reach atablefor.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)
 
 ── Starting atablefor on http://127.0.0.1:3002 ──
   Server up at http://127.0.0.1:3002
 
 ── Running script/book_flow.rb ──
 
-{"http_register":201,"user_id":"c4478ae9-2d23-4222-a2d6-bf6114a2bc62","agent_id":"9dd975be-051b-4030-8f40-35e0b352b0b9","date":"2026-09-07","time":"20:00","party_size":2,"booking":{"booking_id":"93a5bda4-01b4-48dc-9562-72e0403bd780","restaurant_id":2,"restaurant_table_id":6,"party_size":2,"date":"2026-09-07","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"93a5bda4-01b4-48dc-9562-72e0403bd780","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":6,"table_label":"Nook 3","party_size":2,"status":"confirmed","seating_date":"2026-09-07","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T19:00:00.000+00:00"}]}
+{"http_register":201,"user_id":"9a555fcc-2fc4-47df-b48f-e2d4f7bc8d32","agent_id":"c695d5f2-4372-40d4-a2d2-afb58fc3310a","date":"2026-09-07","time":"20:00","party_size":2,"booking":{"booking_id":"e044939d-c4aa-4d2f-a798-8cf5ea150af8","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-09-07","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"e044939d-c4aa-4d2f-a798-8cf5ea150af8","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-09-07","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T19:00:00.000+00:00"}]}
 
 ── Assertions ──
-  ✓  booking.booking_id present (93a5bda4-01b4-48dc-9562-72e0403bd780)
+  ✓  booking.booking_id present (e044939d-c4aa-4d2f-a798-8cf5ea150af8)
   ✓  booking.status == confirmed
   ✓  booking.party_size == 2 (a table for two)
-  ✓  my_bookings shows the confirmed booking (id=93a5bda4-01b4-48dc-9562-72e0403bd780)
-  ✓  the new booking is confirmed in the DB (id=93a5bda4-01b4-48dc-9562-72e0403bd780)
+  ✓  my_bookings shows the confirmed booking (id=e044939d-c4aa-4d2f-a798-8cf5ea150af8)
+  ✓  the new booking is confirmed in the DB (id=e044939d-c4aa-4d2f-a798-8cf5ea150af8)
   ✓  the booking pins a table + seating instant (restaurant_table_id + seating_at set)
 
   All assertions passed.

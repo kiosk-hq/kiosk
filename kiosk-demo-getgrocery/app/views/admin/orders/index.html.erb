@@ -192,12 +192,12 @@
         # in the same zone, as the assistant was told. Re-parsing `slot_at` in
         # the view printed the SERVER's hour and put the back office an hour
         # off the customer.
+        # And the order's own timestamp is composed the same way, in the same
+        # zone, for the same reason (K-1414): re-parsing `created_at` here
+        # printed the SERVER's hour beside a Dublin window, so one card carried
+        # two clocks and named neither.
         slot_time  = order["slot_window"].to_s
-        created    = begin
-          Time.parse(order["created_at"].to_s).strftime("%-d %b %Y at %H:%M")
-        rescue
-          order["created_at"].to_s
-        end
+        created    = order["created_label"].to_s
         # Glyph reflects the currency the order actually SETTLED in (the controller
         # exposes settled_currency from kiosk.settlements). Unpaid orders have none,
         # so fall back to € — this operator's cashier is EUR-only today, so in

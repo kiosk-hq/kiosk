@@ -131,7 +131,10 @@ module WireArguments
   #
   # `Date.parse`, deliberately, and NOT the stricter `Date.iso8601`: what it
   # loosely accepts — a `["2026-09-01"]`, a bare `"20260101"` — is published
-  # behaviour on this verb pair.
+  # behaviour on this verb pair. What it accepts is WIDER than that pair of
+  # examples and the spec beside this file now says so in full, including the
+  # ambiguous `09/01/2026`; whether the looseness should be narrowed is a
+  # separate question that is not settled here.
   #
   # @param default [Date] what a blank value means (tomorrow, for both verbs)
   # @param past_message [Proc] the refusal sentence for a past date; the two
@@ -141,7 +144,7 @@ module WireArguments
     return [default, nil] if raw.blank?
 
     date = begin
-      Date.parse(raw.to_s)
+      parse_date(raw.to_s)
     rescue ArgumentError, TypeError
       return [nil, OperationResult.refused(
         code:    "bad_request",
@@ -157,6 +160,51 @@ module WireArguments
 
     [nil, OperationResult.refused(code: "bad_request", message: past_message.call(date))]
   end
+
+  # ── A PARTIAL DATE IS COMPLETED FROM THE ORIGIN'S TODAY (K-1411) ─────────
+  #
+  # `Date.parse` accepts values that name only PART of a date — "Tue", "sep",
+  # "1st", "250" — and fills the rest in from the PROCESS's today, read off the
+  # machine's `TZ`. Everything else on this surface reads
+  # `DeliverySlots.now`, and the file says «ONE CLOCK FOR THE WHOLE ORIGIN»
+  # three times, so the one value that silently consulted a second clock was the
+  # one an assistant is likeliest to get wrong anyway. On a server whose zone is
+  # a day ahead of or behind Dublin, "1st" on the 30th of a month resolves to a
+  # different MONTH, and "Tue" across a week boundary to a different WEEK — a
+  # wrong date rather than a refusal, which is the direction that hurts.
+  #
+  # SO THE COMPLETION IS DONE HERE, from `DeliverySlots.now.to_date`, and only
+  # when a completion is needed at all. A value that carries its own year —
+  # every ISO form, every `d/m/y`, every ordinal or week date — is handed
+  # straight to `Date.parse`, whose answer cannot depend on any clock. Nothing
+  # about WHICH forms are accepted changes: the branches below reproduce
+  # `Date.parse`'s own filling rules (a lone weekday is the one in today's
+  # Sunday-first week; a lone month starts on the 1st; a lone day-of-month is in
+  # today's month), and the spec asserts that equality form by form.
+  #
+  # @raise [ArgumentError] for a value naming no date at all, exactly as
+  #   `Date.parse` does — the caller turns that into the 400.
+  # @return [Date]
+  def parse_date(raw)
+    frags = Date._parse(raw)
+    return Date.parse(raw) if frags.key?(:year) || frags.key?(:cwyear)
+    raise Date::Error, "no date in #{raw.inspect}" if (frags.keys & DATE_FRAGS).empty?
+
+    today = DeliverySlots.now.to_date
+    if frags[:yday]
+      Date.ordinal(today.year, frags[:yday])
+    elsif frags[:cweek]
+      Date.commercial(today.cwyear, frags[:cweek], frags[:cwday] || 1)
+    elsif frags[:mon] || frags[:mday]
+      Date.new(today.year, frags[:mon] || today.month, frags[:mday] || 1)
+    else
+      today - today.wday + frags[:wday]
+    end
+  end
+
+  # The `Date._parse` keys that name part of a DATE. A fragment set carrying
+  # none of them (`"12:00"`, `"not-a-date"`) is not a date at all.
+  DATE_FRAGS = %i[mon mday wday yday cweek cwday].freeze
 
   # A window that has already begun is no longer bookable, and BOTH verbs
   # re-validate it so neither lands on a window `delivery_slots` would now hide.

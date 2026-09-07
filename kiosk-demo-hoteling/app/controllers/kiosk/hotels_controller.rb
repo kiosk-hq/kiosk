@@ -65,7 +65,7 @@ class Kiosk::HotelsController < ActionController::API
               "availability in the past either: this hotel sells no room-night before tonight, read " \
               "in the property's own clock (Europe/Istanbul), and tonight itself IS bookable because " \
               "a same-day arrival is an ordinary room-night. " \
-              "Rates are quoted per night in EUR cents, but a cart is signed for " \
+              "Rates are quoted PER NIGHT, but a cart is signed for " \
               "the WHOLE stay at the total the operator quotes, which `reserve_room` returns. Once " \
               "the human picks a room type, `reserve_room` holds it."
   input_schema type: "object",
@@ -220,21 +220,37 @@ class Kiosk::HotelsController < ActionController::API
   HINT_SEARCH_MIN_STARS = "`min_stars` is a whole number 1..5 — the star rating to floor at."
   HINT_SEARCH_MAX_PRICE = "`max_price_cents` is a whole number of EUR CENTS, e.g. 20000 for €200."
 
-  # ADR-0023, and its ONE carve-out. The filters and the row's fields are
-  # declared in the schemas. The page-size default, its clamp and `X-Total-Count`
-  # stay in prose because no schema can hold them: `limit` and `cursor` are
-  # RESERVED names a verb never declares (spec §8.1 item 6). How to FOLLOW a
-  # `rel="next"` link is not here — the skill states that once, for every
-  # operator.
+  # ADR-0023, AND ITS ONE CARVE-OUT — AND THE CARVE-OUT IS NARROWER THAN THIS
+  # PARAGRAPH USED TO CLAIM (K-1407). The filters, their types and the row's
+  # fields are declared in the schemas, so the prose says none of them. What
+  # stays is the page-size default and its clamp, and it stays for the reason
+  # the published house style gives rather than by preference: `limit` and
+  # `cursor` are RESERVED names a verb never declares (spec §8.1 item 6), so
+  # there is no schema for the sentence to duplicate. MEASURED at head, the
+  # engine's derived OpenAPI injects `limit` as `{type: "integer", minimum: 1}`
+  # with NO `default:` and NO `maximum:` — twenty and fifty are stated NOWHERE
+  # else on this verb, which is exactly what makes them prose's job.
+  #
+  # THREE CLAUSES LEFT THAT WERE NOT ITS JOB. «Every filter is optional» is a
+  # required/optional marker, which `required: []` two declarations down already
+  # states and the house style names in its prohibitions. «Prices are EUR cents»
+  # is a UNIT, and a unit is a property OF a field: `max_price_cents` and
+  # `from_price_cents` each carry it in their own `description`. And the
+  # `X-Total-Count` sentence restated a response header the engine declares in
+  # every query operation with its own description — and restated it WRONG,
+  # calling it «how you tell a short page from the end of the results» where
+  # spec §8.4 and the skill both say the loop bound is the absence of the
+  # `rel="next"` link and that this header is advisory. How to FOLLOW that link
+  # is not here either — the skill states it once, for every operator. The
+  # currency went the same way as the unit: the row's own `currency` field
+  # declares «eur — the currency the cart must be signed in».
   kind :query
   description "Search Istanbul hotels, returning a paginated page of SUMMARY rows — one per hotel, " \
               "priced from its cheapest room. Apply the human's stated constraints as filters so the " \
-              "search NARROWS; do not pull the whole catalogue and sift it yourself. Every filter is " \
-              "optional and they AND together. Page size defaults to 20 and is CLAMPED to 1..50 — " \
+              "search NARROWS; do not pull the whole catalogue and sift it yourself. Filters AND " \
+              "together. Page size defaults to 20 and is CLAMPED to 1..50 — " \
               "send `limit` to override it (a value outside that range is clamped, never refused). " \
-              "X-Total-Count is how many hotels match in " \
-              "all, which is how you tell a short page from the end of the results. Prices are EUR " \
-              "cents; carts are signed in eur. Once the human picks a row, `hotel_detail` returns " \
+              "Once the human picks a row, `hotel_detail` returns " \
               "everything a summary leaves out — the rooms, the amenities, the address."
   input_schema type: "object",
                additionalProperties: false,
@@ -402,9 +418,9 @@ class Kiosk::HotelsController < ActionController::API
               "demand» half of this origin's read surface. Call it for the one or few hotels the " \
               "human is choosing between, never across a whole result set. The argument ADDRESSES a " \
               "hotel rather than filtering for one, so the answer is a ONE-ROW array and an id this " \
-              "origin does not list is 404 not_found rather than an empty one. Rates are EUR " \
-              "cents; carts are signed in eur. THE DATES ARE OPTIONAL AND THEY CHANGE WHAT THE ROOM " \
-              "LIST MEANS: give both ends of a stay and the rooms listed are only those still FREE " \
+              "origin does not list is 404 not_found rather than an empty one. THE DATES CHANGE " \
+              "WHAT THE ROOM LIST MEANS: give both ends of a stay and the rooms listed are only " \
+              "those still FREE " \
               "for those nights — the same rule `availability` applies and `reserve_room` enforces. " \
               "Leave them out and the list is this hotel's full CATALOGUE, which says nothing about " \
               "what is bookable: a room in it may already be taken for the nights you want, and " \

@@ -1487,13 +1487,34 @@ namespace :demo do
     python3 + numpy.
   DESC
   task browse: :setup do
+    require "resolv"
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     abort "numpy not found. Install with: pip install numpy" unless python_ok
 
     port         = ENV.fetch("PORT", "3003")
-    server_url   = "http://127.0.0.1:#{port}"
+
+    # ── host resolution ────────────────────────────────────────────────
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("hoteling.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "hoteling.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach hoteling.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
     log          = "/tmp/kiosk-hoteling-browse.log"
     flow_rb      = File.expand_path("../../script/browse_flow.rb", __dir__)

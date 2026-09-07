@@ -180,8 +180,14 @@ class Kiosk::StorefrontController < ActionController::API
       return render_slots(soonest, district)
     end
 
+    # {WireArguments.parse_date} and not `Date.parse`: the loose forms this
+    # origin accepts include PARTIAL ones ("Tue", "sep", "1st"), and `Date.parse`
+    # completes those from the SERVER PROCESS's today. Every other date question
+    # on this surface is answered off `DeliverySlots.now`, so the parse is too —
+    # otherwise the day this verb offers and the day `create_order` books could
+    # come from two different clocks (K-1411).
     date = begin
-      Date.parse(params[:date].to_s)
+      WireArguments.parse_date(params[:date].to_s)
     rescue ArgumentError, TypeError
       return render_refusal(OperationResult.refused(
         code: "bad_request", message: "invalid date: #{params[:date]}",

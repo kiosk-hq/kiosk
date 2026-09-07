@@ -140,9 +140,8 @@ always been unambiguous, but nobody says an offset out loud: the field a human
 is actually read out is `label`, and a bare `08:00–10:00` is a wall clock with
 no clock named — a customer three hours away hears their own 08:00. The row
 also carries `district` (the served postal district, `D02`), which is a ROUTING
-key and not a time zone; it used to be called `zone`, in a row that also
-publishes a delivery window, which is precisely where that word means something
-else.
+key and not a time zone — `zone` would mean something else in a row that also
+publishes a delivery window.
 
 **Every verb that publishes this window publishes it the same way.**
 `delivery_slots` offers a window, `create_order` books it, and `my_orders` reads

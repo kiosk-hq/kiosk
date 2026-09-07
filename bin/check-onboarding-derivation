@@ -2067,6 +2067,19 @@ end
 # the run says in its first line which of the two it used. The derivation side
 # is always the real checkout, in both cases.
 #
+# AND THE REASON IS THAT AND NOT A TOKEN COST -- the correction matters because
+# the next wave to weigh «should this leg just check the sibling out?» will meet
+# whichever reason is written down (K-1385). A sibling checkout here would cost
+# NO cross-repo credential: MEASURED via `gh api`, both `kiosk-hq/kiosk.tech` and
+# `kiosk-hq/kiosk` answer `private: false, visibility: public`, and the
+# `published-bytes` job in `.github/workflows/ci.yml` already checks that same
+# sibling out with no token at all. What a sibling checkout would cost is the
+# property this leg exists for: a guard that can only be proven where the
+# sibling happens to be present is a guard that reads green in every hand-run
+# and is red on the push, which is exactly what happened here once. So the
+# fixture stays because the leg must be able to go red with NOTHING beside it,
+# not because reaching the sibling is expensive.
+#
 # THE PLANTS ARE DERIVED, not typed. A plant table naming `date` and
 # `delivery_address` would be a hand-kept copy of the very facts these rules
 # exist to stop being hand-kept: rename a parameter in getgrocery and the arm
@@ -2219,6 +2232,14 @@ def derived_facts(sources)
     # chain empties this and the self-test SAYS so instead of building a fixture
     # that agrees with nothing.
     ceiling: derived_total_ceiling(sources).first,
+    # K-1411: the `Date.` constructors this origin parses a caller's date with.
+    # DERIVED for R18's own reason -- the fixture used to write `Date.parse` as a
+    # literal, so the day getgrocery added a second constructor the fixture kept
+    # teaching one and the CI leg (which is the fixture leg) went red on a page
+    # nobody had touched. A hand-kept copy of the fact a rule exists to derive is
+    # the one thing this file's header forbids, and it was sitting in the fixture.
+    date_ctors: (date_constructors(sources[:storefront]) |
+                 date_constructors(sources[:wire_arguments])).sort,
     # K-1366: which verbs owe a stale-day / stale-window refusal, and the three
     # expressions they owe it in. Derived, so the fixture below writes the
     # origin's own spelling and the plants aim at text R16 actually reads.
@@ -2331,6 +2352,13 @@ def fixture_page(f)
   # the rest, which is the "passes by covering less" shape the fixture exists
   # to avoid.
   window    = fixture_window_guard(f)
+  # One line per constructor the origin uses, derived rather than typed: R18
+  # compares the SET of `Date.` constructors on the two sides, so the fixture has
+  # to name every one getgrocery names or it teaches a narrower page than the
+  # origin has (K-1411).
+  date_reads = f[:date_ctors]
+               .map { |c| "    Date.#{c}(params[:#{f[:optional].first}].to_s)" }
+               .join("\n")
   ruby_verb = <<~RUBY
     class #{f[:handlers].first} &lt; ApplicationController
       include Kiosk::Handler
@@ -2345,7 +2373,7 @@ def fixture_page(f)
       def #{WORKED_VERB}
     #{reads}
     #{window}
-        Date.parse(params[:#{f[:optional].first}].to_s)
+    #{date_reads}
       end
     end
   RUBY
@@ -2519,9 +2547,13 @@ def run_self_test
   # The page silently switched to the OTHER origin's date spelling. Faithful in
   # both directions: this is the drift K-1406 was filed about, and it is also
   # what a well-meant edit toward strictness would look like.
+  # Through DATE_CONSTRUCTOR and not a literal `"Date.parse("`, for the reason the
+  # fixture's own copy of that literal gave (K-1411): the page names more than one
+  # constructor and moved the one this needle was aimed at, so the plant became a
+  # NO-OP the day the origin's spelling changed.
   arms << plant_arm("the page parses dates with a constructor getgrocery does not use",
                         planted.call("date constructor swapped on the page",
-                                     page, page.gsub("Date.parse(params", "Date.iso8601(params")),
+                                     page, page.gsub(DATE_CONSTRUCTOR, "Date.iso8601")),
                         sources, "DATE_PARSER")
   arms << plant_arm("getgrocery's own #{divergent} un-named",
                         page.gsub(divergent, "the read controller"), sources, "GETGROCERY_HANDLERS")
@@ -2686,9 +2718,13 @@ def run_self_test
                                       orders: sources[:orders].gsub('type: "integer"', 'type: "number"')), "INTEGER_COERCION")
   arms << vacuity_arm("the page loses every example_params",
                         page.gsub("example_params(", "example_args("), sources, "FROZEN_DATE")
+  # Through DATE_CONSTRUCTOR itself, not through the literal "Date.parse": the
+  # origin names more than one constructor and a literal gsub left one standing,
+  # which turned this VACUITY arm into an inequality arm without saying so (K-1411).
+  restub = ->(src) { src.gsub(DATE_CONSTRUCTOR) { "DateStub.#{Regexp.last_match(1)}" } }
   arms << vacuity_arm("getgrocery stops parsing a date with a `Date.` constructor", page,
-                        sources.merge(storefront: sources[:storefront].gsub("Date.parse", "DateStub.parse"),
-                                      wire_arguments: sources[:wire_arguments].gsub("Date.parse", "DateStub.parse")),
+                        sources.merge(storefront: restub.(sources[:storefront]),
+                                      wire_arguments: restub.(sources[:wire_arguments])),
                         "DATE_PARSER")
   arms << vacuity_arm("getgrocery registers exactly the page's classes", page,
                         sources.merge(getgrocery_init: sources[:getgrocery_init].sub(divergent, f[:handlers].first)), "GETGROCERY_HANDLERS")

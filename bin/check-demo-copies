@@ -488,6 +488,30 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "bin/check-demo-copies", "  host_block_sites += found.size\n", ""]],
       expect: /the K-1353 host-detection rule read 0 blocks/ },
 
+    { id: "host-pair-one-task-loses-it", kind: :break,
+      rule: "Every task that boots a server detects its host (K-1413)",
+      what: "ONE of stylish's six booting tasks loses its block and hard-codes loopback — the exact " \
+            "plant that left the lockstep rule above at exit 0",
+      ops:  [[:edit, "kiosk-demo-stylish/lib/tasks/demo.rake",
+              "  task roles: :setup do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
+              "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    host = begin\n",
+              "  task roles: :setup do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
+              "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    " \
+              "host = \"127.0.0.1\"\n    _dropped = begin\n"]],
+      expect: /lib\/tasks\/demo\.rake: every task that boots a server must carry exactly one/ },
+    { id: "host-pair-block-outlives-boot", kind: :break,
+      rule: "Every task that boots a server detects its host (K-1413)",
+      what: "a task keeps its resolver lookup after the spawn it was detecting a host FOR has gone",
+      ops:  [[:edit, "kiosk-demo-tudu/lib/tasks/demo.rake",
+              "    server_pid, server_url = tudu_boot_server(log: log, port: port, host: host)\n",
+              "    server_pid, server_url = [nil, \"http://127.0.0.1:3007\"]\n"]],
+      expect: /lib\/tasks\/demo\.rake: every task that boots a server must carry exactly one/ },
+    { id: "vacuity-host-pairing", kind: :vacuity,
+      rule: "Every task that boots a server detects its host (K-1413)",
+      what: "the boot sites stop being counted, so a pairing rule with nothing paired must say so",
+      ops:  [[:edit, "bin/check-demo-copies", "    host_pair_booting += 1 if boots.positive?\n", ""]],
+      expect: /the K-1413 host-pairing rule found 0 server-booting tasks/ },
+
     { id: "unit-one-sided-edit", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "one of the six held `devise` lines gains a module — K-1263's own gate",
@@ -3341,6 +3365,92 @@ if host_groups.size > 1
             "(K-1353)."
 end
 
+# ── Every task that boots a server detects its host (K-1413) ─────────────────
+#
+# THE RULE ABOVE HOLDS THE BLOCKS THAT EXIST AND CANNOT SEE ONE GO MISSING.
+# Its two halves are «every block that is there must agree after substitution»
+# and «a declared demo must have at least one». MEASURED (K-1413): replacing ONE
+# of stylish's six blocks with a hard-coded loopback literal left the guard at
+# exit 0 — the other five still agreed with everyone else's, and the demo still
+# had blocks, so both halves passed while one task quietly stopped telling an
+# operator the vanity name existed. K-1400 then took the guarded population from
+# twenty-five sites in four demos to forty-one in seven, which widened the blind
+# spot rather than closing it.
+#
+# WHAT CLOSES IT IS A PAIRING, NOT A COUNT. A per-demo tally would be a
+# hand-kept number — the thing K-863 and K-1379 both record going stale — so the
+# rule is derived from the file instead: the rake file is cut at every `task`
+# declaration, and in each task the number of `host = begin` blocks must be 1 if
+# that task boots a server and 0 if it does not. Losing one block leaves a
+# booting task with none, which is red; adding a booting task without one is red
+# for the same reason and needs no edit here; and a block left behind in a task
+# that no longer boots is red too, because a resolver lookup nothing dials is a
+# lie about what the run does.
+#
+# WHAT COUNTS AS BOOTING, and why it is two spellings rather than one. Five
+# demos spawn `bundle exec rails s` inline (hoteling and skooti wrap theirs in a
+# task-local `boot_server` lambda called two or three times, which is still ONE
+# spawn site and ONE host block). philslist and tudu hoist the spawn into a
+# file-level `<demo>_boot_server` helper that takes the host as a KEYWORD, so
+# their tasks boot by calling it. The helper itself lives before the first task
+# and is deliberately outside the pairing: it has no host to detect, it is
+# handed one.
+#
+# TWO TASKS FAILED THIS THE DAY IT WAS WRITTEN and were fixed rather than
+# excepted: getgrocery's `demo:pow` and hoteling's `demo:browse` both spawned a
+# server and hard-coded `http://127.0.0.1:#{port}`, so K-1400's sweep — whose
+# own prose says «every task that boots one opens with the same block» — had
+# missed them, and nothing could have said so. There is no exemption list here
+# on purpose: an exemption is the hand-kept thing this rule exists to avoid.
+HOST_PAIR_BOOT = "bundle exec rails s "
+HOST_PAIR_TASK = /\A\s*task[\s(:]/
+
+# One entry per rake task: [line, declaration, boot sites, host blocks].
+def host_pair_tasks(path, demo)
+  lines  = File.readlines(path)
+  starts = lines.each_index.select { |i| lines[i] =~ HOST_PAIR_TASK }
+  starts.each_with_index.map do |a, k|
+    body  = lines[a..((starts[k + 1] || lines.size) - 1)]
+    boots = body.count { |l| l.include?(HOST_PAIR_BOOT) } +
+            body.count { |l| l.include?("#{demo}_boot_server(") && l !~ /\A\s*def\s/ }
+    [a + 1, lines[a].strip, boots, body.count { |l| HOST_BLOCK_OPEN.match?(l) }]
+  end
+end
+
+host_pair_booting = 0
+host_pair_bad     = []
+demos.each do |dir|
+  demo = short.(File.basename(dir))
+  path = File.join(dir, HOST_BLOCK_REL)
+  next unless File.exist?(path)
+
+  host_pair_tasks(path, demo).each do |line, decl, boots, blocks|
+    next if boots.zero? && blocks.zero?
+
+    host_pair_booting += 1 if boots.positive?
+    want = boots.positive? ? 1 : 0
+    next if blocks == want
+
+    host_pair_bad << "#{demo}:#{line} `#{decl}` boots #{boots} server#{boots == 1 ? '' : 's'} " \
+                     "and detects its host #{blocks} time#{blocks == 1 ? '' : 's'}"
+  end
+end
+
+unless host_pair_bad.empty?
+  errors << "#{HOST_BLOCK_REL}: every task that boots a server must carry exactly one " \
+            "`host = begin` block, and a task that boots none may not carry one — " \
+            "#{host_pair_bad.sort.join('; ')}. The lockstep rule above compares the blocks that " \
+            "EXIST and so cannot see one go missing: a task that loses its block keeps dialling " \
+            "whatever literal the edit left behind and stops printing the /etc/hosts hint, while " \
+            "its siblings still agree with each other (K-1413)."
+end
+
+if host_pair_booting < 2
+  errors << "check-demo-copies: the K-1413 host-pairing rule found #{host_pair_booting} " \
+            "server-booting task#{host_pair_booting == 1 ? '' : 's'} — the boot construct has moved " \
+            "out of #{HOST_BLOCK_REL}, and a pairing rule with nothing paired passes everything."
+end
+
 # ── A shared UNIT inside a `:per_demo` file (T-120) ──────────────────────────
 #
 # The lockstep rule's handle is a relative PATH, so a method shared by two demos
@@ -6188,7 +6298,8 @@ if errors.empty?
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
        "with its exit-status tail compared in all #{flow_tails.size}, " \
        "#{host_block_sites} host-detection block(s) in #{host_blocks.size} demo(s) held in one form " \
-       "modulo each demo's own vanity host, " \
+       "modulo each demo's own vanity host and paired one-to-one with the " \
+       "#{host_pair_booting} rake task(s) that boot a server, " \
        "#{prose_path_cites} source-path and #{prose_code_refs} `{Constant}` citation(s) in the " \
        "comments of #{prose_corpus.size} compared file(s) resolved against the tree, " \
        "#{E2E_FIXTURES.size} e2e harness fixture(s) declared " \

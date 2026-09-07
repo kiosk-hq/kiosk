@@ -87,6 +87,18 @@ module Admin
           "slot_window"      => slot_at && "#{slot_at.in_time_zone(DeliverySlots.zone).strftime('%a %-d %b')}, " \
                                            "#{DeliverySlots.label(slot_at)}",
           "created_at"       => created_at,
+          # AND THE ORDER'S OWN TIMESTAMP IS ON THE SAME CLOCK (K-1414). The
+          # window above moved to {DeliverySlots.zone} and this one did not, so
+          # for one wave the card showed a Dublin delivery window beside a UTC
+          # «Ordered» time with nothing on the page saying which was which —
+          # arguably worse for the operator than the uniform wrongness it
+          # replaced. `created_at` is a `timestamptz` and arrives on the
+          # connection's clock for the same reason `slot_at` does, so it is read
+          # through the SAME zone and NAMES it, exactly as {DeliverySlots.label}
+          # names it for the window. One screen, one clock, both of them said out
+          # loud.
+          "created_label"    => created_at && "#{created_at.in_time_zone(DeliverySlots.zone).strftime('%-d %b %Y at %H:%M')} " \
+                                              "(#{DeliverySlots::ZONE_NAME})",
           "settled_currency" => settled_currency,
           "items"            => (items_by_order[id] || []).map { |_order_id, qty, name, price_cents|
             { "qty" => qty, "product_name" => name, "price_cents" => price_cents }

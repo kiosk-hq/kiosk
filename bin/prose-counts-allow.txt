@@ -103,7 +103,6 @@ kiosk-demo-skooti/before-after.md ¦ 3 pins ¦ not a count: "RUN 3" is a label i
 kiosk-demo-skooti/before-after.md ¦ two verbs ¦ the two query verbs that one beat of the run exercises, which is a subset of this demo's three and is named in the sentence.
 kiosk-demo-skooti/before-after.md ¦ two initializers ¦ same generator sentence, same reason, as the getgrocery entry above.
 kiosk-demo-skooti/firmware/README.md ¦ 22 assertions ¦ the assertion total the firmware's own host test prints; it belongs to that binary's output and no file list counts it.
-kiosk-demo-stylish/README.md ¦ 14 scenarios ¦ a quotation of what the battery PRINTED while a live escalation went unreported; the sentence is about that output being wrong, so the number must not move with the tree.
 kiosk-demo-stylish/README.md ¦ four beats ¦ the four scenario classes are named one by one in the same sentence.
 kiosk-demo-stylish/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
 kiosk-demo-tudu/README.md ¦ 404 beats ¦ not a count: the numeral is an HTTP status in a list of refusals, and the noun sits three words further along the same joined sentence.

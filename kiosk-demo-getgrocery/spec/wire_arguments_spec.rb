@@ -387,6 +387,48 @@ at_dublin("2026-08-07T11:00:00") do
            "Date.parse's loose form #{raw.inspect} → #{want} (published behaviour, not an oversight)")
   end
 
+  # ── WHAT THE PARSER REALLY ACCEPTS, WRITTEN DOWN (K-1411) ─────────────────
+  #
+  # The three forms above were the whole of this demo's record of its own
+  # looseness, and the parser takes a good deal more. The rest is asserted here
+  # — not because any of it is desirable, but because a record NARROWER than
+  # the behaviour is what let the clock bug below live unnoticed. Whether the
+  # looseness should be narrowed is a separate and still-open question; this
+  # block only states where it stands. Every date the origin is frozen at here
+  # is Friday 7 August 2026, so a completed value in the same month reads as
+  # PAST — and the past refusal names the date it parsed, which is what makes
+  # these assertions about the PARSE rather than about the refusal.
+
+  # SLASH FORM IS DAY-FIRST, AND SILENTLY AMBIGUOUS. `09/01/2026` is the NINTH
+  # OF JANUARY. An assistant that meant the first of September gets a date seven
+  # months away — here a refusal, and on a future value simply the wrong day.
+  refusal = refusal_of(guard('delivery_date("09/01/2026")') { call.("09/01/2026") })
+  assert(refusal.is_a?(OperationResult) && refusal.message == past_msg.call(Date.new(2026, 1, 9)),
+         "the slash form is DAY-first: \"09/01/2026\" parses as 9 January 2026, not 1 September — " \
+         "#{refusal.is_a?(OperationResult) ? refusal.message.inspect : refusal.inspect}")
+
+  pair = guard('delivery_date("12/09/2026")') { call.("12/09/2026") }
+  assert(refusal_of(pair).nil? && value_of(pair) == Date.new(2026, 9, 12),
+         "… and it is ACCEPTED rather than refused — \"12/09/2026\" books 12 September 2026")
+
+  # PARTIAL VALUES. A month, an ordinal day or an ISO week with nothing else is
+  # completed from TODAY — and today is the ORIGIN's, which is the fix this
+  # block's ledger row is about.
+  [["sep",   Date.new(2026, 9, 1),  "a bare month name starts on the 1st"],
+   ["250",   Date.new(2026, 9, 7),  "a bare ordinal day is that day of the origin's year"],
+   ["W36-2", Date.new(2026, 9, 1),  "an ISO week-and-weekday resolves inside the origin's year"]].each do |raw, want, why|
+    pair = guard("delivery_date(#{raw.inspect})") { call.(raw) }
+    assert(refusal_of(pair).nil? && value_of(pair) == want,
+           "partial value #{raw.inspect} → #{want} — #{why}")
+  end
+
+  [["Tue", Date.new(2026, 8, 4), "a bare weekday is the one in the origin's current week, Sunday-first"],
+   ["1st", Date.new(2026, 8, 1), "a bare day-of-month is that day of the origin's current month"]].each do |raw, want, why|
+    refusal = refusal_of(guard("delivery_date(#{raw.inspect})") { call.(raw) })
+    assert(refusal.is_a?(OperationResult) && refusal.message == past_msg.call(want),
+           "partial value #{raw.inspect} → #{want}, refused as past — #{why}")
+  end
+
   # UNPARSEABLE → the format sentence, naming where a right one comes from.
   ["not-a-date", "2026-13-45", "tomorrow please", "2026-02-30", { "a" => 1 }, 42].each do |bad|
     refusal = refusal_of(guard("delivery_date(#{bad.inspect})") { call.(bad) })
@@ -429,6 +471,63 @@ at_dublin("2026-08-08T00:01:00") do
   assert(refusal.is_a?(OperationResult) && refusal.message == "past #{DAY}",
          "two minutes later — Dublin's next day — the same date is REFUSED, so the clock read " \
          "is DeliverySlots.now and not the runner's")
+end
+
+# ── AND SO IS THE CLOCK A PARTIAL VALUE IS COMPLETED AGAINST (K-1411) ────────
+#
+# The two blocks above prove the PAST test reads Dublin. This proves the same
+# of the parse itself, which `Date.parse` alone could not: it fills a missing
+# month or week from the PROCESS's today, so on a server a day ahead of or
+# behind Dublin the SAME string named a different month. Two minutes apart,
+# either side of a Dublin month boundary and of a Dublin week boundary, the
+# same string resolves to a different date — and it is DeliverySlots.now that
+# moved, nothing else.
+puts "\n── delivery_date: a PARTIAL value is completed against the origin's today ──"
+LATE = ->(d) { "past #{d}" }
+at_dublin("2026-09-30T23:59:00") do
+  refusal = refusal_of(WireArguments.delivery_date("1st", default: Date.new(2026, 9, 30), past_message: LATE))
+  assert(refusal.is_a?(OperationResult) && refusal.message == "past 2026-09-01",
+         "at 23:59 Dublin on 30 September, a bare \"1st\" completes to 2026-09-01 (this month's, past)")
+end
+at_dublin("2026-10-01T00:01:00") do
+  pair = WireArguments.delivery_date("1st", default: Date.new(2026, 10, 1), past_message: LATE)
+  assert(refusal_of(pair).nil? && value_of(pair) == Date.new(2026, 10, 1),
+         "two minutes later — Dublin's next MONTH — the same \"1st\" is 2026-10-01 and is accepted")
+end
+at_dublin("2026-09-05T12:00:00") do
+  refusal = refusal_of(WireArguments.delivery_date("Tue", default: Date.new(2026, 9, 5), past_message: LATE))
+  assert(refusal.is_a?(OperationResult) && refusal.message == "past 2026-09-01",
+         "on Saturday 5 September, a bare \"Tue\" is this week's — 2026-09-01, already past")
+end
+at_dublin("2026-09-06T12:00:00") do
+  pair = WireArguments.delivery_date("Tue", default: Date.new(2026, 9, 6), past_message: LATE)
+  assert(refusal_of(pair).nil? && value_of(pair) == Date.new(2026, 9, 8),
+         "one day later — Dublin's next WEEK — the same \"Tue\" is 2026-09-08 and is accepted")
+end
+
+# THE FORMS THEMSELVES DID NOT MOVE, only the clock they complete against. With
+# the origin's today set to the runner's own today, {WireArguments.parse_date}
+# and `Date.parse` agree on every form this file names and on every value
+# neither can read — so the fix bought a clock and changed no contract. (WHICH
+# forms should be accepted is not settled here and is not this file's to settle.)
+puts "\n── delivery_date: the accepted forms are still exactly Date.parse's ──"
+at_dublin("#{Date.today.iso8601}T12:00:00") do
+  %w[2026-09-01 20260101 09/01/2026 12/09/2026 1/9/2026 Tue tue Tuesday Mon Sun sep sept September
+     1st 3rd 26 31st 2026 2026-09 09-2026 Sep-2026 2026-250 2026-W36-2 250 W36 W36-2 366 000 32
+     13/13 Tue3rd Sep-Tue Tue12:00 09 ---09 --09-01 not-a-date 2026-13-45 2026-02-30 tomorrow
+     12:00 7-Sep-2026 Sep7 2026/09/01].each do |raw|
+    theirs = begin
+      Date.parse(raw)
+    rescue StandardError
+      :refused
+    end
+    ours = begin
+      WireArguments.parse_date(raw)
+    rescue StandardError
+      :refused
+    end
+    assert(ours == theirs, "#{raw.inspect}: parse_date → #{ours}, Date.parse → #{theirs}")
+  end
 end
 
 # ── 7. past_date/1 and past_slot/3 — the domain, not an empty list ───────────

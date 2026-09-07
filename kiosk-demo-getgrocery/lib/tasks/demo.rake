@@ -1482,6 +1482,7 @@ namespace :demo do
     Requires python3 + numpy.
   DESC
   task :pow do
+    require "resolv"
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
@@ -1505,7 +1506,27 @@ namespace :demo do
     Rake::Task["demo:setup"].invoke
 
     port         = ENV.fetch("PORT", "3001")
-    server_url   = "http://127.0.0.1:#{port}"
+
+    # ── host resolution ────────────────────────────────────────────────
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("getgrocery.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "getgrocery.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach getgrocery.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     log          = "/tmp/kiosk-getgrocery-pow.log"
     flow_rb      = File.expand_path("../../script/pow_flow.rb", __dir__)
     failures     = []

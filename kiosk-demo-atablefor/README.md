@@ -52,9 +52,9 @@ the result (no envelope).
 `seating_at` is one field on one clock across every verb that publishes it:
 `availability`, the `book_table` confirmation and `my_bookings` all spell it
 with the restaurant's own offset, so a booking read back after the fact is the
-same string it was confirmed with. `my_bookings` used to answer `+00:00` where
-the confirmation said `+01:00` — the same instant, a second spelling, under
-schema text that described the field identically in both.
+same string it was confirmed with. Two spellings of one instant under schema
+text that describes the field identically is a difference a reader cannot
+resolve, so there is only ever one.
 
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 

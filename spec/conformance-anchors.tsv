@@ -775,7 +775,7 @@ kiosk-pow-cuckoo/Rakefile	task :solve_parity do
 kiosk-pow-cuckoo/lib/kiosk/pow/cuckoo.rb	      NAME = "cuckatoo"
 kiosk-pow-cuckoo/spec/kiosk/pow/cuckoo_spec.rb	  # taken directly from Grin's CI test suite (cuckatoo29 constant).
 kiosk-pow-equihash/README.md	## Solver (Python + numpy)
-kiosk-pow-equihash/README.md	(0.30 ms). Every one of those used to cost the full 18.7 ms, which mattered
+kiosk-pow-equihash/README.md	(0.30 ms), against 18.7 ms for a complete one. That gap is the point, because
 kiosk-pow-equihash/README.md	(PoW = metered pricing, not a hardware wall).
 kiosk-pow-equihash/README.md	(`BUCKET_CAP`) to keep work and memory bounded — the real solution comes from
 kiosk-pow-equihash/README.md	(~9.6 s, *Performance* below) over a valid proof's verify (~18 ms, *Verify* above);

@@ -123,9 +123,16 @@ SURFACE = [
 # the mount — which proves nothing about whether the old wire is still there.
 # Authenticated, the answer is the per-verb wire's ordinary `404 verb_not_found`
 # for a name nobody registered, and that is the cut.
+#
+# `GET /kiosk/ping` rides the same list for the opposite reason. `ping` IS a
+# registered query here, and scenario 1 draws the mount and NOTHING ELSE — so
+# this is the T-183 backstop under test: a verb the operator declared and drew
+# no route for must FAIL LOUDLY rather than be served by the tail pair, or the
+# route magic would be back with an extra step.
 AUTHENTICATED = [
   ["POST", "/kiosk/query"],
   ["POST", "/kiosk/run"],
+  ["GET",  "/kiosk/ping"],
 ].freeze
 
 def surface_snapshot
@@ -209,5 +216,42 @@ begin
 ensure
   Kiosk.configure { |c| c.agent_idp = previous_idp }
 end
+
+# Scenario 5 — THE OPERATOR'S OWN VERBS, drawn the T-183 way: the mount FIRST,
+# then one explicit route per registered verb with the method following the
+# kind. Four questions, and the fourth is the one the row asks by name.
+#
+#   * does an explicit line actually reach the wire, and serve?
+#   * is the OTHER method on that same name the spec's `405` + `Allow`?
+#   * is a name nobody registered the spec's `404 verb_not_found`?
+#   * WHAT HAPPENS IF AN OPERATOR ROUTES A VERB AT A RESERVED PATH? The line
+#     below deliberately draws `/kiosk/schema` into the verb wire, BELOW the
+#     mount. Rails dispatches the first matching route, so the engine's own
+#     `schema` answers and this line is dead — the ordering property the deleted
+#     catch-all used to give for free, now given by the mount being drawn first.
+#     (An operator cannot get this far in practice: {HandlerMixin::RESERVED_NAMES}
+#     raises at declaration, and `bin/check-verb-routes` refuses the route. This
+#     is the routing layer's own answer, measured rather than assumed.)
+Rails.application.routes.draw do
+  mount Kiosk::Server::Engine => "/kiosk"
+  get "/kiosk/ping",   to: "kiosk/server/verb#show", defaults: { kiosk_verb: "ping" }
+  get "/kiosk/schema", to: "kiosk/server/verb#show", defaults: { kiosk_verb: "schema" }
+end
+#
+# `?zzz=1` on the first probe is deliberate and it is what makes the answer
+# unambiguous. `ping` declares a CLOSED empty input_schema, so an undeclared
+# argument is `400 bad_request` from {RequestValidation} — a gate that only
+# {VerbController} runs. {VerbRefusalController} never decodes an argument at
+# all, so a 400 here can have come from nowhere else: the explicit line reached
+# the verb wire. (A clean `GET /kiosk/ping` would reach the handler and need a
+# database, which this probe deliberately does not have.)
+report["operator_verbs"] = {
+  "GET /kiosk/ping?zzz=1"  => request("GET",  "/kiosk/ping?zzz=1", auth: true),
+  "POST /kiosk/ping"       => request("POST", "/kiosk/ping",   auth: true),
+  "GET /kiosk/frobnicate"  => request("GET",  "/kiosk/frobnicate", auth: true),
+  "GET /kiosk/schema"      => request("GET",  "/kiosk/schema"),
+  "GET /kiosk/Catalog"     => request("GET",  "/kiosk/Catalog", auth: true),
+  "GET /kiosk/9lives"      => request("GET",  "/kiosk/9lives",  auth: true),
+}
 
 puts JSON.generate(report)

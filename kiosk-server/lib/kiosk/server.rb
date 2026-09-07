@@ -79,6 +79,7 @@ require "kiosk/server/engine"
 # OAuth-wire + HTML controllers.
 require "kiosk/server/wire_controller"
 require "kiosk/server/verb_controller"
+require "kiosk/server/verb_refusal_controller"
 require "kiosk/server/open_api_controller"
 require "kiosk/server/discovery_controller"
 require "kiosk/server/jwks_controller"

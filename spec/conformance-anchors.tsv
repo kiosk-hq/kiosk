@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1665 anchors.
+# 1666 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -40,6 +40,7 @@ README.md	multi-assistant identity per user
 README.md	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 README.md	| `kiosk-rls` | Opt-in RLS DSL + migration helpers (`rake kiosk:rls:{show,check}` planned, lands in a follow-up) | alpha |
 ROADMAP.md	**MPP as a settlement adapter.**
+bin/check-verb-routes	#   METHOD-KIND       GET for a query, POST for an action.
 deploy/Caddyfile	atablefor.demo.kiosk.tech {
 deploy/Caddyfile	getgrocery.demo.kiosk.tech {
 deploy/Caddyfile	hoteling.demo.kiosk.tech {
@@ -388,21 +389,11 @@ kiosk-demo-getgrocery/config/initializers/kiosk.rb	  raise "getgrocery requires 
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = ValidatingPaymentProvider.new(
-kiosk-demo-getgrocery/config/routes.rb	  # POST /kiosk/<action-name>. getgrocery hand-draws its routes rather than
-kiosk-demo-getgrocery/config/routes.rb	  get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
-kiosk-demo-getgrocery/config/routes.rb	  post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
-kiosk-demo-getgrocery/config/routes.rb	  post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
-kiosk-demo-getgrocery/config/routes.rb	  post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
 kiosk-demo-getgrocery/config/routes.rb	  post "/kyc/callback",                            to: "kyc_callback#create"
-kiosk-demo-getgrocery/config/routes.rb	get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
-kiosk-demo-getgrocery/config/routes.rb	get  "/kiosk/auth/challenge",
-kiosk-demo-getgrocery/config/routes.rb	get "/.well-known/agent-configuration",   to: "kiosk/server/discovery#agent_configuration"
-kiosk-demo-getgrocery/config/routes.rb	get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
-kiosk-demo-getgrocery/config/routes.rb	get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
-kiosk-demo-getgrocery/config/routes.rb	get "/agents.json",                       to: "kiosk/server/discovery#agents_json"
-kiosk-demo-getgrocery/config/routes.rb	get "/agents.txt",                        to: "kiosk/server/discovery#agents_txt"
-kiosk-demo-getgrocery/config/routes.rb	post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
-kiosk-demo-getgrocery/config/routes.rb	post "/kiosk/auth/register",
+kiosk-demo-getgrocery/config/routes/kiosk.rb	# 1. THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way. `schema`, `pay`, the
+kiosk-demo-getgrocery/config/routes/kiosk.rb	get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
+kiosk-demo-getgrocery/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+kiosk-demo-getgrocery/config/routes/kiosk.rb	post "/kiosk/create_order",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "create_order" }
 kiosk-demo-getgrocery/db/migrate/20260630000001_create_stripe_customers.rb	create_table :stripe_customers do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      boot_env["STRIPE_SECRET_KEY"] = "sk_test_mock"
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      exit exit_status
@@ -492,6 +483,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the 
 kiosk-demo-hoteling/script/pay_window.rb	RoomHold.where(user_id: USER_ID).delete_all
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
 kiosk-demo-hoteling/script/spending_cap_flow.rb	makes it a cap rather than a suggestion
+kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	# philslist — Kiosk reference demo (NON-COMMERCE)
 kiosk-demo-philslist/README.md	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-philslist/README.md	**not only for commerce**: it exercises the full query + action + `schema` +
@@ -508,7 +500,6 @@ kiosk-demo-philslist/config/initializers/kiosk.rb	  c.registration_pow_count  = 
 kiosk-demo-philslist/config/initializers/kiosk.rb	# `payment_provider` here, so `capabilities` computes to schema/queries/actions and
 kiosk-demo-philslist/config/initializers/kiosk.rb	# ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-philslist/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-philslist/config/routes.rb	  # NO `POST /kiosk/pay` route — philslist takes no payments (the whole point).
 kiosk-demo-philslist/lib/tasks/demo.rake	    if capabilities.include?("pay")
 kiosk-demo-philslist/lib/tasks/demo.rake	  task :walkthrough do
 kiosk-demo-philslist/lib/tasks/demo.rake	  task binding: :setup do
@@ -587,7 +578,7 @@ kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience  = ProveTrust.oper
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer    = ProveTrust.issuer
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count  = 1
-kiosk-demo-skooti/config/routes.rb	post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
+kiosk-demo-skooti/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-skooti/lib/tasks/demo.rake	  task :rideflow do
 kiosk-demo-skooti/lib/tasks/demo.rake	  task isolation: :setup do
 kiosk-demo-skooti/lib/tasks/demo.rake	  task kyc: :setup do
@@ -639,7 +630,7 @@ kiosk-demo-stylish/config/initializers/kiosk.rb	  # configures no payment_provid
 kiosk-demo-stylish/config/initializers/kiosk.rb	  # role separation in this demo). This demo runs WITHOUT RLS — isolation
 kiosk-demo-stylish/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-stylish/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-stylish/config/routes.rb	  post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
+kiosk-demo-stylish/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-stylish/lib/tasks/demo.rake	  task :walkthrough do
 kiosk-demo-stylish/lib/tasks/demo.rake	  task binding: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	  task isolation: :setup do
@@ -1039,20 +1030,29 @@ kiosk-server/lib/kiosk/server/discovery_controller.rb	Discovery surface — one 
 kiosk-server/lib/kiosk/server/discovery_controller.rb	alias; byte-identical to
 kiosk-server/lib/kiosk/server/discovery_controller.rb	class DiscoveryController < ::ActionController::API
 kiosk-server/lib/kiosk/server/discovery_controller.rb	rendered from {WellKnown} (the single generator seam, so they cannot
-kiosk-server/lib/kiosk/server/engine.rb	          next unless Kiosk::Server::Engine.mounted_in?(app.routes)
+kiosk-server/lib/kiosk/server/engine.rb	          get "/.well-known/agent-configuration", to: "kiosk/server/discovery#agent_configuration"
+kiosk-server/lib/kiosk/server/engine.rb	          get "/.well-known/kiosk.json",          to: "kiosk/server/discovery#kiosk_json"
+kiosk-server/lib/kiosk/server/engine.rb	          get "/agents.json", to: "kiosk/server/discovery#agents_json"
+kiosk-server/lib/kiosk/server/engine.rb	          get "/agents.txt",  to: "kiosk/server/discovery#agents_txt"
+kiosk-server/lib/kiosk/server/engine.rb	          get "/auth.md",     to: "kiosk/server/discovery#auth_md"
 kiosk-server/lib/kiosk/server/engine.rb	        # `schema` is one of the TWO routes under this mount that resolve no
+kiosk-server/lib/kiosk/server/engine.rb	        get  "auth/challenge", to: "auth#challenge"
 kiosk-server/lib/kiosk/server/engine.rb	        get  "schema", to: "wire#schema"
+kiosk-server/lib/kiosk/server/engine.rb	        post "agents/kyc", to: "kyc_attestation#create"
+kiosk-server/lib/kiosk/server/engine.rb	        post "auth/login",     to: "auth#login"
+kiosk-server/lib/kiosk/server/engine.rb	        post "auth/register",  to: "auth#register"
+kiosk-server/lib/kiosk/server/engine.rb	        post "auth/revoke",    to: "auth#revoke"
+kiosk-server/lib/kiosk/server/engine.rb	        post "pay",    to: "wire#pay"
 kiosk-server/lib/kiosk/server/engine.rb	      initializer "kiosk-server.root_discovery_routes" do |app|
+kiosk-server/lib/kiosk/server/engine.rb	      initializer "kiosk-server.verb_refusal_route" do |app|
 kiosk-server/lib/kiosk/server/engine.rb	      routes do
 kiosk-server/lib/kiosk/server/engine.rb	#   mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-kiosk-server/lib/kiosk/server/engine.rb	get  "/:kiosk_verb", to: "verb#show",
 kiosk-server/lib/kiosk/server/engine.rb	get  "oauth/device/verify",        to: "device_verify#show"
 kiosk-server/lib/kiosk/server/engine.rb	get  "schema", to: "wire#schema"
 kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/api-catalog",
 kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/kiosk.json",          to: "kiosk/server/discovery#kiosk_json"
 kiosk-server/lib/kiosk/server/engine.rb	get "/agents.txt",  to: "kiosk/server/discovery#agents_txt"
 kiosk-server/lib/kiosk/server/engine.rb	get "openapi.json", to: "open_api#show"
-kiosk-server/lib/kiosk/server/engine.rb	post "/:kiosk_verb", to: "verb#create",
 kiosk-server/lib/kiosk/server/errors.rb	      class ModuleNotServed < Base
 kiosk-server/lib/kiosk/server/errors.rb	"pow_required"           => 402,
 kiosk-server/lib/kiosk/server/errors.rb	"spending_cap_exceeded"  => 403,
@@ -1146,7 +1146,7 @@ kiosk-server/lib/kiosk/server/verb_controller.rb	THE PER-VERB WIRE. One endpoint
 kiosk-server/lib/kiosk/server/verb_controller.rb	class VerbController < WireController
 kiosk-server/lib/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/lib/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
-kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane above wins
+kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane still wins by first-match, because the operator
 kiosk-server/lib/kiosk/server/well_known.rb	            kind:          "kiosk-pop",
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
 kiosk-server/lib/kiosk/server/well_known.rb	          auth_modes: ["kiosk-pop", "user-claimed", "link-code"],
@@ -1276,21 +1276,22 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 applicat
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a routing 404 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an explicit line reaches the VERB wire, not the refusal beside it
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an unhandled 500 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb 405 + Allow (§8.1)
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves a path that cannot be a verb name a routing 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	stamps every path UNDER the mount — success and refusal alike
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	the HOST's own route outside the mount carries none — on a 200
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on a root-level routing 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on the host's own 500, which is the same exception path
-kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws GET <name> at the query half and POST <name> at the action half
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws JWKS under the mount
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws the KYC attestation endpoint
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws the two RESERVED wire endpoints — and the wire has no others
-kiosk-server/spec/kiosk/server/engine_routes_spec.rb	leaves a path that cannot be a verb name a routing 404
-kiosk-server/spec/kiosk/server/engine_routes_spec.rb	lets EVERY reserved-plane route win by first-match
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	reserves exactly the first segments it draws — and `query`/`run` left both
-kiosk-server/spec/kiosk/server/engine_routes_spec.rb	the per-verb wire
+kiosk-server/spec/kiosk/server/engine_routes_spec.rb	still owns every reserved path, and the mount being drawn FIRST is why
+kiosk-server/spec/kiosk/server/engine_routes_spec.rb	the per-verb wire, which this table deliberately does NOT draw
 kiosk-server/spec/kiosk/server/errors_spec.rb	#to_problem — the 0.4 error shape (RFC 9457)
 kiosk-server/spec/kiosk/server/errors_spec.rb	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
 kiosk-server/spec/kiosk/server/errors_spec.rb	carries a handler's own extra fields through

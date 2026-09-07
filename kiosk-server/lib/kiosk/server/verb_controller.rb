@@ -20,32 +20,54 @@ module Kiosk
     # the retired 0.3 wire spelled out in a `name` field. Since the cutover
     # this is the ONLY way to reach an operator verb, `POST <endpoint>/query`
     # and `POST <endpoint>/run` included (T-074 = A): no dedicated route is
-    # drawn for either name, so both fall through to the per-verb pair below
-    # and answer `404 verb_not_found` — an ordinary problem document whose
-    # `hint` names the registered verbs — because nobody declared a verb called
-    # `query` or `run` (K-1112).
+    # drawn for either name, so both fall through to {VerbRefusalController} and
+    # answer `404 verb_not_found` — an ordinary problem document whose `hint`
+    # names the registered verbs — because nobody declared a verb called `query`
+    # or `run` (K-1112).
     #
-    # ── Where the routes come from, and the design delta it carries ──────
+    # ── Where the routes come from (T-183 reversed this) ────────────────
     #
-    # The engine draws ONE constrained single-segment pair (`get "/:kiosk_verb"`,
-    # `post "/:kiosk_verb"`) LAST in its own table and this controller resolves
-    # the name against the registry AT REQUEST TIME — the same registry, read
-    # the same way, that `GET <endpoint>/schema` renders its descriptors from.
+    # THE OPERATOR DRAWS THEM, one explicit line per registered verb, in their
+    # own `config/routes/kiosk.rb`:
     #
-    # The T-067 design (§4, "Route ownership") said the OPERATOR must draw
-    # these, because "the engine cannot: it would have to enumerate the registry
-    # at route-draw time, before controllers are eager-loaded". That is true of
-    # STATICALLY drawn routes and only of those. Resolving at request time
-    # costs one registry lookup per call and buys three things: the whole
-    # "declared but unrouted / routed but undeclared" bug class cannot occur
-    # because there is nothing to keep in sync; the reserved plane above wins
-    # by first-match, so an operator verb can never shadow `schema`, `pay`,
-    # `auth`, `oauth`, `agents` or `.well-known`; and a verb added in
-    # development is served on the next reload, which a routes file edited by
-    # hand would NOT give (Rails reloads routes when routes files change, not
-    # when a controller does). What it costs is that `rails routes` lists the
-    # pair rather than the verbs — the origin's surface is read off
-    # `GET <endpoint>/schema`, which is what the skill already teaches.
+    #   get  "/kiosk/catalog",     to: "kiosk/server/verb#show",
+    #        defaults: { kiosk_verb: "catalog" }
+    #   post "/kiosk/place_order", to: "kiosk/server/verb#create",
+    #        defaults: { kiosk_verb: "place_order" }
+    #
+    # The METHOD follows the KIND, which is what the protocol already says a
+    # verb IS, and `defaults:` pins the name this controller reads. Nothing
+    # about the request path is inferred: `params[:kiosk_verb]` is a constant
+    # the route supplies.
+    #
+    # UNTIL T-183 THE ENGINE DREW THE ROUTES — one constrained single-segment
+    # pair (`get "/:kiosk_verb"`, `post "/:kiosk_verb"`) LAST in its own table,
+    # resolving the name against the registry at request time. That bought
+    # three things and they are the honest cost of the change: the "declared but
+    # unrouted / routed but undeclared" bug class could not occur, because there
+    # was nothing to keep in sync; the reserved plane won by first-match; and a
+    # verb added in development was served on the next reload. What it cost was
+    # the one thing an operator most wants from a routes file — `rails routes`
+    # listed the pair, not the verbs.
+    #
+    # Phil, 2026-09-07: «Я НЕ СОГЛАСЕН с тем что у нас должна быть какая-то
+    # магия с роутами. Сделаем пока по-простому. GET/QUERY для query, POST для
+    # run. Вручную для каждого в routes.» So the trade is taken the other way,
+    # and each of the three is answered where it now lands rather than left
+    # implied:
+    #
+    #   * declared-but-unrouted is a REAL bug class again, and
+    #     `reference/bin/check-verb-routes` is the check — it derives the
+    #     expected list from each origin's own handler controllers and fails on
+    #     a missing route, an extra route, or a method that disagrees with the
+    #     kind. At runtime {VerbRefusalController} refuses rather than serves.
+    #   * the reserved plane still wins by first-match, because the operator
+    #     draws `mount Kiosk::Server::Engine` FIRST and their verbs after it —
+    #     and, more strongly, {HandlerMixin::RESERVED_NAMES} refuses such a
+    #     declaration at boot.
+    #   * a verb added in development now needs a line in the routes file.
+    #     Rails reloads routes when a routes file changes, so the reload is
+    #     still automatic; writing the line is not.
     #
     # ── Order of the gates, and why it is not the first draft's ──────────
     #

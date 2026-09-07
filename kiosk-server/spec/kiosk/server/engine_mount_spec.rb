@@ -137,6 +137,24 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       end
     end
 
+    it "REFUSES a verb it registered but drew no route for — it does not serve it" do
+      # The T-183 backstop, and the sharpest statement of what the mount now is.
+      # This scenario draws the mount and NOTHING ELSE, so `ping` — a query this
+      # origin really does register, published in the catalogue two examples up
+      # — has no route. The engine's appended tail pair reaches it and REFUSES:
+      # a 500 whose detail names the exact line the operator has to add. Serving
+      # it here would be the deleted catch-all with an extra step, which is the
+      # one thing the tail route may never do.
+      res = probe("mounted", "GET /kiosk/ping (bearer)")
+
+      expect(res["status"]).to eq(500)
+      expect(res["headers"]["content-type"]).to include("application/problem+json")
+      body = JSON.parse(res["body"])
+      expect(body["code"]).to eq("internal_error")
+      expect(body["detail"]).to include("no route reaches it")
+      expect(body["detail"]).to include(%(get "/kiosk/ping", to: "kiosk/server/verb#show"))
+    end
+
     it "routes the kiosk-pop auth plane into AuthController" do
       # A malformed register/login/revoke answers with the wire's RFC 9457
       # problem document — reaching the controller at all is what this route
@@ -223,6 +241,93 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
         .to match(%r{\A/kiosk/schema\?v=[0-9a-f]{32}\z})
 
       expect(probe("double_draw", "GET /kiosk/.well-known/jwks.json")["status"]).to eq(200)
+    end
+  end
+
+  # ── THE OPERATOR'S OWN VERBS, drawn by hand below the mount (T-183) ─────
+  #
+  # Phil, 2026-09-07: «Я НЕ СОГЛАСЕН с тем что у нас должна быть какая-то магия
+  # с роутами… Вручную для каждого в routes.» So the engine draws the PROTOCOL
+  # PLANE and the operator draws one explicit route per verb underneath it. This
+  # scenario is that arrangement, through a booted app and the whole Rack stack,
+  # answering four questions the routing layer cannot be asked any other way.
+  context "when the host mounts the engine and hand-draws its own verb routes" do
+    it "an explicit line reaches the VERB wire, not the refusal beside it" do
+      # `?zzz=1` against a CLOSED empty input_schema is `400 bad_request` from
+      # RequestValidation — a gate only VerbController runs. VerbRefusalController
+      # never decodes an argument, so a 400 can have come from nowhere else.
+      res = probe("operator_verbs", "GET /kiosk/ping?zzz=1")
+
+      expect(res["status"]).to eq(400)
+      expect(JSON.parse(res["body"])["code"]).to eq("bad_request")
+    end
+
+    it "answers the OTHER method on that same verb 405 + Allow (§8.1)" do
+      # The route the operator drew is the GET; nothing draws POST /kiosk/ping.
+      # Without the appended refusal pair this would be Rails' own HTML 404 —
+      # the spec's mandatory 405 lost to a routing miss.
+      res = probe("operator_verbs", "POST /kiosk/ping")
+
+      expect(res["status"]).to eq(405)
+      expect(res["headers"]["allow"]).to eq("GET")
+      body = JSON.parse(res["body"])
+      expect(body["code"]).to eq("method_not_allowed")
+      expect(body["detail"]).to include("is a query, not an action")
+    end
+
+    it "leaves a path that cannot be a verb name a routing 404" do
+      # The refusal route carries {VerbController::NAME_SEGMENT}, spec §8.1's own
+      # expression, so a path that could never BE a verb never reaches Kiosk at
+      # all: it stays the answer RAILS composes, which is what keeps the K-824
+      # probe (`GET /kiosk/nope/nope`) meaningful. Dialed WITH a token, so the
+      # 401 gate cannot be what produced the answer.
+      %w[/kiosk/Catalog /kiosk/9lives].each do |path|
+        res = probe("operator_verbs", "GET #{path}")
+        expect(res["status"]).to eq(404), "#{path}: got #{res["status"]}"
+        expect(res["headers"]["content-type"]).not_to include("application/problem+json")
+      end
+    end
+
+    it "answers a name nobody registered 404 verb_not_found, with the hint (§9)" do
+      res = probe("operator_verbs", "GET /kiosk/frobnicate")
+
+      expect(res["status"]).to eq(404)
+      expect(res["headers"]["content-type"]).to include("application/problem+json")
+      body = JSON.parse(res["body"])
+      expect(body["code"]).to eq("verb_not_found")
+      expect(body["hint"]).to include("ping")
+    end
+
+    # ── THE SHADOWING QUESTION, ANSWERED BY MEASUREMENT ──────────────────
+    #
+    # "What happens if an operator routes a verb at a reserved path?" Until
+    # T-183 the answer was a property of ONE table: the engine drew the reserved
+    # lines first and its own catch-all last, so `schema` could not be shadowed.
+    # With explicit routes the property moves into a file somebody WRITES, so it
+    # has to be re-established deliberately — and it is, three times over:
+    #
+    #   1. {HandlerMixin::RESERVED_NAMES} raises an ArgumentError as the class
+    #      body loads, so the verb cannot be DECLARED (handler_mixin_spec).
+    #   2. `bin/check-verb-routes`' NOT-RESERVED rule refuses the ROUTE at build
+    #      time, so it cannot be written either (that script's own self-test).
+    #   3. And if both were bypassed, the mount is drawn FIRST and Rails
+    #      dispatches the first matching route — which is what this example
+    #      measures. The scenario draws `get "/kiosk/schema"` into the verb wire
+    #      BELOW the mount; the engine's `schema` answers and that line is dead.
+    #
+    # Note what the failure now IS, because it is not what it was: a collision is
+    # a DEAD ROUTE (Rails permits duplicate paths and silently prefers the first)
+    # rather than a shadowed dispatch inside one table. That is a better failure
+    # only because 1 and 2 above make it unreachable; on its own it is just as
+    # silent, which is why neither of them is optional.
+    it "cannot be shadowed by an operator verb route drawn below the mount" do
+      res = probe("operator_verbs", "GET /kiosk/schema")
+
+      expect(res["status"]).to eq(200)
+      expect(res["headers"]["content-type"]).to include("application/json")
+      # The WIRE's catalogue, not the verb wire's answer for a verb called
+      # `schema` (which is 401 anonymous, and could never be registered anyway).
+      expect(JSON.parse(res["body"]).keys).to eq(%w[queries actions])
     end
   end
 

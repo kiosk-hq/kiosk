@@ -18,7 +18,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. Kiosk stores nothing itself: default is no sink and no emission. See [The audit sink](#the-audit-sink).
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, reservations, device authorizations, mandates).
-- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed surface (wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Mount the routes](#mount-the-routes)).
+- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, appends the wire's own 404/405 refusal below your routes, and auto-injects the headers middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
 
@@ -238,29 +238,55 @@ sink has state. A non-callable is rejected when you configure it, so a typo is
 a boot failure rather than an audit trail that silently was never there.
 
 
-## Mount the routes
+## Draw the routes
 
-One line. The engine draws the entire surface:
+The wire has TWO HALVES and the split is by whose surface it is. Put both in a
+routes file of their own and reach it with Rails' own `draw`:
 
 ```ruby
 # config/routes.rb
-mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+draw(:kiosk)
 ```
 
-Under the mount that is the wire — one endpoint per registered verb
-(`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) plus the reserved
-`schema`, `openapi.json` and `pay` — the kiosk-pop auth plane
-(`auth/challenge`, `auth/register`, `auth/login`, `auth/revoke`), JWKS
-(`.well-known/jwks.json`), KYC attestation (`agents/kyc`) and the whole
-account-binding ceremony (the RFC 8628 claim wire, `auth/link`/`claim`/`unlink`,
-the verify and «Link an assistant» pages). The engine also installs the
-ROOT-relative discovery documents — `/agents.txt`, `/agents.json`, `/auth.md`,
+```ruby
+# config/routes/kiosk.rb
+mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+
+get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
+post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "place_order" }
+```
+
+**The mount draws the PROTOCOL PLANE** — the paths whose shape is the spec's and
+not yours. Under the mount: the reserved `schema`, `openapi.json` and `pay`, the
+kiosk-pop auth plane (`auth/challenge`, `auth/register`, `auth/login`,
+`auth/revoke`), JWKS (`.well-known/jwks.json`), KYC attestation (`agents/kyc`)
+and the whole account-binding ceremony (the RFC 8628 claim wire,
+`auth/link`/`claim`/`unlink`, the verify and «Link an assistant» pages). The
+engine also installs the ROOT-relative discovery documents — `/agents.txt`,
+`/agents.json`, `/auth.md`,
 `/.well-known/{agent-configuration,kiosk.json,api-catalog}` — into the host app
 via `routes.append`, because the agents.txt standard and RFC 8615 place them at
 the origin root, outside any mount prefix. That install happens ONLY when the
 engine is mounted: merely bundling the gem adds no routes.
 
-Hand-drawing the same routes in `config/routes.rb` remains the escape hatch —
+**You draw your OWN VERBS, one explicit route each, and the METHOD FOLLOWS THE
+KIND** — GET for a `kind :query`, POST for a `kind :action`. That is what the
+protocol says a verb IS, so the routes state it instead of hiding it, and
+`bin/rails routes` prints your actual wire. `defaults: { kiosk_verb: … }` hands
+the name to the shipped controller; nothing is inferred from the path.
+
+**Draw the mount FIRST.** Rails dispatches the first matching route, so
+everything the engine draws wins over anything you write below it and no verb of
+yours can shadow `schema`, `pay` or the auth plane. (You could not declare such
+a verb anyway — `Kiosk::Handler` refuses a reserved name at boot.)
+
+A path under the mount that names no verb you drew — and a verb called with the
+other method — is answered by the wire's own `404 verb_not_found` / `405` +
+`Allow`, from a refusal route the engine appends AFTER your routes. It refuses;
+it never serves. So a verb you declared and forgot to route fails loudly with
+the missing line in the message, rather than working by accident.
+
+Hand-drawing the protocol routes yourself instead of mounting remains possible —
 for a partial surface, or mid-migration. Hand-drawn lines win over the engine's
 (Rails dispatches the first matching route), and either path reaches the same
 shipped controllers.
@@ -272,8 +298,8 @@ An assistant reaches a provider at ONE ENDPOINT PER VERB: a query is
 `GET <mount>/<query-name>` with its arguments in the query string, an action is
 `POST <mount>/<action-name>` with its arguments in a JSON body. The operator
 decides what those names are and what they mean. `Kiosk::Handler` is the module
-that lets a controller answer them; the engine routes every registered name
-without a routes-file edit.
+that lets a controller answer them, and you draw one route per name — see
+[Draw the routes](#draw-the-routes).
 
 Kiosk ships a **mixin, not a base class**. Which superclass a handler controller
 has is your decision; the `include` is the whole contract.

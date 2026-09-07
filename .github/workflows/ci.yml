@@ -1274,6 +1274,44 @@ jobs:
       - name: No process-spawning construct is reachable from the served PoW path
         run: ./bin/check-served-pow-purity
 
+  # Since T-183 an operator draws ONE EXPLICIT ROUTE PER VERB, so "declared but
+  # unrouted / routed but undeclared" is a real bug class here again — it was
+  # impossible while the engine resolved names at request time from one
+  # catch-all pair, and that pair is deleted. bin/check-verb-routes DERIVES each
+  # origin's expected route list from the handler controllers its own
+  # config/initializers/kiosk.rb names in `c.handlers` — no verb name is typed
+  # in the script — and holds config/routes/kiosk.rb to it: every verb routed,
+  # every route a verb, the METHOD following the KIND, the path and the pinned
+  # `kiosk_verb` agreeing, no dynamic segment, no collision with a path the
+  # engine draws, the mount above the verbs, and `draw(:kiosk)` reaching the
+  # file at all.
+  #
+  # Its own job rather than a step beside check-kiosk-names, for the reason that
+  # script's header gives: the two invariants (does the reserved plane match the
+  # engine's table / does every verb have its route) should fail with their own
+  # names. Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
+  # check and ~2 s for the twelve-arm self-test beside it.
+  verb-routes:
+    name: every verb has its route, and the method is its kind (bin/check-verb-routes)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every rule, and non-vacuous here
+        run: ./bin/check-verb-routes --self-test
+
+      - name: Every registered verb has its explicit route, with the right method
+        run: ./bin/check-verb-routes
+
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. demo_telemetry.rb (then at lib/, now app/services/) carried a stale

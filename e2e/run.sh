@@ -323,6 +323,12 @@ cp "$FIXTURES/demo_audit_sink.rb"    app/services/demo_audit_sink.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/devise_initializer.rb" config/initializers/devise.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
+# The wire surface itself, in its own file — the ninth showcase of what every
+# demo now does (T-183): config/routes.rb reaches it with Rails' own
+# `draw(:kiosk)`, it mounts the engine for the protocol plane, and it draws one
+# explicit route per registered verb with the method following the kind.
+mkdir -p config/routes
+cp "$FIXTURES/routes_kiosk.rb"       config/routes/kiosk.rb
 
 # …and app/services is declared an autoload-ONCE path, which is what lets the
 # initializer name those four with no `require` at all. Rails sets the

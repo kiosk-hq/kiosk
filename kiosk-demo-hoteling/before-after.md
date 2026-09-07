@@ -206,58 +206,42 @@ rails g kiosk:install
 This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `kiosk.*` schema migrations — the namespace itself, the identity tables (`agents`, `agent_tokens`, `agent_mappings`), `reservations`, `device_authorizations`, the AP2 mandate trail (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`) and `kyc_attributes`, one row per anonymized attribute an attestation granted. Run `bin/rails db:migrate` to apply them.
 
 The generator does **not** touch your routes. `kiosk-server` ships the wire
-controllers; you mount them yourself. Below are the route statements this demo's
-`config/routes.rb` actually draws, verbatim — every one of them, in file order.
-Only that file's own comments are trimmed, plus the three lines that have
-nothing to do with Kiosk (`devise_for`, `root`, and a telemetry route drawn only
-under `KIOSK_TELEMETRY=1`).
+controllers, and the wiring splits by whose surface it is: the PROTOCOL PLANE is
+MOUNTED, and this operator's own VERBS are one explicit route each. Both live in
+`config/routes/kiosk.rb`, which `config/routes.rb` reaches with Rails' own
+`draw(:kiosk)`. That is the whole file below, verbatim and in order — only its
+comments are trimmed.
 
-<!-- derived: snippet | from: config/routes.rb | transform: dedent | abridged: the Kiosk wire lines only, quoted without the routes.draw indent; this demo's own devise/root/admin routes and every comment are out -->
+<!-- derived: snippet | from: config/routes/kiosk.rb | abridged: the route statements only; the file's own comments are out -->
 ```ruby
-# config/routes.rb — the wire surface, hand-drawn.
-get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
-post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
-post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"
-post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
-post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
-get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
-get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
-post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
-get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
-post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
-post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
-get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
-post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
-post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
-post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
+# config/routes/kiosk.rb
+mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 
-get "/agents.txt",                        to: "kiosk/server/discovery#agents_txt"
-get "/agents.json",                       to: "kiosk/server/discovery#agents_json"
-get "/.well-known/agent-configuration",   to: "kiosk/server/discovery#agent_configuration"
-get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
-get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
-get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"
-
-get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
-     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
-post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",
-     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+get  "/kiosk/availability",    to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "availability" }
+get  "/kiosk/hotel_detail",    to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "hotel_detail" }
+get  "/kiosk/my_bookings",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "my_bookings" }
+get  "/kiosk/properties",      to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "properties" }
+get  "/kiosk/search_hotels",   to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "search_hotels" }
+post "/kiosk/confirm_booking", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "confirm_booking" }
+post "/kiosk/payment_setup",   to: "kiosk/server/verb#create", defaults: { kiosk_verb: "payment_setup" }
+post "/kiosk/reserve_room",    to: "kiosk/server/verb#create", defaults: { kiosk_verb: "reserve_room" }
 ```
 
-Three things that table is worth reading for. **Every controller in it is
-kiosk-server's** — including `/.well-known/kiosk.json`, which is
-`Kiosk::Server::DiscoveryController#kiosk_json` rendering the same
-`WellKnown.build_json` document; there is no Rack lambda to hand-write and no
-part of the wire this operator implements. **The RESERVED lines come first and
-the per-verb pair is drawn LAST**, so first-match protects `schema`, `pay` and
-the auth plane from an operator verb that happens to share a name — and there is
-no `/kiosk/query` and no `/kiosk/run`, because protocol 0.4 deleted the
-multiplexed pair outright. **And none of this has to be hand-drawn at all:**
-mounting the engine draws the whole table in one line — `kiosk-server`'s
-`Engine` ships both the mount-prefixed drawer and the root-relative discovery
-routes. hoteling writes them out by hand because that is the escape hatch the
-engine documents, and because the expanded form shows an adopter exactly what
-the mount installs.
+Three things that file is worth reading for. **One line draws everything the
+protocol defines** — `schema`, `pay`, the JWKS and OpenAPI documents, the four
+`auth/*` ceremonies, the RFC 8628 device-grant pair, the link/claim/unlink
+endpoints, the KYC attestation endpoint and the root-relative discovery surface
+(`/agents.txt`, `/agents.json`, `/auth.md`, `/.well-known/*`). Not one of those
+paths is hoteling's to choose, there is no Rack lambda to hand-write, and every
+controller behind them is `kiosk-server`'s. **Every operator verb is a line
+somebody wrote, and its METHOD is its KIND** — GET for a query, POST for an
+action — so `bin/rails routes` prints this origin's actual wire instead of a
+wildcard, and a verb declared one way and routed the other is a routing error
+you can see. **The mount comes FIRST**, so Rails' own first-match protects
+`schema`, `pay` and the auth plane from an operator verb that happens to share a
+name; `kiosk-server` also refuses such a declaration at boot, which is where you
+would actually meet it. And there is no `/kiosk/query` and no `/kiosk/run`,
+because protocol 0.4 deleted the multiplexed pair outright.
 
 **3. Declare the read verbs in a controller**
 

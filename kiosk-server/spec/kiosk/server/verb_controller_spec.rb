@@ -585,10 +585,12 @@ RSpec.describe Kiosk::Server::VerbController do
       # The two RESERVED endpoints are still literally drawn…
       expect(paths).to include("/schema(.:format)", "/pay(.:format)")
       # …and the multiplexed pair is not drawn at all: not as a route, not as
-      # a tombstone. The only thing that can match those paths now is the
-      # constrained per-verb pair at the bottom of the table.
+      # a tombstone. Since T-183 nothing in this table can match those paths
+      # either — the engine's own set carries no dynamic segment at all, and an
+      # unregistered name is answered by {VerbRefusalController} through the
+      # tail pair the engine appends to the HOST's route set.
       expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
-      expect(paths.last(2)).to eq(["/:kiosk_verb(.:format)", "/:kiosk_verb(.:format)"])
+      expect(paths.grep(/kiosk_verb/)).to be_empty
     end
 
     it "answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one" do

@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
-# The Rails engine — the one-line adoption surface. A host that puts
+# The Rails engine — THE PROTOCOL PLANE, and only the protocol plane. A host
+# that puts
 #
 #   mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 #
-# in its config/routes.rb gets the ENTIRE shipped surface:
+# in its config/routes.rb gets every path whose shape is the SPEC's rather than
+# the operator's:
 #
 #   * the reserved wire     — GET schema (PUBLIC), POST pay
-#   * the per-verb wire     — GET <query-name>, POST <action-name>
+#   * the OpenAPI document  — GET openapi.json (PUBLIC)
 #   * the kiosk-pop plane   — GET auth/challenge, POST auth/{register,login,revoke}
 #   * JWKS                  — GET .well-known/jwks.json (under the mount)
 #   * KYC attestation       — POST agents/kyc
@@ -15,6 +17,13 @@
 #     unlink endpoints, and the two HTML pages (verify, «Link an assistant»)
 #   * the discovery surface — /agents.txt, /agents.json, /auth.md,
 #     /.well-known/{agent-configuration,kiosk.json,api-catalog}
+#
+# IT DRAWS NO OPERATOR VERB, and that is the T-183 change rather than an
+# omission. The operator writes one explicit route per registered verb in their
+# own `config/routes/kiosk.rb`, GET for a query and POST for an action — see the
+# end of the `routes do` table below for the whole argument, and
+# {VerbController} for the shape of the line. The mount is drawn FIRST in that
+# file, so every protocol path here wins by Rails' own first-match.
 #
 # The discovery routes are ROOT-relative — the agents.txt v1.0 standard and
 # RFC 8615 (.well-known) place them at the origin root, so they cannot live
@@ -25,12 +34,18 @@
 # not to mount. (`isolate_namespace` scopes CONSTANTS, not URLs, so an
 # engine installing root paths on the host is fine.)
 #
-# Hand-drawing the same routes in the host's config/routes.rb remains the
-# documented escape hatch (e.g. for a partial surface). A host that BOTH
-# mounts and hand-draws keeps working: Rails dispatches the FIRST matching
-# route, hand-drawn lines precede everything `routes.append` adds, and for
-# paths under the prefix both the mount and a hand-drawn line reach the
-# same shipped controller either way.
+# Hand-drawing the same protocol routes in the host's config/routes.rb remains
+# possible (e.g. for a partial surface), and nothing shipped here does it any
+# more. A host that BOTH mounts and hand-draws keeps working: Rails dispatches
+# the FIRST matching route, hand-drawn lines precede everything `routes.append`
+# adds, and for paths under the prefix both the mount and a hand-drawn line
+# reach the same shipped controller either way.
+#
+# A path under the mount that this engine does NOT draw falls THROUGH to the
+# host's later routes — the mounted route set answers `X-Cascade: pass` and the
+# host's router carries on — which is what lets an operator draw their own verbs
+# below the mount at all. MEASURED on a booted demo, 2026-09-07: with the mount
+# first, `GET /kiosk/nope/nope` reached a host route drawn after it.
 #
 # The engine also auto-injects HeadersMiddleware into the host stack
 # (initializer below) — that happens on load, mounted or not, and it goes
@@ -276,15 +291,53 @@ module Kiosk
         end
       end
 
+      # THE WIRE'S OWN 404/405 FOR A PATH UNDER THE MOUNT THAT NAMES NO VERB
+      # THIS ORIGIN DRAWS (T-183). Appended to the HOST's route set for the one
+      # property `routes` below cannot give it: it has to come AFTER the
+      # operator's own explicit per-verb lines, and `routes.append` is the only
+      # place that is true — the block runs when the host's set is FINALIZED.
+      #
+      # Drawn inside the engine's own table it would be worse than useless: a
+      # mounted route set that matches answers instead of passing, so a tail
+      # route there would swallow every verb path before the operator's lines
+      # were ever consulted, and the explicit routes would be dead.
+      #
+      # WHAT IT IS NOT is the pair T-183 deleted. {VerbRefusalController} can
+      # only REFUSE — 405 for a name registered as the other kind, 404
+      # `verb_not_found` (with the registry's hint) for a name registered as
+      # neither, and a raise for a name registered as THIS kind, which is a
+      # misconfigured origin rather than a call to serve. Spec Section 8.1 and
+      # Section 9 make both of those statuses MANDATORY of an operator, and an
+      # unregistered name has no explicit route by construction, so without this
+      # the answer would be Rails' own HTML 404 with no `code` for an assistant
+      # to branch on.
+      #
+      # The constraint is {VerbController::NAME_SEGMENT}, the same expression
+      # spec Section 8.1 gives for a verb name, so a path that could never BE a
+      # verb (`/kiosk/Foo`, `/kiosk/nope/nope`) stays a routing 404 and keeps
+      # carrying the Section 3.6 headers through the middleware (K-824).
+      initializer "kiosk-server.verb_refusal_route" do |app|
+        app.routes.append do
+          next unless Kiosk::Server::Engine.mounted_in?(app.routes)
+
+          mount_path = Kiosk.configuration.mount_path
+          get  "#{mount_path}/:kiosk_verb", to: "kiosk/server/verb_refusal#show",
+               constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+          post "#{mount_path}/:kiosk_verb", to: "kiosk/server/verb_refusal#create",
+               constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+        end
+      end
+
       # Everything mount-prefixed. `isolate_namespace` scopes the drawer to
       # the kiosk/server controller namespace, so "wire#schema" resolves to
       # Kiosk::Server::WireController#schema.
       routes do
-        # The two RESERVED wire endpoints. Every OTHER verb is served by the
-        # per-verb pair at the bottom of this table, so these two are drawn
-        # here for one reason only: they are the wire's own, not the
-        # operator's, and drawing them first is what makes them unshadowable
-        # (see the per-verb block below).
+        # The two RESERVED wire endpoints. They are drawn here for one reason:
+        # they are the wire's OWN, not the operator's — their paths and their
+        # answers are the spec's — and this table is where the protocol plane
+        # lives. The operator's verbs are not here at all (see the end of this
+        # table); the mount is drawn FIRST in their routes file, so every line
+        # here wins over anything they write by Rails' own first-match.
         #
         # `pay` is drawn unconditionally: a host with no payment_provider
         # answers it with the wire's own 403 ("no payment_provider
@@ -302,14 +355,13 @@ module Kiosk
         # (T-074 = A, the hard cut). No DEDICATED route is drawn for either
         # name and no tombstone stands in for one, so an origin serving 0.4
         # has exactly ONE wire surface and exactly one conformance surface.
-        # What a caller still speaking 0.3 actually meets is the constrained
-        # per-verb pair at the bottom of this table (`NAME_SEGMENT` matches
-        # both names): `404 verb_not_found` as an `application/problem+json`
-        # document whose `hint` names the verbs this origin DOES register —
-        # the same answer any unregistered name gets, which is the honest
-        # one, because `query` and `run` are now just names nobody declared
-        # here (K-1112; `engine_routes_spec.rb` and `verb_controller_spec.rb`
-        # assert both halves).
+        # What a caller still speaking 0.3 actually meets is
+        # {VerbRefusalController}, through the tail pair the initializer above
+        # appends to the host: `404 verb_not_found` as an
+        # `application/problem+json` document whose `hint` names the verbs this
+        # origin DOES register — the same answer any unregistered name gets,
+        # which is the honest one, because `query` and `run` are now just names
+        # nobody declared here (K-1112).
         get  "schema", to: "wire#schema"
         post "pay",    to: "wire#pay"
 
@@ -325,10 +377,10 @@ module Kiosk
         get ".well-known/jwks.json", to: "jwks#show"
 
         # The DERIVED OpenAPI description (T-068 slice 4, T-071 = C). Drawn
-        # here, above the per-verb pair, so the literal `.json` path wins by
-        # first-match — `/:kiosk_verb(.:format)` would otherwise swallow it as
-        # the verb `openapi` in the `json` format. It needs no entry in
-        # {HandlerMixin::RESERVED_NAMES}: `openapi.json` is not a legal verb
+        # here, in the mounted table, so the literal `.json` path wins by
+        # first-match over the appended refusal pair, which would otherwise
+        # read it as the verb `openapi` in the `json` format. It needs no entry
+        # in {HandlerMixin::RESERVED_NAMES}: `openapi.json` is not a legal verb
         # name (§8.1 forbids the dot), so no declaration can collide with it,
         # and an operator verb literally called `openapi` stays reachable at
         # `<endpoint>/openapi`. PUBLIC since K-804, on the same terms as
@@ -361,30 +413,42 @@ module Kiosk
         post "auth/assistants/update", to: "assistants#update"
         post "auth/assistants/unlink", to: "assistants#unlink"
 
-        # ── The 0.4 per-verb wire (T-068 slice 1) ─────────────────────────
+        # ── AND NOTHING FOR THE OPERATOR'S OWN VERBS (T-183) ──────────────
         #
-        # One endpoint per registered verb — GET <endpoint>/<query-name>,
-        # POST <endpoint>/<action-name> — served from ONE constrained
-        # single-segment pair that resolves the name against the registry at
-        # request time, exactly as `GET <endpoint>/schema` renders the
-        # descriptors from it. See {VerbController} for why the engine draws
-        # these rather than the operator.
+        # This table ENDS here, and the absence is the design. Until T-183 it
+        # closed with one constrained single-segment pair —
+        # `get "/:kiosk_verb"`, `post "/:kiosk_verb"` — that matched ANY legal
+        # verb name and resolved it against the registry at request time. That
+        # pair is deleted. Phil, 2026-09-07: «Я НЕ СОГЛАСЕН с тем что у нас
+        # должна быть какая-то магия с роутами… Вручную для каждого в routes.»
+        # A mount that draws the PROTOCOL is an ordinary Rails engine; a mount
+        # that draws the OPERATOR'S verbs by pattern is route magic, and it is
+        # magic wherever the pattern is written — the demos spelled the same
+        # pair in their own files and it was no better there.
         #
-        # DRAWN LAST, and that placement is spec §8.3's reserved-name rule
-        # enforced by Rails' own first-match: every route above owns
-        # its first path segment, so an operator who declares a verb called
-        # `schema` or `pay` cannot shadow the wire — the wire answers. A
-        # declaration-time REFUSAL of such a name (so the operator learns at
-        # boot rather than by their verb being unreachable) rides the
-        # descriptor slice with `bin/check-kiosk-names`.
+        # So the operator writes ONE EXPLICIT ROUTE PER VERB, in
+        # `config/routes/kiosk.rb`, with the METHOD FOLLOWING THE KIND — GET
+        # for a query, POST for an action — pinning the name with
+        # `defaults: { kiosk_verb: "<name>" }`. {VerbController} is unchanged
+        # and still reads the name from that parameter; what changed is who
+        # supplies it. `reference/bin/check-verb-routes` derives the expected
+        # list from each origin's own handler controllers and fails on a verb
+        # with no route, a route with no verb, or a method that disagrees with
+        # the kind.
         #
-        # The constraint keeps a path that cannot be a verb name out of the
-        # controller entirely, so it stays a routing 404 rather than becoming
-        # a 401 from the wire.
-        get  "/:kiosk_verb", to: "verb#show",
-             constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
-        post "/:kiosk_verb", to: "verb#create",
-             constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+        # WHAT THE DELETION COSTS, stated rather than implied: a verb added in
+        # development is no longer served on the next reload — the routes file
+        # has to gain a line, which is a routes-file edit Rails does reload.
+        # WHAT IT BUYS: `rails routes` lists the origin's actual wire, and the
+        # method a verb answers to is a fact you can read instead of a fact the
+        # dispatcher decides.
+        #
+        # THE RESERVED PLANE ABOVE IS UNCHANGED AND STILL WINS BY FIRST-MATCH,
+        # because the operator's file draws the mount FIRST and their verbs
+        # after it. That ordering is the backstop, not the control: an operator
+        # verb named `schema` or `pay` is REFUSED AT DECLARATION by
+        # {HandlerMixin::RESERVED_NAMES}, at boot, with the name and the reason
+        # — which is where they actually meet the rule.
       end
     end
   end

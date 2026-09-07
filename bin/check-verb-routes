@@ -1,0 +1,571 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-verb-routes — every registered verb has a route, every route names a
+# registered verb, and the METHOD agrees with the KIND (T-183).
+#
+# WHY THIS EXISTS, and it is a bug class this repository DELETED and then chose
+# to re-create. Through 0.4.12 the engine drew ONE constrained single-segment
+# pair — `get "/:kiosk_verb"`, `post "/:kiosk_verb"` — last in its own table,
+# and {Kiosk::Server::VerbController} resolved the name against the registry at
+# request time. Nothing could fall out of sync because there was nothing to
+# keep in sync, and `bin/check-kiosk-names`' own header said so in as many
+# words. It also meant `rails routes` on an operator's app listed the pair
+# rather than their wire.
+#
+# Phil, 2026-09-07: «Я НЕ СОГЛАСЕН с тем что у нас должна быть какая-то магия с
+# роутами. Сделаем пока по-простому. GET/QUERY для query, POST для run. Вручную
+# для каждого в routes. Во всех демках route'ы - в ОТДЕЛЬНОМ файле, типа
+# config/routes/kiosk.rb» — so the pair is gone and every origin hand-writes one
+# explicit route per verb. The bug class it prevented comes back with it:
+#
+#   * a verb declared and never routed — 404 to every caller, invisible to the
+#     origin's own tests unless one happens to call that verb;
+#   * a route drawn for a name nobody declares — reaches the wire and dies;
+#   * a query routed POST or an action routed GET — a verb that answers the
+#     wrong method, or nothing at all.
+#
+# This script is the replacement for the property that was lost. It DERIVES the
+# expected list — no verb name is typed anywhere in this file — from each
+# origin's own handler controllers, the ones its `config/initializers/kiosk.rb`
+# names in `c.handlers`, which is the same list {Kiosk::Server::HandlerRegistrations}
+# reads at boot. Then it holds `config/routes/kiosk.rb` to it, line by line.
+#
+# ── The nine rules, and what each one is FOR ────────────────────────────────
+#
+#   MOUNTED           the wire file mounts Kiosk::Server::Engine. The protocol
+#                     plane (`schema`, `pay`, auth, JWKS, OpenAPI, the binding
+#                     ceremony, discovery) is not the operator's to write.
+#   MOUNT-FIRST       the mount precedes every verb line. THIS IS THE ORDERING
+#                     PROPERTY the deleted catch-all had for free: Rails
+#                     dispatches the first matching route, so the protocol wins
+#                     over anything an operator writes below it.
+#   NO-PATTERN        no route in the wire file carries a dynamic segment. A
+#                     `:name` or `*splat` under the mount is the catch-all
+#                     spelled in the operator's file, which is the thing T-183
+#                     deleted.
+#   VERB-ROUTED       every declared verb has exactly one route.
+#   ROUTE-DECLARED    every route names a declared verb.
+#   METHOD-KIND       GET for a query, POST for an action.
+#   PATH-IS-NAME      the path is `<mount_path>/<name>` and the
+#                     `defaults: { kiosk_verb: … }` agrees with the segment.
+#                     Two spellings of one name in one line; they must match.
+#   NOT-RESERVED      no verb route collides with a first path segment the
+#                     engine's own table draws. The engine refuses such a
+#                     DECLARATION at boot ({HandlerMixin::RESERVED_NAMES}); this
+#                     is the same rule read off the ROUTES, which is where the
+#                     collision would actually be silent.
+#   DRAWN             `config/routes.rb` reaches the wire file with Rails' own
+#                     `draw(:kiosk)` and draws no kiosk-server wire route of its
+#                     own — the interleaved table T-183 moved out.
+#
+# ── What it deliberately does NOT do ────────────────────────────────────────
+#
+#   * IT DOES NOT BOOT ANYTHING. Both sides are read as text, so it runs on a
+#     bare checkout in about a second, with no database and no bundle — the same
+#     argument bin/check-kiosk-names makes for itself. The cost is that a verb
+#     declared by metaprogramming this parser cannot see is invisible to it; the
+#     parser is the same one bin/check-kiosk-names uses, and (iii) below asserts
+#     that the handler files it read are the handler files the origin ships.
+#   * IT DOES NOT CHECK THE PROTOCOL PLANE'S CONTENTS. That is
+#     bin/check-kiosk-names rule (i) plus kiosk-server's own engine_routes_spec.
+#   * IT SAYS NOTHING ABOUT WHETHER A VERB WORKS. A route that reaches the wire
+#     is all this asserts; the demos' own flow tasks and e2e call them.
+#
+# Usage:  bin/check-verb-routes [--list] [--self-test]
+# Exit:   0 clean, 1 on any violation (or a self-test arm that did not fail).
+
+require "fileutils"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+
+# §8.1: a verb is ONE path segment. Same expression the engine's route
+# constraint and the mixin's NAME_PATTERN carry; read here as text.
+NAME_PATTERN = /\A[a-z][a-z0-9_]*\z/
+
+# A drawn route line in a routes file: `get "/kiosk/menu", to: "x#y", …`.
+ROUTE_LINE = /^\s*(get|post|put|patch|delete|match)\s+"([^"]+)"\s*,\s*to:\s*"([^"]+)"(.*)$/
+MOUNT_LINE = /^\s*mount\s+Kiosk::Server::Engine\s*=>/
+
+# The verb wire's two controller actions, and which kind reaches each.
+VERB_ACTION = { query: "kiosk/server/verb#show", run: "kiosk/server/verb#create" }.freeze
+KIND_METHOD = { query: "get", run: "post" }.freeze
+
+# ── the derivations ────────────────────────────────────────────────────────
+
+# The verbs a handler controller declares, as [wire_name, :query|:action].
+# Identical to bin/check-kiosk-names' parser and for the same reason: a verb is
+# declared by a class-level macro run above the method it binds to, and the
+# `kind` in that run is what decides which registry — and therefore which HTTP
+# method — it belongs to. A run with no `kind` is not a verb, exactly as the
+# mixin refuses to register one.
+def verbs_in(source)
+  return [] unless source.match?(/include\s+Kiosk::Handler\b/)
+
+  out = []
+  previous_end = 0
+  offset = 0
+  while (m = source.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
+    method_name  = m[1]
+    region       = source[previous_end...m.begin(0)].to_s
+    header       = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+    offset       = m.end(0)
+    previous_end = offset
+
+    next unless header.match?(/^[ \t]*(?:kind|description|input_schema|output_schema|wire_name)[ \t]/)
+
+    kind = header[/^[ \t]*kind[ \t]+:(query|action)\b/, 1]&.to_sym
+    next if kind.nil?
+
+    wire = header[/^[ \t]*wire_name[ \t]+"([^"]*)"/, 1] || method_name
+    out << [wire, kind == :action ? :run : :query]
+  end
+  out
+end
+
+# `Kiosk::HotelsController` -> `kiosk/hotels_controller.rb`. Rails' own
+# underscore rule, written out because this script loads no ActiveSupport.
+def controller_file(class_name)
+  class_name.split("::")
+            .map { |part| part.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }
+            .join("/") + ".rb"
+end
+
+# The declared verbs of one origin, read out of the controllers its own
+# initializer names in `c.handlers`. That list is the registry's input, so this
+# is the origin's REGISTERED surface and not merely the files that happen to sit
+# in app/controllers/kiosk.
+def declared_verbs(origin)
+  initializer = File.read(origin[:initializer])
+  names = initializer[/c\.handlers\s*=\s*%w\[([^\]]*)\]/m, 1].to_s.split
+  return [nil, [], "names no `c.handlers`"] if names.empty?
+
+  missing = []
+  verbs = names.flat_map do |class_name|
+    path = File.join(origin[:handler_dir], origin[:flat_handlers] ? File.basename(controller_file(class_name)) : controller_file(class_name))
+    unless File.file?(path)
+      missing << "#{class_name} (expected #{path.sub("#{ROOT}/", '')})"
+      next []
+    end
+    verbs_in(File.read(path))
+  end
+  [names, verbs, missing.empty? ? nil : "names #{missing.join(', ')} in `c.handlers`, which does not exist"]
+end
+
+# The mount path this origin serves its wire at: whatever its initializer sets,
+# or the protocol constant's default. Never a literal in this file.
+def mount_path_for(initializer_source)
+  explicit = initializer_source[/c\.mount_path\s*=\s*"([^"]*)"/, 1]
+  return explicit if explicit
+
+  protocol = File.read(File.join(ROOT, "kiosk-core/lib/kiosk/protocol.rb"))
+  protocol[/DEFAULT_MOUNT_PATH\s*=\s*"([^"]*)"/, 1]
+end
+
+# The first path segments the ENGINE draws under the mount — the protocol plane
+# an operator route may not collide with. Read off engine.rb's own `routes do`
+# block, the same way bin/check-kiosk-names reads it.
+def protocol_segments
+  engine = File.read(File.join(ROOT, "kiosk-server/lib/kiosk/server/engine.rb"))
+  block  = engine[/^      routes do$(.*?)^      end$/m, 1].to_s
+  block.scan(/^\s*(?:get|post|put|patch|delete)\s+"([^"]+)"/)
+       .flatten
+       .map { |path| path.delete_prefix("/").split("/").first.to_s }
+       .uniq.sort
+end
+
+# Every drawn route in a routes file, as [line_index, method, path, target, rest].
+def routes_in(source)
+  source.lines.each_with_index.filter_map do |line, index|
+    next unless (m = line.match(ROUTE_LINE))
+
+    [index, m[1], m[2], m[3], m[4]]
+  end
+end
+
+def mount_line_index(source)
+  source.lines.each_with_index.find { |line, _| line.match?(MOUNT_LINE) }&.last
+end
+
+# The origins this repository ships: the operator demos that configure Kiosk,
+# plus the e2e harness's fixture origin, which is the same wiring by another
+# path. Derived from the tree, so a ninth demo is covered the day it exists.
+def origins(root = ROOT)
+  found = Dir[File.join(root, "kiosk-demo-*/config/initializers/kiosk.rb")].sort.map do |initializer|
+    dir = File.expand_path("../../..", initializer)
+    { label:        File.basename(dir).sub("kiosk-demo-", ""),
+      initializer:  initializer,
+      handler_dir:  File.join(dir, "app/controllers"),
+      flat_handlers: false,
+      routes:       File.join(dir, "config/routes.rb"),
+      wire:         File.join(dir, "config/routes/kiosk.rb"),
+      wire_rel:     "config/routes/kiosk.rb",
+      routes_rel:   "config/routes.rb" }
+  end
+  e2e = File.join(root, "e2e/fixtures/initializer_kiosk.rb")
+  if File.file?(e2e)
+    found << { label:        "e2e",
+               initializer:  e2e,
+               handler_dir:  File.join(root, "e2e/fixtures"),
+               flat_handlers: true,
+               routes:       File.join(root, "e2e/fixtures/routes.rb"),
+               wire:         File.join(root, "e2e/fixtures/routes_kiosk.rb"),
+               wire_rel:     "e2e/fixtures/routes_kiosk.rb",
+               routes_rel:   "e2e/fixtures/routes.rb" }
+  end
+  found
+end
+
+# ── the check ──────────────────────────────────────────────────────────────
+
+def run_check(root)
+  errors  = []
+  listing = []
+  reserved = protocol_segments.select { |seg| NAME_PATTERN.match?(seg) }
+  total_verbs = 0
+  total_routes = 0
+
+  found = origins(root)
+  if found.empty?
+    errors << "VACUITY: no Kiosk origin found under #{root}. This check read nothing, so it " \
+              "would pass whatever the tree said."
+    return [errors, listing]
+  end
+  if reserved.empty?
+    errors << "VACUITY: the engine's `routes do` block yielded no reservable first segment. " \
+              "The NOT-RESERVED rule would then permit any collision at all."
+  end
+
+  found.each do |origin|
+    label = origin[:label]
+    handlers, verbs, complaint = declared_verbs(origin)
+
+    if complaint
+      errors << "#{label}: #{complaint}"
+      next
+    end
+    if verbs.empty?
+      # An origin that configures Kiosk and declares no verb is not an origin
+      # this check can say anything about — and, more to the point, a parser
+      # that has stopped seeing declarations reads exactly like one.
+      errors << "VACUITY (#{label}): #{handlers.join(', ')} declare no verb this parser can see. " \
+                "Every rule below would pass vacuously for this origin."
+      next
+    end
+
+    unless File.file?(origin[:wire])
+      errors << "#{label}: ships no #{origin[:wire_rel]}. Since T-183 the wire surface lives in " \
+                "its own file, reached by Rails' own `draw(:kiosk)`."
+      next
+    end
+
+    wire_source   = File.read(origin[:wire])
+    routes_source = File.file?(origin[:routes]) ? File.read(origin[:routes]) : ""
+    mount_path    = mount_path_for(File.read(origin[:initializer]))
+    drawn         = routes_in(wire_source)
+    verb_routes   = drawn.select { |(_, _, _, target, _)| target.start_with?("kiosk/server/verb#") }
+
+    total_verbs  += verbs.length
+    total_routes += verb_routes.length
+    listing << [label, "#{verbs.length} verbs, #{verb_routes.length} routes, mount #{mount_path}"]
+
+    # MOUNTED + MOUNT-FIRST.
+    mount_at = mount_line_index(wire_source)
+    if mount_at.nil?
+      errors << "#{label}: MOUNTED — #{origin[:wire_rel]} does not mount Kiosk::Server::Engine. " \
+                "The protocol plane (schema, pay, the auth ceremonies, JWKS, OpenAPI, the binding " \
+                "wire, discovery) is drawn by mounting the engine, not by hand."
+    elsif (first_verb = verb_routes.map(&:first).min) && first_verb < mount_at
+      errors << "#{label}: MOUNT-FIRST — #{origin[:wire_rel]} draws a verb route on line " \
+                "#{first_verb + 1}, ABOVE the mount on line #{mount_at + 1}. Rails dispatches the " \
+                "FIRST matching route, so an operator verb drawn above the mount can shadow " \
+                "`schema`, `pay` or the auth plane. That ordering is the whole reason the mount " \
+                "goes first."
+    end
+
+    # NO-PATTERN.
+    drawn.each do |(index, method, path, _target, _rest)|
+      next unless path.include?(":") || path.include?("*")
+
+      errors << "#{label}: NO-PATTERN — #{origin[:wire_rel]}:#{index + 1} draws `#{method} " \
+                "\"#{path}\"`, a route with a DYNAMIC SEGMENT. A pattern under the mount is the " \
+                "catch-all T-183 deleted, spelled in the operator's file; write one explicit " \
+                "route per verb instead."
+    end
+
+    routed = {}
+    verb_routes.each do |(index, method, path, target, rest)|
+      where   = "#{origin[:wire_rel]}:#{index + 1}"
+      segment = path.delete_prefix("#{mount_path}/")
+      pinned  = rest[/defaults:\s*\{\s*kiosk_verb:\s*"([^"]*)"/, 1]
+
+      # PATH-IS-NAME, both halves.
+      if !path.start_with?("#{mount_path}/") || segment.include?("/")
+        errors << "#{label}: PATH-IS-NAME — #{where} draws `#{path}`, which is not " \
+                  "`#{mount_path}/<verb>`. A verb is ONE path segment under this origin's mount " \
+                  "path (§8.1), and #{mount_path} is what its initializer configures."
+        next
+      end
+      if pinned.nil?
+        errors << "#{label}: PATH-IS-NAME — #{where} draws `#{path}` with no " \
+                  "`defaults: { kiosk_verb: … }`. VerbController reads the name from that " \
+                  "parameter; without it the route reaches the wire with no verb at all."
+        next
+      end
+      if pinned != segment
+        errors << "#{label}: PATH-IS-NAME — #{where} draws `#{path}` but pins " \
+                  "`kiosk_verb: \"#{pinned}\"`. The path segment and the pinned name are two " \
+                  "spellings of one verb and they disagree, so the URL serves the other verb."
+        next
+      end
+
+      # NOT-RESERVED.
+      if reserved.include?(segment)
+        errors << "#{label}: NOT-RESERVED — #{where} draws `#{path}`, whose first segment the " \
+                  "ENGINE draws itself. The mount is above this line, so the wire answers and " \
+                  "this route is dead. Reserved: #{reserved.join(', ')}."
+        next
+      end
+
+      declared = verbs.find { |(name, _)| name == segment }
+
+      # ROUTE-DECLARED.
+      if declared.nil?
+        errors << "#{label}: ROUTE-DECLARED — #{where} routes `#{segment}`, which none of " \
+                  "#{handlers.join(', ')} declares. Either the verb was renamed or deleted and " \
+                  "this line was left behind, or the route is a guess: it reaches " \
+                  "VerbController and answers 404 verb_not_found to every caller."
+        next
+      end
+
+      # METHOD-KIND.
+      kind = declared.last
+      if method != KIND_METHOD[kind]
+        errors << "#{label}: METHOD-KIND — #{where} routes `#{segment}` with `#{method}`, but it " \
+                  "is declared `kind :#{kind == :run ? 'action' : 'query'}`, which is " \
+                  "#{KIND_METHOD[kind].upcase}. The method IS the read/write semantics on this " \
+                  "wire (§8.1); a query is a GET at its own path and an action a POST at its own."
+      elsif target != VERB_ACTION[kind]
+        errors << "#{label}: METHOD-KIND — #{where} routes `#{segment}` to `#{target}`; a " \
+                  "#{kind == :run ? 'action' : 'query'} is served by `#{VERB_ACTION[kind]}`."
+      end
+
+      if routed[segment]
+        errors << "#{label}: VERB-ROUTED — `#{segment}` is routed twice, at " \
+                  "#{origin[:wire_rel]}:#{routed[segment] + 1} and at #{where}. One verb is one " \
+                  "path and one method; the second line is unreachable."
+      end
+      routed[segment] = index
+    end
+
+    # VERB-ROUTED.
+    verbs.each do |(name, kind)|
+      next if routed.key?(name)
+
+      errors << "#{label}: VERB-ROUTED — `#{name}` is declared (`kind " \
+                ":#{kind == :run ? 'action' : 'query'}`) and no route reaches it. Add " \
+                "`#{KIND_METHOD[kind]} \"#{mount_path}/#{name}\", to: \"#{VERB_ACTION[kind]}\", " \
+                "defaults: { kiosk_verb: \"#{name}\" }` to #{origin[:wire_rel]}. It is in the " \
+                "catalogue `GET #{mount_path}/schema` publishes, so an assistant will call it."
+    end
+
+    # DRAWN.
+    unless routes_source.match?(/^\s*draw\(:kiosk\)\s*$/)
+      errors << "#{label}: DRAWN — #{origin[:routes_rel]} does not call `draw(:kiosk)`, so " \
+                "#{origin[:wire_rel]} is never read and this origin serves NO Kiosk wire at all."
+    end
+    stray = routes_in(routes_source).select do |(_, _, _, target, _)|
+      target.start_with?("kiosk/server/")
+    end
+    stray.each do |(index, method, path, target, _rest)|
+      errors << "#{label}: DRAWN — #{origin[:routes_rel]}:#{index + 1} still hand-draws " \
+                "`#{method} \"#{path}\" => #{target}`. Every kiosk-server route belongs in " \
+                "#{origin[:wire_rel]}: the protocol plane through the mount, the operator's " \
+                "verbs one explicit line each."
+    end
+  end
+
+  if total_verbs.zero? || total_routes.zero?
+    errors << "VACUITY: read #{total_verbs} declared verbs and #{total_routes} verb routes across " \
+              "#{found.length} origins. A comparison with an empty side proves nothing."
+  end
+
+  [errors, listing]
+end
+
+# ── the self-test ──────────────────────────────────────────────────────────
+#
+# One faithful plant per rule, each run against a throwaway copy of this
+# checkout, each required to come back red NAMING its rule — plus vacuity arms
+# for the two derivations that can silently stop reading (the verb parser and
+# the engine's own route table). A guard nobody has watched fail is a script.
+
+SELF_TEST_CASES = [
+  { rule: "MOUNTED",
+    what: "a demo drops the mount, so its protocol plane is drawn by nothing",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /^mount Kiosk::Server::Engine.*$/, "# (mount removed by the self-test)"],
+    expect: /hoteling: MOUNTED/ },
+  { rule: "MOUNT-FIRST",
+    what: "a verb line is written ABOVE the mount, where it could shadow the wire",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /^mount Kiosk::Server::Engine(.*)$/,
+           "get  \"/kiosk/properties\", to: \"kiosk/server/verb#show\", " \
+           "defaults: { kiosk_verb: \"properties\" }\nmount Kiosk::Server::Engine\\1"],
+    expect: /hoteling: MOUNT-FIRST/ },
+  { rule: "NO-PATTERN",
+    what: "the deleted catch-all is written back into the operator's own file",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /\A/,
+           "get  \"/kiosk/:kiosk_verb\", to: \"kiosk/server/verb#show\"\n"],
+    expect: /hoteling: NO-PATTERN/ },
+  { rule: "VERB-ROUTED (declared, unrouted)",
+    what: "a verb is declared and its route line is missing — the class T-183 re-created",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /^get  "\/kiosk\/properties".*$/, "# (route deleted by the self-test)"],
+    expect: /hoteling: VERB-ROUTED — `properties`/ },
+  { rule: "ROUTE-DECLARED (routed, undeclared)",
+    what: "a route survives a verb rename",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /"\/kiosk\/properties"/, "\"/kiosk/propertys\""],
+    expect: /hoteling: (ROUTE-DECLARED|PATH-IS-NAME)/ },
+  { rule: "METHOD-KIND",
+    what: "a query is routed POST — the mis-declared verb this split exists to expose",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /^get  "\/kiosk\/properties",(\s*)to: "kiosk\/server\/verb#show",/,
+           "post \"/kiosk/properties\",\\1to: \"kiosk/server/verb#show\","],
+    expect: /hoteling: METHOD-KIND/ },
+  { rule: "PATH-IS-NAME",
+    what: "the path and the pinned kiosk_verb drift apart, so the URL serves another verb",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /defaults: \{ kiosk_verb: "properties" \}/,
+           "defaults: { kiosk_verb: \"my_bookings\" }"],
+    expect: /hoteling: PATH-IS-NAME/ },
+  { rule: "NOT-RESERVED",
+    what: "a verb route claims a path the engine draws itself",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /^get  "\/kiosk\/properties",(\s*)to: "kiosk\/server\/verb#show",(\s*)defaults: \{ kiosk_verb: "properties" \}/,
+           "get  \"/kiosk/schema\",\\1to: \"kiosk/server/verb#show\",\\2defaults: { kiosk_verb: \"schema\" }"],
+    expect: /hoteling: NOT-RESERVED/ },
+  { rule: "DRAWN (never reached)",
+    what: "config/routes.rb stops calling draw(:kiosk), so the whole wire file is dead",
+    edit: ["kiosk-demo-hoteling/config/routes.rb", /^  draw\(:kiosk\)$/, "  # draw(:kiosk)"],
+    expect: /hoteling: DRAWN — config\/routes\.rb does not call/ },
+  { rule: "DRAWN (interleaved again)",
+    what: "a kiosk-server route creeps back into the app's own routes file",
+    edit: ["kiosk-demo-hoteling/config/routes.rb", /^  draw\(:kiosk\)$/,
+           "  draw(:kiosk)\n  get \"/kiosk/schema\", to: \"kiosk/server/wire#schema\""],
+    expect: /hoteling: DRAWN — config\/routes\.rb:\d+ still hand-draws/ },
+  { rule: "VACUITY (the verb parser)",
+    what: "the parser stops seeing declarations, so every rule passes with nothing to compare",
+    edit: ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+           /^ *kind :query$/, "  # kind :query"],
+    expect: /VACUITY \(hoteling\)|hoteling: ROUTE-DECLARED/ },
+  { rule: "VACUITY (the engine's route table)",
+    what: "the `routes do` block stops being readable, so NOT-RESERVED reserves nothing",
+    edit: ["kiosk-server/lib/kiosk/server/engine.rb", /^      routes do$/, "      routes() do"],
+    expect: /VACUITY: the engine's `routes do` block/ },
+].freeze
+
+def self_test
+  failures = []
+  Dir.mktmpdir("kiosk-verb-routes") do |tmp|
+    SELF_TEST_CASES.each_with_index do |kase, i|
+      sandbox = File.join(tmp, "case-#{i}")
+      copy_tree(sandbox)
+      rel, pattern, replacement = kase[:edit]
+      path = File.join(sandbox, rel)
+      unless File.file?(path)
+        failures << "#{kase[:rule]}: the plant's file #{rel} is not in the sandbox"
+        next
+      end
+      body = File.read(path)
+      unless body.match?(pattern)
+        failures << "#{kase[:rule]}: the plant no longer matches anything in #{rel} " \
+                    "(#{pattern.inspect}). The fixture has rotted, so this arm proves nothing."
+        next
+      end
+      File.write(path, body.sub(pattern, replacement))
+
+      errors, = with_root(sandbox) { run_check(sandbox) }
+      if errors.empty?
+        failures << "#{kase[:rule]}: PLANTED AND STILL GREEN — #{kase[:what]}"
+      elsif errors.none? { |e| e =~ kase[:expect] }
+        failures << "#{kase[:rule]}: went red but not for its own reason (wanted " \
+                    "#{kase[:expect].inspect}); got: #{errors.first[0, 160]}"
+      end
+    end
+  end
+  failures
+end
+
+# The files this check reads, and nothing else — a sandbox that is cheap to
+# build is a self-test that gets run.
+def copy_tree(sandbox)
+  globs = ["kiosk-core/lib/kiosk/protocol.rb",
+           "kiosk-server/lib/kiosk/server/engine.rb",
+           "kiosk-demo-*/config/initializers/kiosk.rb",
+           "kiosk-demo-*/config/routes.rb",
+           "kiosk-demo-*/config/routes/kiosk.rb",
+           "kiosk-demo-*/app/controllers/kiosk/*.rb",
+           "e2e/fixtures/initializer_kiosk.rb",
+           "e2e/fixtures/routes.rb",
+           "e2e/fixtures/routes_kiosk.rb",
+           "e2e/fixtures/*_controller.rb"]
+  globs.each do |glob|
+    Dir[File.join(ROOT, glob)].each do |src|
+      rel = src.sub("#{ROOT}/", "")
+      dst = File.join(sandbox, rel)
+      FileUtils.mkdir_p(File.dirname(dst))
+      FileUtils.cp(src, dst)
+    end
+  end
+end
+
+# `protocol_segments` and `mount_path_for` read out of ROOT, which is a
+# constant; the sandbox needs them to read out of the copy instead. One
+# re-pointing, in one place, rather than threading a root through every reader.
+def with_root(root)
+  previous = Object.send(:remove_const, :ROOT)
+  Object.const_set(:ROOT, root)
+  yield
+ensure
+  Object.send(:remove_const, :ROOT)
+  Object.const_set(:ROOT, previous)
+end
+
+# ── main ───────────────────────────────────────────────────────────────────
+
+if ARGV.include?("--self-test")
+  failures = self_test
+  if failures.empty?
+    puts "check-verb-routes --self-test: OK — #{SELF_TEST_CASES.length} planted breaks, each red " \
+         "for its own rule."
+    exit 0
+  end
+  warn "\ncheck-verb-routes --self-test FAILED:\n"
+  failures.each { |f| warn "  ✗ #{f}" }
+  exit 1
+end
+
+errors, listing = run_check(ROOT)
+
+if ARGV.include?("--list")
+  listing.each { |(label, value)| puts format("%-14s %s", label, value) }
+end
+
+if errors.empty?
+  routed = listing.sum { |(_, value)| value[/(\d+) routes/, 1].to_i }
+  puts "check-verb-routes: OK — #{routed} explicit verb routes across #{listing.length} origins, " \
+       "each one a verb its own handler controllers declare, with the method its kind requires."
+  exit 0
+end
+
+warn "\ncheck-verb-routes FAILED:\n"
+errors.each { |e| warn "  ✗ #{e}" }
+warn "\nSince T-183 an operator draws ONE explicit route per verb in config/routes/kiosk.rb — GET " \
+     "for a query, POST for an action — below `mount Kiosk::Server::Engine`, which draws the " \
+     "protocol plane. This check derives the expected list from each origin's own handler " \
+     "controllers; nothing about it is typed here."
+exit 1

@@ -631,9 +631,9 @@ if ARGV.include?("--self-test")
     { id: "framework-claim-dropped", kind: :break,
       rule: "Cross-demo PROSE about the FRAMEWORK (K-1069)",
       what: "a sweep rewords one demo's copy of a shared framework claim and not the others",
-      ops:  [[:edit, "kiosk-demo-hoteling/config/routes.rb",
+      ops:  [[:edit, "kiosk-demo-hoteling/config/routes/kiosk.rb",
               "REST endpoints: one per verb, HTTP method = semantics.", "REST endpoints, one per verb."]],
-      expect: /hoteling: config\/routes\.rb does not carry K-1069 claim `one-endpoint-per-verb` verbatim/ },
+      expect: /hoteling: config\/routes\/kiosk\.rb does not carry K-1069 claim `one-endpoint-per-verb` verbatim/ },
 
     { id: "engine-words-it-differently", kind: :break,
       rule: "The HOUSE SENTENCE, where the ENGINE says it too (K-1294)",
@@ -1681,7 +1681,14 @@ SKELETON_NOT_COMPARED = {
   "config/boot.rb" => "Rails generator output, four lines, identical in all eight.",
   "config/environment.rb" => "Rails generator output, five lines, identical in all eight.",
   "config/database.yml" => "Per-demo: each resolves its own KIOSK_<APP>_DB / _DB_USER (deploy/README).",
-  "config/routes.rb" => "Per-demo: each demo's own verbs and pages. The telemetry route IS asserted below.",
+  "config/routes.rb" =>
+    "Per-demo: each demo's own pages, plus the one `draw(:kiosk)` that reaches the wire "\
+    "file beside it. The telemetry route IS asserted below.",
+  "config/routes/kiosk.rb" =>
+    "Per-demo: the mount is identical in all eight and the verb lines are that storefront's "\
+    "own, so the file as a whole is not comparable. Its FRAMEWORK PROSE is compared across "\
+    "demos by the K-1069 block below, and bin/check-verb-routes holds every route line in it "\
+    "to the verbs that demo's own handler controllers declare (T-183).",
   "config/initializers/kiosk.rb" =>
     "Per-demo: capabilities, verbs, PoW policy and adapters differ per storefront. The telemetry " \
     "require and middleware insertion ARE asserted below.",
@@ -2391,7 +2398,7 @@ end
 # must therefore be asserted about the MECHANISM instead. The file count catches
 # a glob that stopped matching or a lexer that stopped running. The comment count
 # catches the pattern itself rotting -- and it cannot drain to zero by accident,
-# because seven `config/routes.rb` copies carry `(T-074 = A)` inside a sentence
+# because seven `config/routes/kiosk.rb` copies carry `(T-074 = A)` inside a sentence
 # FRAMEWORK_CLAIMS holds verbatim in this same script, itself held to the
 # protocol constant's own record of the deletion. Losing that count means the
 # regex broke, not that the tree got tidier.
@@ -2455,7 +2462,8 @@ end
 if demo_id_files.positive? && demo_id_comment.zero?
   errors << "check-demo-copies: the K-1383 ledger-id detector matched NOTHING in #{demo_id_files} demo " \
             "Ruby file(s) — not even a comment. It cannot have drained honestly: seven " \
-            "config/routes.rb copies carry `(T-074 = A)` inside a sentence FRAMEWORK_CLAIMS holds " \
+            "config/routes/kiosk.rb copies carry `(T-074 = A)` inside a sentence FRAMEWORK_CLAIMS " \
+            "holds " \
             "verbatim in this same script. So LEDGER_ID_RE has stopped matching the shape people " \
             "write, and the ban is holding nothing."
 end
@@ -5244,10 +5252,20 @@ E2E_FIXTURES = {
   },
   "routes.rb" => {
     rule: :per_demo,
-    why:  "The generated app's routes: the Kiosk mount, Devise, and the two fixture verbs. Every " \
-          "demo's is that storefront's own. This file IS held on one axis already — it is in the " \
-          "K-1069 framework-prose corpus below, which binds what its comments say about the " \
-          "framework to what the framework does.",
+    why:  "The generated app's own pages: Devise, the K-824 probes, and the one `draw(:kiosk)` " \
+          "that reaches the wire file beside it. Every demo's is that storefront's own. This file " \
+          "IS held on one axis already — it is in the K-1069 framework-prose corpus below, which " \
+          "binds what its comments say about the framework to what the framework does.",
+  },
+  "routes_kiosk.rb" => {
+    rule: :per_demo,
+    why:  "The harness's WIRE, copied by run.sh to config/routes/kiosk.rb — the same split every " \
+          "demo ships since T-183: `mount Kiosk::Server::Engine` for the protocol plane, then one " \
+          "explicit route per registered verb with the method following the kind. `:per_demo` " \
+          "because the verb lines are this origin's own, and the mount line is one line. Held on " \
+          "two axes anyway: its framework prose is in the K-1069 corpus below, and " \
+          "bin/check-verb-routes derives every route line in it from the fixture handler " \
+          "controllers this same directory ships.",
   },
   "seeds.rb" => {
     rule: :per_demo,
@@ -5705,49 +5723,70 @@ end
 # the smaller API-only broker (PROVE_SKELETON above), it has no `before-after.md`
 # at all, and its `config/routes.rb` carries none of the operator wire-surface
 # prose. It is excluded by `ships:`, not by an exception.
-FRAMEWORK_CORPUS_RUBY = ["config/routes.rb"].freeze
+FRAMEWORK_CORPUS_RUBY = ["config/routes.rb", "config/routes/kiosk.rb"].freeze
 FRAMEWORK_CORPUS_TEXT = ["before-after.md"].freeze
 BEFORE_AFTER_FOUR = %w[atablefor getgrocery hoteling skooti].freeze
 
 FRAMEWORK_CLAIMS = {
   "wire-surface-is-the-engine's" => {
-    doc:   "config/routes.rb",
+    doc:   "config/routes/kiosk.rb",
     text:  "Kiosk wire surface (controllers shipped by kiosk-server).",
     ships: OPERATOR_SEVEN + ["e2e"],
     why:   "The one sentence that tells a reader the routes below are NOT this app's code. Eight " \
-           "hand-drawn copies of one framework fact; nothing compared them before this block.",
+           "hand-drawn copies of one framework fact; nothing compared them before this block. " \
+           "T-183 moved the document it lives in — the wire is now its own file — and moved this " \
+           "declaration with it rather than leaving it asserting about the page it left.",
   },
   "one-endpoint-per-verb" => {
-    doc:   "config/routes.rb",
+    doc:   "config/routes/kiosk.rb",
     text:  "REST endpoints: one per verb, HTTP method = semantics.",
     ships: OPERATOR_SEVEN,
-    source: { file: "kiosk-server/lib/kiosk/server/engine.rb",
-              must: %r{get\s+"/:kiosk_verb".*?\n.*?post\s+"/:kiosk_verb"}m },
+    source: { file: "kiosk-server/lib/kiosk/server/verb_controller.rb",
+              must: %r{GET\s+<endpoint>/<query-name>.*?POST\s+<endpoint>/<action-name>}m },
     why:   "K-1069's DEMONSTRATED instance, and the reason this block was commissioned. Measured " \
            "at 4b347592: getgrocery and hoteling carried this line, the other five did not — one " \
            "framework fact at two texts, produced by a fix wave that moved one copy and left the " \
            "others. The e2e fixture is deliberately out: it draws a two-verb fixture wire, not a " \
-           "storefront's, and says so in its own header.",
+           "storefront's, and says so in its own header. The source binding moved at T-183: it " \
+           "used to name the engine's `/:kiosk_verb` pair, which no longer exists — the claim is " \
+           "now bound to the controller that still states the one-endpoint-per-verb shape, and " \
+           "`bin/check-verb-routes` is what holds the demos' actual lines to it.",
   },
   "no-multiplexed-pair" => {
-    doc:   "config/routes.rb",
+    doc:   "config/routes/kiosk.rb",
     text:  "NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the multiplexed " \
-           "pair outright (T-074 = A). Every verb is its own endpoint; the pair that serves them " \
-           "is drawn LAST, at the bottom of this file.",
+           "pair outright (T-074 = A). Every verb is its own endpoint, and its own line below.",
     ships: OPERATOR_SEVEN,
     source: { file: "kiosk-core/lib/kiosk/protocol.rb", must: /T-074 = A/ },
     why:   "The retired-wire fact, in the file an integrator copies. Seven copies of a sentence " \
-           "about the PROTOCOL, held to the protocol constant's own record of the deletion.",
+           "about the PROTOCOL, held to the protocol constant's own record of the deletion. The " \
+           "sentence lost its «the pair that serves them is drawn LAST» tail at T-183, because " \
+           "there is no pair any more — every verb is a line somebody wrote.",
   },
-  "mount-is-the-escape-hatch" => {
-    doc:   "config/routes.rb",
-    text:  "hand-draws its routes rather than mounting the engine (that IS the escape hatch the " \
-           "engine documents)",
+  "mount-draws-the-protocol-plane" => {
+    doc:   "config/routes/kiosk.rb",
+    text:  "THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way.",
     ships: OPERATOR_SEVEN + ["e2e"],
     source: { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /app\.routes\.append/ },
-    why:   "The sentence K-1068 put in all eight files to REPLACE the false «in a follow-up " \
-           "release these will be mounted». It is the positive form of the claim, so it is what " \
-           "must be present; the false form is banned by `routes-drawer-is-not-future-work` below.",
+    why:   "T-183 REVERSED the sentence this slot used to hold. Every one of these files said it " \
+           "«hand-draws its routes rather than mounting the engine (that IS the escape hatch the " \
+           "engine documents)» — true when K-1068 put it in all eight, false the moment they all " \
+           "mounted. Phil's split is by whose surface it is: the protocol plane through the " \
+           "mount, the operator's verbs one explicit line each. The source binding is unchanged " \
+           "and still the strong half — `routes.append` is how the engine installs the " \
+           "root-relative half of that plane, so a mount that stopped doing it fails here.",
+  },
+  "mount-is-drawn-first" => {
+    doc:   "config/routes/kiosk.rb",
+    text:  "THE MOUNT IS DRAWN FIRST",
+    ships: OPERATOR_SEVEN + ["e2e"],
+    source: { file: "kiosk-server/lib/kiosk/server/handler_mixin.rb", must: /RESERVED_NAMES\s*=\s*%w\[/ },
+    why:   "The ORDERING PROPERTY the deleted catch-all used to give for free: the reserved plane " \
+           "wins by first-match because the mount is above the operator's verbs. It is a property " \
+           "of a file somebody writes now, so it is stated in all eight of them, held here for " \
+           "agreement, held by `bin/check-verb-routes`' MOUNT-FIRST rule on the routes themselves, " \
+           "and bound to the boot-time refusal that makes the collision unwritable in the first " \
+           "place.",
   },
   "routes-drawer-is-not-future-work" => {
     doc:     :all,
@@ -5762,19 +5801,23 @@ FRAMEWORK_CLAIMS = {
              "the mount-prefixed one. A ban rather than a required sentence, because the defect " \
              "was a sentence that should not exist anywhere rather than one missing somewhere.",
   },
-  "mount-draws-the-table-today" => {
+  "mount-draws-the-protocol-plane-today" => {
     doc:   "before-after.md",
-    topic: /mount(?:ing|s|ed)?\s+the\s+engine|routes\s+drawer|what\s+the\s+mount\s+installs/i,
-    must:  /mount\w*\s+the\s+engine\s+(?:draws|would\s+draw)/i,
+    topic: /mount(?:ing|s|ed)?\s+the\s+engine|routes\s+drawer|what\s+the\s+mount\s+installs|
+            protocol\s+plane\s+is\s+mounted/ix,
+    must:  /PROTOCOL PLANE is\s+MOUNTED/i,
     ships: %w[getgrocery hoteling skooti],
     source: { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /^\s*routes do\s*$/ },
     why:   "The PARAPHRASE half of K-1064, and the one leg `text:` structurally cannot carry: the " \
            "three documents state this fact in three different sentences, so nothing compares " \
-           "them. `topic:` pairs them by SUBJECT and `must:` pins the tense — the mount draws the " \
-           "table now, or would draw it, never will draw it. atablefor is deliberately out of " \
-           "`ships:`: its recipe says «you mount them yourself» and never claims what the mount " \
-           "draws, so the topic does not fire — and if it ever starts making the claim, it fires " \
-           "and is checked like the other three.",
+           "them. `topic:` pairs them by SUBJECT and `must:` pins WHAT the mount draws. T-183 " \
+           "changed the answer and this claim with it: the mount used to draw the whole table " \
+           "including the operator's verbs, and three documents said so; it now draws the PROTOCOL " \
+           "PLANE and the operator writes their verbs by hand, so the old `must:` — «mounting the " \
+           "engine draws the table» — would enforce a sentence that is no longer true. atablefor " \
+           "is deliberately out of `ships:`: its recipe says «you mount them yourself» and never " \
+           "claims what the mount draws, so the topic does not fire — and if it ever starts " \
+           "making the claim, it fires and is checked like the other three.",
   },
   "generator-does-not-touch-routes" => {
     doc:   "before-after.md",
@@ -5857,16 +5900,28 @@ demos.each do |dir|
 end
 e2e_routes = File.join(ROOT, "e2e/fixtures/routes.rb")
 (corpus["e2e"] ||= {})["config/routes.rb"] = framework_prose_ruby(e2e_routes) if File.exist?(e2e_routes)
+# The e2e origin keeps its wire in a fixture of its own, copied to
+# config/routes/kiosk.rb by run.sh — the same file under another path, so it is
+# read under the name the claims name (T-183).
+e2e_wire = File.join(ROOT, "e2e/fixtures/routes_kiosk.rb")
+(corpus["e2e"] ||= {})["config/routes/kiosk.rb"] = framework_prose_ruby(e2e_wire) if File.exist?(e2e_wire)
 
 # A rule with nothing to read passes everything (the K-1021 lesson, and the
 # reason the static-signpost block above counts its pages). These two numbers
 # are the corpus, asserted rather than assumed.
 routes_read = corpus.count { |_, d| d.key?("config/routes.rb") }
+wire_read   = corpus.count { |_, d| d.key?("config/routes/kiosk.rb") }
 ba_read     = corpus.count { |_, d| d.key?("before-after.md") }
 if routes_read != OPERATOR_SEVEN.length + 2 # + prove + the e2e fixture
   errors << "check-demo-copies: the K-1069 corpus read #{routes_read} config/routes.rb, expected " \
             "#{OPERATOR_SEVEN.length + 2} (seven operator demos + prove + e2e/fixtures). A corpus " \
             "that lost a document passes vacuously for it."
+end
+if wire_read != OPERATOR_SEVEN.length + 1 # + the e2e fixture; prove serves no Kiosk wire
+  errors << "check-demo-copies: the K-1069 corpus read #{wire_read} config/routes/kiosk.rb, " \
+            "expected #{OPERATOR_SEVEN.length + 1} (seven operator demos + e2e/fixtures). Since " \
+            "T-183 every framework sentence about the wire lives in THAT file, so a corpus that " \
+            "lost one passes vacuously for the demo whose wire prose nobody is reading."
 end
 if ba_read != BEFORE_AFTER_FOUR.length
   errors << "check-demo-copies: the K-1069 corpus read #{ba_read} before-after.md, expected " \

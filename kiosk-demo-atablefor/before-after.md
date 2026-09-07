@@ -148,7 +148,7 @@ or not a demo names it.
 rails g kiosk:install
 ```
 
-This emits `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `kiosk.*` schema migrations. Run `bin/rails db:migrate` to apply them. The generator does **not** touch your routes; `kiosk-server` ships the wire controllers and you mount them yourself (see `config/routes.rb`).
+This emits `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `kiosk.*` schema migrations. Run `bin/rails db:migrate` to apply them. The generator does **not** touch your routes; `kiosk-server` ships the wire controllers, and `config/routes/kiosk.rb` mounts the protocol plane and draws one explicit route per verb (see that file, reached from `config/routes.rb` by `draw(:kiosk)`).
 
 **3. Declare the read verbs in a controller**
 

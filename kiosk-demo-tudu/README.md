@@ -26,11 +26,13 @@ Demonstrates:
   independently-revocable assistants** (multi-assistant identity).
 - **Attribution in a shared space** — each todo records the AI assistant that added it
   (`created_by_agent_id`): "who added the tent? — Bob's assistant."
-- **`/.well-known/kiosk.json` with `pay` absent** — no `payment_provider`, no
-  `/kiosk/pay` route, no PSP adapter (shared with philslist). The mandate and
-  settlement tables ARE installed and stay empty: every demo runs the same
-  unmodified `kiosk:install`, so the absence of payments here is the absence of
-  a route and a provider, not of schema.
+- **`/.well-known/kiosk.json` with `pay` absent** — no `payment_provider` and no
+  PSP adapter (shared with philslist). `POST /kiosk/pay` is drawn, because the
+  mounted engine draws the whole protocol plane at every origin, and it refuses
+  with the wire's own `403`; nothing advertises it. The mandate and settlement
+  tables ARE installed and stay empty: every demo runs the same unmodified
+  `kiosk:install`, so the absence of payments here is the absence of a provider,
+  not of schema and not of a path.
 - **Full human web UI** (NOT api_only) — the tutorial-plain scaffold (lists,
   todos, invite, the manage-assistants page) is the video centerpiece.
 

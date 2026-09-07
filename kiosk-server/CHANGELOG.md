@@ -6,6 +6,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **BREAKING: the engine no longer routes your verbs — you draw one explicit route per verb (T-183).** `mount Kiosk::Server::Engine` now draws the PROTOCOL PLANE only (`schema`, `pay`, `openapi.json`, JWKS, the `auth/*` ceremonies, the device-grant pair, `agents/kyc`, the binding pages, root discovery). The `get`/`post "<mount>/:kiosk_verb"` pair it used to draw LAST is deleted. Draw the mount first, then `get "/kiosk/<query>", to: "kiosk/server/verb#show", defaults: { kiosk_verb: "<query>" }` and `post "/kiosk/<action>", to: "kiosk/server/verb#create", …` — GET for a query, POST for an action. See the README's «Draw the routes».
+
 - **The vendored PoW schema types a proof's `nonce` relative to `challenge.alg` (K-1410).** It required the Equihash solution object of every proof, so with `validate_requests` on a valid proof from any other backend was a 400 before the gate saw it — while the protocol keeps `alg` open on purpose. Equihash keeps its exact shape; any other `alg` is left to its own backend. The 400's hint follows.
 
 - **`Cursor` publishes the offset as a decimal integer and refuses a cursor it did not issue (K-1403).** BREAKING for a handler that stored the old base64 token: `encode_offset(40)` is now `"40"`, and `decode_offset` raises `Errors::BadRequest` on a present-but-malformed cursor instead of returning the default. An absent or empty cursor is still the first page. A cursor authorizes nothing, so it is not signed — scope your page by the principal, not by the token.
@@ -120,6 +122,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   `enforce_db_role` in kiosk-server's extension. No wire-surface change.
 
 ### Added
+
+- **`Kiosk::Server::VerbRefusalController` and the tail route that reaches it (T-183).** A mounted engine appends a single-segment refusal pair BELOW the host's own routes, so a path under the mount that names no verb you drew still answers the spec's `404 verb_not_found` (with the registry's hint) and a verb called with the other method still answers `405` + `Allow`. It refuses; it never serves — a name registered as the kind asked for raises, naming the route line you did not write.
 
 - **The audit sink — Kiosk offers the trail and stores none of it (K-828).** `c.audit_sink` is a callable an operator sets; it receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike, carrying the action name, the `{user_id, agent_id}` pair, the role, the actor, the outcome, the error class and message, the timestamp — and the ARGUMENTS IN FULL, deliberately unredacted, because the retention policy for an operator's customers' data is not Kiosk's to assume. Default is no sink: nothing is emitted and nothing is written anywhere. Redaction is one call (`ActionEvent#with_arg_types`, `#without_args`), a sink that raises is logged and never fails the action, and emission sits outside the action's transaction so a sink cannot hold one open. Replaces the `kiosk.action_log` writer this release briefly shipped.
 

@@ -29,10 +29,11 @@ RSpec.describe "Kiosk::Server::Engine routes" do
   end
 
   it "draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)" do
-    # Not tombstoned, not 404-with-a-hint — absent from the table. Both names
-    # therefore fall through to the constrained per-verb pair at the bottom
-    # and are resolved against the registry like any other name, which is what
-    # "there is exactly ONE wire surface" means at the routing layer.
+    # Not tombstoned, not 404-with-a-hint — absent from the table. Since T-183
+    # both names reach {VerbRefusalController} through the tail pair the engine
+    # appends to the HOST, and answer the ordinary `verb_not_found` any
+    # unregistered name gets; engine_mount_spec.rb asserts that end to end,
+    # through a booted app, which is the only place the appended route exists.
     routes = Kiosk::Server::Engine.routes
     routes.finalize!
     paths = routes.routes.map { |route| route.path.spec.to_s }
@@ -40,10 +41,8 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     expect(paths).to include("/schema(.:format)", "/pay(.:format)")
     expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
 
-    expect(recognize(:post, "/query"))
-      .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "query")
-    expect(recognize(:post, "/run"))
-      .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "run")
+    expect { recognize(:post, "/query") }.to raise_error(ActionController::RoutingError)
+    expect { recognize(:post, "/run") }.to   raise_error(ActionController::RoutingError)
   end
 
   it "draws the kiosk-pop auth plane" do
@@ -98,23 +97,43 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       .to include(controller: "kiosk/server/assistants", action: "unlink")
   end
 
-  # ── the 0.4 per-verb wire (T-068 slice 1) ────────────────────────────────
+  # ── the 0.4 per-verb wire is NOT here any more (T-183) ───────────────────
 
-  describe "the per-verb wire" do
-    it "draws GET <name> at the query half and POST <name> at the action half" do
-      expect(recognize(:get, "/catalog"))
-        .to include(controller: "kiosk/server/verb", action: "show", kiosk_verb: "catalog")
-      expect(recognize(:post, "/create_order"))
-        .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "create_order")
+  describe "the per-verb wire, which this table deliberately does NOT draw" do
+    it "draws no dynamic segment at all — every path in it is a literal" do
+      # The whole of T-183 at the routing layer. Until 0.4.12 this table ended
+      # with `get "/:kiosk_verb"` / `post "/:kiosk_verb"`, and that pair SERVED
+      # every registered verb. It is gone: the operator writes one explicit
+      # route per verb in their own config/routes/kiosk.rb, GET for a query and
+      # POST for an action, and this table is the PROTOCOL PLANE and nothing
+      # else.
+      routes = Kiosk::Server::Engine.routes
+      routes.finalize!
+      paths = routes.routes.map { |route| route.path.spec.to_s }
+
+      expect(paths).not_to be_empty
+      dynamic = paths.select { |path| path.match?(/[:*][a-z_]/) && !path.include?("(.:format)") }
+      expect(dynamic).to be_empty
+      expect(paths.grep(/kiosk_verb/)).to be_empty
     end
 
-    it "lets EVERY reserved-plane route win by first-match" do
-      # This IS spec §8.3's reserved-name rule, enforced by Rails' own
-      # route ordering rather than by a hand-kept literal list: the per-verb
-      # pair is drawn last, so an operator who declares a verb called
-      # `schema` or `pay` cannot shadow the wire — the wire answers, and the
-      # declaration-time refusal (so they learn at boot) is the descriptor
-      # slice's job.
+    it "leaves an operator verb name unroutable HERE — the mount cascades past it" do
+      # A verb path matches nothing in this set, which is what lets the host's
+      # own explicit line (drawn BELOW the mount) be reached at all: a mounted
+      # route set that does not match answers `X-Cascade: pass` and the host's
+      # router carries on. engine_mount_spec.rb proves the cascade end to end.
+      expect { recognize(:get,  "/catalog") }.to      raise_error(ActionController::RoutingError)
+      expect { recognize(:post, "/create_order") }.to raise_error(ActionController::RoutingError)
+    end
+
+    it "still owns every reserved path, and the mount being drawn FIRST is why" do
+      # This IS spec §8.3's reserved-name rule. It used to be enforced by this
+      # table's own ordering (the per-verb pair drawn last); it is now enforced
+      # by the OPERATOR's file drawing `mount Kiosk::Server::Engine` above their
+      # verbs, so every path here still wins by Rails' first-match.
+      # `bin/check-verb-routes`' MOUNT-FIRST rule is what holds that ordering,
+      # and {HandlerMixin::RESERVED_NAMES} refuses the declaration at boot so
+      # the collision cannot be written in the first place.
       expect(recognize(:get,  "/schema")).to include(controller: "kiosk/server/wire")
       expect(recognize(:post, "/pay")).to    include(controller: "kiosk/server/wire")
     end
@@ -133,23 +152,13 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       expect(recognize(:get,  "/.well-known/jwks.json")).to include(controller: "kiosk/server/jwks")
     end
 
-    it "does not swallow openapi.json as the verb `openapi` in the `json` format" do
-      # `/:kiosk_verb(.:format)` would match it. The derived document's route
-      # is drawn above the pair, so the literal path wins — and an operator
-      # verb literally called `openapi` still answers at `/openapi`, because
-      # the reserved route needs the `.json`.
+    it "draws openapi.json as a literal, and nothing here answers /openapi" do
+      # The `.json` document is the engine's; the bare `openapi` segment is a
+      # legal verb name an operator may declare, and if they do it is THEIR
+      # explicit route that serves it — not anything in this table.
       expect(recognize(:get, "/openapi.json"))
         .to include(controller: "kiosk/server/open_api", action: "show")
-      expect(recognize(:get, "/openapi"))
-        .to include(controller: "kiosk/server/verb", action: "show", kiosk_verb: "openapi")
-    end
-
-    it "leaves a path that cannot be a verb name a routing 404" do
-      # The constraint keeps it out of the controller entirely, so it never
-      # becomes a 401 from the wire.
-      ["/Catalog", "/create-order", "/9lives", "/_hidden"].each do |path|
-        expect { recognize(:get, path) }.to raise_error(ActionController::RoutingError)
-      end
+      expect { recognize(:get, "/openapi") }.to raise_error(ActionController::RoutingError)
     end
   end
 end

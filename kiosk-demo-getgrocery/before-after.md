@@ -226,59 +226,44 @@ rails g kiosk:install
 This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `kiosk.*` schema migrations — the namespace itself, the identity tables (`agents`, `agent_tokens`, `agent_mappings`), `reservations`, `device_authorizations`, the AP2 mandate trail (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`) and `kyc_attributes`, one row per anonymized attribute an attestation granted. Run `bin/rails db:migrate` to apply them.
 
 The generator does **not** touch your routes. `kiosk-server` ships the wire
-controllers; you mount them yourself. Below are the Kiosk route statements this
-demo's `config/routes.rb` actually draws, verbatim and in file order. Only that
-file's own comments are trimmed, plus the lines that have nothing to do with the
-Kiosk wire (`devise_for`, `root`, this demo's own `/kyc/callback` and
-`/admin/orders`, a `/payment/return` landing page and a telemetry route drawn
-only under `KIOSK_TELEMETRY=1`).
+controllers, and the wiring splits by whose surface it is: the PROTOCOL PLANE is
+MOUNTED, and this operator's own VERBS are one explicit route each. Both live in
+`config/routes/kiosk.rb`, which `config/routes.rb` reaches with Rails' own
+`draw(:kiosk)`. That is the whole file below, verbatim and in order — only its
+comments are trimmed. This demo's own non-Kiosk routes (`devise_for`, `root`,
+`/kyc/callback`, `/admin/orders`, the `/payment/return` landing page and a
+telemetry route drawn only under `KIOSK_TELEMETRY=1`) stay in `config/routes.rb`
+and are not part of it.
 
-<!-- derived: snippet | from: config/routes.rb | transform: dedent | abridged: the Kiosk wire lines only, quoted without the routes.draw indent; this demo's own devise/root/admin/telemetry routes and every comment are out -->
+<!-- derived: snippet | from: config/routes/kiosk.rb | abridged: the route statements only; the file's own comments are out -->
 ```ruby
-# config/routes.rb — the wire surface, hand-drawn.
-get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
-post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
-get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
-post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
-post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
-get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
-post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
-post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
-post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
+# config/routes/kiosk.rb
+mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 
-get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
-post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
-post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"
-post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
-post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
-get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
-post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
-
-get "/agents.txt",                        to: "kiosk/server/discovery#agents_txt"
-get "/agents.json",                       to: "kiosk/server/discovery#agents_json"
-get "/.well-known/agent-configuration",   to: "kiosk/server/discovery#agent_configuration"
-get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
-get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
-get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"
-
-get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
-     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
-post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",
-     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
+get  "/kiosk/delivery_slots",      to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "delivery_slots" }
+get  "/kiosk/kyc_status",          to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "kyc_status" }
+get  "/kiosk/my_orders",           to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "my_orders" }
+post "/kiosk/create_order",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "create_order" }
+post "/kiosk/payment_setup",       to: "kiosk/server/verb#create", defaults: { kiosk_verb: "payment_setup" }
+post "/kiosk/request_kyc",         to: "kiosk/server/verb#create", defaults: { kiosk_verb: "request_kyc" }
+post "/kiosk/reschedule_delivery", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "reschedule_delivery" }
 ```
 
-**Every controller in that table is kiosk-server's** — including
-`/.well-known/kiosk.json`, which is `Kiosk::Server::DiscoveryController#kiosk_json`
-rendering the `WellKnown.build_json` document; there is nothing here for an
-operator to implement and no Rack lambda to hand-write. ONE ENDPOINT PER VERB,
-and the HTTP method carries the semantics: a query is a GET whose arguments are
-the query string, an action a POST whose arguments are the JSON body. The
-reserved lines come first so they win by first-match; the per-verb pair is drawn
-LAST. Every registered verb, `pay`, and the public `schema` catalogue are wired
+**One line draws everything the protocol defines** — `schema`, `pay`, the JWKS
+and OpenAPI documents, the `auth/*` ceremonies, the RFC 8628 device-grant pair,
+the link/claim/unlink endpoints, the KYC attestation endpoint getgrocery routes
+but does not implement, and the root-relative discovery surface including
+`/.well-known/kiosk.json`, which is
+`Kiosk::Server::DiscoveryController#kiosk_json` rendering the
+`WellKnown.build_json` document. There is nothing there for an operator to
+implement and no Rack lambda to hand-write. ONE ENDPOINT PER VERB, and the HTTP
+method carries the semantics: a query is a GET whose arguments are the query
+string, an action a POST whose arguments are the JSON body — which is why each
+verb is a line of its own with the method written out. The mount is drawn FIRST,
+so the reserved paths win by first-match and no operator verb can shadow them.
+Every registered verb, `pay`, and the public `schema` catalogue are wired
 end-to-end (AI-assistant self-discovery works — see `rake demo:schema`).
-Mounting the engine draws all of this in one line; the block above is the
-hand-drawn equivalent, kept here because it shows what the mount actually
-installs.
 
 AI assistants call named queries BY NAME — `GET /kiosk/<query-name>` — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the handler and in Actions, with RLS available as optional defense-in-depth.
 

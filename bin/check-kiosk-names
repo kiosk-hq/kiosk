@@ -9,10 +9,12 @@
 #   (i)   the RESERVED list the engine refuses declarations against
 #         ({Kiosk::Server::HandlerMixin::RESERVED_NAMES}) must be exactly the
 #         set of first path segments the engine's own route table draws under
-#         the mount. The engine draws its per-verb pair LAST, so every route
-#         above it wins by first-match — a route added to engine.rb without a
-#         name added to RESERVED_NAMES silently re-opens a name an operator can
-#         declare and never be reached at. That is the check nothing else can
+#         the mount. Every operator draws that table by MOUNTING the engine,
+#         and the mount is the FIRST line of their config/routes/kiosk.rb, so
+#         every route in it wins by first-match over the explicit per-verb lines
+#         below it — a route added to engine.rb without a name added to
+#         RESERVED_NAMES silently re-opens a name an operator can declare and
+#         never be reached at. That is the check nothing else can
 #         make: the mixin cannot read the route table (it is required first),
 #         and the route table cannot read the mixin's list without a cycle.
 #
@@ -36,13 +38,15 @@
 #         mid-sentence on the wire.
 #
 
-# WHAT IT IS NOT. The T-067 design invents this check to catch "declared but
-# unrouted / routed but undeclared". That bug class cannot occur in this
-# implementation at all — the engine resolves a verb name against the registry
-# AT REQUEST TIME from the same registry the descriptors come from, so there is
-# nothing to keep in sync (see {Kiosk::Server::VerbController}). What survives
-# of the design's intent is (i), which is about the RESERVED PLANE rather than
-# about individual verbs, plus the two boot-free readings above.
+# WHAT IT IS NOT, and this paragraph was REWRITTEN by T-183 rather than tuned.
+# It used to say that "declared but unrouted / routed but undeclared" could not
+# occur here, because the engine resolved a verb name against the registry at
+# request time. That was true while the engine drew one catch-all pair; the pair
+# is deleted, the operator now writes one explicit route per verb, and the bug
+# class is back and REAL. `bin/check-verb-routes` is the check for it — it
+# derives each origin's route list from that origin's own handler controllers
+# and holds the routes file to it, method and all. This script stays what it
+# always was: the RESERVED PLANE (i) plus the two boot-free readings above.
 #
 # Usage:  bin/check-kiosk-names [--list]
 # Exit:   0 OK, 1 on any violation.

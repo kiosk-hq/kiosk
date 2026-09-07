@@ -177,12 +177,18 @@ module Kiosk
       NAME_PATTERN = /\A[a-z][a-z0-9_]*\z/
 
       # `RESERVED_NAMES` are the first path segments the ENGINE itself draws
-      # under the mount, above the per-verb pair. Rails' first-match already
-      # protects them — an operator verb called `schema` is shadowed, never
-      # shadowing — but being silently unreachable is a worse answer than a
-      # boot-time refusal that says which name is taken and why. `.well-known`
-      # is drawn too and is deliberately absent: it cannot match NAME_PATTERN,
-      # so no declaration can collide with it.
+      # under the mount, and since T-183 this list is the PRIMARY control rather
+      # than a courtesy. Rails' first-match still protects those paths — the
+      # operator draws the mount FIRST in config/routes/kiosk.rb and their own
+      # verb routes after it, so a verb called `schema` is shadowed, never
+      # shadowing — but that ordering is now a property of a file somebody
+      # writes rather than of a table the engine controls end to end, and being
+      # silently unreachable was always a worse answer than a boot-time refusal
+      # that says which name is taken and why. THIS is where an operator meets
+      # the rule: an `ArgumentError` as the class body loads, naming the class,
+      # the method and the taken name. `.well-known` is drawn too and is
+      # deliberately absent: it cannot match NAME_PATTERN, so no declaration can
+      # collide with it.
       #
       # `bin/check-kiosk-names` holds this list against the engine's own route
       # table, so a route added there without a name added here fails the build
@@ -403,8 +409,9 @@ module Kiosk
           if HandlerMixin::RESERVED_NAMES.include?(name)
             raise ArgumentError,
               "#{where} declares the Kiosk verb #{name.inspect}, which is RESERVED: the engine " \
-              "draws #{Kiosk.configuration.mount_path}/#{name} itself, and that route wins by " \
-              "first-match — the verb would never be reached. Reserved: " \
+              "draws #{Kiosk.configuration.mount_path}/#{name} itself, and the mount is drawn " \
+              "before your own routes, so that route wins by first-match — the verb would never " \
+              "be reached. Reserved: " \
               "#{HandlerMixin::RESERVED_NAMES.join(", ")}. Give it a `wire_name` of its own."
           end
 

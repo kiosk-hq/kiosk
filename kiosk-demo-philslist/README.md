@@ -37,7 +37,10 @@ Demonstrates:
   (`GET /kiosk/browse_listings`, `GET /kiosk/my_listings`,
   `POST /kiosk/post_listing`, `POST /kiosk/edit_listing`,
   `POST /kiosk/close_listing`) beside the public `GET /kiosk/schema` — and
-  deliberately **no `/kiosk/pay` route**
+  **deliberately no payments**: philslist configures no `payment_provider`, so
+  `pay` is absent from `capabilities`, from `agents.json` and from `agents.txt`,
+  and `POST /kiosk/pay` — which the mounted engine draws at every origin, because
+  the path is the protocol's — refuses with the wire's own `403`
 - App-layer data isolation on an **owned resource**: any principal may
   `browse_listings` across all sellers, but `my_listings` /
   `edit_listing` / `close_listing` are scoped to

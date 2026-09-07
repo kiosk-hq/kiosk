@@ -531,7 +531,7 @@ namespace :demo do
         { scooter_code: "SK-001" },
         q_token,
       )
-      abort "RUN6 reserve failed (#{rsv_rc}): #{rsv_data.inspect}" unless rsv_rc == 200
+      abort "RUN 3 reserve failed (#{rsv_rc}): #{rsv_data.inspect}" unless rsv_rc == 200
       q_reservation_id = rsv_data["reservation_id"]
       puts "  Reserved: #{q_reservation_id}"
 

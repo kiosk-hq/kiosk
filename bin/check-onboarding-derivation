@@ -163,6 +163,12 @@ CORE_GEMSPEC = "kiosk-core/kiosk-core.gemspec"
 # The one place either published repository states publication status and the
 # canonical install form; the page points at it and must agree with it (K-1319).
 MONOREPO_README = "README.md"
+# The rescue seam the page teaches under «raise what you would raise anyway»,
+# and the file holding the sentences it renders INSTEAD of the exception's own
+# (K-1341). Two files because the two halves of that fact live apart: the mixin
+# decides WHETHER the message travels, `errors.rb` decides WHAT does.
+SERVER_HANDLER_MIXIN = "kiosk-server/lib/kiosk/server/handler_mixin.rb"
+SERVER_ERRORS        = "kiosk-server/lib/kiosk/server/errors.rb"
 
 PAGE_URL      = "https://kiosk.tech/onboarding.html"
 PAGE_BASENAME = "onboarding.html"
@@ -240,7 +246,20 @@ end
 # Strip Ruby comments and the contents of double-quoted strings, so a `{` in a
 # description sentence cannot be mistaken for a hash brace. Bytes are replaced
 # rather than removed, so every index still lines up with the original.
+# Memoised: `masked` is a pure function of its input, and the self-test runs
+# every rule once per arm — thirty-odd times over the same handful of sources.
+# Without this the char-by-char walk below is re-run several hundred times and
+# the arm suite takes minutes instead of seconds.
+MASK_CACHE = {}
+
 def masked(src)
+  cached = MASK_CACHE[src]
+  return cached if cached
+
+  MASK_CACHE[src] = masked!(src)
+end
+
+def masked!(src)
   out    = src.dup
   i      = 0
   len    = out.length
@@ -911,6 +930,301 @@ def rule_install_source(page, sources)
         bad.empty? ? "derived from #{MONOREPO_README}" : "#{bad.length} without it: #{bad.map(&:strip).join(" | ")}")
 end
 
+# ── K-1341 / K-1344 derivations ─────────────────────────────────────────────
+
+# The rescue seam's body: `def kiosk_rescue_to_wire` down to its own `end`, by
+# indentation. Read off the MASKED copy for structure and returned from the
+# ORIGINAL, the same discipline every reader above uses.
+def rescue_seam_body(src)
+  mask = masked(src)
+  # `[ \t]*` and NOT `\s*`: `masked` blanks a comment to SPACES, so the
+  # forty-line header above this def is whitespace in the mask and a `\s*`
+  # that crosses newlines matches at the top of it -- which makes `indent` a
+  # multi-line blob and the closing `end` unfindable. Measured: the first
+  # writing of this reader answered VACUOUS on a seam that is plainly there.
+  at   = mask.index(/^[ \t]*def kiosk_rescue_to_wire\b/)
+  return nil if at.nil?
+
+  indent = mask[at..].match(/\A([ \t]*)def/)[1]
+  stop   = mask.index(/^#{indent}end$/, at + 1)
+  return nil if stop.nil?
+
+  src[at..stop]
+end
+
+# The class the seam re-raises UNTOUCHED — `raise exception if
+# exception.is_a?(X)`. That class is the operator's deliberate route to the
+# assistant, so the page must name it; deriving it means a rename in the engine
+# reddens the page rather than leaving a stale class name published.
+def reraised_class(seam)
+  return nil if seam.nil?
+
+  m = seam.match(/raise\s+\w+\s+if\s+\w+\.is_a\?\(([A-Z][A-Za-z0-9_:]*)\)/)
+  m && m[1]
+end
+
+# Every sentence `Errors.rescued_wire` gives the CALLER in place of the
+# exception's own, as {code => hint}. Ruby's adjacent-string continuation is
+# joined, because that is how the constant is written and a half-sentence would
+# never match a page.
+def rescued_hints(src)
+  body = src[/RESCUED_HINTS\s*=\s*\{(.*?)\}\.freeze/m, 1]
+  return {} if body.nil?
+
+  out = {}
+  body.scan(/"([a-z_]+)"\s*=>\s*((?:"(?:[^"\\]|\\.)*"\s*\\?\s*)+),/m) do |code, literal|
+    out[code] = literal.scan(/"((?:[^"\\]|\\.)*)"/).flatten.join
+  end
+  out
+end
+
+# R13 -- the page teaches «raise what you would raise anyway»; the engine no
+# longer publishes what that raise SAID, and the page must carry both halves
+# of that (K-1341, closing K-1310's blast radius one repository over).
+#
+# THE DEFECT THIS CLOSES: after K-1310 the rescue seam renders
+# {Errors.rescued_wire}'s sentence and hint for the code it decided, and sends
+# the exception's class, message and backtrace to the operator's log instead of
+# the wire. The page's paragraph stayed ACCURATE — it only ever claimed the
+# STATUS maps to a code — and stopped being COMPLETE: an operator reading it
+# learned the raise-and-map recovery and not that the sentence they raised with
+# is dropped, nor that rendering the envelope or raising a Kiosk error class is
+# how they speak to the assistant on purpose. `kiosk-server/README.md` gained
+# exactly that split in the same wave and the published page did not.
+#
+# TWO DERIVED HALVES, because either alone is half the instruction:
+#   WHAT ARRIVES INSTEAD  one of {Errors::RESCUED_HINTS}' sentences, verbatim.
+#   THE DELIBERATE ROUTE  the class the seam re-raises untouched, by name.
+#
+# AND A THIRD STATE THAT IS NEITHER: if the seam ever renders the exception's
+# own message again, this rule's subject is gone and the page's paragraph
+# becomes FALSE rather than merely incomplete. That is reported as VACUOUS —
+# red, naming itself — so the page is re-decided rather than quietly held to a
+# fact that stopped being one.
+def rule_error_redaction(page, sources)
+  seam = rescue_seam_body(sources[:handler_mixin])
+  return vacuous!("ERROR_REDACTION", "no `def kiosk_rescue_to_wire` in #{SERVER_HANDLER_MIXIN}") if seam.nil?
+
+  if seam.match?(/\w+\.message/)
+    return vacuous!("ERROR_REDACTION",
+                    "#{SERVER_HANDLER_MIXIN}'s rescue seam renders an exception's own `.message` again, so " \
+                    "there is no redaction for the page to teach -- the page's paragraph is now FALSE and " \
+                    "this rule must be re-decided, not deleted")
+  end
+
+  klass = reraised_class(seam)
+  return vacuous!("ERROR_REDACTION", "#{SERVER_HANDLER_MIXIN}'s seam re-raises no class untouched") if klass.nil?
+
+  hints = rescued_hints(sources[:server_errors])
+  return vacuous!("ERROR_REDACTION", "no RESCUED_HINTS map in #{SERVER_ERRORS}") if hints.empty?
+
+  # The page may quote any ONE of them -- it teaches one worked refusal, not
+  # the whole table -- but it must quote one exactly, or it is paraphrasing a
+  # sentence this engine sends.
+  quoted = hints.select { |_code, hint| page.include?(hint) }
+  # `Errors::Base` is the ancestor the seam tests; an operator raises a
+  # SUBCLASS, so the page is held to the namespace and either spelling passes.
+  needle = klass.sub(/::Base\z/, "")
+  named  = page.include?(needle)
+
+  bad = []
+  bad << "the page quotes none of the #{hints.size} `RESCUED_HINTS` sentences the wire sends in place of " \
+         "the exception's own" if quoted.empty?
+  bad << "the page never names #{needle}, the class #{SERVER_HANDLER_MIXIN}'s seam re-raises untouched -- " \
+         "so it does not say how an operator speaks to the assistant deliberately" unless named
+
+  check("ERROR_REDACTION",
+        bad.empty?,
+        "the page carries the redaction split: #{quoted.keys.sort.join(", ")} hint(s) quoted verbatim, " \
+        "#{needle} named",
+        bad.empty? ? "derived from #{SERVER_HANDLER_MIXIN} + #{SERVER_ERRORS}" : bad.join(" | "))
+end
+
+# The JSON Schema assertion keywords a property declaration can carry. This
+# list is the STANDARD's vocabulary, not a fact about this repository -- what
+# is derived is which of them getgrocery actually uses, on which property, with
+# what value, and a keyword nobody declares contributes nothing.
+ASSERTION_KEYWORDS = %w[format pattern enum const minimum maximum exclusiveMinimum
+                        exclusiveMaximum multipleOf minLength maxLength minItems
+                        maxItems uniqueItems].freeze
+
+# A property's OWN assertion keywords, as {keyword => value-as-written}.
+# DEPTH 1 ONLY: `items:`'s body contains the element schema, whose `qty` has a
+# `maximum` of its own, and reading that as the array's would compare two facts
+# that are not the same fact -- the identical shape `top_level_required` exists
+# for one macro up.
+KEYWORD_AT = /\G([a-zA-Z]+):[ \t]*/
+
+def property_assertions(src, base)
+  mask  = masked(src)
+  out   = {}
+  property_body_ranges(mask, base).each do |name, body|
+    pairs = {}
+    depth = 0
+    i     = body.first
+    while i <= body.last
+      c = mask[i]
+      if ["{", "["].include?(c)
+        depth += 1
+      elsif ["}", "]"].include?(c)
+        depth -= 1
+        break if depth.zero? && i > body.first
+      elsif depth == 1 && (i.zero? || mask[i - 1] =~ /[\s{,]/) &&
+            # `\G` anchors the match AT `i` without slicing the string: the
+            # first writing sliced `mask[i..body.last]` on every character,
+            # which is quadratic and made the self-test take minutes.
+            (m = KEYWORD_AT.match(mask, i)) && ASSERTION_KEYWORDS.include?(m[1])
+        pairs[m[1]] = assertion_value(src[(i + m[0].length)..body.last])
+      end
+      i += 1
+    end
+    out[name] = pairs
+  end
+  out
+end
+
+# The value as WRITTEN, so `maximum: 6` and `maximum: WireArguments::MAX_INT4`
+# stay distinguishable. A bracketed value is read to its matching `]` (an
+# `enum: ["a", "b"]` has a comma inside it); anything else runs to the comma or
+# the end of the line.
+def assertion_value(text)
+  return "" if text.nil?
+
+  if text.start_with?("[")
+    depth = 0
+    i     = 0
+    while i < text.length
+      depth += 1 if text[i] == "["
+      if text[i] == "]"
+        depth -= 1
+        break if depth.zero?
+      end
+      i += 1
+    end
+    text[0..i]
+  else
+    text[/\A[^,\n]*/].to_s.strip
+  end
+end
+
+# A value this page could have written for itself. A Ruby constant
+# (`UuidCheck::JSON_SCHEMA_PATTERN`) is not: the page teaches a standalone
+# controller and has no such constant to name, so its absence there is a
+# simplification rather than drift, and the rule counts it instead of
+# asserting on it.
+def literal_assertion?(value)
+  value.match?(/\A("|\d|-|\[|true\b|false\b)/)
+end
+
+def demo_property_assertions(sources, verb)
+  [sources[:storefront], sources[:orders]].each do |src|
+    mask  = masked(src)
+    decl  = declaration_range(mask, verb)
+    next if decl.nil?
+
+    range = input_schema_range(mask, decl)
+    next if range.nil?
+
+    return property_assertions(src, range)
+  end
+  nil
+end
+
+def page_property_assertions(ruby, verb)
+  mask  = masked(ruby)
+  decl  = declaration_range(mask, verb)
+  return nil if decl.nil?
+
+  range = input_schema_range(mask, decl)
+  return nil if range.nil?
+
+  property_assertions(ruby, range)
+end
+
+# R14 -- every property both sides declare carries the same VALIDATION
+# KEYWORDS, so the page cannot publish a shape the origin does not perform
+# (K-1344).
+#
+# THE DEFECT THIS CLOSES: the page declared `format: "date"` on `delivery_date`
+# for both write verbs where getgrocery declares no `format` there at all --
+# deliberately, because that argument is parsed with `Date.parse` and a bare
+# "20260101" is published behaviour on that verb pair (K-1324). MEASURED with
+# json_schemer 2.5.0, which asserts `format` by default: the page's schema
+# refuses "20260101" with a wire 400 before the handler runs, and the handler
+# the page shows beside it is written to accept it. So an operator copying the
+# page shipped a schema stricter than its own handler and than the reference.
+# Eleven rules preceded this one and not one compared a property's KEYWORDS.
+#
+# TWO DIRECTIONS, and they are not symmetrical:
+#   OVER   the page declares a keyword (or a different value) getgrocery does
+#          not -- the K-1344 shape, and the one that REFUSES real input.
+#   UNDER  getgrocery declares a keyword whose value is a JSON literal and the
+#          page omits it -- a copied schema looser than the origin.
+# UNDER is scoped to literals ON PURPOSE: getgrocery writes
+# `pattern: UuidCheck::JSON_SCHEMA_PATTERN`, a constant belonging to a class the
+# page's standalone controller does not have, so requiring it there would be red
+# for a difference that is not drift. Those are COUNTED AND PRINTED on every
+# run rather than asserted -- an honest number beats a rule someone switches off.
+def rule_property_keywords(page, sources)
+  shared = shared_verbs(page, sources)
+  return vacuous!("PROPERTY_KEYWORDS", "no verb is declared on both sides") if shared.empty?
+
+  ruby      = page_ruby(page)
+  pairs     = []            # [verb, prop, demo_assertions, page_assertions]
+  derived   = 0
+  shared.each do |verb|
+    demo = demo_property_assertions(sources, verb)
+    mine = page_property_assertions(ruby, verb)
+    next if demo.nil? || mine.nil?
+
+    (demo.keys & mine.keys).sort.each do |prop|
+      derived += demo[prop].size
+      pairs << [verb, prop, demo[prop], mine[prop]]
+    end
+  end
+
+  if pairs.empty? || derived.zero?
+    return vacuous!("PROPERTY_KEYWORDS",
+                    "no property shared by #{shared.sort.join(", ")} carries a JSON Schema assertion " \
+                    "keyword on getgrocery's side, so there is nothing to hold the page to")
+  end
+
+  bad        = []
+  uncomparable = []
+  pairs.each do |verb, prop, demo, mine|
+    (mine.keys - demo.keys).sort.each do |kw|
+      bad << "#{verb}.#{prop} declares #{kw}: #{mine[kw]}, which getgrocery does not declare at all"
+    end
+    (mine.keys & demo.keys).sort.each do |kw|
+      next if mine[kw] == demo[kw]
+
+      if literal_assertion?(demo[kw]) && literal_assertion?(mine[kw])
+        bad << "#{verb}.#{prop} declares #{kw}: #{mine[kw]} where getgrocery declares #{demo[kw]}"
+      else
+        uncomparable << "#{verb}.#{prop}.#{kw} (getgrocery writes #{demo[kw]})"
+      end
+    end
+    (demo.keys - mine.keys).sort.each do |kw|
+      if literal_assertion?(demo[kw])
+        bad << "#{verb}.#{prop} omits #{kw}: #{demo[kw]}, which getgrocery declares"
+      else
+        uncomparable << "#{verb}.#{prop}.#{kw} (getgrocery writes #{demo[kw]})"
+      end
+    end
+  end
+
+  detail = bad.empty? ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_ORDERS}" : bad.join(" | ")
+  unless uncomparable.empty?
+    detail += "; #{uncomparable.size} keyword(s) NOT compared, getgrocery's value is a Ruby constant " \
+              "the page cannot name: #{uncomparable.join(", ")}"
+  end
+  check("PROPERTY_KEYWORDS",
+        bad.empty?,
+        "#{pairs.size} shared propert(ies) across #{shared.size} verb(s) carry getgrocery's keywords " \
+        "(#{derived} keyword(s) derived)",
+        detail)
+end
+
 RULES = [
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
@@ -924,6 +1238,8 @@ RULES = [
   [:rule_install_source,     "INSTALL_SOURCE",      "derivation", "the install source qualifier the monorepo README declares canonical"],
   [:rule_write_required,     "WRITE_REQUIRED",      "derivation", "the input_schema `required:` list of every verb both sides declare"],
   [:rule_item_shape,         "ITEM_SHAPE",          "ban",        "indexing an element of a declared array-of-objects without checking it is a Hash"],
+  [:rule_error_redaction,    "ERROR_REDACTION",     "derivation", "what the rescue seam sends INSTEAD of the exception's own message, and the class it re-raises untouched"],
+  [:rule_property_keywords,  "PROPERTY_KEYWORDS",   "derivation", "the JSON Schema assertion keywords getgrocery declares on every property both sides declare"],
 ].freeze
 
 def load_sources
@@ -933,7 +1249,9 @@ def load_sources
     getgrocery_init: repo_read(GETGROCERY_INITIALIZER),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
-    readme:          repo_read(MONOREPO_README) }
+    readme:          repo_read(MONOREPO_README),
+    handler_mixin:   repo_read(SERVER_HANDLER_MIXIN),
+    server_errors:   repo_read(SERVER_ERRORS) }
 end
 
 def run_rules(page, sources)
@@ -950,7 +1268,7 @@ def run_list
   puts
   puts "Derivation sources:"
   [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
-   SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README].each do |rel|
+   SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
     puts "  #{File.exist?(File.join(ROOT, rel)) ? "present" : "MISSING"}  #{rel}"
   end
   0
@@ -1015,6 +1333,11 @@ def derived_facts(sources)
     arrays: (array_of_object_param_names(sources[:storefront]) |
              array_of_object_param_names(sources[:orders])).to_a.sort,
     getgrocery: handler_names(sources[:getgrocery_init]).first,
+    # K-1341: the rescue seam itself, and the sentences it sends in place of
+    # the exception's own. Both derived, so a reworded hint or a renamed class
+    # reddens the arm rather than leaving it matching a string nobody sends.
+    seam:  rescue_seam_body(sources[:handler_mixin]),
+    hints: rescued_hints(sources[:server_errors]),
     rails: rails_floor(sources[:server_gemspec]),
     ruby: ruby_floor(sources[:core_gemspec]),
     install: canonical_install_source(sources[:readme]) }
@@ -1088,7 +1411,7 @@ def run_self_test
   f       = derived_facts(sources)
   if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? ||
      f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil? ||
-     f[:orders_schemas].empty? || f[:arrays].empty?
+     f[:orders_schemas].empty? || f[:arrays].empty? || f[:seam].nil? || f[:hints].empty?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -1113,6 +1436,40 @@ def run_self_test
   write_anchor = f[:orders_schemas].values.map(&:first).flatten
                                    .find { |n| all_required.count { |l| l.include?(n) } == 1 }
   array_param  = f[:arrays].first
+
+  # K-1341's two halves, both read off the live engine.
+  errors_ns      = reraised_class(f[:seam]).to_s.sub(/::Base\z/, "")
+  redaction_hint = f[:hints].values.find { |h| page.include?(h) } || f[:hints].values.first
+
+  # K-1344's plant coordinates, derived from the live pair rather than typed:
+  #   KW_OVER   a property BOTH sides declare on which getgrocery asserts
+  #             nothing -- the only place a page-side keyword is unambiguously
+  #             one getgrocery does not have.
+  #   KW_VALUE  a keyword and literal value getgrocery uses SOMEWHERE, so the
+  #             plant is a real keyword of this schema family and not a token.
+  #   KW_UNDER  a literal-valued keyword both sides carry, for the direction a
+  #             one-sided rule would miss.
+  kw_over = kw_under = kw_value = nil
+  ruby_now = page_ruby(page)
+  shared_verbs(page, sources).each do |verb|
+    d = demo_property_assertions(sources, verb)
+    m = page_property_assertions(ruby_now, verb)
+    next if d.nil? || m.nil?
+
+    d.each_value { |as| as.each { |k, v| kw_value ||= [k, v] if literal_assertion?(v) } }
+    (d.keys & m.keys).sort.each do |prop|
+      kw_over ||= [verb, prop] if d[prop].empty? && m[prop].empty?
+      d[prop].each do |kw, v|
+        kw_under ||= [verb, prop, kw, v] if literal_assertion?(v) && m[prop][kw] == v
+      end
+    end
+  end
+  if errors_ns.empty? || redaction_hint.nil? || kw_over.nil? || kw_under.nil? || kw_value.nil?
+    warn "self-test cannot derive its K-1341/K-1344 plants: " \
+         "errors_ns=#{errors_ns.inspect} hint=#{redaction_hint.inspect} " \
+         "over=#{kw_over.inspect} under=#{kw_under.inspect} value=#{kw_value.inspect}"
+    return 1
+  end
 
   puts "── planted breaks (page side) ──"
   arms = []
@@ -1160,6 +1517,25 @@ def run_self_test
   # indexes a declared array of objects.
   arms << self_test_arm("the #{array_param} element-shape guard removed",
                         page.gsub("is_a?(Hash)", "respond_to?(:[])"), sources, "ITEM_SHAPE")
+  # K-1341's shape, both halves: the page paraphrases the sentence the wire
+  # actually sends, and the page stops naming the deliberate route.
+  arms << self_test_arm("the quoted #{errors_ns.split("::").last} hint paraphrased",
+                        page.sub(redaction_hint, "check your arguments and try again."),
+                        sources, "ERROR_REDACTION")
+  arms << self_test_arm("the page stops naming #{errors_ns}",
+                        page.gsub(errors_ns, "a Kiosk error"), sources, "ERROR_REDACTION")
+  # K-1344's shape: a property BOTH sides declare gains a keyword getgrocery
+  # does not, so the page publishes a stricter shape than the origin performs.
+  arms << self_test_arm("#{kw_over[0]}.#{kw_over[1]} gains #{kw_value[0]}: #{kw_value[1]}",
+                        page.sub(/(#{Regexp.escape(kw_over[1])}:\s*\{\s*type:\s*"[a-z]+")/,
+                                 "\\1, #{kw_value[0]}: #{kw_value[1]}"),
+                        sources, "PROPERTY_KEYWORDS")
+  # And the other direction, which a "the page is too strict" rule alone would
+  # not reach: a literal keyword getgrocery declares, dropped from the page.
+  arms << self_test_arm("#{kw_under[0]}.#{kw_under[1]} loses #{kw_under[2]}: #{kw_under[3]}",
+                        page.sub(/(#{Regexp.escape(kw_under[1])}:\s*\{[^}]*?),\s*#{kw_under[2]}:\s*#{Regexp.escape(kw_under[3])}/) {
+                          Regexp.last_match(1)
+                        }, sources, "PROPERTY_KEYWORDS")
 
   puts "── vacuity (derivation side blanked) ──"
   arms << self_test_arm("generator template loses its c.handlers example", page,
@@ -1208,6 +1584,17 @@ def run_self_test
   arms << self_test_arm("getgrocery declares no array-of-objects parameter", page,
                         sources.merge(storefront: sources[:storefront].gsub('type: "array"', 'type: "string"'),
                                       orders: sources[:orders].gsub('type: "array"', 'type: "string"')), "ITEM_SHAPE")
+  arms << self_test_arm("the engine's RESCUED_HINTS map is emptied", page,
+                        sources.merge(server_errors: sources[:server_errors]
+                          .sub(/RESCUED_HINTS\s*=\s*\{.*?\}\.freeze/m, "RESCUED_HINTS = {}.freeze")),
+                        "ERROR_REDACTION")
+  # Renaming the keywords rather than deleting them keeps the declarations
+  # parseable, so the rule reaches its own vacuity test instead of failing
+  # earlier for an unrelated reason.
+  dekeyword = ->(src) { src.gsub(/\b(#{ASSERTION_KEYWORDS.join("|")}):/) { "x#{Regexp.last_match(1)}:" } }
+  arms << self_test_arm("getgrocery asserts no JSON Schema keyword anywhere", page,
+                        sources.merge(storefront: dekeyword.call(sources[:storefront]),
+                                      orders: dekeyword.call(sources[:orders])), "PROPERTY_KEYWORDS")
 
   FAILURES.clear
   puts

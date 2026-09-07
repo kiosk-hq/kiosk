@@ -95,11 +95,11 @@ class Kiosk::OrdersController < ActionController::API
     end
   end
 
-  # create_order — the flagship verb; see {CreateOrderOperation} for the six
-  # gates. The principal comes from the identity the wire resolved, so `user_id`
-  # is NOT a declared input — and because `input_schema` closes the object
-  # (`additionalProperties: false`) and is validated on every call, a forged one
-  # is refused with a typed 400 naming it rather than silently ignored.
+  # create_order — the flagship verb; see {CreateOrderOperation} for the gates it
+  # enumerates. The principal comes from the identity the wire resolved, so
+  # `user_id` is NOT a declared input — and because `input_schema` closes the
+  # object (`additionalProperties: false`) and is validated on every call, a
+  # forged one is refused with a typed 400 naming it rather than silently ignored.
   kind :action
   description "Create a grocery order for the authenticated principal, or REPLACE an unpaid one in " \
               "place — which is how a human changes their mind before any money moves. Delivery is " \

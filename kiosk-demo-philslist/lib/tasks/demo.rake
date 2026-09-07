@@ -89,11 +89,10 @@ def philslist_boot_server(log:, port:, extra_env: {})
     sleep 1
   end
   unless ready
-    # K-712e: reap the server WE spawned before leaving. The abort used to fire
-    # here with `pid` known only to this method — every caller registers its
+    # Reap the server WE spawned before leaving. Every caller registers its
     # cleanup on the value this method RETURNS, so on a readiness failure the
-    # `rails s` outlived the run and held the port against the next one. The
-    # caller's own `ensure`/`at_exit` cannot help: it never received a pid.
+    # caller's own `ensure`/`at_exit` has no pid to kill — without this kill the
+    # `rails s` outlives the run and holds the port against the next one.
     begin
       Process.kill("TERM", pid)
       Process.wait(pid)
@@ -168,11 +167,11 @@ namespace :demo do
     log  = "/tmp/kiosk-philslist-isolation.log"
     db   = "kiosk_philslist_development"
 
-    # The two seeded humans behind the two assistants (db/seeds.rb). Since
-    # T-104 the driver EARNS each principal through the shipped ceremony —
-    # register → the human's Devise sign-in → link → claim — so it needs real
-    # credentials, and they travel as env the way demo:binding's do rather than
-    # as literals inside script/isolation_flow.rb.
+    # The two seeded humans behind the two assistants (db/seeds.rb). The driver
+    # EARNS each principal through the shipped ceremony — register → the human's
+    # Devise sign-in → link → claim — so it needs real credentials, and they
+    # travel as env the way demo:binding's do rather than as literals inside
+    # script/isolation_flow.rb.
     alice_email   = "alice@example.com"
     bob_email     = "bob@example.com"
     demo_password = "philslist-demo-password"
@@ -272,8 +271,6 @@ namespace :demo do
     # one the engine minted. `created_by_agent_id` is written from the acting
     # agent (post_listing_operation.rb) and is unwritable from the wire; the id
     # it must equal is the uuid `/auth/register` handed this run's assistant.
-    # Before T-104 a driver chose its own agent id, so this column could only
-    # ever agree with the driver's own literal.
     db_agent = `psql -X -d #{db} -tAc "SELECT created_by_agent_id FROM listings WHERE id = '#{owner_probe_id}'" 2>&1`.strip
     if db_agent == agent_id_b
       puts "  OK  Assertion 5c: DB listings.created_by_agent_id == Bob's MINTED agent id (#{agent_id_b})"
@@ -442,14 +439,14 @@ namespace :demo do
       check.call("link-code redeem binds to the SAME account",       result["link_claim"] == [201, true])
       check.call("assistant 2 sees assistant 1's listing (household)", result["a2_sees_listing"] == true)
       check.call("assistant 2 can EDIT the household listing → 200",  result["a2_edit"] == 200)
-      # 204, not 200: unlink withdrew its undocumented `{ok: true}` body (K-870);
-      # protocol.md §6.2 states the 204 beside link's and claim's responses.
+      # 204, not 200: unlink answers with no body at all — protocol.md §6.2
+      # states the 204 beside link's and claim's responses.
       check.call("unlink assistant 1 → 204 (no body)",               result["unlink"] == 204)
-      # K-835: the TOKEN half of spec §6.3/§15.4, not just the login half —
-      # including a token minted in the same wall-clock second as the unlink,
-      # which used to survive for its full hour. `unlink_same_second` reports
-      # whether the run actually landed inside that aperture; the refusals are
-      # required either way.
+      # The TOKEN half of spec §6.3/§15.4, not just the login half — including a
+      # token minted in the same wall-clock second as the unlink, the case a
+      # strict `iat < watermark` comparison lets through. `unlink_same_second`
+      # reports whether the run actually landed inside that aperture; the
+      # refusals are required either way.
       check.call("assistant 1's held token after unlink → 401",      result["a1_token_after_unlink"] == 401)
       check.call("assistant 1's same-second token after unlink → 401", result["a1_fresh_token_after_unlink"] == 401)
       check.call("…and it cannot WRITE either → 401",                result["a1_fresh_token_write_after_unlink"] == 401)
@@ -534,9 +531,9 @@ namespace :demo do
     port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-redteam.log"
 
-    # The two seeded humans behind the battery's principals (db/seeds.rb): since
-    # T-104 the suite EARNS them through the shipped ceremony instead of writing
-    # tokens down, so it needs credentials, passed as env like demo:binding's.
+    # The two seeded humans behind the battery's principals (db/seeds.rb): the
+    # suite EARNS them through the shipped ceremony instead of writing tokens
+    # down, so it needs credentials, passed as env like demo:binding's.
     alice_email   = "alice@example.com"
     bob_email     = "bob@example.com"
     demo_password = "philslist-demo-password"
@@ -618,16 +615,16 @@ namespace :demo do
     puts "\n── Schema + discovery assertions ──"
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -690,7 +687,7 @@ namespace :demo do
     actions = action_specs.map { |a| a["name"] }
     capabilities = result["discovery_capabilities"] || []
 
-    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL. The flow driver
     # sends no Authorization header, so this status IS the public-access proof.
     if result["schema_status"] == 200
       puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
@@ -699,8 +696,8 @@ namespace :demo do
       puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
 
-    # THE MODULE SET, at its one remaining home: `schema` published a
-    # byte-identical copy as `verbs` until T-095 dropped it.
+    # THE MODULE SET, at its ONE home: `kiosk.json` `capabilities`. There is
+    # no second copy of it under `schema.verbs` that could drift out of step.
     %w[schema queries actions].each do |v|
       if capabilities.include?(v)
         puts "  ✓  capabilities includes #{v}"
@@ -720,7 +717,7 @@ namespace :demo do
       end
     end
 
-    # Actions: post/edit/close (NO flag_listing — cut).
+    # Actions: post/edit/close (there is no flag_listing).
     %w[post_listing edit_listing close_listing].each do |a|
       if actions.include?(a)
         puts "  ✓  schema.actions includes #{a}"
@@ -742,7 +739,7 @@ namespace :demo do
       end
     end
 
-    # T-042 / K-452: the primary read query (browse_listings) and primary action
+    # The primary read query (browse_listings) and primary action
     # (post_listing) advertise the machine-readable descriptor extensions.
     {
       query_specs  => %w[browse_listings],
@@ -790,7 +787,7 @@ namespace :demo do
       puts "  ✓  agents.txt carries NO `Protocols: ap2` / `Payments:` directives"
     end
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`

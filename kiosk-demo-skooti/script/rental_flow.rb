@@ -128,14 +128,13 @@ price_per_min_eur = format("€%.2f", price_per_min.to_i / 100.0)
 
 STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min_eur}/min"
 
-# ── Step 3b: payment_setup — the card check that MUST precede pay (K-1327) ───
+# ── Step 3b: payment_setup — the card check that MUST precede pay ────────────
 #
 # skooti publishes `payment_setup` and its own descriptor says «The assistant
 # should call this before `pay`», which is also the canonical skill's Step 5.
-# Until K-1327 no driver here ever called it: the verb was declared, served, and
-# asserted PRESENT in /kiosk/schema by a catalogue check, so its poll cadence,
-# its stop condition and its ready payload were never executed in CI or
-# anywhere. A presence assertion is not a behaviour assertion.
+# It is DRIVEN here rather than merely declared: a presence assertion in
+# /kiosk/schema is not a behaviour assertion, and only a real call exercises the
+# poll cadence, the stop condition and the ready payload.
 #
 # UNCONDITIONAL, outside the SKIP_PAY branch below, and that is the point: the
 # question this verb answers is «does THIS PRINCIPAL have a card on file», a

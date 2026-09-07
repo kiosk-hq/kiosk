@@ -46,9 +46,8 @@ PASSWORD = ENV.fetch("HOLDER_PASSWORD")
 #
 # ONE mechanism, shared: script/devise_session.rb holds the cookie jar, the CSRF
 # read and the sign-in POST for every demo, and bin/check-demo-copies keeps the
-# copies byte-identical. Each driver used to carry its own copy of that jar —
-# five of them, free to drift, exactly the way script/equihash_register.rb drifted
-# in three of five. These wrappers keep this driver's call sites unchanged.
+# copies byte-identical. Five hand-copied jars would be five things free to
+# drift. These wrappers keep this driver's call sites unchanged.
 require_relative "devise_session"
 
 SESSION = DeviseSession.new(SERVER)

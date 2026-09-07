@@ -103,12 +103,12 @@ rescue ArgumentError, TypeError
 end
 assert(refused_int, "a non-string slot (12345) is refused, not read as a date")
 
-# ── 4. THE PUBLISHED EXAMPLE INSTANT IS ON THE SALON'S CLOCK (K-1350) ─────
+# ── 4. THE PUBLISHED EXAMPLE INSTANT IS ON THE SALON'S CLOCK ───────────────
 #
 # {BookAppointmentOperation.example_slot} is the one instant this demo publishes
 # as «copy this» — the catalog's `example_params`/`example_row` and both `slot`
-# refusals read it. It used to render 14:00 UTC, which no guard refuses and no
-# caller misresolves; what it demonstrated was a clock the salon does not keep.
+# refusals read it. Rendering it in UTC would break no guard and misresolve for
+# no caller; it would simply demonstrate a clock the salon does not keep.
 #
 # WATCHED FAIL: put `(Time.current + 7.days).utc.change(hour: 14).iso8601` back
 # and the wall-clock assertion goes red under both TZ values (16 in summer, 15

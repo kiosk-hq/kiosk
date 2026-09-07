@@ -6,16 +6,15 @@
 # `scooter_code` is not accepted from the client at all: it is derived
 # server-side from the reservation row, which prevents a cross-vehicle unlock.
 #
-# THE GATES, IN THIS ORDER, and the order is behaviour rather than tidiness —
+# The gates, in this order, and the order is behaviour rather than tidiness —
 # each one is the answer a caller gets when a later one would also have refused:
 #   1.  the reservation exists, belongs to the principal, and is still reserved
 #   1b. the reserved vehicle is licence-FREE — a needs_licence motorcycle is
-#       refused here and sent to rent_motorcycle (K-687)
+#       refused here and sent to rent_motorcycle
 #   2.  the principal has a settled payment for THIS reservation
 #
-# Licence-free scooters need NO KYC (K-442, decided 2026-08-04) — "ride
-# even if you can't walk yet, just pay the fare". Gate 1b is what keeps that a
-# statement about SCOOTERS.
+# Licence-free scooters need NO KYC — "ride even if you can't walk yet, just
+# pay the fare". Gate 1b is what keeps that a statement about SCOOTERS.
 #
 # No `transaction` block: the call already runs inside the ONE SessionContext
 # transaction the wire opened — that is where the GUCs the ownership predicate
@@ -35,13 +34,13 @@ class StartRentalOperation
     scooter, refusal = RentalGates.vehicle_for(reservation, missing_message: "scooter not found for reservation")
     return refusal if refusal
 
-    # ── Gate 1b: the reserved vehicle must be licence-FREE (K-687) ─────────
+    # ── Gate 1b: the reserved vehicle must be licence-FREE ─────────────────
     # The exact inverse of rent_motorcycle's Gate 2, and the reason it must
     # exist: the two verbs share one reservations table, so without it an agent
     # reserves the KYC-gated motorcycle and activates it with the licence-free
     # verb, bypassing the age_over_18 + licence_a gate. {Scooter#licence_free?}
     # is the fail-closed coercion, the SAME predicate rent_motorcycle reads in
-    # the other direction, so no reading of the column opens both doors (K-724).
+    # the other direction, so no reading of the column opens both doors.
     #
     # It fires BEFORE the payment gate: an agent that reserved the wrong vehicle
     # is told to change VERB, not told to pay first and refused afterwards.
@@ -57,7 +56,7 @@ class StartRentalOperation
     end
 
     # ── Gate 2: THIS principal has PAID for THIS reservation ───────────────
-    # Capture-anchored, not settlement-anchored (K-853) — see RentalGates.
+    # Capture-anchored, not settlement-anchored — see RentalGates.
     refusal = RentalGates.payment_refusal(reservation_id)
     return refusal if refusal
 

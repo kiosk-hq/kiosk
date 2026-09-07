@@ -4,10 +4,10 @@
 # `listing_id`, and the refusal an owner-scoped UPDATE earns when it touches no
 # row — expressed once, as REFUSALS rather than as rendered responses.
 #
-# WHY THE SHAPE GUARD EXISTS (K-581/K-582, K-654): ActiveRecord does not refuse
-# a malformed uuid, it CASTS it to NULL, which matches no row — so without this
-# check a typo would read as an OWNERSHIP refusal (403) rather than a shape one
-# (400). A well-formed but foreign id still gets the 403.
+# Why the shape guard exists: ActiveRecord does not refuse a malformed uuid, it
+# CASTS it to NULL, which matches no row — so without this check a typo would
+# read as an OWNERSHIP refusal (403) rather than a shape one (400). A
+# well-formed but foreign id still gets the 403.
 #
 # It is NOT an Operation: it writes nothing, and there is no access DECISION to
 # put on the model. Ownership is not asked as a predicate at all — it is the ROW

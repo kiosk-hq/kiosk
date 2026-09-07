@@ -10,7 +10,7 @@
 # — an anonymized claim is transferable and the demo settles a nameless hold, so
 # real rental still needs identity, a contract, insurance and a deposit.
 #
-# THE GATES, IN THIS ORDER — Gate 0 first is published behaviour: an un-attested
+# The gates, in this order — Gate 0 first is published behaviour: an un-attested
 # agent is told to get attested even when its `reservation_id` is also missing.
 #   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
 #   1. the reservation exists, belongs to the principal, and is still reserved
@@ -27,7 +27,7 @@ class RentMotorcycleOperation
       return OperationResult.refused(
         code:    "kyc_required",
         message: "motorcycle rental requires KYC attributes age_over_18 and licence_a",
-        # The completable path: no pre-shared issuer key needed (K-440/K-443).
+        # The completable path: no pre-shared issuer key needed.
         hint:    "POST <endpoint>/request_kyc to start age≥18 + category-A licence verification: " \
                  "it returns a verification_url for the human to approve; then poll " \
                  "GET <endpoint>/kyc_status for the signed attestation and submit it to " \
@@ -48,7 +48,7 @@ class RentMotorcycleOperation
     # ── Gate 2: the reserved vehicle IS a needs_licence motorcycle ─────────
     # {Scooter#licence_required?} is start_rental's Gate 1b predicate closed in
     # THIS direction: only a value Rails casts to literal TRUE unlocks one, so an
-    # ambiguous column reading opens neither door rather than both (K-724).
+    # ambiguous column reading opens neither door rather than both.
     unless vehicle.licence_required?
       return OperationResult.refused(
         code:    "bad_request",
@@ -58,7 +58,7 @@ class RentMotorcycleOperation
     end
 
     # ── Gate 3: THIS principal has PAID for THIS reservation ───────────────
-    # Capture-anchored, not settlement-anchored (K-853) — see RentalGates.
+    # Capture-anchored, not settlement-anchored — see RentalGates.
     refusal = RentalGates.payment_refusal(reservation_id)
     return refusal if refusal
 

@@ -6,7 +6,7 @@
 # resolved in app/services/pow_difficulty.rb; the run header prints the live pair
 # rather than this comment naming one) → reserve → pay →
 # start_rental (ownership/licence-free-vehicle/payment gates; licence-free
-# scooters are NOT KYC-gated, K-442).  Headline scenarios:
+# scooters are NOT KYC-gated).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
 #   C3  SpentResourceReuse  — re-start_rental on an active reservation
 #       KYC verifier variants — expired / forged attestation rejected at /kyc
@@ -15,8 +15,7 @@
 #                              KYC-attribute-gated rent_motorcycle stays 403.
 #   MotorcycleViaStartRental — the KYC gate cannot be walked around by VERB:
 #                              reserve(MC-001) → pay → start_rental must be
-#                              refused, not answered with an unlock token
-#                              (K-687 — it was answered with one).
+#                              refused, not answered with an unlock token.
 #   IssuedKycJwsTheft        — a REAL issuer-signed jws minted for victim B via
 #                              the stub-issuer approve page cannot be replayed by
 #                              attacker A (KycVerifier binds sub to the caller),
@@ -33,9 +32,9 @@
 #   HostileArgShapes   — every hostile SHAPE (boolean/array/object/number) on
 #                        scooter_code, reservation_id and request_id is a typed
 #                        400 too — or a 404 for an unknown id on a query, never
-#                        a 500 (K-773). It also carries a control on its own
-#                        ORACLE (T-121): a scooter_code spelling three of the
-#                        leak strings must be BLOCKED, not a BREACH on its echo
+#                        a 500. It also carries a control on its own ORACLE: a
+#                        scooter_code spelling three of the leak strings must
+#                        be BLOCKED, not a BREACH on its echo
 #
 # Two broker beats attack the cross-operator KYC callback:
 #   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
@@ -44,7 +43,7 @@
 #                        rejected, so kyc_status stays pending and the agent 403
 #
 # And two forgery beats at the identity boundary, both over the wire in the
-# SAME environment the drivers run in (T-104):
+# SAME environment the drivers run in:
 #   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
 #                        resolves to NO identity (401), while the genuinely
 #                        bound token is still answered
@@ -52,7 +51,7 @@
 #                        /kiosk/auth/link is 401, while the seeded rider's real
 #                        Devise session is answered
 #
-# And two beats that are only expressible after the 0.4 cutover (T-074 = A):
+# And two beats about the shape of the wire itself:
 #   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
 #                        404 / verb_not_found an AUTHENTICATED caller gets, and
 #                        401 / unauthenticated without a bearer (auth precedes
@@ -85,18 +84,18 @@ require "net/http"
 require "uri"
 require "json"
 
-# ── KYC helpers (redteam-only) — the KYC broker rewire ───────────────────
+# ── KYC helpers (redteam-only) ────────────────────────────────────────────
 #
-# skooti's self-hosted stub KYC issuer retired; the SHARED KYC broker is now
-# the trusted issuer. Valid/expired attestations are minted with the broker's
-# ProveKey (ProveTestIssuer, signing with the key skooti trusts); the forged
+# The SHARED KYC broker is the trusted issuer. Valid/expired attestations are
+# minted with the broker's ProveKey (ProveTestIssuer, signing with the key
+# skooti trusts); the forged
 # variant signs with a DIFFERENT key but the TRUSTED issuer so signature
 # verification is exercised in isolation (an alg:none/weakened-sig regression is
 # caught). None of this weakens the real verification path.
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require_relative "prove_test_issuer"
 require_relative "../app/services/prove_trust"
-# K-1035 — the Equihash params printed in the run header below are READ from the same
+# The Equihash params printed in the run header below are READ from the same
 # plain module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`,
 # config/initializers/kiosk.rb:45), never typed. Loadable outside a Rails boot for
 # exactly the reason ProveTrust is: it is ENV-only, with no Rails dependency.
@@ -137,8 +136,7 @@ end
 
 # The intake secret arrives in this driver's env (the rake task passes the
 # broker wiring through — KIOSK_PROVE_INTAKE_SECRET, the operator side's one
-# role-named variable, K-694); there is no shipped default anywhere any more
-# (K-547/K-650).
+# role-named variable); there is no shipped default anywhere.
 def broker_start_verification(callback_url:, subject_handle:, requested_claims: %w[age_over_18 licence_category:A], operator_id: ProveTrust.operator_id, secret: ENV.fetch("KIOSK_PROVE_INTAKE_SECRET"))
   uri = URI("#{BROKER_URL}/verifications")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{secret}")
@@ -167,15 +165,14 @@ end
 
 profile = Kiosk::Redteam::Profile.new(
   pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (params per KIOSK_POW_DIFFICULTY) and the client solves the real 402 challenge — the numeric value is not an Equihash param
-  requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated (K-442) because it only ever activates licence-free vehicles: since K-687 it REFUSES a needs_licence one instead of quietly unlocking it (MotorcycleViaStartRental)
+  requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated because it only ever activates licence-free vehicles: it REFUSES a needs_licence one instead of quietly unlocking it (MotorcycleViaStartRental)
 
   # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
   # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
   # The claim ceremony's beat must name a role this origin ACTUALLY declares:
-  # an invented one was refused by the vulnerable code too, which is how a
-  # green battery sat on top of K-072 for nineteen days. The scenario also
-  # derives one off the wire, so a stale list here weakens the probe rather
-  # than emptying it.
+  # an invented one is refused by vulnerable code too, so a probe that names
+  # only an invented role cannot fail. The scenario also derives one off the
+  # wire, so a stale list here weakens the probe rather than emptying it.
   declared_roles: %w[customer],
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
@@ -185,7 +182,7 @@ profile = Kiosk::Redteam::Profile.new(
   # Query rows (my_reservations) carry a "reservation_id" field — matching the
   # reserve action response's body["value"]["reservation_id"] and the
   # start_rental/rent_motorcycle param name, so an assistant copies the same
-  # key with no guessing (K-482).
+  # key with no guessing.
   row_id_key:    "reservation_id",
   result_id_key: "reservation_id",
 
@@ -211,12 +208,11 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # ── forge_action / forge_args — ForgedUserId ─────────────────────────────
-  # B calls reserve with user_id: A.user_id injected. Since 0.4 the wire itself
-  # REFUSES it: `reserve` publishes `additionalProperties: false` and declares
-  # only `scooter_code`, so the injected principal is a typed 400 before the
-  # handler runs. (Through 0.3 the argument was accepted and the handler derived
-  # the owner from the GUC instead; the generic scenario accepts either — a 4xx
-  # refusal, or a 200 whose row never surfaces under A.)
+  # B calls reserve with user_id: A.user_id injected. The wire itself REFUSES
+  # it: `reserve` publishes `additionalProperties: false` and declares only
+  # `scooter_code`, so the injected principal is a typed 400 before the
+  # handler runs. The generic scenario accepts either answer — a 4xx refusal,
+  # or a 200 whose row never surfaces under A.
   forge_action: "reserve",
   forge_args:   lambda { |client, principal_a, _principal_b|
     fleet_resp = client.query(principal_a, name: "scooters_available")
@@ -272,7 +268,7 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # ── KYC attestation variants ──────────────────────────────────────────────
-  # Valid/expired minted with the shared broker ProveKey (the key skooti now
+  # Valid/expired minted with the shared broker ProveKey (the key skooti
   # trusts); forged signs with a wrong key under the trusted issuer.
   kyc_valid:   ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
   kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },
@@ -362,12 +358,12 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 end
 
-# A malformed reservation_id must come back as a TYPED 400, never a 500
-# (K-581/K-582). Three surfaces, one guard (UuidCheck): start_rental's and
+# A malformed reservation_id must come back as a TYPED 400, never a 500.
+# Three surfaces, one guard (UuidCheck): start_rental's and
 # rent_motorcycle's `reservation_id` args, and the `{"reservation_id":…}`
 # reference inside a signed cart mandate that the cashier prices at capture.
-# Before the guard, Postgres raised InvalidTextRepresentation on the `::uuid`
-# cast — not a Kiosk error, so it escaped as a raw 500 with the PG message
+# Without the guard Postgres raises InvalidTextRepresentation on the `::uuid`
+# cast — not a Kiosk error, so it escapes as a raw 500 with the PG message
 # attached, and on the PAY path a 500 is the worst possible answer because an
 # assistant cannot tell it from "the charge may have gone through".
 #
@@ -377,12 +373,11 @@ end
 # generic `blocked?` verdict would accept a 403 or a 401 here, so this scenario
 # builds its Verdict directly.
 #
-# Since 0.4 the arg-shaped probes are refused one layer EARLIER — `reservation_id`
-# declares `format: "uuid"` and `input_schema` is validated on every call — so the
-# refusal now comes from the declared contract rather than from UuidCheck inside
-# the handler. Same status, same code, same no-leak property; the guard behind it
-# still stands for anything that reaches it (the signed-cart probe below, which
-# no input_schema covers).
+# The arg-shaped probes are refused by the declared contract — `reservation_id`
+# declares `format: "uuid"` and `input_schema` is validated on every call —
+# rather than by UuidCheck inside the handler. Same status, same code, same
+# no-leak property; the guard behind it still stands for anything that reaches
+# it (the signed-cart probe below, which no input_schema covers).
 #
 # rent_motorcycle is probed too, and it is the interesting one: its KYC-attribute
 # gate runs FIRST, so an un-KYC'd principal gets 403 kyc_required and the uuid
@@ -447,13 +442,13 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   private
 
   # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker (T-121). skooti names the value
-  # it got — `reservation_id "…" is not a uuid` — so the bytes scanned for
+  # leak assertion being decided by the attacker. skooti names the value it
+  # got — `reservation_id "…" is not a uuid` — so the bytes scanned for
   # SQL_INTERNALS are partly the probe's own, and a junk id spelling `PG::`
   # would otherwise be reported as a BREACH on its own echo, under a runner
   # whose prose says a BREACH means "fix the app, not the scenario". The
-  # default is nil, which is the pre-fix oracle exactly: forgetting to declare
-  # risks a FALSE BREACH, never a missed leak.
+  # default is nil, and that default fails SAFE: forgetting to declare risks
+  # a FALSE BREACH, never a missed leak.
   def check(failures, statuses, label, resp, supplied: nil)
     statuses << resp.status
     scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
@@ -484,23 +479,20 @@ end
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 12 generic + 3 local cashier-check beats + the K-581/K-582 malformed-uuid
-# beat; skooti's full surface makes all generic scenarios applicable (0 skips
-# expected). Nine further skooti-local beats run after the runner, below —
-# seven of them, plus the two 0.4-cutover beats (RetiredWire, MethodMismatch).
+# 12 generic + 3 local cashier-check beats + the malformed-uuid beat; skooti's
+# full surface makes all generic scenarios applicable (0 skips expected). Nine
+# further skooti-local beats run after the runner, below — seven of them, plus
+# the two wire-shape beats (RetiredWire, MethodMismatch).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
-# K-773 — THE STANDING HOSTILE-SHAPE BEAT.
+# THE STANDING HOSTILE-SHAPE BEAT.
 #
-# K-773 is the finding that Postgres used to do free shape-checking on wire
-# arguments and ActiveRecord does not — and skooti is the demo where it measured
-# NEGATIVE: its only cast argument, `reservation_id`, was ALREADY uuid-guarded
-# before the conversion (K-581/K-582's {UuidCheck}, which {MalformedUuidArg}
+# Postgres does free shape-checking on wire arguments and ActiveRecord does not
+# — and skooti is the demo where that measures NEGATIVE: its only cast argument,
+# `reservation_id`, is uuid-guarded by {UuidCheck} (which {MalformedUuidArg}
 # stands for), and its other two wire strings — `scooter_code`, `request_id` —
-# were quoted values with no Postgres cast at all, so nothing was ever doing
-# free type-checking on them. That negative is why this beat is SHORT and why it
-# exists anyway: the row asked for the probes to run against ALL THREE converted
-# demos as a standing beat, and "we reasoned there is no exposure here" is
+# are quoted values with no Postgres cast at all. That negative is why this beat
+# is SHORT and why it exists anyway: "we reasoned there is no exposure here" is
 # exactly the kind of claim that stops being true without anyone noticing.
 #
 # WHAT IT ADDS OVER {MalformedUuidArg}, which is the beat next door: that one
@@ -517,7 +509,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   LEAKS = ["::uuid", "PG::", "22P02", "invalid input syntax", "NoMethodError",
            "TypeError", "undefined method", "ActiveRecord::"].freeze
 
-  # The five families the row names, as a string argument can carry them.
+  # The five families of hostile shape, as a string argument can carry them.
   SHAPES = [true, false, [], {}, ["SK-001"], { "code" => "SK-001" }, 1, 1.5].freeze
 
   def initialize
@@ -553,7 +545,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
             client.run(a, name: "reserve", scooter_code: "NO-SUCH-VEHICLE"),
             supplied: "NO-SUCH-VEHICLE"
 
-    # ── NEGATIVE CONTROL FOR THE ORACLE ITSELF (T-121) ────────────────────────
+    # ── NEGATIVE CONTROL FOR THE ORACLE ITSELF ───────────────────────────────
     #
     # Every probe above asserts something about skooti. This one asserts
     # something about the ASSERTION: that a needle reaching the wire ONLY
@@ -607,14 +599,14 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   private
 
   # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker (T-121). `scooter_code` is a
+  # leak assertion being decided by the attacker. `scooter_code` is a
   # bare `{type: "string"}` — the fleet's handles are DB-derived — so every
   # string reaches {ReserveOperation}, whose refusal reads `scooter not found:
   # <the value>`. Without this declaration a probe whose handle spelled `PG::`
   # would be reported as a BREACH on its own echo, under a runner whose prose
   # says a BREACH means "fix the app, not the scenario". The default is nil,
-  # which is the pre-fix oracle exactly: forgetting to declare risks a FALSE
-  # BREACH, never a missed leak.
+  # and that default fails SAFE: forgetting to declare risks a FALSE BREACH,
+  # never a missed leak.
   def refused(label, resp, supplied: nil)
     doc  = resp.body.is_a?(Hash) ? resp.body : {}
     scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
@@ -640,14 +632,13 @@ end
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,     # C2 — headline
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,     # C3
-  # MissingKyc removed (K-442): start_rental (scooter) is no longer KYC-gated,
-  # so "no KYC -> gated action blocked" no longer holds for it. The motorcycle's
-  # missing-KYC block is covered by MotorcycleForgedKyc + kyc_flow A1 — and,
-  # since K-687, by MotorcycleViaStartRental, which is the beat that would have
-  # caught what removing MissingKyc left uncovered: this generic scenario drove
-  # the profile's gated_action (start_rental) against whatever create_owned
-  # reserved, i.e. always a SCOOTER, so no scenario ever pointed start_rental at
-  # the motorcycle until that beat did.
+  # MissingKyc is deliberately NOT registered: start_rental (scooter) is not
+  # KYC-gated, so "no KYC -> gated action blocked" does not hold for it. The
+  # motorcycle's missing-KYC block is covered by MotorcycleForgedKyc + kyc_flow
+  # A1 and by MotorcycleViaStartRental — the generic scenario drives the
+  # profile's gated_action (start_rental) against whatever create_owned
+  # reserved, i.e. always a SCOOTER, so no registered scenario ever points
+  # start_rental at the motorcycle.
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
@@ -659,15 +650,15 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
-  # `/auth/register`, where the role was never client-readable; this covers the
-  # door that WAS open (K-072) — the unauthenticated `device_authorization`
-  # request that opens the account-binding ceremony.
+  # `/auth/register`, where the role is not client-readable; this covers the
+  # UNAUTHENTICATED `device_authorization` request that opens the
+  # account-binding ceremony.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   WrongCurrencyCart.new,                                 # cashier check — currency
   TamperedPriceCart.new,                                 # cashier check — below quote
   InflatedTotalCart.new,                                 # cashier check — total ≠ line sum
-  MalformedUuidArg.new,                                  # K-581/K-582 — junk uuid → typed 400, no 500
-  HostileArgShapes.new,                                  # K-773 — boolean/array/object/number shapes → typed 400
+  MalformedUuidArg.new,                                  # junk uuid → typed 400, no 500
+  HostileArgShapes.new,                                  # boolean/array/object/number shapes → typed 400
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
@@ -680,11 +671,10 @@ EXPECTED_SKIP_NAMES = [].freeze
 
 puts "\n── skooti redteam battery ──"
 puts "  base_url:              #{BASE_URL}"
-# K-1035 — DERIVE THESE TWO LINES, NEVER TYPE THEM.  Both were hand-kept literals
-# restating things the run already holds, 450 lines above and one file over, so a
-# flipped constructor argument or a changed env left the header announcing the old
-# world while the battery attacked the new one — K-710's rot shape, sitting directly
-# above the number K-1033 had just made honest.  What each half now reads:
+# DERIVE THESE TWO LINES, NEVER TYPE THEM.  A hand-kept literal here restates
+# something the run already holds, so a flipped constructor argument or a changed
+# env leaves the header announcing one world while the battery attacks another.
+# What each half reads:
 #   • n / k — `PowDifficulty.params`, the SAME plain module the server initializer
 #     reads into `c.registration_pow_params` (config/initializers/kiosk.rb:45), so
 #     KIOSK_POW_DIFFICULTY=high moves the /register gate and this line together
@@ -703,16 +693,14 @@ puts "  register gate:         Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} 
      "(profile pow_difficulty: #{profile.pow_difficulty} → RegistrationWithoutPow " \
      "#{profile.pow_difficulty > 0 ? %(applicable) : %(SKIPPED)})"
 puts "  requires_kyc:          #{profile.requires_kyc}"
-# K-1033 — SAY WHAT THIS NUMBER COUNTS.  It is `scenarios.size`, i.e. the REGISTRY
-# above, and skooti is the only one of the seven demos that also runs beats OUTSIDE
-# it: the nine one-off lambdas below (`mc_beat` … `self_asserted_user_beat`), which
-# are not `Kiosk::Redteam::Scenario` instances and cannot be registry entries without
-# pretending they are.  getgrocery, hoteling, atablefor, philslist, stylish and tudu
-# push everything through `runner.run(scenarios)`, so their header and their summary
-# agree by construction; skooti's did not, and an unqualified `scenarios: 17` sitting
-# above a `26 BLOCKED` summary in the SAME run read as "nine attacks ran that the
-# header did not admit exist".  Both numbers stay DERIVED — the fix is the labels and
-# the summary's decomposition, never a hand-kept literal, because the count the header
+# SAY WHAT THIS NUMBER COUNTS.  It is `scenarios.size`, i.e. the REGISTRY above,
+# and this suite also runs beats OUTSIDE it: the nine one-off lambdas below
+# (`mc_beat` … `self_asserted_user_beat`), which are not
+# `Kiosk::Redteam::Scenario` instances and cannot be registry entries without
+# pretending they are.  So an unqualified count here would sit above a larger
+# BLOCKED summary in the SAME run and read as attacks the header does not admit
+# exist.  Both numbers stay DERIVED — the labels and the summary's decomposition
+# carry the difference, never a hand-kept literal, because the count the header
 # would need (how many beats will run) does not exist yet at this point in the file.
 puts "  registered scenarios:  #{scenarios.size} (skooti-local beats run after them; the summary counts both)"
 puts ""
@@ -731,14 +719,13 @@ results = runner.run(scenarios)
 # agent mint its own licence and unlock a combustion motorcycle — a real BREACH.
 motorcycle_forged_kyc = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  # K-1035 — NO `pow_difficulty:` HERE, AND NOT IN THE OTHER SIX LOCAL BEATS EITHER.
+  # NO `pow_difficulty:` HERE, AND NOT IN THE OTHER SIX LOCAL BEATS EITHER.
   # The kwarg is INERT: `Client#register!` accepts it and `build_register` never reads
   # it (kiosk-redteam/lib/kiosk/redteam/client.rb:52-57, restated at :253-257), because
-  # PoW is driven entirely off the server’s 402 Equihash challenges. All seven beats
-  # used to type `pow_difficulty: 20` at this call, which READS as a gate being
-  # configured at a call site that configures nothing — so it was dropped rather than
-  # re-derived from the profile, which would have kept the false reading and only
-  # removed the literal. The GENERIC path still threads `profile.pow_difficulty`
+  # PoW is driven entirely off the server’s 402 Equihash challenges. Passing it here
+  # would READ as a gate being configured at a call site that configures nothing, and
+  # re-deriving it from the profile would keep that false reading while removing only
+  # the literal. The GENERIC path still threads `profile.pow_difficulty`
   # (kiosk-redteam/lib/kiosk/redteam/scenario.rb:230): that kwarg is a documented
   # backwards-compat shim for callers already passing it, and scenarios read the
   # profile value directly for APPLICABILITY (RegistrationWithoutPow), which is a real
@@ -804,15 +791,15 @@ mc_beat = motorcycle_forged_kyc.call
 # proves the gate cannot simply be BYPASSED — by calling the other verb.
 #
 # skooti has two rental verbs on one reservations table: start_rental (the
-# licence-free electric scooter, no KYC by design — K-442) and rent_motorcycle
-# (the combustion motorcycle, gated on age_over_18 AND licence_a). Nothing on
-# the wire stops an assistant from reserving the MOTORCYCLE and then activating
-# it with the SCOOTER verb, and until K-687 nothing in start_rental stopped it
-# either: it selected `code` from the vehicle row and never looked at
-# `needs_licence`, so reserve(MC-001) → pay → start_rental returned a signed
-# Ed25519 unlock token for the KYC-gated motorcycle to an agent that had never
-# attested anything. Every KYC driver called start_rental with SK-001 only, so
-# no gate saw it.
+# licence-free electric scooter, no KYC by design) and rent_motorcycle (the
+# combustion motorcycle, gated on age_over_18 AND licence_a). Nothing on the
+# wire stops an assistant from reserving the MOTORCYCLE and then activating it
+# with the SCOOTER verb, and nothing in start_rental would stop it either if it
+# selected `code` from the vehicle row without reading `needs_licence`:
+# reserve(MC-001) → pay → start_rental would return a signed Ed25519 unlock
+# token for the KYC-gated motorcycle to an agent that had never attested
+# anything. No KYC driver calls start_rental with anything but SK-001, so no
+# other beat covers this path.
 #
 # The agent here submits NO attestation at all — that is the point. It reserves
 # and PAYS for MC-001 so nothing but the vehicle-kind check can be what blocks,
@@ -864,7 +851,7 @@ motorcycle_via_start_rental = lambda do
   # settlement" 403 a block. The refusal has to be TYPED — one of the wire
   # vocabulary's client-error codes, never a 5xx — and it has to be THIS gate,
   # which is what naming the other verb proves.
-  # The whole problem document is the refusal now — `detail` and `hint` are its
+  # The whole problem document is the refusal — `detail` and `hint` are its
   # top-level members, so there is no nested `error` object to serialize.
   refusal_text  = JSON.generate(attack.body)
   typed_refusal = [400, 403].include?(attack.status) &&
@@ -913,8 +900,7 @@ mc_verbswap_beat = motorcycle_via_start_rental.call
 # KycVerifier binds `sub` to the authenticated identity, so it rejects (subject
 # mismatch) → A's attributes are never granted → A's rent_motorcycle stays 403
 # kyc_required. A bug that dropped the sub check would let any agent replay
-# someone else's licence — a real BREACH. (Broker-minted now; the sub-binding
-# defense is identical.)
+# someone else's licence — a real BREACH.
 kyc_jws_theft = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 
@@ -981,8 +967,8 @@ theft_beat = kyc_jws_theft.call
 
 # ── broker beat: a claim minted for a DIFFERENT operator is rejected ──────────
 #
-# Cross-operator replay defense, enforced at the DEMO LAYER
-# in skooti's callback (the engine attestation/wire is unchanged). A claim the
+# Cross-operator replay defence, enforced at the DEMO LAYER in skooti's
+# callback. A claim the
 # broker minted addressed to operator "other-operator" (aud/operator) must be
 # rejected when POSTed to skooti's /kyc/callback — skooti only accepts claims
 # addressed to ITSELF. We open a real skooti request (so the request_id/nonce are
@@ -1097,19 +1083,18 @@ end
 
 fcb_beat = forged_callback_no_sig.call
 
-# ── 0.4-cutover beats: the shape of the wire itself ──────────────────────────
+# ── Wire-shape beats: the shape of the wire itself ───────────────────────────
 #
-# Two beats that could not be written before the cutover (T-074 = A), because
-# before it both answers were something else. They share one principal: neither
-# touches the fleet or the reservations table, so nothing is staged and there is
-# nothing for a second identity to isolate.
+# Two beats about the wire rather than about the fleet. They share one
+# principal: neither touches the fleet or the reservations table, so nothing is
+# staged and there is nothing for a second identity to isolate.
 wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
                                    .register!(name: "redteam-wire-shape")
 
 # One raw request, bypassing the redteam Client — the whole point is to dial
 # paths and methods the Client will not construct.
 #
-# `bearer: false` is the ANONYMOUS probe (K-1094) and asks a different question,
+# `bearer: false` is the ANONYMOUS probe and asks a different question,
 # not a weaker version of the same one: the wire resolves the caller BEFORE it
 # looks the verb up, so an unauthenticated request at a retired path is answered
 # 401 and never reaches the registry lookup that produces the 404.
@@ -1130,21 +1115,18 @@ end
 # payload that would keep the 0.3 argument channel alive, and no second
 # conformance surface to attack.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
+# a caller with no bearer never reaches the registry lookup that produces the
+# 404 — it is answered 401 `unauthenticated`, exactly as it would be at any
+# other name.
 #
-# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
-# `run` are NAMES nobody registered, and the vocabulary now reserves
-# `not_found` for an argument that ADDRESSED something absent.
+# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
+# NAMES nobody registered, and the vocabulary reserves `not_found` for an
+# argument that ADDRESSED something absent.
 #
-# A
-# deprecation shim here would be exactly that second surface — and it is the one
-# an attacker would reach for, because it took the verb name from the BODY.
+# A deprecation shim here would be exactly that second surface — and it is the
+# one an attacker would reach for, because it takes the verb name from the BODY.
 retired_wire = lambda do
   probes = %w[query run].flat_map do |name|
     [[true, 404, "verb_not_found", ""], [false, 401, "unauthenticated", " (anon)"]]
@@ -1202,34 +1184,22 @@ end
 
 method_mismatch_beat = method_mismatch.call
 
-# ── SelfAssertedTokenForgery (K-539, restated by T-104) — OVER THE LIVE WIRE ──
-# THE BEAT OUTLIVED ITS TARGET, WHICH IS WHY IT IS STILL HERE. It used to be an
-# IN-PROCESS proof about a door that was only shut in production: skooti shipped
-# a hand-copied composite agent-IdP whose cleartext fallback parsed
-# `agent:u-…:a-…:r-…` into an identity at whatever role the string named, and it
-# was INTENTIONALLY live wherever `Rails.env.local?` — which is exactly the
-# environment demo:redteam boots. So the dev wire could not demonstrate the
-# block, and this beat had to stub `Rails.env` to "production", assert NO
-# identity there, and then assert that development still ACCEPTED the forgery,
-# because every driver depended on it doing so.
+# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
-# T-104 deleted the parser instead of gating it. Agent auth is the engine's own
-# kiosk-pop verifier now — it has no cleartext branch to fall back to in any
-# environment — and no driver wants one, because they all earn a real token
-# through the shipped ceremony. So the beat becomes what it should always have
-# been, exactly as its human sibling below did at T-066: an over-the-wire probe
-# in the SAME environment the drivers run in, with no `Rails.env` anywhere in
-# it and no environment condition in the verdict. A self-asserted bearer
-# resolves to NO identity, unconditionally.
+# Agent auth is the engine's own kiosk-pop verifier: it has no cleartext branch
+# to fall back to in any environment, and no driver wants one, because they all
+# earn a real token through the shipped ceremony. So this is an over-the-wire
+# probe in the SAME environment the drivers run in, with no `Rails.env`
+# anywhere in it and no environment condition in the verdict. A self-asserted
+# bearer resolves to NO identity, unconditionally.
 #
 # The first probe is the STRONGEST form of the attack rather than the easiest:
 # it names a real account and a real agent — `wire_probe`'s, minted by the
 # shipped registration a few lines above — and escalates the role to `owner`,
 # so nothing in the string is invented except the claim that it is a
-# credential. The second is the wholly-made-up one the old beat used. The
-# positive control is the same verb over the same wire with `wire_probe`'s REAL
-# token, so a 401 above is the forgery being refused rather than the surface
-# being down.
+# credential. The second is wholly made up. The positive control is the same
+# verb over the same wire with `wire_probe`'s REAL token, so a 401 above is the
+# forgery being refused rather than the surface being down.
 #
 # Unit proof of the same property, from the other side:
 # kiosk-test-support spec/demo_agent_idp_is_real_spec.rb.
@@ -1275,19 +1245,12 @@ end
 
 self_asserted_beat = self_asserted_token_forgery.call
 
-# ── SelfAssertedUserBearerForgery (K-555 / T-066) — OVER THE LIVE WIRE ────────
-# The HUMAN sibling of the K-539 agent-stub forgery, and it changed shape when
-# the stub it used to attack was deleted.
+# ── SelfAssertedUserBearerForgery — OVER THE LIVE WIRE ───────────────────────
+# The HUMAN sibling of the agent-bearer forgery above.
 #
-# Until T-066 skooti shipped a StubUserIdp that parsed an UNSIGNED, self-asserted
-# `user:u-<uuid>` bearer into a HUMAN identity, live in development so the
-# binding ceremonies could be walked without a real login. The block could only
-# be shown IN-PROCESS, against a stubbed production Rails.env, because the dev
-# wire this suite drives was supposed to accept the forgery.
-#
-# skooti now authenticates humans with real Devise in EVERY environment, so the
-# forgery has no arm to land on and the beat can be what it always should have
-# been: an over-the-wire probe in the SAME environment the drivers run in. A
+# skooti authenticates humans with real Devise in EVERY environment, so an
+# UNSIGNED, self-asserted `user:u-<uuid>` bearer has no arm to land on, and the
+# beat is an over-the-wire probe in the SAME environment the drivers run in. A
 # forged `user:u-<uuid>` bearer at the account-binding surface must resolve to
 # no human at all — POST /kiosk/auth/link answers 401 — and the positive control
 # is the real thing: the seeded rider signs in at /users/sign_in and the SAME
@@ -1395,7 +1358,7 @@ blocked_count = blocked_results.size + local_beats_blocked
 beat_breach   = all_beats.count { |b| !b[:blocked] }
 
 puts ""
-# K-1033 — print the decomposition, so this total and the header's `registered
+# Print the decomposition, so this total and the header's `registered
 # scenarios` are readable as parts of one sum instead of two numbers that disagree.
 # Both halves are the live counts computed immediately above; nothing here is typed.
 if breach_results.empty? && skipped_results.empty? && beat_breach.zero?

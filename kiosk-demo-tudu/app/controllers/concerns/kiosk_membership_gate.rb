@@ -3,7 +3,7 @@
 # THE MEMBERSHIP GUARD tudu's QUERY controller opens with — the rendering half
 # of {ListAccess}, and the only thing in this file that is tudu's alone.
 #
-# WHY IT IS SEPARATE FROM {KioskRefusals} (T-083). Until now this file also held
+# WHY IT IS SEPARATE FROM {KioskRefusals}. This file also holds
 # `render_operation`/`render_refusal` — code the other six demos ship verbatim as
 # `KioskRefusals`, but under a name only tudu used. `bin/check-demo-copies` pairs
 # copies by relative PATH, so tudu's pair was compared to nothing and was free to
@@ -21,7 +21,7 @@
 #
 # Not a Kiosk mechanism and not shipped by the gem — an ordinary Rails concern
 # in the operator's own app, which is the whole point of the mixin design
-# (K-495: the operator owns the structure).
+# (the operator owns the structure).
 module KioskMembershipGate
   extend ActiveSupport::Concern
 
@@ -43,7 +43,7 @@ module KioskMembershipGate
   #
   # The human web UI does NOT come through here: `/lists/:id` consults
   # {ListAccess.check} itself and presents the same refusal as a flash rather than
-  # a rendered body (T-082). Same question, same answer, two presentations —
+  # a rendered body. Same question, same answer, two presentations —
   # which is exactly why the question does not live in a renderer.
   def kiosk_membership_gate(list_id, require_owner: false)
     refusal = ListAccess.check(list_id, require_owner: require_owner)

@@ -5,7 +5,7 @@
 # it: the query handlers directly, the write Operations before they touch a
 # transaction. It writes nothing, so it is not an Operation.
 #
-# Load-bearing under ActiveRecord (K-654): `where(id: junk)` does not raise,
+# Load-bearing under ActiveRecord: `where(id: junk)` does not raise,
 # because ActiveRecord's uuid type quietly casts an unparseable value to NULL,
 # which matches no row — so without this check a typo would be reported as an
 # OWNERSHIP refusal (403) instead of a shape one (400). A well-formed but

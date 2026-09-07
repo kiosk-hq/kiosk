@@ -124,14 +124,13 @@ STDERR.puts "  Reserved: booking_id=#{booking_id} total=#{format("€%.2f", tota
 # Calculate nights for the cart
 nights = (Date.parse(check_out) - Date.parse(check_in)).to_i
 
-# ── Step 4b: payment_setup — the card check that MUST precede pay (K-1327) ─
+# ── Step 4b: payment_setup — the card check that MUST precede pay ───────────
 #
 # This origin publishes `payment_setup` and its own descriptor says «The
 # assistant should call this before `pay`», which is also the canonical skill's
-# Step 5. Until K-1327 no driver here ever called it: the verb was declared,
-# served, and asserted PRESENT in /kiosk/schema by a catalogue check, so its
-# poll cadence, its stop condition and its ready payload were never executed in
-# CI or anywhere. A presence assertion is not a behaviour assertion.
+# Step 5. It is DRIVEN here rather than merely declared: a presence assertion in
+# /kiosk/schema is not a behaviour assertion, and only a real call exercises the
+# poll cadence, the stop condition and the ready payload.
 #
 # UNCONDITIONAL, outside the SKIP_PAY branch below, and that is the point: the
 # question this verb answers is «does THIS PRINCIPAL have a card on file», which

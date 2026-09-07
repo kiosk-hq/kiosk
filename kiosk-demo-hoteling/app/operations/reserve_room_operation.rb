@@ -5,7 +5,7 @@
 # together, in one transaction.
 #
 # An Operation and not a controller method because of what is IN it: a
-# three-part inventory guard (K-690) wrapped in a transaction. The transaction
+# three-part inventory guard wrapped in a transaction. The transaction
 # answers a VALUE; the controller decides what a value looks like on the wire.
 class ReserveRoomOperation
   # @param principal_id [String] the account the wire resolved — NEVER an
@@ -40,7 +40,7 @@ class ReserveRoomOperation
       return OperationResult.refused(code: "bad_request", message: "check_out must be after check_in")
     end
 
-    # K-969: the SAME floor the read verbs apply, so the offer and the sale
+    # The SAME floor the read verbs apply, so the offer and the sale
     # cannot disagree about it — an assistant may name a date it never read from
     # an availability response. See {WireArguments.past_stay} for what «past»
     # means here and why today counts as bookable.
@@ -51,7 +51,7 @@ class ReserveRoomOperation
     total_cents = nights * nightly_price_cents
 
     # A stay whose price does not fit the column is refused here, before the
-    # transaction, rather than crashing on INSERT (K-968).
+    # transaction, rather than crashing on INSERT.
     refusal = WireArguments.priceable_total(total_cents, nights)
     return refusal if refusal
 
@@ -59,7 +59,7 @@ class ReserveRoomOperation
     # the whole request (the GUCs are SET LOCAL in it), so this opens no second
     # one and a `return` out of it is an ordinary method return.
     Booking.transaction do
-      # ── Finite inventory: the room-night must still be free (K-690) ─────────
+      # ── Finite inventory: the room-night must still be free ─────────────────
       # Three parts: this pre-check, which answers a clean 409; a database
       # EXCLUDE constraint that makes the race unrepresentable; and the rescue
       # below, which turns a lost race into the same 409. The predicate is
@@ -92,7 +92,7 @@ class ReserveRoomOperation
         end
 
       # The engine's reserve-then-pay row, bound to the booking, stamped with the
-      # pay-by deadline nothing yet enforces — see {RoomHold} (K-936).
+      # pay-by deadline nothing yet enforces — see {RoomHold}.
       RoomHold.insert!(
         { user_id:       principal_id,
           agent_id:      agent_id,

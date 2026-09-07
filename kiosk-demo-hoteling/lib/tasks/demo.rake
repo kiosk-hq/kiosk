@@ -7,13 +7,13 @@
 #   rake demo:wire_args_spec DB-free unit spec for the WireArguments shape guard —
 #                        the gate every verb opens with, and the only executable
 #                        coverage of it that needs no origin, no database and no
-#                        Equihash toll (T-137)
+#                        Equihash toll
 #   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
 #                        booking chain), asserts happy path + negative gate, then runs
-#                        script/pay_window.rb in-process (K-853 capture-anchored paid state)
+#                        script/pay_window.rb in-process (capture-anchored paid state)
 #   rake demo:spending_cap the per-assistant spending cap: a spend under it settles,
 #                        one that would cross it is 403 spending_cap_exceeded, and two
-#                        spellings of one currency hit ONE cap (T-154, K-1251)
+#                        spellings of one currency hit ONE cap
 #   rake demo:isolation  adversarial cross-tenant isolation test
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam)
 #   rake demo:schema     self-discovery proof — verifies the schema verb over HTTP
@@ -85,18 +85,17 @@ namespace :demo do
        "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
        "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # db:schema:load unconditionally (K-712b): db/structure.sql is TRACKED in
-    # every demo, so the db:migrate arm this used to branch to was unreachable
-    # in every checkout — and under `schema_format = :sql` it would have
-    # re-dumped that tracked file, dirtying the worktree. The canonical
-    # structure.sql is the source of truth.
+    # db:schema:load unconditionally: db/structure.sql is TRACKED in every demo,
+    # so a db:migrate arm would be unreachable in every checkout — and under
+    # `schema_format = :sql` it would re-dump that tracked file, dirtying the
+    # worktree. The canonical structure.sql is the source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
   desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), then the " \
        "in-process capture-window regression (script/pay_window.rb), assert."
   # `: :setup` IS LOAD-BEARING — it is what makes the headline task runnable
-  # TWICE (K-1044), and it was the one task of the seven here declared without it.
+  # TWICE.
   #
   # The consequence was measured, not argued: `demo:setup` 0, `demo:book` 0,
   # `demo:book` again **1**, aborting at script/hoteling_flow.rb's "availability
@@ -113,7 +112,7 @@ namespace :demo do
   # `bookings_no_overlapping_room_nights` counts `reserved` as well as
   # `confirmed`, and the SKIP_PAY negative leaves its booking `reserved`/unpaid
   # permanently: app/models/room_hold.rb says outright that `expires_at` is never
-  # read back and that the sweep is the operator's (K-936). That posture is
+  # read back and that the sweep is the operator's. That posture is
   # decided and documented, so this task may not "fix" the repeat by releasing the
   # hold — and releasing it would not be enough anyway, because the happy path's
   # own room stays `confirmed` while a run needs TWO free room types.
@@ -136,21 +135,20 @@ namespace :demo do
 
     # ── host resolution ────────────────────────────────────────────────────
     # The domain here MUST be one config/environments/development.rb permits
-    # (config.hosts) — that is the whole point of the lookup. Until K-695 it was
-    # <demo>.app, which config.hosts has never listed, so the ONE branch this
-    # block exists to offer was the one that broke: a developer who followed the
-    # printed /etc/hosts line got Rails 8 HostAuthorization 403s, the 200-only
-    # readiness poll below burned its 40 seconds, and the run aborted naming the
-    # wrong cause. CI never saw it — with no hosts entry the lookup fails and
-    # everything dials 127.0.0.1.
+    # (config.hosts) — that is the whole point of the lookup. A name that is not
+    # listed breaks the ONE branch this block exists to offer: a developer who
+    # follows the printed /etc/hosts line gets Rails 8 HostAuthorization 403s,
+    # the 200-only readiness poll below burns its 40 seconds, and the run aborts
+    # naming the wrong cause. CI never sees it — with no hosts entry the lookup
+    # fails and everything dials 127.0.0.1.
     #
     # This name resolves PUBLICLY to the live demo box, so a bare lookup returns
     # a public IP, not an error. Only 127.0.0.1 is accepted, which is exactly
     # what an /etc/hosts entry produces: a local harness can never be steered
     # onto the deployed host by whatever DNS happens to answer.
     #
-    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT (K-1318). Unguarded, every local
-    # run of every task in this file sent a DNS query for a `demo.kiosk.tech`
+    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT. Unguarded, every local run of
+    # every task in this file would send a DNS query for a `demo.kiosk.tech`
     # subdomain: an outbound query to the project's production domain, on each
     # invocation, for a value the run discards unless this machine has an
     # /etc/hosts entry. Set KIOSK_DEMO_HOST_LOOKUP=1 to ask for it. Without it
@@ -257,11 +255,11 @@ namespace :demo do
       check.call("http_properties",     result["http_properties"],     200)
       check.call("http_availability",   result["http_availability"],   200)
       check.call("http_reserve_room",   result["http_reserve_room"],   200)
-      # payment_setup is CALLED, not merely catalogued (K-1327). The origin
-      # publishes the verb and its descriptor tells an assistant to call it
-      # before `pay`; until this line the only proof it worked was that its name
-      # appeared in /kiosk/schema. Both halves are asserted, because a 200
-      # carrying no `status` is exactly the shape an assistant cannot act on.
+      # payment_setup is CALLED, not merely catalogued. The origin publishes the
+      # verb and its descriptor tells an assistant to call it before `pay`, and a
+      # name appearing in /kiosk/schema is no proof it works. Both halves are
+      # asserted, because a 200 carrying no `status` is exactly the shape an
+      # assistant cannot act on.
       check.call("http_payment_setup",  result["http_payment_setup"],  200)
       check.call("payment_setup_status", result["payment_setup_status"], "ready")
       check.call("http_pay",            result["http_pay"],            200)
@@ -276,13 +274,12 @@ namespace :demo do
         puts "  FAIL  booking_id missing or empty"
       end
 
-      # ── confirmation_code is PERSISTED, not minted for the response (K-698)
-      # It was a fresh SecureRandom.uuid handed to the assistant while the
-      # UPDATE wrote only status — against a table with no such column — so the
-      # hotel issued a reference it kept no record of and could not match at
-      # the desk. Three assertions, because "present" was already true before
-      # the fix and proved nothing: the code comes back, my_bookings reports the
-      # SAME string afterwards, and the bookings row actually holds it.
+      # ── confirmation_code is PERSISTED, not minted for the response
+      # A code minted for the response alone is a reference the hotel keeps no
+      # record of and cannot match at the desk. THREE assertions, because
+      # "present" is true of a minted-and-discarded code too and proves nothing:
+      # the code comes back, my_bookings reports the SAME string afterwards, and
+      # the bookings row actually holds it.
       code        = result["confirmation_code"].to_s
       stored_code = result["stored_confirmation_code"].to_s
       if !code.empty? && stored_code == code
@@ -302,13 +299,12 @@ namespace :demo do
 
       # ── psql assertions ──────────────────────────────────────────────
       #
-      # EACH ASSERTION NAMES THE ROW THIS RUN CREATED (K-862). They used to be
-      # DB-wide `COUNT(*) >= 1`, which passes on a row a PREVIOUS run left
-      # behind — `demo:setup` is idempotent but nothing forces this task to run
-      # straight after it — so the beat under test could stop writing entirely
-      # and these three would stay green. The ids are already in hand: the
-      # driver reports `booking_id` and its freshly registered `user_id`, and
-      # atablefor's demo.rake has asserted by id since K-712f.
+      # EACH ASSERTION NAMES THE ROW THIS RUN CREATED. A DB-wide
+      # `COUNT(*) >= 1` passes on a row a PREVIOUS run left behind —
+      # `demo:setup` is idempotent but nothing forces this task to run straight
+      # after it — so the beat under test could stop writing entirely and these
+      # three would stay green. The ids are already in hand: the driver reports
+      # `booking_id` and its freshly registered `user_id`.
       this_status = `psql -X -d #{db} -tAc "SELECT status FROM public.bookings WHERE id = '#{booking_id}'" 2>&1`.strip
       if this_status == "confirmed"
         puts "  OK  this run's booking is confirmed in the DB (id=#{booking_id})"
@@ -365,7 +361,7 @@ namespace :demo do
       end
     end
 
-    # ── RUN 3: the capture→settlement window (K-853 / protocol.md §11.6) ──
+    # ── RUN 3: the capture→settlement window (protocol.md §11.6) ──────────
     # NO SERVER. The two halves of the window cannot be stood in over HTTP —
     # holding a capture mid-charge and observing a returned capture with no
     # settlement row need a controllable PSP and the provider called directly —
@@ -516,7 +512,7 @@ namespace :demo do
 
       # ── psql ground truth ──────────────────────────────────────────────
       #
-      # Anchored to THIS run's principal, the way demo:book's are (K-862): the
+      # Anchored to THIS run's principal, the way demo:book's are: the
       # driver registers a fresh agent every run, so a DB-wide count would pass
       # on a previous run's rows.
       user_id = result["user_id"]
@@ -530,15 +526,15 @@ namespace :demo do
       carts = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.cart_mandates WHERE user_id = '#{user_id}'" 2>&1`.strip
       check.call("kiosk.cart_mandates rows for this run's principal", carts.to_i, 2)
 
-      # THE BOUNDARY HALF OF K-1251, on disk: one chain was signed "eur" and the
-      # other "EUR", and both rows must read the canonical spelling. This is
+      # THE BOUNDARY HALF, on disk: one chain was signed "eur" and the other
+      # "EUR", and both rows must read the canonical spelling. This is
       # what makes the tally's fold a legacy accommodation rather than the
       # mechanism — new rows are canonical by construction.
       currencies = `psql -X -d #{db} -tAc "SELECT DISTINCT currency FROM kiosk.settlements WHERE user_id = '#{user_id}' ORDER BY 1" 2>&1`.strip
       check.call("kiosk.settlements currencies for this run's principal", currencies, "eur")
 
       # The same fact as the assistant sees it: the `pay` answer echoes the
-      # canonical value, so a sender that wrote "EUR" is answered "eur" (K-1257).
+      # canonical value, so a sender that wrote "EUR" is answered "eur".
       check.call("the pay answer's currency after an \"EUR\" chain",
                  result["pay_after_raise_currency"], "eur")
     ensure
@@ -705,8 +701,6 @@ namespace :demo do
     # On the 0.4 wire `reserve_room` publishes `additionalProperties: false` and
     # does not declare `user_id` — the principal is not one of its inputs — so
     # the forgery is a typed 400 naming the parameter, before the handler runs.
-    # (Through 0.3 the argument was accepted and silently ignored, and the desc
-    # said so; that sentence is now false.)
     forged_rc, forged_code, forged_detail = forged_refusal
     if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
       puts "  OK  Assertion 3a: forged user_id → 400 bad_request naming user_id " \
@@ -966,16 +960,16 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -1036,7 +1030,7 @@ namespace :demo do
     actions      = result["schema_actions"] || []
     capabilities = result["discovery_capabilities"] || []
 
-    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL. The flow driver
     # sends no Authorization header, so this status IS the public-access proof.
     if result["schema_status"] == 200
       puts "  OK  GET /kiosk/schema answered 200 with NO Authorization header"
@@ -1045,9 +1039,9 @@ namespace :demo do
       puts "  FAIL  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
 
-    # THE MODULE SET, at its one remaining home. It was published twice —
-    # `schema.verbs` and `kiosk.json` `capabilities` — from the same call, so
-    # `verbs` was dropped (T-095) and the property moved here intact.
+    # THE MODULE SET, at its ONE home: `kiosk.json` `capabilities`. It is not
+    # also published as `schema.verbs`, so there is no second copy of it that
+    # could drift out of step with this one.
     %w[schema queries actions pay].each do |v|
       if capabilities.include?(v)
         puts "  OK  capabilities includes #{v}"
@@ -1080,7 +1074,7 @@ namespace :demo do
       end
     end
 
-    # T-042 / K-452: the two data-plane exemplar queries carry the machine-readable
+    # The two data-plane exemplar queries carry the machine-readable
     # descriptor extensions (input_schema + example_params + example_row).
     %w[search_hotels hotel_detail].each do |qname|
       entry = queries.find { |q| q["name"] == qname } || {}
@@ -1111,22 +1105,21 @@ namespace :demo do
       end
     end
 
-    # ── K-606: THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ─────
+    # ── THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ────────────
     # The out-of-band verbs below are learned about by RE-POLLING and nothing
-    # else — the wire has no server→assistant push — so K-477/K-595 wrote a
-    # cadence and a give-up horizon into their descriptors and K-605 made them
-    # QUOTE kiosk.tech/skill.md's tiered schedule instead of a rival flat one.
-    # Until this beat nothing that runs read either back: `grep` found the
-    # strings only in the source they were written into, so any later edit could
-    # drop the horizon and every gate stayed green. It is asserted here, on the
-    # SERVED descriptor, because that is the document an assistant reads.
+    # else — the wire has no server→assistant push — so their descriptors carry
+    # a cadence and a give-up horizon, QUOTING kiosk.tech/skill.md's tiered
+    # schedule rather than a rival flat one. NOTHING ELSE THAT RUNS READS EITHER
+    # VALUE BACK — they live only in the source they are written into — so
+    # without this beat an edit could drop the horizon and every gate would stay
+    # green. It is asserted on the SERVED descriptor, because that is the
+    # document an assistant reads.
     #
     # STRUCTURE, NOT THE MINUTES. Both tiers must be present, the second must be
     # SLOWER than the first (a tiering that is not one is not a schedule), and a
     # horizon must be named in minutes. The exact numbers are deliberately NOT
     # pinned: writing "5" and "15" here would make this file a third place the
-    # schedule lives, which is the divergence K-605 closed by deleting a derived
-    # count rather than recomputing it.
+    # schedule lives, and a derived copy of a schedule is one copy too many.
     poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
     poll_horizon = /GIVE UP after about (\d+) minutes?/
     { actions => ["payment_setup"] }.each do |list, names|
@@ -1158,7 +1151,7 @@ namespace :demo do
       end
     end
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`
@@ -1299,9 +1292,9 @@ namespace :demo do
 
     check.call(result["http_page1"] == 200, "search_hotels page 1 → 200", "page 1 HTTP #{result["http_page1"].inspect}")
 
-    # THE pagination proof (T-092): every page is a BARE ARRAY; a truncated one
-    # carries `Link: …; rel="next"`; following that link verbatim returns a
-    # DISJOINT next page; the last (filtered, complete) page carries no link.
+    # THE pagination proof: every page is a BARE ARRAY; a truncated one carries
+    # `Link: …; rel="next"`; following that link verbatim returns a DISJOINT
+    # next page; the last (filtered, complete) page carries no link.
     check.call(result["page1_count"] == 20,
                "page 1 is a full page of 20 rows", "page 1 count #{result["page1_count"].inspect} (expected 20)")
     check.call(result["page1_is_array"] == true,
@@ -1335,16 +1328,15 @@ namespace :demo do
                "hotel_detail(id=#{result["detail_id"]}) → full property, #{result["detail_room_count"]} room type(s)",
                "hotel_detail failed (http=#{result["http_detail"].inspect}, rooms=#{result["detail_room_count"].inspect})")
 
-    # K-794: a detail-by-id query is still a query, so it answers ROWS — a
-    # one-element array, not a bare object. Both halves are asserted, because
-    # the shape without the empty case would leave "no such hotel" undefined.
+    # A detail-by-id query is still a query, so it answers ROWS — a one-element
+    # array, not a bare object. Both halves are asserted, because the shape
+    # without the empty case would leave "no such hotel" undefined.
     check.call(result["detail_is_array"] == true && result["detail_row_count"] == 1,
                "hotel_detail answers a ONE-ROW ARRAY (spec §8.2)",
                "hotel_detail is not a one-row array " \
                "(array=#{result["detail_is_array"].inspect}, rows=#{result["detail_row_count"].inspect})")
-    # T-090 / spec §9.1: `property_id` ADDRESSES a property, so an id nobody has
-    # is 404 — on BOTH verbs that take it. The pair used to disagree, which is
-    # what made the rule Phil's call.
+    # Spec §9.1: `property_id` ADDRESSES a property, so an id nobody has is
+    # 404 — on BOTH verbs that take it, which must agree.
     check.call(result["http_unknown_detail"] == 404 &&
                result["unknown_detail_code"] == "not_found",
                "hotel_detail for an id nobody has → 404 not_found",
@@ -1358,7 +1350,7 @@ namespace :demo do
                "http=#{result["http_unknown_availability"].inspect} " \
                "code=#{result["unknown_availability_code"].inspect} (want 404 / not_found)")
 
-    # ── §9.1's THREE-WAY BAD-ARGUMENT RULE, ALL THREE BRANCHES (K-821) ──────
+    # ── §9.1's THREE-WAY BAD-ARGUMENT RULE, ALL THREE BRANCHES ──────────────
     #
     # The two checks above are rule 2 («a well-formed IDENTIFIER of a resource
     # that does not exist is 404»). The rule has three branches and they are ONE
@@ -1366,10 +1358,9 @@ namespace :demo do
     # collection?» — so any one of them checked alone proves very little: an
     # origin that answered 404 to every miss, or `200 []` to every miss, would
     # pass a single-branch check and be exactly the origin an assistant cannot
-    # tell a typo from a sold-out night on. hoteling implements all three and,
-    # until this run, tested none: the comment at
-    # app/operations/operation_result.rb:28 records that the `not_found`
-    # mapping was already REMOVED ONCE and restored, by an edit no test caught.
+    # tell a typo from a sold-out night on. All three are asserted here because
+    # the `not_found` mapping is one an edit can silently remove — the comment
+    # in app/operations/operation_result.rb records that it has been.
     check.call(result["http_empty_filter"] == 200 &&
                result["empty_filter_is_array"] == true &&
                result["empty_filter_count"] == 0,
@@ -1412,20 +1403,20 @@ namespace :demo do
                "the 400's detail contains the rejected value itself, so 'names the valid " \
                "values' may be satisfied by an echo: #{result["bad_enum_detail"].inspect}")
 
-    # ── THE PUBLISHED CLAMP, AT BOTH BOUNDS (K-1328) ────────────────────────
+    # ── THE PUBLISHED CLAMP, AT BOTH BOUNDS ─────────────────────────────────
     #
     # `search_hotels` publishes «Page size defaults to 20 and is CLAMPED to
     # 1..50 — a value outside that range is clamped, never refused», and the
     # descriptor house style on kiosk.tech carries the same sentence verbatim
-    # as the worked example operators copy. Until this run nothing sent a value
-    # below 1 anywhere in the demo or the e2e harness, and the handler mapped
-    # `limit=0` and every negative to the DEFAULT page size — twenty rows for a
-    # caller who asked for zero, which is neither bound of the published range.
+    # as the worked example operators copy. NOTHING ELSE in the demo or the e2e
+    # harness sends a value below 1, so this is the only place the floor is
+    # exercised at all.
     #
     # ONE ROW is the whole assertion, and it is not vacuous: the catalogue holds
-    # ~100 hotels, so 1 cannot be «the page happened to be short». Twenty rows
-    # is exactly the pre-fix behaviour and a 400 is the other forbidden answer,
-    # so the two ways to get this wrong land on two different failures.
+    # ~100 hotels, so 1 cannot be «the page happened to be short». Twenty rows —
+    # the DEFAULT page size, which is neither bound of the published range — and
+    # a 400 are the two forbidden answers, and they land on two different
+    # failures.
     check.call(result["http_limit_zero"] == 200 && result["limit_zero_count"] == 1,
                "limit=0 is CLAMPED to the floor — one row, not refused and not the default page",
                "limit=0 answered http=#{result["http_limit_zero"].inspect} with " \
@@ -1538,7 +1529,7 @@ namespace :demo do
         puts "  FAIL  proof count not monotonic"
       end
 
-      # ── THE WRITE BRANCH FIRES (K-1329) ────────────────────────────────
+      # ── THE WRITE BRANCH FIRES ─────────────────────────────────────────
       #
       # The policy hook receives one of Executor::VERBS — `%i[query run pay]` —
       # while a handler DECLARES `kind :query` / `kind :action`. Only `:query`

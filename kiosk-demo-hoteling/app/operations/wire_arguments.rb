@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
 # THE SHAPE GUARD every hoteling verb opens with — expressed once, as a REFUSAL
-# rather than as a rendered response (the {ListAccess} shape tudu settled).
+# rather than as a rendered response.
 #
 # It exists because ActiveRecord does not raise on junk — it CASTS.
 # `where(property_id: "abc")` silently becomes `= 0` and
 # `where(property_id: true)` becomes `= 1`, so without this guard `true` would
 # quietly mean "property 1" rather than being an error. Postgres refused those
-# outright, and recovering that refusal is the job (K-581/K-582 is the same
-# finding for `booking_id`).
+# outright, and recovering that refusal is the job.
 #
 # NOT an Operation: it writes nothing. Both halves use it — the query handlers
 # directly, the write Operations before they touch a transaction.
@@ -24,14 +23,10 @@ module WireArguments
   # is compared against or stored in: `properties.stars`, the cheapest-rate
   # cents `max_price_cents` filters on, and `bookings.total_cents`.
   #
-  # THE BOUND IS THE COLUMN'S AND NOT A POLICY (K-968's rule): it refuses
-  # exactly what cannot be REPRESENTED and invents no star ceiling and no
-  # nightly-rate ceiling. Named MAX_INT4 rather than for any one of those
-  # columns because three of them share it, and because the two sibling demos'
-  # guards carry the same constant under the same name — the three helpers
-  # converge here even though their coercions deliberately do not (getgrocery
-  # and atablefor use {whole_number} for arguments that reach them with no
-  # decoder in front; hoteling's integers arrive as query strings).
+  # THE BOUND IS THE COLUMN'S AND NOT A POLICY: it refuses exactly what cannot
+  # be REPRESENTED and invents no star ceiling and no nightly-rate ceiling.
+  # Named MAX_INT4 rather than for any one of those columns because three of
+  # them share it.
   MAX_INT4 = 2_147_483_647
 
   # @param max [Integer, nil] the ceiling this argument's column can hold; nil
@@ -42,19 +37,14 @@ module WireArguments
   # typo into a much quieter wrong answer than a 400. Base 10 is explicit so
   # "0x10" is refused rather than read as 16; surrounding space is tolerated.
   #
-  # SHAPE, THEN MAGNITUDE — and the second arm is T-125, the axis this helper
-  # did not have while both its siblings did. It is HARDENING and closes no
-  # present defect: MEASURED at head inside this bundle, hoteling was safe from
-  # K-1047's class by a COINCIDENCE of its call sites rather than by anything
-  # written here.
+  # SHAPE, THEN MAGNITUDE.
   #
   #   * `min_stars` reaches `Property.arel_table[:stars].gteq(min_stars)`, which
   #     is the RAISING shape — `gteq(2**31)` → `ActiveModel::RangeError:
   #     2147483648 is out of range for ActiveModel::Type::Integer with limit 4
-  #     bytes` — and was safe only because its descriptor declares `maximum: 5`
-  #     and schema validation is unconditional for queries as well as actions.
-  #   * `max_price_cents` had NO declared maximum and reaches
-  #     `Property.from_price_cents.lteq(max_price_cents)`, which does not raise
+  #     bytes`.
+  #   * `max_price_cents` reaches
+  #     `Property.from_price_cents.lteq(max_price_cents)`, which does NOT raise
   #     — but only because {Property.from_price_cents} is an
   #     `Arel::Nodes::Grouping` wrapping a correlated subquery and therefore
   #     carries no int4 type, so the literal is inlined into the SQL. Denormalise
@@ -62,19 +52,17 @@ module WireArguments
   #     performance move — and the identical query becomes a 500.
   #
   # A guard that holds only while a descriptor elsewhere holds is not a second
-  # layer at all (the K-1020/K-1025/K-1027 argument, three demos deep), so the
-  # ceiling is asked HERE and mirrored in the descriptor rather than left to it.
+  # layer at all, so the ceiling is asked HERE and mirrored in the descriptor
+  # rather than left to it.
   #
-  # WHO OMITS `max:`, and why — because an omission nobody reasoned about is how
-  # `max_price_cents` got here. `limit` reaches no column (it becomes `.limit()`
+  # WHO OMITS `max:`, and why. `limit` reaches no column (it becomes `.limit()`
   # and is CLAMPED into 1..HOTELING_SEARCH_MAX), and its description publishes
   # that every integer `limit` is adjusted rather than refused. `property_id`
   # and `room_type_id` reach ActiveRecord as EQUALITY predicates, where an
   # out-of-range value is absorbed — MEASURED: `Property.where(id: 2**31).first`
   # → nil, no raise — and answers the `404 not_found` spec §9.1's second branch
   # asks for; a ceiling here would turn that into a 400 that also published the
-  # column's width. It is the COMPARISON that casts, which is the same line
-  # atablefor's `party_size` beat draws for the same reason.
+  # column's width. It is the COMPARISON that casts.
   #
   # There is deliberately no `min:` to match: no argument on this surface has a
   # floor that is this guard's to enforce. `min_stars`' 1 and `max_price_cents`'
@@ -112,30 +100,22 @@ module WireArguments
   #
   # `Date.iso8601`, not `Date.parse`: `Date.parse` SCANS for a date rather than
   # validating a format, so it accepts `"2026-09-01'; --"` and `["2026-09-01"]`
-  # and would turn a refusal into a booking. This is now the demo's ONE date
-  # guard: `hotel_detail` used to keep its own `Date.parse` on the ground that
-  # its answers were already published behaviour, and K-1234 converged it here —
-  # what that verb PUBLISHES is `format: "date"` on both arguments, which is this
-  # spelling and nothing else.
+  # and would turn a refusal into a booking. This is the demo's ONE date guard —
+  # what these verbs PUBLISH is `format: "date"`, which is this spelling and
+  # nothing else.
   #
-  # AND `Date.iso8601` IS NOT THE FORMAT THE REFUSAL NAMES (K-1230). ISO 8601 is
-  # a family, and MEASURED, every one of these parses to 2026-09-01:
-  # `"20260901"` (basic), `"2026-09-01T10:00:00Z"` (datetime), `"2026-W36-2"`
-  # (week date) and `"2026-244"` (ordinal date) — five spellings where the
-  # sentence below names one, on the descriptor-less `ReserveRoomOperation` path
-  # where no JSON Schema narrows the input first and that sentence is the only
-  # thing telling an assistant what this operator takes.
-  #
-  # The sibling getgrocery documents its `Date.parse` looseness in code instead
-  # of narrowing it, and says why: on that verb pair the looseness is already
-  # PUBLISHED BEHAVIOUR. Here it is not — it is a side effect of the method
-  # picked for strictness — and two of the five spellings are worse than merely
-  # undocumented: `"2026-09-01T10:00:00Z"` silently DISCARDS a time an assistant
-  # may have meant as the check-in hour, and a week or ordinal date resolves to a
-  # day no human reading the booking would recognise. So the guard narrows to the
-  # published spelling rather than the sentence growing to name four more.
-  # `Date.iso8601` still runs behind the format check, because it is what refuses
-  # `"2026-02-30"` and `"2026-13-01"` — a well-shaped date that is not a day.
+  # AND `Date.iso8601` IS NOT THE FORMAT THE REFUSAL NAMES. ISO 8601 is a family,
+  # and MEASURED, every one of these parses to 2026-09-01: `"20260901"` (basic),
+  # `"2026-09-01T10:00:00Z"` (datetime), `"2026-W36-2"` (week date) and
+  # `"2026-244"` (ordinal date) — five spellings where the sentence below names
+  # one, on the descriptor-less `ReserveRoomOperation` path where no JSON Schema
+  # narrows the input first. Two of the four extra spellings are worse than
+  # merely undocumented: `"2026-09-01T10:00:00Z"` silently DISCARDS a time an
+  # assistant may have meant as the check-in hour, and a week or ordinal date
+  # resolves to a day no human reading the booking would recognise. So the
+  # format check narrows to the published spelling, and `Date.iso8601` still
+  # runs behind it, because it is what refuses `"2026-02-30"` and `"2026-13-01"`
+  # — a well-shaped date that is not a day.
   STAY_DATE = /\A\d{4}-\d{2}-\d{2}\z/
 
   def stay_dates(check_in, check_out)
@@ -159,7 +139,7 @@ module WireArguments
     )]
   end
 
-  # ── T-090: A `property_id` THAT ADDRESSES NOTHING IS 404, NOT AN EMPTY LIST ──
+  # ── A `property_id` THAT ADDRESSES NOTHING IS 404, NOT AN EMPTY LIST ────────
   #
   # Spec §9.1's second branch: an argument naming a SPECIFIC RESOURCE gets
   # `404 not_found` when it does not exist, because an empty list would assert
@@ -186,7 +166,7 @@ module WireArguments
     )
   end
 
-  # ── K-969: THERE IS NO ROOM-NIGHT IN THE PAST, SO THERE IS NO OFFER EITHER ──
+  # ── THERE IS NO ROOM-NIGHT IN THE PAST, SO THERE IS NO OFFER EITHER ────────
   #
   # One floor for the read side and the write side, so they cannot disagree.
   # What «past» means here:
@@ -216,7 +196,7 @@ module WireArguments
     zone.now.to_date
   end
 
-  # THE CHECK-IN A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the property's
+  # THE CHECK-IN A PUBLISHED EXAMPLE NAMES: tomorrow, in the property's
   # own locale. A calendar literal in `example_params`/`example_row` says «copy
   # this verbatim» and ages into a 400 the moment {#past_stay}'s floor passes it;
   # tomorrow rather than {#today} so the example survives the whole day it is
@@ -248,18 +228,15 @@ module WireArguments
     )
   end
 
-  # ── K-968: A STAY NOBODY CAN PRICE IS A 400, NOT A 500 ──────────────────
+  # ── A STAY NOBODY CAN PRICE IS A 400, NOT A 500 ────────────────────────────
   #
   # A well-formed ISO `check_in` far enough back prices a stay past
-  # `bookings.total_cents`, a 4-byte `integer` — the INSERT then raised
-  # `ActiveModel::RangeError` and the wire answered `500 action_failed` for an
-  # argument a client simply got wrong. THE BOUND IS THE COLUMN'S, NOT A POLICY:
-  # it refuses exactly what cannot be REPRESENTED and invents no booking horizon.
-  #
-  # The ceiling is {MAX_INT4}, declared once at the top of this module: it is the
-  # SAME column width `min_stars` and `max_price_cents` are bounded by, and two
-  # constants of one value in one file is the drift this demo has already paid
-  # for elsewhere (T-125).
+  # `bookings.total_cents`, a 4-byte `integer`: the INSERT raises
+  # `ActiveModel::RangeError` and the wire would answer `500 action_failed` for
+  # an argument a client simply got wrong. THE BOUND IS THE COLUMN'S, NOT A
+  # POLICY: it refuses exactly what cannot be REPRESENTED and invents no booking
+  # horizon. The ceiling is {MAX_INT4}, declared once at the top of this module —
+  # the same column width `min_stars` and `max_price_cents` are bounded by.
   #
   # @return [OperationResult, nil] a refusal, or nil when the total fits
   def priceable_total(total_cents, nights)

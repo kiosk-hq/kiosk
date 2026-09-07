@@ -36,7 +36,7 @@ class Kiosk::HouseholdController < ApplicationController
   # A ONE-ROW array: this is a query and a query answers with rows. `agent_id` is
   # null when a human web session is calling rather than an assistant — a real
   # state of this demo's tables, not a defensive null. `display_name` is NOT
-  # nullable and is NEVER an address (K-950): {User.public_name} answers a blank
+  # nullable and is NEVER an address: {User.public_name} answers a blank
   # name with an opaque `member-<hex>` over the account UUID.
   output_schema type: "array",
                 description: "Exactly one row: the authenticated principal.",
@@ -60,7 +60,7 @@ class Kiosk::HouseholdController < ApplicationController
   # my_lists — the lists the caller is a MEMBER of (owner OR member): a list it
   # was invited into is listed alongside its own. The agent supplies no filter.
   #
-  # `reach :consented` (K-949, ADR-0028): a row here may be a list somebody else
+  # `reach :consented` (ADR-0028): a row here may be a list somebody else
   # owns, and what admits it is an act by the human whose data it is — an owner
   # minted a single-use invite, `accept_invite` turned it into a `memberships`
   # row. That row IS the authorising artefact, and every verb below reads it.
@@ -84,9 +84,9 @@ class Kiosk::HouseholdController < ApplicationController
                   properties: {
                     list_id: { type: "string", description: "uuid. Pass to list_todos / list_members / add_todo / invite / remove_member as `list_id`." },
                     title:   { type: "string", description: "The list title." },
-                    # `Membership::ROLES`, not a literal (K-946): the model
-                    # VALIDATES against that constant, so a fourth role added
-                    # there would otherwise leave both published schemas wrong.
+                    # `Membership::ROLES`, not a literal: the model VALIDATES
+                    # against that constant, so a fourth role added there would
+                    # otherwise leave both published schemas wrong.
                     role:    { enum: Membership::ROLES, description: "The CALLER's role on this list — `invite` and `remove_member` are owner-only." },
                   },
                   required: %w[list_id title role],
@@ -96,7 +96,7 @@ class Kiosk::HouseholdController < ApplicationController
     list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
   })
   # The rows are {List.reachable_rows} — a MODEL PROJECTION, because the web UI's
-  # `/lists` page publishes exactly these rows (T-082): one definition of a list
+  # `/lists` page publishes exactly these rows: one definition of a list
   # row, not two surfaces to keep in agreement. Its membership predicate is
   # `Membership.of_current_principal`, a scope rather than a Ruby comparison.
   def my_lists
@@ -132,7 +132,7 @@ class Kiosk::HouseholdController < ApplicationController
                   required: %w[todo_id title done created_by_agent_id],
                 }
   # Gate, then {Todo.rows_on} — the projection tudu's `/lists/:id` page renders
-  # too (T-082): both doors run the same gate and then the same projection.
+  # too: both doors run the same gate and then the same projection.
   def list_todos
     return unless kiosk_membership_gate(params[:list_id])
 
@@ -143,7 +143,7 @@ class Kiosk::HouseholdController < ApplicationController
   # collaborator can see who else is on the list. The most obviously
   # cross-principal verb tudu has: the rows ARE other accounts.
   #
-  # WHAT THE CONSENT DOES NOT BUY (K-950): the roster, yes; the members' LOGIN
+  # What the consent does not buy: the roster, yes; the members' LOGIN
   # ADDRESSES, no. §7.2's prohibition binds every reach, `consented` included —
   # consent to share a list is not consent to publish an email address.
   kind :query
@@ -167,13 +167,13 @@ class Kiosk::HouseholdController < ApplicationController
                   properties: {
                     account_id:   { type: "string", description: "uuid. Pass to remove_member as `account_id`." },
                     display_name: { type: "string", description: "How this member is named on the list — the name they chose, or a stable opaque `member-<hex>` when they have chosen none (every assistant-created account has). NEVER a login address, and there is no verb that turns it back into one." },
-                    # `Membership::ROLES` — same reason as `my_lists` above (K-946).
+                    # `Membership::ROLES` — same reason as `my_lists` above.
                     role:         { enum: Membership::ROLES, description: "Their role on this list. The last owner cannot be removed." },
                   },
                   required: %w[account_id display_name role],
                 }
   # Gate, then {Membership.rows_on} — the projection the web page's member list
-  # renders too (T-082).
+  # renders too.
   def list_members
     return unless kiosk_membership_gate(params[:list_id])
 

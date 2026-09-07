@@ -8,7 +8,7 @@
 # Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery,
 #           payment_setup, request_kyc
 #
-# THE VERBS ARE NOT HERE (T-057/K-495). They are ordinary Rails controllers under
+# The verbs themselves are ordinary Rails controllers under
 # app/controllers/kiosk/, named in `c.handlers` below, and their writes are
 # Operations under app/operations/ — which is also what lets the operator's own
 # back office at GET /admin/orders read the paid state through the SAME seam the
@@ -16,7 +16,7 @@
 # in this file is configuration — the PoW gates, the payment provider, the
 # identity providers, the KYC trust anchors — which is what an initializer is for.
 #
-# ADDRESS-UPFRONT (K-468): the delivery address is a deliberate, EARLY input.
+# ADDRESS-UPFRONT: the delivery address is a deliberate, EARLY input.
 # `delivery_slots` will not return slots without an in-zone Dublin address, so
 # the assistant must obtain the address from its human BEFORE it can shop, and
 # `create_order` re-validates the same zone rule (consistency). The operator
@@ -27,9 +27,9 @@
 #           catalog prices, and sum correctly (the cashier check).
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, Stripe credentials,
-# test flags) lives in config/environments/{development,test,production}.rb
-# (K-650/K-700); this file reads the resolved values from
-# Rails.configuration.x.kiosk.* and never ENV.
+# test flags) lives in config/environments/{development,test,production}.rb;
+# this file reads the resolved values from Rails.configuration.x.kiosk.* and
+# never ENV.
 
 require "kiosk/payment_providers/stripe"
 require "kiosk/user_identity_providers/devise"
@@ -44,7 +44,7 @@ require "kiosk/user_identity_providers/devise"
 # for the full shop flow); the knob is here for parity. run/pay are never gated.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
-# ── Registration PoW gate — ALWAYS ON — POW-VERB-GATING (K-487)
+# ── Registration PoW gate — ALWAYS ON ───────────────────────────────────────
 #
 # register is a verb like any other: a grocery provider prices fresh-identity
 # minting (one Equihash proof) so spam signups pay at the door. Independent of
@@ -60,30 +60,28 @@ require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 if ENV["KIOSK_POW_DEMO"] == "1"
-  # ⚠ TOY COUNTER — NOT a reputation signal (K-590, the atablefor K-498
-  # sibling). Its ONLY job is to let the local `script/pow_flow.rb` driver
-  # print "the server counted MY bad proof"; nothing reads it for policy
-  # (`reputation_factors` below is `Factors.empty`). Since K-498's re-decision
-  # it counts PER IDENTITY in sqlite (app/services/bad_proof_counter.rb): one abusive
-  # assistant can no longer inflate anyone else's count, and concurrent server
-  # processes no longer fight over one flat file. Two toy aspects REMAIN,
-  # deliberately, labelled:
+  # ⚠ TOY COUNTER — NOT a reputation signal. Its ONLY job is to let the local
+  # `script/pow_flow.rb` driver print "the server counted MY bad proof";
+  # nothing reads it for policy (`reputation_factors` below is
+  # `Factors.empty`). It counts PER IDENTITY in sqlite
+  # (app/services/bad_proof_counter.rb): one abusive assistant cannot inflate
+  # anyone else's count, and concurrent server processes do not fight over one
+  # flat file. One toy aspect REMAINS, deliberately, labelled:
   #   · NO TTL — and never resetting is equally wrong: a count that only grows
   #     condemns an identity for something a year old.
   # A production bad-proof count keeps the per-identity keying and adds decay
   # plus durability across restarts (the same gap as the in-process revocation
   # watermark). It must be specified before it is built, not bolted on here.
   #
-  # WHERE IT LIVES, AND WHO WIPES IT (K-785, K-711). This file is what an
-  # adopter copies, so it may not hardcode a path under /tmp, and it may not
-  # truncate a store AT BOOT — a redeploy would silently zero the accumulated
-  # signal. `rake demo:pow` OWNS the location: it wipes the file for a clean
-  # slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the
-  # driver that reads the counts back, so the two processes cannot drift onto
-  # different files and report zero at each other. The PATH ITSELF is resolved
-  # in config/environments/* like every other env input (K-1008,
-  # ENV-CONFIG-PLACEMENT); this file only reads it, and the default over there
-  # is only for a bare `rails s`.
+  # WHERE IT LIVES, AND WHO WIPES IT. This file is what an adopter copies, so
+  # it may not hardcode a path under /tmp, and it may not truncate a store AT
+  # BOOT — a redeploy would silently zero the accumulated signal. `rake
+  # demo:pow` OWNS the location: it wipes the file for a clean slate and
+  # exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the driver that
+  # reads the counts back, so the two processes cannot drift onto different
+  # files and report zero at each other. The PATH ITSELF is resolved in
+  # config/environments/* like every other env input; this file only reads it,
+  # and the default over there is only for a bare `rails s`.
   GETGROCERY_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
 
   class GetgroceryCatalogPowPolicy < Kiosk::Reputation::Policy
@@ -149,29 +147,26 @@ Kiosk.configure do |c|
   # capabilities at all. A verb registers only when its class is named here.
   c.handlers = %w[Kiosk::StorefrontController Kiosk::OrdersController]
 
-  # UNIFORM-VALIDATION slice-1 (K-479): validate the proof(s) parsed from the
-  # `Kiosk-PoW` request header (ADR-0022) against the normative PoW schema at
-  # the wire choke point, so a malformed proof gets a clear 400 bad_request
-  # (with a shape hint) instead of a silent re-issued 402 loop. There is no
-  # `pow` body field to validate — the header is the only channel. Needs the
-  # json_schemer gem (in the Gemfile). Absent/valid proofs unchanged.
+  # Validate the proof(s) parsed from the `Kiosk-PoW` request header (ADR-0022)
+  # against the normative PoW schema at the wire choke point, so a malformed
+  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
+  # re-issued 402 loop. There is no `pow` body field to validate — the header is
+  # the only channel. Needs the json_schemer gem (in the Gemfile). Absent/valid
+  # proofs unchanged.
   c.validate_requests = true
 
-  # T-068 slice 3: every query/action answer is validated against the
-  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
-  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
-  # request check — nothing a caller sends can trigger it — and it is what
-  # makes this demo's own CI task list a per-verb conformance proof of the
-  # descriptors rather than a smoke test.
+  # Every query/action answer is validated against the `output_schema` that verb
+  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
+  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
+  # caller sends can trigger it — and it is what makes this demo's own CI task
+  # list a per-verb conformance proof of the descriptors rather than a smoke
+  # test.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why (K-1332): with it on,
-  # a descriptor typo becomes a 500 for a caller who did nothing wrong. This
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production — so leaving
-  # it unconditional shipped exactly the posture
-  # kiosk-server/lib/kiosk/server/response_validation.rb warns against, on the
-  # public endpoint an assistant is pointed at, in the file an operator is sent
-  # here to copy. Nothing is lost from the proof: every demo task list runs in
-  # development, so all of the per-verb conformance survives.
+  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
+  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
+  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
+  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
+  # the proof: every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
@@ -187,26 +182,23 @@ Kiosk.configure do |c|
   c.skill_sha256 = "7d5be9bf841f8e05fd67b62b60d140fab584de373f8e28944298c93139f9a9ca"
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence (T-104). An assistant
+  # Deliberate, and the point of the line's absence. An assistant
   # authenticates with the kiosk-pop JWT this very engine minted at
   # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
   # engine already ships the adapter that verifies its own tokens:
   # `IdentityResolution.agent_idp` falls back to
   # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured. This demo used to override it with a hand-copied composite that
-  # re-implemented the JWT half (more loosely — it never checked `iss`) in
-  # order to bolt on a dev-only parser turning a self-asserted
-  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # configured.
   # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
   # Okta, an ID-JAG-style broker) by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID (K-830).
+  # the `agent_id` you return must be a UUID.
+  #
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint and unlink. `rake demo:claim` walks the claim-rebind ceremony
   # through it, signing the shopper in at /users/sign_in first. ONE channel in
-  # every environment: there is no dev-only arm to gate, because there is no
-  # stub left to gate (T-066).
+  # every environment.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # Payment provider: real Stripe in test mode (sk_test_…).
@@ -216,13 +208,13 @@ Kiosk.configure do |c|
   # The principal→Stripe Customer mapping is stored in `stripe_customers` and
   # injected as lambdas — the kiosk-pay-stripe gem stays provider-agnostic.
   #
-  # CREDENTIALS COME FROM THE ENVIRONMENT FILE, NOT FROM ENV (K-650/K-700).
+  # CREDENTIALS COME FROM THE ENVIRONMENT FILE, NOT FROM ENV.
   # config/environments/* resolves both values once, per environment: dev and
   # test hand back the mock key or a placeholder so db:setup, the schema proof,
   # isolation and redteam run with no payment config at all, and production hands
-  # back exactly what was supplied and invents nothing. So there is no
-  # `Rails.env` branch left in this file — the posture is the environment's to
-  # state, and what is left here is this app's own reaction to it.
+  # back exactly what was supplied and invents nothing. There is no `Rails.env`
+  # branch in this file — the posture is the environment's to state, and what is
+  # here is this app's own reaction to it.
   #
   # Real Stripe by default (demo:shop → real pi_…). When a mock base URL is
   # configured (the adversarial suites, and CI, which carries no key), point the
@@ -247,7 +239,7 @@ Kiosk.configure do |c|
   # test_autocard (set by the demo/redteam/isolation rake tasks via
   # KIOSK_TEST_AUTOCARD=1) makes the adapter simulate a completed SetupIntent —
   # automated suites need no card-setup step and no server-side test route.
-  # config/environments/production.rb pins it FALSE (K-650), so the live demo
+  # config/environments/production.rb pins it FALSE, so the live demo
   # always runs the real hosted SetupIntent flow (human enters the card once).
   # The cashier check: ValidatingPaymentProvider verifies the agent-signed
   # cart against OUR catalog — currency (EUR), per-line prices, and total —
@@ -270,7 +262,7 @@ Kiosk.configure do |c|
   # SHARED KYC broker as its kyc_issuer + kyc_public_key ONCE and asks the
   # broker for exactly the ONE claim it needs (age_over_18 — NOT a driving
   # licence). The issuer identity comes from ProveTrust; the broker PUBLIC KEY
-  # comes from Rails.configuration.x.kiosk (config/environments — K-650): the
+  # comes from Rails.configuration.x.kiosk (config/environments): the
   # harness/deploy pins it explicitly, there is NO shipped fallback key, and
   # with none set the engine's KycVerifier fails closed at the wire. Same two
   # config attributes the shipped KycVerifier already reads.
@@ -289,8 +281,7 @@ Kiosk.configure do |c|
     c.pow_ttl            = 300
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
     # ⚠ TOY COUNTER — the write side of the demo counter defined above; the
-    # two remaining caveats there apply verbatim (boot-truncated, no TTL —
-    # K-590/K-498). PER IDENTITY since K-498's re-decision: keyed by the
+    # caveat there applies verbatim (no TTL). PER IDENTITY: keyed by the
     # verified agent credential id the gate hands in, so one abuser's
     # rejections never appear in anyone else's count. Its only consumer is the
     # local driver script/pow_flow.rb; `reputation_factors` right above feeds
@@ -326,8 +317,8 @@ Kiosk.configure do |c|
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
   # plus the one table it needs — see the kiosk-server README, "Multi-process
   # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on (K-752), but a warning nobody reads is
-  # not the mitigation; this comment and the README are.
+  # this default is in use with PoW on, but a warning nobody reads is not the
+  # mitigation; this comment and the README are.
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

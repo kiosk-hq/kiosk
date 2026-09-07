@@ -23,7 +23,7 @@
 #   5. hotel_detail on an id nobody has → 404 not_found (spec §9.1:
 #      that argument ADDRESSES a property, so an empty array would be a
 #      false statement rather than an empty result).
-#   6. the published CLAMP at both bounds (K-1328): `limit=0` and a negative
+#   6. the published CLAMP at both bounds: `limit=0` and a negative
 #      `limit` come back as ONE row and `limit=500` as fifty — «a value outside
 #      that range is clamped, never refused», which is the sentence the
 #      descriptor, its refusal hint and kiosk.tech's descriptor house style all
@@ -236,12 +236,11 @@ bad_detail  = bad_problem["detail"].to_s
 STDERR.puts "  Out-of-domain neighbourhood: HTTP #{rc9}, code=#{bad_problem["code"].inspect}, " \
             "detail=#{bad_detail.inspect}"
 
-# ── 4f. THE CLAMP'S LOWER BOUND — `limit=0` and a NEGATIVE (K-1328) ────────
+# ── 4f. THE CLAMP'S LOWER BOUND — `limit=0` and a NEGATIVE ──────────────────
 # The descriptor, its refusal hint and kiosk.tech's descriptor house style all
 # publish «CLAMPED to 1..50 — a value outside that range is clamped, never
-# refused», and until K-1328 nothing anywhere sent a value below 1. The code
-# mapped 0 and every negative to the DEFAULT page size, so the one sentence
-# three surfaces agree on was false at its lower bound and no run could see it.
+# refused». A lower bound nothing drives is a sentence three surfaces agree on
+# and no run can check.
 #
 # BOTH ENDS OF «outside that range» ARE DRIVEN, because a floor that only holds
 # for 0 is not a floor: `limit=0` is the boundary value and `limit=-5` is the

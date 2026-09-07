@@ -19,11 +19,11 @@ require "uri"
 #                   rejected. In the demo the operator host varies by port, so
 #                   the callback host is configured per environment
 #                   (KIOSK_PROVE_<OP>_CALLBACK_HOST, read in
-#                   config/environments/*.rb — K-672).
+#                   config/environments/*.rb).
 #   audience      — the operator-binding `aud` the broker mints into this
 #                   operator's attestations (the value its engine KycVerifier
 #                   compares against its own kyc_audience). This is held at
-#                   REGISTRATION, NOT taken from the intake body (K-550): the `aud`
+#                   REGISTRATION, NOT taken from the intake body: the `aud`
 #                   is derived from the authenticated operator's own record, so an
 #                   operator can only ever obtain an attestation bound to ITS OWN
 #                   audience — operator B cannot request operator A's audience.
@@ -68,16 +68,16 @@ module OperatorRegistry
 
   # The demo registry, built from Rails custom config — the env vars behind
   # these values are read in config/environments/{development,test,production}.rb
-  # and published as Rails.configuration.x.prove.* (K-672); this lib never
+  # and published as Rails.configuration.x.prove.*; this lib never
   # reads ENV, and each environment's posture lives in that environment's file:
   #   - secret: shared bearer. An operator with NO configured secret is simply
-  #     NOT registered (fail-closed, K-547: a shipped default is world-readable
+  #     NOT registered (fail-closed: a shipped default is world-readable
   #     in this public repo, so anyone could present it to drive operator intake
   #     and trigger broker→operator callbacks) — `authenticate` then rejects it
   #     rather than honouring a guessable token. Production and development are
   #     both env-or-nothing (the two-server harnesses pin the secret explicitly
-  #     on both sides — since K-650 there is no operator-side dev default to
-  #     pair with); test registers both demo operators with fixture literals
+  #     on both sides — there is no operator-side dev default to pair with);
+  #     test registers both demo operators with fixture literals
   #     because the request specs drive real intake auth.
   #   - callback_host: the operator host the broker may call back (SSRF guard);
   #     set by the two-server harness (which knows the operator's host:port),

@@ -34,11 +34,10 @@ def tudu_boot_server(log:, port:, extra_env: {})
     sleep 1
   end
   unless ready
-    # K-712e: reap the server WE spawned before leaving. The abort used to fire
-    # here with `pid` known only to this method — every caller registers its
+    # Reap the server WE spawned before leaving. Every caller registers its
     # cleanup on the value this method RETURNS, so on a readiness failure the
-    # `rails s` outlived the run and held the port against the next one. The
-    # caller's own `ensure`/`at_exit` cannot help: it never received a pid.
+    # caller's own `ensure`/`at_exit` has no pid to kill — without this kill the
+    # `rails s` outlives the run and holds the port against the next one.
     begin
       Process.kill("TERM", pid)
       Process.wait(pid)
@@ -112,7 +111,7 @@ namespace :demo do
     # already covers /config/master.key and /config/*.key.
     enc_path, key_path = "config/credentials.yml.enc", "config/master.key"
     if File.exist?(enc_path) && !File.exist?(key_path)
-      # Same dead end as before this task existed: nothing can decrypt the enc.
+      # A dead end: nothing here can decrypt the enc.
       warn "#{enc_path} exists but #{key_path} is missing — cannot decrypt; " \
            "delete #{enc_path} and re-run demo:setup to regenerate both"
     elsif !File.exist?(enc_path)
@@ -127,10 +126,10 @@ namespace :demo do
         env_key: "RAILS_MASTER_KEY", raise_if_missing_key: true,
       ).write("secret_key_base: #{SecureRandom.hex(64)}")
     end
-    # db:schema:load, NOT db:migrate (K-712a): this task's own description and
-    # the comment above both say schema:load, and under
+    # db:schema:load, NOT db:migrate: this task's own description and the
+    # comment above both say schema:load, and under
     # `schema_format = :sql` (config/application.rb) `db:migrate` RE-DUMPS the
-    # tracked db/structure.sql, so running demo:setup dirtied the worktree.
+    # tracked db/structure.sql, so demo:setup would dirty the worktree.
     # The canonical structure.sql is the source of truth, as in every sibling.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end

@@ -6,8 +6,8 @@ class CompleteTodoOperation
   # This verb takes no `list_id`, so it never passes through {ListAccess}: the
   # membership test is folded into the write, against the todo's list.
   def self.call(todo_id:)
-    # The one wire-supplied id in tudu with no other guard in front of it
-    # (K-581/K-582) — see {ListAccess.check} for why the shape check matters.
+    # The one wire-supplied id in tudu with no other guard in front of it — see
+    # {ListAccess.check} for why the shape check matters.
     unless UuidCheck.valid?(todo_id)
       return OperationResult.refused(
         code:    "bad_request",

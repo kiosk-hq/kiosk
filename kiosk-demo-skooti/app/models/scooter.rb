@@ -15,37 +15,35 @@ class Scooter < ApplicationRecord
 
   # ── THE licence predicate, in the ONE place both rental verbs read it ──────
   #
-  # K-687 is the finding that the licence gate was one verb name away from
-  # being optional: `reserve` is open to every vehicle (one reservation shape,
-  # both verbs), so before the gate existed an agent reserved the KYC-gated
-  # motorcycle and activated it through the licence-FREE verb, and got a signed
-  # unlock token having attested nothing. The check therefore lives at USE time
-  # in BOTH verbs — and because it does, the two readings of this one column
-  # must not be able to drift apart. They are these two methods.
+  # The licence gate is one verb name away from being optional: `reserve` is
+  # open to every vehicle (one reservation shape, both verbs), so without a
+  # use-time check an agent reserves the KYC-gated motorcycle, activates it
+  # through the licence-FREE verb, and walks away with a signed unlock token
+  # having attested nothing. The check therefore lives at USE time in BOTH verbs
+  # — and because it does, the two readings of this one column must not be able
+  # to drift apart. They are these two methods.
   #
-  # K-724 is why the cast is here at all rather than a bare `needs_licence`.
-  # The check used to enumerate the truthy spellings it knew by hand
-  # (`== true || == "t" || == "true"`), which is correct against today's pg
-  # adapter — it returns real TrueClass/FalseClass, and so does ActiveRecord's
-  # own boolean attribute type — and fails OPEN against any other: one adapter,
-  # cast or schema change yielding "TRUE" or 1, and the unrecognised value is
-  # treated as licence-free, silently unlocking the KYC-gated motorcycle this
-  # whole gate exists to hold. A gate on a physical vehicle does not get to be
-  # right only for the values someone remembered, and "ActiveRecord already
-  # casts it" is the same assumption in a new coat: it is true of the boolean
-  # COLUMN this schema has today, which is exactly the premise K-724 says a
-  # gate may not rest on.
+  # Why the cast is here at all, rather than a bare `needs_licence` or a
+  # hand-enumerated list of the truthy spellings (`== true || == "t" || ==
+  # "true"`). Enumerating by hand is correct against today's pg adapter — it
+  # returns real TrueClass/FalseClass, and so does ActiveRecord's own boolean
+  # attribute type — and fails OPEN against any other: one adapter, cast or
+  # schema change yielding "TRUE" or 1, and the unrecognised value is treated as
+  # licence-free, silently unlocking the KYC-gated motorcycle this whole gate
+  # exists to hold. A gate on a physical vehicle does not get to be right only
+  # for the values someone remembered, and "ActiveRecord already casts it" is
+  # the same assumption in a new coat: it is true of the boolean COLUMN this
+  # schema has today, which is exactly the premise a gate may not rest on.
   #
   # Fail-closed BY CONSTRUCTION, in both directions. Only a value Rails
   # recognises as literally FALSE (false, "f", "false", "0", 0) is licence-free;
-  # only one it recognises as literally TRUE is licence-required. NULL, THE
-  # EMPTY STRING, an unexpected spelling, or a `needs_licence` that stopped
+  # only one it recognises as literally TRUE is licence-required. NULL, the
+  # empty string, an unexpected spelling, or a `needs_licence` that stopped
   # being a boolean column therefore answers `false` to BOTH — so no reading of
   # this column can ever open both doors, and an ambiguous one opens neither.
-  # (`""` used to be listed above as licence-free, on the strength of it being
-  # in Rails' FALSE_VALUES. It is not reached: `Boolean#cast_value` maps `""` to
-  # nil first. `spec/licence_flag_spec.rb`, which pins all of this, is what
-  # measured it.)
+  # (`""` is in Rails' FALSE_VALUES but never reaches the licence-free branch:
+  # `Boolean#cast_value` maps `""` to nil first, so it lands in the ambiguous
+  # bucket. `spec/licence_flag_spec.rb` pins all of this.)
   def licence_free?     = licence_flag == false
   def licence_required? = licence_flag == true
 

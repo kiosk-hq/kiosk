@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Add + complete todos from the web UI, through the same Operations the agent
-# wire's handlers call (K-654). Membership is enforced inside the Operation, so
+# wire's handlers call. Membership is enforced inside the Operation, so
 # the human and the assistant meet the identical refusal; here it becomes a
 # flash instead of a 403 body.
 #

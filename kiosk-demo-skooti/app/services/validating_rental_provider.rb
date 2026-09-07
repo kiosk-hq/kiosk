@@ -36,7 +36,7 @@
 #       both pass the cashier and both charge the rider. The engine's `409` on a
 #       re-presented mandate id does not help: a FRESH chain collides with
 #       nothing.
-#   (b) "NOT PAID" DURING THE WINDOW — between the capture returning and P3
+#   (b) "NOT PAID" during the window — between the capture returning and P3
 #       writing the settlement every read says no settlement exists, which §11.6
 #       forbids publishing as *not paid*: that answer licenses an assistant to
 #       sign a fresh chain and charge its human twice.

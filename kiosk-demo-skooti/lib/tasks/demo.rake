@@ -9,7 +9,7 @@
 #   rake demo:rideflow   boots the server, runs script/rental_flow.rb (no-human full
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down, then runs script/pay_window.rb in-process
-#                        (K-853 capture-anchored paid state)
+#                        (capture-anchored paid state)
 #   rake demo:isolation  adversarial cross-tenant + ownership isolation test
 #   rake demo:kyc        named-anonymized-attribute KYC gate proof (age_over_18 +
 #                        licence_a): motorcycle 403→attest→200, scooter stays KYC-free
@@ -104,10 +104,10 @@ namespace :demo do
     require "shellwords"
 
     $LOAD_PATH.unshift File.expand_path("../", __dir__)
-    # script/, not lib/ (K-861): both are flow-only helpers and moved out of
-    # the app's eager-load set. A BARE `require` used to resolve them off the
-    # load path Rails happens to set up for lib/, which is the implicit
-    # dependency K-856 broke by moving a sibling file.
+    # script/, not lib/: both are flow-only helpers and sit OUTSIDE the app's
+    # eager-load set, so they are reached by `require_relative` rather than a
+    # bare `require` — which would depend on whatever load path Rails happens
+    # to set up for lib/, an implicit dependency a file move breaks.
     require_relative "../../script/lock_sim"
     require_relative "../../script/dev_unlock_key"
 
@@ -116,21 +116,20 @@ namespace :demo do
 
     # ── host resolution ────────────────────────────────────────────────────
     # The domain here MUST be one config/environments/development.rb permits
-    # (config.hosts) — that is the whole point of the lookup. Until K-695 it was
-    # <demo>.app, which config.hosts has never listed, so the ONE branch this
-    # block exists to offer was the one that broke: a developer who followed the
-    # printed /etc/hosts line got Rails 8 HostAuthorization 403s, the 200-only
-    # readiness poll below burned its 40 seconds, and the run aborted naming the
-    # wrong cause. CI never saw it — with no hosts entry the lookup fails and
-    # everything dials 127.0.0.1.
+    # (config.hosts) — that is the whole point of the lookup. A name that is not
+    # listed breaks the ONE branch this block exists to offer: a developer who
+    # follows the printed /etc/hosts line gets Rails 8 HostAuthorization 403s,
+    # the 200-only readiness poll below burns its 40 seconds, and the run aborts
+    # naming the wrong cause. CI never sees it — with no hosts entry the lookup
+    # fails and everything dials 127.0.0.1.
     #
     # This name resolves PUBLICLY to the live demo box, so a bare lookup returns
     # a public IP, not an error. Only 127.0.0.1 is accepted, which is exactly
     # what an /etc/hosts entry produces: a local harness can never be steered
     # onto the deployed host by whatever DNS happens to answer.
     #
-    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT (K-1318). Unguarded, every local
-    # run of every task in this file sent a DNS query for a `demo.kiosk.tech`
+    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT. Unguarded, every local run of
+    # every task in this file would send a DNS query for a `demo.kiosk.tech`
     # subdomain: an outbound query to the project's production domain, on each
     # invocation, for a value the run discards unless this machine has an
     # /etc/hosts entry. Set KIOSK_DEMO_HOST_LOOKUP=1 to ask for it. Without it
@@ -172,20 +171,18 @@ namespace :demo do
     failures = []
 
     # This task attests agents with ProveTestIssuer (the ProveKey), so the
-    # server must be told to TRUST that key explicitly — skooti no longer
-    # ships a pinned dev ProveKey (K-650).
+    # server must be told to TRUST that key explicitly — skooti ships no
+    # pinned dev ProveKey.
     require_relative "../../script/prove_test_issuer"
 
-    # Registration goes through the SHIPPED helper (K-696), never a local copy:
+    # Registration goes through the SHIPPED helper, never a local copy:
     # script/equihash_register.rb owns the challenge → PoP → 402 → solve → retry
     # handshake and asks Kiosk::Pow::Equihash.solver_path where solve.py lives,
     # so the gem that packages the solver stays the only thing that knows its
-    # location (K-627/K-632). The two hand-rolled copies this replaces named
-    # ../../../kiosk-pow-equihash/solve.py — a path that resolves in a monorepo
-    # checkout and nowhere else — and were weaker than the helper besides: one
-    # NoMethodError'd on any 402 whose body carried no error.challenges, and one
-    # read access_token with no status assertion at all, so a failed register
-    # yielded `Bearer ` and the 403 that earned was reported as the expected 403.
+    # location. A hand-rolled copy naming ../../../kiosk-pow-equihash/solve.py
+    # resolves in a monorepo checkout and nowhere else; one that reads
+    # access_token without asserting the status yields `Bearer ` on a failed
+    # register, and the 403 that earns then reads as the expected 403.
     require_relative "../../script/equihash_register"
 
     # The transport slots the helper takes: ->(url) and ->(url, body, headers = {}),
@@ -275,11 +272,11 @@ namespace :demo do
         puts "  FAIL  browse_rows_count expected >= 1, got #{browse_count.inspect}"
       end
 
-      # payment_setup is CALLED, not merely catalogued (K-1327). This origin
-      # publishes the verb and its descriptor tells an assistant to call it
-      # before `pay`; until this line the only proof it worked was that its name
-      # appeared in /kiosk/schema. Both halves are asserted, because a 200
-      # carrying no `status` is exactly the shape an assistant cannot act on.
+      # payment_setup is CALLED, not merely catalogued. This origin publishes the
+      # verb and its descriptor tells an assistant to call it before `pay`, and a
+      # name appearing in /kiosk/schema is no proof it works. Both halves are
+      # asserted, because a 200 carrying no `status` is exactly the shape an
+      # assistant cannot act on.
       if happy_result["http_payment_setup"] == 200 && happy_result["payment_setup_status"] == "ready"
         puts "  OK  payment_setup == 200/ready (called before pay, as the descriptor says)"
       else
@@ -321,7 +318,7 @@ namespace :demo do
 
       # ── psql assertions ────────────────────────────────────────────────
       #
-      # BY ID, NOT BY DB-WIDE COUNT (K-862). `COUNT(*) >= 1` over the whole
+      # BY ID, NOT BY DB-WIDE COUNT. `COUNT(*) >= 1` over the whole
       # table passes on a row a PREVIOUS run left behind, so the beat under
       # test could stop writing and both assertions would stay green. The
       # driver already reports the two anchors: this run's `reservation_id`
@@ -439,25 +436,15 @@ namespace :demo do
       end
     end
 
-    # RUN 5 (C3 — re-start_rental on an already-active reservation) was
-    # removed here (K-697): it minted a NEW principal each time and called
-    # start_rental on the INNER run's own reservation, so Gate 1's ownership
-    # predicate (`user_id = kiosk.current_user_id()`) alone emptied the row
-    # set — deleting the `status = 'reserved'` clause it claimed to cover
-    # left it green (verified). Its KYC round-trips also discarded their
-    # responses (a 4xx KYC failure was invisible) and gated nothing, and
-    # register's response was checked only for `== 402`, so a failed
-    # register could report a `Bearer ` 403 as a pass. The property it
-    # claimed — a spent/active resource cannot be re-activated by the SAME
-    # principal — is covered soundly by demo:redteam's
+    # WHERE THE C3 PROPERTY IS PROVED — a spent/active resource cannot be
+    # re-activated by the SAME principal — is demo:redteam's
     # Kiosk::Redteam::Scenarios::SpentResourceReuse (script/redteam_suite.rb),
-    # which drives ONE principal against the SAME owned_ref twice.
-    #
-    # The RUN numbering it left ragged is closed (K-712d): there had never been
-    # a RUN 3, and RUN 4 ("C2 — unpaid second reservation") was the SAME call
-    # and the SAME assertion as RUN 2 with the label strings changed, so it
-    # bought a second server boot and a second Equihash registration for a
-    # property already proved. The runs below are 1, 2, 3 and contiguous.
+    # which drives ONE principal against the SAME owned_ref twice, and NOT a
+    # run here. A run here would mint a NEW principal each time and call
+    # start_rental on its own reservation, so Gate 1's ownership predicate
+    # (`user_id = kiosk.current_user_id()`) alone empties the row set and the
+    # `status = 'reserved'` clause it claims to cover goes untested — measured:
+    # deleting that clause leaves such a run green.
 
     # ── RUN 3: Query-verb assertions — scooters_available + per-user my_reservations ──
     # Proves: (a) query scooters_available returns SK-001;
@@ -495,8 +482,7 @@ namespace :demo do
       end
 
       # Register a fresh agent through the Equihash-gated /auth/register — the
-      # shared helper again (K-696), which asserts the 201 this block used to
-      # assert for itself.
+      # shared helper again, which asserts the 201 itself.
       _q_key, reg_data = equihash_register(
         server: server_url, issuer: kiosk_issuer,
         get_json: reg_get, post_json: reg_post,
@@ -582,7 +568,7 @@ namespace :demo do
       puts "  (structure.sql not found — skip RLS check)"
     end
 
-    # ── The capture→settlement window (K-853 / protocol.md §11.6) ─────────
+    # ── The capture→settlement window (protocol.md §11.6) ─────────────────
     # NO SERVER. The two halves of the window cannot be stood in over HTTP —
     # holding a capture mid-charge and observing a returned capture with no
     # settlement row need a controllable PSP and the provider called directly —
@@ -667,8 +653,8 @@ namespace :demo do
     puts "\n── Starting skooti (isolation test) on #{server_url} ──"
 
     # The isolation driver attests agents with ProveTestIssuer (the ProveKey),
-    # so the server must be told to TRUST that key explicitly — skooti no
-    # longer ships a pinned dev ProveKey (K-650).
+    # so the server must be told to TRUST that key explicitly — skooti ships no
+    # pinned dev ProveKey.
     require_relative "../../script/prove_test_issuer"
 
     # ── boot the server ────────────────────────────────────────────────────
@@ -728,7 +714,7 @@ namespace :demo do
     # ── Assertion 1: B's start_rental on A's reservation → 403 ──────────
     # B passed Gate 1b (licence-free vehicle) and Gate 2 (payment for rA)
     # before this attempt; the 403 therefore isolates Gate 1 ownership
-    # exclusively (start_rental has no KYC gate — K-442).
+    # exclusively (start_rental has no KYC gate).
     if b_start_rental_rc == 403
       puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate 1 ownership denied; Gate 1b+2 passed)"
     else
@@ -904,9 +890,9 @@ namespace :demo do
     ProveBrokerBoot.with_broker(operator_host: host, log: "/tmp/kiosk-prove-broker-redteam.log") do |broker|
       # The one gate that runs BOTH issuance paths — the running broker's key
       # (fetched at /prove_key.pem and pinned as skooti's trust anchor) and the
-      # driver's own ProveTestIssuer — so it is where their lockstep is checked
-      # (K-681). A drift makes every valid-KYC control look like a forgery;
-      # this says which two files disagree instead.
+      # driver's own ProveTestIssuer — so it is where their lockstep is checked.
+      # A drift makes every valid-KYC control look like a forgery; this says
+      # which two files disagree instead.
       ProveTestIssuer.assert_matches_broker!(broker[:wiring]["KIOSK_PROVE_PUBLIC_KEY_PEM"])
 
       puts "\n── Starting skooti (redteam battery) on #{server_url} ──"
@@ -953,10 +939,10 @@ namespace :demo do
       puts "\n── Running script/redteam_suite.rb (skooti + KYC broker) ──"
 
       # The driver mints valid/expired attestations via ProveTestIssuer and
-      # forged ones via ProveTrust.issuer — both now read the same
-      # ProveTrust.issuer (K-681), i.e. KIOSK_PROVE_ISSUER, so it MUST carry the
-      # same pinned iss the broker stamps and skooti's server verifies against,
-      # or the valid-KYC control mismatches iss.
+      # forged ones via ProveTrust.issuer — both read the same ProveTrust.issuer,
+      # i.e. KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
+      # stamps and skooti's server verifies against, or the valid-KYC control
+      # mismatches iss.
       env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                 "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                 "KIOSK_PROVE_ISSUER=#{broker[:wiring]['KIOSK_PROVE_ISSUER']} " \
@@ -1069,16 +1055,16 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -1139,7 +1125,7 @@ namespace :demo do
     actions      = result["schema_actions"] || []
     capabilities = result["discovery_capabilities"] || []
 
-    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL. The flow driver
     # sends no Authorization header, so this status IS the public-access proof.
     if result["schema_status"] == 200
       puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
@@ -1148,9 +1134,9 @@ namespace :demo do
       puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
 
-    # THE MODULE SET, at its one remaining home. It was published twice —
-    # `schema.verbs` and `kiosk.json` `capabilities` — from the same call, so
-    # `verbs` was dropped (T-095) and the property moved here intact.
+    # THE MODULE SET, at its ONE home: `kiosk.json` `capabilities`. It is not
+    # also published as `schema.verbs`, so there is no second copy of it that
+    # could drift out of step with this one.
     %w[schema queries actions pay].each do |v|
       if capabilities.include?(v)
         puts "  ✓  capabilities includes #{v}"
@@ -1181,8 +1167,8 @@ namespace :demo do
       puts "  ✗  schema.actions missing reserve"
     end
 
-    # T-042 / K-452: the primary read query (scooters_available) and primary
-    # action (reserve) advertise the machine-readable descriptor extensions.
+    # The primary read query (scooters_available) and primary action
+    # (reserve) advertise the machine-readable descriptor extensions.
     {
       queries => %w[scooters_available],
       actions => %w[reserve],
@@ -1201,8 +1187,8 @@ namespace :demo do
     end
 
     # start_rental, rent_motorcycle (the KYC-gated action), request_kyc (the
-    # external stub-issuer trigger, K-440/K-443), payment_setup (skill Step 5)
-    # present with descriptions
+    # external stub-issuer trigger), payment_setup (skill Step 5) present with
+    # descriptions
     %w[start_rental rent_motorcycle request_kyc payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
@@ -1228,22 +1214,21 @@ namespace :demo do
       puts "  ✗  schema.queries missing kyc_status (or no description)"
     end
 
-    # ── K-606: THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ─────
+    # ── THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ────────────
     # The out-of-band verbs below are learned about by RE-POLLING and nothing
-    # else — the wire has no server→assistant push — so K-477/K-595 wrote a
-    # cadence and a give-up horizon into their descriptors and K-605 made them
-    # QUOTE kiosk.tech/skill.md's tiered schedule instead of a rival flat one.
-    # Until this beat nothing that runs read either back: `grep` found the
-    # strings only in the source they were written into, so any later edit could
-    # drop the horizon and every gate stayed green. It is asserted here, on the
-    # SERVED descriptor, because that is the document an assistant reads.
+    # else — the wire has no server→assistant push — so their descriptors carry
+    # a cadence and a give-up horizon, QUOTING kiosk.tech/skill.md's tiered
+    # schedule rather than a rival flat one. NOTHING ELSE THAT RUNS READS EITHER
+    # VALUE BACK — they live only in the source they are written into — so
+    # without this beat an edit could drop the horizon and every gate would stay
+    # green. It is asserted on the SERVED descriptor, because that is the
+    # document an assistant reads.
     #
     # STRUCTURE, NOT THE MINUTES. Both tiers must be present, the second must be
     # SLOWER than the first (a tiering that is not one is not a schedule), and a
     # horizon must be named in minutes. The exact numbers are deliberately NOT
     # pinned: writing "5" and "15" here would make this file a third place the
-    # schedule lives, which is the divergence K-605 closed by deleting a derived
-    # count rather than recomputing it.
+    # schedule lives, and a derived copy of a schedule is one copy too many.
     poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
     poll_horizon = /GIVE UP after about (\d+) minutes?/
     { actions => ["payment_setup"], queries => ["kyc_status"] }.each do |list, names|
@@ -1275,7 +1260,7 @@ namespace :demo do
       end
     end
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`
@@ -1413,8 +1398,7 @@ namespace :demo do
       # ProveTrust.issuer — and without this the driver falls back to the
       # DEPLOYED broker origin while the booted broker stamps the harness's
       # local one, so a perfectly-signed attestation comes back 403 «issuer
-      # mismatch». getgrocery's demo:agecheck has always passed it; this task
-      # did not, because until PART C nothing in this driver signed anything.
+      # mismatch».
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                    "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"
@@ -1425,7 +1409,7 @@ namespace :demo do
     failures = []
 
     # A1: rent_motorcycle without KYC → 403 kyc_required AND the hint points the
-    # agent at request_kyc (the K-440/K-443 discoverable-path fix).
+    # agent at request_kyc — the discoverable path out of the refusal.
     if result["http_mc_rent_no_kyc"] == 403 && result["mc_rent_no_kyc_code"] == "kyc_required"
       puts "  OK  A1 rent_motorcycle without KYC → 403 kyc_required"
     else
@@ -1451,7 +1435,7 @@ namespace :demo do
       failures << "A2: request_kyc expected 200 with a /verify?request= broker url, got #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
       puts "  FAIL  A2 request_kyc → #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
     end
-    # A2b: the OUTSTANDING-INTAKE CAP (K-586). One registration proof bought
+    # A2b: the OUTSTANDING-INTAKE CAP. Without it one registration proof buys
     # unlimited broker intakes — free against a stub, a budget hole behind a
     # paid issuer, and a licence check is the expensive kind. The FOURTH
     # pending request for one account is refused with the wire's own
@@ -1488,7 +1472,7 @@ namespace :demo do
     end
 
     # B: scooter positive control — start_rental succeeds with NO KYC submitted
-    # at all (K-442), proving licence-free scooters carry no KYC gate; only the
+    # at all, proving licence-free scooters carry no KYC gate; only the
     # combustion motorcycle (rent_motorcycle) is KYC-gated.
     if result["http_scooter_rent_no_kyc"] == 200 && result["scooter_rented_no_kyc"] == true
       puts "  OK  B  start_rental SK-001 with NO KYC → 200 (licence-free scooters are not KYC-gated)"
@@ -1497,7 +1481,7 @@ namespace :demo do
       puts "  FAIL  B  scooter start_rental (no KYC) → #{result["http_scooter_rent_no_kyc"].inspect}/rented=#{result["scooter_rented_no_kyc"].inspect}"
     end
 
-    # C: THE FAIL-CLOSED BOOLEAN (K-656). A genuinely broker-signed attestation
+    # C: THE FAIL-CLOSED BOOLEAN. A genuinely broker-signed attestation
     # whose booleans are spelled "true" (a JSON string) and 1 is ACCEPTED as an
     # attestation and grants NOTHING — so the agent A4 just cleared loses its
     # clearance and the motorcycle it unlocked is refused again with

@@ -5,7 +5,7 @@
 #
 # Wire-only today (stylish's page is read-only counts), an Operation anyway: a
 # guard that `render`s cannot be exercised from a console or reused by a second
-# door, and these three guards are the demo's whole argument (K-692).
+# door, and these three guards are the demo's whole argument.
 class BookAppointmentOperation
   # @param principal_id [String] the account the wire resolved. NEVER an argument
   #   off the request: `book_appointment` IGNORES a forged `user_id` in the body,
@@ -16,7 +16,7 @@ class BookAppointmentOperation
   #   WHERE predicate, an INSERT has none. Moving the column's DEFAULT to
   #   `kiosk.current_user_id()` would keep the database the authority; a migration.
   def self.call(principal_id:, salon_id:, slot:, service_id:)
-    # ── Input guards (K-692) ─────────────────────────────────────────────────
+    # ── Input guards ─────────────────────────────────────────────────────────
     # Clean 400s instead of letting `create!` (or the column's NOT NULL) raise a
     # RecordInvalid/NotNullViolation that surfaces as an opaque 500. Each refusal
     # names what was wrong and what the valid values are, so an assistant that
@@ -31,8 +31,8 @@ class BookAppointmentOperation
     # `slot` needs its own guard because ActiveRecord's timestamp cast does not
     # fail loudly and fails in TWO directions: "banana" casts to nil and detonates
     # the column's NOT NULL as a 500, while "next tuesday" casts to TODAY AT
-    # MIDNIGHT and books a real appointment in the past. The «e.g.» is COMPUTED
-    # (K-972): a written-down instant becomes a second refusal once it ages.
+    # MIDNIGHT and books a real appointment in the past. The «e.g.» is COMPUTED:
+    # a written-down instant becomes a second refusal once it ages.
     if slot.blank?
       return refused("missing field: slot — an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
@@ -42,16 +42,15 @@ class BookAppointmentOperation
       return refused("invalid slot #{slot.inspect} — pass an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
 
-    # ── K-969: AN APPOINTMENT IN THE PAST IS REFUSED ────────────────────────
+    # ── An appointment in the past is refused ───────────────────────────────
     # The guard above only catches what does not PARSE; `"1900-01-01T09:00:00Z"`
-    # parses perfectly and booked a real appointment a century ago.
+    # parses perfectly and would book a real appointment a century ago.
     #
-    # This verb takes an INSTANT, not a date like hoteling's, so its floor is an
-    # instant: at or before NOW has passed, later today has not. A timestamp WITH
-    # an offset compares exactly from any caller's clock; one WITHOUT is read AT
-    # THE SALON, which is where the chair is and which is what {SalonClock} names
-    # — never in whatever zone the server process happens to run in, which is
-    # what the parse above used to do while the sentence here claimed it was UTC.
+    # This verb takes an INSTANT rather than a date, so its floor is an instant:
+    # at or before NOW has passed, later today has not. A timestamp WITH an
+    # offset compares exactly from any caller's clock; one WITHOUT is read AT
+    # THE SALON, which is where the chair is and which is what {SalonClock}
+    # names — never in whatever zone the server process happens to run in.
     # The refusal echoes back the instant it understood, so a caller that meant
     # another one can see which clock it got. No read-side counterpart,
     # deliberately: `availability` publishes the service MENU, not a calendar, so
@@ -108,21 +107,17 @@ class BookAppointmentOperation
     OperationResult.ok(value)
   end
 
-  # THE ONE INSTANT THIS DEMO PUBLISHES AS AN EXAMPLE (K-969, K-972), read from
-  # two places that must not disagree: the catalog's `example_params`/`example_row`
-  # and the two `slot` refusals above. Both mean «here is a value that works», so
-  # both must name an instant this guard would ACCEPT. A week out at 14:00 ON THE
-  # SALON'S OWN CLOCK — ahead of now from any caller's clock, on a round
-  # wall-clock hour.
+  # The one instant this demo publishes as an example, read from two places that
+  # must not disagree: the catalog's `example_params`/`example_row` and the two
+  # `slot` refusals above. Both mean «here is a value that works», so both must
+  # name an instant this guard would ACCEPT. A week out at 14:00 on the salon's
+  # own clock — ahead of now from any caller's clock, on a round wall-clock hour.
   #
-  # AND THE ZONE IS THE SALON'S BECAUSE THIS IS THE «COPY THIS» VALUE (K-1350).
-  # It used to render 14:00 UTC, which was never FALSE — the string carries an
-  # offset, so every guard here accepted it and every caller resolved it to the
-  # same instant. What it failed to be is EXEMPLARY: it demonstrated a clock the
-  # salon does not keep, in the demo whose whole point is that the salon's clock
-  # is the one that decides ({SalonClock}). An operator copying it learned the
-  # shape and not the rule. Rendered in the salon's zone it is the same kind of
-  # value the verb answers WITH, so the example and the response agree.
+  # The zone is the salon's, not UTC, because this is the «copy this» value: an
+  # operator copying it should carry away the RULE and not just the shape, and
+  # the rule is that the salon's clock is the one that decides ({SalonClock}).
+  # Rendered in the salon's zone the example is the same kind of value the verb
+  # answers WITH, so the example and the response agree.
   #
   # @return [String] an ISO 8601 instant carrying the salon's own offset,
   #   always later than now

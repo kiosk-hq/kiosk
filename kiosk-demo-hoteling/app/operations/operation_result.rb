@@ -11,7 +11,7 @@ class OperationResult < Kiosk::OperationResult
   # this app never produces has no business having a mapping here, and `fetch`
   # turning a typo into a loud KeyError is the point of writing it out.
   #
-  # `not_found` is here for T-090's three-way rule (spec §9.1): a `property_id`
+  # `not_found` is here for the three-way rule of spec §9.1: a `property_id`
   # that ADDRESSES a property which does not exist is 404 — `hotel_detail` and
   # `availability` both do — while `search_hotels`' neighbourhood/amenity
   # filters answer `200 []`.

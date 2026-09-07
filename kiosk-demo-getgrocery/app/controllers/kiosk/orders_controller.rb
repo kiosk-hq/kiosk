@@ -6,7 +6,7 @@
 # `include Kiosk::Handler` — with `kind :action` above each declaration, which is
 # what puts it on `POST`.
 #
-# THE THREE WRITES ARE A HANDFUL OF LINES EACH: read the arguments off the
+# The three writes are a handful of lines each: read the arguments off the
 # request, hand them to an Operation, render what it answers. Keeping the gates
 # in app/operations/ keeps them callable from a console, a rake task, and (for
 # the paid-state read they share) the operator's own back office at
@@ -16,9 +16,9 @@
 # no Kiosk error classes appear below: an Operation answers with an
 # {OperationResult}, and {KioskRefusals#render_operation} is the one place that
 # becomes a `render json:, status:` for the wire to re-render as an RFC 9457
-# problem document. That matters more here than on most siblings — `kyc_required`
-# and `forbidden` are both 403, so the alcohol age gate is a refusal the STATUS
-# cannot name and only the rendered code carries.
+# problem document. That matters here: `kyc_required` and `forbidden` are both
+# 403, so the alcohol age gate is a refusal the STATUS cannot name and only the
+# rendered code carries.
 #
 # Nothing here means a 402. The 402s an assistant meets on this origin come from
 # the registration PoW gate (always on) and, when KIOSK_POW_DEMO=1, the catalog

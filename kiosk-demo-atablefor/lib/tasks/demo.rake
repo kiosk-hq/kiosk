@@ -6,7 +6,6 @@
 #   rake demo:wire_args_spec DB-free unit spec for the WireArguments shape guards —
 #                          party_size, whole_number, the two filter guards and
 #                          booking_id, with no origin, no database and no toll
-#                          (T-137)
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase, tears down
 #   rake demo:book         boots the server, runs script/book_flow.rb (no-human table booking),
 #                          asserts the confirmed booking, tears down
@@ -113,21 +112,20 @@ namespace :demo do
 
     # ── host resolution ────────────────────────────────────────────────
     # The domain here MUST be one config/environments/development.rb permits
-    # (config.hosts) — that is the whole point of the lookup. Until K-695 it was
-    # <demo>.app, which config.hosts has never listed, so the ONE branch this
-    # block exists to offer was the one that broke: a developer who followed the
-    # printed /etc/hosts line got Rails 8 HostAuthorization 403s, the 200-only
-    # readiness poll below burned its 40 seconds, and the run aborted naming the
-    # wrong cause. CI never saw it — with no hosts entry the lookup fails and
-    # everything dials 127.0.0.1.
+    # (config.hosts) — that is the whole point of the lookup. A name that is not
+    # listed breaks the ONE branch this block exists to offer: a developer who
+    # follows the printed /etc/hosts line gets Rails 8 HostAuthorization 403s,
+    # the 200-only readiness poll below burns its 40 seconds, and the run aborts
+    # naming the wrong cause. CI never sees it — with no hosts entry the lookup
+    # fails and everything dials 127.0.0.1.
     #
     # This name resolves PUBLICLY to the live demo box, so a bare lookup returns
     # a public IP, not an error. Only 127.0.0.1 is accepted, which is exactly
     # what an /etc/hosts entry produces: a local harness can never be steered
     # onto the deployed host by whatever DNS happens to answer.
     #
-    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT (K-1318). Unguarded, every local
-    # run of every task in this file sent a DNS query for a `demo.kiosk.tech`
+    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT. Unguarded, every local run of
+    # every task in this file would send a DNS query for a `demo.kiosk.tech`
     # subdomain: an outbound query to the project's production domain, on each
     # invocation, for a value the run discards unless this machine has an
     # /etc/hosts entry. Set KIOSK_DEMO_HOST_LOOKUP=1 to ask for it. Without it
@@ -247,12 +245,9 @@ namespace :demo do
     end
 
     # ── assertions: psql ground truth ──────────────────────────────────
-    # Assert the SPECIFIC booking just made (by id), not a DB-wide COUNT. The
-    # reason this comment used to give — "the seeds place a couple of existing
-    # reservations on the board" — stopped being true: db/seeds.rb now says the
-    # public board is deliberately EMPTY at rest (K-712f). The rule survives its
-    # old reason. A DB-wide count cannot tell the row THIS run created from one
-    # a previous run left behind, or from a future seed change; the id can.
+    # Assert the SPECIFIC booking just made (by id), not a DB-wide COUNT: a
+    # DB-wide count cannot tell the row THIS run created from one a previous run
+    # left behind, or from a future seed change; the id can.
     db = "kiosk_atablefor_development"
 
     this_booking = `psql -X -d #{db} -tAc "SELECT status FROM bookings WHERE id = '#{booking_id}'" 2>&1`.strip
@@ -316,22 +311,18 @@ namespace :demo do
             "Then re-run: bundle exec rake demo:pow"
     end
 
-    # ── The toll this run pays, DERIVED and then PRINTED (T-110) ──────────────
+    # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
     #
     # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
-    # this repo, and until now it pinned nothing about the parameters: it set
-    # `KIOSK_POW_DEMO=1` and nothing else, so it always ran at `PowDifficulty`'s
-    # `low` default while the shipped kiosk-pow-equihash default — and the
-    # hosted deploy — are n=168 k=7. Nothing anywhere demonstrated end to end
-    # that an assistant can pay the toll a real operator charges, and a reader
-    # watching this task had no way to tell which of the two they were seeing.
+    # this repo, and it runs at `PowDifficulty`'s `low` default while the
+    # shipped kiosk-pow-equihash default — and the hosted deploy — are n=168
+    # k=7, so a reader watching this task must be told which of the two they
+    # are seeing.
     #
-    # Both halves are fixed here and neither costs a gate: the ambient
-    # `KIOSK_POW_DIFFICULTY` is now FORWARDED to the server this task spawns
-    # (it was being dropped, so setting it did nothing), and the pair is read
-    # off {PowDifficulty} — the same module the initializer reads — rather than
-    # typed here, then printed at boot and beside the verdict. The default is
-    # unchanged, so CI and a bare `rake demo:pow` cost exactly what they did.
+    # So: the ambient `KIOSK_POW_DIFFICULTY` is FORWARDED to the server this
+    # task spawns, and the pair is read off {PowDifficulty} — the same module
+    # the initializer reads — rather than typed here, then printed at boot and
+    # beside the verdict.
     require File.expand_path("../../app/services/pow_difficulty.rb", __dir__)
     pow_level  = PowDifficulty.level
     pow_params = PowDifficulty.params
@@ -371,11 +362,11 @@ namespace :demo do
            "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
     end
 
-    # ONE owner for the toy counter's location (K-711, K-785). The server and
-    # the driver are two processes that never meet; this task spawns both, so
-    # it is the only place the path can be stated once. Wiped HERE — the beat
-    # asserts exact counts, and the initializer must not truncate a store at
-    # boot in a file an adopter copies.
+    # ONE owner for the toy counter's location. The server and the driver are
+    # two processes that never meet; this task spawns both, so it is the only
+    # place the path can be stated once. Wiped HERE — the beat asserts exact
+    # counts, and the initializer must not truncate a store at boot in a file
+    # an adopter copies.
     bad_proof_db = File.expand_path("../../tmp/bad-proof.sqlite3", __dir__)
     require "fileutils"
     require "shellwords"
@@ -388,7 +379,7 @@ namespace :demo do
       "KIOSK_BAD_PROOF_DB"     => bad_proof_db,
       # Forwarded, not defaulted: `spawn` with an env Hash still inherits the
       # parent's environment, but naming it here is what makes the server's
-      # level and the level printed above the SAME read (T-110).
+      # level and the level printed above the SAME read.
       "KIOSK_POW_DIFFICULTY"   => pow_level,
     }
     server_pid = spawn(
@@ -437,7 +428,7 @@ namespace :demo do
          "KIOSK_POW_DIFFICULTY=#{pow_level}) ──"
     failures = []
 
-    # WHICH TOLL WAS ACTUALLY PAID (T-110), asserted off the WIRE rather than
+    # WHICH TOLL WAS ACTUALLY PAID, asserted off the WIRE rather than
     # printed off this task's own read. A banner naming the parameters is a
     # claim; the challenge the server issued is evidence, and it is what follows
     # an operator override or a policy this task cannot see. Without this the
@@ -453,12 +444,12 @@ namespace :demo do
       puts "  ✗  toll parameters — served #{served_params.inspect}, wanted #{pow_params.inspect}"
     end
 
-    # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR (K-1221), counted by the driver
-    # where the solver runs rather than typed here. This task's prose used to
-    # promise "four" while the driver reported one: it counted only the tolled
-    # query's challenges and not the registration proof `equihash_register`
-    # solves transparently for each identity the flow mints. It is the number a
-    # viewer multiplies by the per-proof budget to size a recording, so it is
+    # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR, counted by the driver where
+    # the solver runs rather than typed here. The total covers BOTH the tolled
+    # query's challenges and the registration proof `equihash_register` solves
+    # transparently for each identity the flow mints — counting the query's
+    # alone reports the wrong number. It is what a viewer multiplies by the
+    # per-proof budget to size a recording, so it is
     # ASSERTED — a printed total that does not equal its own two parts is a
     # counter that has come loose from what it counts.
     solved     = result["proofs_solved"].to_i
@@ -502,7 +493,7 @@ namespace :demo do
       puts "  ✗  bad_proof_count=#{bpc} (expected >=1)"
     end
 
-    # PER-IDENTITY (K-498): a second, innocent identity registered by the flow
+    # PER-IDENTITY: a second, innocent identity registered by the flow
     # must be untouched by the first identity's wrong nonce — one bad client
     # must not raise anyone else's count.
     obpc = result["other_bad_proof_count"].to_i
@@ -563,7 +554,7 @@ namespace :demo do
 
     require "resolv"
 
-    port = ENV.fetch("PORT", "3104")  # distinct from the dev port (3002, where demo:pow runs) AND outside the 3001-3008 band the sibling demos' dev ports occupy (K-649)
+    port = ENV.fetch("PORT", "3104")  # distinct from the dev port (3002, where demo:pow runs) AND outside the 3001-3008 band the sibling demos' dev ports occupy
     log  = "/tmp/kiosk-atablefor-reputation-demo.log"
 
     host = begin
@@ -704,7 +695,7 @@ namespace :demo do
 
     require "resolv"
 
-    port = ENV.fetch("PORT", "3106")  # distinct port (pow=3002, reputation=3104), outside the sibling demos' 3001-3008 dev-port band (K-649)
+    port = ENV.fetch("PORT", "3106")  # distinct port (pow=3002, reputation=3104), outside the sibling demos' 3001-3008 dev-port band
     log  = "/tmp/kiosk-atablefor-backoff-demo.log"
 
     host = begin
@@ -1199,16 +1190,16 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -1269,7 +1260,7 @@ namespace :demo do
     actions      = result["schema_actions"]        || []
     capabilities = result["discovery_capabilities"] || []
 
-    # ── T-094: the catalogue is PUBLIC, and this is what says so ─────────
+    # ── the catalogue is PUBLIC, and this is what says so ────────────────
     # The flow driver sends NO Authorization header, so this status is the
     # whole access proof; a regression to the Bearer gate reads back as a 401.
     if result["schema_status"] == 200
@@ -1279,11 +1270,10 @@ namespace :demo do
       puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
 
-    # ── T-095: ONE origin, ONE publication of the module set ─────────────
-    # This used to compare `schema.verbs` with discovery `capabilities` — two
-    # fields rendered from the SAME `Array(config.capabilities)` call, so the
-    # comparison could only ever pass. `verbs` is gone; the `pay`-absent proof
-    # below is against the one document that still carries the set.
+    # ── ONE origin, ONE publication of the module set ────────────────────
+    # There is no `schema.verbs` beside discovery `capabilities` to
+    # cross-compare — the module set is published once — so the `pay`-absent
+    # proof below is against the one document that carries it.
 
     # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
     if capabilities.include?("pay")
@@ -1337,7 +1327,7 @@ namespace :demo do
       end
     end
 
-    # T-042 / K-452: the primary read query (availability) and primary action
+    # The primary read query (availability) and primary action
     # (book_table) advertise the machine-readable descriptor extensions.
     {
       queries => %w[availability],
@@ -1356,7 +1346,7 @@ namespace :demo do
       end
     end
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`
@@ -1451,8 +1441,8 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-redteam.log"
 
     # The two SEEDED diners (db/seeds.rb). The battery binds one assistant to
-    # each through the real ceremony (T-104), because the cross-owner beats
-    # need two distinct ACCOUNT HOLDERS — two assistants linked to one diner
+    # each through the real ceremony, because the cross-owner beats need two
+    # distinct ACCOUNT HOLDERS — two assistants linked to one diner
     # would legitimately see each other's bookings. Credentials travel in the
     # environment rather than sitting in script/redteam_suite.rb, the same way
     # demo:binding passes the holder's.

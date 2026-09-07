@@ -5,8 +5,8 @@
 # and one action, all of them ordinary Rails controllers named below.
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
-# in config/environments/{development,test,production}.rb (K-650); this file
-# reads the resolved values from Rails.configuration.x.kiosk.*.
+# in config/environments/{development,test,production}.rb; this file reads the
+# resolved values from Rails.configuration.x.kiosk.*.
 
 require "kiosk/user_identity_providers/devise"
 
@@ -36,13 +36,13 @@ Kiosk.configure do |c|
   c.user_id_type   = :uuid
   c.user_id_column = :id
 
-  # ── Where the wire verbs live (T-053 mixin / T-057) ────────────────────────
+  # ── Where the wire verbs live ──────────────────────────────────────────────
   # The queries and actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros (`kind`
-  # says which verb reaches each one), plain `render json:`. Nothing about them belongs in an
-  # initializer, and nothing about them is here: this line only NAMES them, and
-  # the engine loads and registers them (once in production, again after every
-  # reload in development, so an edited/added/removed verb needs no restart).
+  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros
+  # (`kind` says which verb reaches each one), plain `render json:`. This line
+  # only NAMES them; the engine loads and registers them (once in production,
+  # again after every reload in development, so an edited verb needs no
+  # restart).
   c.handlers = %w[Kiosk::FrontDeskController Kiosk::AppointmentsController]
 
   c.guc_namespace  = "app"
@@ -66,29 +66,26 @@ Kiosk.configure do |c|
   # in dev/test — the posture lives in config/environments/*.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # UNIFORM-VALIDATION slice-1 (K-479): validate the proof(s) parsed from the
-  # `Kiosk-PoW` request header (ADR-0022) against the normative PoW schema at
-  # the wire choke point, so a malformed proof gets a clear 400 bad_request
-  # (with a shape hint) instead of a silent re-issued 402 loop. There is no
-  # `pow` body field to validate — the header is the only channel. Needs the
-  # json_schemer gem (in the Gemfile). Absent/valid proofs unchanged.
+  # Validate the proof(s) parsed from the `Kiosk-PoW` request header (ADR-0022)
+  # against the normative PoW schema at the wire choke point, so a malformed
+  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
+  # re-issued 402 loop. There is no `pow` body field to validate — the header is
+  # the only channel. Needs the json_schemer gem (in the Gemfile). Absent/valid
+  # proofs unchanged.
   c.validate_requests = true
 
-  # T-068 slice 3: every query/action answer is validated against the
-  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
-  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
-  # request check — nothing a caller sends can trigger it — and it is what
-  # makes this demo's own CI task list a per-verb conformance proof of the
-  # descriptors rather than a smoke test.
+  # Every query/action answer is validated against the `output_schema` that verb
+  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
+  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
+  # caller sends can trigger it — and it is what makes this demo's own CI task
+  # list a per-verb conformance proof of the descriptors rather than a smoke
+  # test.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why (K-1332): with it on,
-  # a descriptor typo becomes a 500 for a caller who did nothing wrong. This
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production — so leaving
-  # it unconditional shipped exactly the posture
-  # kiosk-server/lib/kiosk/server/response_validation.rb warns against, on the
-  # public endpoint an assistant is pointed at, in the file an operator is sent
-  # here to copy. Nothing is lost from the proof: every demo task list runs in
-  # development, so all of the per-verb conformance survives.
+  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
+  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
+  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
+  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
+  # the proof: every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   # stylish is dual-audience: VISITORS book a service off the menu (customer),
   # salon STAFF view the forecasted revenue (owner). The owner role is sourced
@@ -120,49 +117,42 @@ Kiosk.configure do |c|
   c.skill_sha256 = "7d5be9bf841f8e05fd67b62b60d140fab584de373f8e28944298c93139f9a9ca"
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence (T-104). An assistant
-  # authenticates with the kiosk-pop JWT this very engine minted at
-  # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
-  # engine already ships the adapter that verifies its own tokens:
-  # `IdentityResolution.agent_idp` falls back to
-  # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured. This demo used to override it with a hand-copied composite that
-  # re-implemented the JWT half (more loosely — it never checked `iss`) in
-  # order to bolt on a dev-only parser turning a self-asserted
-  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # Deliberate, and the point of the line's absence. An assistant authenticates
+  # with the kiosk-pop JWT this very engine minted at `/kiosk/auth/register`,
+  # `/auth/login` or the binding ceremony — and the engine already ships the
+  # adapter that verifies its own tokens: `IdentityResolution.agent_idp` falls
+  # back to `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when
+  # nothing is configured.
   # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
   # Okta, an ID-JAG-style broker) by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID (K-830).
+  # the `agent_id` you return must be a UUID.
+  #
   # The provider's own web-session channel (Devise/Warden): the /users/sign_in
   # cookie that approves links on the verify page, mints link codes, unlinks,
-  # and drives the manage-assistants page. ONE channel in every environment
-  # (T-066): the role-carrying `X-Staff-Session` stand-in that used to sit in
-  # front of it is gone, and with it the composite that existed only to hold
-  # the two.
+  # and drives the manage-assistants page. ONE channel in every environment.
   #
-  # ROLES-FROM-IdP SURVIVES THE DELETION, and this is the seam worth reading:
-  # the salon's role never came from the stand-in's header, it came from the
-  # provider's own users table. The Devise adapter asks the User model for
-  # `#kiosk_role`, which returns the staff member's `staff_role` — so an OWNER
-  # who signs in at /users/sign_in mints link codes as `owner`, kiosk-server
-  # captures that role onto the link row (AuthController#link →
-  # LinkCode.mint(requested_role:)), and the assistant that redeems it inherits
-  # it. Walked by `rake demo:roles`.
+  # ROLES COME FROM THE PROVIDER'S OWN IdP, and this is the seam worth reading:
+  # the salon's role comes from the provider's own users table. The Devise
+  # adapter asks the User model for `#kiosk_role`, which returns the staff
+  # member's `staff_role` — so an OWNER who signs in at /users/sign_in mints
+  # link codes as `owner`, kiosk-server captures that role onto the link row
+  # (AuthController#link → LinkCode.mint(requested_role:)), and the assistant
+  # that redeems it inherits it. Walked by `rake demo:roles`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   # Where the engine bounces an UNAUTHENTICATED browser visitor to the
   # manage-assistants page (this app's Devise sign-in). The engine stays
   # IdP-neutral, so the sign-in URL is supplied here; without it the page
-  # would render a bare 401 (MANAGE-PAGE-UNAUTH-UX).
+  # would render a bare 401.
   c.sign_in_path = "/users/sign_in"
 
   # ── NO spending_cap seam, and the reason is the same as the NO
   #    payment_provider one ──────────────────────────────────────────────────
   # `config.spending_cap` is read at exactly one site — `Executor#verb_pay`'s
-  # mandate chain — and since K-800 the provider check runs FIRST, so a `pay`
-  # here is `403 no payment_provider configured` before a cart exists. stylish
+  # mandate chain — and the provider check runs FIRST, so a `pay` here is
+  # `403 no payment_provider configured` before a cart exists. stylish
   # configures no payment_provider (this salon takes payment in the chair), so a
-  # seam set here could never be consulted: it was, until K-989 measured it.
+  # seam set here could never be consulted.
   # What stylish DOES demonstrate is the governance surface above the cap — the
   # manage-assistants page writes `agents.spending_cap_cents`, which
   # `demo:binding` asserts end to end — and that is deliberate: a human sets the
@@ -192,8 +182,8 @@ Kiosk.configure do |c|
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
   # plus the one table it needs — see the kiosk-server README, "Multi-process
   # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on (K-752), but a warning nobody reads is
-  # not the mitigation; this comment and the README are.
+  # this default is in use with PoW on, but a warning nobody reads is not the
+  # mitigation; this comment and the README are.
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

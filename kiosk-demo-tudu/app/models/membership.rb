@@ -17,9 +17,8 @@ class Membership < ApplicationRecord
   validates :account_id, uniqueness: { scope: :list_id }
 
   # ── THE isolation predicate ────────────────────────────────────────────────
-  # When tudu's handlers stopped writing SQL (K-654) this is the one fragment
-  # that deliberately did NOT become a Ruby comparison, for the reason the
-  # philslist pilot settled (see Listing#owned_by_current_principal).
+  # The one predicate in this demo deliberately written as SQL rather than as a
+  # Ruby comparison. Why:
   #
   # `kiosk.current_user_id()` is a STABLE Postgres function reading the
   # transaction-local GUC `app.current_user_id`, which kiosk-server's
@@ -52,13 +51,11 @@ class Membership < ApplicationRecord
   # whole request on both of tudu's doors. A caller cannot pass a different one,
   # which is the property that makes this un-bypassable.
   #
-  # Shape is NOT checked here, and the consequence CHANGED with K-654. It used
-  # to interpolate the id into a `::uuid` cast, so a malformed value raised
-  # InvalidTextRepresentation; `where(list_id:)` instead casts an unparseable
-  # value to NULL and simply answers false. Either way {ListAccess} checks the
-  # shape FIRST and answers 400, so nothing reaches here malformed — but the
-  # guard is now the only thing standing between a typo and a 403, which is
-  # why its note says so at length.
+  # Shape is NOT checked here, and that is load-bearing: `where(list_id:)` casts
+  # an unparseable value to NULL and simply answers false — it never raises, so
+  # a malformed id reads here as a foreign one. {ListAccess} checks the shape
+  # FIRST and answers 400, so nothing reaches here malformed, and that guard is
+  # the only thing standing between a typo and a 403.
   #
   # @param list_id [String] a canonical uuid (see UuidCheck)
   # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)
@@ -69,7 +66,7 @@ class Membership < ApplicationRecord
     scope.exists?
   end
 
-  # ── THE PROJECTION BOTH OF tudu's DOORS READ (T-082) ───────────────────────
+  # ── THE PROJECTION BOTH OF tudu's DOORS READ ───────────────────────────────
   # Who else is on one list, in the shape `list_members` publishes — the
   # collaboration surface a member is entitled to see once access is granted.
   #
@@ -83,16 +80,15 @@ class Membership < ApplicationRecord
   # rather than 404. See {List.reachable_rows} for why the shape lives on the
   # model at all.
   #
-  # WHAT IT PUBLISHES ABOUT A PERSON, AND WHAT IT MUST NOT (K-950). This pluck
-  # used to read `User.arel_table[:email]` into the wire field `handle`, so a
-  # co-member walked away with every other member's LOGIN ADDRESS. It reads
-  # `display_name` now, and {User.public_name} turns a blank one into an opaque
-  # `member-<hex>` derived from the account UUID — never from the address. The
-  # rule is not tudu's: spec Section 7.2 forbids a login address in a row about
-  # another account at EVERY reach, `consented` included, because consent to
-  # share a list is not consent to publish an email address. `demo:redteam`'s
-  # NoLoginAddressOnTheRoster beat reads this projection over the wire and fails
-  # on an address appearing ANYWHERE in the body, not merely in this field.
+  # What it publishes about a person, and what it MUST NOT. It plucks
+  # `display_name`, never `users.email`, and {User.public_name} turns a blank one
+  # into an opaque `member-<hex>` derived from the account UUID — never from the
+  # address. The rule is not tudu's: spec Section 7.2 forbids a login address in
+  # a row about another account at EVERY reach, `consented` included, because
+  # consent to share a list is not consent to publish an email address.
+  # `demo:redteam`'s NoLoginAddressOnTheRoster beat reads this projection over
+  # the wire and fails on an address appearing ANYWHERE in the body, not merely
+  # in this field.
   #
   # @return [Array<Hash>]
   def self.rows_on(list_id)

@@ -11,17 +11,11 @@ require "json"
 # This is the operator→broker leg; the broker→operator leg lands on
 # POST /kyc/callback.
 module ProveBrokerClient
-  # WHAT THIS CLIENT RAISES, AND WHY IT IS TWO NAMED CLASSES RATHER THAN A BARE
-  # RuntimeError.
-  #
-  # Every failure here used to be `raise "…"`, so the caller could not tell one
-  # from another and rescued none of them: `request_kyc` — a no-argument verb an
-  # assistant can call FIRST — answered `500 action_failed` with the Ruby class
-  # and message in `detail`, and in the connection-refused case with this
-  # operator's own broker host and port. MEASURED on a plainly-booted origin
-  # (2026-09-05): `Action "request_kyc" raised RuntimeError: KYC broker intake
-  # secret is not configured …` and `Action "request_kyc" raised
-  # Errno::ECONNREFUSED: Failed to open TCP connection to 127.0.0.1:9 …`.
+  # WHAT THIS CLIENT RAISES, and why it is two named classes rather than a bare
+  # RuntimeError: an unnamed failure reaches the wire as `500 action_failed`
+  # carrying a Ruby class, a Ruby message and — on a refused connection — this
+  # operator's own broker host and port, from a no-argument verb an assistant
+  # can call FIRST.
   #
   # The split is the one the WIRE has to make, which is why it is drawn here
   # rather than by inspecting a message at the caller:
@@ -52,7 +46,9 @@ module ProveBrokerClient
   # @param requested_claims [Array<String>] e.g. ["age_over_18"]
   # @param subject_handle   [String] the agent's user_id the claim must bind to
   # @return [Hash] { "request_id" =>, "verification_url" =>, ... } on success
-  # @raise [RuntimeError] on a non-201 response or transport error
+  # @raise [NotConfigured] when this deployment has no intake secret
+  # @raise [Unavailable] on a transport error, a non-201 response, or a body
+  #   without both fields
   def start_verification(callback_url:, requested_claims:, subject_handle:)
     uri  = URI.parse("#{ProveTrust.broker_url.chomp('/')}/verifications")
     body = JSON.generate(
@@ -106,7 +102,7 @@ module ProveBrokerClient
     # THE CHECKED READ, HERE RATHER THAN AT THE CALLER. The caller stores
     # `request_id` as the row's token and relays `verification_url` to the
     # agent's human, so a response missing either is not a verification this
-    # operator can hold — and a bare `fetch` for them one layer up answered that
+    # operator can hold — and a bare `fetch` for them one layer up answers that
     # with a KeyError, i.e. with a 500 carrying a Ruby message.
     unless intake.is_a?(::Hash) && !intake["request_id"].to_s.empty? &&
            !intake["verification_url"].to_s.empty?

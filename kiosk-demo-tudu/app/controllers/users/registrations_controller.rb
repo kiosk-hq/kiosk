@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Users
-  # SIGN-UP, with the one field that keeps a login address off the roster (K-950).
+  # SIGN-UP, with the one field that keeps a login address off the roster.
   #
   # Devise's `RegistrationsController` permits `email`, `password` and
   # `password_confirmation` and nothing else, by design — a strong-parameters
@@ -12,7 +12,7 @@ module Users
   # safe but useless to the people who invited them.
   #
   # This is the WHOLE override. Sign-up, sign-out, the redirects and the failure
-  # re-render are Devise's, untouched — the same shape as the K-533 sessions
+  # re-render are Devise's, untouched — the same shape as the sessions
   # signpost next door, which subclasses to change one answer and inherits the
   # rest. `display_name` carries no authorisation meaning whatsoever: it is not
   # unique, nothing looks an account up by it, and {User.public_name} is the

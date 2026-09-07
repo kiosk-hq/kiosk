@@ -36,10 +36,6 @@ class Kiosk::ReservationsController < ActionController::API
   # cadence below is the skill's verbatim (skill.md Step 5), because the skill is
   # what assistants actually follow. No CHECK COUNT is stated: a count is derived
   # from cadence and horizon, so it goes silently wrong when either moves.
-  #
-  # getgrocery's descriptor also promises its setup_url is stable across polls.
-  # NOT repeated here: StubPsp mints no setup session, so claiming it would be a
-  # claim about code this demo never runs.
   kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \

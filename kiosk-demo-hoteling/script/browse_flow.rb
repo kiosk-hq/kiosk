@@ -11,7 +11,7 @@
 #
 # It then drives ONE ACTION (`reserve_room`) through the same gate, because the
 # policy hook's write kind is `:run` and NOT the `:action` an operator declares
-# above the handler (K-1329). A policy that branched on `:action` would return
+# above the handler. A policy that branched on `:action` would return
 # nil forever, silently, and the toll would never apply to a write — so the
 # 402 this driver expects on the un-proofed `reserve_room` is what proves the
 # branch fires at all.
@@ -87,7 +87,7 @@ BROWSES.times do |i|
   $stderr.puts "  [browse] query #{i + 1}: #{curve.last} proof(s), served"
 end
 
-# ── THE WRITE TOLL — an action reaches the policy as `:run` (K-1329) ─────────
+# ── THE WRITE TOLL — an action reaches the policy as `:run` ─────────────────
 #
 # The policy hook receives one of `Kiosk::Server::Executor::VERBS` —
 # `%i[query run pay]` — while what an operator DECLARES above the handler is
@@ -171,7 +171,7 @@ puts JSON.generate(
   free_prefix:   free_prefix,
   became_priced: became_priced,
   monotonic:     monotonic,
-  # K-1329: the write branch. `write_first_status` is the whole assertion — a
+  # The write branch. `write_first_status` is the whole assertion — a
   # 402 means an action reached the policy as `:run`; a 200 means the branch
   # never fired at all.
   http_availability:     rc_avail,

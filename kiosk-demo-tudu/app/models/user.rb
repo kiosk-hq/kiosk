@@ -27,42 +27,37 @@ class User < ApplicationRecord
   # Every list this account can reach — the membership-based access surface.
   has_many :memberships, foreign_key: :account_id, inverse_of: :account, dependent: :destroy
 
-  # THE ONE NAME THIS ACCOUNT HAS IN FRONT OF OTHER PEOPLE (K-950).
+  # The one name this account has in front of other people.
   #
-  # `list_members` publishes a row PER MEMBER of a shared list, and until K-950
-  # the column it published was `users.email` — so every housemate on a list
-  # learned the login address of every other housemate, and the demo's own web
-  # board published a masked local-part (`al•••`) of the same column, which
-  # against a known domain is barely a mask at all. Membership is consented (an
-  # owner minted a single-use invite and a human redeemed it), which made this
-  # far weaker than philslist's ungated board — but consent to share a list is
-  # not consent to publish an email address, and Phil's rule is categorical: no
+  # `list_members` publishes a row PER MEMBER of a shared list, so this name
+  # reaches every other member. It may therefore never be `users.email`, nor a
+  # masked local-part of it (`al•••`), which against a known domain is barely a
+  # mask at all. Membership here is consented — an owner minted a single-use
+  # invite and a human redeemed it — and that makes NO difference: consent to
+  # share a list is not consent to publish an email address, and no
   # authorization model justifies putting a login credential on the wire. The
-  # spec now says so at every `reach`, not only at `published` (Section 7.2).
+  # spec says so at every `reach`, not only at `published` (Section 7.2).
   #
   # SO: the account's OWN chosen name, and an opaque pseudonym when it has none.
   #
-  # WHY A NAME AT ALL, where philslist publishes only `seller-<hex>`. The two
-  # audiences are different and the difference is the whole design. philslist's
-  # board is read by strangers, so an opaque handle costs a buyer nothing. A
-  # tudu roster is read by the people the account holder DELIBERATELY invited
-  # into their household list — "who added the tent?" is the question the verb
-  # exists to answer, and `member-4f2a9c1e3b7d` does not answer it. A name the
-  # reader recognises is the point.
+  # Why a name at all, rather than an opaque handle throughout. A tudu roster is
+  # read by the people the account holder DELIBERATELY invited into their
+  # household list — "who added the tent?" is the question the verb exists to
+  # answer, and `member-4f2a9c1e3b7d` does not answer it. A name the reader
+  # recognises is the point.
   #
-  # WHY THE FALLBACK IS DERIVED FROM THE ACCOUNT UUID AND NEVER FROM THE
-  # ADDRESS — this is K-913's argument and it transfers unchanged. Hashing an
-  # email is reversible in practice: the input space is a wordlist, and anyone
-  # holding a candidate address confirms it with one hexdigest. A v4 UUID is 122
-  # bits of randomness that appears nowhere a reader can enumerate, so the same
-  # construction over it inverts to nothing. Masking the local part is NOT an
-  # acceptable third option: two characters plus the confirmation that an
-  # address holds an account here is a disclosure, not a redaction.
+  # The fallback is derived from the account UUID and NEVER from the address.
+  # Hashing an email is reversible in practice: the input space is a wordlist,
+  # and anyone holding a candidate address confirms it with one hexdigest. A v4
+  # UUID is 122 bits of randomness that appears nowhere a reader can enumerate,
+  # so the same construction over it inverts to nothing. Masking the local part
+  # is NOT an acceptable third option: two characters plus the confirmation that
+  # an address holds an account here is a disclosure, not a redaction.
   #
-  # 48 bits (12 hex), deterministic and unsalted, for philslist's reasons: a
-  # display label is never an argument to a verb (`remove_member` takes
-  # `account_id`), nothing rests on it being unique, and stability across boots
-  # and reseeds is what lets the redteam battery assert on it.
+  # 48 bits (12 hex), deterministic and unsalted: a display label is never an
+  # argument to a verb (`remove_member` takes `account_id`), nothing rests on it
+  # being unique, and stability across boots and reseeds is what lets the
+  # redteam battery assert on it.
   #
   # @param display_name [String, nil] the account's chosen name, or nil/blank
   # @param account_id [String] users.id — the uuid, NOT the address

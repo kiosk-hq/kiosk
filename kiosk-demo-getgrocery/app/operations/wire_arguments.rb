@@ -96,19 +96,16 @@ module WireArguments
   # delivery_address: ""}` is answered about the ADDRESS, and folding presence in
   # here would reorder that.
   #
-  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s. A `raw.to_s.to_i` is enough to stop
-  # the 500s the header describes and NOT enough to agree with the
+  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s. A `raw.to_s.to_i` stops the 500s
+  # the header describes and does NOT agree with the
   # `{type: "integer", minimum: 1, maximum: 6}` declared in front of it:
   # `1.5.to_s.to_i` is 1, so a fractional slot comes out of that line INSIDE the
   # declared range — booked as slot 1 rather than refused. Every other hostile
   # shape (`true`, `false`, `[]`, `{}`, `[1]`, `{"a" => 1}`, `"abc"`) collapses
   # to 0 and the range arm below catches it, so `1.5` is the single value on
-  # which the looser spelling would disagree with the layer in front of it —
-  # which is exactly as much disagreement as a defence-in-depth layer is allowed
-  # to have. Not reachable on the wire either way: both verbs are `kind :action`,
-  # so a real `1.5` is a JSON number the validator refuses before this line. That
-  # is WHY the strict spelling matters — a layer that only holds while the layer
-  # in front of it holds is not a second layer at all.
+  # which the looser spelling would disagree with the layer in front of it. A
+  # layer that only holds while the layer in front of it holds is not a second
+  # layer at all.
   #
   # {#whole_number} and not `is_a?(Integer)`: `2.0` is still slot 2 here, because
   # json_schemer says a JSON `2.0` is a valid `integer` (measured).
@@ -207,8 +204,8 @@ module WireArguments
   # @return [Array(String, nil), Array(nil, OperationResult)] the canonical `D0N`
   #   routing key the address resolved to, or a refusal naming what is needed.
   #   `delivery_slots` publishes that key as the row's `district`; the order
-  #   verbs only need one to exist. THE METHOD IS NAMED FOR WHAT IT RETURNS
-  #   (K-1349): a routing key, never the clock `DeliverySlots.zone` names.
+  #   verbs only need one to exist. THE METHOD IS NAMED FOR WHAT IT RETURNS: a
+  #   routing key, never the clock `DeliverySlots.zone` names.
   def served_district(address)
     result = DublinZones.check(address)
     return [result.district, nil] if result.ok?
@@ -230,27 +227,18 @@ module WireArguments
   # `items: {sku: …}` and `items: ["bread"]` become a 400 instead of walking into
   # `.map` / `it[:sku]` and raising a 500 out of the headline action.
   #
-  # `qty` IS AS STRICT HERE AS IN THE SCHEMA, and that is the point. A
-  # `(item[:qty] || 1).to_s.to_i` stops the 500s the header describes but lets
-  # exactly two shapes through as a legal quantity: `false`, because `||` reads
-  # it as absent and defaults to 1, and `1.5`, because `"1.5".to_i` is 1.
-  # Neither is reachable on the wire — `input_schema` declares `qty`
-  # `{type: "integer", minimum: 1}` and `required`, and it is validated on every
-  # call — so this layer would never be the thing refusing them. That is
-  # precisely why it is written strictly: a defence-in-depth layer whose whole
-  # claim is «the schema is not the only thing standing here» is worth nothing
-  # if the schema is, in fact, the only thing standing. An ABSENT `qty` is
-  # refused too, for the same reason: the schema requires it, so a default here
-  # would be a second, weaker contract nobody published.
+  # `qty` IS AS STRICT HERE AS IN THE SCHEMA, for the reason
+  # {#delivery_slot_id} gives. A `(item[:qty] || 1).to_s.to_i` lets exactly two
+  # shapes through as a legal quantity: `false`, because `||` reads it as absent
+  # and defaults to 1, and `1.5`, because `"1.5".to_i` is 1. An ABSENT `qty` is
+  # refused too: the schema requires it, so a default here would be a second,
+  # weaker contract nobody published. BOTH ENDS of the declared
+  # `{type: "integer", minimum: 1, maximum: MAX_INT4}` are carried, for the same
+  # reason one bound over.
   #
-  # BOTH ENDS OF THE DECLARED RANGE: `qty` is
-  # `{type: "integer", minimum: 1, maximum: MAX_INT4}`, so this layer carries a
-  # `<= MAX_INT4` arm as well as its `>= 1` one. Leaving it off would be the
-  # same defect one bound over — a second layer weaker than the schema in
-  # front of it. What this layer CANNOT
-  # check is the other half of the same bug: the cart's TOTAL, which is not a
-  # fact about any single item. {#priceable_total} answers that one, later,
-  # once the catalogue prices are resolved.
+  # What this layer CANNOT check is the other half of the same bug: the cart's
+  # TOTAL, which is not a fact about any single item. {#priceable_total} answers
+  # that one, later, once the catalogue prices are resolved.
   #
   # @return [Array(Array<Hash>, nil), Array(nil, OperationResult)]
   def items(raw)

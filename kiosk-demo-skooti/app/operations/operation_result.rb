@@ -13,7 +13,7 @@ class OperationResult < Kiosk::OperationResult
   # turning a typo into a loud KeyError is the point of writing it out.
   # `kyc_required` and `forbidden` are BOTH 403, so the code — not the status —
   # is what tells an assistant "go and get attested" apart from "this is not
-  # yours". `quota_exceeded` (K-586) is the per-principal cap on outstanding
+  # yours". `quota_exceeded` is the per-principal cap on outstanding
   # broker intakes: 429 is the status §9 gives it, and the only refusal on this
   # origin an assistant can read as "come back later" rather than "no".
   # `module_not_served` and `action_failed` are the KYC broker's two absences:

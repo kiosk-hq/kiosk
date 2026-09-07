@@ -66,16 +66,14 @@ class Kiosk::BookingsController < ApplicationController
   # because a confirmation an assistant reads back to its human has to name WHAT
   # was booked; `seating_at` is the absolute instant behind the (date, time).
   #
-  # AND THE CONFIRMATION CARRIES `seating_label` FOR THE SAME REASON THE
-  # AVAILABILITY ROW DOES (K-1351). `date` and `time` here ECHO the caller's own
-  # arguments, and that was the argument for leaving them bare: a caller cannot
-  # be told its own words in a clock it did not mean. It is also exactly where
-  # the two sides may DISAGREE about which clock those words were in — a
-  # zoneless "20:00" is the restaurant's, per the guard above, whatever the
-  # assistant meant by it — and a booking confirmation is the artefact a human
-  # keeps. So the same zone-bearing rendering `availability` and `my_bookings`
-  # publish is on this row too, from the same {Seatings.label}: one label, one
-  # spelling, three surfaces.
+  # The confirmation carries `seating_label` for the same reason the availability
+  # row does. `date` and `time` here ECHO the caller's own arguments, which is
+  # exactly where the two sides may DISAGREE about which clock those words were
+  # in — a zoneless "20:00" is the restaurant's, per the guard above, whatever
+  # the assistant meant by it — and a booking confirmation is the artefact a
+  # human keeps. So the same zone-bearing rendering `availability` and
+  # `my_bookings` publish is on this row too, from the same {Seatings.label}:
+  # one label, one spelling, three surfaces.
   output_schema type: "object",
                 description: "The confirmed booking.",
                 additionalProperties: false,

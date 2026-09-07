@@ -5,7 +5,7 @@
 # Same shape as Kiosk::FleetController, with `kind :action` above each
 # declaration, which is what puts it on `POST`.
 #
-# THE FOUR WRITES ARE THREE LINES EACH: read the arguments off the request, hand
+# The four writes are three lines each: read the arguments off the request, hand
 # them to an Operation, render what it answers. The gate chains, the Ed25519
 # signature and the server-to-server KYC call live in app/operations/, which
 # keeps a `render` out of the middle of one and makes them callable from a
@@ -39,9 +39,9 @@ class Kiosk::RentalsController < ActionController::API
   # stated, since a count derived from the cadence and the horizon goes wrong the
   # moment either moves.
   #
-  # getgrocery's descriptor also promises the setup_url is stable across polls —
-  # a real-Stripe SetupIntent-reuse property. NOT repeated here: StubPsp mints no
-  # setup session, so that would be a claim about code this never runs.
+  # The descriptor promises nothing about the setup_url being stable across
+  # polls: StubPsp mints no setup session, so that would be a claim about code
+  # this never runs.
   kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \

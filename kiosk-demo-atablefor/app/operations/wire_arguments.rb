@@ -36,8 +36,8 @@ module WireArguments
   #     `RestaurantTable.where(capacity.gteq(party_size))` and ActiveRecord
   #     raises `ActiveModel::RangeError` CASTING the comparison — HTTP 500 for
   #     an argument a client simply got wrong, on BOTH surfaces at once, with
-  #     the runtime's own class name in the body. Measured on a booted origin,
-  #     and probed by this demo's HostileArgShapes beat so it stays measured.
+  #     the runtime's own class name in the body. Probed by this demo's
+  #     HostileArgShapes beat so it stays measured.
   #     NOTE the asymmetry with the two identifiers next door: they reach
   #     ActiveRecord as EQUALITY predicates, where an out-of-range value is
   #     answered with zero rows rather than a raise. It is the COMPARISON that
@@ -70,16 +70,11 @@ module WireArguments
   # (`"abc"`, `nil` and `"0x10"` coerce to 0 and the range arm below catches
   # them, and `2.0` is 2 — which it still is, see {#whole_number}.)
   #
-  # THE COMMENT ABOVE IS WHY THAT STILL MATTERS THOUGH NOTHING ON THE WIRE CAN
-  # REACH IT: `book_table` is `kind :action`, so its JSON body is validated
-  # against `input_schema` first, and `availability` is `kind :query`, so
-  # {Kiosk::Server::ArgumentDecoder}'s `Integer(v, 10)` refuses a non-integer
-  # spelling before the handler runs. The path this guard SAYS it exists for is
-  # the descriptor-less one — {BookTableOperation} is an ordinary class with an
-  # ordinary `call` — and that is precisely the path on which nothing has
-  # coerced the argument, so it is precisely where a `.to_i` would turn a
-  # hostile shape into a 500 and `1.5` into a party of one. A layer that only
-  # holds while the layer in front of it holds is not a second layer at all.
+  # No WIRE call can reach either mistake — an action's body is schema-validated
+  # first and a query's arguments pass {Kiosk::Server::ArgumentDecoder} — but
+  # {BookTableOperation} is an ordinary class with an ordinary `call`, and on
+  # that descriptor-less path nothing has coerced the argument. A layer that
+  # only holds while the layer in front of it holds is not a second layer at all.
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def party_size(raw)
@@ -107,29 +102,22 @@ module WireArguments
   #
   # NOT `is_a?(Integer)`, and the difference is measured rather than assumed:
   # draft 2020-12 defines `integer` NUMERICALLY, not by wire type, so
-  # `{"party_size": 2.0}` is a VALID integer and json_schemer accepts it —
-  # re-measured against THIS demo's own bundle (json_schemer 2.5.0) rather than
-  # inherited from a sibling demo. A bare class
-  # test here would therefore refuse a call the published schema allows, which is
-  # the one way this guard could get the story wrong in the other direction.
-  # JSON parsing yields Integer or Float and nothing else, so those are the two
-  # cases; every other type — nil, true/false, String, Array, Hash — and every
-  # fractional or non-finite Float is not a party.
+  # `{"party_size": 2.0}` is a VALID integer and json_schemer (2.5.0 in this
+  # bundle) accepts it. A bare class test here would therefore refuse a call the
+  # published schema allows, which is the one way this guard could get the story
+  # wrong in the other direction. JSON parsing yields Integer or Float and
+  # nothing else, so those are the two cases; every other type — nil,
+  # true/false, String, Array, Hash — and every fractional or non-finite Float
+  # is not a party.
   #
-  # DELIBERATELY THE SAME HELPER getgrocery uses for `qty` and
-  # `delivery_slot_id`, and deliberately NOT hoteling's `Integer(raw.to_s, 10)`
-  # spelling: that one is for arguments the query decoder has ALREADY turned into
-  # integers, and `party_size` is also reached with no decoder in front of it.
-  #
-  # WHAT THAT COSTS, MEASURED rather than left for the next reader to trip over:
-  # a STRING is not a party, so `availability` works only because its declared
-  # `{type: "integer"}` makes {Kiosk::Server::ArgumentDecoder} coerce
-  # `?party_size=2` to `2` before the handler runs. Drop that declaration and
-  # this guard refuses the legal call along with the hostile ones (watched, and
-  # restored). That is the correct trade for a layer whose whole job is to be
-  # the schema's `integer` and nothing looser — but it means the query half's
-  # second layer sits DOWNSTREAM of the descriptor rather than independent of it,
-  # which the action half's does not.
+  # WHAT THAT COSTS: a STRING is not a party, so `availability` works only
+  # because its declared `{type: "integer"}` makes
+  # {Kiosk::Server::ArgumentDecoder} coerce `?party_size=2` to `2` before the
+  # handler runs. Drop that declaration and this guard refuses the legal call
+  # along with the hostile ones. That is the correct trade for a layer whose
+  # whole job is to be the schema's `integer` and nothing looser — but it means
+  # the query half's second layer sits DOWNSTREAM of the descriptor rather than
+  # independent of it, which the action half's does not.
   #
   # @return [Integer, nil] nil when `raw` is not a whole number
   def whole_number(raw)
@@ -176,13 +164,9 @@ module WireArguments
   end
 
   # The "currently …" tail both DB-DERIVED refusals end in, and the reason it is
-  # a method rather than a `join` at each site.
-  #
-  # `[].join(", ")` is `""`, so the sentence came to rest as «… is not one this
-  # aggregator serves — currently » — a promise of a set with nothing after it,
-  # which is WORSE than no clause at all: an assistant parsing the refusal for
-  # the values it may retry with gets an empty promise rather than an absence.
-  # And the empty set is not a corner: an origin with no restaurants, or none
+  # a method rather than a `join` at each site: `[].join(", ")` is `""`, which
+  # leaves «… serves — currently » — a promise of a set with nothing after it.
+  # The empty set is not a corner case: an origin with no restaurants, or none
   # with an upcoming seating, is exactly the state a fresh operator install is
   # in, so this is the FIRST refusal a new operator's assistant sees.
   #

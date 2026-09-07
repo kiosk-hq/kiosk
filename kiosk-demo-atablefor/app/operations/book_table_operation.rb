@@ -113,7 +113,7 @@ class BookTableOperation
         party_size:          booking["party_size"].to_i,
         date:                date,
         time:                time,
-        # The zone-bearing rendering of the same wall clock (K-1351), from the
+        # The zone-bearing rendering of the same wall clock, from the
         # SAME helper `availability` and `my_bookings` label their rows with, so
         # the three surfaces cannot spell one seating three ways.
         seating_label:       Seatings.label(time),
@@ -133,48 +133,40 @@ class BookTableOperation
   # A restaurant or table identifier: SHAPE first, then RANGE — the same two
   # steps in the same order {WireArguments.party_size} takes.
   #
-  # A BARE `.to_i` HERE IS WRONG TWICE OVER on the descriptor-less path — the
-  # only path where either argument is uncoerced, and the path
-  # {WireArguments}' own comment names as its reason to exist:
+  # A bare `.to_i` is wrong twice over on the descriptor-less path, the only
+  # path where either argument is uncoerced:
   #
-  #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` AT
-  #     ALL, so each raises `NoMethodError` — a `500 action_failed` for a value
+  #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` at
+  #     all, so each raises `NoMethodError` — a `500 action_failed` for a value
   #     `input_schema` already forbids;
   #   * `1.5.to_i` is 1, so a fractional id RESOLVES TO A ROW THE CALLER DID NOT
-  #     NAME. Watched rather than argued: `BookTableOperation.call` with
-  #     `restaurant_id: 1.5, restaurant_table_id: 1` returned a CONFIRMED
-  #     BOOKING at restaurant 1 table 1, and `restaurant_table_id: 1.5` against
-  #     restaurant 2 answered "no such table 1 at restaurant 2" — a refusal
-  #     naming a table nobody asked for. Which of the two a caller meets is the
-  #     SEEDED DATA's choice, not the guard's.
+  #     NAME — either a booking at a table nobody asked for, or a refusal naming
+  #     one. Which of the two a caller meets is the seeded data's choice, not
+  #     the guard's.
   #
   # The shape is {WireArguments.whole_number}'s, so it is json_schemer's own
-  # `integer` and nothing looser: `2.0` still resolves to 2, exactly as `.to_i`
-  # did and exactly as the declared `{type: "integer"}` in front of it allows
-  # (measured against this demo's bundle). A bare `is_a?(Integer)`
-  # here would refuse a body the published descriptor calls valid.
+  # `integer` and nothing looser: `2.0` still resolves to 2, exactly as the
+  # declared `{type: "integer"}` in front of it allows (measured against this
+  # demo's bundle). A bare `is_a?(Integer)` here would refuse a body the
+  # published descriptor calls valid.
   #
-  # THREE REFUSALS, ONE PER THING THAT CAN BE WRONG, and the split is behaviour
-  # rather than decoration — an error body an assistant acts on has to say which
-  # of the three it was:
+  # Three refusals, one per thing that can be wrong, because an error body an
+  # assistant acts on has to say which of the three it was:
   #
   #   * NOT GIVEN — `nil` is what the controller passes for an argument that was
-  #     not given, and that keeps "missing param: …" byte-for-byte;
-  #   * GIVEN, WRONG SHAPE — the values that used to be a 500 or a wrong row;
+  #     not given, and it answers "missing param: …";
+  #   * GIVEN, WRONG SHAPE — a value with no whole number in it;
   #   * GIVEN, OUT OF RANGE — a `0` or a negative id, which parsed fine and the
   #     guard has already read.
   #
-  # THE THIRD ONE MUST NOT ANSWER "missing param: …" — telling a caller that an
-  # argument was not given when it WAS is an error body that misinforms rather
-  # than informs. The wording is the one this demo already uses for the
-  # identical case one line down: {WireArguments.party_size} answers a zero
-  # party "party_size must be >= 1", and the fleet's other integer guards split
-  # the two cases the same way (getgrocery's `delivery_slot_id`, hoteling's
-  # `integer`).
+  # The third must NOT answer "missing param: …": telling a caller that an
+  # argument was not given when it was is an error body that misinforms rather
+  # than informs. The wording is the one this demo already uses one line down —
+  # {WireArguments.party_size} answers a zero party "party_size must be >= 1".
   #
-  # NONE OF THIS IS OBSERVABLE ON THE WIRE, and that is measured rather than
-  # assumed: both properties are declared `{type: "integer", minimum: 1}`
-  # (`app/controllers/kiosk/bookings_controller.rb:47,:49`) and `input_schema` is
+  # None of this is observable on the wire, and that is measured rather than
+  # assumed: both properties are declared `{type: "integer", minimum: 1}` in
+  # `app/controllers/kiosk/bookings_controller.rb` and `input_schema` is
   # validated on every call, so a body carrying `0` is refused a layer earlier
   # and no wire caller reaches this arm. The descriptor-less path — this class's
   # own `call`, the path the whole guard exists for — is where it IS reachable,

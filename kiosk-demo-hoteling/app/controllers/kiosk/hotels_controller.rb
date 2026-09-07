@@ -288,39 +288,32 @@ class Kiosk::HotelsController < ActionController::API
     from_price_cents: 15000, currency: "eur", room_type_count: 2,
   })
   def search_hotels
-    # ── THE THREE INTEGERS THIS VERB READS GO THROUGH THE DEMO'S OWN GUARD ────
+    # The three integers this verb reads go through {WireArguments.integer}, not
+    # `params[…].to_s.to_i`: `.to_i` answers 0 for `"abc"` and 1 for `"1.5"`, so
+    # a junk filter would silently become «no floor at all» or a floor nobody
+    # asked for, and a junk `limit` the default page size. That guard is
+    # `Integer(raw, 10)` with base 10 explicit, so `"0x10"` is refused rather
+    # than read as 16; `property_id` and `room_type_id` use the same one.
     #
-    # NOT `params[…].to_s.to_i`. `to_s` before `to_i` is enough to stop the
-    # `NoMethodError` a JSON `true` or `[3]` would raise on a bare `.to_i` — it
-    # is NOT enough to agree with the `{type: "integer"}` declared in front of
-    # them. `.to_i` answers 0 for `"abc"` and 1 for `"1.5"`, so a junk filter
-    # would become «no floor at all» or a floor nobody asked for, silently, and
-    # a junk `limit` the default page size. This demo writes its answer to that
-    # question down one file over: {WireArguments.integer} is `Integer(raw, 10)`
-    # with base 10 explicit so `"0x10"` is refused rather than read as 16, and
-    # it is what `property_id` and `room_type_id` use. Every reader of a
-    # declared integer on this surface goes through it.
-    #
-    # NOT REACHABLE FROM THE WIRE — said out loud rather than left as a puzzle.
+    # It is NOT REACHABLE from the wire, and it is still the second layer:
     # `search_hotels` is `kind :query`, so {Kiosk::Server::ArgumentDecoder} has
     # already coerced `min_stars` and `max_price_cents` (both declared
     # `type: "integer"`) and `limit` (a RESERVED name it coerces to integer by
-    # default, spec §8.1 item 6) through the SAME strict `Integer(v, 10)`: a
-    # `1.5`, a `true` or an array is a typed 400 before this method runs. That is
-    # precisely why the second layer had to be fixed rather than left — a layer
+    # default, spec §8.1 item 6) through the same strict `Integer(v, 10)`, and a
+    # `1.5`, a `true` or an array is a typed 400 before this method runs. A layer
     # that only holds while the layer in front of it holds is not a second layer.
     #
-    # THE CLAMP IS UNCHANGED, and it is what the description publishes: every
-    # INTEGER `limit` is adjusted into 1..HOTELING_SEARCH_MAX and never refused.
-    # A non-integer is not «a value outside that range» — it is not a page size
-    # at all, and the engine in front of this line already answers it 400.
+    # The clamp is what the description publishes: every INTEGER `limit` is
+    # adjusted into 1..HOTELING_SEARCH_MAX and never refused. A non-integer is
+    # not «a value outside that range» — it is not a page size at all, and the
+    # engine in front of this line already answers it 400.
     #
-    # SO `limit` TAKES NO `max:`, and that is a decision rather than an
-    # omission: it is the one integer on this surface that reaches no COLUMN —
-    # it becomes `.limit()`, bounded by construction two lines below — and
-    # refusing a `limit` of 2**31 would contradict the sentence above, which the
-    # descriptor publishes. The two FILTERS below take one, because each is
-    # compared against a 4-byte `integer` column.
+    # So `limit` takes no `max:`, and that is a decision rather than an omission:
+    # it is the one integer on this surface that reaches no COLUMN — it becomes
+    # `.limit()`, bounded by construction two lines below — and refusing a
+    # `limit` of 2**31 would contradict the sentence the descriptor publishes.
+    # The two FILTERS below take one, because each is compared against a 4-byte
+    # `integer` column.
     limit = HOTELING_SEARCH_PAGE
     if params[:limit].present?
       requested, refusal = WireArguments.integer(params[:limit], field: "limit",
@@ -329,18 +322,14 @@ class Kiosk::HotelsController < ActionController::API
 
       limit = requested
     end
-    # THE FLOOR IS 1, NOT THE DEFAULT PAGE SIZE (K-1328). `limit=0` and every
-    # negative integer are «a value outside that range», so the published
-    # sentence says what happens to them: they are CLAMPED into 1..50. Mapping
-    # them to HOTELING_SEARCH_PAGE — which this line did until K-1328 — is a
-    # THIRD behaviour that neither bound describes: a caller asking for zero
-    # rows got twenty, silently, and three published sentences (this verb's
-    # `description`, {HINT_SEARCH_LIMIT}, and the descriptor house style
-    # published on kiosk.tech, whose worked hotel-search example carries that
-    # same sentence verbatim as the model every operator is told to copy) all
-    # said 1. Three surfaces agreeing is what put the code on the wrong side.
-    # `script/search_flow.rb` sends `limit=0` and demo:search asserts the
-    # one-row page, so the floor is a behaviour assertion rather than prose.
+    # The floor is 1, NOT the default page size. `limit=0` and every negative
+    # integer are «a value outside that range», so they are CLAMPED into 1..50;
+    # mapping them to HOTELING_SEARCH_PAGE would be a third behaviour neither
+    # bound describes, and a caller asking for zero rows would silently get
+    # twenty. This verb's `description`, {HINT_SEARCH_LIMIT} and the descriptor
+    # house style published on kiosk.tech all say 1. `script/search_flow.rb`
+    # sends `limit=0` and demo:search asserts the one-row page, so the floor is
+    # a behaviour assertion rather than prose.
     limit = 1 if limit < 1
     limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
 
@@ -350,9 +339,9 @@ class Kiosk::HotelsController < ActionController::API
     offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
     offset = 0 if offset.negative?
 
-    # The filters, in the order they have always been applied — a refusal is
-    # raised where the filter is read, so `{min_stars: "abc", max_price_cents:
-    # "abc"}` still answers about `min_stars` first.
+    # The filters, in the order they are applied — a refusal is raised where the
+    # filter is read, so `{min_stars: "abc", max_price_cents: "abc"}` answers
+    # about `min_stars` first.
     scope = Property.all
     scope = scope.where(neighbourhood: params[:neighbourhood].to_s) if params[:neighbourhood].present?
     if params[:min_stars].present?
@@ -469,8 +458,8 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[property_id name neighbourhood stars address amenities currency
                                room_types_scope check_in check_out room_types],
                 }
-  # THE STAY IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here ages
-  # into a 400, because a `check_in` before today is REFUSED. `example_params`
+  # The stay is RESOLVED, not written down: a calendar literal here ages
+  # into a 400, because a `check_in` before today is refused. `example_params`
   # and `example_row` are RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so
   # both name {WireArguments.example_check_in}/{WireArguments.example_check_out},
   # and `room_types_scope` is built from the same two rather than repeating them.
@@ -511,27 +500,25 @@ class Kiosk::HotelsController < ActionController::API
       ))
     end
     if dated
-      # ONE DATE GUARD FOR THE WHOLE ORIGIN: {WireArguments.stay_dates}, which
+      # One date guard for the whole origin: {WireArguments.stay_dates}, which
       # accepts `\A\d{4}-\d{2}-\d{2}\z` and nothing else. A local `Date.parse`
       # here would be a second guard disagreeing with it about what a date is
       # while carrying the SAME refusal sentence.
       #
-      # WHY THE STRICT SPELLING, rather than documenting `Date.parse`'s
-      # looseness the way getgrocery documents its own: `Date.parse` SCANS
-      # rather than validates, so `"x2026-09-01x"`, `"2026-09-01'; --"` and
-      # `["2026-09-01"].to_s` all parse; `"09/01/2026"` is read as 9 January,
-      # not the 1 September an assistant sending it means; and `"Tue"`, `"sep"`
-      # and `"1st"` are COMPLETED FROM TODAY'S CLOCK. There is no set to name —
-      # the accepted set would depend on the day the call is made.
+      # The strict spelling, because `Date.parse` SCANS rather than validates:
+      # `"x2026-09-01x"`, `"2026-09-01'; --"` and `["2026-09-01"].to_s` all
+      # parse; `"09/01/2026"` is read as 9 January, not the 1 September an
+      # assistant sending it means; and `"Tue"`, `"sep"` and `"1st"` are
+      # completed from TODAY'S CLOCK, so the accepted set would depend on the
+      # day the call is made and there is no set to name.
       #
-      # And what the DESCRIPTOR above publishes is `format: "date"` on both
-      # arguments. Measured against this demo's own json_schemer 2.5.0, the only
-      # spelling that REACHES this line through the wire is YYYY-MM-DD naming a
-      # real day — `"20260901"`, `"2026-244"`, `"09/01/2026"` and `"2026-02-30"`
-      # are all refused before the handler runs — and this controller is NOT
-      # ROUTABLE by any other path (see the class header). So the strict guard
-      # costs an assistant nothing it can observe, and it makes the sentence
-      # below and the guard above it say the same thing.
+      # The descriptor above publishes `format: "date"` on both arguments.
+      # Measured against this demo's own json_schemer 2.5.0, the only spelling
+      # that reaches this line through the wire is YYYY-MM-DD naming a real day
+      # — `"20260901"`, `"2026-244"`, `"09/01/2026"` and `"2026-02-30"` are all
+      # refused before the handler runs — and this controller is NOT ROUTABLE by
+      # any other path (see the class header). So the strict guard costs an
+      # assistant nothing it can observe.
       dates, refusal = WireArguments.stay_dates(ci_raw, co_raw)
       return render_refusal(refusal) if refusal
 

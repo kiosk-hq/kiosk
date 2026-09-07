@@ -38,7 +38,7 @@ class Kiosk::ListingsController < ApplicationController
                                   enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "The section to post in (see browse_listings)." },
                  title:         { type: "string", description: "Short headline." },
-                 # THE ONLY CONTACT CHANNEL THIS BOARD HAS: sellers are
+                 # The ONLY contact channel this board has: sellers are
                  # pseudonymous and there is no relayed-message verb, so the
                  # contact line is the human's choice and the human's words.
                  body:          { type: "string",

@@ -15,7 +15,7 @@ module ListAccess
   # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)
   # @return [OperationResult, nil] a refusal, or nil when access is granted
   #
-  # `list_id` arrives from the wire and its shape is load-bearing (K-581/K-582):
+  # `list_id` arrives from the wire and its shape is load-bearing:
   # `where(list_id: junk)` does not raise — ActiveRecord's uuid type quietly casts
   # an unparseable value to NULL, which matches no row — so without this check a
   # typo would be reported as an ACCESS refusal (403) instead of a shape one

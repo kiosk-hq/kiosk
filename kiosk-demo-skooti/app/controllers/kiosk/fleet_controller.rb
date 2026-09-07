@@ -148,9 +148,9 @@ class Kiosk::FleetController < ActionController::API
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
   #
-  # THE CADENCE AND THE GIVE-UP HORIZON ARE PART OF THE CONTRACT:
-  # the wire has no server→assistant push, so a descriptor that stops at
-  # "poll until the human acts" leaves an agent to invent a loop with no exit.
+  # The cadence and the give-up horizon are part of the contract: the wire has
+  # no server→assistant push, so a descriptor that stops at "poll until the
+  # human acts" leaves an agent to invent a loop with no exit.
   # The schedule below is QUOTED from kiosk.tech/skill.md so the two surfaces
   # cannot publish rival arithmetic, and `demo:schema` asserts the SERVED
   # descriptor still carries both numbers.

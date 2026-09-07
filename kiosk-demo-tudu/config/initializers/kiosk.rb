@@ -11,8 +11,8 @@
 # advertise no payments (`demo:schema` asserts it).
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
-# in config/environments/{development,test,production}.rb (K-650); this file
-# reads the resolved values from Rails.configuration.x.kiosk.*.
+# in config/environments/{development,test,production}.rb; this file reads the
+# resolved values from Rails.configuration.x.kiosk.*.
 
 require "kiosk/user_identity_providers/devise"
 
@@ -42,13 +42,13 @@ Kiosk.configure do |c|
   c.user_id_type   = :uuid
   c.user_id_column = :id
 
-  # ── Where the wire verbs live (T-053 mixin / T-057) ────────────────────────
+  # ── Where the wire verbs live ──────────────────────────────────────────────
   # The four queries and six actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros (`kind`
-  # says which verb reaches each one), plain `render json:`. Nothing about them belongs in an
-  # initializer, and nothing about them is here: this line only NAMES them, and
-  # the engine loads and registers them (once in production, again after every
-  # reload in development, so an edited/added/removed verb needs no restart).
+  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros
+  # (`kind` says which verb reaches each one), plain `render json:`. This line
+  # only NAMES them; the engine loads and registers them (once in production,
+  # again after every reload in development, so an edited verb needs no
+  # restart).
   c.handlers = %w[Kiosk::HouseholdController Kiosk::TodoListsController]
 
   c.guc_namespace  = "app"
@@ -72,29 +72,26 @@ Kiosk.configure do |c|
   # in dev/test — the posture lives in config/environments/*.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # UNIFORM-VALIDATION slice-1 (K-479): validate the proof(s) parsed from the
-  # `Kiosk-PoW` request header (ADR-0022) against the normative PoW schema at
-  # the wire choke point, so a malformed proof gets a clear 400 bad_request
-  # (with a shape hint) instead of a silent re-issued 402 loop. There is no
-  # `pow` body field to validate — the header is the only channel. Needs the
-  # json_schemer gem (in the Gemfile). Absent/valid proofs unchanged.
+  # Validate the proof(s) parsed from the `Kiosk-PoW` request header (ADR-0022)
+  # against the normative PoW schema at the wire choke point, so a malformed
+  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
+  # re-issued 402 loop. There is no `pow` body field to validate — the header is
+  # the only channel. Needs the json_schemer gem (in the Gemfile). Absent/valid
+  # proofs unchanged.
   c.validate_requests = true
 
-  # T-068 slice 3: every query/action answer is validated against the
-  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
-  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
-  # request check — nothing a caller sends can trigger it — and it is what
-  # makes this demo's own CI task list a per-verb conformance proof of the
-  # descriptors rather than a smoke test.
+  # Every query/action answer is validated against the `output_schema` that verb
+  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
+  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
+  # caller sends can trigger it — and it is what makes this demo's own CI task
+  # list a per-verb conformance proof of the descriptors rather than a smoke
+  # test.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why (K-1332): with it on,
-  # a descriptor typo becomes a 500 for a caller who did nothing wrong. This
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production — so leaving
-  # it unconditional shipped exactly the posture
-  # kiosk-server/lib/kiosk/server/response_validation.rb warns against, on the
-  # public endpoint an assistant is pointed at, in the file an operator is sent
-  # here to copy. Nothing is lost from the proof: every demo task list runs in
-  # development, so all of the per-verb conformance survives.
+  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
+  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
+  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
+  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
+  # the proof: every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
@@ -118,20 +115,17 @@ Kiosk.configure do |c|
   # payments block. tudu is a collaborative todo app — it takes no money.
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence (T-104). An assistant
-  # authenticates with the kiosk-pop JWT this very engine minted at
-  # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
-  # engine already ships the adapter that verifies its own tokens:
-  # `IdentityResolution.agent_idp` falls back to
-  # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured. This demo used to override it with a hand-copied composite that
-  # re-implemented the JWT half (more loosely — it never checked `iss`) in
-  # order to bolt on a dev-only parser turning a self-asserted
-  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # Deliberate, and the point of the line's absence. An assistant authenticates
+  # with the kiosk-pop JWT this very engine minted at `/kiosk/auth/register`,
+  # `/auth/login` or the binding ceremony — and the engine already ships the
+  # adapter that verifies its own tokens: `IdentityResolution.agent_idp` falls
+  # back to `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when
+  # nothing is configured.
   # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
   # Okta, an ID-JAG-style broker) by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID (K-830).
+  # the `agent_id` you return must be a UUID.
+  #
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint, unlink, and the manage-assistants page. Walked by
@@ -140,7 +134,7 @@ Kiosk.configure do |c|
   # Where the engine bounces an UNAUTHENTICATED browser visitor to the
   # manage-assistants page (this app's Devise sign-in). The engine stays
   # IdP-neutral, so the sign-in URL is supplied here; without it the page
-  # would render a bare 401 (MANAGE-PAGE-UNAUTH-UX).
+  # would render a bare 401.
   c.sign_in_path = "/users/sign_in"
 
   # ── Headless assistant accounts ──────────────────────────────
@@ -158,25 +152,22 @@ Kiosk.configure do |c|
   #   config.assistant_claimed&.call(agent:, previous_user_id:, user_id:)
   # `agent` = kiosk.agents.id, `previous_user_id` = the headless account,
   # `user_id` = the human account. tudu migrates the headless account's domain
-  # rows to the human. First real use of this hook in the repo (core never
-  # touches provider rows). A raise here rolls the whole rebind back atomically.
+  # rows to the human — core never touches provider rows. A raise here rolls
+  # the whole rebind back atomically.
   #
-  # K-781: this was the last hand-quoted SQL in tudu — three `exec_update`
-  # heredocs with six `conn.quote` interpolations, which seven passes of handler
-  # migration walked past because a CONFIG HOOK is not a verb. It reads through
-  # the models now, in the same `where(...).update_all` / `.delete_all` shape
-  # tudu's Operations use: no callbacks, no rows loaded, the affected count IS
-  # the answer — which is what the raw UPDATEs did.
+  # It reads through the models, in the same `where(...).update_all` /
+  # `.delete_all` shape tudu's Operations use: no callbacks, no rows loaded,
+  # the affected count IS the answer.
   #
   # THE TRANSACTION IS NOT THIS HOOK'S: `AccountBinding.rebind` opened it on
   # `ActiveRecord::Base.connection` and calls this inside it. `update_all` and
   # `delete_all` are single statements that start no transaction of their own,
   # and `ApplicationRecord` leases the same connection, so all three JOIN the
-  # rebind rather than nesting under it — a raise here still rolls the whole
-  # rebind back atomically, exactly as before.
+  # rebind rather than nesting under it — a raise here rolls the whole rebind
+  # back atomically.
   c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
-    # BELT AND BRACES (K-783). kiosk-server no longer calls this hook when the
-    # holder did not actually change, and that engine guard is the fix. This
+    # BELT AND BRACES. kiosk-server does not call this hook when the holder did
+    # not actually change, and that engine guard is the primary defence. This
     # line is here because of what happens if it ever regresses: every
     # statement below reads "move the HEADLESS account's rows to the human",
     # and with previous_user_id == user_id the last one becomes "delete the
@@ -196,12 +187,12 @@ Kiosk.configure do |c|
     # UNIQUE(list_id, account_id) index would otherwise collide); drop the
     # now-redundant headless membership instead.
     #
-    # The guard was a correlated `NOT EXISTS`; it is a `NOT IN (SELECT list_id
-    # …)` anti-join now, which is the same set here and only here: BOTH
-    # `memberships.list_id` and `memberships.account_id` are `NOT NULL`, so the
-    # subquery can never yield a NULL and turn `NOT IN` into "no rows". It stays
-    # ONE statement for the reason RemoveMemberOperation gives — at READ
-    # COMMITTED a two-statement read-then-write would straddle two snapshots.
+    # The guard is a `NOT IN (SELECT list_id …)` anti-join, and it is safe here
+    # and only here: BOTH `memberships.list_id` and `memberships.account_id`
+    # are `NOT NULL`, so the subquery can never yield a NULL and turn `NOT IN`
+    # into "no rows". It stays ONE statement for the reason
+    # RemoveMemberOperation gives — at READ COMMITTED a two-statement
+    # read-then-write would straddle two snapshots.
     already_a_member = Membership.where(account_id: user_id).select(:list_id)
     Membership.where(account_id: previous_user_id)
               .where.not(list_id: already_a_member)
@@ -233,8 +224,8 @@ Kiosk.configure do |c|
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
   # plus the one table it needs — see the kiosk-server README, "Multi-process
   # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on (K-752), but a warning nobody reads is
-  # not the mitigation; this comment and the README are.
+  # this default is in use with PoW on, but a warning nobody reads is not the
+  # mitigation; this comment and the README are.
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

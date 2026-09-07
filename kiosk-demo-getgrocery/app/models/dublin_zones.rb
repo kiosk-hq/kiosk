@@ -26,12 +26,12 @@
 # suburban districts below; the far outer districts are intentionally NOT
 # served so the out-of-zone path is demonstrable.
 #
-# THAT SENTENCE EXPLAINS THE MODULE'S NAME AND NOTHING ELSE (K-1349). The
-# VALUE this module resolves an address to is spelled `district` everywhere it
-# is named — the `Result` member, {.extract_district}, {WireArguments.served_district}
-# and the wire field `delivery_slots` publishes — because `DeliverySlots.zone`
-# in this same demo is an `ActiveSupport::TimeZone`, and one word for a routing
-# key and a clock is unreadable three lines apart. The area sense ("in-zone",
+# That sentence explains the module's NAME and nothing else. The VALUE this
+# module resolves an address to is spelled `district` everywhere it is named —
+# the `Result` member, {.extract_district}, {WireArguments.served_district} and
+# the wire field `delivery_slots` publishes — because `DeliverySlots.zone` in
+# this same demo is an `ActiveSupport::TimeZone`, and one word for a routing key
+# and a clock is unreadable three lines apart. The area sense ("in-zone",
 # "out-of-zone") keeps the word: an address is inside or outside the served
 # area, which is not a value anything reads off a row.
 module DublinZones

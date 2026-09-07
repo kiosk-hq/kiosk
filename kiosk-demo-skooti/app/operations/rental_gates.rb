@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# THE PRECONDITIONS BOTH RENTAL VERBS SHARE — ownership and payment — expressed
+# The preconditions both rental verbs share — ownership and payment — expressed
 # once, as REFUSALS rather than as rendered responses. Nothing here writes, so
 # it is not an Operation; the write both verbs share is {RentalActivation}.
 #
 # The vehicle-kind check is per-verb by nature (each refuses the other's), but
 # ownership and payment are ONE question over one reservations table, and two
-# copies of a security sentence is two chances to drift (K-687).
+# copies of a security sentence is two chances to drift.
 module RentalGates
   module_function
 
@@ -49,7 +49,7 @@ module RentalGates
   # THIS PRINCIPAL has paid for THIS reservation — which is what stops paying
   # for reservation A and starting rental B.
   #
-  # TWO WITNESSES, and the order matters (K-853). protocol.md §11.6 anchors paid
+  # TWO WITNESSES, and the order matters. protocol.md §11.6 anchors paid
   # state to the CAPTURE, so skooti's own `payment_status`/`paid_by_user_id` pair
   # — written the instant the capture RETURNS — is consulted first: it is the
   # only witness that exists before the engine writes its settlement row, and a

@@ -25,16 +25,15 @@ class User < ApplicationRecord
   # book, no forecast). Map the provider's own `staff_role` onto the kiosk role:
   # staff carry their staff_role ('owner'), everyone else is a 'customer' (the
   # registration default). The result is always one of `Kiosk.configuration.roles`
-  # (%i[customer owner]) — and it is now that BY CONSTRUCTION rather than by
-  # convention (K-712h). `staff_role` is a bare varchar with no CHECK
-  # constraint, so before this the column's contents were returned verbatim as
-  # the kiosk role: one stray value in the provider's own table and an
-  # assistant would be minted at a role the origin never configured. An
+  # (%i[customer owner]) BY CONSTRUCTION rather than by convention: `staff_role`
+  # is a bare varchar with no CHECK constraint, so returning it verbatim would
+  # let one stray value in the provider's own table mint an assistant at a role
+  # the origin never configured. An
   # unrecognised value now falls back to the LEAST privileged role rather than
   # being trusted, which is the only safe direction for an authorization input.
-  # Since T-066 this is the ONLY channel: the `X-Staff-Session` SSO stand-in
-  # that read the same column is gone, so this method is what makes
-  # roles-from-IdP work at all.
+  # This is the ONLY channel by which a staff role reaches kiosk — there is no
+  # SSO-header stand-in beside it — so this method is what makes roles-from-IdP
+  # work at all.
   def kiosk_role
     return "customer" unless staff?
 

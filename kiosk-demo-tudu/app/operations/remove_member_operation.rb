@@ -9,7 +9,7 @@ class RemoveMemberOperation
     return refusal if refusal
 
     # `account_id` is a SECOND wire-supplied id and {ListAccess} only covers
-    # `list_id`, so it gets its own shape check (K-581/K-582).
+    # `list_id`, so it gets its own shape check.
     target = account_id.to_s
     unless UuidCheck.valid?(target)
       return OperationResult.refused(

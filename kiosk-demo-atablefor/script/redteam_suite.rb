@@ -21,8 +21,8 @@
 #   GarbageToken      — an unparseable bearer token → 401
 #   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
 #                       resolves to NO identity → 401, unconditionally and in
-#                       THIS (development) environment (K-539, restated by
-#                       T-104: the cleartext parser is deleted, not gated)
+#                       THIS (development) environment: agent auth has no
+#                       cleartext parser to fall back to
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
 #   RetiredWire       — the deleted 0.3 `POST /kiosk/{query,run}` answer the
@@ -33,30 +33,30 @@
 #   InvalidFilterIsNotAnEmptyList — an availability filter naming a seating
 #     time, a date or a NEIGHBOURHOOD that does not exist is a typed 400
 #     NAMING the valid values, never a 200 with an empty rows array and never
-#     a 500 (K-717 and T-090, and K-691 before them)
+#     a 500
 #   BookOutsideOfferedHorizon — book_table on a well-formed date OUTSIDE the
 #     rolling horizon availability offers is a typed 400 NAMING the bookable
 #     dates, never a confirmed booking for a seating that was never offered;
 #     and the BASIC-form `YYYYMMDD` spelling Date.iso8601 would have accepted
-#     is refused by the declared `format: "date"` before the handler (K-767)
+#     is refused by the declared `format: "date"` before the handler
 #   HostileArgShapes — boolean/array/object/junk values on book_table's
 #     party_size, restaurant_id, restaurant_table_id, date and time, on
 #     availability's party_size (including the two bracket spellings) and on
 #     cancel_booking's booking_id are a typed 400 with no runtime vocabulary on
-#     the wire — never a 500 and never a wrong answer served as 200 (K-773,
-#     K-1027, K-1028). The beat's own comment enumerates which layer answers
-#     which argument; it does not claim more than it probes. It ALSO carries a
-#     control on its own oracle (T-121): a neighborhood value that spells three
-#     of the leak strings must be BLOCKED, never a BREACH on its own echo.
+#     the wire — never a 500 and never a wrong answer served as 200. The beat's
+#     own comment enumerates which layer answers which argument; it does not
+#     claim more than it probes. It ALSO carries a control on its own oracle: a
+#     neighborhood value that spells three of the leak strings must be BLOCKED,
+#     never a BREACH on its own echo.
 #   WholeValuedFloatBody — the ONE beat here that asserts an ACCEPTANCE: the
 #     two halves of the wire disagree about `2.0` ON PURPOSE (spec §8.1 item
 #     8), so `?party_size=2.0` on the availability QUERY is a typed 400 while
 #     `{"party_size": 2.0}` on the book_table ACTION books a party of TWO —
-#     and a one-sided battery is how the accepted half drifts (K-1029)
+#     and a one-sided battery is how the accepted half drifts
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony (K-072, K-1128)
+#     while the role-less request still opens the ceremony
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
@@ -78,8 +78,8 @@ require "uri"
 
 # The shared harness. Required HERE rather than beside the one framework beat
 # further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
-# assertion in this file now asks — is needed from the first hostile-input beat
-# onwards (T-121).
+# assertion in this file asks — is needed from the first hostile-input beat
+# onwards.
 require "kiosk/redteam"
 
 require_relative "bound_assistant"
@@ -87,19 +87,13 @@ require_relative "bound_assistant"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
 
-# ── The two principals, EARNED rather than asserted (T-104) ──────────────────
+# ── The two principals, EARNED rather than asserted ──────────────────────────
 #
-# This battery used to hand itself both principals by writing them down —
-# `agent:u-<uuid>:a-<uuid>:r-customer` — which a dev-only parser in the demo
-# turned into an authenticated identity at any role it named. That parser is
-# gone: agent auth runs through the engine's own kiosk-pop verifier now, so a
-# string like that authenticates NOTHING (asserted below, as its own beat).
-#
-# So both principals run the full shipped ceremony instead
+# Both principals run the full shipped ceremony
 # (script/bound_assistant.rb): Equihash-tolled `/auth/register` → the diner's real
 # Devise sign-in → `/auth/link` → `/auth/claim`. That costs a couple of
 # sub-second proofs and buys the thing this suite is FOR — every cross-owner
-# refusal below is now a refusal between two principals the shipped code
+# refusal below is a refusal between two principals the shipped code
 # issued, at the role IT chose, bound to two accounts a human actually holds.
 #
 # TWO SEEDED HUMANS, not two assistants for one human, and that is the whole
@@ -109,11 +103,11 @@ ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
 # Diego and Bea are separate account holders (db/seeds.rb); the rake task
 # passes their credentials in the environment.
 #
-# `agent_id` is now MINTED by `/auth/register` and is a uuid because the schema
+# `agent_id` is MINTED by `/auth/register` and is a uuid because the schema
 # says so: `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
 # `kiosk.current_agent_id()` are typed `uuid`, so an identity carrying anything
-# else is one the shipped tables cannot store (K-829/K-830). A driver can no
-# longer choose it at all, which is the strongest form of that guarantee.
+# else is one the shipped tables cannot store. A driver cannot choose it at
+# all, which is the strongest form of that guarantee.
 DIEGO = bind_assistant(server: SERVER, issuer: ISSUER,
                        email:    ENV.fetch("HOLDER_A_EMAIL"),
                        password: ENV.fetch("HOLDER_A_PASSWORD"))
@@ -188,11 +182,7 @@ record(results, "CrossTenantRead",
 
 # ── ForgedUserId — Bea books with a forged user_id (Diego's) ─────────────────
 #
-# THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what it
-# now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
-# IGNORED by the handler, and the proof was indirect: the created booking did
-# not surface in Diego's my_bookings. On the 0.4 wire `input_schema` is
-# validated on every call and `book_table` declares
+# `input_schema` is validated on every call and `book_table` declares
 # `additionalProperties: false` — the principal is not one of its inputs — so
 # the forgery is REFUSED before the handler runs, with a typed 400 naming the
 # offending parameter. Both halves are asserted: the wire refuses it, AND
@@ -220,24 +210,24 @@ rc, _ = post_json("/kiosk/cancel_booking",
 record(results, "CrossOwnerCancel", rc == 403, "Bea cancel Diego's booking → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk booking_id must be a typed 400, never a 500 ────
-# K-581/K-582: cancel_booking casts its booking_id `::uuid`. Before the
-# UuidCheck guard, a malformed value made Postgres raise
-# InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
-# carrying the PG message. Three properties are asserted, not one: the status is
+# cancel_booking casts its booking_id `::uuid`, and without the UuidCheck guard
+# a malformed value makes Postgres raise InvalidTextRepresentation — not a
+# Kiosk error, so it escapes as a raw 500 carrying the PG message. Three
+# properties are asserted, not one: the status is
 # 400 (a client mistake reported as such), the problem document's TOP-LEVEL
 # `code` is the typed `bad_request` an assistant can branch on, and NO SQL
 # internals reach the wire.
 #
-# Since 0.4 the refusal usually comes one layer EARLIER than it used to:
-# `cancel_booking` declares `booking_id` as `{type: "string", format: "uuid"}`
-# and `input_schema` is validated on every call, so the schema layer answers
-# most of these before {WireArguments.booking_id} runs. The three properties
-# asserted are unchanged — that is the point of asserting properties rather
-# than a sentence — and the handler guard remains as defence in depth.
+# The refusal usually comes from the schema layer: `cancel_booking` declares
+# `booking_id` as `{type: "string", format: "uuid"}` and `input_schema` is
+# validated on every call, so most of these are answered before
+# {WireArguments.booking_id} runs. The three properties above are asserted as
+# PROPERTIES rather than as a sentence for exactly that reason, and the
+# handler guard remains as defence in depth.
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE bookings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
-# THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). atablefor answers a bad
+# THE SCAN IS TOLD WHAT THIS PROBE SENT. atablefor answers a bad
 # argument by NAMING the value it got, so the bytes searched for SQL_INTERNALS
 # are partly the probe's own; without the `supplied:` declaration a probe whose
 # junk id spelled `PG::` would be reported as a BREACH on its own echo, under a
@@ -275,20 +265,13 @@ record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (wa
 rc, _ = get_json("/kiosk/availability", { party_size: 2 }, bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
-# ── SelfAssertedTokenForgery (K-539, restated by T-104) ──────────────────────
-# THE BEAT SURVIVES ITS TARGET, AND THAT IS THE POINT OF KEEPING IT. Until
-# T-104 this demo shipped a hand-copied composite agent-IdP whose cleartext
-# fallback parsed `agent:u-…:a-…:r-…` into an identity at whatever role the
-# string named — live wherever `Rails.env.local?`, which is exactly the
-# environment these drivers run in. The sibling suite could therefore only
-# demonstrate the block IN-PROCESS, against a stubbed production `Rails.env`,
-# while asserting that development still ACCEPTED the forgery.
-#
-# The parser is gone rather than gated: agent auth is the engine's own kiosk-pop
-# verifier, which has no cleartext branch to fall back to in any environment. So
-# the assertion is now unconditional and lands over the LIVE WIRE, in the same
-# environment as every other beat here: a self-asserted bearer resolves to NO
-# identity. There is no `Rails.env` anywhere in it.
+# ── SelfAssertedTokenForgery ─────────────────────────────────────────────────
+# Agent auth is the engine's own kiosk-pop verifier, which has no cleartext
+# branch to fall back to in any environment, so an `agent:u-…:a-…:r-…` string
+# is not a credential in any environment either. The assertion is therefore
+# unconditional and lands over the LIVE WIRE, in the same environment as every
+# other beat here: a self-asserted bearer resolves to NO identity. There is no
+# `Rails.env` anywhere in it.
 #
 # The first probe is the STRONGEST form of the attack rather than the easiest —
 # it names a real account and a real agent (the ones the ceremony above just
@@ -322,22 +305,21 @@ rc, _ = post_json("/kiosk/nope", {}, bearer(TOKEN_A))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
-# T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
-# controller as a verb literally named "query", which nobody registered, so it
-# answers the ordinary 404 an AUTHENTICATED caller gets — no privileged
-# endpoint, no compatibility payload, no second conformance surface to attack.
+# The 0.3 multiplexed pair was a hard cut: `POST /kiosk/query` reaches the
+# per-verb controller as a verb literally named "query", which nobody
+# registered, so it answers the ordinary 404 an AUTHENTICATED caller gets — no
+# privileged endpoint, no compatibility payload, no second conformance surface
+# to attack.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
-# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
-# verb up, so a caller with no bearer never reaches the registry lookup that
-# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
-# be at any other name. Every retired-wire beat in the fleet dialled WITH a
-# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
-# tested the anonymous case the sentence was wrong about.
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
+# a caller with no bearer never reaches the registry lookup that produces the
+# 404 — it is answered 401 `unauthenticated`, exactly as it would be at any
+# other name.
 #
-# The 404's code is `verb_not_found` since T-158, not `not_found`: `query` and
-# `run` are NAMES nobody registered, and the vocabulary now reserves
-# `not_found` for an argument that ADDRESSED something absent.
+# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
+# NAMES nobody registered, and the vocabulary reserves `not_found` for an
+# argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
   rc, body = post_json("/kiosk/#{name}", { name: "availability", party_size: 2 }, bearer(TOKEN_A))
   [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
@@ -364,65 +346,51 @@ record(results, "MethodMismatch",
        "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
        "(want 405/\"method_not_allowed\"/POST)")
 
-# ── InvalidFilterIsNotAnEmptyList (K-717, was EmptyAvailabilityIsNotACrash) ──
-# THE BEAT FLIPPED, AND THE FLIP IS THE POINT. These three probes used to
-# assert HTTP 200 with an empty rows array. Phil's K-717 decision (2026-08-19)
-# makes that the wrong answer: «если передан неверный входной параметр, ответ
-# должен быть http 400 bad request, не пустой список, и должна быть ошибка с
-# описанием». From the assistant's side `200 []` for a mistyped filter is
-# indistinguishable from a sold-out night, so a typo and a full house read the
-# same — which is exactly what philslist's `post_listing` refuses to do, and
-# that is now the house position fleet-wide.
+# ── InvalidFilterIsNotAnEmptyList ────────────────────────────────────────────
+# AN INVALID FILTER VALUE IS A TYPED 400 WITH A DESCRIPTION, never an empty
+# list. From the assistant's side `200 []` for a mistyped filter is
+# indistinguishable from a sold-out night, so a typo and a full house would
+# read the same.
 #
-# What each probe sends is unchanged, and both are still values the OLD
-# descriptor accepted: `time: "18:00"` matched the retired
-# "^[0-2][0-9]:[0-5][0-9]$" pattern without being a seating, and any date past
-# the rolling horizon is a valid `format: "date"`. `time` is now an `enum` on
-# the descriptor and `date` keeps an explicit handler guard, because a horizon
+# Every probe sends a value that is WELL-FORMED and wrong: `time: "18:00"` is
+# a valid clock time that is not one of the seatings, and any date past the
+# rolling horizon is a valid `format: "date"`. `time` is an `enum` on the
+# descriptor and `date` keeps an explicit handler guard, because a horizon
 # that rolls forward daily cannot be named in a schema written at declaration
 # time.
 #
-# WHICH LAYER ANSWERS EACH ONE MOVED AT 0.4, AND THE ASSERTION DELIBERATELY
-# DOES NOT CARE. `input_schema` is validated on every per-verb call now, so
-# `time=18:00` is refused by the DECLARED `enum` before the handler runs —
-# ``value at `/time` is not one of: ["19:00", "20:00", "21:00"]`` — where 0.3
-# reached {WireArguments.seating_time}'s prose. The out-of-horizon `date` still
-# reaches the handler guard, because no `enum` written at declaration time can
-# name a horizon that rolls forward daily. Both are checked for the same thing:
-# a TYPED 400 whose detail NAMES the valid values, which is what an assistant
-# actually recovers from — not a sentence a particular layer happened to
-# phrase.
+# WHICH LAYER ANSWERS EACH ONE, AND THE ASSERTION DELIBERATELY DOES NOT CARE.
+# `input_schema` is validated on every per-verb call, so `time=18:00` is
+# refused by the DECLARED `enum` before the handler runs — ``value at `/time`
+# is not one of: ["19:00", "20:00", "21:00"]``. The out-of-horizon `date`
+# reaches the handler guard instead, because no `enum` written at declaration
+# time can name a horizon that rolls forward daily. Both are checked for the
+# same thing: a TYPED 400 whose detail NAMES the valid values, which is what an
+# assistant actually recovers from — not a sentence a particular layer happened
+# to phrase.
 #
 # The assertion is a TYPED 400 that NAMES the valid values — not merely
 # "not 200". An unnamed 400 would refuse correctly and still leave the
-# assistant fetching the schema to find out what it should have sent, and the
-# K-691 property this beat was born for (the empty path is not a crash) is
-# still covered: a 500 fails this just as it failed the old one. The
-# non-empty positive control stays, and it is what keeps the beat from passing
-# against a handler that refuses everything.
+# assistant fetching the schema to find out what it should have sent. The
+# empty path is still held to not being a crash: a 500 fails this beat just as
+# it fails every other. The non-empty positive control is what keeps the beat
+# from passing against a handler that refuses everything.
 #
-# THE THIRD FILTER JOINED THE BEAT UNDER T-090. `neighborhood` was the last of
-# `availability`'s three arguments still answering `200 []` to a value the
-# aggregator does not serve, which is the same indistinguishable-from-sold-out
-# answer the other two stopped giving under K-717. Its served set is
-# DB-DERIVED, so it can never be an `enum` — the refusal comes from
+# THE THIRD FILTER, `neighborhood`, is the one no schema can hold: its served
+# set is DB-DERIVED, so it can never be an `enum` — the refusal comes from
 # {WireArguments.neighborhood} and names the neighbourhoods that exist, exactly
 # as the `date` guard names the horizon.
 #
-# THE NEAR END JOINED THE BEAT UNDER K-969 (Phil, 2026-08-23: «there should be
-# zero availability for past dates»). The horizon has two ends and only the far
-# one was probed: a date BEHIND it is refused by the very same
-# {WireArguments.seating_date} guard, because `Seatings.upcoming` starts at
-# today in Europe/Lisbon and drops today's already-started seatings — so the
-# behaviour was already right and only the assertion was missing. It is added
-# here rather than as a beat of its own because it is literally the same guard
-# answering the same question from the other side.
+# THE HORIZON HAS TWO ENDS AND BOTH ARE PROBED. A date BEHIND it is refused by
+# the very same {WireArguments.seating_date} guard, because `Seatings.upcoming`
+# starts at today in Europe/Lisbon and drops today's already-started seatings.
+# It lives here rather than in a beat of its own because it is literally the
+# same guard answering the same question from the other side.
 #
-# «PAST» ON THIS DEMO IS AN INSTANT, NOT A DAY, and that is a real difference
-# from hoteling and getgrocery: those sell by the DAY (and both count today as
-# bookable), while atablefor sells three named evening SEATINGS, so tonight's
-# 19:00 stops being offered at 19:00 while tonight's 21:00 is still bookable.
-# The floor is therefore "has this seating started?", read in the restaurant's
+# «PAST» ON THIS DEMO IS AN INSTANT, NOT A DAY: atablefor sells three named
+# evening SEATINGS rather than whole days, so tonight's 19:00 stops being
+# offered at 19:00 while tonight's 21:00 is still bookable. The floor is
+# therefore "has this seating started?", read in the restaurant's
 # own clock (Europe/Lisbon), and TODAY IS PARTLY BOOKABLE — which is why the
 # probe below uses a date 30 days back rather than today: a probe on today
 # would be a test of the RUNNER's timezone, not of the operator's.
@@ -455,13 +423,13 @@ record(results, "InvalidFilterIsNotAnEmptyList",
        "#{rc_ctl}/#{(rc_ctl == 200 ? Array(ctl).size : 0)} rows " \
        "(want 400 bad_request naming the valid values for each filter, and a non-empty control)")
 
-# ── BookOutsideOfferedHorizon (K-767) ────────────────────────────────────────
+# ── BookOutsideOfferedHorizon ────────────────────────────────────────────────
 #
 # THE WRITE SIDE OF THE BEAT ABOVE. `availability` refuses an out-of-horizon
-# `date` filter; `book_table` used to CONFIRM one. Its only date guard asked
-# "has this seating already started?", which a date weeks in the future answers
-# NO to, so a booking was written for a (table, seating) `availability` has
-# never listed and will not list until the rolling window reaches it (K-767).
+# `date` filter, and `book_table` has to refuse one too. A date guard that
+# asks only "has this seating already started?" answers NO for a date weeks
+# out, and the booking is then written for a (table, seating) `availability`
+# has never listed and will not list until the rolling window reaches it.
 #
 # TWO LAYERS ANSWER, AND WHICH ONE IS THE POINT OF THE SECOND PROBE. The
 # out-of-horizon date reaches the handler guard, because no `enum` written at
@@ -480,7 +448,7 @@ record(results, "InvalidFilterIsNotAnEmptyList",
 horizon_slot = open_slot
 horizon_probes = [
   ["date=#{FAR_FUTURE} (valid date, beyond the rolling horizon)", FAR_FUTURE, "upcoming seatings"],
-  # K-969, the near end of the same horizon. The sentence differs from the far
+  # The near end of the same horizon. The sentence differs from the far
   # end's on purpose and is not this beat's to normalise: a date behind the
   # horizon trips `Seatings.past?` FIRST, so the refusal is «seating … has
   # already started — call availability again for the still-bookable seatings»,
@@ -508,16 +476,13 @@ record(results, "BookOutsideOfferedHorizon",
        "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
        "(want 400 bad_request naming the horizon for each, and a confirmed control)")
 
-# ── HostileArgShapes (K-773, K-1027, K-1028) ────────────────────────────────
+# ── HostileArgShapes ─────────────────────────────────────────────────────────
 #
-# THIS BATTERY HAD NO SHAPE BEAT AT ALL UNTIL K-1027, which is why the row was
-# filed against atablefor rather than found here: every `party_size` in the
-# fourteen beats above is the legal `2`. Its siblings have carried one since
-# K-773 (hoteling and getgrocery both), so this is the last of the three ORM
-# demos to get it.
+# Every `party_size` in the beats above is the legal `2`; this is the beat that
+# varies the SHAPE of an argument rather than its value.
 #
-# WHAT IS PROBED, NAMED RATHER THAN CLAIMED (K-773's 2026-08-25 reopen: a beat
-# whose comment CLAIMS coverage is itself the defect). Exactly these:
+# WHAT IS PROBED, NAMED RATHER THAN CLAIMED — a beat whose comment CLAIMS
+# coverage is itself the defect. Exactly these:
 #
 #   book_table      party_size, restaurant_id, restaurant_table_id  (INT_SHAPES)
 #                   date, time                                      (NONSTRING)
@@ -535,16 +500,16 @@ record(results, "BookOutsideOfferedHorizon",
 # WHICH LAYER ANSWERS WHICH, MEASURED at head rather than assumed, because it
 # differs per argument and the difference is the whole point of the beat:
 #
-#   * `party_size` — BOTH LAYERS REFUSE EVERY SHAPE BELOW, and that sentence is
-#     only true since K-1027. {WireArguments.party_size} read a bare `raw.to_i`:
-#     `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i`, so each
-#     was a `NoMethodError` → `500 action_failed`, and `1.5.to_i` is 1, so a
-#     fractional party was SEATED as a party of one. It goes through
-#     {WireArguments.whole_number} now, which is json_schemer's own `integer`
-#     (so `2.0` is still a party of two — measured against this demo's bundle).
+#   * `party_size` — BOTH LAYERS REFUSE EVERY SHAPE BELOW. The handler guard
+#     {WireArguments.party_size} goes through {WireArguments.whole_number},
+#     which is json_schemer's own `integer` (so `2.0` is still a party of two
+#     — measured against this demo's bundle). A bare `raw.to_i` there is the
+#     hole: `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no
+#     `to_i`, so each is a `NoMethodError` → `500 action_failed`, and
+#     `1.5.to_i` is 1, so a fractional party is SEATED as a party of one.
 #     WATCHED FAIL, run and restored: drop `party_size`'s declared `type` from
 #     `book_table`'s `input_schema` and these stay 400 off the second layer;
-#     with the pre-K-1027 `.to_i` restored underneath the same mutation they are
+#     with a bare `.to_i` restored underneath, the same mutation makes them
 #     a 500 for the six raising shapes and a CONFIRMED BOOKING for `1.5`.
 #     THE SAME MUTATION ON `availability` SAYS SOMETHING ELSE, and it is
 #     recorded rather than smoothed over: drop the type there and the QUERY
@@ -554,14 +519,11 @@ record(results, "BookOutsideOfferedHorizon",
 #     on the query half it is the DECODER that turns the wire's string into one;
 #     independent of the descriptor for `book_table`, downstream of it here.
 #   * `restaurant_id` and `restaurant_table_id` — BOTH LAYERS REFUSE EVERY
-#     SHAPE BELOW, and that sentence is only true since K-1028; until then this
-#     clause said the probes pinned the DESCRIPTOR ALONE, because they did. The
-#     declared `{type: "integer", minimum: 1}` answers first; behind it
-#     {BookTableOperation}'s own `identifier` routes each through
+#     SHAPE BELOW. The declared `{type: "integer", minimum: 1}` answers first;
+#     behind it {BookTableOperation}'s own `identifier` routes each through
 #     {WireArguments.whole_number} — json_schemer's `integer`, the same one
 #     `party_size` uses, so `2.0` still resolves to 2 — and only then asks
-#     `>= 1`. It read `restaurant_id.to_i` / `restaurant_table_id.to_i`, the
-#     bare `.to_i` `party_size` had just stopped being.
+#     `>= 1`.
 #     NEITHER ARGUMENT HAS A QUERY HALF, which is the one way this pair differs
 #     from `party_size`: `book_table` is the only verb on this origin that takes
 #     either (`availability` and `my_bookings` only ever RETURN them), so no
@@ -569,17 +531,17 @@ record(results, "BookOutsideOfferedHorizon",
 #     second layer is independent of the descriptor on both counts.
 #     WATCHED FAIL, run and restored: drop BOTH declared `type`s from
 #     `book_table`'s `input_schema` and all 62 probes stay 400 off the second
-#     layer; with the pre-K-1028 `.to_i` restored underneath the same mutation
-#     TWELVE of them break — the six raising shapes × the two arguments, each a
+#     layer; with a bare `.to_i` restored underneath, the same mutation breaks
+#     TWELVE of them — the six raising shapes × the two arguments, each a
 #     `500 action_failed` LEAKing `NoMethodError`.
-#     `1.5` DID NOT BREACH UNDER THAT MUTATION AND THE REASON IS RECORDED
+#     `1.5` DOES NOT BREACH UNDER THAT MUTATION AND THE REASON IS RECORDED
 #     RATHER THAN SMOOTHED OVER, because it is the more dangerous half: `.to_i`
-#     turned it into 1, and whether resolving to row 1 is a WRONG BOOKING or a
+#     turns it into 1, and whether resolving to row 1 is a WRONG BOOKING or a
 #     400 depends on the SEEDED DATA, not on the guard. This beat's slot is not
-#     restaurant 1 table 1, so the mismatch fell out as "no such table 1 at
+#     restaurant 1 table 1, so the mismatch falls out as "no such table 1 at
 #     restaurant 2" — a typed refusal naming a table nobody asked for, which is
-#     why the probes above stayed green on that value. Measured on the
-#     descriptor-less path with the same pre-fix code:
+#     why the probes above stay green on that value. Measured on the
+#     descriptor-less path with a bare `.to_i` underneath:
 #     `BookTableOperation.call(restaurant_id: 1.5, restaurant_table_id: 1, …)`
 #     returned a CONFIRMED BOOKING at restaurant 1 table 1. A probe set cannot
 #     pin that half, so the guard has to.
@@ -594,8 +556,8 @@ record(results, "BookOutsideOfferedHorizon",
 #
 # AND THE ERROR BODY MUST NOT CARRY THE RUNTIME'S OWN VOCABULARY: these probes
 # are the ones most likely to reach a cast or a `NoMethodError`, so every
-# response is checked for the leak strings K-581/K-582 named plus the two
-# `NoMethodError` spellings K-773's class-two 500 would have printed.
+# response is checked for the SQL-cast leak strings plus the two
+# `NoMethodError` spellings a shape crash would print.
 SHAPE_LEAKS = ["NoMethodError", "undefined method", "TypeError",
                "no implicit conversion", "::uuid", "::integer", "::date", "PG::",
                "22P02", "invalid input syntax", "ActiveRecord::", "ActiveModel::"].freeze
@@ -615,14 +577,13 @@ NONSTRING  = [true, false, [], {}, [1], { "a" => 1 }, nil, 20260826].freeze
 # json_schemer and books a party of two through the action, while the query
 # decoder's `Integer(v, 10)` refuses the STRING `"2.0"` outright.
 #
-# «ALLOWED TO DIFFER» USED TO BE THIS COMMENT'S OWN ASSERTION AND NOTHING BACKED
-# IT (K-1029). It is now PUBLISHED behaviour — spec Section 8.1 item 8 and the
+# THE DIFFERENCE IS PUBLISHED behaviour — spec Section 8.1 item 8 and the
 # narrative specification say a query parameter declared `integer` takes an
 # integer LITERAL and nothing else, while a body field declared `integer` takes
 # any JSON number whose value is whole, and that the difference is intentional.
-# Phil decided it on 2026-08-30: the strict query half is right, and a field that
-# may legitimately be fractional must DECLARE itself `number` rather than
-# `integer`. Both halves are pinned so neither can drift into the other — the
+# The strict query half is the right one, and a field that may legitimately be
+# fractional must DECLARE itself `number` rather than `integer`. Both halves
+# are pinned so neither can drift into the other — the
 # query half twice (this probe, and kiosk-server's
 # `refuses a WHOLE-VALUED float where an integer is declared` unit example) and
 # the body half by the `WholeValuedFloatBody` beat below, which asserts on a
@@ -630,9 +591,9 @@ NONSTRING  = [true, false, [], {}, [1], { "a" => 1 }, nil, 20260826].freeze
 QUERY_JUNK = ["abc", "true", "1.5", "0x10", "", "2.0"].freeze
 
 # `supplied:` is what this probe put on the wire, and it is what stops the
-# assertion being decided by the attacker (T-121) — see {uuid_guard_verdict}'s
-# note above. It defaults to nil, which is the pre-fix oracle exactly: a beat
-# that forgets to declare risks a FALSE BREACH, never a missed leak.
+# assertion being decided by the attacker — see {uuid_guard_verdict}'s note
+# above. It defaults to nil, and that default fails SAFE: a beat that forgets
+# to declare risks a FALSE BREACH, never a missed leak.
 def shape_verdict(label, rc, body, supplied: nil)
   scan = Kiosk::Redteam::LeakScan.scan(body, SHAPE_LEAKS, supplied: supplied)
   code = body.is_a?(Hash) ? body["code"] : nil
@@ -668,22 +629,19 @@ end
   shape_probes << shape_verdict("availability #{bracket}", rc, body, supplied: bracket)
 end
 
-# ── MAGNITUDE, not type — the axis INT_SHAPES does not have (K-1047) ─────────
+# ── MAGNITUDE, not type — the axis INT_SHAPES does not have ──────────────────
 #
-# Every value in INT_SHAPES varies an argument's TYPE, and nothing above is an
-# integer too LARGE for the column behind it. That blind spot is exactly what
-# let a sibling demo answer `500 action_failed` for a body its own published
-# descriptor called VALID through three hostile-shape waves, so it is closed
-# here in the same one.
+# Every value in INT_SHAPES varies an argument's TYPE, and none of them is an
+# integer too LARGE for the column behind it.
 #
-# MEASURED on a booted origin before the bound was declared: `party_size:
-# 2_147_483_648` passed `{type: "integer", minimum: 1}` (which had no ceiling),
-# passed {WireArguments.party_size} (a whole number >= 1), and reached
+# MEASURED on a booted origin without the declared bound: `party_size:
+# 2_147_483_648` passes `{type: "integer", minimum: 1}` (no ceiling), passes
+# {WireArguments.party_size} (a whole number >= 1), and reaches
 # `RestaurantTable.where(capacity.gteq(party_size))` — `capacity` is a
-# PostgreSQL `integer` — where ActiveRecord raised `ActiveModel::RangeError`
+# PostgreSQL `integer` — where ActiveRecord raises `ActiveModel::RangeError`
 # CASTING the comparison, on BOTH surfaces that take a party: `book_table`
 # (`book_table_operation.rb`) and `availability`
-# (`dining_room_controller.rb`). Both answered HTTP 500. `party_size` now
+# (`dining_room_controller.rb`), and both answer HTTP 500. `party_size`
 # declares the column's own width as its `maximum`, and the shared guard
 # mirrors it, so both are a typed 400 from the schema layer.
 #
@@ -700,7 +658,7 @@ shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body, 
 rc, body = get_json("/kiosk/availability", { party_size: BEYOND_INT4 }, bearer(TOKEN_A))
 shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
 
-# ── NEGATIVE CONTROL FOR THE ORACLE ITSELF (T-121) ──────────────────────────
+# ── NEGATIVE CONTROL FOR THE ORACLE ITSELF ──────────────────────────────────
 #
 # Every probe above asserts something about atablefor. This one asserts
 # something about the ASSERTION: that a needle reaching the wire ONLY because
@@ -711,7 +669,7 @@ shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body
 #
 # `neighborhood` is the right argument and the choice is measured, not
 # convenient: it is declared a bare `{type: "string"}` because the served set is
-# DB-derived (T-090), so json_schemer cannot refuse it and the value reaches
+# DB-derived, so json_schemer cannot refuse it and the value reaches
 # {WireArguments.neighborhood}, whose refusal NAMES it back. The two arguments
 # whose refusals also echo — `party_size` and the two identifiers — are answered
 # by the descriptor first, and json_schemer's message names the POINTER rather
@@ -756,14 +714,13 @@ record(results, "HostileArgShapes",
        "#{rc_shape_avail == 200 ? Array(shape_avail).size : 0} rows " \
        "(want a typed 400 for every probe, never a 5xx and never a 200, and three live controls)")
 
-# ── WholeValuedFloatBody — the OTHER half of the published asymmetry (K-1029) ─
+# ── WholeValuedFloatBody — the OTHER half of the published asymmetry ─────────
 #
 # THE ONLY BEAT IN THIS FILE WHOSE ASSERTION IS THAT SOMETHING IS ACCEPTED, and
 # that is the point: every probe above pins a refusal, so a wire that refused
 # EVERYTHING would satisfy them. Spec Section 8.1 item 8 publishes an asymmetry
 # with two sides, and a one-sided pin is how the accepted side drifts away
-# unnoticed — which is exactly what K-1029 found, with the QUERY_JUNK comment
-# above asserting «allowed to differ» and nothing anywhere backing the «allowed».
+# unnoticed.
 #
 # THE PAIR, on ONE booted origin, in one beat so the two cannot be read apart:
 #   * `?party_size=2.0` on `availability` (a query) is `400 bad_request` naming
@@ -805,20 +762,18 @@ record(results, "WholeValuedFloatBody",
        "(want 400 on the query half and a party of TWO on the body half — " \
        "spec Section 8.1 item 8, and it is INTENTIONAL that they differ)")
 
-# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
+# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
 # The one beat in this file that is NOT hand-rolled: it comes from
 # `kiosk-redteam`, so every demo runs the SAME assertion about the
 # account-binding claim ceremony and a demo cannot be left out of it by
 # forgetting to copy a block.
 #
-# It exists because the coverage that was supposed to catch K-072 rested on a
-# condition nobody re-measured: the shared `PrivilegeSelfSelection` scenario
-# probes `/auth/register` only, and the ceremony beats written when K-072 was
-# fixed lived in ONE demo's suite. The other six were safe purely because each
-# declares a single role — which is exactly the mitigation the ledger row had
-# priced K-072 on, and which expired unnoticed the day a demo declared a
-# second one.
+# The shared `PrivilegeSelfSelection` scenario probes `/auth/register` only;
+# this one covers the UNAUTHENTICATED request that opens the ceremony. An
+# origin that declares a SINGLE role is not made safe by that fact: the
+# mitigation expires the day it declares a second one, which is why the beat
+# runs on every demo rather than in one demo's suite.
 #
 # `declared_roles` names what `config/initializers/kiosk.rb` declares here. The
 # scenario ALSO derives a declared role from the wire (the `role` claim of a

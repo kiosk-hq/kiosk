@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# THE ONE WRITE BOTH RENTAL VERBS PERFORM: mint the Ed25519 rental token the
+# The one write both rental verbs perform: mint the Ed25519 rental token the
 # lock verifies offline, and flip the reservation to `active`.
 #
 # ONE call site, deliberately. The bytes {RentalTokenIssuer.issue} signs are a
-# PHYSICAL-DEVICE contract (K-686) reproduced byte-for-byte in script/lock_sim.rb,
+# PHYSICAL-DEVICE contract reproduced byte-for-byte in script/lock_sim.rb,
 # firmware/host_test.c and firmware/skooti_lock.ino and pinned by `demo:kat` as a
 # frozen known-answer vector. Both rental verbs mint one, so a second call site
 # would be a second place a byte can drift — and that drift signs tokens no
@@ -25,7 +25,7 @@ module RentalActivation
   #   deliberately not re-read off `reservation.id`: {UuidCheck}'s `\h` pattern
   #   accepts either hex case, so an uppercase id is signed as the caller wrote
   #   it and re-canonicalising here would change the bytes a provisioned lock
-  #   verifies (K-686). The UPDATE below uses the ROW's id — the same row.
+  #   verifies. The UPDATE below uses the ROW's id — the same row.
   # @return [OperationResult] the token, the vehicle it opens, and its expiry
   def call(reservation:, scooter:, reservation_id:)
     now = Time.now.to_i

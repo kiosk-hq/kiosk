@@ -7,45 +7,27 @@
 # request rate with escalating Equihash proofs — and, at a flat one proof, the
 # ACTIONS beside them — sized by whatever KIOSK_POW_DIFFICULTY selects (see the
 # browse gate below, exercised by demo:browse); the REGISTRATION gate is ALWAYS
-# ON, with no env flag to set or to forget. Each gate's own section below owns its detail; neither is restated
-# here.
+# ON, with no env flag to set or to forget. Each gate's own section below owns
+# its detail; neither is restated here.
 #
-# NAMING THE GATE IS THE POINT OF THAT SENTENCE (K-1041). It used to make the
-# off-by-default claim about this origin's PoW posture AS A WHOLE, flat out, and
-# only then narrow to the browse flag — and the file contradicts that reading in
-# every place further down where it states the register gate's own posture
-# («ALWAYS ON — POW-VERB-GATING», «ALWAYS ON (register is uniformly tolled)»,
-# «so register-pow works regardless of KIOSK_POW_BROWSE_DEMO»). Those are what
-# the code does: `registration_pow_count` and `registration_pow_params` are
-# assigned inside `Kiosk.configure` and OUTSIDE the
-# `if ENV["KIOSK_POW_BROWSE_DEMO"]` branch, so they take effect with the flag
-# unset. Which gate is off is the first thing a reader learns about a demo's
-# posture, so the claim has to name the gate it is true of. The old phrasing is
-# deliberately not retyped here, so a grep for it finds live claims only.
-#
-# NO (n, k) IS NAMED IN THIS OPENING BLOCK (K-1038, the K-1035 class). This
-# sentence used to state a pair outright, unconditionally, while
-# `EQUIHASH_BROWSE_PARAMS = PowDifficulty.params` further down reads that pair
-# out of the environment — so `KIOSK_POW_DIFFICULTY=high` made the first thing a
-# reader of this file sees FALSE, with no edit to this tree, and that setting is
-# not hypothetical (deploy/env/atablefor.env.example ships it for a sibling
-# demo). A comment cannot read a value, so the repair is to NAME THE KNOB; the
-# mapping from knob to params stays written out exactly once, beside the
-# constant it governs, and the register half below states which level hoteling
-# ships. The escalation claim itself is untouched and real: it is
+# No (n, k) pair is named in this block, deliberately:
+# `EQUIHASH_BROWSE_PARAMS = PowDifficulty.params` reads it out of
+# KIOSK_POW_DIFFICULTY, and a comment cannot read a value — so the KNOB is
+# named here and the mapping from knob to params is written out exactly once,
+# beside the constant it governs. The escalation is
 # HOTELING_FREE_BROWSES / HOTELING_RATE_STEP / HOTELING_MAX_PROOFS.
 # Queries: properties, availability, my_bookings, search_hotels, hotel_detail
 # Actions: reserve_room, confirm_booking, payment_setup
 #
-# The verbs THEMSELVES are not here any more (T-057 / K-654): they are Rails
-# controllers under app/controllers/kiosk/, named in `c.handlers` below, and
-# their writes are Operations under app/operations/. What is left in this file is
-# configuration — the PoW gates, the payment provider, the identity providers —
-# which is what an initializer is for.
+# The verbs themselves are Rails controllers under app/controllers/kiosk/,
+# named in `c.handlers` below, and their writes are Operations under
+# app/operations/. What is left in this file is configuration — the PoW gates,
+# the payment provider, the identity providers — which is what an initializer
+# is for.
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
-# in config/environments/{development,test,production}.rb (K-650); this file
-# reads the resolved values from Rails.configuration.x.kiosk.*.
+# in config/environments/{development,test,production}.rb; this file reads the
+# resolved values from Rails.configuration.x.kiosk.*.
 
 
 require "kiosk/user_identity_providers/devise"
@@ -74,7 +56,7 @@ HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free t
 HOTELING_MAX_PROOFS    = 5
 HOTELING_WRITE_PROOFS  = 1    # flat toll on an action (`:run`) — a hold, not a read
 
-# ── Registration PoW gate — ALWAYS ON — POW-VERB-GATING (K-487)
+# ── Registration PoW gate — ALWAYS ON ───────────────────────────────────────
 #
 # register is a verb like any other: a hotel provider prices fresh-identity
 # minting (one Equihash proof) so a scraper renting throwaway agents pays at the
@@ -99,25 +81,21 @@ if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   # path — so `:query` reaches every `GET /kiosk/<query-name>` and `:run` every
   # `POST /kiosk/<action-name>`.
   #
-  # ── THE NAME OF THE WRITE KIND IS `:run`, NOT `:action` (K-1329) ──────────
+  # ── THE NAME OF THE WRITE KIND IS `:run`, NOT `:action` ────────────────────
   #
-  # THE TWO VOCABULARIES DO NOT MATCH, AND ONLY ONE OF THEIR THREE WORDS DOES.
+  # The two vocabularies do not match, and only one of their three words does.
   # What an operator DECLARES above a handler is `kind :query` / `kind :action`;
   # what this hook RECEIVES is one of `Executor::VERBS` — `%i[query run pay]`.
   # So an `action` arrives here as **`:run`**, and `pay` arrives as its own
   # third kind rather than as a write. `:query` is spelled identically in both,
-  # which is exactly what makes the mismatch invisible: a policy that branches
-  # on `verb == :query` looks like it was written against the declaration
-  # vocabulary and happens to be right.
+  # which is what makes the mismatch invisible.
   #
   # A WRONG BRANCH IS SILENT. `challenge_for` returning nil is the ordinary «do
   # not toll this one» answer, so `verb == :action` — which can never be true —
   # produces no error, no log line and no failing test: the toll simply never
-  # applies to writes, which is the direction that matters, and the origin
-  # looks configured. The mapping is stated in the spec's policy section and in
-  # kiosk-reputation's README; this demo is the worked example that EXERCISES
-  # it, so a `:run` branch that stopped firing would fail `demo:browse` rather
-  # than going quiet.
+  # applies to writes, and the origin looks configured. This demo is the worked
+  # example that EXERCISES the mapping, so a `:run` branch that stopped firing
+  # fails `demo:browse` rather than going quiet.
   #
   # WHY WRITES ARE PRICED AT ALL, on a browse-priced origin: `reserve_room`
   # holds real inventory. Depth costs an escalating number of proofs because a
@@ -158,16 +136,15 @@ Kiosk.configure do |c|
   c.user_id_type   = :uuid
   c.user_id_column = :id
 
-  # ── Where the wire verbs live (T-053 mixin / T-057) ────────────────────────
+  # ── Where the wire verbs live ──────────────────────────────────────────────
   # The five queries and three actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros (`kind`
-  # says which verb reaches each one), plain `render json:`. Nothing about them belongs in an
-  # initializer, and nothing about them is here: this line only NAMES them, and
-  # the engine loads and registers them (once in production, again after every
-  # reload in development, so an edited/added/removed verb needs no restart).
-  # A verb registers when its class LOADS and nothing loads a handler on its own,
-  # so an origin whose controllers are not named here serves nothing at all
-  # (K-761).
+  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros
+  # (`kind` says which verb reaches each one), plain `render json:`. This line
+  # only NAMES them; the engine loads and registers them (once in production,
+  # again after every reload in development, so an edited verb needs no
+  # restart). A verb registers when its class LOADS and nothing loads a handler
+  # on its own, so an origin whose controllers are not named here serves
+  # nothing at all.
   c.handlers = %w[Kiosk::HotelsController Kiosk::ReservationsController]
 
   c.guc_namespace  = "app"
@@ -185,29 +162,26 @@ Kiosk.configure do |c|
   # in dev/test — the posture lives in config/environments/*.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # UNIFORM-VALIDATION slice-1 (K-479): validate the proof(s) parsed from the
-  # `Kiosk-PoW` request header (ADR-0022) against the normative PoW schema at
-  # the wire choke point, so a malformed proof gets a clear 400 bad_request
-  # (with a shape hint) instead of a silent re-issued 402 loop. There is no
-  # `pow` body field to validate — the header is the only channel. Needs the
-  # json_schemer gem (in the Gemfile). Absent/valid proofs unchanged.
+  # Validate the proof(s) parsed from the `Kiosk-PoW` request header (ADR-0022)
+  # against the normative PoW schema at the wire choke point, so a malformed
+  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
+  # re-issued 402 loop. There is no `pow` body field to validate — the header is the only
+  # channel. Needs the json_schemer gem (in the Gemfile). Absent/valid proofs
+  # unchanged.
   c.validate_requests = true
 
-  # T-068 slice 3: every query/action answer is validated against the
-  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
-  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
-  # request check — nothing a caller sends can trigger it — and it is what
-  # makes this demo's own CI task list a per-verb conformance proof of the
-  # descriptors rather than a smoke test.
+  # Every query/action answer is validated against the `output_schema` that verb
+  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
+  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
+  # caller sends can trigger it — and it is what makes this demo's own CI task
+  # list a per-verb conformance proof of the descriptors rather than a smoke
+  # test.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why (K-1332): with it on,
-  # a descriptor typo becomes a 500 for a caller who did nothing wrong. This
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production — so leaving
-  # it unconditional shipped exactly the posture
-  # kiosk-server/lib/kiosk/server/response_validation.rb warns against, on the
-  # public endpoint an assistant is pointed at, in the file an operator is sent
-  # here to copy. Nothing is lost from the proof: every demo task list runs in
-  # development, so all of the per-verb conformance survives.
+  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
+  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
+  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
+  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
+  # the proof: every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
@@ -224,24 +198,21 @@ Kiosk.configure do |c|
   c.skill_sha256 = "7d5be9bf841f8e05fd67b62b60d140fab584de373f8e28944298c93139f9a9ca"
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence (T-104). An assistant
+  # Deliberate, and the point of the line's absence. An assistant
   # authenticates with the kiosk-pop JWT this very engine minted at
   # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
   # engine already ships the adapter that verifies its own tokens:
   # `IdentityResolution.agent_idp` falls back to
   # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured. This demo used to override it with a hand-copied composite that
-  # re-implemented the JWT half (more loosely — it never checked `iss`) in
-  # order to bolt on a dev-only parser turning a self-asserted
-  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # configured.
   # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
   # Okta, an ID-JAG-style broker) by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID (K-830).
+  # the `agent_id` you return must be a UUID.
+  #
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
-  # link-code mint and unlink. ONE channel in every environment: there is no
-  # dev-only arm to gate, because there is no stub left to gate (T-066).
+  # link-code mint and unlink. ONE channel in every environment.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # The cashier check: ValidatingBookingProvider verifies the agent-signed
@@ -259,16 +230,11 @@ Kiosk.configure do |c|
   # demo register — and `demo:spending_cap` is where a cap is actually written
   # and the control actually bites.
   #
-  # IT IS HERE RATHER THAN NOWHERE BECAUSE «NOWHERE» WAS THE STATE OF THE WHOLE
-  # FLEET, AND THAT COST SOMETHING. `Executor#enforce_spending_cap!` returns at
-  # its first line when this is unset, so until this line existed no demo and
-  # no e2e origin exercised the control at all — which is precisely what let
-  # K-1251 sit unseen: a cap the assistant could defeat by alternating the
-  # capitalisation of its currency, live for any operator who configured the
-  # seam and for nobody here. hoteling is the host because it is one of the
-  # three origins that can actually settle (kiosk-demo-stylish reasons its way
-  # to the opposite conclusion for the opposite reason — it configures no
-  # `payment_provider`, so a `pay` there is refused before a cart exists).
+  # A SEAM NOBODY CONFIGURES IS NOT A CONTROL. `Executor#enforce_spending_cap!`
+  # returns at its first line when this is unset, so an origin that leaves it
+  # out has no cap at all — silently, and with nothing to run against it.
+  # hoteling configures it because it is one of the origins that can actually
+  # settle, and `demo:spending_cap` is where the control is watched biting.
   c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 
   # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
@@ -292,9 +258,9 @@ Kiosk.configure do |c|
 
   # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the browse gate above; pow_secret is set unconditionally so the
-  # gate works even when KIOSK_POW_BROWSE_DEMO is off (RegistrationPow.gate raises
-  # without it) — the browse-gate branch above shares this one assignment.
+  # Independent of the browse gate above; pow_secret is set unconditionally so
+  # the gate works even when KIOSK_POW_BROWSE_DEMO is off (RegistrationPow.gate
+  # raises without it).
   c.registration_pow_count  = 1
   c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
@@ -308,16 +274,16 @@ Kiosk.configure do |c|
   # discounted by however many processes are running.
   #
   # WHY THIS IS WRITTEN DOWN RATHER THAN DETECTED: a replayed proof is not an
-  # error. It verifies, it is accepted, the request succeeds — no exception,
-  # no metric, no log line, no failed request, nothing in any dashboard. An
-  # operator who scales from one worker to two gets NO signal at all that
-  # their origin stopped conforming (kiosk.tech protocol.md §15.2 and the
-  # §16.1 operator profile). So the remedy is stated, not inferred:
+  # error. It verifies, it is accepted, the request succeeds — no exception, no
+  # metric, no log line, nothing in any dashboard. An operator who scales from
+  # one worker to two gets NO signal that their origin stopped conforming
+  # (kiosk.tech protocol.md §15.2 and the §16.1 operator profile). So the
+  # remedy is stated, not inferred:
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
   # plus the one table it needs — see the kiosk-server README, "Multi-process
   # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on (K-752), but a warning nobody reads is
-  # not the mitigation; this comment and the README are.
+  # this default is in use with PoW on, but a warning nobody reads is not the
+  # mitigation; this comment and the README are.
 end
 
 # Amenity vocabulary — the closed set a property MAY offer. Shared by the
@@ -336,13 +302,12 @@ AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
 # enum (Kiosk::HotelsController) and the seeds (db/seeds.rb), so a rename or a
 # typo in either place cannot leave a value the filter can never reach.
 #
-# WHY IT IS A CONSTANT AND NOT A K-922 PROC (T-090, K-947). Deriving the enum
-# from `properties.neighbourhood` would narrow it to the districts that HAPPEN to
-# have inventory right now, which collapses "we do not serve that area" (a 400
-# naming the served set) into "no hotel there today" (a 200 []) — a distinction
-# T-090 drew on purpose and `app/operations/operation_result.rb` records. The
-# rule the K-922 sweep settled: derive an enum from a VOCABULARY table, never
-# from a column on an INVENTORY table. This is the vocabulary, written down.
+# WHY IT IS A CONSTANT AND NOT A PROC OVER THE INVENTORY. Deriving the enum
+# from `properties.neighbourhood` would narrow it to the districts that HAPPEN
+# to have inventory right now, which collapses "we do not serve that area" (a
+# 400 naming the served set) into "no hotel there today" (a 200 []) — a
+# distinction `app/operations/operation_result.rb` records. The rule: derive an
+# enum from a VOCABULARY table, never from a column on an INVENTORY table.
 NEIGHBOURHOOD_POOL = %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
                         Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı].freeze
 

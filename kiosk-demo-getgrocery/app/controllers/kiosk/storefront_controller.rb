@@ -332,17 +332,14 @@ class Kiosk::StorefrontController < ActionController::API
   # omits the date is not getting a lesser response, it is getting the same one
   # for the day the operator picked. `date` on each row is what create_order
   # books, so it is the omitting caller's way of learning which day it got.
-  # THE ROW SAYS `district` AND SO DOES EVERY NAME BEHIND IT. The published
-  # field is a POSTAL DISTRICT — `D02`, a routing key — while
-  # `DeliverySlots.zone` in this same demo is an `ActiveSupport::TimeZone`. K-1346
-  # split the two on the wire, where an assistant has only the field name: a row
-  # carrying a delivery window is exactly where a reader expects `zone` to mean
-  # the clock the window is written in. K-1349 finished the split INSIDE the demo
-  # — `DublinZones::Result#district`, {DublinZones.extract_district},
-  # {WireArguments.served_district} — because "readable here, where a human knows
-  # which file they are in" was the argument for leaving it, and the demo is the
-  # file an operator reads to learn the pattern. Only the IANA accessor keeps the
-  # name `zone`, which is the one thing it can honestly mean.
+  #
+  # The row says `district`, and so does every name behind it
+  # (`DublinZones::Result#district`, {DublinZones.extract_district},
+  # {WireArguments.served_district}): the published field is a POSTAL DISTRICT —
+  # `D02`, a routing key — while `DeliverySlots.zone` in this same demo is an
+  # `ActiveSupport::TimeZone`. A row carrying a delivery window is exactly where
+  # a reader expects `zone` to mean the clock the window is written in, so only
+  # the IANA accessor keeps that name — the one thing it can honestly mean.
   def render_slots(date, district)
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)
@@ -350,7 +347,7 @@ class Kiosk::StorefrontController < ActionController::API
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
-        # THE ZONE IS PART OF THE LABEL, because the label is the field a human
+        # The zone is part of the label, because the label is the field a human
         # is actually read out. A bare "08:00–10:00" is a wall clock with no
         # clock named, and a customer three hours away reads it as THEIR 08:00.
         # `slot_at` has carried the resolved offset all along, but nobody says

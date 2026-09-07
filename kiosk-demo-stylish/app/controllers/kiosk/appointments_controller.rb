@@ -3,7 +3,7 @@
 # stylish's WRITE surface: the one verb an assistant reaches with
 # `POST /kiosk/book_appointment` — arguments in the JSON body, and `kind :action`
 # above the declaration is what puts it on `POST`. The action is six lines:
-# arguments off the request, into an Operation, render what it answers (T-083).
+# arguments off the request, into an Operation, render what it answers.
 #
 # A refusal is an ordinary `render json:, status:` naming a code from the wire's
 # closed error-code table — no Kiosk error classes appear below. The wire
@@ -65,7 +65,7 @@ class Kiosk::AppointmentsController < ApplicationController
       },
       required: %w[appointment_id salon_id slot] },
   ]
-  # THE SLOT IS RESOLVED, NOT WRITTEN DOWN (K-969): a past slot is refused, so a
+  # The slot is RESOLVED, not written down: a past slot is refused, so a
   # literal would age into "copy this and get a 400". `example_params` takes a
   # resolvable slot ({Kiosk::Server::SchemaSlots}); the instant itself lives in
   # the Operation, quoted back by the two `slot` refusals as the shape to retry.
@@ -75,8 +75,7 @@ class Kiosk::AppointmentsController < ApplicationController
   # `type: "string"`, and an assistant that copied the integer would build a
   # value it will only ever be handed as a uuid and then round-trip it back.
   # Caught on the first run of the §8.3 example-vs-schema check across the
-  # seven origins (T-097) — the SAME defect K-825 found in the reference
-  # origin, whose fixtures stage this demo's salons and appointments.
+  # seven origins.
   example_row({
     appointment_id: "6b1f0c5a-9d3e-4f27-8a10-2c7e4b9d5f83", salon_id: 1,
     slot: -> { BookAppointmentOperation.example_slot }, service: "Colour",

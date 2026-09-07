@@ -41,7 +41,7 @@ class VerificationsController < ActionController::Base
     subject_handle   = body["subject_handle"].to_s
     # The operator-binding `aud` is derived from the AUTHENTICATED OPERATOR'S
     # REGISTRATION record — the audience the broker holds for this allow-listed
-    # operator — NOT from the request body (K-550). An operator can therefore only
+    # operator — NOT from the request body. An operator can therefore only
     # ever obtain an attestation bound to ITS OWN audience: operator B cannot
     # request `{audience: <operator A's audience>}` and receive an A-audience
     # ProveKey-signed claim. Defaults to the operator_id handle when the operator
@@ -66,7 +66,7 @@ class VerificationsController < ActionController::Base
         :forbidden,
       )
     end
-    # BIND-AND-VERIFY the operator's own declared audience (K-550): the honest
+    # BIND-AND-VERIFY the operator's own declared audience: the honest
     # operator still sends its kyc_audience in the body so its intent is explicit,
     # but the broker refuses to be told a DIFFERENT audience than the one it holds
     # for this operator. A body audience that matches the registration is accepted;
@@ -92,7 +92,7 @@ class VerificationsController < ActionController::Base
       subject_handle:   subject_handle,
       nonce:            nonce,
       # The registration-derived audience (never the raw request body) — this is
-      # what mint() stamps as the attestation `aud` (K-550).
+      # what mint() stamps as the attestation `aud`.
       audience:         (audience.empty? ? nil : audience),
       status:           "pending",
       expires_at:       Time.current + REQUEST_TTL,
@@ -157,7 +157,7 @@ class VerificationsController < ActionController::Base
 
   # Mint the signed anonymized claim bound to (subject + operator + request)
   # and POST it to the operator callback. Only ever reached AFTER {#claim!}
-  # has already, atomically, flipped the row pending → confirmed (K-705) — so
+  # has already, atomically, flipped the row pending → confirmed — so
   # by the time this method's expensive work runs, this request has already
   # won the single-use guard and no concurrent approve can duplicate it.
   def approve!(prove_request)
@@ -184,23 +184,19 @@ class VerificationsController < ActionController::Base
     # human-facing page must not claim delivery succeeded when it did not —
     # @delivered drives which of the two "Confirmed" messages decided.html.erb
     # renders. The row itself is already flipped to confirmed above and stays
-    # that way either way (K-706 fixes the claim, not the retryability — see
-    # K-705 for making an undelivered row retryable).
+    # that way either way: an undelivered row is not retryable today.
     @decision   = :approved
     @delivered  = delivery_status.is_a?(Integer) && (200..299).cover?(delivery_status)
     @attributes = attributes
     render :decided
   end
 
-  # ── K-705: the burn IS the single-use guard ────────────────────────────────
-  # The old code read #confirmable? in memory, THEN (after minting — an
-  # expensive RSA sign + network POST) wrote the row unconditionally. Two
-  # concurrent POST /verify on the same pending row both passed the read,
-  # both minted, both delivered: a check-then-write TOCTOU, the same class as
-  # K-542 (kiosk-server's PoW spent-store race). K-542's fix was to make a
-  # single atomic claim op — succeed-or-fail — happen BEFORE the expensive
-  # work, instead of a plain check followed by a later plain write. This is
-  # that same shape at the SQL layer: ONE conditional UPDATE, scoped to
+  # ── THE BURN IS THE SINGLE-USE GUARD ───────────────────────────────────────
+  # Reading `#confirmable?` in memory and THEN — after minting, an expensive RSA
+  # sign plus a network POST — writing the row unconditionally is a
+  # check-then-write TOCTOU: two concurrent POST /verify on one pending row both
+  # pass the read, both mint and both deliver. So the atomic claim happens
+  # BEFORE the expensive work: ONE conditional UPDATE, scoped to
   # `WHERE status = "pending"`, executed BEFORE any minting. Postgres
   # serializes concurrent UPDATEs against the same row, so of N racing
   # decisions on one row, `update_all` returns 1 for exactly one caller and 0
@@ -266,7 +262,7 @@ class VerificationsController < ActionController::Base
   end
 
   # The link base: PROVE_PUBLIC_URL when the deploy pins one (read in
-  # config/environments/*.rb — K-672), else this intake request's own origin.
+  # config/environments/*.rb), else this intake request's own origin.
   def verification_url_for(request_id)
     base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp("/")
     "#{base}/verify?request=#{request_id}"

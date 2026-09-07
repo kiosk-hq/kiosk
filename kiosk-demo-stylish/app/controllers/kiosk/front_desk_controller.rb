@@ -6,7 +6,7 @@
 # ApplicationController, `include Kiosk::Handler` is the whole contract, and a
 # macro is claimed by the NEXT `def` — a method with no macros above it is a
 # helper the wire cannot see. `kind :query` puts a declaration on `GET`, and the
-# kind belongs to the DECLARATION, not the class (K-921).
+# kind belongs to the DECLARATION, not the class.
 #
 # NOT ROUTABLE: config/routes.rb draws nothing here. Handlers are reached only
 # through the wire, where authentication, the registration PoW gate and the
@@ -35,7 +35,7 @@ class Kiosk::FrontDeskController < ApplicationController
                 }
   def salons
     # `pluck` rather than loading models: naming the columns keeps the wire's
-    # field names and their order a decision this handler makes (K-654).
+    # field names and their order a decision this handler makes.
     render json: Salon.order(:id).pluck(:id, :name).map { |id, name|
       { salon_id: id, name: name }
     }
@@ -79,7 +79,7 @@ class Kiosk::FrontDeskController < ApplicationController
                         }
   end
 
-  # availability — EVERGREEN (K-446): capacity is infinite and nothing goes
+  # availability — EVERGREEN: capacity is infinite and nothing goes
   # stale, so availability IS the service menu with every row `open: true`.
   kind :query
   description "Browse the salon's OPEN services. Every service on the menu is always bookable — this " \
@@ -121,7 +121,7 @@ class Kiosk::FrontDeskController < ApplicationController
   end
 
   # my_appointments — scoped by the session GUC: the agent supplies no filter.
-  # `owned_by_current_principal` stays SQL-side — see Appointment (K-654).
+  # `owned_by_current_principal` stays SQL-side — see Appointment.
   kind :query
   description "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
@@ -164,20 +164,12 @@ class Kiosk::FrontDeskController < ApplicationController
   # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
   # because a role is ASSIGNED by the operator and never client-requested.
   #
-  # THE CITATION HERE USED TO BE FALSE, AND IT MATTERED (K-072). It named
-  # kiosk-redteam's `privilege_self_selection` scenario as the proof — a
-  # scenario that injects a role into `POST /auth/register` and nowhere else.
-  # The binding ceremonies are the other way in, and one of them was open: the
-  # RFC 8628 claim flow read `role`/`scope` off its UNAUTHENTICATED opening
-  # request, so `role=owner` reached this verb through a customer's approval
-  # while `rake demo:redteam` printed «all 14 scenarios BLOCKED». A citation
-  # to a test that does not test the claim is worse than none — it is what
-  # stopped anyone looking.
-  #
-  # What holds it now, and each of these is a beat of `rake demo:redteam` in
-  # THIS demo (script/redteam_suite.rb), against the live wire:
-  #   • registration  — kiosk-redteam's `PrivilegeSelfSelection`, the original
-  #     and still-correct scenario for `/auth/register`;
+  # What holds that claim: five beats of `rake demo:redteam` in THIS demo
+  # (script/redteam_suite.rb), against the live wire. The registration one
+  # alone does NOT cover it — the binding ceremonies (claim, link) are the
+  # other way a role can be asked for — so all five are load-bearing:
+  #   • registration  — kiosk-redteam's `PrivilegeSelfSelection`, for
+  #     `/auth/register`;
   #   • claim         — `DeviceGrantCannotSelfSelectRole` /
   #     `DeviceGrantRoleComesFromTheApprover` / `DeviceGrantRebindCannotEscalate`;
   #   • link          — `CustomerLinkCannotCarryOwnerRole` /
@@ -188,7 +180,7 @@ class Kiosk::FrontDeskController < ApplicationController
   reach :role
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # TWO ROW SHAPES IN ONE ARRAY, discriminated by the field each has that the
+  # Two row shapes in ONE array, discriminated by the field each has that the
   # other does not: `kind: "booking"` versus `summary: "forecast"`. The forecast
   # is APPENDED to the bookings rather than sitting beside them in an envelope. A
   # non-owner never sees the second shape — the role gate, not a format option.

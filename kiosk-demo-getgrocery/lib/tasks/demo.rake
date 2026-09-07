@@ -13,14 +13,14 @@
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200) at TOY
 #                        params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
-#   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter (K-480)
-#   rake demo:cashier_spec DB-free unit spec for the order-ref uuid shape check (K-579)
+#   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter
+#   rake demo:cashier_spec DB-free unit spec for the order-ref uuid shape check
 #   rake demo:wire_args_spec DB-free unit spec for the whole WireArguments shape
 #                        guard — the module that decides whether a hostile wire
-#                        argument is a typed 400 or a booked order (T-116)
-#   rake demo:race       pay-path regression: concurrency (K-544) + typed 4xx (K-579)
-#                        + stuck-`paying` self-heal (K-578)
-#   rake demo:reconcile  resolve orders stuck in `paying` from local evidence (K-578)
+#                        argument is a typed 400 or a booked order
+#   rake demo:race       pay-path regression: concurrency + typed 4xx
+#                        + stuck-`paying` self-heal
+#   rake demo:reconcile  resolve orders stuck in `paying` from local evidence
 #   rake demo            setup + shop (full end-to-end proof)
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
@@ -113,11 +113,10 @@ namespace :demo do
        "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
        "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # db:schema:load unconditionally (K-712b): db/structure.sql is TRACKED in
-    # every demo, so the db:migrate arm this used to branch to was unreachable
-    # in every checkout — and under `schema_format = :sql` it would have
-    # re-dumped that tracked file, dirtying the worktree. The canonical
-    # structure.sql is the source of truth.
+    # db:schema:load unconditionally: db/structure.sql is TRACKED in every demo,
+    # so a db:migrate arm would be unreachable in every checkout — and under
+    # `schema_format = :sql` it would re-dump that tracked file, dirtying the
+    # worktree. The canonical structure.sql is the source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
@@ -198,21 +197,20 @@ namespace :demo do
 
     # -- host resolution --
     # The domain here MUST be one config/environments/development.rb permits
-    # (config.hosts) — that is the whole point of the lookup. Until K-695 it was
-    # <demo>.app, which config.hosts has never listed, so the ONE branch this
-    # block exists to offer was the one that broke: a developer who followed the
-    # printed /etc/hosts line got Rails 8 HostAuthorization 403s, the 200-only
-    # readiness poll below burned its 40 seconds, and the run aborted naming the
-    # wrong cause. CI never saw it — with no hosts entry the lookup fails and
-    # everything dials 127.0.0.1.
+    # (config.hosts) — that is the whole point of the lookup. A name that is not
+    # listed breaks the ONE branch this block exists to offer: a developer who
+    # follows the printed /etc/hosts line gets Rails 8 HostAuthorization 403s,
+    # the 200-only readiness poll below burns its 40 seconds, and the run aborts
+    # naming the wrong cause. CI never sees it — with no hosts entry the lookup
+    # fails and everything dials 127.0.0.1.
     #
     # This name resolves PUBLICLY to the live demo box, so a bare lookup returns
     # a public IP, not an error. Only 127.0.0.1 is accepted, which is exactly
     # what an /etc/hosts entry produces: a local harness can never be steered
     # onto the deployed host by whatever DNS happens to answer.
     #
-    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT (K-1318). Unguarded, every local
-    # run of every task in this file sent a DNS query for a `demo.kiosk.tech`
+    # THE LOOKUP IS OPT-IN AND OFF BY DEFAULT. Unguarded, every local run of
+    # every task in this file would send a DNS query for a `demo.kiosk.tech`
     # subdomain: an outbound query to the project's production domain, on each
     # invocation, for a value the run discards unless this machine has an
     # /etc/hosts entry. Set KIOSK_DEMO_HOST_LOOKUP=1 to ask for it. Without it
@@ -314,9 +312,9 @@ namespace :demo do
     check.call("http_catalog",       result["http_catalog"],       200)
     check.call("http_order",         result["http_order"],         200)
     check.call("http_slots",         result["http_slots"],         200)
-    # ADDRESS-UPFRONT (K-468): an out-of-zone / district-less delivery address
-    # must be a CLEAN 400 (bad_request), never a 500; the valid in-zone address
-    # must reach 200 (asserted by http_slots/http_order above).
+    # ADDRESS-UPFRONT: an out-of-zone / district-less delivery address must be a
+    # CLEAN 400 (bad_request), never a 500; the valid in-zone address must reach
+    # 200 (asserted by http_slots/http_order above).
     check.call("http_slots_badzone", result["http_slots_badzone"], 400)
     check.call("slots_badzone_code", result["slots_badzone_code"], "bad_request")
     check.call("http_payment_setup", result["http_payment_setup"], 200)
@@ -341,7 +339,7 @@ namespace :demo do
       puts "  FAIL  slot_at missing or empty"
     end
 
-    # K-470: create_order's booked slot_at must EQUAL the date+start-time of the
+    # create_order's booked slot_at must EQUAL the date+start-time of the
     # delivery_slot the agent queried and chose — same day, NOT a fixed +1.
     chosen = result["chosen_slot_at"]
     if sat && chosen && sat == chosen
@@ -351,7 +349,7 @@ namespace :demo do
       puts "  FAIL  K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
     end
 
-    # K-480: if the flow ran late enough that some of today's windows had already
+    # If the flow ran late enough that some of today's windows had already
     # started, delivery_slots hid them AND create_order rejected a past one with a
     # clean 400 bad_request (the negative control in script/getgrocery_flow.rb only fires
     # when a genuine past slot exists — a no-op before 08:00 Dublin or when booking
@@ -366,9 +364,9 @@ namespace :demo do
       puts "  FAIL  K-480: create_order on past slot got #{psc.inspect}"
     end
 
-    # my_orders marks the settled order paid. K-853: the field is the TRI-state
-    # §11.6 requires (unpaid | pending | paid), not a boolean — `pending` is a
-    # capture whose outcome is unknown and is NOT a settled order.
+    # my_orders marks the settled order paid. The field is the TRI-state §11.6
+    # requires (unpaid | pending | paid), not a boolean — `pending` is a capture
+    # whose outcome is unknown and is NOT a settled order.
     if result["payment_state"] == "paid"
       puts "  OK  my_orders own order payment_state == paid"
     else
@@ -379,9 +377,9 @@ namespace :demo do
     # THE PAY BODY IS THE SETTLEMENT (0.4). `POST /kiosk/pay` keeps its path,
     # but its success body is the settlement object itself — there is no `ok`
     # flag left to read, and "did it settle?" is the 200 status plus a
-    # settlement that names itself and its currency. Asserting the fields is
-    # STRICTLY MORE than the retired `ok == true` was: a wrapper saying `true`
-    # never proved the operator had booked anything.
+    # settlement that names itself and its currency. The FIELDS are what is
+    # asserted: a wrapper saying `true` would not prove the operator had booked
+    # anything.
     pay = result["pay"] || {}
     %w[settlement_id psp_reference settled_amount_cents currency].each do |field|
       value = pay[field]
@@ -429,13 +427,13 @@ namespace :demo do
       puts "  FAIL  psp_reference not a pi_… (got #{psp_ref.inspect})"
     end
 
-    # -- assertions: THIS RUN's rows, named by id (K-862) --
+    # -- assertions: THIS RUN's rows, named by id --
     #
-    # These were DB-wide `COUNT(*) >= 1`, which passes on a row a PREVIOUS run
-    # left behind: getgrocery's seeds create no orders, but `demo:shop` is not
-    # always run straight after `demo:setup`, so the beat could stop writing
-    # and all three would stay green. The driver reports `order_id` and the
-    # `user_id` of the agent it registered this run; both are anchors.
+    # A DB-wide `COUNT(*) >= 1` passes on a row a PREVIOUS run left behind:
+    # getgrocery's seeds create no orders, but `demo:shop` is not always run
+    # straight after `demo:setup`, so the beat could stop writing and all three
+    # would stay green. The driver reports `order_id` and the `user_id` of the
+    # agent it registered this run; both are anchors.
     this_order = result["order_id"]
     this_slot  = `psql -X -d #{db} -tAc "SELECT slot_at IS NOT NULL FROM orders WHERE id = '#{this_order}'" 2>&1`.strip
     if this_slot == "t"
@@ -523,7 +521,7 @@ namespace :demo do
 
     # The seeded account holder with the saved card, and her Devise credentials
     # (db/seeds.rb). The driver signs her in at /users/sign_in before she can
-    # approve anything: since T-066 there is no stub session channel to assert.
+    # approve anything: there is no stub session channel to approve through.
     human_id       = "00000000-0000-0000-0000-000000000042"
     human_cus_id   = "cus_getgrocery_saved_card"
     human_email    = "hana@example.com"
@@ -801,8 +799,7 @@ namespace :demo do
     # `create_order` declares `additionalProperties: false` and does not declare
     # `user_id` — the principal is not one of its inputs — so on the 0.4 wire the
     # schema layer answers a typed 400 NAMING the parameter before the handler
-    # runs. Through 0.3 the argument reached the handler and was silently
-    # ignored; refusing it is the stricter answer, and "ignored" is now false.
+    # runs.
     forged_rc, forged_code, forged_detail = forged_refusal
     if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
       puts "  ✓  Assertion 5a: forged user_id → 400 bad_request naming user_id " \
@@ -822,10 +819,10 @@ namespace :demo do
       puts "  ✗  Assertion 5b FAILED: unexpected user_id #{db_user_id.inspect} (expected B's)"
     end
 
-    # Assertion 6 (K-472): re-paying an ALREADY-SETTLED order is rejected WITH A
-    # BODY. Every /pay error must carry an RFC 9457 problem document whose
-    # TOP-LEVEL `code` an agent can branch on — never an empty/bodiless
-    # response. Guards the K-471 detour: a mistaken second /pay for a paid order.
+    # Assertion 6: re-paying an ALREADY-SETTLED order is rejected WITH A BODY.
+    # Every /pay error must carry an RFC 9457 problem document whose TOP-LEVEL
+    # `code` an agent can branch on — never an empty/bodiless response. The case
+    # it guards is a mistaken second /pay for an order already paid.
     if repay_settled_status == 403 && repay_body_len > 0 && repay_error_code == "forbidden"
       puts "  ✓  Assertion 6: re-pay of a settled order → 403 with a problem document (code=#{repay_error_code.inspect}, #{repay_body_len} bytes) — no empty pay error"
     else
@@ -933,16 +930,16 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    # ── THE DISCOVERY SIGNAL, READ OFF THE WIRE ──────────────────────────────
     #
-    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # protocol.md §4.5: an operator that advertises
     # `rel="kiosk"` MUST point it at a VERSIONED cut
     # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
     # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
     # — the tag, the header and the pin MUST all name the SAME url.
     #
-    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
-    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
+    # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
     # assistant scanning this page is actually handed. bin/check-version-parity
     # holds the SOURCE half (no literal url in app/, read the accessor); this
@@ -1003,7 +1000,7 @@ namespace :demo do
     actions      = result["schema_actions"] || []
     capabilities = result["discovery_capabilities"] || []
 
-    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL. The flow driver
     # sends no Authorization header, so this status IS the public-access proof.
     if result["schema_status"] == 200
       puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
@@ -1012,9 +1009,9 @@ namespace :demo do
       puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
 
-    # THE MODULE SET, at its one remaining home. It was published twice —
-    # `schema.verbs` and `kiosk.json` `capabilities` — from the same call, so
-    # `verbs` was dropped (T-095) and the property moved here intact.
+    # THE MODULE SET, at its ONE home: `kiosk.json` `capabilities`. It is not
+    # also published as `schema.verbs`, so there is no second copy of it that
+    # could drift out of step with this one.
     %w[schema queries actions pay].each do |v|
       if capabilities.include?(v)
         puts "  ✓  capabilities includes #{v}"
@@ -1047,7 +1044,7 @@ namespace :demo do
       end
     end
 
-    # T-042 / K-452: the primary read query (catalog) and primary action
+    # The primary read query (catalog) and primary action
     # (create_order) advertise the machine-readable descriptor extensions.
     {
       queries => %w[catalog],
@@ -1083,15 +1080,14 @@ namespace :demo do
       end
     end
 
-    # K-596: both verbs that take an `order_id` must DECLARE its uuid shape, not
-    # merely describe it in prose. Since 0.4 the declaration is also ENFORCED:
+    # Both verbs that take an `order_id` must DECLARE its uuid shape, not merely
+    # describe it in prose. Since 0.4 the declaration is also ENFORCED:
     # `input_schema` is validated on every call, unconditionally, so the pattern
     # asserted below is what refuses a malformed order_id at the wire.
     # `UuidCheck` in the handler remains the floor for the values the pattern
-    # admits — demo:race pins that side, in-process. Asserted by BEHAVIOUR,
-    # not by string equality:
-    # the published pattern must accept the ids create_order hands out and
-    # reject the value that used to 500.
+    # admits — demo:race pins that side, in-process. Asserted by BEHAVIOUR, not
+    # by string equality: the published pattern must accept the ids create_order
+    # hands out and reject the junk that would otherwise reach a `::uuid` cast.
     require "securerandom"
     %w[create_order reschedule_delivery].each do |aname|
       prop = (actions.find { |a| a["name"] == aname } || {})
@@ -1142,22 +1138,21 @@ namespace :demo do
       end
     end
 
-    # ── K-606: THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ─────
+    # ── THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ────────────
     # The out-of-band verbs below are learned about by RE-POLLING and nothing
-    # else — the wire has no server→assistant push — so K-477/K-595 wrote a
-    # cadence and a give-up horizon into their descriptors and K-605 made them
-    # QUOTE kiosk.tech/skill.md's tiered schedule instead of a rival flat one.
-    # Until this beat nothing that runs read either back: `grep` found the
-    # strings only in the source they were written into, so any later edit could
-    # drop the horizon and every gate stayed green. It is asserted here, on the
-    # SERVED descriptor, because that is the document an assistant reads.
+    # else — the wire has no server→assistant push — so their descriptors carry
+    # a cadence and a give-up horizon, QUOTING kiosk.tech/skill.md's tiered
+    # schedule rather than a rival flat one. NOTHING ELSE THAT RUNS READS EITHER
+    # VALUE BACK — they live only in the source they are written into — so
+    # without this beat an edit could drop the horizon and every gate would stay
+    # green. It is asserted on the SERVED descriptor, because that is the
+    # document an assistant reads.
     #
     # STRUCTURE, NOT THE MINUTES. Both tiers must be present, the second must be
     # SLOWER than the first (a tiering that is not one is not a schedule), and a
     # horizon must be named in minutes. The exact numbers are deliberately NOT
     # pinned: writing "5" and "15" here would make this file a third place the
-    # schedule lives, which is the divergence K-605 closed by deleting a derived
-    # count rather than recomputing it.
+    # schedule lives, and a derived copy of a schedule is one copy too many.
     poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
     poll_horizon = /GIVE UP after about (\d+) minutes?/
     { actions => ["payment_setup"], queries => ["kyc_status"] }.each do |list, names|
@@ -1189,7 +1184,7 @@ namespace :demo do
       end
     end
 
-    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS (T-097) ─────
+    # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off
     # `/kiosk/schema` a moment ago — an `example_params` its own `input_schema`
@@ -1486,19 +1481,15 @@ namespace :demo do
 
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
-    # ── The toll this run pays, DERIVED and then PRINTED (T-110) ──────────────
+    # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
     #
     # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
-    # this repo, and until now it pinned nothing about the parameters: it set
-    # `KIOSK_POW_DEMO=1` and nothing else, so it always ran at `PowDifficulty`'s
-    # `low` default while the shipped kiosk-pow-equihash default is n=168 k=7.
-    # Nothing anywhere demonstrated end to end that an assistant can pay the
-    # toll a real operator charges, and a reader watching this task had no way
-    # to tell which of the two they were seeing. The ambient
-    # `KIOSK_POW_DIFFICULTY` is now forwarded to the server this task spawns,
-    # and the pair is read off {PowDifficulty} — the same module the initializer
-    # reads — rather than typed here. The default is unchanged, so CI and a bare
-    # `rake demo:pow` cost exactly what they did.
+    # this repo, and it runs at `PowDifficulty`'s `low` default while the
+    # shipped kiosk-pow-equihash default is n=168 k=7, so a reader watching
+    # this task must be told which of the two they are seeing. The ambient
+    # `KIOSK_POW_DIFFICULTY` is FORWARDED to the server this task spawns, and
+    # the pair is read off {PowDifficulty} — the same module the initializer
+    # reads — rather than typed here.
     require File.expand_path("../../app/services/pow_difficulty.rb", __dir__)
     pow_level  = PowDifficulty.level
     pow_params = PowDifficulty.params
@@ -1514,17 +1505,15 @@ namespace :demo do
     flow_rb      = File.expand_path("../../script/pow_flow.rb", __dir__)
     failures     = []
 
-    # K-712c: the ternary that used to stand here re-asked a question already
-    # answered above — ENV["STRIPE_SECRET_KEY"] is filled in before demo:setup
-    # runs, so its "empty" branch was unreachable and the justification was
-    # written out twice.
+    # `fetch`, not a default: ENV["STRIPE_SECRET_KEY"] is filled in above,
+    # before demo:setup runs, so there is nothing left here to fall back to.
     stripe_key = ENV.fetch("STRIPE_SECRET_KEY")
 
-    # ONE owner for the toy counter's location (K-711, K-785). The server and
-    # the driver are two processes that never meet; this task spawns both, so
-    # it is the only place the path can be stated once. Wiped HERE — the beat
-    # asserts exact counts, and the initializer must not truncate a store at
-    # boot in a file an adopter copies.
+    # ONE owner for the toy counter's location. The server and the driver are
+    # two processes that never meet; this task spawns both, so it is the only
+    # place the path can be stated once. Wiped HERE — the beat asserts exact
+    # counts, and the initializer must not truncate a store at boot in a file
+    # an adopter copies.
     bad_proof_db = File.expand_path("../../tmp/bad-proof.sqlite3", __dir__)
     require "fileutils"
     FileUtils.mkdir_p(File.dirname(bad_proof_db))
@@ -1536,7 +1525,7 @@ namespace :demo do
         "KIOSK_TEST_AUTOCARD" => "1", "STRIPE_SECRET_KEY" => stripe_key,
         "KIOSK_BAD_PROOF_DB" => bad_proof_db,
         # Forwarded, not defaulted: naming it here is what makes the server's
-        # level and the level this task prints the SAME read (T-110).
+        # level and the level this task prints the SAME read.
         "KIOSK_POW_DIFFICULTY" => pow_level },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
@@ -1576,7 +1565,7 @@ namespace :demo do
       check = lambda do |label, ok|
         if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
       end
-      # WHICH TOLL WAS ACTUALLY PAID (T-110), asserted off the WIRE rather than
+      # WHICH TOLL WAS ACTUALLY PAID, asserted off the WIRE rather than
       # printed off this task's own read. A banner naming the parameters is a
       # claim; the challenge the server issued is evidence, and it follows an
       # operator override or a policy this task cannot see. Without it the
@@ -1586,11 +1575,11 @@ namespace :demo do
       check.call("toll served at n=#{pow_params[:n]} k=#{pow_params[:k]} (the wire's own params, " \
                  "not this task's read); got n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}",
                  served_params["n"].to_i == pow_params[:n] && served_params["k"].to_i == pow_params[:k])
-      # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR (K-1221), counted by the driver
-      # where the solver runs rather than typed here. This task's prose used to
-      # promise "four" while the driver reported one: it counted only the tolled
-      # catalog query's challenges and not the registration proof
-      # `equihash_register` solves transparently for each identity the flow mints.
+      # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR, counted by the driver where
+      # the solver runs rather than typed here. The total covers BOTH the tolled
+      # catalog query's challenges and the registration proof `equihash_register`
+      # solves transparently for each identity the flow mints — counting the
+      # query's alone reports the wrong number.
       # It is the number a viewer multiplies by the per-proof budget to size a
       # recording, so it is ASSERTED — a printed total that does not equal its own
       # two parts is a counter that has come loose from what it counts.
@@ -1604,7 +1593,7 @@ namespace :demo do
       check.call("served after solve (200 + rows)",  result["served"] == true && result["catalog_rows"].to_i >= 1)
       check.call("wrong nonce rejected (403)",       result["http_wrong_nonce"] == 403)
       check.call("on_bad_proof penalized",           result["bad_proof_count"].to_i >= 1)
-      # PER-IDENTITY (K-498): the flow's second, innocent identity must be
+      # PER-IDENTITY: the flow's second, innocent identity must be
       # untouched by the first identity's wrong nonce.
       check.call("per-identity counter: innocent identity stays 0",
                  result.key?("other_bad_proof_count") && result["other_bad_proof_count"].to_i.zero?)
@@ -1752,7 +1741,7 @@ namespace :demo do
       KIOSK_TELEMETRY_DB_URL=… SEED_SHARED=1 rake demo:telemetry   # hosted tile
   DESC
   task telemetry: :environment do
-    # K-620 write-target guard. This task WRITES synthetic rows, and which store
+    # Write-target guard. This task WRITES synthetic rows, and which store
     # it writes them into is decided by an environment variable: unset ⇒ this
     # demo's own database (a throwaway, which is what CI has); set ⇒ the SHARED
     # hosted store the public kiosk.tech landing tile reads, where 40 fabricated
@@ -1936,7 +1925,7 @@ namespace :demo do
                result["alcohol_no_kyc_hint_to_req"] == true)
     check.call("A2 request_kyc → 200 with a broker verification_url",
                result["http_request_kyc"] == 200 && result["request_kyc_verification_url"].to_s.include?("/verify?request="))
-    # A2b: the OUTSTANDING-INTAKE CAP (K-586). One registration proof bought
+    # A2b: the OUTSTANDING-INTAKE CAP. Without it one registration proof buys
     # unlimited broker intakes — free against a stub, a budget hole behind a
     # paid issuer. The FOURTH pending request for one account is refused with
     # the wire's own `quota_exceeded` (429), BEFORE the broker is called.
@@ -1956,7 +1945,7 @@ namespace :demo do
                result["http_forged_kyc_submit"] == 403)
     check.call("R2 alcohol create_order after the forged submit still blocked → 403",
                result["http_alcohol_after_forged"] == 403)
-    # THE FAIL-CLOSED BOOLEAN (K-656). A genuinely broker-signed attestation
+    # THE FAIL-CLOSED BOOLEAN. A genuinely broker-signed attestation
     # whose age_over_18 is the STRING "true" is ACCEPTED as an attestation and
     # grants NOTHING — so the agent cleared in PART A loses its clearance and
     # the alcohol order it just paid for is refused on a retry. Presence of a

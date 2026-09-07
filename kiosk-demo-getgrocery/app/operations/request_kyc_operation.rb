@@ -85,11 +85,10 @@ class RequestKycOperation
   end
 
   # THE BROKER IS A SECOND SERVICE, AND ITS ABSENCE MAY NOT REACH THE WIRE AS A
-  # RUBY EXCEPTION. Three unrescued raises used to leave this verb answering
-  # `500 action_failed` with a Ruby class name in `detail` — and, when the
-  # broker's port was refused, with this operator's own broker host in it. That
-  # is the opaque-500 shape the wire exists to replace, on a no-argument verb an
-  # assistant can call before anything else.
+  # RUBY EXCEPTION. Unrescued, its raises answer `500 action_failed` with a Ruby
+  # class name in `detail` — and, when the broker port is refused, with this
+  # operator's own broker host in it: the opaque-500 shape the wire exists to
+  # replace, on a no-argument verb an assistant can call before anything else.
   #
   # TWO ANSWERS, because they ask the assistant to do different things:
   #

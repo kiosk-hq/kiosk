@@ -3,7 +3,7 @@
 # The tutorial-plain tudu web UI for a signed-in human. Every action runs the
 # SAME domain code the agent wire runs, as the signed-in human (via
 # KioskSessionable), so the human and their assistants share one world — and
-# since T-082 it runs that code DIRECTLY: reads are model projections, writes are
+# and it runs that code DIRECTLY: reads are model projections, writes are
 # the Operations the wire handlers call. Nothing here goes through the wire
 # dispatcher, which is for assistants.
 #   index  — the human's lists (owner or member) — List.reachable_rows
@@ -43,10 +43,10 @@ class ListsController < ApplicationController
       members:  Membership.count,
     }
 
-    # The SECOND discovery signal on the demo's ROOT (K-944). The
+    # The SECOND discovery signal on the demo's ROOT. The
     # `<link rel="kiosk">` tag rides the layout, so it is on every page; the
     # header was set only on #shared, which made tudu the one demo whose HOME
-    # page carried a single signal while the fleet claim (K-927) says all seven
+    # page carried a single signal while the fleet claim says all seven
     # carry both. protocol.md §4.5 permits either form — this is about the
     # claim being true and the fleet being uniform, not about conformance.
     advertise_kiosk_skill
@@ -64,11 +64,11 @@ class ListsController < ApplicationController
 
   # The three actions below branch on the wire CODE rather than on an exception
   # class, and anything else re-raises so an unexpected refusal still surfaces
-  # instead of being swallowed by a friendly redirect. Since T-082 the code
-  # arrives ONE way on both halves — an {OperationResult} carrying a string from
-  # the wire's closed vocabulary (T-054: the code table is the contract, not a
-  # hierarchy) — because the read half no longer travels through the dispatcher
-  # that used to wrap it in an `Errors::WireError` on the way back.
+  # instead of being swallowed by a friendly redirect. The code arrives ONE way
+  # on both halves — an {OperationResult} carrying a string from the wire's
+  # closed vocabulary (the code table is the contract, not a hierarchy) —
+  # because neither half travels through the dispatcher, which would wrap it in
+  # an `Errors::WireError` on the way back.
   #
   # ONE gate for the page, where the wire runs its gate once per verb: the two
   # queries this replaces each called {ListAccess.check} themselves, so the page
@@ -139,7 +139,7 @@ class ListsController < ApplicationController
   # much of an address a reader may see — and masking is itself a disclosure (two
   # characters plus the confirmation that the address holds an account here).
   # Both surfaces now read the SAME value through {User.public_name}, so there is
-  # one answer to "what is this person called" and no address on either (K-950).
+  # one answer to "what is this person called" and no address on either.
   def housemate_board
     conn = ActiveRecord::Base.connection
     rows = conn.exec_query(<<~SQL, "housemate_board", [HOUSEMATE_ID]).to_a

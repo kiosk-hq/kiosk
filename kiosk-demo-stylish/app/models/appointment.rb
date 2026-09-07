@@ -9,9 +9,8 @@ class Appointment < ApplicationRecord
   belongs_to :service, optional: true
 
   # ── THE two GUC-borne assertions ───────────────────────────────────────────
-  # When stylish's handlers stopped writing SQL (K-654) every statement became
-  # an ordinary relation EXCEPT these two, and the reason is the one philslist
-  # settled (see Listing#owned_by_current_principal, the K-654 pilot).
+  # Every other statement in this demo is an ordinary relation; these two are
+  # deliberately written as SQL. Why:
   #
   # `kiosk.current_user_id()` and `kiosk.current_role()` are STABLE Postgres
   # functions reading the transaction-local GUCs `app.current_user_id` /
@@ -27,19 +26,17 @@ class Appointment < ApplicationRecord
   #
   # `Arel.sql` over a frozen literal rather than an interpolated string: there is
   # no caller-controlled value anywhere in either fragment. That is what makes
-  # them exempt from the no-raw-SQL rule rather than an exception to it — and it
-  # is what replaced `appt_scope`, a WHERE clause the calendar used to BUILD as a
-  # Ruby string and splice into `execute`.
+  # them exempt from the no-raw-SQL rule rather than an exception to it.
   scope :owned_by_current_principal, lambda {
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 
   # The staff role the bound human's IdP supplied, as the DB sees it. Read here
-  # rather than off `kiosk_identity` for the reason `salon_calendar` has always
-  # recorded: the branch and the scope above then agree by construction (one
-  # source, no drift), and it keeps answering when the query is reached outside a
-  # wire request — an RLS journey test sets the four GUCs but has no
-  # `kiosk_identity`. Returns nil when no session GUC is set.
+  # rather than off `kiosk_identity` so that the branch and the scope above
+  # agree by construction (one source, no drift), and so it keeps answering when
+  # the query is reached outside a wire request — an RLS journey test sets the
+  # four GUCs but has no `kiosk_identity`. Returns nil when no session GUC is
+  # set.
   def self.current_principal_role
     connection.select_value("SELECT kiosk.current_role()")
   end

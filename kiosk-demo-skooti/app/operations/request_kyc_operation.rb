@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # request_kyc — start a verification at the KYC broker that an EXTERNAL agent
-# can COMPLETE without any pre-shared issuer key (K-440/K-443).
+# can COMPLETE without any pre-shared issuer key.
 #
 # skooti hosts no issuer: it calls the shared broker's intake server-to-server
 # with its own callback_url, the claims it needs and the agent's user_id as the
@@ -86,11 +86,10 @@ class RequestKycOperation
   end
 
   # THE BROKER IS A SECOND SERVICE, AND ITS ABSENCE MAY NOT REACH THE WIRE AS A
-  # RUBY EXCEPTION. Three unrescued raises used to leave this verb answering
-  # `500 action_failed` with a Ruby class name in `detail` — and, when the
-  # broker's port was refused, with this operator's own broker host in it. That
-  # is the opaque-500 shape the wire exists to replace, on a no-argument verb an
-  # assistant can call before anything else.
+  # RUBY EXCEPTION. Unrescued, its raises answer `500 action_failed` with a Ruby
+  # class name in `detail` — and, when the broker port is refused, with this
+  # operator's own broker host in it: the opaque-500 shape the wire exists to
+  # replace, on a no-argument verb an assistant can call before anything else.
   #
   # TWO ANSWERS, because they ask the assistant to do different things:
   #

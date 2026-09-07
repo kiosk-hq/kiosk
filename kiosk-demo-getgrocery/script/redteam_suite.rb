@@ -776,9 +776,9 @@ end
 # repository had ever called `request_kyc` in the configuration a plain
 # `bin/rails s` produces: the one a live demo run uses.
 #
-# MEASURED before the fix, on a plainly booted origin: HTTP 500,
+# WITHOUT THE TYPED REFUSAL that configuration answers HTTP 500,
 # `code: "action_failed"`, `detail: "Action \"request_kyc\" raised RuntimeError: KYC
-# broker intake secret is not configured …"`. A Ruby class name on the wire, from
+# broker intake secret is not configured …"` — a Ruby class name on the wire, from
 # a NO-ARGUMENT verb an assistant can call first, with no way to tell "this
 # operator does not do KYC" from "something crashed".
 #

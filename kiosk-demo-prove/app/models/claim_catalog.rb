@@ -18,7 +18,7 @@ module ClaimCatalog
       attribute: "age_over_18",
       question:  "I hereby confirm I am over 18 years old.",
     },
-    # DELIBERATE EXTENSION POINT (K-599): no shipped operator requests
+    # DELIBERATE EXTENSION POINT: no shipped operator requests
     # `age_over_21`. It is the executable half of the betting-demo example
     # above — proof that the catalog is a superset each operator draws a subset
     # from, and that teaching the broker a new fact is one entry. The request

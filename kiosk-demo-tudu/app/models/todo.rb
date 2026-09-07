@@ -9,7 +9,7 @@ class Todo < ApplicationRecord
 
   validates :title, presence: true
 
-  # ── THE PROJECTION BOTH OF tudu's DOORS READ (T-082) ───────────────────────
+  # ── THE PROJECTION BOTH OF tudu's DOORS READ ───────────────────────────────
   # The todos on one list, in the shape `list_todos` publishes: one string-keyed
   # row each, with the attribution the demo exists to show.
   #

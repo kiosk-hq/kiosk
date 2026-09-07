@@ -12,7 +12,7 @@ class Reservation < ApplicationRecord
   RESERVED = "reserved"
   ACTIVE   = "active"
 
-  # ── The PAYMENT lifecycle (K-853), orthogonal to `status` above ────────────
+  # ── The PAYMENT lifecycle, orthogonal to `status` above ────────────────────
   # `status` is the RIDE; this is the money. A reservation is `unpaid` until a
   # /pay CLAIMS it (`paying`, an atomic compare-and-set taken BEFORE the cashier
   # check and the capture), and `paid` the instant the capture returns — a hair
@@ -41,10 +41,8 @@ class Reservation < ApplicationRecord
   scope :still_reserved, -> { where(status: RESERVED) }
 
   # ── THE isolation predicate ────────────────────────────────────────────────
-  # When skooti's handlers stopped writing SQL (K-654) this is the one fragment
-  # that deliberately did NOT become a Ruby comparison, for the reason the
-  # philslist pilot settled (see also Booking#owned_by_current_principal in
-  # hoteling).
+  # The one predicate in this demo deliberately written as SQL rather than as a
+  # Ruby comparison. Why:
   #
   # `kiosk.current_user_id()` is a STABLE Postgres function reading the
   # transaction-local GUC `app.current_user_id`, which kiosk-server's
@@ -65,7 +63,7 @@ class Reservation < ApplicationRecord
 
   # ── THE settled-cart containment, correlated to the row being selected ─────
   #
-  # WHY THERE ARE TWO SPELLINGS OF ONE PREDICATE, and why this one is a frozen
+  # Why there are TWO spellings of one predicate, and why this one is a frozen
   # SQL literal where {CartMandate.referencing} is Arel. That scope binds a
   # SINGLE, CALLER-SUPPLIED reservation id, so the value must be quoted by the
   # adapter. This one binds NO value at all: it correlates the cart's line_items
@@ -92,7 +90,7 @@ class Reservation < ApplicationRecord
                .exists
   end
 
-  # ── The one place "has money moved for this rental" is decided (K-853) ─────
+  # ── The one place "has money moved for this rental" is decided ─────────────
   #
   # protocol.md §11.6: an operator MUST NOT publish *not paid* while a capture
   # may still be outstanding, and MUST offer a third state distinct from both.

@@ -16,8 +16,8 @@ class Listing < ApplicationRecord
   validates :status, inclusion: { in: STATUSES }
 
   # ── THE isolation predicate ────────────────────────────────────────────────
-  # When philslist's handlers stopped writing SQL (K-654), this is the one
-  # fragment that deliberately did NOT become a Ruby comparison. Why:
+  # The one predicate in this demo deliberately written as SQL rather than as a
+  # Ruby comparison. Why:
   #
   # `kiosk.current_user_id()` is a STABLE Postgres function that reads the
   # transaction-local GUC `app.current_user_id`. kiosk-server's SessionContext

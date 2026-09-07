@@ -11,12 +11,11 @@
 # attestation granted, replacing whatever was there) and skooti only ever reads
 # them, through {Agent.kyc_granted?}.
 #
-# THERE IS NO VALUE COLUMN, AND THE GATE DEPENDS ON THAT. K-656 moved these
-# grants out of a `kiosk.agents.kyc_attributes` jsonb map precisely because a
-# map has to carry a value and a value has spellings — JSON `true`, the string
-# `"true"`, `1` — so every reader had to decide which ones count, and a reader
-# that decided differently would be a KYC gate disagreeing with the engine
-# about a boolean. The grant is now the row: present means granted, absent
+# There is no VALUE column, and the gate depends on that. A map of grants would
+# have to carry a value, and a value has spellings — JSON `true`, the string
+# `"true"`, `1` — so every reader would have to decide which ones count, and a
+# reader that decided differently would be a KYC gate disagreeing with the
+# engine about a boolean. The grant IS the row: present means granted, absent
 # means not, and the only place a spelling is judged is the engine's write.
 # Only the NAMES are ever stored — never the DOB, licence number, or any
 # document (the anonymized property ADR-0020 exists for).

@@ -5,7 +5,7 @@
 # any demo. The arguments ARE the JSON body; no `name` field, no multiplexed
 # `/kiosk/run`. `kind :action` above each declaration puts it on `POST`.
 #
-# EVERY ACTION BELOW IS FOUR LINES: arguments off the request, into an Operation,
+# Every action below is four lines: arguments off the request, into an Operation,
 # render what it answers. The logic lives in app/operations/ because tudu's HUMAN
 # web UI drives the same writes and calls the same Operations directly.
 #
@@ -141,9 +141,9 @@ class Kiosk::TodoListsController < ApplicationController
 
   # accept_invite(code) — look up by digest; reject foreign/expired/redeemed
   # (403); INSERT a `member` membership; mark redeemed, so a used code fails on
-  # the second try. `reach :consented` — THE VERB THAT MINTS THE ARTEFACT EVERY
-  # OTHER `consented` VERB HERE RELIES ON: the moment consent becomes a row this
-  # operator can point at, which is what makes the claim `consented`.
+  # the second try. `reach :consented` — this is the verb that MINTS the artefact
+  # every other `consented` verb here relies on: the moment consent becomes a row
+  # this operator can point at, which is what makes the claim `consented`.
   kind :action
   reach :consented
   description "Redeem a collaboration secret somebody shared with you and join their list as a " \

@@ -101,10 +101,6 @@ STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 # it, so the client’s own Date.today is the right thing to send there and its
 # timezone does not matter to the outcome.
 # THE HAPPY PATH SENDS NO DATE AT ALL — the block above that request says why.
-# This header used to say the driver queries for TODAY and falls back to
-# tomorrow when today is sold out. Both halves stopped being true when K-1302
-# made `date` optional and deleted the retry; the sentence outlived the fix and
-# was found by that row’s verify pass, still contradicting the file 25 lines on.
 delivery_address = "42 Camden Street, Dublin 2"
 delivery_date    = Date.today.to_s
 
@@ -126,11 +122,10 @@ rc_slots = nil
 # 23:00 and 00:00 UTC its today and ours are different dates. Omitting `date`
 # asks for the soonest day it can deliver and is correct at every hour.
 #
-# An earlier version of this file sent Date.today and RETRIED when the operator
-# refused it as past. That worked and was still wrong: a retry is a second
-# round trip to learn something the operator could have been asked properly the
-# first time, and a reference driver is what an assistant copies. The verb now
-# makes `date` optional, so the round trip is gone rather than handled.
+# Sending Date.today and RETRYING when the operator refuses it as past would
+# work and would still be wrong: a retry is a second round trip to learn
+# something the operator can be asked properly the first time, and a reference
+# driver is what an assistant copies.
 query_slots = lambda do |date_str|
   args = { delivery_address: delivery_address }
   args[:date] = date_str if date_str

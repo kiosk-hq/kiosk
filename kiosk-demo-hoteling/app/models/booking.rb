@@ -3,7 +3,7 @@
 # A room-night hold on one room type. `status` moves reserved → confirmed once a
 # settlement referencing this booking exists; `confirmation_code` is the
 # reference the guest gives at the desk and is written by the same UPDATE that
-# confirms (K-698), never minted for a response.
+# confirms, never minted for a response.
 class Booking < ApplicationRecord
   RESERVED  = "reserved"
   CONFIRMED = "confirmed"
@@ -13,7 +13,7 @@ class Booking < ApplicationRecord
   # these two and not to every row.
   LIVE = [RESERVED, CONFIRMED].freeze
 
-  # ── The PAYMENT lifecycle (K-853), orthogonal to `status` above ────────────
+  # ── The PAYMENT lifecycle, orthogonal to `status` above ────────────────────
   # `status` is the room-night; this is the money. A booking is `unpaid` until a
   # /pay CLAIMS it (`paying`, an atomic compare-and-set taken BEFORE the cashier
   # check and the capture), and `paid` the instant the capture returns — a hair
@@ -39,9 +39,8 @@ class Booking < ApplicationRecord
   scope :live, -> { where(status: LIVE) }
 
   # ── THE isolation predicate ────────────────────────────────────────────────
-  # When hoteling's handlers stopped writing SQL (K-654) this is the one fragment
-  # that deliberately did NOT become a Ruby comparison, for the reason the
-  # philslist pilot settled (see Listing#owned_by_current_principal).
+  # The one predicate in this demo deliberately written as SQL rather than as a
+  # Ruby comparison. Why:
   #
   # `kiosk.current_user_id()` is a STABLE Postgres function reading the
   # transaction-local GUC `app.current_user_id`, which kiosk-server's
@@ -60,15 +59,15 @@ class Booking < ApplicationRecord
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 
-  # ── THE room-night invariant (K-690), written ONCE ─────────────────────────
+  # ── THE room-night invariant, written ONCE ─────────────────────────────────
   # Nights are HALF-OPEN: a checkout day is the next guest's check-in day, so two
   # stays clash iff `check_in < other.check_out AND check_out > other.check_in`.
-  # Three callers need exactly this predicate and used to spell it three times in
-  # SQL — `availability`, `hotel_detail`'s dated form, and `reserve_room`'s
-  # in-transaction pre-check — which is three chances for one of them to drift
-  # away from the `daterange(check_in, check_out) WITH &&` the database EXCLUDE
-  # constraint enforces. It is one scope now, and the abutting-nights positive
-  # control in the redteam battery is what proves it did not get over-broad.
+  # Three callers need exactly this predicate — `availability`, `hotel_detail`'s
+  # dated form, and `reserve_room`'s in-transaction pre-check — and every extra
+  # spelling is another chance to drift away from the `daterange(check_in,
+  # check_out) WITH &&` the database EXCLUDE constraint enforces. So it is one
+  # scope, and the abutting-nights positive control in the redteam battery is
+  # what proves it did not get over-broad.
   #
   # The two bounds are BOUND VALUES, so a Date (or a date string) is quoted by
   # the adapter rather than interpolated.
@@ -79,7 +78,7 @@ class Booking < ApplicationRecord
 
   # ── THE settled-cart containment, correlated to the row being selected ─────
   #
-  # WHY THERE ARE TWO SPELLINGS OF ONE PREDICATE, and why this one is a frozen
+  # Why there are TWO spellings of one predicate, and why this one is a frozen
   # SQL literal where {CartMandate.referencing} is Arel. That scope binds a
   # SINGLE, CALLER-SUPPLIED booking id, so the value must be quoted by the
   # adapter. This one binds NO value at all: it correlates the cart's line_items
@@ -106,7 +105,7 @@ class Booking < ApplicationRecord
                .exists
   end
 
-  # ── The one place "has money moved for this booking" is decided (K-853) ────
+  # ── The one place "has money moved for this booking" is decided ────────────
   #
   # protocol.md §11.6: an operator MUST NOT publish *not paid* while a capture
   # may still be outstanding, and MUST offer a third state distinct from both.

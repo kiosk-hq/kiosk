@@ -11,7 +11,7 @@ class ConfirmBookingOperation
   def self.call(booking_id:)
     return WireArguments.missing("booking_id") if booking_id.blank?
 
-    # K-581/K-582: a SHAPE check, not an access one. `where(id: junk)` does not
+    # A SHAPE check, not an access one. `where(id: junk)` does not
     # raise — ActiveRecord casts an unparseable uuid to NULL, which matches no
     # row — so without this a typo would be answered as an OWNERSHIP refusal
     # (403) instead of a 400. A well-formed but foreign id still gets the 403.
@@ -38,7 +38,7 @@ class ConfirmBookingOperation
       end
 
       # ── Gate 2: THIS principal has paid for THIS booking ────────────────────
-      # TWO WITNESSES, and the order matters (K-853). The engine's settlement row
+      # TWO WITNESSES, and the order matters. The engine's settlement row
       # is written in executor phase 3, AFTER the irreversible capture; the
       # `payment_status`/`paid_by_user_id` pair is hoteling's own, written the
       # instant the capture RETURNS. protocol.md §11.6 anchors paid state to the
@@ -76,7 +76,7 @@ class ConfirmBookingOperation
       end
 
       # ── All gates passed: confirm ───────────────────────────────────────────
-      # K-698: the code is PERSISTED by this UPDATE and read back OUT of the row,
+      # The code is PERSISTED by this UPDATE and read back OUT of the row,
       # so what the assistant is handed is provably what the hotel stored. The
       # COALESCE keeps an already-coded booking's code stable. The read-back is a
       # second statement because Rails 8.1's `update_all` has no `returning:`.

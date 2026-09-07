@@ -82,7 +82,7 @@ class ValidatingPaymentProvider
   # Callable from `rake demo:reconcile`. There is NO background worker in this
   # demo, and querying the PSP for the unresolved half is not built.
   #
-  # THE THREE STATUS STATEMENTS here and in `claim_and_validate!` are RAW SQL
+  # The three status statements here and in `claim_and_validate!` are RAW SQL
   # where every READ on this origin is a model call, because the claim's
   # ATOMICITY is what closes both races above and `update_all` has no RETURNING
   # in Rails 8.1 — an ActiveRecord spelling would be a SELECT then an UPDATE, and

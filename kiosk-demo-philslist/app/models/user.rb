@@ -19,16 +19,16 @@ class User < ApplicationRecord
   # isolation predicate for edit/close (see config/initializers/kiosk.rb).
   has_many :listings, foreign_key: :owner_id, inverse_of: :owner, dependent: :destroy
 
-  # THE ONE PUBLIC NAME AN ACCOUNT HAS ON THIS BOARD (K-913).
+  # The one public name an account has on this board.
   #
   # The board is deliberately cross-owner: every authenticated principal sees
-  # every open listing. Until K-913 the seller column it published was
-  # `users.email`, so registering an assistant and calling `browse_listings`
-  # returned the address of every account holder in the seed — and the public
-  # web board published a masked local-part (`al•••`) of the same column,
-  # which against a known domain is barely a mask at all. For a protocol whose
-  # pitch is that a human is not tracked across operators, publishing the login
-  # identifier of everyone who ever posted was the wrong thing to demonstrate.
+  # every open listing, so whatever names a seller is published to STRANGERS —
+  # register an assistant, call `browse_listings`, and you hold it for every
+  # account holder on the board. It may therefore never be `users.email`, nor a
+  # masked local-part of it (`al•••`), which against a known domain is barely a
+  # mask at all. For a protocol whose pitch is that a human is not tracked
+  # across operators, publishing the login identifier of everyone who ever
+  # posted is the wrong thing to demonstrate.
   #
   # SO: a pseudonym derived from the account UUID, never from the email.
   # That distinction is the whole security argument. Hashing an email would be

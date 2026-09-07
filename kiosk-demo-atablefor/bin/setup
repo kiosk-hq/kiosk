@@ -12,7 +12,7 @@ FileUtils.chdir APP_ROOT do
   # substitution that matters in a demo app, and with the flag the substitution
   # made meaningless removed.
   #
-  # WHY (K-1315). The generated script runs `db:prepare` and then execs
+  # WHY. The Rails-generated script runs `db:prepare` and then execs
   # `bin/dev`. Both halves were wrong here. `db:prepare` loads the schema and
   # stops, so the app came up with no seeded catalogue and without `app_role` —
   # the group role this demo's queries assume, created and granted by

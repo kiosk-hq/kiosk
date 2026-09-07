@@ -665,10 +665,10 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                             check_in: v, check_out: PROBE_OUT),
               supplied: v
-      # …and the SAME shapes on `check_out`. It used to be a frozen constant on
-      # every call site here, so the second half of the stay was pinned by
-      # nothing: a descriptor that widened `check_out` to an untyped string, or
-      # a guard that stopped parsing it, would have left this beat green.
+      # …and the SAME shapes on `check_out`, so the second half of the stay is
+      # pinned too: a descriptor that widened `check_out` to an untyped string,
+      # or a guard that stopped parsing it, would otherwise leave this beat
+      # green.
       refused "reserve_room check_out=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                             check_in: PROBE_IN, check_out: v),

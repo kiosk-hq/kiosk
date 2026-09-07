@@ -5,8 +5,8 @@
 #
 # Deliberately OPEN TO EVERY VEHICLE, licence-free scooter and KYC-gated
 # motorcycle alike: one reservation shape serves both rental verbs, and the
-# licence check belongs at USE time next to the ownership and payment gates
-# (K-687). Booking is not a statement that the caller may ride what it books.
+# licence check belongs at USE time next to the ownership and payment gates.
+# Booking is not a statement that the caller may ride what it books.
 class ReserveOperation
   # @param principal_id [String] the account the wire resolved, NEVER an argument
   #   off the request: `reserve` ignores a forged `user_id` in the body precisely

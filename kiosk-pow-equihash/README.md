@@ -211,6 +211,17 @@ zero on that block. Two consequences the verifier must respect:
 
 ## Solver (Python + numpy)
 
+**Verifying is the operator's Ruby; solving is the caller's problem.** Nothing
+an operator's server loads to serve a request ever executes a subprocess — the
+`verify` above is pure Ruby with no shell-out anywhere in its reach, and
+`solve.py` is here for the CALLER that pays the toll, run by the caller's own
+process. `bin/check-served-pow-purity` in this repository holds that split: it
+derives the served set (the require closure of the engine, the reputation layer
+and whatever PoW backend an operator initializer loads) and fails if any
+process-spawning construct — `Open3`, `system`, backticks, `IO.popen`, `spawn`,
+`exec`, `%x` — becomes reachable from it, or if a served file starts naming the
+solver. The example below is what a CLIENT does, and that is why it is safe.
+
 ```bash
 pip install numpy          # REQUIRED — see performance note below
 python3 solve.py '{"salt_b64":"...", "params":{"n":168,"k":7}}'

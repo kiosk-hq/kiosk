@@ -1237,6 +1237,43 @@ jobs:
       - name: No shipped line cites material that does not ship with this repo
         run: ./bin/check-publication-paths
 
+  # The operator's Ruby server never runs a subprocess to verify a proof
+  # (K-1396). The property was already true when the guard was written and held
+  # by NOTHING: a shell-out added to the verify path would redden no suite,
+  # because `verify` would still return true. Solving is the caller's problem —
+  # the client scripts legitimately run `python3 solve.py`, which is exactly why
+  # this cannot be a whole-repo grep and why the guard derives the SERVED set
+  # (the require closure of the engine, the reputation layer, and whatever PoW
+  # backend an operator initializer requires) instead of listing files.
+  #
+  # The --self-test step is not decoration: a scan aimed at nothing exits 0, so
+  # it plants every construct it claims to catch AND asserts the closure is
+  # non-empty, contains the gate and the equihash backend, and reads that
+  # backend — whose comments show `Open3.capture2("python3", …)` to a caller —
+  # as clean, which only an AST-level scan can do.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~2 s for both steps.
+  served-pow-purity:
+    name: the server never spawns a process to verify a proof (bin/check-served-pow-purity)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every construct, and non-vacuous here
+        run: ./bin/check-served-pow-purity --self-test
+
+      - name: No process-spawning construct is reachable from the served PoW path
+        run: ./bin/check-served-pow-purity
+
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. demo_telemetry.rb (then at lib/, now app/services/) carried a stale

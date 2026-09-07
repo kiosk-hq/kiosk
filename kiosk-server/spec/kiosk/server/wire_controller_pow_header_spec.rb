@@ -124,6 +124,18 @@ RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
       c.agent_idp         = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
       c.reputation_policy = policy
       c.pow_secret        = "test-pow-secret"
+      # THE SHAPE CHECK IS OFF HERE, AND THAT IS ABOUT THE BACKEND, NOT THE
+      # TRANSPORT (K-1399 turned it on by default). This file exercises the
+      # ADR-0022 header transport with the OPTIONAL argon2id backend, whose
+      # solution is a decimal STRING, because argon2id at d=4/m=8 solves in
+      # microseconds and equihash does not. The vendored normative PoW schema
+      # types a proof's `nonce` as an Equihash solution object with `indices`,
+      # so with the shape check on every argon2id proof is refused 400 before
+      # the transport under test is reached. Equihash is the one shipped
+      # backend and every demo uses it, so nothing an operator serves is
+      # affected — but the flag has to be off for these examples to be about
+      # what they say they are about.
+      c.validate_requests = false
     end
 
     # The verbs this spec dials. Two queries, so a proof for one can be shown

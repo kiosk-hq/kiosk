@@ -1941,6 +1941,56 @@ def rule_publication_status(page, sources)
         bad.empty? ? "derived from #{MONOREPO_README} (section «#{head}»)" : bad.join(" | "))
 end
 
+# R18 -- the page parses a date argument with the SAME `Date.` constructor
+# getgrocery does (K-1406).
+#
+# WHY THIS IS A DERIVATION AND NOT A BAN, which is the whole point of the rule.
+# Two shipped origins take OPPOSITE, both-documented positions on the same
+# question. kiosk-demo-hoteling refuses `Date.parse` in so many words -- it
+# SCANS rather than validates, so `"x2026-09-01x"` parses and `"Tue"` is
+# completed from today's clock -- and pairs a `YYYY-MM-DD` regex with
+# `Date.iso8601`. kiosk-demo-getgrocery chooses `Date.parse` deliberately and
+# records the choice three times: in `wire_arguments.rb`, in an assertion of
+# `wire_arguments_spec.rb`, and in a redteam comment explaining which probes it
+# therefore does NOT fire. Neither position is this script's to overturn, and
+# a BAN here would overturn one of them by writing it into a gate.
+#
+# What IS this script's business is that the page is a COPY. It teaches
+# getgrocery's verbs, so it must teach getgrocery's date spelling -- whichever
+# that becomes. If the divergence is ever resolved toward the strict spelling,
+# this rule turns the page red until it follows, which is the drift-catching
+# the guide has and the ban would not: a ban would go green on a page that had
+# stopped matching its source in the other direction.
+#
+# Comments are masked on BOTH sides. Every one of these files argues about the
+# spelling in prose -- getgrocery's own comment names `Date.iso8601` in order to
+# reject it -- so an unmasked scan would compare arguments rather than code.
+DATE_CONSTRUCTOR = /\bDate\.(parse|iso8601|strptime|rfc3339|xmlschema|civil|jd|_parse)\b/
+
+def date_constructors(src)
+  masked(src).scan(DATE_CONSTRUCTOR).flatten.uniq.sort
+end
+
+def rule_date_parser(page, sources)
+  demo = (date_constructors(sources[:storefront]) | date_constructors(sources[:wire_arguments])).sort
+  if demo.empty?
+    return vacuous!("DATE_PARSER",
+                    "neither #{GETGROCERY_STOREFRONT} nor #{GETGROCERY_WIRE_ARGUMENTS} parses a date with a " \
+                    "`Date.` constructor, so there is no spelling to derive")
+  end
+
+  mine = date_constructors(page_ruby(page))
+  return vacuous!("DATE_PARSER", "the page's Ruby parses no date at all") if mine.empty?
+
+  check("DATE_PARSER",
+        demo == mine,
+        "the page parses dates with #{mine.map { |m| "Date.#{m}" }.join(", ")}",
+        demo == mine ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_WIRE_ARGUMENTS}"
+                     : "getgrocery uses #{demo.map { |m| "Date.#{m}" }.join(", ")}; the page uses " \
+                       "#{mine.map { |m| "Date.#{m}" }.join(", ")} -- the page is a copy of those verbs and " \
+                       "must parse their arguments the way they do")
+end
+
 RULES = [
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
@@ -1959,6 +2009,7 @@ RULES = [
   [:rule_total_guard,        "TOTAL_GUARD",         "derivation", "the ceiling getgrocery refuses an unpriceable cart at, walked from the summed total in its create operation to the constant the guard bounds it by -- a COMPUTED value no declared-property rule can reach"],
   [:rule_past_window,        "PAST_WINDOW",         "derivation", "which verbs refuse a delivery day that has already gone and re-check the window they book, walked from each verb's Operation through the wire-argument guards to the clock reader those guards compare against"],
   [:rule_publication_status, "PUBLICATION_STATUS",  "derivation", "the publication-status claim the monorepo README states canonically, and the URL of the section that states it"],
+  [:rule_date_parser,        "DATE_PARSER",         "derivation", "the `Date.` constructor getgrocery's read controller and wire-argument guards parse a date argument with"],
 ].freeze
 
 def load_sources
@@ -2458,6 +2509,13 @@ def run_self_test
                         page.sub("whole_number(params[:#{int}])", "params[:#{int}].to_i"), sources, "INTEGER_COERCION")
   arms << plant_arm("a calendar literal frozen into example_params",
                         page.sub("example_params({", 'example_params({ planted: "2026-08-12",'), sources, "FROZEN_DATE")
+  # The page silently switched to the OTHER origin's date spelling. Faithful in
+  # both directions: this is the drift K-1406 was filed about, and it is also
+  # what a well-meant edit toward strictness would look like.
+  arms << plant_arm("the page parses dates with a constructor getgrocery does not use",
+                        planted.call("date constructor swapped on the page",
+                                     page, page.gsub("Date.parse(params", "Date.iso8601(params")),
+                        sources, "DATE_PARSER")
   arms << plant_arm("getgrocery's own #{divergent} un-named",
                         page.gsub(divergent, "the read controller"), sources, "GETGROCERY_HANDLERS")
   arms << plant_arm("params.require(:#{opt}) back in the handler",
@@ -2621,6 +2679,10 @@ def run_self_test
                                       orders: sources[:orders].gsub('type: "integer"', 'type: "number"')), "INTEGER_COERCION")
   arms << vacuity_arm("the page loses every example_params",
                         page.gsub("example_params(", "example_args("), sources, "FROZEN_DATE")
+  arms << vacuity_arm("getgrocery stops parsing a date with a `Date.` constructor", page,
+                        sources.merge(storefront: sources[:storefront].gsub("Date.parse", "DateStub.parse"),
+                                      wire_arguments: sources[:wire_arguments].gsub("Date.parse", "DateStub.parse")),
+                        "DATE_PARSER")
   arms << vacuity_arm("getgrocery registers exactly the page's classes", page,
                         sources.merge(getgrocery_init: sources[:getgrocery_init].sub(divergent, f[:handlers].first)), "GETGROCERY_HANDLERS")
   # REQUIRE_OPTIONAL's subject is «an argument some SHARED verb leaves

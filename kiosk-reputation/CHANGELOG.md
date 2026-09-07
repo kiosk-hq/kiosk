@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- **`Policy#challenge_for`'s `verb:` contract is stated as closed, and a wrong branch is no longer silent (K-1395).** The hook receives one of `:query`, `:run`, `:pay` and nothing else; a handler declared `kind :action` in kiosk-server arrives as `:run`. Branching on `:action` matched nothing and declined to toll every write with no error, log line or failing test. `kiosk-server` now refuses such a policy at configuration time. No behaviour change in this gem.
+
 ### Added
 
 - Initial implementation.

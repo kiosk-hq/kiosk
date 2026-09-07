@@ -24,6 +24,28 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.min_client).to eq(Kiosk::Protocol::MIN_CLIENT)
     end
 
+    # K-1399. The two validation flags point OPPOSITE ways on purpose, and the
+    # pair is asserted together because the asymmetry is the whole content of
+    # the decision: a request-shape refusal is a 400 to a caller who sent a bad
+    # request; a response-shape refusal is a 500 to a caller who did nothing
+    # wrong. `validate_requests` shipped false while all seven showcases and the
+    # install generator turned it on — a default nobody wanted, whose off-state
+    # failure is SILENT (the K-479 re-challenge loop).
+    describe "the two validation flags" do
+      it "defaults validate_requests to TRUE and validate_responses to FALSE" do
+        expect(Kiosk.configuration.validate_requests).to  be(true)
+        expect(Kiosk.configuration.validate_responses).to be(false)
+      end
+
+      # The reader must not be an `||=`: with a true default that idiom turns an
+      # operator's explicit `false` back into `true` and the opt-out silently
+      # does nothing — the same silence the flip exists to remove.
+      it "lets an operator turn validate_requests OFF and keeps it off" do
+        Kiosk.configure { |c| c.validate_requests = false }
+        expect(Kiosk.configuration.validate_requests).to be(false)
+      end
+    end
+
     # The auth-challenge nonce must outlive the registration PoW solve,
     # or a slow honest solver's nonce expires mid-solve (and the proofs are
     # already burned). The PoW solve window is pow_ttl * count.

@@ -1,0 +1,387 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# THE OPERATOR'S RUBY SERVER NEVER EXECUTES A SUBPROCESS TO VERIFY A PROOF (K-1396).
+#
+# Phil's constraint, verbatim: «Ruby Kiosk сервер, крутящий код оператора, не
+# должен исполнять python для проверки PoW». The property was already TRUE when
+# this guard was written — and held by nothing, which is the whole reason it
+# exists. A shell-out added to the verify path tomorrow would redden no suite:
+# `verify` would still return true, the tests would still pass, and the origin
+# would have quietly acquired an RCE-shaped surface reachable from an
+# unauthenticated 402 retry.
+#
+# The split this enforces, in one sentence: **verifying is the operator's Ruby;
+# solving is the caller's problem.** `solve.py` is shipped for the CLIENT, is
+# fetched-and-hash-pinned by the assistant that pays the toll, and is named by
+# nothing the server loads.
+#
+# ── HOW THE SCOPE IS DECIDED, AND WHY IT IS NOT A WHOLE-REPO GREP ────────────
+#
+# A whole-repo grep would be useless here: the client scripts LEGITIMATELY shell
+# out. The demos' `script/*_flow.rb`, skooti's solver rake task and
+# `kiosk-redteam`'s client library all run `python3 solve.py`, because that is
+# what a caller does. A guard that failed on those would be switched off in a
+# week. So the scope is the SERVED set, derived rather than hand-listed:
+#
+#   ENTRIES  (what an operator's process loads to serve a tolled request)
+#     * `kiosk/server`     — the engine the operator mounts
+#     * `kiosk/reputation` — the policy/challenge layer the gate requires the
+#                            host to have loaded (PowGate raises without it)
+#     * every `kiosk/pow…` backend that an OPERATOR-LOADED file requires. A PoW
+#       backend is registered by the host, never by the gate, so no require edge
+#       reaches it from the engine — the entry is DERIVED by scanning the demo
+#       initializers and the e2e fixture initializer for their own `require`
+#       lines, so a demo that adds a backend widens this guard automatically.
+#
+#   CLOSURE  transitive `require` / `require_relative` edges, resolved against
+#            this repo's `*/lib` directories. A require that resolves outside
+#            them (stdlib, third-party gems) leaves the closure and is counted,
+#            not followed — this guard makes a claim about THIS repo's code.
+#
+#   OUT, deliberately: `bin/`, `spec/`, `script/`, `bench/`, `lib/tasks/`, and
+#   `kiosk-redteam` — client, test and developer surfaces, none of which the
+#   served request path loads.
+#
+# ── WHAT IS ASSERTED ─────────────────────────────────────────────────────────
+#
+#   A. No process-spawning construct occurs in the closure: `Open3.*`,
+#      `system`, `exec`, `spawn`, `fork`, `IO.popen`, backticks, `%x{}`, `PTY`,
+#      `syscall`. Detection is AST-level (Prism), NOT textual — the equihash
+#      gem's own documentation shows `Open3.capture2("python3", …)` in a comment
+#      to tell a CALLER how to solve, and a textual guard would either fail on
+#      that comment forever or be weakened until it failed on nothing.
+#
+#   B. Nothing in the served set NAMES the solver: no call to `solver_path`, no
+#      filesystem string naming `solve.py`. `solver_path` exists so a CALLER can
+#      locate the file; a served file that names it is a served file one edit
+#      away from running it. This assertion covers the closure AND the demos'
+#      `app/` and `config/initializers/` and the e2e initializer/controller
+#      fixtures — the operator's own request-path code — because that is the
+#      other half of "what the server runs".
+#      Two exemptions, both stated rather than silent:
+#        * `kiosk-pow-equihash` itself is where the solver lives and is where
+#          `solver_path` is DEFINED for callers. It is exempt from B; A still
+#          covers it, and A is the assertion that matters there.
+#        * a `solve.py` inside an `http(s)://` string is a HINT, not a path —
+#          `PowGate::POW_INVALID_HINT` points a stuck assistant at the published
+#          solver (K-512) and `bin/check-solver-pin` requires it to. Telling a
+#          caller where the solver is published is the opposite of running it.
+#
+# `--self-test` plants each construct and asserts it is caught, and carries
+# VACUITY arms: the closure must be non-empty, must contain both the gate and
+# the equihash backend by name, and the equihash file — which contains the
+# literal text `Open3` — must scan CLEAN. If the parser ever stops reading, or
+# the closure ever collapses to nothing, those arms fail instead of this guard
+# greening on an empty set.
+#
+# Usage: bin/check-served-pow-purity [--self-test]
+
+require "prism"
+require "set"
+
+REPO = File.expand_path("..", __dir__)
+
+# Gem lib roots in this repo — the load paths a served require can resolve
+# against. Derived from the directory layout, not listed.
+LIB_ROOTS = Dir.glob(File.join(REPO, "*", "lib")).select { |d| File.directory?(d) }.sort.freeze
+
+# Client/test/developer surfaces the served path never loads.
+EXCLUDED_GEMS = %w[kiosk-redteam].freeze
+
+# Files an OPERATOR loads at boot; scanned to derive the PoW backend entries.
+OPERATOR_BOOT_FILES = (
+  Dir.glob(File.join(REPO, "kiosk-demo-*", "config", "initializers", "*.rb")) +
+  Dir.glob(File.join(REPO, "e2e", "fixtures", "initializer_*.rb"))
+).sort.freeze
+
+FIXED_ENTRIES = %w[kiosk/server kiosk/reputation].freeze
+
+SPAWN_CALLS = %i[
+  system exec spawn fork syscall popen
+  capture2 capture2e capture3
+  popen2 popen2e popen3
+  pipeline pipeline_r pipeline_rw pipeline_w pipeline_start
+].freeze
+
+SPAWN_CONSTANTS = %w[Open3 PTY].freeze
+
+# ── plumbing ────────────────────────────────────────────────────────────────
+
+def parse(path)
+  result = Prism.parse_file(path)
+  result.success? ? result.value : nil
+end
+
+def walk(node, &block)
+  return if node.nil?
+
+  block.call(node)
+  node.compact_child_nodes.each { |child| walk(child, &block) }
+end
+
+def resolve(feature, from_file)
+  candidates =
+    if feature.start_with?(".")
+      [File.expand_path(feature, File.dirname(from_file))]
+    else
+      LIB_ROOTS.map { |root| File.join(root, feature) }
+    end
+  candidates.each do |candidate|
+    path = candidate.end_with?(".rb") ? candidate : "#{candidate}.rb"
+    return path if File.file?(path)
+  end
+  nil
+end
+
+def excluded?(path)
+  rel = path.delete_prefix("#{REPO}/")
+  gem = rel.split("/").first
+  EXCLUDED_GEMS.include?(gem)
+end
+
+# Every `require`/`require_relative` string literal in a file.
+def required_features(path, tree)
+  features = []
+  walk(tree) do |node|
+    next unless node.is_a?(Prism::CallNode)
+    next unless %i[require require_relative].include?(node.name)
+
+    argument = node.arguments&.arguments&.first
+    next unless argument.is_a?(Prism::StringNode)
+
+    feature = argument.unescaped
+    feature = "./#{feature}" if node.name == :require_relative && !feature.start_with?(".")
+    features << [feature, path]
+  end
+  features
+end
+
+# ── the served set ──────────────────────────────────────────────────────────
+
+def backend_entries
+  entries = Set.new
+  OPERATOR_BOOT_FILES.each do |file|
+    tree = parse(file)
+    next if tree.nil?
+
+    required_features(file, tree).each do |feature, _|
+      entries << feature if feature.start_with?("kiosk/pow")
+    end
+  end
+  entries.to_a.sort
+end
+
+def served_closure
+  entries = FIXED_ENTRIES + backend_entries
+  seen    = Set.new
+  left    = []
+  queue   = entries.filter_map { |feature| resolve(feature, REPO) }
+  missing = entries.reject { |feature| resolve(feature, REPO) }
+
+  until queue.empty?
+    path = queue.shift
+    next if seen.include?(path)
+    next if excluded?(path)
+
+    seen << path
+    tree = parse(path)
+    next if tree.nil?
+
+    required_features(path, tree).each do |feature, from|
+      target = resolve(feature, from)
+      if target.nil?
+        left << feature
+      else
+        queue << target
+      end
+    end
+  end
+
+  [seen.to_a.sort, left.uniq.sort, missing]
+end
+
+# ── the assertions ──────────────────────────────────────────────────────────
+
+def spawn_hits(path)
+  tree = parse(path)
+  return [] if tree.nil?
+
+  hits = []
+  walk(tree) do |node|
+    case node
+    when Prism::XStringNode
+      hits << [node.location.start_line, "backticks / %x"]
+    when Prism::CallNode
+      hits << [node.location.start_line, "#{node.name}(…)"] if SPAWN_CALLS.include?(node.name)
+    when Prism::ConstantReadNode
+      hits << [node.location.start_line, node.name.to_s] if SPAWN_CONSTANTS.include?(node.name.to_s)
+    end
+  end
+  hits
+end
+
+SOLVER_OWNER_GEM = "kiosk-pow-equihash"
+
+def solver_hits(path)
+  tree = parse(path)
+  return [] if tree.nil?
+
+  hits = []
+  walk(tree) do |node|
+    case node
+    when Prism::CallNode
+      hits << [node.location.start_line, "solver_path call"] if node.name == :solver_path
+    when Prism::StringNode, Prism::SymbolNode
+      value = node.unescaped
+      next unless value.include?("solve.py")
+      next if value.include?("://")  # a published URL is a hint, not a path
+
+      hits << [node.location.start_line, "#{value.inspect} (a filesystem path to the solver)"]
+    end
+  end
+  hits
+end
+
+def operator_request_path_files
+  (Dir.glob(File.join(REPO, "kiosk-demo-*", "app", "**", "*.rb")) +
+   Dir.glob(File.join(REPO, "kiosk-demo-*", "config", "initializers", "*.rb")) +
+   Dir.glob(File.join(REPO, "e2e", "fixtures", "initializer_*.rb")) +
+   Dir.glob(File.join(REPO, "e2e", "fixtures", "*_controller.rb"))).sort
+end
+
+def report(label, offenders)
+  offenders.each do |path, line, what|
+    puts "  FAIL #{path.delete_prefix("#{REPO}/")}:#{line} — #{what} (#{label})"
+  end
+end
+
+def run_check
+  closure, left, missing = served_closure
+
+  puts "SCOPE"
+  puts "  entries        : #{(FIXED_ENTRIES + backend_entries).join(', ')}"
+  puts "  lib roots      : #{LIB_ROOTS.size} (#{LIB_ROOTS.map { |r| File.basename(File.dirname(r)) }.join(', ')})"
+  puts "  served closure : #{closure.size} files"
+  puts "  left the repo  : #{left.size} requires (stdlib / third-party, not followed)"
+  puts "  excluded gems  : #{EXCLUDED_GEMS.join(', ')} (client surfaces)"
+  puts "  NOTE: bin/, spec/, script/, bench/ and lib/tasks/ are not reachable by require"
+  puts "        from these entries and are therefore out of the closure by construction."
+
+  failures = []
+
+  if closure.empty?
+    puts "FAIL: the served closure is EMPTY — this guard would pass on nothing."
+    return 1
+  end
+  unless missing.empty?
+    puts "FAIL: entry point(s) did not resolve: #{missing.join(', ')}"
+    failures << true
+  end
+
+  spawn_offenders = closure.flat_map { |path| spawn_hits(path).map { |line, what| [path, line, what] } }
+  solver_scope    = (closure + operator_request_path_files).uniq.reject do |path|
+    path.delete_prefix("#{REPO}/").split("/").first == SOLVER_OWNER_GEM
+  end
+  solver_offenders = solver_scope.flat_map { |path| solver_hits(path).map { |line, what| [path, line, what] } }
+
+  puts
+  puts "A. process-spawning constructs reachable from the served PoW verify path"
+  if spawn_offenders.empty?
+    puts "  OK — none in #{closure.size} files"
+  else
+    report("A: the server must never spawn a process to verify a proof", spawn_offenders)
+    failures << true
+  end
+
+  puts "B. the solver named by anything the server runs"
+  if solver_offenders.empty?
+    puts "  OK — none in #{solver_scope.size} files (closure + demo app/ + demo initializers + " \
+         "e2e initializer/controller fixtures, less #{SOLVER_OWNER_GEM})"
+  else
+    report("B: solving is the caller's problem; the server must not name the solver", solver_offenders)
+    failures << true
+  end
+
+  failures.empty? ? 0 : 1
+end
+
+# ── self-test ───────────────────────────────────────────────────────────────
+
+def self_test
+  require "tmpdir"
+  failures = []
+
+  check = lambda do |name, ok|
+    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
+    failures << name unless ok
+  end
+
+  Dir.mktmpdir("pow-purity-selftest") do |dir|
+    plants = {
+      "Open3.capture2"  => %(require "open3"\ndef f = Open3.capture2("python3", "x")\n),
+      "backticks"       => %(def f = `python3 solve.py`\n),
+      "%x"              => %(def f = %x{python3 solve.py}\n),
+      "system"          => %(def f = system("python3", "solve.py")\n),
+      "IO.popen"        => %(def f = IO.popen("python3")\n),
+      "spawn"           => %(def f = spawn("python3")\n),
+      "exec"            => %(def f = exec("python3")\n),
+      "PTY.spawn"       => %(require "pty"\ndef f = PTY.spawn("python3")\n),
+    }
+    plants.each_with_index do |(name, source), index|
+      path = File.join(dir, "plant#{index}.rb")
+      File.write(path, source)
+      check.call("detects #{name}", !spawn_hits(path).empty?)
+    end
+
+    comment_only = File.join(dir, "comment_only.rb")
+    File.write(comment_only, %(# Open3.capture2("python3", solver_path)\n# `python3 solve.py`\ndef f = 1\n))
+    check.call("does NOT flag a construct that only appears in a comment", spawn_hits(comment_only).empty?)
+
+    solver_plant = File.join(dir, "solver.rb")
+    File.write(solver_plant, %(def f = solver_path\n))
+    check.call("detects a solver_path call", !solver_hits(solver_plant).empty?)
+
+    solver_string = File.join(dir, "solver_string.rb")
+    File.write(solver_string, %(PATH = "vendor/solve.py"\n))
+    check.call("detects a \"solve.py\" filesystem string", !solver_hits(solver_string).empty?)
+
+    solver_url = File.join(dir, "solver_url.rb")
+    File.write(solver_url, %(HINT = "https://kiosk.tech/pow/solve.py"\n))
+    check.call("does NOT flag a published solve.py URL (it is a hint)", solver_hits(solver_url).empty?)
+  end
+
+  # ── VACUITY: the guard must be looking at something real ──────────────────
+  closure, _left, missing = served_closure
+  check.call("the served closure is non-empty", !closure.empty?)
+  check.call("every entry point resolves", missing.empty?)
+  check.call(
+    "the closure contains the PoW gate",
+    closure.any? { |p| p.end_with?("kiosk-server/lib/kiosk/server/pow_gate.rb") }
+  )
+  equihash = File.join(REPO, "kiosk-pow-equihash", "lib", "kiosk", "pow", "equihash.rb")
+  check.call("the closure contains the equihash backend", closure.include?(equihash))
+  check.call(
+    "the equihash backend contains the TEXT 'Open3' (so the AST scan is doing real work)",
+    File.read(equihash).include?("Open3")
+  )
+  check.call("…and scans clean anyway", spawn_hits(equihash).empty?)
+  check.call(
+    "a PoW backend entry was DERIVED from an operator boot file",
+    !backend_entries.empty?
+  )
+  check.call(
+    "the operator request-path file set is non-empty",
+    !operator_request_path_files.empty?
+  )
+
+  if failures.empty?
+    puts "SELF-TEST OK"
+    0
+  else
+    puts "SELF-TEST FAILED: #{failures.size} arm(s)"
+    1
+  end
+end
+
+exit(ARGV.include?("--self-test") ? self_test : run_check)

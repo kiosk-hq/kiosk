@@ -323,7 +323,6 @@ DEPENDENCIES
   bootsnap
   debug
   devise
-  json_schemer
   kiosk-all!
   kiosk-core!
   kiosk-pow-equihash!

@@ -16,8 +16,8 @@ One endpoint per verb: a read is a `GET` at its own name with arguments in the
 query string, a write is a `POST` at its own name with a JSON body. Success is
 the handler's payload with no envelope around it (a query always answers an
 array); a refusal is an RFC 9457 problem document whose `code` is a flat
-member. The 0.3 `POST /kiosk/query` and `POST /kiosk/run` are the ordinary 404
-an authenticated caller gets; without a bearer they are `401 unauthenticated`,
+member. A path that names no registered verb is the ordinary 404 an
+authenticated caller gets; without a bearer it is `401 unauthenticated`,
 because the wire resolves the caller before it looks the verb up.
 
 | Endpoint | Verb | What it does |

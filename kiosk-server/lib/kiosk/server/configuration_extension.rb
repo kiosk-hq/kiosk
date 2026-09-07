@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "kiosk/server/verb_vocabulary"
+
 module Kiosk
   module Server
     # Adds server-specific fields to {Kiosk::Configuration} via include.
@@ -356,27 +358,50 @@ module Kiosk
       # This is a SHAPE check in front of the gate — NOT a replacement for it: a
       # well-formed-but-forged proof still fails the real cryptographic
       # verification inside the gate. An ABSENT pow is untouched (the initial
-      # no-pow request still gets its normal 402 challenge). Requires the OPTIONAL
-      # `json_schemer` gem; if this is on but the gem is not loadable, the first
-      # validation raises a {Errors::ConfigurationError} naming it. The demos turn
-      # this on; the fuller uniform-validation layer is v0.5 (T-045).
+      # no-pow request still gets its normal 402 challenge). `json_schemer` is a
+      # RUNTIME dependency of this gem since 0.4 (K-1333), not an optional extra
+      # tied to this flag — it is still required LAZILY, so a vendored checkout
+      # missing it gets a {Errors::ConfigurationError} naming the gem rather than
+      # a LoadError at boot. The fuller uniform-validation layer is v0.5 (T-045).
+      #
+      # **DEFAULT TRUE SINCE K-1399, and the asymmetry with the flag below is
+      # the whole reason.** This shipped `false` as "byte-identical old
+      # behaviour" while every one of the seven showcase origins turned it on
+      # and `rails g kiosk:install` writes it on (K-1336) — a default nobody
+      # wanted and one an adopter who skipped the generator inherited in
+      # silence. What that adopter inherited was the K-479 loop: a malformed
+      # `Kiosk-PoW` yields no parseable proofs, so the gate re-issues a fresh
+      # 402 forever with no diagnostic, and the assistant on the other end can
+      # neither see nor fix what it sent. Off is the setting that produces the
+      # silent failure; on is the setting that produces a 400 naming the shape.
+      #
+      # It is a BEHAVIOUR CHANGE for an existing adopter, and the honest
+      # accounting is that there are none: nothing is published to RubyGems, so
+      # the flip cannot break a deployment that exists. It is written here
+      # because that will stop being true, and the next person to weigh a
+      # default should know this one was weighed rather than assumed.
       attr_writer :validate_requests
       def validate_requests
-        @validate_requests ||= false
+        return @validate_requests unless @validate_requests.nil?
+
+        true
       end
 
       # When true, every query/action answer is validated against the
       # `output_schema` that verb DECLARES, and a mismatch raises — see
       # {ResponseValidation} for why the check exists and where it runs.
       #
-      # DEFAULT FALSE, and deliberately NOT the flag above. `validate_requests`
-      # polices what a CALLER sent; this polices what the OPERATOR's own handler
-      # rendered. Nothing a caller does can trigger it, the failure it reports is
-      # always an operator-side bug, and it costs one schema validation per
-      # answer — so it belongs in development and CI, where a descriptor that
-      # lies about its handler is cheap to fix, and not in front of a production
-      # caller who did nothing wrong. Requires the OPTIONAL `json_schemer` gem
-      # on the same terms as `validate_requests`.
+      # DEFAULT FALSE, and deliberately NOT the flag above, which defaults TRUE.
+      # `validate_requests` polices what a CALLER sent; this polices what the
+      # OPERATOR's own handler rendered. Nothing a caller does can trigger it,
+      # the failure it reports is always an operator-side bug, and it costs one
+      # schema validation per answer — so it belongs in development and CI,
+      # where a descriptor that lies about its handler is cheap to fix, and not
+      # in front of a production caller who did nothing wrong. THE REASON DOES
+      # NOT TRANSFER (K-1399): a request-shape refusal is a 400 to a caller who
+      # sent a bad request, not a 500 to one who did nothing wrong, which is why
+      # the two defaults point opposite ways. Uses `json_schemer` on the same
+      # lazily-required terms as `validate_requests`.
       attr_writer :validate_responses
       def validate_responses
         @validate_responses ||= false
@@ -431,7 +456,16 @@ module Kiosk
       # `#challenge_for(identity:, verb:, factors:) → {alg:,params:,count:}|nil`
       # (`count` is the N×PoW proof-count escalation lever; the gate defaults it
       # to 1 when omitted).
-      attr_writer :reputation_policy
+      #
+      # THE VERB IT IS HANDED IS `:run`, NEVER `:action` (K-1395), and a
+      # policy that branches on the wrong spelling is REFUSED HERE rather than
+      # declining to toll every write in silence. See {VerbVocabulary} for why
+      # the refusal is a load error and not an alias.
+      def reputation_policy=(value)
+        VerbVocabulary.assert!(value, :challenge_for, "reputation_policy #challenge_for") unless value.nil?
+        @reputation_policy = value
+      end
+
       def reputation_policy
         @reputation_policy
       end
@@ -454,7 +488,15 @@ module Kiosk
       # (which it must be when a policy is set). The body is a lambda, so
       # `Kiosk::Reputation::Factors` is NOT referenced at definition time;
       # nil-policy apps without kiosk-reputation still boot.
-      attr_writer :reputation_factors
+      #
+      # It receives the SAME coarse verb the policy does, so it carries the
+      # same trap and the same refusal (K-1395): a factors lambda branching on
+      # `:action` is rejected at configuration time.
+      def reputation_factors=(value)
+        VerbVocabulary.assert!(value, nil, "reputation_factors callable") unless value.nil?
+        @reputation_factors = value
+      end
+
       def reputation_factors
         @reputation_factors ||= ->(**) { ::Kiosk::Reputation::Factors.empty }
       end

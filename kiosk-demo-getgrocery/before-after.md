@@ -190,7 +190,7 @@ The delta between "today's Instacart" and "getgrocery" is an operator-side integ
 
 **1. Add the Kiosk satellite gems**
 
-<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines and json_schemer only; the Rails/Postgres/dev-group lines around them are out -->
+<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines only; the Rails/Postgres/dev-group lines around them are out -->
 ```ruby
 # Gemfile
 gem "kiosk-all",        path: "../kiosk-all"
@@ -202,8 +202,6 @@ gem "kiosk-reputation",   path: "../kiosk-reputation"
 gem "kiosk-redteam",      path: "../kiosk-redteam"
 gem "kiosk-pay-stripe",   path: "../kiosk-pay-stripe"
 gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"
-
-gem "json_schemer"
 ```
 
 Those are this demo's own `Gemfile` lines, verbatim, ragged alignment and all
@@ -213,11 +211,10 @@ versioned RubyGems). Not all nine are the minimum: `kiosk-core` +
 that takes real money, `kiosk-pow-equihash`/`kiosk-reputation` carry the
 registration and catalogue tolls, `kiosk-redteam` is the adversarial battery,
 `kiosk-user-idp-devise` the human-session channel, and `kiosk-rls` the optional
-Postgres backstop. `json_schemer` is not one of the nine and is not optional
-either: `kiosk-server` declares it as a runtime dependency, because every 0.4
+Postgres backstop. `json_schemer` is not one of the nine and needs no line
+of its own: `kiosk-server` declares it as a runtime dependency, because every 0.4
 verb's `input_schema` is validated before the handler sees an argument, behind
-no flag at all. Bundler would install it transitively; the line above only makes
-it explicit.
+no flag at all — so bundler resolves it whether or not a demo names it.
 
 **2. Run the generator**
 

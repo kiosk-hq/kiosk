@@ -217,8 +217,13 @@ class MyPolicy < Kiosk::Reputation::Policy
   #   `serve(:run)`), so branch on :run rather than on :action. The protocol
   #   states the same mapping in its Reputation section, and kiosk-demo-hoteling
   #   is the worked example that EXERCISES a :run branch (rake demo:browse) —
-  #   because branching on :action is silent: it matches nothing, so the toll
-  #   never applies to a write and no error, log line or test says so.
+  #   because branching on :action would otherwise be silent: it matches
+  #   nothing, so the toll never applies to a write and no error, log line or
+  #   test says so. kiosk-server no longer lets it be silent: assigning a
+  #   policy whose #challenge_for compares the verb against :action (or a
+  #   reputation_factors callable that does) raises
+  #   Kiosk::Server::Errors::ConfigurationError from
+  #   `Kiosk.configure`, at boot, naming :run.
   # @param factors  [Factors] reputation inputs
   # @return [Hash{alg:, params:, count:}] challenge spec, or nil to serve without challenge
   #   (`count` is optional; the gate defaults it to 1 when omitted)

@@ -275,8 +275,11 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
     end
   end
 
-  # ── Flag OFF (default): a malformed proof behaves exactly as today ─────────
-  context "with validate_requests off (default)" do
+  # ── Flag OFF (an operator's explicit opt-OUT since K-1399 made it default
+  # true): a malformed proof falls back to the pre-fix behaviour ─────────────
+  context "with validate_requests explicitly off" do
+    before { Kiosk.configure { |c| c.validate_requests = false } }
+
     it "does NOT raise a validation error on a malformed proof (byte-identical to today)" do
       # With the flag off, the malformed proof is simply ignored by
       # extract_proofs ([] proofs) and the gate re-issues a fresh 402 — the exact

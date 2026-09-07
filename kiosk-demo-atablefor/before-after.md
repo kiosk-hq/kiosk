@@ -116,7 +116,7 @@ The delta between "today's reservation platform" and "atablefor" is an operator-
 
 **1. Add the Kiosk satellite gems**
 
-<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines and json_schemer only; the Rails/Postgres/dev-group lines around them are out -->
+<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines only; the Rails/Postgres/dev-group lines around them are out -->
 ```ruby
 # Gemfile
 gem "kiosk-all",                path: "../kiosk-all"
@@ -127,8 +127,6 @@ gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
 gem "kiosk-redteam",            path: "../kiosk-redteam"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
-
-gem "json_schemer"
 ```
 
 Those are this demo's own `Gemfile` lines, verbatim (the `path:` overrides are
@@ -138,10 +136,10 @@ and `kiosk-reputation` are what the anti-scalping toll below needs,
 `kiosk-user-idp-devise` is what `demo:binding` needs, `kiosk-redteam` is the
 shared adversarial harness that `script/redteam_suite.rb` drives, and
 `kiosk-rls` is the optional Postgres backstop. `json_schemer` is not one of the
-eight and is not optional either: `kiosk-server` declares it as a runtime
+eight and needs no line of its own: `kiosk-server` declares it as a runtime
 dependency, because every 0.4 verb's `input_schema` is validated before the
-handler sees an argument, behind no flag at all. Bundler would install it
-transitively; the line above only makes it explicit.
+handler sees an argument, behind no flag at all — so bundler resolves it whether
+or not a demo names it.
 
 **2. Run the generator**
 

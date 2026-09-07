@@ -472,8 +472,9 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  # T-068 SLICE 3. `validate_requests` is deliberately NOT set anywhere in this
-  # block — it defaults to false, and every example below still gets its 400.
+  # T-068 SLICE 3. `validate_requests` is deliberately turned OFF in the example
+  # below — the flag is now default-TRUE (K-1399), so turning it off is what
+  # makes the point the block is about: every example here still gets its 400.
   # That is the slice-3 change: `input_schema` is REQUIRED on every 0.4 verb
   # (T-073 = A) and §8.1 item 5 makes the operator coerce-then-validate before
   # the handler sees an argument, so a per-verb endpoint that validated only
@@ -481,6 +482,7 @@ RSpec.describe Kiosk::Server::VerbController do
   # 400 would fall out of the schema layer on some origins and not others.
   describe "input_schema is executable UNCONDITIONALLY on the per-verb wire" do
     it "validates with validate_requests OFF — the flag no longer gates arguments" do
+      Kiosk.configure { |c| c.validate_requests = false }
       expect(Kiosk.configuration.validate_requests).to be(false)
 
       declare_query("catalog", input_schema: { type: "object", additionalProperties: false,

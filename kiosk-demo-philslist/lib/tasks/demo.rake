@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# Resolv is required at file scope because the opt-in host-detection block below
+# runs in EVERY task that boots a server (K-1400).
+require "resolv"
+
 # philslist demo orchestration (NON-COMMERCE classifieds board). Sub-tasks:
 #
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
@@ -68,10 +72,10 @@ def philslist_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 # ── shared server-spawn/readiness helper ──────────────────────────────────────
-def philslist_boot_server(log:, port:, extra_env: {})
+def philslist_boot_server(log:, port:, host: "127.0.0.1", extra_env: {})
   require "net/http"
   require "uri"
-  server_url = "http://127.0.0.1:#{port}"
+  server_url = "http://#{host}:#{port}"
   File.truncate(log, 0) if File.exist?(log)
   pid = spawn(
     { "KIOSK_ISSUER" => server_url }.merge(extra_env),
@@ -177,7 +181,25 @@ namespace :demo do
     demo_password = "philslist-demo-password"
 
     puts "\n── Starting philslist (isolation test) ──"
-    server_pid, server_url = philslist_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("philslist.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "philslist.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach philslist.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = philslist_boot_server(log: log, port: port, host: host)
     at_exit do
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)
@@ -346,7 +368,25 @@ namespace :demo do
     flow_rb = File.expand_path("../../script/register_flow.rb", __dir__)
     failures = []
 
-    server_pid, server_url = philslist_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("philslist.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "philslist.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach philslist.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = philslist_boot_server(log: log, port: port, host: host)
     puts "  (registration PoW active)"
     begin
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"
@@ -415,7 +455,25 @@ namespace :demo do
     holder_password = "philslist-demo-password"
 
     puts "\n── Starting philslist (account-binding walkthrough) ──"
-    server_pid, server_url = philslist_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("philslist.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "philslist.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach philslist.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = philslist_boot_server(log: log, port: port, host: host)
     begin
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
             "HOLDER_ID=#{holder_id.shellescape} HOLDER_EMAIL=#{holder_email.shellescape} " \
@@ -539,7 +597,25 @@ namespace :demo do
     demo_password = "philslist-demo-password"
 
     puts "\n── Starting philslist (redteam battery) ──"
-    server_pid, server_url = philslist_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("philslist.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "philslist.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach philslist.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = philslist_boot_server(log: log, port: port, host: host)
     at_exit do
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)
@@ -598,7 +674,25 @@ namespace :demo do
     log  = "/tmp/kiosk-philslist-schema.log"
 
     puts "\n── Starting philslist (schema proof) ──"
-    server_pid, server_url = philslist_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("philslist.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "philslist.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach philslist.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = philslist_boot_server(log: log, port: port, host: host)
     at_exit do
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)

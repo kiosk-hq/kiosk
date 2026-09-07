@@ -117,6 +117,10 @@ this list and the code that needs it disagree.
 > The SERVER is `localhost`, read from the same `config/database.yml` — unless
 > `PGHOST` is exported, and then it is whatever host that names: the drop
 > follows it, and takes that server's `kiosk_prove_development` instead.
+>
+> **`demo:test` DROPS A DIFFERENT DATABASE.** It runs the same
+> `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
+> is `kiosk_prove_test` — the `test:` database, not `kiosk_prove_development`.
 <!-- PREREQS:END -->
 
 ```sh

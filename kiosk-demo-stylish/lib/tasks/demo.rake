@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# Resolv is required at file scope because the opt-in host-detection block below
+# runs in EVERY task that boots a server (K-1400).
+require "resolv"
+
 # Kiosk demo orchestration. Sub-tasks:
 #
 #   rake demo:clock_spec   DB-free unit spec for the salon-clock slot parse,
@@ -154,7 +158,25 @@ namespace :demo do
     bob_email     = DEMO_CREDENTIALS[:bob_email]
     demo_password = DEMO_CREDENTIALS[:password]
 
-    server_url   = "http://127.0.0.1:#{port}"
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("stylish.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "stylish.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach stylish.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
     puts "\n── Starting stylish (isolation test) on #{server_url} ──"
@@ -302,7 +324,25 @@ namespace :demo do
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
     port         = ENV.fetch("PORT", "3005")
-    server_url   = "http://127.0.0.1:#{port}"
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("stylish.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "stylish.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach stylish.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     log          = "/tmp/kiosk-stylish-register.log"
     flow_rb      = File.expand_path("../../script/register_flow.rb", __dir__)
     failures     = []
@@ -379,7 +419,25 @@ namespace :demo do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     port         = ENV.fetch("PORT", "3005")
-    server_url   = "http://127.0.0.1:#{port}"
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("stylish.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "stylish.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach stylish.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     log          = "/tmp/kiosk-stylish-binding.log"
     flow_rb      = File.expand_path("../../script/binding_flow.rb", __dir__)
     db           = "kiosk_stylish_development"
@@ -496,7 +554,25 @@ namespace :demo do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     port         = ENV.fetch("PORT", "3005")
-    server_url   = "http://127.0.0.1:#{port}"
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("stylish.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "stylish.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach stylish.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
     log          = "/tmp/kiosk-stylish-roles.log"
     flow_rb      = File.expand_path("../../script/roles_flow.rb", __dir__)
@@ -648,7 +724,25 @@ namespace :demo do
 
     port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-stylish-redteam.log"
-    server_url   = "http://127.0.0.1:#{port}"
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("stylish.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "stylish.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach stylish.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
     # The seeded humans the battery drives (db/seeds.rb). The suite EARNS its
@@ -742,7 +836,25 @@ namespace :demo do
 
     port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-stylish-schema.log"
-    server_url   = "http://127.0.0.1:#{port}"
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("stylish.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "stylish.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach stylish.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
     puts "\n── Starting stylish (schema proof) on #{server_url} ──"

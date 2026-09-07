@@ -1792,6 +1792,14 @@ end
 
 namespace :demo do
   # ── demo:agecheck ──────────────────────────────────────────────────────────
+  #
+  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE (K-1392). The task
+  # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
+  # disclosure surfaces for that are this demo README's generated PREREQS block
+  # and the banner the helper prints immediately before the drop. `rake -T`
+  # renders only a description's FIRST SENTENCE, so putting the warning here
+  # would replace what the task IS in `rake -T` rather than add to it —
+  # measured, and written up in bin/check-demo-prereqs.
   desc <<~DESC
     Alcohol age-gate (18+ anonymized KYC) — the LOW-liability age-gated-purchase
     showcase for anonymized KYC (KYC-DEMO-SCOPE (b): the gate lives on the

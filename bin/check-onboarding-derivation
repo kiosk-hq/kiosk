@@ -2499,8 +2499,15 @@ def run_self_test
 
   puts "── planted breaks (page side) ──"
   arms = []
+  # PLANTED INSIDE THE `c.handlers` LINE, not at the page's first mention of the
+  # class (K-1404). HANDLER_NAMES reads `c.handlers = %w[...]` out of the page's
+  # RUBY blocks, so a plant that swaps the first textual occurrence anywhere on
+  # the page breaks nothing the rule looks at — and the day the page grew a prose
+  # paragraph naming the class ahead of the first code block, that is exactly
+  # what happened: the arm stayed GREEN with the rule untouched.
   arms << plant_arm("a handler class the generator does not teach",
-                        page.sub(f[:handlers].first, "Kiosk::PlantedController"), sources, "HANDLER_NAMES")
+                        page.sub(/(c\.handlers\s*=\s*%w\[)#{Regexp.escape(f[:handlers].first)}/,
+                                 '\1Kiosk::PlantedController'), sources, "HANDLER_NAMES")
   arms << plant_arm("#{WORKED_VERB} requires #{opt.inspect} instead",
                         page.sub(req_lit, "required: [#{opt.inspect}]"), sources, "SLOTS_REQUIRED")
   arms << plant_arm("the #{opt.inspect} parameter renamed away",

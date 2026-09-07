@@ -50,6 +50,11 @@ Rails.application.configure do
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
 
+  # Permit the demo's realistic /etc/hosts domain. Rails 8 HostAuthorization
+  # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
+  # which blocks the demo tasks when they run on http://philslist.demo.kiosk.tech.
+  config.hosts << "philslist.demo.kiosk.tech"
+
   # ── Kiosk env inputs ────────────────────────────────────────────────────
   # ENV is read HERE, per environment, and published as Rails custom config
   # (Rails.configuration.x.kiosk.*); initializers and lib code read the

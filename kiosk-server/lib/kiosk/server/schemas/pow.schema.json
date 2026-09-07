@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/pow.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref). Keeping it in sync with the upstream normative copy is tracked as T-045.",
   "title": "Kiosk proof-of-work",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref). Keeping it in sync with the upstream normative copy is tracked as T-045.",
   "description": "The PoW challenge object (issued in a pow_required 402) and the proof(s) an agent returns in the Kiosk-PoW request header (raw JSON) on retry.",
   "$ref": "#/$defs/powHeader",
   "$defs": {
@@ -33,28 +33,49 @@
       "properties": {
         "challenge": { "$ref": "#/$defs/challenge" },
         "nonce": {
-          "type": "object",
-          "description": "The Equihash solution.",
-          "required": ["indices"],
-          "properties": {
-            "indices": {
-              "type": "array",
-              "description": "u64 indices in Zcash canonical (subtree/tree) order; NOT a global ascending sort.",
-              "items": {
-                "$comment": "The upper bound is stated as an INCLUSIVE `maximum` of 2**64-1, not as `exclusiveMaximum: 2**64`. A JSON parser that reads numbers as IEEE-754 doubles rounds the largest LEGAL index, 18446744073709551615, up to exactly 2**64 -- an exclusive bound at 2**64 then REFUSES a proof the reference verifier accepts, and a bound that is wrong in the direction of rejecting valid work is the worse failure. An inclusive bound at the largest legal value survives that round-trip. The residual cost, which no JSON Schema can remove, is that such a parser also admits the handful of values between 2**64 and the next representable double; a parser with exact integers admits none of them, and the verifier refuses them all either way.",
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 18446744073709551615
+          "$comment": "NO `type` HERE, AND THAT IS THE POINT. This document used to type `nonce` as the Equihash solution object outright, which contradicted the decision `alg` is open for: the challenge carries {alg, params} so that an operator may bring a backend of their own, and a backend brings its own solution encoding with it. A schema that admits one algorithm's `alg` string and only that algorithm's nonce shape refuses every other backend's valid proof before any verifier sees it. So the shape is stated CONDITIONALLY, in the `allOf` beside this property, keyed on `challenge.alg`.",
+          "description": "The solution to the challenge. Its shape belongs to the ALGORITHM named in `challenge.alg`, not to this protocol: `alg` is an open string, so an operator serving a backend of their own encodes that backend's solution however the backend defines it, and a verifier that does not know the `alg` refuses the proof rather than the shape. For `equihash` -- the one backend the reference implementation ships -- the shape is #/$defs/equihashNonce, and the conditional below requires exactly that."
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "ALGORITHM-RELATIVE NONCE. `if` matches only when the echoed challenge names equihash; `then` applies the Equihash solution shape. Any other `alg` reaches no `then` and so leaves `nonce` unconstrained here -- which is the honest statement of what this specification knows about a backend it does not define.",
+          "if": {
+            "required": ["challenge"],
+            "properties": {
+              "challenge": {
+                "required": ["alg"],
+                "properties": { "alg": { "const": "equihash" } }
               }
-            },
-            "header_nonce": {
-              "$comment": "The bound is stated as an INCLUSIVE `maximum` of 2**32-1, matching how `indices` states its own: 4294967295 is exactly representable as an IEEE-754 double, so it survives any JSON parser, and an inclusive bound never refuses the largest legal value. Without a bound the field is unbounded on the wire while both specs call it a u32 -- and the reference verifier folds it in with `pack(\"V\")`, which truncates mod 2**32 instead of raising, so 0, 2**32 and -(2**32) seed identically and one proof has infinitely many spellings. The verifier rejects out-of-range values for the same reason; schema and verifier state one bound, not two.",
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 4294967295,
-              "description": "OPTIONAL u32, default 0. Folded into the PoW seed after the salt bytes as a little-endian u32; an extensibility point (currently always 0). A verifier reconstructs the seed as salt-bytes || header_nonce(LE u32), so a proof solved for a non-zero header_nonce MUST carry it."
             }
+          },
+          "then": {
+            "properties": { "nonce": { "$ref": "#/$defs/equihashNonce" } }
           }
+        }
+      ]
+    },
+    "equihashNonce": {
+      "type": "object",
+      "description": "The Equihash solution -- the shape a proof's `nonce` takes when, and only when, its challenge's `alg` is \"equihash\".",
+      "required": ["indices"],
+      "properties": {
+        "indices": {
+          "type": "array",
+          "description": "u64 indices in Zcash canonical (subtree/tree) order; NOT a global ascending sort.",
+          "items": {
+            "$comment": "The upper bound is stated as an INCLUSIVE `maximum` of 2**64-1, not as `exclusiveMaximum: 2**64`. A JSON parser that reads numbers as IEEE-754 doubles rounds the largest LEGAL index, 18446744073709551615, up to exactly 2**64 -- an exclusive bound at 2**64 then REFUSES a proof the reference verifier accepts, and a bound that is wrong in the direction of rejecting valid work is the worse failure. An inclusive bound at the largest legal value survives that round-trip. The residual cost, which no JSON Schema can remove, is that such a parser also admits the handful of values between 2**64 and the next representable double; a parser with exact integers admits none of them, and the verifier refuses them all either way.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18446744073709551615
+          }
+        },
+        "header_nonce": {
+          "$comment": "The bound is stated as an INCLUSIVE `maximum` of 2**32-1, matching how `indices` states its own: 4294967295 is exactly representable as an IEEE-754 double, so it survives any JSON parser, and an inclusive bound never refuses the largest legal value. Without a bound the field is unbounded on the wire while both specs call it a u32 -- and the reference verifier folds it in with `pack(\"V\")`, which truncates mod 2**32 instead of raising, so 0, 2**32 and -(2**32) seed identically and one proof has infinitely many spellings. The verifier rejects out-of-range values for the same reason; schema and verifier state one bound, not two.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "OPTIONAL u32, default 0. Folded into the PoW seed after the salt bytes as a little-endian u32; an extensibility point (currently always 0). A verifier reconstructs the seed as salt-bytes || header_nonce(LE u32), so a proof solved for a non-zero header_nonce MUST carry it."
         }
       }
     },

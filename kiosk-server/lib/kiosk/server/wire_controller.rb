@@ -317,7 +317,7 @@ module Kiosk
       # carries about itself are transport metadata, so they travel as response
       # headers and the body stays the bare array every other query answers:
       #
-      #   Link: <…?limit=20&cursor=b2Zmc2V0OjIw>; rel="next"   RFC 8288
+      #   Link: <…?limit=20&cursor=20>; rel="next"             RFC 8288
       #   X-Total-Count: 97
       #
       # `Link` is RFC 8288 (Web Linking) and is the reason a paginating query

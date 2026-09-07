@@ -39,44 +39,78 @@ module Kiosk
       def truncated? = !next_cursor.nil?
     end
 
-    # Opaque-cursor helper for the common offset-pagination case. A handler MAY
-    # ignore this and roll its own opaque token — the wire contract only requires
-    # that whatever the handler emits as `next_cursor` be echoed back verbatim in
-    # the next request's `cursor` param.
+    # Cursor helper for the common offset-pagination case. A handler MAY ignore
+    # this and roll its own token — the wire contract only requires that whatever
+    # the handler emits as `next_cursor` be echoed back verbatim in the next
+    # request's `cursor` param.
     #
-    #   Cursor.encode_offset(40)  # => "b2Zmc2V0OjQw"  (opaque to the client)
-    #   Cursor.decode_offset("b2Zmc2V0OjQw", default: 0) # => 40
+    #   Cursor.encode_offset(40)              # => "40"
+    #   Cursor.decode_offset("40", default: 0) # => 40
     #
-    # decode_offset is deliberately lenient: a malformed/absent cursor decodes to
-    # `default` (0) rather than raising, so a garbage `cursor` param yields the
-    # first page instead of a 500.
+    # THE OFFSET IS PUBLISHED AS A DECIMAL INTEGER, IN CLEAR, AND THIS PARAGRAPH
+    # IS THE «SAY SO» HALF OF THAT (K-1403). It used to be `offset:N` wrapped in
+    # urlsafe base64, and that encoding was a costume: not a secret, not signed,
+    # not stable across a collection that changes under the reader, and decodable
+    # by anyone in one line. It told a reader «opaque, do not parse» while
+    # providing not one of the properties opacity is FOR, which is worse than
+    # saying nothing — a reader who believes the token is protected reasons
+    # about it wrongly. So it says what it is.
+    #
+    # OPACITY IS STILL THE CONTRACT, AND THE CONTRACT IS ON THE CLIENT, NOT ON
+    # THE TOKEN. The specification requires an assistant never to parse a cursor
+    # and never to construct one; it requires nothing of the token's shape,
+    # because the shape is the operator's to choose and to change. Publishing an
+    # integer does not weaken that rule — an assistant that starts doing
+    # arithmetic on this value is out of contract the day the handler switches to
+    # a keyset token.
+    #
+    # NOTHING IS AUTHORIZED BY A CURSOR, and that is why this needs no signature.
+    # A forged `cursor=5000` reaches exactly the rows the same request would have
+    # reached by following five thousand links: the handler's own scoping decides
+    # what a page may contain, and a cursor only says how far in. A handler that
+    # would leak on a forged offset is a handler with no scoping, and an HMAC
+    # would hide that rather than fix it.
+    #
+    # AND THE DECODE IS NO LONGER LENIENT. A malformed cursor used to become
+    # `default` — silently page one — so an assistant that mangled the token was
+    # answered with plausible rows and no way to notice. An ABSENT cursor is
+    # still `default`, because absence legitimately means «first page»; anything
+    # present that is not a non-negative decimal integer is a typed 400 naming
+    # the parameter, which is what every other bad argument on this wire gets.
     #
     # THIS MODULE SURVIVED THE 0.4 CUTOVER, AND IT SURVIVED T-092 TOO. Nothing
-    # about an opaque offset cursor was ever about the envelope or about where
-    # the cursor travels: the wire still has `limit`/`cursor` as reserved
-    # request parameters, and a truncated page still hands back an opaque token
-    # — inside a `Link` header's target URI now instead of a body field — so a
-    # handler encoding an offset behind one needs exactly this helper.
+    # about an offset cursor was ever about the envelope or about where the
+    # cursor travels: the wire still has `limit`/`cursor` as reserved request
+    # parameters, and a truncated page still hands back a token the client
+    # round-trips — inside a `Link` header's target URI now instead of a body
+    # field — so a handler paginating by offset needs exactly this helper.
     module Cursor
-      PREFIX = "offset:"
+      # A cursor this helper wrote: one or more decimal digits, nothing else.
+      OFFSET_RE = /\A[0-9]+\z/
 
       module_function
 
       def encode_offset(offset)
-        require "base64"
-        Base64.urlsafe_encode64("#{PREFIX}#{offset.to_i}", padding: false)
+        offset.to_i.to_s
       end
 
+      # @param cursor [String, nil] the `cursor` request parameter, verbatim
+      # @param default [Integer] the offset an ABSENT cursor means
+      # @raise [Errors::BadRequest] when a cursor is present and is not one this
+      #   helper could have written
       def decode_offset(cursor, default: 0)
         return default if cursor.nil? || cursor.to_s.empty?
 
-        require "base64"
-        decoded = Base64.urlsafe_decode64(cursor.to_s)
-        return default unless decoded.start_with?(PREFIX)
+        raw = cursor.to_s
+        unless raw.match?(OFFSET_RE)
+          raise Errors::BadRequest.new(
+            "cursor #{raw.inspect} is not a cursor this endpoint issued",
+            hint: "do not build a cursor: fetch the `Link: <…>; rel=\"next\"` target verbatim, " \
+                  "or copy its `cursor` parameter byte for byte. Omit `cursor` for the first page.",
+          )
+        end
 
-        Integer(decoded.delete_prefix(PREFIX))
-      rescue ArgumentError
-        default
+        Integer(raw, 10)
       end
     end
 

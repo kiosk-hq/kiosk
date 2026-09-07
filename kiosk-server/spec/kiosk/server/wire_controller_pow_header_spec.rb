@@ -124,18 +124,21 @@ RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
       c.agent_idp         = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
       c.reputation_policy = policy
       c.pow_secret        = "test-pow-secret"
-      # THE SHAPE CHECK IS OFF HERE, AND THAT IS ABOUT THE BACKEND, NOT THE
-      # TRANSPORT (K-1399 turned it on by default). This file exercises the
-      # ADR-0022 header transport with the OPTIONAL argon2id backend, whose
-      # solution is a decimal STRING, because argon2id at d=4/m=8 solves in
-      # microseconds and equihash does not. The vendored normative PoW schema
-      # types a proof's `nonce` as an Equihash solution object with `indices`,
-      # so with the shape check on every argon2id proof is refused 400 before
-      # the transport under test is reached. Equihash is the one shipped
-      # backend and every demo uses it, so nothing an operator serves is
-      # affected — but the flag has to be off for these examples to be about
-      # what they say they are about.
-      c.validate_requests = false
+      # THE SHAPE CHECK IS ON — the K-1399 default — AND THAT IS THIS FILE'S
+      # OTHER ASSERTION (K-1410). These examples exercise the ADR-0022 header
+      # transport with a RETIRED backend: argon2id, whose solution is a decimal
+      # STRING, chosen because it solves in microseconds at d=4/m=8 where
+      # equihash does not. THE WIRE IS ALGORITHM-AGNOSTIC (ADR-0001 decision 3):
+      # a challenge carries {alg, params} so an operator may bring their own
+      # backend, and `pow.schema.json` types a proof's `nonce` CONDITIONALLY on
+      # `challenge.alg` — the Equihash object shape when and only when the
+      # challenge says equihash. So a valid argon2id proof passes the shape
+      # check with the flag at its default, and this file running green with
+      # validation ON is what says the schema is relative to the algorithm
+      # rather than closed around the one shipped backend. It used to set the
+      # flag `false`, because the schema WAS Equihash-only and refused every
+      # proof here 400 before the transport under test was reached.
+      c.validate_requests = true
     end
 
     # The verbs this spec dials. Two queries, so a proof for one can be shown

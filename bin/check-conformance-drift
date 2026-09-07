@@ -63,9 +63,23 @@
 # it. A CI job failing on it would have to be silenced immediately, and silencing
 # it means re-recording the baseline in the same commit — which sets the interval
 # to zero and destroys the only signal the tool has. The baseline must advance
-# when a SWEEP has re-judged the rows, never when a commit lands. Hence exit 2
-# (drift, triage it) is distinct from exit 1 (cannot answer), and no workflow runs
-# the REPORT.
+# when a SWEEP has re-judged the rows, never when a commit lands. So the REPORT is
+# not a gate, and no workflow runs it.
+#
+# AND SO THE BARE RUN EXITS 0, WITH DRIFT OR WITHOUT IT (K-1412). It used to exit
+# 2 to mean «anchors need re-judging», which was a deliberate distinction from
+# exit 1 («cannot answer») and a trap all the same: EVERY OTHER `bin/check-*` in
+# this directory exits 0 when it is satisfied, so a session sweeping `bin/check-*`
+# in a loop — which is how the gates are run here — read this one member as RED on
+# the very state its own output calls «a TRIAGE LIST, not a failure». Two outcomes,
+# both bad: a false failure reported to a human, or, worse, a reader who learns to
+# ignore a non-zero exit from this directory. A tool whose normal state is non-zero
+# teaches people to stop reading exit codes, which is the one signal that cannot be
+# faked. The DRIFT COUNT was never the exit code's to carry: it is on the summary
+# line, by number, and `--exit-on-drift` is there for the caller who genuinely
+# wants a non-zero — the sweep procedure, a future job — asked for explicitly
+# rather than inflicted on a directory sweep. Exit 1 still means «cannot answer»,
+# in both modes, because that IS a failure: the question was not asked.
 #
 # `--check` IS A GATE, AND IT ASKS A DIFFERENT QUESTION (the drift-baseline
 # staleness gap, 2026-08-27). The baseline is a GENERATED file that had no
@@ -145,18 +159,19 @@
 # Usage (stdlib only, no bundle, no database, no network):
 #   bin/check-conformance-drift                     # report drift against the baseline
 #   bin/check-conformance-drift --matrix PATH       # …naming the matrix rows affected
+#   bin/check-conformance-drift --exit-on-drift     # …and exit 2 when regions moved
 #   bin/check-conformance-drift --record            # re-record the baseline at the current tree
 #   bin/check-conformance-drift --record --label T  # …with a free-text label in its header
 #   bin/check-conformance-drift --check             # is the baseline one THIS generator wrote?
 #   bin/check-conformance-drift --reheader          # re-render its header, touching no fingerprint
 #
-# Exit codes. The REPORT has three on purpose:
-#   0 — every anchored region matches the baseline
-#   2 — some moved: the list is the next sweep's D1 work-list, not a failure
+# Exit codes. The REPORT has two, like every other `bin/check-*` here:
+#   0 — it answered. Drift or no drift; the count is on the summary line.
 #   1 — the question could not be answered (missing manifest/baseline/file)
-# `--check` has two, because it IS a gate: 0 the baseline is self-consistent,
-# 1 it is not — 2 is never returned. `--record` and `--reheader`: 0 written,
-# 1 refused, and they say why.
+# `--exit-on-drift` adds a third for a caller that asks for it: 2 when regions
+# moved. `--check` has two, because it IS a gate: 0 the baseline is
+# self-consistent, 1 it is not — 2 is never returned. `--record` and
+# `--reheader`: 0 written, 1 refused, and they say why.
 
 require "digest"
 require "English"
@@ -167,27 +182,30 @@ MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
 BASELINE = File.join(ROOT, "spec", "conformance-drift-baseline.tsv")
 
 USAGE = <<~TEXT
-  usage: bin/check-conformance-drift [--matrix PATH] [--record [--label TEXT]]
+  usage: bin/check-conformance-drift [--matrix PATH] [--exit-on-drift] [--record [--label TEXT]]
          bin/check-conformance-drift --check | --reheader
-         report:   0 = no drift, 2 = regions moved (triage), 1 = cannot answer
+         report:   0 = answered (drift is counted on the summary line, not in the exit code),
+                   1 = cannot answer; add --exit-on-drift for 2 = regions moved (triage)
          --check:  0 = the baseline is one this generator could have written, 1 = it is not
 TEXT
 
-record   = false
-check    = false
-reheader = false
-matrix   = nil
-label    = nil
+record        = false
+check         = false
+reheader      = false
+exit_on_drift = false
+matrix        = nil
+label         = nil
 
 argv = ARGV.dup
 until argv.empty?
   arg = argv.shift
   case arg
-  when "--record"   then record   = true
-  when "--check"    then check    = true
-  when "--reheader" then reheader = true
-  when "--matrix"   then matrix   = argv.shift
-  when "--label"    then label    = argv.shift
+  when "--record"        then record        = true
+  when "--check"         then check         = true
+  when "--reheader"      then reheader      = true
+  when "--exit-on-drift" then exit_on_drift = true
+  when "--matrix"        then matrix        = argv.shift
+  when "--label"         then label         = argv.shift
   when "-h", "--help"
     puts USAGE
     exit 0
@@ -753,4 +771,12 @@ end
 puts
 puts "#{moved.length + fresh.length + broken.length} anchor(s) need re-judging. This is a TRIAGE LIST, not a failure:"
 puts "walk them, then re-record the baseline with --record so the next sweep starts from here."
-exit 2
+
+# K-1412: exit 0, because this is a report and not a gate — the count above is
+# where drift is reported. `--exit-on-drift` is the opt-in for a caller that
+# wants a non-zero to branch on; a `bin/check-*` sweep does not, and used to read
+# the 2 as red on a tool whose normal state this is.
+exit 2 if exit_on_drift
+
+puts "(exit 0: this is a report. Pass --exit-on-drift if you need a non-zero status to branch on.)"
+exit 0

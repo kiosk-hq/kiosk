@@ -73,7 +73,19 @@ module Admin
           "short_id"         => id.to_s[0, 8],
           "status"           => status,
           "total_cents"      => total_cents,
+          # THE WINDOW IS RENDERED HERE, THROUGH THE ONE WRITER THE WIRE USES
+          # (K-1391). `slot_at` is a `timestamptz` and comes back on whatever
+          # clock the connection is on — the SERVER's, because this page runs
+          # outside the wire and no `SET LOCAL` has been issued — so a view that
+          # re-parsed it printed 07:00 where the customer had been told
+          # «08:00–10:00 (Europe/Dublin)». {DeliverySlots.label} is the single
+          # writer for that string and {DeliverySlots.zone} for the day beside
+          # it, so the shop's own staff and the assistant read ONE answer about
+          # ONE window. The raw instant stays in the row for anything that needs
+          # the value rather than the sentence.
           "slot_at"          => slot_at,
+          "slot_window"      => slot_at && "#{slot_at.in_time_zone(DeliverySlots.zone).strftime('%a %-d %b')}, " \
+                                           "#{DeliverySlots.label(slot_at)}",
           "created_at"       => created_at,
           "settled_currency" => settled_currency,
           "items"            => (items_by_order[id] || []).map { |_order_id, qty, name, price_cents|

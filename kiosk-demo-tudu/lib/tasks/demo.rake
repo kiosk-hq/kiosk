@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# Resolv is required at file scope because the opt-in host-detection block below
+# runs in EVERY task that boots a server (K-1400).
+require "resolv"
+
 # tudu demo orchestration (MULTI-USER COLLABORATIVE todo app, NO payments).
 # Sub-tasks:
 #
@@ -13,10 +17,10 @@
 #   rake demo            setup + collab end-to-end
 
 # ── shared server-spawn/readiness helper ──────────────────────────────────────
-def tudu_boot_server(log:, port:, extra_env: {})
+def tudu_boot_server(log:, port:, host: "127.0.0.1", extra_env: {})
   require "net/http"
   require "uri"
-  server_url = "http://127.0.0.1:#{port}"
+  server_url = "http://#{host}:#{port}"
   File.truncate(log, 0) if File.exist?(log)
   pid = spawn(
     { "KIOSK_ISSUER" => server_url }.merge(extra_env),
@@ -150,7 +154,25 @@ namespace :demo do
     port = ENV.fetch("PORT", "3007")
     log  = "/tmp/kiosk-tudu-collab.log"
     puts "\n── Starting tudu (collaboration happy path) ──"
-    server_pid, server_url = tudu_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("tudu.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "tudu.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach tudu.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = tudu_boot_server(log: log, port: port, host: host)
     at_exit { tudu_stop(server_pid) }
 
     flow = File.expand_path("../../script/collab_flow.rb", __dir__)
@@ -203,7 +225,25 @@ namespace :demo do
     holder_password = "tudu-demo-password"
 
     puts "\n── Starting tudu (W5 rebind walkthrough) ──"
-    server_pid, server_url = tudu_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("tudu.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "tudu.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach tudu.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = tudu_boot_server(log: log, port: port, host: host)
     failures = []
     begin
       flow = File.expand_path("../../script/link_flow.rb", __dir__)
@@ -290,7 +330,25 @@ namespace :demo do
     db   = "kiosk_tudu_development"
 
     puts "\n── Starting tudu (membership isolation test) ──"
-    server_pid, server_url = tudu_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("tudu.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "tudu.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach tudu.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = tudu_boot_server(log: log, port: port, host: host)
     at_exit { tudu_stop(server_pid) }
 
     flow = File.expand_path("../../script/isolation_flow.rb", __dir__)
@@ -390,7 +448,25 @@ namespace :demo do
     holder_password = "tudu-demo-password"
 
     puts "\n── Starting tudu (redteam battery) ──"
-    server_pid, server_url = tudu_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("tudu.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "tudu.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach tudu.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = tudu_boot_server(log: log, port: port, host: host)
     at_exit { tudu_stop(server_pid) }
 
     suite = File.expand_path("../../script/redteam_suite.rb", __dir__)
@@ -426,7 +502,25 @@ namespace :demo do
     log  = "/tmp/kiosk-tudu-schema.log"
 
     puts "\n── Starting tudu (schema proof) ──"
-    server_pid, server_url = tudu_boot_server(log: log, port: port)
+    host = begin
+      addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
+        begin
+          Resolv.getaddress("tudu.demo.kiosk.tech")
+        rescue StandardError
+          ""
+        end
+      else
+        ""
+      end
+      if addr == "127.0.0.1"
+        "tudu.demo.kiosk.tech"
+      else
+        puts "  (using 127.0.0.1 — to reach tudu.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)"
+        "127.0.0.1"
+      end
+    end
+
+    server_pid, server_url = tudu_boot_server(log: log, port: port, host: host)
     at_exit { tudu_stop(server_pid) }
 
     flow = File.expand_path("../../script/schema_flow.rb", __dir__)

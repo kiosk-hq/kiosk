@@ -54,12 +54,40 @@ class ValidatingBookingProvider
     settled
   end
 
-  def method_missing(name, *args, **kwargs, &block)
-    @provider.public_send(name, *args, **kwargs, &block)
+  # ── THE PORT, ENUMERATED (K-1402) ───────────────────────────────────────────
+  #
+  # This used to be `method_missing` + `respond_to_missing?` forwarding
+  # everything to `@provider`, which is the worst available interface for a
+  # decorator on the MONEY path. Its surface was «whatever the wrapped object
+  # happens to answer», so a method added to a PSP adapter upstream became
+  # silently reachable THROUGH the validating wrapper without passing any of the
+  # checks above, and a typo at a call site became a delegation instead of a
+  # NoMethodError. Neither failure shows up in a diff of this file.
+  #
+  # So the two methods below are the whole of what this decorator forwards, and
+  # they are the whole of the PSP port an operator's app actually calls:
+  #
+  #   * `setup_required?(user_id:)` — {Kiosk::PaymentProviders::Base} defines it
+  #     and the engine's executor asks it before it burns any mandate ids.
+  #   * `setup_url(user_id:)` — NOT on `Base`, and deliberately forwarded anyway:
+  #     it is the optional half of the same question, and hoteling's own
+  #     `payment_setup` verb calls it whenever `setup_required?` answers yes.
+  #     With the shipped {StubPsp} that branch is never taken; with
+  #     `kiosk-pay-stripe` swapped in it is the card-on-file flow, and a wrapper
+  #     that could not forward it would break the swap this demo advertises.
+  #     A provider that defines neither raises NoMethodError naming ITSELF,
+  #     which is the honest receiver.
+  #
+  # `capture` is above, overridden rather than forwarded — it is the cashier.
+  # Anything else on the wrapped object is now unreachable through this wrapper
+  # BY CONSTRUCTION, which is the point: adding a method here is a decision
+  # somebody makes, in this file, with the checks in front of them.
+  def setup_required?(user_id:)
+    @provider.setup_required?(user_id: user_id)
   end
 
-  def respond_to_missing?(name, include_private = false)
-    @provider.respond_to?(name, include_private) || super
+  def setup_url(user_id:)
+    @provider.setup_url(user_id: user_id)
   end
 
   # True iff a settlement (capture receipt) references this booking — the

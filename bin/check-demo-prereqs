@@ -49,6 +49,43 @@
 #     pure Ruby; only SOLVING one needs the Python solver, and that is the
 #     client side. These are the prerequisites of RUNNING THE DEMOS.
 #
+# THE DISCLOSURE SURFACES ARE THE README AND THE RUNTIME BANNER. THE `desc`
+# STRINGS DELIBERATELY ARE NOT (K-1392), AND THE REASON IS MEASURED.
+#
+# Three tasks destroy a database in ANOTHER demo — getgrocery's `demo:agecheck`
+# and skooti's `demo:kyc`/`demo:redteam`, each through
+# `script/prove_broker_boot.rb` — and their `desc` strings do not say so. That
+# was raised as a gap on the argument that `rake -T` is the first place an
+# operator looks, and it is. What settles it is what `rake -T` actually PRINTS.
+#
+# MEASURED 2026-09-07, rake 13.4.2, on a two-paragraph `desc <<~DESC` heredoc:
+# `rake -T` renders `Rake::Task#comment`, which is the FIRST SENTENCE of the
+# description and nothing else — a warning placed anywhere below the opening
+# sentence does not appear in `-T` at all (only in `-D`). So «derive the desc»
+# does not mean «add a sentence»: it means MOVING the warning in front of the
+# task's own first sentence, and the `rake -T` line for those three tasks then
+# stops saying what the task IS. Measured both spellings: with the warning
+# second, `-T` prints only the purpose; with it first, `-T` prints only the
+# warning.
+#
+# That is a bad trade, because the two surfaces that DO carry the disclosure
+# carry it better:
+#
+#   * this script's generated README block names the sibling demo, the second
+#     database and the tasks that reach it, derived one hop at a time from the
+#     `require_relative` and the `chdir:` — text no hand-copy can rot; and
+#   * `script/prove_broker_boot.rb` PRINTS the drop at the moment it happens,
+#     immediately before the command, naming the app it is about to destroy.
+#     A banner an operator reads while the run is in front of them beats a
+#     catalogue line they read before they chose the task.
+#
+# And the option the row explicitly forbade remains forbidden: hand-typing the
+# sentence into three `desc` bodies is the drift the derivation exists to
+# prevent, and a `desc` body is evaluated on EVERY rake/rails task load, so
+# READING the sibling's `config/database.yml` there would turn a documentation
+# string into a load-time failure mode — the reason skooti's `demo:redteam`
+# desc already gives for naming a knob rather than resolving it.
+#
 # Usage:
 #   bin/check-demo-prereqs               # check every demo README (no bundle needed)
 #   bin/check-demo-prereqs --write       # (re)generate the blocks
@@ -142,9 +179,15 @@ DESTRUCTIVE_TRIGGER = { file: "lib/tasks/demo.rake", must: /db:drop\s+db:create/
 # what K-1340 removed one file over and what K-1378 found already off by one
 # ("six" where seven `database:` keys are literal). The run PRINTS its own
 # derived tallies; that is the number.
-def yml_value(dir, key)
+#
+# `rails_env:` is a PARAMETER because a rake task may run the same command under
+# another one (K-1393): kiosk-demo-prove's `demo:test` prefixes `RAILS_ENV=test`,
+# so the database it destroys is the one the `test:` block names and not the
+# `development:` one. A warning that read `development:` for every drop would
+# name the wrong database with complete confidence.
+def yml_value(dir, key, rails_env = "development")
   yml = File.read(File.join(dir, "config", "database.yml"))
-  dev = yml[/^development:\n(?:[ \t].*\n|\n)*/m] or return nil
+  dev = yml[/^#{rails_env}:\n(?:[ \t].*\n|\n)*/m] or return nil
   raw = dev[/^\s+#{key}:\s*(.+)$/, 1]
   if raw.nil?
     return nil unless dev.match?(/^\s+<<:\s*\*default\s*$/)
@@ -162,6 +205,57 @@ end
 
 def dev_database(dir) = yml_value(dir, "database")
 def dev_host(dir)     = yml_value(dir, "host")
+
+# ── WHICH TASK OWNS WHICH DROP (K-1393) ──────────────────────────────────────
+#
+# DESTRUCTIVE_TRIGGER above asks one question of the whole file — «does anything
+# in here run a `db:drop db:create`» — and the warning it drove said `demo:setup`
+# is destructive «and every task that depends on it inherits that». True, and it
+# folded a SECOND unconditional drop into the first one's sentence:
+# kiosk-demo-getgrocery's `demo:rls` runs its own `db:drop db:create db:schema:load
+# db:seed` and does NOT depend on `demo:setup`, so an operator who avoided
+# `demo:setup` on the strength of the warning still lost the database to the other
+# task. kiosk-demo-prove's `demo:test` is the same shape one step further out: it
+# runs the drop under `RAILS_ENV=test`, so it destroys a DIFFERENT database, which
+# a warning naming only the development one gets exactly backwards.
+#
+# So the ownership is DERIVED, task by task, from the same file the trigger reads:
+# walk it tracking the enclosing `namespace`/`task`, and attribute each
+# `db:drop db:create` to the task it sits under, with the `RAILS_ENV=` that
+# prefixes it when one does. Nothing is typed — not `demo:setup`, not `demo:rls`,
+# not `demo:test` — so a demo that grows or loses a drop moves its own warning.
+#
+# THE LIMIT, plainly: this reads the LEXICAL enclosure, so a drop reached through
+# a helper method defined at the top of the file is attributed to nothing, exactly
+# as a drop reached through a `require_relative` is invisible to the trigger. The
+# cross-demo rule below is the one hop that IS followed; this is not a second one.
+DESTRUCTIVE_CMD = /rails\s+db:drop\s+db:create/.freeze
+
+# [[label, rails_env], ...] for one demo — every task in ITS OWN rake file that
+# runs a `db:drop db:create`, in file order, deduplicated.
+def own_destructive_tasks(dir)
+  rake = File.join(dir, "lib", "tasks", "demo.rake")
+  return [] unless File.file?(rake)
+
+  namespace = nil
+  task      = nil
+  out       = []
+
+  File.readlines(rake).each do |line|
+    if (m = line.match(/^\s*namespace\s+:([a-z0-9_]+)\s+do\b/))
+      namespace = m[1]
+    elsif (m = line.match(/^\s*task\s+:?([a-z0-9_]+)\b/))
+      task = m[1]
+    elsif line.match?(DESTRUCTIVE_CMD)
+      env   = line[/RAILS_ENV=([a-z]+)/, 1] || "development"
+      label = [namespace, task].compact.join(":")
+      next if label.empty?
+
+      out << [label, env] unless out.include?([label, env])
+    end
+  end
+  out
+end
 
 # ── The CROSS-DEMO destructive reach (K-1377) ────────────────────────────────
 #
@@ -266,6 +360,30 @@ def prereq_block(dir)
     elsif host
       parts << "> The SERVER is `#{host[:name]}`, read from the same `config/database.yml`."
     end
+    # EACH DROP ATTRIBUTED TO THE TASK THAT OWNS IT (K-1393). The paragraph
+    # above is about `demo:setup` and the tasks that DEPEND on it; a task running
+    # its own `db:drop db:create` is not covered by it, and folding the two into
+    # one sentence tells an operator who avoided `demo:setup` that the database
+    # is safe when it is not.
+    owners = own_destructive_tasks(dir)
+    others = owners.reject { |label, env| label == "demo:setup" && env == "development" }
+    others.each do |label, env|
+      odb = yml_value(dir, "database", env)
+      parts << ">"
+      if env == "development"
+        parts << "> **`#{label}` RUNS ITS OWN `db:drop db:create`**, rather than depending on"
+        parts << "> `demo:setup`, so skipping `demo:setup` does not spare `#{db[:name]}` — this task"
+        parts << "> drops and recreates it too."
+      elsif odb
+        parts << "> **`#{label}` DROPS A DIFFERENT DATABASE.** It runs the same"
+        parts << "> `db:drop db:create` under `RAILS_ENV=#{env}`, so what it **DROPS and recreates**"
+        parts << "> is `#{odb[:name]}` — the `#{env}:` database, not `#{db[:name]}`."
+      else
+        parts << "> **`#{label}` RUNS ITS OWN `db:drop db:create` under `RAILS_ENV=#{env}`**, and"
+        parts << "> `config/database.yml` declares no `#{env}:` block, so which database it destroys"
+        parts << "> is whatever that environment resolves to on your machine."
+      end
+    end
     # ONLY where the demo actually ships the script, and naming only what that
     # script actually runs. Writing "bin/setup does this" into a README of a demo
     # that ships no bin/setup would be K-1315 committed a second time, in the
@@ -326,6 +444,9 @@ def run(root, write: false)
     fired["destructive"]  += 1 if triggered?(dir, DESTRUCTIVE_TRIGGER)
     fired["server"]       += 1 if triggered?(dir, DESTRUCTIVE_TRIGGER) && dev_host(dir)
     fired["cross-demo"]   += cross_demo_drops(dir).length
+    own = own_destructive_tasks(dir)
+    fired["own-drops"]    += own.length
+    fired["extra-drops"]  += own.count { |l, e| l != "demo:setup" || e != "development" }
 
     # A demo with NO triggered requirement gets no block: kiosk-demo-prove has
     # its own smaller shape, and inventing an empty section for it would be
@@ -400,6 +521,25 @@ def run(root, write: false)
               "data with nothing saying so."
   end
 
+  # K-1393's two arms. The first is an EXTRACTION check: a demo whose file
+  # contains a `db:drop db:create` and whose ownership walk attributes it to no
+  # task means the walk lost the enclosing `task`, and every drop then folds back
+  # into `demo:setup`'s sentence — the exact state this rule was built to end.
+  if fired["destructive"].positive? && fired["own-drops"].zero?
+    errors << "check-demo-prereqs: DESTRUCTIVE_TRIGGER fired but the per-task ownership walk " \
+              "attributed NO drop to any task. Either `own_destructive_tasks` stopped tracking the " \
+              "enclosing `task`/`namespace`, or DESTRUCTIVE_CMD stopped matching the command the " \
+              "trigger still finds — and every drop is silently back to being `demo:setup`'s (K-1393)."
+  end
+
+  if fired["extra-drops"].zero?
+    errors << "check-demo-prereqs: not ONE task anywhere owns a `db:drop db:create` other than " \
+              "`demo:setup`'s development one, so the attribution rule covers nothing and reads as " \
+              "coverage. Either every second drop really has left the demos — in which case delete " \
+              "the rule — or the walk stopped seeing the `RAILS_ENV=` prefix or the second task " \
+              "(K-1393)."
+  end
+
   [errors, blocks, fired]
 end
 
@@ -463,6 +603,45 @@ if ARGV.include?("--self-test")
                     File.write(y, File.read(y).sub("database: kiosk_prove_development",
                                                    "database: kiosk_prove_dev")) },
       expect: %r{skooti/README\.md: the PREREQS block does not match} },
+    { id:   "second-own-drop-not-attributed",
+      what: "the sentence attributing getgrocery's SECOND unconditional drop to `demo:rls` is " \
+            "deleted while that task still runs one — K-1393's shape, an operator who avoids " \
+            "demo:setup losing the database to the other task",
+      op:   ->(t) { r = File.join(t, "kiosk-demo-getgrocery/README.md")
+                    File.write(r, File.read(r).sub(/^>\n> \*\*`demo:rls` RUNS ITS OWN.*?\n(?=>\n|<!-- PREREQS:END)/m, "")) },
+      expect: %r{getgrocery/README\.md: the PREREQS block does not match} },
+    { id:   "own-drop-appears-in-a-new-task",
+      what: "a demo grows a second task that drops its own database and the README does not " \
+            "attribute it — the direction the trigger alone cannot see",
+      op:   ->(t) { ra = File.join(t, "kiosk-demo-tudu/lib/tasks/demo.rake")
+                    body = File.read(ra)
+                    File.write(ra, body + "\nnamespace :demo do\n  desc \"x\"\n  task :wipe do\n" \
+                                          "    sh \"bundle exec rails db:drop db:create\"\n  end\nend\n") },
+      expect: %r{tudu/README\.md: the PREREQS block does not match} },
+    { id:   "cross-env-drop-names-the-wrong-database",
+      what: "the RAILS_ENV=test prefix is dropped from prove's `demo:test`, so its warning names " \
+            "the development database for a command that destroys the test one",
+      op:   ->(t) { ra = File.join(t, "kiosk-demo-prove/lib/tasks/demo.rake")
+                    File.write(ra, File.read(ra).sub("RAILS_ENV=test bundle exec rails db:drop", "bundle exec rails db:drop")) },
+      expect: %r{prove/README\.md: the PREREQS block does not match} },
+    { id:   "vacuity-ownership-walk-stops-resolving", kind: :vacuity,
+      what: "the `task` lines stop being recognised, so every drop is attributed to nothing and " \
+            "folds back into demo:setup's sentence",
+      op:   ->(t) { Dir[File.join(t, "kiosk-demo-*/lib/tasks/demo.rake")].each do |f|
+                      File.write(f, File.read(f).gsub(/^(\s*)task\b/, '\1Rake.task')
+                                        .gsub(/^(\s*)namespace\b/, '\1Rake.namespace'))
+                    end },
+      expect: %r{the per-task ownership walk attributed NO drop to any task} },
+    { id:   "vacuity-no-second-drop-anywhere", kind: :vacuity,
+      what: "every drop outside `demo:setup` disappears, so the attribution rule covers nothing " \
+            "and reads as coverage",
+      op:   ->(t) { ra = File.join(t, "kiosk-demo-getgrocery/lib/tasks/demo.rake")
+                    File.write(ra, File.read(ra).sub(/^(  task :rls do\n)/) { "#{$1}" }
+                                       .sub("    sh \"bundle exec rails db:drop db:create db:schema:load db:seed\"\n\n    # ── Step 2",
+                                            "    # ── Step 2"))
+                    rp = File.join(t, "kiosk-demo-prove/lib/tasks/demo.rake")
+                    File.write(rp, File.read(rp).sub("    sh \"RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load\"\n", "")) },
+      expect: %r{not ONE task anywhere owns a `db:drop db:create` other than} },
     { id:   "vacuity-cross-demo-reach-stops-matching", kind: :vacuity,
       what: "the required script stops running a `db:drop`, so the cross-demo rule silently " \
             "covers nothing and two READMEs read as complete",
@@ -538,7 +717,7 @@ if errors.empty?
   unless write
     # The tally names every rule and counts each one from what it actually
     # matched — no cardinal in this script is typed (K-1340, K-1378).
-    ids = REQUIREMENTS.map { |r| r[:id] } + %w[destructive server cross-demo]
+    ids = REQUIREMENTS.map { |r| r[:id] } + %w[destructive server cross-demo own-drops extra-drops]
     puts "check-demo-prereqs: OK — #{blocks} generated prerequisites block(s), " \
          "#{ids.length} requirement(s) derived from each demo's own files (" +
          ids.map { |id| "#{id}:#{fired[id]}" }.join(" ") + ")"

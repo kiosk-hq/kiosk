@@ -186,14 +186,13 @@
         paid       = order["paid"] == "t" || order["paid"] == true
         status     = order["status"].to_s
         scheduled  = %w[scheduled rescheduled].include?(status)
-        slot_raw   = order["slot_at"].to_s
-        slot_time  = begin
-          t = Time.parse(slot_raw)
-          t_end = t + 7200
-          "#{t.strftime("%a %-d %b, %H:%M")} – #{t_end.strftime("%H:%M")}"
-        rescue
-          slot_raw.empty? ? "—" : slot_raw
-        end
+        # THE WINDOW IS NOT COMPOSED HERE (K-1391). The controller renders it
+        # through DeliverySlots — the one writer `delivery_slots` and
+        # `my_orders` already answer from — so this page names the same hours,
+        # in the same zone, as the assistant was told. Re-parsing `slot_at` in
+        # the view printed the SERVER's hour and put the back office an hour
+        # off the customer.
+        slot_time  = order["slot_window"].to_s
         created    = begin
           Time.parse(order["created_at"].to_s).strftime("%-d %b %Y at %H:%M")
         rescue
@@ -227,7 +226,7 @@
             <% if order["address"] && !order["address"].empty? %>
               <span><span class="label">Address:</span> <%= h order["address"] %></span>
             <% end %>
-            <% if !slot_raw.empty? %>
+            <% if !slot_time.empty? %>
               <span><span class="label">Slot:</span> <%= slot_time %></span>
             <% end %>
             <span style="color:#bbb">Ordered <%= created %></span>

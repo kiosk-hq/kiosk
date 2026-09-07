@@ -134,10 +134,16 @@ module Kiosk
 
       # Human-readable description of the expected proof shape, echoed in the 400
       # hint (K-451 style — name the shape so the agent can self-correct).
+      #
+      # THE NONCE IS NAMED RELATIVE TO `alg`, not absolutely (K-1410). The
+      # schema types the nonce conditionally on the challenge's algorithm, so a
+      # hint that said «nonce: {indices…}» flatly would tell an operator running
+      # a backend of their own to send a shape their own verifier does not want.
       POW_SHAPE_HINT =
         "each Kiosk-PoW proof = " \
         "{challenge: <the challenge object from the 402, echoed verbatim>, " \
-        "nonce: {indices: […], header_nonce?}}; the header carries one proof as " \
+        "nonce: <the solution, in the shape the challenge's `alg` defines — " \
+        "for equihash, {indices: […], header_nonce?}>}; the header carries one proof as " \
         "raw JSON or a JSON array of proofs. " \
         "Solve each challenge issued in the pow_required 402 and echo it back verbatim."
 

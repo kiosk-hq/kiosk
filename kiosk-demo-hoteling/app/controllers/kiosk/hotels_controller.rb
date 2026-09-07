@@ -333,11 +333,14 @@ class Kiosk::HotelsController < ActionController::API
     limit = 1 if limit < 1
     limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
 
-    # A cursor is OPAQUE by contract and `Cursor.decode_offset` is deliberately
-    # lenient — garbage decodes to the first page. The clamp covers the one input
-    # it does not: a NEGATIVE offset, which Postgres answers with a 500.
+    # A cursor is OPAQUE BY CONTRACT — the assistant round-trips it and never
+    # parses or builds one — and since K-1403 `Cursor.decode_offset` holds the
+    # other side of that: an ABSENT cursor is the first page, and a cursor that
+    # is not one this endpoint issued is a typed 400 naming the parameter rather
+    # than a silent page one. It can no longer return a negative offset (the
+    # thing Postgres answered with a 500), so the clamp that used to guard it is
+    # gone with the lenience it was covering.
     offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
-    offset = 0 if offset.negative?
 
     # The filters, in the order they are applied — a refusal is raised where the
     # filter is read, so `{min_stars: "abc", max_price_cents: "abc"}` answers

@@ -474,8 +474,8 @@ if ARGV.include?("--self-test")
       rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
       what: "a demo that detects its host drops out of the declared set — K-860/K-883's shape on this construct",
       ops:  [[:edit, "bin/check-demo-copies",
-              "HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling skooti].freeze",
-              "HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling].freeze"]],
+              "HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze",
+              "HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling philslist stylish tudu].freeze"]],
       expect: /skooti: lib\/tasks\/demo\.rake detects a demo host but is not in the host-detection rule's declared/ },
     { id: "host-block-ships-gone", kind: :break,
       rule: "The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)",
@@ -3220,36 +3220,46 @@ end
 # fails here rather than becoming another copy nobody reasoned about, and a
 # listed demo that loses its last one fails too.
 #
-# `why:` FOR THE SET ITSELF, WHICH IT DID NOT CARRY (K-1379). Every COPIES entry
-# states a reason; this one named four demos and said nothing about the three it
-# leaves out, so a reader could not tell a decision from a half-finished sweep.
-# MEASURED at head, and the answer is: NOBODY DECIDED IT.
+# `why:` FOR THE SET ITSELF, WHICH IT DID NOT CARRY (K-1379), AND THE SET IS NOW
+# EVERY OPERATOR DEMO THAT BOOTS A SERVER (K-1400). Every COPIES entry states a
+# reason; this one named four demos and said nothing about the three it left out,
+# so a reader could not tell a decision from a half-finished sweep. MEASURED at
+# head then, and the answer was: NOBODY DECIDED IT.
 #
-#   * philslist, stylish and tudu are operator demos that boot servers, have a
+#   * philslist, stylish and tudu are operator demos that boot servers and have a
 #     deployed vanity host in `deploy/README.md` (`philslist.demo.kiosk.tech`,
 #     `stylish.demo.kiosk.tech`, `tudu.demo.kiosk.tech`, ports 3005-3007), and
-#     ship NO host-detection block: `command grep -c "host = begin"` over each
-#     one's `lib/tasks/demo.rake` -> 0, against 8 / 6 / 6 / 5 for the four
-#     listed. Their tasks hard-code `http://127.0.0.1:#{port}` and therefore
-#     print no hint that a vanity name exists.
+#     they shipped NO host-detection block: `command grep -c "host = begin"` over
+#     each one's `lib/tasks/demo.rake` -> 0, against 8 / 6 / 6 / 5 for the four
+#     listed. Their tasks hard-coded `http://127.0.0.1:#{port}` and therefore
+#     printed no hint that a vanity name existed.
 #   * There is nothing about them that makes the block inapplicable. It is
 #     opt-in on `KIOSK_DEMO_HOST_LOOKUP=1`, makes no outbound query otherwise,
-#     and falls back to loopback -- which is what those three do unconditionally.
-#   * The set is EXACTLY the four demos that carry a published `before-after.md`
+#     and falls back to loopback -- which is what those three did unconditionally.
+#   * The set was EXACTLY the four demos that carry a published `before-after.md`
 #     recording (`BEFORE_AFTER_FOUR` below is the same four names, arrived at
 #     independently). That is a correlation with the DOCUMENTS, not with any
-#     capability, and it is not chronological either: stylish predates two of the
-#     four. No ADR and no ledger row records a choice; K-1318 and K-1353 both
+#     capability, and it was not chronological either: stylish predates two of the
+#     four. No ADR and no ledger row recorded a choice; K-1318 and K-1353 both
 #     swept «all twenty-five blocks» and neither asked about the demos with none.
 #
-# So this set is a PARTIAL SWEEP as far as anything written down goes, and that
-# is what this `why:` records rather than dressing up. Extending the block to the
-# other three is a product-facing change to what an operator's run prints, so it
-# is filed rather than taken here (K-1379). Until someone decides, the four names
-# below are the demos that HAVE the construct, and the rule holds those four in
-# lockstep -- which is all it ever claimed to do.
+# THE DECISION, taken because the `why:` above could name no reason for the line
+# it drew: the block is now in all seven operator demos, sixteen further sites,
+# and `HOST_BLOCK_SHIPS` is the seven. WHAT AN OPERATOR'S RUN PRINTS CHANGED, and
+# that is the whole visible effect: a task in philslist, stylish or tudu that used
+# to say nothing now prints, once, «(using 127.0.0.1 — to reach
+# <demo>.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set
+# KIOSK_DEMO_HOST_LOOKUP=1)», and with that env var AND an /etc/hosts entry it
+# dials the vanity name instead of loopback. Nothing else moves: the lookup stays
+# opt-in so no run gains an outbound DNS query, the server is still BOUND to
+# 127.0.0.1 in every demo, and only the URL the harness dials (hence the `Host`
+# header) follows the name. The three demos' `config/environments/development.rb`
+# gained the `config.hosts <<` entry the block's own comment requires, without
+# which the printed /etc/hosts line would earn a Rails 8 HostAuthorization 403.
+# `kiosk-demo-prove` is deliberately NOT in the set: it is an ISSUER, not a Kiosk
+# operator, its rake file boots no server of its own, and a sibling boots it.
 HOST_BLOCK_REL   = "lib/tasks/demo.rake"
-HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling skooti].freeze
+HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 HOST_BLOCK_OPEN  = /\A(\s*)host = begin\s*\z/
 HOST_BLOCK_NAME  = "<demo>.demo.kiosk.tech"
 

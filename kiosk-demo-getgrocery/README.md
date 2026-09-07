@@ -32,6 +32,10 @@ this list and the code that needs it disagree.
 > `PGHOST` is exported, and then it is whatever host that names: the drop
 > follows it, and takes that server's `kiosk_getgrocery_development` instead.
 >
+> **`demo:rls` RUNS ITS OWN `db:drop db:create`**, rather than depending on
+> `demo:setup`, so skipping `demo:setup` does not spare `kiosk_getgrocery_development` — this task
+> drops and recreates it too.
+>
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
 >
 > **AND ONE TASK DROPS A SECOND DATABASE, IN ANOTHER DEMO.** `demo:agecheck`

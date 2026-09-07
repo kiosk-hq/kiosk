@@ -65,6 +65,17 @@ class Kiosk::BookingsController < ApplicationController
   # An action answers its own object. The five arguments come back echoed
   # because a confirmation an assistant reads back to its human has to name WHAT
   # was booked; `seating_at` is the absolute instant behind the (date, time).
+  #
+  # AND THE CONFIRMATION CARRIES `seating_label` FOR THE SAME REASON THE
+  # AVAILABILITY ROW DOES (K-1351). `date` and `time` here ECHO the caller's own
+  # arguments, and that was the argument for leaving them bare: a caller cannot
+  # be told its own words in a clock it did not mean. It is also exactly where
+  # the two sides may DISAGREE about which clock those words were in — a
+  # zoneless "20:00" is the restaurant's, per the guard above, whatever the
+  # assistant meant by it — and a booking confirmation is the artefact a human
+  # keeps. So the same zone-bearing rendering `availability` and `my_bookings`
+  # publish is on this row too, from the same {Seatings.label}: one label, one
+  # spelling, three surfaces.
   output_schema type: "object",
                 description: "The confirmed booking.",
                 additionalProperties: false,
@@ -76,13 +87,16 @@ class Kiosk::BookingsController < ApplicationController
                   date:                { type: "string", description: "The seating date, YYYY-MM-DD, #{Seatings::ZONE_NAME}." },
                   time:                { type: "string", description: "The seating time, HH:MM (24-hour), #{Seatings::ZONE_NAME} — " \
                                                                       "the table is there, so that is the clock. `seating_at` is the " \
-                                                                      "same instant with its resolved offset; `availability`'s " \
-                                                                      "`seating_label` is this time with the zone written beside it." },
+                                                                      "same instant with its resolved offset; `seating_label` is this " \
+                                                                      "time with the zone written beside it." },
+                  seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                      "e.g. \"20:00 (#{Seatings::ZONE_NAME})\". This is the line to " \
+                                                                      "read back to the human: `time` alone is a bare wall clock." },
                   seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
                   status:              { type: "string", description: "confirmed." },
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
-                             date time seating_at status]
+                             date time seating_label seating_at status]
   # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
   # ages into a 400 the day that seating passes, so `example_params` and
   # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
@@ -95,6 +109,7 @@ class Kiosk::BookingsController < ApplicationController
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
     seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
     status: "confirmed",
   })

@@ -113,6 +113,10 @@ class BookTableOperation
         party_size:          booking["party_size"].to_i,
         date:                date,
         time:                time,
+        # The zone-bearing rendering of the same wall clock (K-1351), from the
+        # SAME helper `availability` and `my_bookings` label their rows with, so
+        # the three surfaces cannot spell one seating three ways.
+        seating_label:       Seatings.label(time),
         seating_at:          seating_at.iso8601,
         status:              booking["status"],
       })

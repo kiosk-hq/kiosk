@@ -27,7 +27,7 @@ The reason incumbents stay at discovery is economic, not technical. A reservatio
 ## With Kiosk — atablefor (`rake demo:book` output)
 
 atablefor is a Rails 8.1 app that speaks Kiosk. Below is recorded stdout from
-`bundle exec rake demo:book` — **2026-08-26**, on a database prepared by
+`bundle exec rake demo:book` — **2026-09-07**, on a database prepared by
 `rake demo:setup`, which `demo:book` does not declare as a prerequisite and so
 never runs; that is why the declaration below reads `abridged: none`. What holds
 the block is `bin/check-demo-derivations`: every line in it must be a line one
@@ -40,20 +40,16 @@ forward daily, so they move with the day it is run — and the first line appear
 because this machine has no entry for the demo host, which is the branch the
 task takes on any checkout that has not added one.
 
-**That first line was re-spelled after the recording, and saying so is cheaper
-than pretending otherwise.** Where the recording printed `add to /etc/hosts:
-127.0.0.1 atablefor.demo.kiosk.tech`, this document carries the line the task
-prints today. The host lookup that line belongs to is now OPT-IN: unguarded, a
-local run of this task sent a DNS query for a `demo.kiosk.tech` subdomain on
-every invocation — an outbound query to the project's production domain, for a
-value the run discards on any machine without the hosts entry — so the query
-now happens only when `KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint
-had to name that variable as well as the hosts entry, because on its own the
-hosts entry no longer changes anything, and an instruction that does not do
-what it says is worse than no instruction. The run was not repeated for it and
-no other line in the block moved; `bin/check-demo-derivations` holds this
-line, like every other one here, to a literal the current rake task prints,
-which is what makes this note checkable rather than a promise.
+**Nothing in this block was re-spelled: it is one run, start to finish.** The
+2026-08-26 recording it replaces carried a repair note, because its first line
+had been edited by hand after the fact when the host lookup became opt-in
+(`KIOSK_DEMO_HOST_LOOKUP=1`), and later its `book_table` row went stale when
+that verb gained the zone-bearing `seating_label` the availability row already
+published. A hand-repaired line is checkable — `bin/check-demo-derivations`
+holds every line here to a literal the current rake task prints — but two
+repairs on one block is the point at which re-running the task is cheaper and
+more honest than repairing it again, so the block above is a fresh run and this
+paragraph is the whole of its provenance.
 
 <!-- derived: transcript | task: bundle exec rake demo:book | from: lib/tasks/demo.rake, script/book_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/dining_room_controller.rb, app/controllers/kiosk/bookings_controller.rb | abridged: none -->
 ```
@@ -64,14 +60,14 @@ which is what makes this note checkable rather than a promise.
 
 ── Running script/book_flow.rb ──
 
-{"http_register":201,"user_id":"43471b56-f279-443d-b711-6ea643bb2fbb","agent_id":"dc899ef2-bf49-4938-a498-4a9f5367164c","date":"2026-08-26","time":"20:00","party_size":2,"booking":{"booking_id":"d75567a9-ccdf-4b07-ba47-27d3fa718f19","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-08-26","time":"20:00","seating_at":"2026-08-26T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"d75567a9-ccdf-4b07-ba47-27d3fa718f19","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-08-26","seating_time":"20:00","seating_at":"2026-08-26T19:00:00.000+00:00"}]}
+{"http_register":201,"user_id":"c4478ae9-2d23-4222-a2d6-bf6114a2bc62","agent_id":"9dd975be-051b-4030-8f40-35e0b352b0b9","date":"2026-09-07","time":"20:00","party_size":2,"booking":{"booking_id":"93a5bda4-01b4-48dc-9562-72e0403bd780","restaurant_id":2,"restaurant_table_id":6,"party_size":2,"date":"2026-09-07","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"93a5bda4-01b4-48dc-9562-72e0403bd780","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":6,"table_label":"Nook 3","party_size":2,"status":"confirmed","seating_date":"2026-09-07","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T19:00:00.000+00:00"}]}
 
 ── Assertions ──
-  ✓  booking.booking_id present (d75567a9-ccdf-4b07-ba47-27d3fa718f19)
+  ✓  booking.booking_id present (93a5bda4-01b4-48dc-9562-72e0403bd780)
   ✓  booking.status == confirmed
   ✓  booking.party_size == 2 (a table for two)
-  ✓  my_bookings shows the confirmed booking (id=d75567a9-ccdf-4b07-ba47-27d3fa718f19)
-  ✓  the new booking is confirmed in the DB (id=d75567a9-ccdf-4b07-ba47-27d3fa718f19)
+  ✓  my_bookings shows the confirmed booking (id=93a5bda4-01b4-48dc-9562-72e0403bd780)
+  ✓  the new booking is confirmed in the DB (id=93a5bda4-01b4-48dc-9562-72e0403bd780)
   ✓  the booking pins a table + seating instant (restaurant_table_id + seating_at set)
 
   All assertions passed.
@@ -397,11 +393,12 @@ class Kiosk::BookingsController < ApplicationController
                   party_size:          { type: "integer" },
                   date:                { type: "string" },
                   time:                { type: "string" },
+                  seating_label:       { type: "string" },
                   seating_at:          { type: "string" },
                   status:              { type: "string" },
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
-                             date time seating_at status]
+                             date time seating_label seating_at status]
   # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
   # ages into a 400 the day that seating passes, so `example_params` and
   # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
@@ -414,6 +411,7 @@ class Kiosk::BookingsController < ApplicationController
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
     seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
     status: "confirmed",
   })

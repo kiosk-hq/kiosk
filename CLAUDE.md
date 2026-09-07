@@ -120,9 +120,14 @@ universal agent skill is `skill.md` on the same site.
   reads at runtime means adding it to `spec.files`. Its third rule is about the
   same reader rather than the same bytes: a PACKAGED file that teaches
   installing a Kiosk gem — a `gem "kiosk-…"` line, a `bundle add`, a `gem
-  install` — must point at the monorepo README's Install section, which is the
-  one place publication status is stated, because someone holding the built gem
-  has that file and nothing else. The pointer is DERIVED from that README (the
+  install` — must point at the monorepo README's Install section, which is
+  where publication status is stated CANONICALLY, because someone holding the
+  built gem has that file and nothing else. Canonically and not solely: the
+  kiosk.tech onboarding guide carries a DERIVED copy of that README's claim,
+  held to it word for word by `bin/check-onboarding-derivation`'s
+  `PUBLICATION_STATUS` rule — a «one place» that a second live page contradicts
+  is how a maintainer changes one file on publication day and leaves the other
+  saying no gem is published (K-1381). The pointer is DERIVED from that README (the
   canonical line's `github:` slug plus its own heading), so the day the gems are
   published the rule fails and asks to be restated rather than passing quietly;
   a mention that is prose about the resolver rather than an instruction is

@@ -167,6 +167,12 @@ GETGROCERY_WIRE_ARGUMENTS = "kiosk-demo-getgrocery/app/operations/wire_arguments
 # module function that local goes into, the constant that function bounds it
 # against, and the literal that constant is assigned (K-1359).
 GETGROCERY_CREATE_ORDER = "kiosk-demo-getgrocery/app/operations/create_order_operation.rb"
+# R16's two extra sources. The demo's delivery-window clock is the thing BOTH
+# write verbs refuse a stale window against, and the operations DIRECTORY is
+# read as a directory rather than as a list of names, so a verb that gains an
+# Operation is picked up instead of being silently uncovered (K-1366).
+GETGROCERY_DELIVERY_SLOTS = "kiosk-demo-getgrocery/app/models/delivery_slots.rb"
+GETGROCERY_OPERATIONS_DIR = "kiosk-demo-getgrocery/app/operations"
 # The engine's gemspec is the ONLY one that names Rails at all, so it is the
 # single authority for the floor an adopting operator has to clear (K-1320).
 SERVER_GEMSPEC = "kiosk-server/kiosk-server.gemspec"
@@ -174,8 +180,12 @@ SERVER_GEMSPEC = "kiosk-server/kiosk-server.gemspec"
 # is the same source `bin/check-demo-prereqs` derives its Ruby line from -- so
 # the page and the eight demo READMEs cannot drift apart (K-1321).
 CORE_GEMSPEC = "kiosk-core/kiosk-core.gemspec"
-# The one place either published repository states publication status and the
-# canonical install form; the page points at it and must agree with it (K-1319).
+# Where publication status and the canonical install form are stated
+# CANONICALLY (K-1319). The page points at this section AND carries a derived
+# copy of its claim, which R17 holds to these bytes -- the earlier wording here
+# and in the README said this was the ONE PLACE either published repository
+# states publication status while the page stated it three lines above its own
+# pointer at this file, so the claim was false the day it was written (K-1381).
 MONOREPO_README = "README.md"
 # The rescue seam the page teaches under «raise what you would raise anyway»,
 # and the file holding the sentences it renders INSTEAD of the exception's own
@@ -199,6 +209,51 @@ def repo_read(rel)
   File.read(path)
 end
 
+# Every `.rb` under one directory, keyed by basename. A DIRECTORY and not a
+# list of names: R16 resolves «which Operation does this verb hand its
+# arguments to» out of the controller, and a hand-kept file list would go stale
+# the moment a verb gained one -- silently, which is the shape this whole
+# script exists to refuse.
+def repo_read_dir(rel)
+  dir = File.join(ROOT, rel)
+  raise "derivation source directory missing: #{rel}" unless File.directory?(dir)
+
+  Dir[File.join(dir, "*.rb")].sort.to_h { |p| [File.basename(p), File.read(p)] }
+end
+
+# A FETCHED BODY IS BYTES, AND EVERY RULE BELOW COMPARES IT AS TEXT (K-1367).
+#
+# `Net::HTTP` hands back a body tagged ASCII-8BIT — it read a socket, and no
+# amount of `Content-Type: charset=utf-8` changes what Ruby tags the String
+# with. A file read off disk comes back UTF-8, so the file-backed modes never
+# met this; `--network` did, on EVERY run, and the first rule whose needle
+# carries a non-ASCII byte raised `Encoding::CompatibilityError` out of
+# `String#include?`. Unrescued, it escaped `run_rules` at rule 13 of 15, so the
+# three newest rules had never once been evaluated against the published page
+# and no summary was printed. It cannot manufacture a green — an unhandled
+# exception exits 1 — but a check that aborts two rules short while its own
+# output claims fifteen is not the check anybody thinks is running.
+#
+# So the body is decoded HERE, once, at the seam that produces it: the declared
+# charset when the response names one it knows, UTF-8 otherwise, and `scrub`
+# for bytes that are neither, because a page served with a broken byte is a
+# fact about the page and must reach the rules as text rather than as a crash.
+def decoded_body(res)
+  declared = begin
+    res.type_params["charset"]
+  rescue StandardError
+    nil
+  end
+  enc = begin
+    declared ? Encoding.find(declared) : Encoding::UTF_8
+  rescue ArgumentError
+    Encoding::UTF_8
+  end
+  text = res.body.to_s.dup.force_encoding(enc)
+  text = text.encode(Encoding::UTF_8, invalid: :replace, undef: :replace) unless enc == Encoding::UTF_8
+  text.valid_encoding? ? text : text.scrub
+end
+
 # GET with retries. A transient blip must not read as drift, so "could not
 # reach it" and "reached it and the bytes are wrong" stay different answers.
 def fetch(url, attempts: 3)
@@ -207,7 +262,7 @@ def fetch(url, attempts: 3)
     sleep(2**i) if i.positive?
     begin
       res = Net::HTTP.get_response(URI(url))
-      return [res.body, nil] if res.is_a?(Net::HTTPOK)
+      return [decoded_body(res), nil] if res.is_a?(Net::HTTPOK)
 
       last = "HTTP #{res.code}"
     rescue StandardError => e
@@ -1519,6 +1574,334 @@ def rule_total_guard(page, sources)
         bad.empty? ? provenance : bad.join(" | "))
 end
 
+# ── R16's derivation chain ───────────────────────────────────────────────────
+#
+# «A delivery day that is already gone is refused, and the window about to be
+# booked is re-checked against the clock» — walked out of this repository LINK
+# BY LINK, so no sentence, verb name, module name or method name below is typed
+# here (K-1366):
+#
+#   controller   def <verb> … <Class>.call(…)      -> the Operation it delegates to
+#   operations/  WireArguments.<fn>(…)             -> the guards that verb takes
+#   guard module def <fn> … DeliverySlots.<m>      -> the clock those guards read
+#   slot module  def past?(…, at: now)             -> the CLOCK reader (a keyword
+#                                                     default naming a nullary
+#                                                     method of the same module)
+#                slot_at(date, slot) <= at         -> the WINDOW reader
+#   guard module DeliverySlots.now.to_date         -> the DAY expression
+#
+# THE PAGE'S CONTROLLER IS STANDALONE by design and can name no `WireArguments`
+# of the demo's, so what it is held to is the COMPARISON, not the call: the day
+# expression must be an operand of one, and the window expression must be
+# compared with the clock. Both spellings a handler actually uses count — the
+# expression written at the comparison, or a local the same body binds to it —
+# because the origin's own operation binds `slot_at` to a local and hands it on,
+# and a rule that accepted only one of those would be a rule about formatting.
+
+# The first `module`/`class` a source declares — the name its callers spell.
+def declared_module(src)
+  m = masked(src).match(/^[ \t]*(?:module|class)[ \t]+([A-Z][A-Za-z0-9_:]*)/)
+  m && m[1]
+end
+
+# The body of one `def <name>`: its own line down to the next `def` at any
+# indentation, or the end of the source. Structure off the masked copy, text
+# off the original. `(?![A-Za-z0-9_])` and not `\b`, because a predicate's name
+# ends in `?` and `\b` does not fire between `?` and `(`.
+def method_body(src, name)
+  mask = masked(src)
+  at   = mask.index(/^[ \t]*def #{Regexp.escape(name)}(?![A-Za-z0-9_])/)
+  return nil if at.nil?
+
+  stop = mask.index(/^[ \t]*def /, at + 1) || mask.length
+  src[at...stop]
+end
+
+# `CreateOrderOperation` -> `create_order_operation.rb`: Rails' own autoload
+# mapping, which is why the file is there and not somewhere a list would have
+# to remember.
+def operation_file(class_name)
+  "#{class_name.gsub(/([a-z0-9])([A-Z])/, '\1_\2').downcase}.rb"
+end
+
+# Every `<GuardModule>.<fn>` a verb takes, DIRECTLY in its handler body and
+# through the Operation that body hands its arguments to. Both paths, because
+# this origin uses both: the read verb calls the guards itself, the write verbs
+# delegate first.
+def verb_wire_guards(controller_src, operations, guard_module)
+  mask = masked(controller_src)
+  out  = {}
+  declared_verbs(controller_src).each do |verb|
+    range = handler_body_range(mask, verb)
+    next if range.nil?
+
+    body  = mask[range]
+    calls = body.scan(/\b#{Regexp.escape(guard_module)}\.([a-z_][A-Za-z0-9_]*[?!]?)/).flatten
+    if (m = body.match(/\b([A-Z][A-Za-z0-9_]*)\.call\b/)) && (op = operations[operation_file(m[1])])
+      calls += masked(op).scan(/\b#{Regexp.escape(guard_module)}\.([a-z_][A-Za-z0-9_]*[?!]?)/).flatten
+    end
+    out[verb] = calls.uniq unless calls.empty?
+  end
+  out
+end
+
+# Every local a body binds to `expr_re`, so the same fact spelled through a
+# local is still the same fact.
+def bound_locals(body, expr_re)
+  body.scan(/^[ \t]*([a-z_][a-zA-Z0-9_]*)[ \t]*=[ \t]*(?:#{expr_re})/).flatten.uniq
+end
+
+# `expr_re`, or any local this body binds to it, as one alternation.
+def operand_regex(body, expr_re)
+  ([expr_re] + bound_locals(body, expr_re).map { |l| "#{Regexp.escape(l)}(?![A-Za-z0-9_])" }).join("|")
+end
+
+COMPARISON = '(?:<=|<|>=|>)'
+
+# Is `expr_re` an operand of SOME comparison in this body?
+def compared_at_all?(body, expr_re)
+  term = operand_regex(body, expr_re)
+  body.match?(/(?:#{term})[ \t]*#{COMPARISON}/) || body.match?(/#{COMPARISON}[ \t]*(?:#{term})/)
+end
+
+# Are `left_re` and `right_re` the two operands of one comparison, either way
+# round?
+def compared_with?(body, left_re, right_re)
+  l = operand_regex(body, left_re)
+  r = operand_regex(body, right_re)
+  body.match?(/(?:#{l})[ \t]*#{COMPARISON}[ \t]*(?:#{r})/) ||
+    body.match?(/(?:#{r})[ \t]*#{COMPARISON}[ \t]*(?:#{l})/)
+end
+
+# The whole chain, or the reason there is none.
+#
+# @return [Array(Hash, String, nil), Array(nil, nil, String)]
+def derived_window_guards(sources)
+  guard_mod = declared_module(sources[:wire_arguments])
+  slot_mod  = declared_module(sources[:delivery_slots])
+  return [nil, nil, "#{GETGROCERY_WIRE_ARGUMENTS} declares no module"] if guard_mod.nil?
+  return [nil, nil, "#{GETGROCERY_DELIVERY_SLOTS} declares no module"] if slot_mod.nil?
+
+  # THE CLOCK READER, from the slot module's own signatures: a keyword
+  # parameter whose DEFAULT names a nullary method of the same module is that
+  # module saying «this is where I read now from».
+  slots_mask = masked(sources[:delivery_slots])
+  # `\b` before the parameter name is load-bearing: without it the greedy
+  # `[^)\n]*` stops one character INSIDE the name (`at:` reads as `t:`), which
+  # still captures the right default here and would not on the next signature.
+  clock = slots_mask.scan(/^[ \t]*def [a-z_][A-Za-z0-9_?!]*\([^)\n]*\b[a-z_][A-Za-z0-9_]*:[ \t]*([a-z_][A-Za-z0-9_]*)[,)]/)
+                    .flatten.uniq
+  return [nil, nil, "no method of #{slot_mod} defaults a keyword argument to another of its methods, " \
+                    "so the clock those guards read cannot be resolved"] if clock.size != 1
+
+  clock = clock.first
+  return [nil, nil, "#{slot_mod} names `#{clock}` as a keyword default but declares no `def #{clock}`"] \
+    if method_body(sources[:delivery_slots], clock).nil?
+
+  # THE PREDICATE AND THE WINDOW READER: the method of the slot module that
+  # compares a call of its own against that keyword argument.
+  pred = window = nil
+  slots_mask.enum_for(:scan, /^[ \t]*def ([a-z_][A-Za-z0-9_?!]*)\([^)\n]*\b([a-z_][A-Za-z0-9_]*):[ \t]*#{Regexp.escape(clock)}[,)]/)
+            .each do
+    name, kw = Regexp.last_match(1), Regexp.last_match(2)
+    body     = method_body(sources[:delivery_slots], name)
+    next if body.nil?
+
+    m = masked(body).match(/([a-z_][A-Za-z0-9_]*)\([^()\n]*\)[ \t]*#{COMPARISON}[ \t]*#{Regexp.escape(kw)}(?![A-Za-z0-9_])/)
+    next if m.nil?
+
+    pred, window = name, m[1]
+    break
+  end
+  return [nil, nil, "no method of #{slot_mod} compares one of its own readers against that clock, " \
+                    "so the window expression cannot be resolved"] if pred.nil?
+
+  # THE DAY EXPRESSION: the chain the guard module applies to the clock. One
+  # spelling across the whole guard module or this says so — two would leave no
+  # single fact to hold the page to, exactly as two Rails floors leave none.
+  suffixes = masked(sources[:wire_arguments])
+             .scan(/#{Regexp.escape(slot_mod)}\.#{Regexp.escape(clock)}((?:\.[a-z_][A-Za-z0-9_]*)+)/)
+             .flatten.uniq
+  return [nil, nil, "#{guard_mod} never reads #{slot_mod}.#{clock}, so there is no day expression " \
+                    "to hold the page to"] if suffixes.size != 1
+
+  day = "#{slot_mod}.#{clock}#{suffixes.first}"
+
+  # WHICH VERB TAKES WHICH FACT. A guard that reads the day expression is a DAY
+  # refusal; one that reaches the predicate is a WINDOW refusal. A guard that
+  # does neither (a uuid shape, a served district, a cart) is not this rule's.
+  guards = verb_wire_guards(sources[:storefront], sources[:operations], guard_mod)
+           .merge(verb_wire_guards(sources[:orders], sources[:operations], guard_mod)) { |_k, a, b| (a + b).uniq }
+  facts = {}
+  guards.each do |verb, fns|
+    seen = []
+    fns.each do |fn|
+      body = method_body(sources[:wire_arguments], fn)
+      next if body.nil?
+
+      mb = masked(body)
+      seen << :day    if mb.include?(day)
+      seen << :window if mb.match?(/#{Regexp.escape(slot_mod)}\.#{Regexp.escape(pred)}(?![A-Za-z0-9_])/)
+    end
+    facts[verb] = seen.uniq unless seen.empty?
+  end
+  return [nil, nil, "no verb of #{GETGROCERY_STOREFRONT} / #{GETGROCERY_ORDERS} reaches a #{guard_mod} " \
+                    "guard that refuses a stale day or a stale window"] if facts.empty?
+
+  [{ facts: facts, day: day, window: "#{slot_mod}.#{window}", clock: "#{slot_mod}.#{clock}" },
+   "#{GETGROCERY_ORDERS} -> app/operations -> #{guard_mod} -> #{slot_mod}.#{pred} " \
+   "(day #{day}, window #{slot_mod}.#{window} vs #{slot_mod}.#{clock})"]
+end
+
+# R16 -- every worked write verb REFUSES a delivery day that has passed and
+# RE-CHECKS the window it is about to book, exactly as the origin does
+# (K-1366).
+#
+# THE DEFECT THIS CLOSES: the page's `create_order` parsed `delivery_date` with
+# `Date.parse`, computed `slot_at` from it and wrote the row — no past-day check
+# and no re-validation of the window — and its `reschedule_delivery` did the
+# same. Three lines above, the page's OWN comment beside `example_params` says a
+# literal there «would publish a `delivery_date` this action refuses as past»,
+# which was a sentence about code that refused nothing. getgrocery refuses BOTH
+# limbs on BOTH verbs, and its `delivery_slots` hides a window whose start has
+# passed — so an operator copying this page shipped a pair of write verbs that
+# book a slot their own read verb would never have offered.
+#
+# NO RULE ABOVE COULD REACH IT, and each for its own reason: WRITE_REQUIRED
+# compares required LISTS, PROPERTY_KEYWORDS compares declared KEYWORDS, and a
+# «day already gone» is expressible as neither — the domain rolls forward every
+# midnight, which is why the origin states it as a handler refusal and not as an
+# `enum`. TOTAL_GUARD is the nearest neighbour (a computed value no declared
+# property can carry) and its subject is the cart sum.
+def rule_past_window(page, sources)
+  chain, provenance, why = derived_window_guards(sources)
+  return vacuous!("PAST_WINDOW", why) if chain.nil?
+
+  ruby     = page_ruby(page)
+  mask     = masked(ruby)
+  on_page  = declared_verbs(ruby)
+  subjects = chain[:facts].select { |verb, _| on_page.include?(verb) }
+  if subjects.empty?
+    return vacuous!("PAST_WINDOW",
+                    "the page declares none of the verb(s) that take a stale-window refusal on this " \
+                    "origin (#{chain[:facts].keys.sort.join(", ")})")
+  end
+
+  day_re    = "#{Regexp.escape(chain[:day])}(?![A-Za-z0-9_])"
+  window_re = "#{Regexp.escape(chain[:window])}\\([^()\\n]*\\)"
+  clock_re  = "#{Regexp.escape(chain[:clock])}(?![.A-Za-z0-9_])"
+
+  derived = 0
+  bad     = []
+  subjects.sort.each do |verb, facts|
+    range = handler_body_range(mask, verb)
+    if range.nil?
+      bad << "#{verb} is declared on the page but has no handler body to read"
+      next
+    end
+
+    body = mask[range]
+    facts.each do |fact|
+      derived += 1
+      case fact
+      when :day
+        next if compared_at_all?(body, day_re)
+
+        bad << "#{verb} never compares anything against #{chain[:day]}, so it books a delivery day " \
+               "that is already gone -- getgrocery refuses it by name"
+      when :window
+        next if compared_with?(body, window_re, clock_re)
+
+        bad << "#{verb} never compares #{chain[:window]}(...) against #{chain[:clock]}, so it books a " \
+               "window that has already begun -- getgrocery re-validates it on this verb"
+      end
+    end
+  end
+
+  check("PAST_WINDOW",
+        bad.empty?,
+        "#{subjects.size} worked write verb(s) (#{subjects.keys.sort.join(", ")}) refuse a stale day " \
+        "and a stale window (#{derived} refusal(s) derived)",
+        bad.empty? ? provenance : bad.join(" | "))
+end
+
+# ── R17's derivation ─────────────────────────────────────────────────────────
+#
+# The monorepo README states publication status CANONICALLY, and the page
+# carries a DERIVED COPY of that sentence plus a pointer to where it is stated
+# (K-1381). Before this rule the README claimed to be «the one place in either
+# published repository that states publication status» while the page stated it
+# too, three lines above its own pointer at that section — the two agreed, so no
+# reader was misled today, and on publication day a maintainer who believes the
+# «one place» sentence changes one file and leaves a live page saying no gem is
+# published.
+#
+# WHAT IS DERIVED: the claim's own words, the section that carries it, and the
+# URL of that section — all read out of README.md, none of them typed here. The
+# page is held to the WORDS because that is what makes it a copy rather than a
+# second statement: reword the canonical sentence and the page is red until it
+# carries the new one.
+
+# The `## Heading` a byte offset falls under, and its GitHub anchor slug.
+def readme_section_at(readme_src, at)
+  head = readme_src[0...at].scan(/^##[ \t]+(.+)$/).flatten.last
+  return nil if head.nil?
+
+  [head.strip, head.strip.downcase.gsub(/[^a-z0-9 -]/, "").tr(" ", "-")]
+end
+
+# The publication-status claim the README states in the section its canonical
+# install line lives in: the first **bolded** run of that section, which is how
+# that section opens and what a reader meets first.
+#
+# @return [Array(String, String, String), nil] claim, heading, anchor
+def readme_publication_status(readme_src)
+  at = readme_src.index(/^gem[ \t]+"kiosk-all"/)
+  return nil if at.nil?
+
+  section = readme_section_at(readme_src, at)
+  return nil if section.nil?
+
+  head, anchor = section
+  from = readme_src.index(/^##[ \t]+#{Regexp.escape(head)}$/)
+  to   = readme_src.index(/^##[ \t]+/, from + 1) || readme_src.length
+  m    = readme_src[from...to].match(/\*\*([^*\n]+)\*\*/)
+  return nil if m.nil?
+
+  [m[1].strip.sub(/[.!]\z/, ""), head, anchor]
+end
+
+# R17 -- the page carries the README's publication-status sentence, and names
+# the section it is stated in (K-1381).
+def rule_publication_status(page, sources)
+  status = readme_publication_status(sources[:readme])
+  if status.nil?
+    return vacuous!("PUBLICATION_STATUS",
+                    "#{MONOREPO_README} states no **bolded** publication-status claim in the section " \
+                    "its canonical `gem \"kiosk-all\"` line lives in -- if the gems have shipped and the " \
+                    "claim is gone, restate this rule rather than leaving it matching nothing")
+  end
+
+  claim, head, anchor = status
+  canonical = canonical_install_source(sources[:readme])
+  if canonical.nil? || canonical[0] != "github"
+    return vacuous!("PUBLICATION_STATUS",
+                    "#{MONOREPO_README}'s canonical install line names no `github:` source, so the URL " \
+                    "of its «#{head}» section cannot be derived")
+  end
+
+  url = "https://github.com/#{canonical[1]}##{anchor}"
+  bad = []
+  bad << "the page does not carry #{MONOREPO_README}'s claim «#{claim}» -- it is stated canonically " \
+         "there and copied here, so a reword there is a reword here" unless page.include?(claim)
+  bad << "the page never names #{url}, the section that states it" unless page.include?(url)
+
+  check("PUBLICATION_STATUS",
+        bad.empty?,
+        "the page carries «#{claim}» and points at #{url}",
+        bad.empty? ? "derived from #{MONOREPO_README} (section «#{head}»)" : bad.join(" | "))
+end
+
 RULES = [
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
@@ -1535,6 +1918,8 @@ RULES = [
   [:rule_error_redaction,    "ERROR_REDACTION",     "derivation", "what the rescue seam sends INSTEAD of the exception's own message, and the class it re-raises untouched"],
   [:rule_property_keywords,  "PROPERTY_KEYWORDS",   "derivation", "the JSON Schema assertion keywords getgrocery declares on every property both sides declare, array ELEMENTS included, each Ruby constant resolved to the literal it is assigned"],
   [:rule_total_guard,        "TOTAL_GUARD",         "derivation", "the ceiling getgrocery refuses an unpriceable cart at, walked from the summed total in its create operation to the constant the guard bounds it by -- a COMPUTED value no declared-property rule can reach"],
+  [:rule_past_window,        "PAST_WINDOW",         "derivation", "which verbs refuse a delivery day that has already gone and re-check the window they book, walked from each verb's Operation through the wire-argument guards to the clock reader those guards compare against"],
+  [:rule_publication_status, "PUBLICATION_STATUS",  "derivation", "the publication-status claim the monorepo README states canonically, and the URL of the section that states it"],
 ].freeze
 
 def load_sources
@@ -1545,6 +1930,8 @@ def load_sources
 uuid_check:      repo_read(GETGROCERY_UUID_CHECK),
 wire_arguments:  repo_read(GETGROCERY_WIRE_ARGUMENTS),
 create_order_op: repo_read(GETGROCERY_CREATE_ORDER),
+delivery_slots:  repo_read(GETGROCERY_DELIVERY_SLOTS),
+operations:      repo_read_dir(GETGROCERY_OPERATIONS_DIR),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
     readme:          repo_read(MONOREPO_README),
@@ -1567,8 +1954,10 @@ def run_list
   puts "Derivation sources:"
   [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
    GETGROCERY_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS, GETGROCERY_CREATE_ORDER,
+   GETGROCERY_DELIVERY_SLOTS, GETGROCERY_OPERATIONS_DIR,
    SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
-    puts "  #{File.exist?(File.join(ROOT, rel)) ? "present" : "MISSING"}  #{rel}"
+    path = File.join(ROOT, rel)
+    puts "  #{File.exist?(path) ? "present" : "MISSING"}  #{rel}"
   end
   0
 end
@@ -1610,6 +1999,67 @@ ensure
   $stdout = old
 end
 
+# A plant confined to ONE verb's own region of the RAW page: its `def` line to
+# the next `def`. R16's defect was one verb losing a refusal its SIBLING still
+# carried, so a page-wide `gsub` would go red for the wrong reason and would
+# never exercise the per-verb scoping the rule is written with -- a rule that
+# only asked «does this page mention the clock anywhere» stays GREEN on the
+# plant below, which is the whole point of aiming it at one region.
+def plant_in_verb(page, verb)
+  at = page.index(/^[ \t]*def #{Regexp.escape(verb)}[ \t]*$/)
+  return page if at.nil?
+
+  stop = page.index(/^[ \t]*def /, at + 1) || page.length
+  page[0...at] + yield(page[at...stop]) + page[stop..]
+end
+
+# ── THE NETWORK READER'S OWN ARMS (K-1367) ───────────────────────────────────
+#
+# EVERY OTHER ARM IN THIS FILE IS FILE-BACKED, and that is exactly why the
+# `--network` crash lived as long as it did: a file read off disk comes back
+# tagged UTF-8, a socket read comes back tagged ASCII-8BIT, and nothing can
+# tell the two apart until a needle carries a non-ASCII byte -- at which point
+# `String#include?` raises `Encoding::CompatibilityError` rather than answering.
+# It aborted `run_rules` at rule 13 of 15, unconditionally, on every `--network`
+# run there has ever been.
+#
+# So these arms drive `resolve_page` through the REAL network branch, with the
+# response `Net::HTTP` actually hands back, and assert BOTH halves: that what
+# comes out is text every rule can compare, and that a break planted in those
+# BYTES is still caught. The second half is what stops the repair degenerating
+# into «return something that never raises» -- an empty string satisfies the
+# first half and holds nothing.
+#
+# No socket is opened: `Net::HTTP.get_response` is aliased away for the
+# duration and put back afterwards. `KIOSK_TECH_DIR` comes off for the same
+# duration because it is resolved BEFORE `--network` and the CI leg sets it.
+def with_stubbed_response(bytes, charset: "utf-8")
+  res = Net::HTTPOK.new("1.1", "200", "OK")
+  res["content-type"] = "text/html#{charset ? "; charset=#{charset}" : ""}"
+  res.instance_variable_set(:@body, bytes)
+  res.instance_variable_set(:@read, true)
+  Net::HTTP.singleton_class.send(:alias_method, :kiosk_self_test_get_response, :get_response)
+  Net::HTTP.define_singleton_method(:get_response) { |*_a, **_k| res }
+  env = ENV.delete("KIOSK_TECH_DIR")
+  yield
+ensure
+  Net::HTTP.singleton_class.send(:alias_method, :get_response, :kiosk_self_test_get_response)
+  Net::HTTP.singleton_class.send(:remove_method, :kiosk_self_test_get_response)
+  ENV["KIOSK_TECH_DIR"] = env if env
+end
+
+# What `--network` gets back for a given set of bytes, without a network.
+def network_resolved(bytes)
+  out = nil
+  with_stubbed_response(bytes) { out = resolve_page(explicit: nil, network: true) }
+  out
+end
+
+def network_arm(label, ok, detail)
+  puts format("  %s  %-48s %s", ok ? "ok  " : "FAIL", label, detail)
+  ok
+end
+
 # Every value the plants and the fixture are built from, read out of the repo.
 def derived_facts(sources)
   handlers = handler_names(sources[:generator]).first
@@ -1642,6 +2092,14 @@ def derived_facts(sources)
     # chain empties this and the self-test SAYS so instead of building a fixture
     # that agrees with nothing.
     ceiling: derived_total_ceiling(sources).first,
+    # K-1366: which verbs owe a stale-day / stale-window refusal, and the three
+    # expressions they owe it in. Derived, so the fixture below writes the
+    # origin's own spelling and the plants aim at text R16 actually reads.
+    window: derived_window_guards(sources).first,
+    # K-1381: the publication-status claim the README states canonically, its
+    # section and that section's anchor -- the fixture carries the derived copy
+    # R17 holds the page to.
+    publication: readme_publication_status(sources[:readme]),
     # K-1360: every verb's property ASSERTION KEYWORDS, array elements
     # included, and the constant table they resolve through. The fixture writes
     # these into the page it builds, which is what makes the fixture mode a
@@ -1719,6 +2177,20 @@ def fixture_property_lines(names, assertions, consts, indent)
   end.join("\n")
 end
 
+# R16's pair of refusals as the fixture writes them: the DAY compared against
+# the day expression, and the WINDOW compared against the clock, both in the
+# spelling `derived_window_guards` resolved out of getgrocery. `&lt;` and
+# `&gt;` because the fixture is HTML the same `page_ruby` decodes — a raw `<`
+# here would not survive the round trip the real page takes.
+def fixture_window_guard(f)
+  w = f[:window]
+  return "" if w.nil?
+
+  ["    return if requested_day &lt; #{w[:day]}",
+   "    slot_start = #{w[:window]}(requested_day, 1)",
+   "    return if slot_start &lt;= #{w[:clock]}"].join("\n")
+end
+
 # A minimal page that satisfies every rule by construction, so the arms
 # below are testing the RULES rather than the fixture.
 def fixture_page(f)
@@ -1726,6 +2198,12 @@ def fixture_page(f)
   props     = fixture_property_lines(f[:properties], f[:assertions][WORKED_VERB] || {}, f[:consts],
                                      " " * 17)
   reads     = f[:integers].map { |n| "    #{n} = whole_number(params[:#{n}])" }.join("\n")
+  # R16's two refusals, in the origin's own spelling (K-1366). Every fixture
+  # handler carries them because the SUBJECT list is derived at run time -- a
+  # fixture that guessed which verbs owe them would make the rule vacuous for
+  # the rest, which is the "passes by covering less" shape the fixture exists
+  # to avoid.
+  window    = fixture_window_guard(f)
   ruby_verb = <<~RUBY
     class #{f[:handlers].first} &lt; ApplicationController
       include Kiosk::Handler
@@ -1739,6 +2217,7 @@ def fixture_page(f)
       example_params({})
       def #{WORKED_VERB}
     #{reads}
+    #{window}
         Date.parse(params[:#{f[:optional].first}].to_s)
       end
     end
@@ -1751,8 +2230,13 @@ def fixture_page(f)
   # the same "passes by covering less" shape the fixture mode exists to avoid.
   errors_ns = reraised_class(f[:seam]).to_s.sub(/::Base\z/, "")
   hint      = f[:hints].values.first
+  # R17's derived copy (K-1381): the README's own claim, and the URL of the
+  # section that states it. Both read out of README.md, so a reword there makes
+  # the fixture carry the new sentence rather than a stale one.
+  status_url = "https://github.com/#{f[:install][1]}##{f[:publication][2]}"
   [%(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
    %(<p>Needs Rails #{f[:rails]} and Ruby #{f[:ruby]}.</p>),
+   %(<p>#{f[:publication][0]}. Publication status is stated once, at <a href="#{status_url}">#{status_url}</a>.</p>),
    %(<p>Raise what you would raise anyway: the caller is sent "#{hint}" in place of your
       exception's own sentence, and #{errors_ns} is the route you speak deliberately through.</p>),
    %(<pre><code class="language-ruby">#{gemfile}</code></pre>),
@@ -1788,6 +2272,7 @@ def fixture_write_surface(f)
         example_params({})
         def #{verb}
       #{reads}
+      #{fixture_window_guard(f)}
         end
     VERB
   end
@@ -1801,7 +2286,7 @@ def run_self_test
   if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? ||
      f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil? ||
      f[:orders_schemas].empty? || f[:arrays].empty? || f[:seam].nil? || f[:hints].empty? ||
-     f[:ceiling].nil?
+     f[:ceiling].nil? || f[:window].nil? || f[:publication].nil?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -2003,6 +2488,36 @@ def run_self_test
                                      }),
                         sources, "TOTAL_GUARD")
 
+  # K-1366's shape, both limbs, planted in ONE verb's region so the arm also
+  # proves the rule is per-verb rather than page-wide: every other handler
+  # still carries both refusals while this one loses them.
+  window_verb = f[:window][:facts].find { |v, facts| page_ruby(page).match?(/^[ \t]*def #{Regexp.escape(v)}[ \t]*$/) && facts.include?(:window) }
+  if window_verb.nil?
+    warn "self-test cannot derive its K-1366 plants: no verb of " \
+         "#{f[:window][:facts].keys.join(", ")} is declared on the page with a window refusal"
+    return 1
+  end
+  window_verb = window_verb.first
+  arms << self_test_arm("#{window_verb} stops refusing a day that is already gone",
+                        planted.call("day refusal in #{window_verb}", page,
+                                     plant_in_verb(page, window_verb) { |r| r.gsub(f[:window][:day], "#{f[:window][:day]}_planted") }),
+                        sources, "PAST_WINDOW")
+  arms << self_test_arm("#{window_verb} stops re-checking the window it books",
+                        planted.call("window refusal in #{window_verb}", page,
+                                     plant_in_verb(page, window_verb) { |r| r.gsub("#{f[:window][:window]}(", "#{f[:window][:window]}_planted(") }),
+                        sources, "PAST_WINDOW")
+  # K-1381's shape, both halves: the page stops carrying the README's claim,
+  # and the page stops pointing at the section that states it.
+  status_url = "https://github.com/#{f[:install][1]}##{f[:publication][2]}"
+  arms << self_test_arm("the page drops the README's publication-status claim",
+                        planted.call("publication claim", page,
+                                     page.gsub(f[:publication][0], "Kiosk gems install from git")),
+                        sources, "PUBLICATION_STATUS")
+  arms << self_test_arm("the page stops pointing at the section that states it",
+                        planted.call("canonical section url", page,
+                                     page.gsub(status_url, "the reference monorepo")),
+                        sources, "PUBLICATION_STATUS")
+
   puts "── vacuity (derivation side blanked) ──"
   # The resolution K-1354 put in place of a printed note: rename the constant
   # where it is DEFINED, and the declaration citing it stops resolving. The rule
@@ -2082,6 +2597,67 @@ def run_self_test
   planted.call("getgrocery's create operation no longer sums", sources[:create_order_op], no_sum)
   arms << self_test_arm("getgrocery's create operation sums no total", page,
                         sources.merge(create_order_op: no_sum), "TOTAL_GUARD")
+  # R16's chain is rooted in the slot module's own clock reader. Rename it at
+  # its DEFINITION and every guard that reads it still names it, so the chain
+  # resolves to nothing -- which the rule must SAY rather than pass over.
+  no_clock = sources[:delivery_slots].sub(/^(\s*)def now$/, "\\1def clock_renamed")
+  planted.call("the slot module's clock reader renamed at its definition",
+               sources[:delivery_slots], no_clock)
+  arms << self_test_arm("the slot module declares no clock reader", page,
+                        sources.merge(delivery_slots: no_clock), "PAST_WINDOW")
+  # R17 reads a **bolded** claim out of the README's install section. Strip the
+  # emphasis and there is no canonical claim to copy -- red, naming itself,
+  # rather than a page held to a sentence nobody states.
+  no_claim = sources[:readme].gsub("**", "")
+  planted.call("the README's bold emphasis removed", sources[:readme], no_claim)
+  arms << self_test_arm("the README states no bolded publication-status claim", page,
+                        sources.merge(readme: no_claim), "PUBLICATION_STATUS")
+
+  # ── the network reader (K-1367) ────────────────────────────────────────────
+  puts
+  puts "── the --network reader, on the body Net::HTTP actually returns ──"
+  binary = page.dup.force_encoding(Encoding::BINARY)
+  got, provenance_net, reason_net = network_resolved(binary)
+  decoded = !got.nil? && got.encoding == Encoding::UTF_8 && got.valid_encoding?
+  clean   = false
+  crash   = nil
+  if decoded
+    FAILURES.clear
+    begin
+      quiet { run_rules(got, sources) }
+      clean = FAILURES.empty?
+    rescue StandardError => e
+      crash = "#{e.class}: #{e.message}"
+    end
+  end
+  arms << network_arm("an ASCII-8BIT body reaches every rule as text",
+                      decoded && clean,
+                      if !decoded
+                        "!! resolve_page returned #{got.nil? ? reason_net.to_s : got.encoding.to_s}"
+                      elsif crash
+                        "!! #{RULES.size} rules did not run: #{crash}"
+                      elsif !clean
+                        "!! #{FAILURES.size} rule(s) red through the network reader that are green off disk"
+                      else
+                        "-> #{RULES.size} rules ran over #{provenance_net}"
+                      end)
+  # And the bytes are really COMPARED: an empty string would satisfy the arm
+  # above and hold nothing.
+  drifted_bytes = page.gsub("Rails #{f[:rails]}", "Rails 7.1")
+  planted.call("Rails floor, through the network reader", page, drifted_bytes)
+  got2, = network_resolved(drifted_bytes.dup.force_encoding(Encoding::BINARY))
+  caught = false
+  unless got2.nil?
+    FAILURES.clear
+    begin
+      quiet { run_rules(got2, sources) }
+      caught = FAILURES.any? { |x| x.start_with?("RAILS_FLOOR:") }
+    rescue StandardError => e
+      crash = "#{e.class}: #{e.message}"
+    end
+  end
+  arms << network_arm("a break planted in those BYTES still goes red", caught,
+                      caught ? "-> RAILS_FLOOR" : "!! RAILS_FLOOR stayed green#{crash ? " (#{crash})" : ""}")
 
   FAILURES.clear
   puts

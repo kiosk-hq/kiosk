@@ -9,9 +9,18 @@ tables below answers HTTP 404 from `https://rubygems.org/api/v1/gems/<name>.json
 against a control of `rails` → HTTP 200; this repository carries no release tag,
 and no gemspec sets `allowed_push_host`. So a bare `gem "kiosk-all"`, and
 `bundle add` of any of these names, do **not** resolve today — **git is the only
-install that works.** This section is the one place in either published
-repository that states publication status; every install snippet elsewhere
-points here.
+install that works.** This section is where publication status is stated
+**canonically** — the one place either published repository decides it — and
+every install snippet elsewhere points here instead of restating it.
+
+One sentence is copied rather than pointed at, deliberately: the onboarding
+guide on kiosk.tech carries the bolded claim above and a link back to this
+section, because a reader deciding whether to start an integration should not
+have to leave the page to find out the gems are not published. That copy is
+DERIVED and not remembered — `bin/check-onboarding-derivation`'s
+`PUBLICATION_STATUS` rule reads the claim out of this file and fails until the
+page carries it word for word, so rewording it here reddens the page instead of
+leaving a live page saying something this repository no longer says.
 
 The canonical install is one line — the meta-gem, from git:
 

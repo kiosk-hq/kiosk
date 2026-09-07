@@ -52,10 +52,14 @@
 #      and B: someone holding the built gem has this file and nothing else, so
 #      an unqualified `bundle add kiosk-all` in it is an instruction that
 #      answers 404 with no way to find out why. The monorepo README says of its
-#      own Install section that it «is the one place in either published
-#      repository that states publication status; every install snippet
-#      elsewhere points here» — this rule is what makes that sentence true
-#      rather than hopeful. It is a THIRD invariant behind this exit code
+#      own Install section that it is «where publication status is stated
+#      canonically … and every install snippet elsewhere points here instead of
+#      restating it» — this rule is what makes that sentence true rather than
+#      hopeful. (It used to say «the one place in either published repository
+#      that states publication status», which was false the day it was written:
+#      the onboarding page states it too, and now carries a DERIVED copy that
+#      `bin/check-onboarding-derivation` holds to this README — K-1381.)
+#      It is a THIRD invariant behind this exit code
 #      because its SUBJECT is the same one: what a RubyGems reader receives.
 #
 # WHY BOTH. A alone passes a gem that packages every file it owns and then
@@ -379,8 +383,8 @@ Dir.mktmpdir do |tmp|
       errors << "#{gem}: `#{rel}` is IN THE BUILT GEM and teaches an install of a Kiosk gem, but " \
                 "does not point at #{install_ref}. No Kiosk gem is on RubyGems, so a reader who " \
                 "has only this package follows an instruction that answers 404 and has nowhere to " \
-                "find out why. Add the pointer to that section — it is the one place publication " \
-                "status is stated — or, if this occurrence is prose ABOUT the resolver rather " \
+                "find out why. Add the pointer to that section — it is where publication status " \
+                "is stated canonically — or, if this occurrence is prose ABOUT the resolver rather " \
                 "than a snippet anyone will copy, declare it in INSTALL_MENTION_ONLY in " \
                 "bin/check-gem-packaging with the reason."
     end

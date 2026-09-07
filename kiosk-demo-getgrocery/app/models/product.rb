@@ -4,9 +4,10 @@
 # never by the numeric primary key: that key is not a param of any verb, so
 # publishing it would be a dead field an assistant can only guess at.
 class Product < ApplicationRecord
-  # Stock at or below this earns the `low` flag on a catalog row. It used to be
-  # a top-level constant in the initializer, next to the handler that read it;
-  # it belongs to the thing it is a fact about.
+  # Stock at or below this earns the `low` flag on a catalog row. It lives on
+  # the model because it is a fact about a PRODUCT rather than about the surface
+  # that renders one: {low_stock?} reads it here, and so does every caller that
+  # decides whether a line is running out.
   LOW_STOCK_THRESHOLD = 5
 
   # What `catalog` publishes. Out-of-stock lines are HIDDEN rather than marked —

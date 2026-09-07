@@ -95,7 +95,7 @@ class Kiosk::DiningRoomController < ApplicationController
                                                                         "#{Seatings::ZONE_NAME}, so the wall clock is the restaurant's " \
                                                                         "and not the caller's; `seating_at` carries the same instant " \
                                                                         "with its resolved offset." },
-                    seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
+                    seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying the RESTAURANT's offset — every verb of this demo publishes this field on that one clock." },
                     deposit_eur:         { type: "integer", description: "No-show hold in whole EUR (0 = none), settled at the restaurant." },
                   },
                   required: %w[restaurant neighborhood cuisine restaurant_id restaurant_table_id
@@ -246,7 +246,7 @@ class Kiosk::DiningRoomController < ApplicationController
                     seating_time:        { type: "string", description: "HH:MM (24-hour), #{Seatings::ZONE_NAME}." },
                     seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
                                                                         "e.g. \"20:00 (#{Seatings::ZONE_NAME})\"." },
-                    seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
+                    seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying the RESTAURANT's offset — every verb of this demo publishes this field on that one clock." },
                   },
                   required: %w[booking_id restaurant_id restaurant neighborhood restaurant_table_id
                                table_label party_size status seating_date seating_time seating_label seating_at],

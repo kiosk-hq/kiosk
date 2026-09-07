@@ -229,12 +229,19 @@ class Kiosk::StorefrontController < ActionController::API
                     order_id:      { type: "string", description: "Pass to reschedule_delivery (or to create_order, to replace an unpaid order) as `order_id`." },
                     status:        { type: "string", description: "The operator's order status — where the BASKET stands (created, paying, paid, rescheduled). Read payment_state for where the money stands." },
                     total_cents:   { type: "integer", description: "EUR cents." },
-                    slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null." },
+                    slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null. " \
+                                                                        "The offset is the DELIVERY zone's — the same one `delivery_slots` and " \
+                                                                        "`create_order` gave you for this window, so the three verbs spell one " \
+                                                                        "instant one way." },
+                    slot_label:    { type: %w[string null], description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                        "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\" — or null when no window " \
+                                                                        "is booked. The wall clock is the delivery address's, not the caller's; " \
+                                                                        "`slot_at` carries the same instant with its resolved offset." },
                     address:       { type: %w[string null], description: "The delivery address on the order, or null." },
                     payment_state: { type: "string", enum: %w[unpaid pending paid],
                                      description: "Where this order's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this order has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct." },
                   },
-                  required: %w[order_id status total_cents slot_at address payment_state],
+                  required: %w[order_id status total_cents slot_at slot_label address payment_state],
                 }
   def my_orders
     # The paid witness is {Order.paid_flag} over the CALLER's settlements — the
@@ -249,11 +256,27 @@ class Kiosk::StorefrontController < ActionController::API
                         { "order_id"      => id,
                           "status"        => status,
                           "total_cents"   => total_cents,
-                          # `pluck` casts a timestamptz to a TimeWithZone, whose
-                          # JSON rendering of a UTC instant is "…Z" where this
-                          # field publishes "…+00:00". Same instant, and the
-                          # `getlocal(0)` is what keeps the spelling.
-                          "slot_at"       => slot_at&.utc&.getlocal(0),
+                          # ONE FIELD, ONE CLOCK, EVERY VERB. `delivery_slots`
+                          # offers the window and `create_order` books it, both
+                          # on the DELIVERY zone's; this is the reconciliation
+                          # read of that same booking, so it answers there too.
+                          # It published "+00:00" — one instant in a second
+                          # spelling — and an assistant formatting that without
+                          # converting reads a human the 07:00 of an 08:00
+                          # Dublin window (K-1370).
+                          #
+                          # A String, and THAT is what the byte-stability
+                          # argument here was always for: `pluck` hands back a
+                          # TimeWithZone whose `as_json` follows `Time.zone` and
+                          # the encoder's `time_precision`, so the published
+                          # bytes would be the app's configuration talking.
+                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone)&.iso8601,
+                          # The window said out loud, zone named (K-1371).
+                          # `slot_at` carries the offset; nobody speaks an
+                          # offset. This is the verb §11.6 sends an assistant to
+                          # after a lost `pay`, so it is the row most likely to
+                          # be read back TO a human.
+                          "slot_label"    => slot_at && DeliverySlots.label(slot_at),
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }
@@ -343,7 +366,6 @@ class Kiosk::StorefrontController < ActionController::API
   def render_slots(date, district)
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)
-      hour      = slot_time.hour
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
@@ -353,8 +375,11 @@ class Kiosk::StorefrontController < ActionController::API
         # `slot_at` has carried the resolved offset all along, but nobody says
         # an offset out loud; the IANA name is what makes the sentence the
         # assistant speaks a true one.
-        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00 " \
-                      "(#{DeliverySlots::ZONE_NAME})",
+        #
+        # Built by {DeliverySlots.label} rather than here, because `my_orders`
+        # publishes the same window for the same booking and two writers of one
+        # string are two answers waiting to disagree.
+        "label"    => DeliverySlots.label(slot_time),
         "district" => district }
     }
   end

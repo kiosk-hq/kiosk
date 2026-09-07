@@ -80,6 +80,9 @@ this list and the code that needs it disagree.
 > It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
 > check, no confirmation prompt — so running it **DROPS and recreates**
 > `kiosk_hoteling_development`. Nothing you left in that database survives.
+> The SERVER is `localhost`, read from the same `config/database.yml` — unless
+> `PGHOST` is exported, and then it is whatever host that names: the drop
+> follows it, and takes that server's `kiosk_hoteling_development` instead.
 >
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
 <!-- PREREQS:END -->

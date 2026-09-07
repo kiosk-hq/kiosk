@@ -41,15 +41,27 @@ class Booking < ApplicationRecord
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 
-  # `seating_at` as `my_bookings` has always published it. Not cosmetic: the
-  # column is `timestamptz`, and the raw `execute` this verb used returned PG's
-  # decoded value as a plain Ruby `Time` carrying a +00:00 offset, which
+  # `seating_at` as EVERY verb of this demo publishes it, and the pin is two
+  # separate decisions that were being made by one line.
+  #
+  # THE TYPE. Not cosmetic: the column is `timestamptz`, and the raw `execute`
+  # this verb used returned PG's decoded value as a plain Ruby `Time`, which
   # `as_json` renders "…T18:00:00.000+00:00". ActiveRecord hands back an
-  # `ActiveSupport::TimeWithZone`, which renders the SAME instant as "…Z".
-  # Both are valid ISO 8601 and mean the same moment, but they are different
-  # bytes on a published wire, so the published form is pinned here rather than
-  # left to whichever type the persistence layer happens to return.
+  # `ActiveSupport::TimeWithZone`, which renders the SAME instant as "…Z", with
+  # a millisecond field the encoder's `time_precision` sets. Both are valid ISO
+  # 8601 and mean the same moment, but they are different bytes on a published
+  # wire, so the form is pinned here rather than left to whichever type the
+  # persistence layer happens to return — and a String is the strongest pin
+  # there is, identical here, in CI and on a box in another zone.
+  #
+  # THE CLOCK, which the old line chose silently while arguing about the type
+  # (K-1370). It pinned "+00:00", so `my_bookings` answered a different offset
+  # from the `book_table` confirmation of the same booking — one instant in two
+  # spellings, under output schemas that describe the field identically. The
+  # restaurant's clock is the one that decides here, the same {Seatings.zone}
+  # that decides which seatings exist at all: the table is in Lisbon, and that
+  # is where the service happens.
   def self.publish_instant(time)
-    time&.utc&.localtime("+00:00")
+    time&.in_time_zone(Seatings.zone)&.iso8601
   end
 end

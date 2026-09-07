@@ -28,8 +28,16 @@ this list and the code that needs it disagree.
 > `kiosk_getgrocery_development`. Nothing you left in that database survives.
 > `KIOSK_GETGROCERY_DB` overrides that name in development too, so an export points the drop
 > at whatever it names.
+> The SERVER is `localhost`, read from the same `config/database.yml` — unless
+> `PGHOST` is exported, and then it is whatever host that names: the drop
+> follows it, and takes that server's `kiosk_getgrocery_development` instead.
 >
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
+>
+> **AND ONE TASK DROPS A SECOND DATABASE, IN ANOTHER DEMO.** `demo:agecheck`
+> boots the app in `kiosk-demo-prove` and sets its database up the same destructive
+> way, so running it also **DROPS and recreates** `kiosk_prove_development`. That is another
+> demo's data, and nothing you left in it survives either.
 <!-- PREREQS:END -->
 
 ## Flows
@@ -131,6 +139,16 @@ also carries `district` (the served postal district, `D02`), which is a ROUTING
 key and not a time zone; it used to be called `zone`, in a row that also
 publishes a delivery window, which is precisely where that word means something
 else.
+
+**Every verb that publishes this window publishes it the same way.**
+`delivery_slots` offers a window, `create_order` books it, and `my_orders` reads
+it back after the fact — one field, one clock: `slot_at` carries the DELIVERY
+zone's offset in every one of them, and a zone-bearing label travels beside it
+in every one of them (`label` on a slot row, `slot_label` on an order). `my_orders` used to
+answer `+00:00` where the booking said `+01:00` — the same instant, spelled a
+second way, with no clock named beside it — and it is the verb §11.6 sends an
+assistant to after a `pay` whose response was lost, which is exactly the row a
+human hears read back.
 
 `delivery_slots` returns only **still-bookable** windows: for **today**, a slot
 whose start has already passed in Dublin is dropped (querying at 11:00 hides

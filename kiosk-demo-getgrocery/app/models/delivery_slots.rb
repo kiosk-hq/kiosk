@@ -64,6 +64,22 @@ module DeliverySlots
     zone.local(date.year, date.month, date.day, hour, 0, 0)
   end
 
+  # The window rendered for a human, IN THE ZONE IT NAMES — "08:00–10:00
+  # (Europe/Dublin)". ONE writer for the whole demo: `delivery_slots` publishes
+  # the window it is offering and `my_orders` publishes the window that was
+  # booked, and those are the same string about the same window. Written twice
+  # they are two answers that drift, which is what the offsets on `slot_at`
+  # already did (K-1370).
+  #
+  # It takes an INSTANT rather than a slot_id because `my_orders` has only the
+  # stored instant, and it reads the hour off THIS zone rather than off the
+  # value's own offset — a `timestamptz` comes back from the database on
+  # whatever clock the connection is using, and the label must name Dublin's.
+  def label(time)
+    hour = time.in_time_zone(zone).hour
+    "#{hour.to_s.rjust(2, "0")}:00–#{(hour + WINDOW_HOURS).to_s.rjust(2, "0")}:00 (#{ZONE_NAME})"
+  end
+
   # Has this (date, slot_id) window's START already passed, relative to `at`
   # (default: now in Dublin)? A window that has already begun is no longer
   # bookable as a fresh delivery, so we filter on START (not end): at 11:00 the

@@ -49,7 +49,7 @@ class Kiosk::AppointmentsController < ApplicationController
       properties: {
         appointment_id: { type: "string", description: "uuid — the booking. my_appointments calls the same value `id`." },
         salon_id:       { type: "integer", description: "The salon booked." },
-        slot:           { type: "string", description: "Appointment time, ISO 8601." },
+        slot:           { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
         service:        { type: "string", description: "The booked service's name, captured at booking time." },
         currency:       { type: "string", description: "EUR." },
         price_cents:    { type: "integer", description: "EUR cents captured on the booking." },
@@ -61,7 +61,7 @@ class Kiosk::AppointmentsController < ApplicationController
       properties: {
         appointment_id: { type: "string", description: "uuid — the booking." },
         salon_id:       { type: "integer", description: "The salon booked." },
-        slot:           { type: "string", description: "Appointment time, ISO 8601." },
+        slot:           { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
       },
       required: %w[appointment_id salon_id slot] },
   ]

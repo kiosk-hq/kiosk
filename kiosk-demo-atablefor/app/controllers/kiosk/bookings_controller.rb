@@ -90,7 +90,7 @@ class Kiosk::BookingsController < ApplicationController
                   seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
                                                                       "e.g. \"20:00 (#{Seatings::ZONE_NAME})\". This is the line to " \
                                                                       "read back to the human: `time` alone is a bare wall clock." },
-                  seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
+                  seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying the RESTAURANT's offset — every verb of this demo publishes this field on that one clock." },
                   status:              { type: "string", description: "confirmed." },
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size

@@ -128,18 +128,105 @@ REQUIREMENTS = [
 # the database it names is read out of config/database.yml rather than typed.
 DESTRUCTIVE_TRIGGER = { file: "lib/tasks/demo.rake", must: /db:drop\s+db:create/ }.freeze
 
-def dev_database(dir)
+# One `config/database.yml` key, as `development:` actually resolves it: the
+# block's own line when it has one, else the `default:` anchor it merges. Two
+# callers, two keys — `database:` (WHAT is dropped) and `host:` (WHERE), and the
+# second one is the whole of K-1376: every demo reads its host from the anchor
+# and NOT from `development:`, so a reader that stops at the `development:`
+# block sees a name with no server attached to it.
+#
+# The `env:` half is not decoration. A key resolved from an environment variable
+# WIDENS the blast radius — an export moves the drop to a database, or a server,
+# the README does not name — so which variable it is has to reach the operator.
+# No count of demos is stated here: a typed cardinal in a derivation guard is
+# what K-1340 removed one file over and what K-1378 found already off by one
+# ("six" where seven `database:` keys are literal). The run PRINTS its own
+# derived tallies; that is the number.
+def yml_value(dir, key)
   yml = File.read(File.join(dir, "config", "database.yml"))
   dev = yml[/^development:\n(?:[ \t].*\n|\n)*/m] or return nil
-  raw = dev[/^\s+database:\s*(.+)$/, 1] or return nil
+  raw = dev[/^\s+#{key}:\s*(.+)$/, 1]
+  if raw.nil?
+    return nil unless dev.match?(/^\s+<<:\s*\*default\s*$/)
+
+    anchor = yml[/^default:\s*&default\n(?:[ \t].*\n|\n)*/m] or return nil
+    raw    = anchor[/^\s+#{key}:\s*(.+)$/, 1] or return nil
+  end
   raw = raw.strip
-  # Six demos name it literally; getgrocery resolves an env var with a default,
-  # which WIDENS the blast radius and therefore has to reach the operator.
   if (m = raw.match(/ENV\.fetch\(\s*"([A-Z0-9_]+)"\s*,\s*"([^"]+)"\s*\)/))
     { name: m[2], env: m[1] }
   else
     { name: raw, env: nil }
   end
+end
+
+def dev_database(dir) = yml_value(dir, "database")
+def dev_host(dir)     = yml_value(dir, "host")
+
+# ── The CROSS-DEMO destructive reach (K-1377) ────────────────────────────────
+#
+# DESTRUCTIVE_TRIGGER asks `lib/tasks/demo.rake` and nothing else, so a
+# `db:drop` a task reaches THROUGH a `require_relative` is invisible to it — and
+# that is not a hypothetical gap. getgrocery's `demo:agecheck` and skooti's
+# `demo:kyc`/`demo:redteam` each require `script/prove_broker_boot.rb`, whose
+# `with_broker` runs `db:drop db:create db:schema:load db:seed` with `chdir:` at
+# a SIBLING DEMO — so running skooti's red-team battery destroys the KYC
+# broker's database, and until this rule nothing anywhere said so.
+#
+# WHAT IS DERIVED, one hop at a time, so no name below is typed:
+#   1. the `require_relative`s in `lib/tasks/demo.rake`, and the `task` each one
+#      sits under (that is which TASKS the reach belongs to);
+#   2. whether the required file runs `db:drop db:create` at all;
+#   3. the `chdir:` beside that command, and the constant it names, resolved
+#      through that constant's own `File.expand_path(…, __dir__)`;
+#   4. that directory's `config/database.yml`, for the SECOND database's name.
+#
+# IT IS ONE HOP, DELIBERATELY, and that is a limit worth stating plainly: a
+# `db:drop` two requires deep, or behind a computed path, is invisible here
+# exactly as this one was invisible to the trigger above. The vacuity arm holds
+# the rule to matching something; it cannot hold it to matching everything.
+CROSS_DEMO_DESTRUCTIVE = /db:drop\s+db:create/.freeze
+
+# The directory a script's destructive command runs IN, or nil when the script
+# runs none — resolved through the `chdir:` constant rather than read off a
+# path literal, because the path literal is in the constant.
+def destructive_chdir(script)
+  body  = File.read(script)
+  const = body[/#{CROSS_DEMO_DESTRUCTIVE.source}.*?chdir:\s*([A-Z][A-Za-z0-9_]*)/m, 1] or return nil
+  rel   = body[/^\s*#{const}\s*=\s*File\.expand_path\(\s*"([^"]+)"\s*,\s*__dir__\s*\)/, 1] or return nil
+  File.expand_path(rel, File.dirname(script))
+end
+
+# [{ dir:, tasks: [...] }] — every OTHER directory this demo's tasks drop a
+# database in, with the tasks that reach it. Empty for a demo that reaches none.
+def cross_demo_drops(dir)
+  rake = File.join(dir, "lib", "tasks", "demo.rake")
+  return [] unless File.file?(rake)
+
+  namespace = nil
+  task      = nil
+  found     = {}
+
+  File.readlines(rake).each do |line|
+    if (m = line.match(/^\s*namespace\s+:([a-z0-9_]+)\s+do\b/))
+      namespace = m[1]
+    elsif (m = line.match(/^\s*task\s+:?([a-z0-9_]+)\b/))
+      task = m[1]
+    elsif (m = line.match(/^\s*require_relative\s+"([^"]+)"/))
+      script = File.expand_path(m[1], File.join(dir, "lib", "tasks"))
+      script += ".rb" unless script.end_with?(".rb")
+      next unless File.file?(script)
+
+      target = destructive_chdir(script)
+      next if target.nil? || target == File.expand_path(dir)
+      next unless File.file?(File.join(target, "config", "database.yml"))
+
+      label = [namespace, task].compact.join(":")
+      (found[target] ||= []) << label unless found[target]&.include?(label)
+    end
+  end
+
+  found.sort.map { |target, tasks| { dir: target, tasks: tasks } }
 end
 
 def triggered?(dir, trigger)
@@ -156,7 +243,8 @@ def prereq_block(dir)
   parts.concat(bullets)
 
   if triggered?(dir, DESTRUCTIVE_TRIGGER)
-    db = dev_database(dir)
+    db   = dev_database(dir)
+    host = dev_host(dir)
     parts << ""
     parts << "> **`demo:setup` is destructive, and every task that depends on it inherits that.**"
     parts << "> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment"
@@ -165,6 +253,18 @@ def prereq_block(dir)
     if db[:env]
       parts << "> `#{db[:env]}` overrides that name in development too, so an export points the drop"
       parts << "> at whatever it names."
+    end
+    # WHICH SERVER, not only which database (K-1376). The name alone reads as a
+    # promise about the local machine, and it is not one: the host comes off the
+    # `default:` anchor `development:` merges, and an exported PGHOST — which
+    # deploy/CHECKLIST.md and e2e/README.md both tell an operator to set — moves
+    # the drop to a database of that name on a DIFFERENT server.
+    if host && host[:env]
+      parts << "> The SERVER is `#{host[:name]}`, read from the same `config/database.yml` — unless"
+      parts << "> `#{host[:env]}` is exported, and then it is whatever host that names: the drop"
+      parts << "> follows it, and takes that server's `#{db[:name]}` instead."
+    elsif host
+      parts << "> The SERVER is `#{host[:name]}`, read from the same `config/database.yml`."
     end
     # ONLY where the demo actually ships the script, and naming only what that
     # script actually runs. Writing "bin/setup does this" into a README of a demo
@@ -178,6 +278,24 @@ def prereq_block(dir)
       parts << "> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then " +
                steps.map { |x| "`#{x}`" }.join(", then ") + "."
     end
+  end
+
+  # The SECOND database, in ANOTHER demo (K-1377). Rendered outside the block
+  # above on purpose: a demo could reach a sibling's `db:drop` without running
+  # one of its own, and that operator needs the warning just as much.
+  cross_demo_drops(dir).each do |reach|
+    other = File.basename(reach[:dir])
+    odb   = dev_database(reach[:dir])
+    tasks = reach[:tasks].sort
+    one   = tasks.length == 1
+    parts << (triggered?(dir, DESTRUCTIVE_TRIGGER) ? ">" : "")
+    parts << "> **AND #{one ? "ONE TASK DROPS" : "SOME TASKS DROP"} A SECOND DATABASE, IN ANOTHER " \
+             "DEMO.** `#{tasks.join("`, `")}`"
+    parts << "> #{one ? "boots" : "boot"} the app in `#{other}` and #{one ? "sets" : "set"} its " \
+             "database up the same destructive"
+    parts << "> way, so running #{one ? "it" : "any of them"} also **DROPS and recreates** " \
+             "`#{odb[:name]}`. That is another"
+    parts << "> demo's data, and nothing you left in it survives either."
   end
 
   parts << END_MARK
@@ -205,7 +323,9 @@ def run(root, write: false)
     end
 
     REQUIREMENTS.each { |r| fired[r[:id]] += 1 if triggered?(dir, r) }
-    fired["destructive"] += 1 if triggered?(dir, DESTRUCTIVE_TRIGGER)
+    fired["destructive"]  += 1 if triggered?(dir, DESTRUCTIVE_TRIGGER)
+    fired["server"]       += 1 if triggered?(dir, DESTRUCTIVE_TRIGGER) && dev_host(dir)
+    fired["cross-demo"]   += cross_demo_drops(dir).length
 
     # A demo with NO triggered requirement gets no block: kiosk-demo-prove has
     # its own smaller shape, and inventing an empty section for it would be
@@ -262,6 +382,24 @@ def run(root, write: false)
               "in which case seven READMEs are silently under-stating what they need."
   end
 
+  # The two K-1376/K-1377 rules get their own vacuity text, because the generic
+  # one above ("delete the entry") is the wrong instruction for either of them.
+  if fired["destructive"].positive? && fired["server"].zero?
+    errors << "check-demo-prereqs: not ONE demo yielded a host for the destructive warning, so " \
+              "every warning names a database with no server attached to it — which is the whole " \
+              "of K-1376. Either `host:` left every config/database.yml, or `yml_value` stopped " \
+              "reading the `default:` anchor that `development:` merges."
+  end
+
+  if fired["cross-demo"].zero?
+    errors << "check-demo-prereqs: the cross-demo destructive reach matched NO demo. Either no " \
+              "demo task requires a script that drops another demo's database any more — in which " \
+              "case delete the rule — or one hop of the derivation stopped resolving (the " \
+              "`require_relative`, the `db:drop db:create`, the `chdir:` constant, or that " \
+              "constant's `File.expand_path`), and three tasks are back to destroying a sibling's " \
+              "data with nothing saying so."
+  end
+
   [errors, blocks, fired]
 end
 
@@ -300,6 +438,45 @@ if ARGV.include?("--self-test")
                     File.write(y, File.read(y).sub("database: kiosk_tudu_development",
                                                    "database: kiosk_tudu_dev")) },
       expect: %r{tudu/README\.md: the PREREQS block does not match} },
+    { id:   "server-not-disclosed",
+      what: "the destructive warning's SERVER sentence is deleted while PGHOST still moves the " \
+            "drop to another host — K-1376's shape, a database name with no server attached",
+      op:   ->(t) { r = File.join(t, "kiosk-demo-hoteling/README.md")
+                    File.write(r, File.read(r).sub(/^> The SERVER is .*?instead\.\n/m, "")) },
+      expect: %r{hoteling/README\.md: the PREREQS block does not match} },
+    { id:   "stale-host-variable",
+      what: "the host variable is renamed in config/database.yml and the warning keeps naming " \
+            "the old one",
+      op:   ->(t) { y = File.join(t, "kiosk-demo-philslist/config/database.yml")
+                    File.write(y, File.read(y).sub("ENV.fetch(\"PGHOST\"", "ENV.fetch(\"PGHOSTNAME\"")) },
+      expect: %r{philslist/README\.md: the PREREQS block does not match} },
+    { id:   "cross-demo-drop-not-disclosed",
+      what: "the second-database warning is deleted while demo:agecheck still drops the KYC " \
+            "broker's database through script/prove_broker_boot.rb — K-1377's shape exactly",
+      op:   ->(t) { r = File.join(t, "kiosk-demo-getgrocery/README.md")
+                    File.write(r, File.read(r).sub(/^>\n> \*\*AND ONE TASK DROPS A SECOND.*?\n(?=<!-- PREREQS:END)/m, "")) },
+      expect: %r{getgrocery/README\.md: the PREREQS block does not match} },
+    { id:   "cross-demo-target-renamed",
+      what: "the SIBLING demo renames its development database and the two warnings that name " \
+            "it keep naming the old one — the drift a hand-typed second name cannot survive",
+      op:   ->(t) { y = File.join(t, "kiosk-demo-prove/config/database.yml")
+                    File.write(y, File.read(y).sub("database: kiosk_prove_development",
+                                                   "database: kiosk_prove_dev")) },
+      expect: %r{skooti/README\.md: the PREREQS block does not match} },
+    { id:   "vacuity-cross-demo-reach-stops-matching", kind: :vacuity,
+      what: "the required script stops running a `db:drop`, so the cross-demo rule silently " \
+            "covers nothing and two READMEs read as complete",
+      op:   ->(t) { Dir[File.join(t, "kiosk-demo-*/script/prove_broker_boot.rb")].each do |f|
+                      File.write(f, File.read(f).gsub("rails db:drop db:create", "rails db:create"))
+                    end },
+      expect: %r{the cross-demo destructive reach matched NO demo} },
+    { id:   "vacuity-host-stops-resolving", kind: :vacuity,
+      what: "`host:` leaves every config/database.yml (or the anchor stops being read), so every " \
+            "destructive warning names a database with no server",
+      op:   ->(t) { Dir[File.join(t, "kiosk-demo-*/config/database.yml")].each do |f|
+                      File.write(f, File.read(f).gsub(/^\s+host:.*\n/, ""))
+                    end },
+      expect: %r{not ONE demo yielded a host for the destructive warning} },
     { id:   "vacuity-trigger-stops-matching", kind: :vacuity,
       what: "the CREATE ROLE trigger stops matching anywhere, so the requirement silently covers " \
             "nothing and every README reads as complete",
@@ -359,9 +536,12 @@ errors, blocks, fired = run(ROOT, write: write)
 
 if errors.empty?
   unless write
+    # The tally names every rule and counts each one from what it actually
+    # matched — no cardinal in this script is typed (K-1340, K-1378).
+    ids = REQUIREMENTS.map { |r| r[:id] } + %w[destructive server cross-demo]
     puts "check-demo-prereqs: OK — #{blocks} generated prerequisites block(s), " \
-         "#{REQUIREMENTS.length + 1} requirement(s) derived from each demo's own files (" +
-         (REQUIREMENTS.map { |r| r[:id] } + ["destructive"]).map { |id| "#{id}:#{fired[id]}" }.join(" ") + ")"
+         "#{ids.length} requirement(s) derived from each demo's own files (" +
+         ids.map { |id| "#{id}:#{fired[id]}" }.join(" ") + ")"
   end
   exit 0
 end

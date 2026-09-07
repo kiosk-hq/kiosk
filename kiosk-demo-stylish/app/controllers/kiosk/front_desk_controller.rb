@@ -134,7 +134,7 @@ class Kiosk::FrontDeskController < ApplicationController
                   properties: {
                     id:       { type: "string", description: "uuid — the appointment. book_appointment calls the same value `appointment_id`." },
                     salon_id: { type: "integer", description: "The salon booked." },
-                    slot:     { type: "string", description: "Appointment time, ISO 8601." },
+                    slot:     { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
                   },
                   required: %w[id salon_id slot],
                 }
@@ -143,7 +143,14 @@ class Kiosk::FrontDeskController < ApplicationController
                             .order(:id)
                             .pluck(:id, :salon_id, :slot)
                             .map { |id, salon_id, slot|
-                              { id: id, salon_id: salon_id, slot: slot }
+                              # On the SALON's clock, through the one writer
+                              # every verb of this demo publishes an instant
+                              # with — see {SalonClock.publish}. Rendered
+                              # straight off the pluck it would follow
+                              # `Time.zone` instead, which is how this verb and
+                              # `book_appointment` came to answer the same
+                              # booking in two spellings (K-1372).
+                              { id: id, salon_id: salon_id, slot: SalonClock.publish(slot) }
                             }
   end
 
@@ -193,7 +200,7 @@ class Kiosk::FrontDeskController < ApplicationController
                       properties: {
                         id:          { type: "string", description: "uuid — the appointment." },
                         salon_id:    { type: "integer", description: "The salon booked." },
-                        slot:        { type: "string", description: "Appointment time, ISO 8601." },
+                        slot:        { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
                         service_id:  { type: %w[integer null], description: "The booked service, or null for a bare salon booking." },
                         service:     { type: %w[string null], description: "The booked service's name, or null." },
                         price_cents: { type: %w[integer null], description: "EUR cents CAPTURED on the booking, or null when no service was booked." },
@@ -226,7 +233,8 @@ class Kiosk::FrontDeskController < ApplicationController
                     .pluck("appointments.id", "appointments.salon_id", "appointments.slot",
                            "appointments.service_id", "services.name", "appointments.price_cents")
                     .map { |id, salon_id, slot, service_id, service, price_cents|
-                      { id: id, salon_id: salon_id, slot: slot, service_id: service_id,
+                      # Same one writer as my_appointments — {SalonClock.publish}.
+                      { id: id, salon_id: salon_id, slot: SalonClock.publish(slot), service_id: service_id,
                         service: service, price_cents: price_cents,
                         kind: "booking", currency: "EUR",
                         price_eur: Service.format_eur(price_cents) }

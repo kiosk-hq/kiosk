@@ -52,7 +52,7 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
-**TWO LINES in the block below were re-spelled after the recording, and saying
+**THREE LINES in the block below were re-spelled after the recording, and saying
 so is cheaper than pretending otherwise.** The FIRST is the `/etc/hosts` hint
 at the top. Where the recording printed `(add to /etc/hosts: 127.0.0.1
 getgrocery.demo.kiosk.tech -- using 127.0.0.1)`, this document carries the
@@ -76,11 +76,21 @@ same demo is an IANA time zone — one word for a postal district and for a cloc
 `08:00–10:00` that a customer in another zone reads as their own morning, grew
 the zone it is written in. The driver's own summary line carries both, so where
 the recording printed `08:00–10:00 zone=D02` this document reads `08:00–10:00
-(Europe/Dublin) district=D02`. The run was not repeated for that either; apart
-from these two lines, every line is what the task printed on the day.
-`bin/check-demo-derivations` holds all of them — including this one — to a
-literal the current driver prints, which is what makes this note checkable
-rather than a promise.
+(Europe/Dublin) district=D02`. The run was not repeated for that either.
+
+The THIRD is the `my_orders` row inside the driver's JSON summary line. That
+verb published the booked window's instant as `+00:00` where `delivery_slots`
+and `create_order` published the same instant as `+01:00` — one moment in two
+spellings, under output schemas that described the field identically — and it
+carried no zone-bearing label at all, though it is the verb §11.6 sends an
+assistant to after a `pay` whose response was lost. Both are fixed, so where
+the recording printed `"slot_at":"2026-08-27T07:00:00.000+00:00"` this document
+carries `"slot_at":"2026-08-27T08:00:00+01:00"` and the `"slot_label"` that now
+travels beside it — the same instant of the same recorded run, spelled the way
+the code spells it today. Apart from these three lines, every line is what the
+task printed on the day. `bin/check-demo-derivations` holds all of them —
+including these — to a literal the current driver prints, which is what makes
+this note checkable rather than a promise.
 
 **This recording is the secret-free path**, the one CI runs: with no
 `STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,
@@ -108,7 +118,7 @@ key whenever one is present.
   payment_setup: ready
   pay: settlement_id=ebac3e74-9087-4560-adb3-14157fc4f48b psp_reference=pi_RGA0cgHgjoCS0YF
   my_orders: 1 order(s); own order payment_state=paid
-{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"fe1a7146-dc21-4ea6-91ea-e1d560e386bc","agent_id":"8be0b50f-573e-4d79-9ce2-9992476baef6","order_id":"1af6fb28-c05a-416b-adb6-a6965251808d","total_cents":847,"slot_at":"2026-08-27T08:00:00+01:00","chosen_slot_at":"2026-08-27T08:00:00+01:00","slot_date":"2026-08-27","past_slot_check":null,"payment_state":"paid","psp_reference":"pi_RGA0cgHgjoCS0YF","my_orders":[{"order_id":"1af6fb28-c05a-416b-adb6-a6965251808d","status":"paid","total_cents":847,"slot_at":"2026-08-27T07:00:00.000+00:00","address":"42 Camden Street, Dublin 2","payment_state":"paid"}],"pay":{"settlement_id":"ebac3e74-9087-4560-adb3-14157fc4f48b","psp_reference":"pi_RGA0cgHgjoCS0YF","settled_amount_cents":0,"currency":"eur"}}
+{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"fe1a7146-dc21-4ea6-91ea-e1d560e386bc","agent_id":"8be0b50f-573e-4d79-9ce2-9992476baef6","order_id":"1af6fb28-c05a-416b-adb6-a6965251808d","total_cents":847,"slot_at":"2026-08-27T08:00:00+01:00","chosen_slot_at":"2026-08-27T08:00:00+01:00","slot_date":"2026-08-27","past_slot_check":null,"payment_state":"paid","psp_reference":"pi_RGA0cgHgjoCS0YF","my_orders":[{"order_id":"1af6fb28-c05a-416b-adb6-a6965251808d","status":"paid","total_cents":847,"slot_at":"2026-08-27T08:00:00+01:00","slot_label":"08:00–10:00 (Europe/Dublin)","address":"42 Camden Street, Dublin 2","payment_state":"paid"}],"pay":{"settlement_id":"ebac3e74-9087-4560-adb3-14157fc4f48b","psp_reference":"pi_RGA0cgHgjoCS0YF","settled_amount_cents":0,"currency":"eur"}}
 
 -- Assertions --
   OK  http_register == 201
@@ -430,12 +440,10 @@ class Kiosk::StorefrontController < ActionController::API
     # what create_order books.
     render json: DeliverySlots.bookable_ids(date).map { |slot_id|
       slot_time = DeliverySlots.slot_at(date, slot_id)
-      hour      = slot_time.hour
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
-        "label"    => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00 " \
-                      "(#{DeliverySlots::ZONE_NAME})",
+        "label"    => DeliverySlots.label(slot_time),
         "district" => district }
     }
   end
@@ -463,10 +471,11 @@ class Kiosk::StorefrontController < ActionController::API
                     status:        { type: "string" },
                     total_cents:   { type: "integer" },
                     slot_at:       { type: %w[string null] },
+                    slot_label:    { type: %w[string null] },
                     address:       { type: %w[string null] },
                     payment_state: { type: "string", enum: %w[unpaid pending paid] },
                   },
-                  required: %w[order_id status total_cents slot_at address payment_state],
+                  required: %w[order_id status total_cents slot_at slot_label address payment_state],
                 }
   def my_orders
     # The paid witness is {Order.paid_flag} over the CALLER's settlements — the
@@ -481,11 +490,27 @@ class Kiosk::StorefrontController < ActionController::API
                         { "order_id"      => id,
                           "status"        => status,
                           "total_cents"   => total_cents,
-                          # `pluck` casts a timestamptz to a TimeWithZone, whose
-                          # JSON rendering of a UTC instant is "…Z" where this
-                          # field publishes "…+00:00". Same instant, and the
-                          # `getlocal(0)` is what keeps the spelling.
-                          "slot_at"       => slot_at&.utc&.getlocal(0),
+                          # ONE FIELD, ONE CLOCK, EVERY VERB. `delivery_slots`
+                          # offers the window and `create_order` books it, both
+                          # on the DELIVERY zone's; this is the reconciliation
+                          # read of that same booking, so it answers there too.
+                          # It published "+00:00" — one instant in a second
+                          # spelling — and an assistant formatting that without
+                          # converting reads a human the 07:00 of an 08:00
+                          # Dublin window (K-1370).
+                          #
+                          # A String, and THAT is what the byte-stability
+                          # argument here was always for: `pluck` hands back a
+                          # TimeWithZone whose `as_json` follows `Time.zone` and
+                          # the encoder's `time_precision`, so the published
+                          # bytes would be the app's configuration talking.
+                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone)&.iso8601,
+                          # The window said out loud, zone named (K-1371).
+                          # `slot_at` carries the offset; nobody speaks an
+                          # offset. This is the verb §11.6 sends an assistant to
+                          # after a lost `pay`, so it is the row most likely to
+                          # be read back TO a human.
+                          "slot_label"    => slot_at && DeliverySlots.label(slot_at),
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }

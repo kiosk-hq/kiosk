@@ -255,7 +255,7 @@ CREATE TABLE public.appointments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     salon_id bigint NOT NULL,
-    slot timestamp without time zone NOT NULL,
+    slot timestamp with time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     service_id bigint,
@@ -838,6 +838,7 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260907000001'),
 ('20260827000002'),
 ('20260823000001'),
 ('20260820130117'),

@@ -49,6 +49,13 @@ the result (no envelope).
 - `POST /kiosk/cancel_booking {booking_id}` — cancel one of your own bookings (owner-scoped)
 - `GET /kiosk/schema` — self-discovery
 
+`seating_at` is one field on one clock across every verb that publishes it:
+`availability`, the `book_table` confirmation and `my_bookings` all spell it
+with the restaurant's own offset, so a booking read back after the fact is the
+same string it was confirmed with. `my_bookings` used to answer `+00:00` where
+the confirmation said `+01:00` — the same instant, a second spelling, under
+schema text that described the field identically in both.
+
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
 The verbs above are ordinary Rails controllers, not initializer blocks:
@@ -83,6 +90,9 @@ this list and the code that needs it disagree.
 > It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
 > check, no confirmation prompt — so running it **DROPS and recreates**
 > `kiosk_atablefor_development`. Nothing you left in that database survives.
+> The SERVER is `localhost`, read from the same `config/database.yml` — unless
+> `PGHOST` is exported, and then it is whatever host that names: the drop
+> follows it, and takes that server's `kiosk_atablefor_development` instead.
 >
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
 <!-- PREREQS:END -->

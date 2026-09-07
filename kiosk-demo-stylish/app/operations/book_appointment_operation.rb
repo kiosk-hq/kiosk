@@ -58,8 +58,8 @@ class BookAppointmentOperation
     # live.
     if slot_at <= Time.current
       return refused(
-        "slot #{slot_at.iso8601} has already passed — book a time in the future " \
-        "(now is #{Time.current.utc.iso8601}); this salon does not record appointments in the past",
+        "slot #{SalonClock.publish(slot_at)} has already passed — book a time in the future " \
+        "(now is #{SalonClock.publish(Time.current)}); this salon does not record appointments in the past",
       )
     end
 
@@ -93,7 +93,7 @@ class BookAppointmentOperation
     value = {
       appointment_id: appointment.id,
       salon_id:       appointment.salon_id,
-      slot:           appointment.slot.iso8601,
+      slot:           SalonClock.publish(appointment.slot),
     }
     if service
       value.merge!(
@@ -118,6 +118,15 @@ class BookAppointmentOperation
   # the rule is that the salon's clock is the one that decides ({SalonClock}).
   # Rendered in the salon's zone the example is the same kind of value the verb
   # answers WITH, so the example and the response agree.
+  #
+  # THAT LAST SENTENCE WAS TRUE OF THE INSTANT AND FALSE OF THE CLOCK when it
+  # was written (K-1372): the example was `+02:00` and the response was `Z`,
+  # because the confirmation rendered the value straight off the record and an
+  # `ActiveSupport::TimeWithZone` renders through `Time.zone`. The code moved to
+  # meet the sentence rather than the other way round — every published instant
+  # in this demo now goes through {SalonClock.publish} — because the demo's own
+  # invariant is that the salon's clock decides, and a response on a different
+  # clock from the example is the reader's first reason to doubt it.
   #
   # @return [String] an ISO 8601 instant carrying the salon's own offset,
   #   always later than now

@@ -53,4 +53,23 @@ module SalonClock
     Time.iso8601(str)
     zone.iso8601(str)
   end
+
+  # An instant as this demo PUBLISHES it: on the salon's clock, as a String.
+  #
+  # EVERY verb that answers with an appointment instant goes through here —
+  # `book_appointment`'s confirmation and its refusals, `my_appointments`,
+  # `salon_calendar` — so the demo cannot spell one instant two ways. It did:
+  # `book_appointment`'s reason for computing {BookAppointmentOperation.example_slot}
+  # on the salon's clock is that «the example and the response agree», and the
+  # response was UTC, because the value came back off the record and rendered
+  # through `Time.zone` (K-1372). This is the answer the sentence claimed.
+  #
+  # A String, not a Time, and that is the second half of the pin: an
+  # `ActiveSupport::TimeWithZone` renders through `Time.zone` and the JSON
+  # encoder's `time_precision`, so the published BYTES would be set by the app's
+  # configuration rather than by this file. `.iso8601` on a zone-resolved value
+  # is the same bytes here, in CI and on a box in another zone.
+  def publish(time)
+    time&.in_time_zone(zone)&.iso8601
+  end
 end

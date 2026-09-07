@@ -41,15 +41,18 @@ because this machine has no entry for the demo host, which is the branch the
 task takes on any checkout that has not added one.
 
 **Nothing in this block was re-spelled: it is one run, start to finish.** The
-2026-08-26 recording it replaces carried a repair note, because its first line
-had been edited by hand after the fact when the host lookup became opt-in
+2026-08-26 recording it first replaced carried a repair note, because its first
+line had been edited by hand after the fact when the host lookup became opt-in
 (`KIOSK_DEMO_HOST_LOOKUP=1`), and later its `book_table` row went stale when
 that verb gained the zone-bearing `seating_label` the availability row already
 published. A hand-repaired line is checkable — `bin/check-demo-derivations`
 holds every line here to a literal the current rake task prints — but two
 repairs on one block is the point at which re-running the task is cheaper and
-more honest than repairing it again, so the block above is a fresh run and this
-paragraph is the whole of its provenance.
+more honest than repairing it again, so that rule is what this block follows
+too: it is a fresh run, taken after `my_bookings` stopped answering `+00:00`
+where the `book_table` confirmation of the same booking answered `+01:00`. One
+instant, one spelling, in every verb that publishes it — and the difference is
+visible in the block above, where `seating_at` now reads the same in both.
 
 <!-- derived: transcript | task: bundle exec rake demo:book | from: lib/tasks/demo.rake, script/book_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/dining_room_controller.rb, app/controllers/kiosk/bookings_controller.rb | abridged: none -->
 ```
@@ -60,14 +63,14 @@ paragraph is the whole of its provenance.
 
 ── Running script/book_flow.rb ──
 
-{"http_register":201,"user_id":"9a555fcc-2fc4-47df-b48f-e2d4f7bc8d32","agent_id":"c695d5f2-4372-40d4-a2d2-afb58fc3310a","date":"2026-09-07","time":"20:00","party_size":2,"booking":{"booking_id":"e044939d-c4aa-4d2f-a798-8cf5ea150af8","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-09-07","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"e044939d-c4aa-4d2f-a798-8cf5ea150af8","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-09-07","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T19:00:00.000+00:00"}]}
+{"http_register":201,"user_id":"821f1887-a9e1-4d53-a188-63646f86f373","agent_id":"348c3464-8a50-4259-9151-ba4cbf7c3b8f","date":"2026-09-07","time":"20:00","party_size":2,"booking":{"booking_id":"6e101249-963e-4fac-bcab-70224648d945","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-09-07","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"6e101249-963e-4fac-bcab-70224648d945","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-09-07","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00"}]}
 
 ── Assertions ──
-  ✓  booking.booking_id present (e044939d-c4aa-4d2f-a798-8cf5ea150af8)
+  ✓  booking.booking_id present (6e101249-963e-4fac-bcab-70224648d945)
   ✓  booking.status == confirmed
   ✓  booking.party_size == 2 (a table for two)
-  ✓  my_bookings shows the confirmed booking (id=e044939d-c4aa-4d2f-a798-8cf5ea150af8)
-  ✓  the new booking is confirmed in the DB (id=e044939d-c4aa-4d2f-a798-8cf5ea150af8)
+  ✓  my_bookings shows the confirmed booking (id=6e101249-963e-4fac-bcab-70224648d945)
+  ✓  the new booking is confirmed in the DB (id=6e101249-963e-4fac-bcab-70224648d945)
   ✓  the booking pins a table + seating instant (restaurant_table_id + seating_at set)
 
   All assertions passed.

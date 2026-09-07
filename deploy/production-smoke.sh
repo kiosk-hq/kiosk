@@ -198,6 +198,34 @@ drop_smoke_db() {
 
 require_disposable_host
 
+# ── THE MEASUREMENT THE K-1332 POSTURE RESTS ON, RE-MEASURED (K-1369) ────────
+#
+# The header above states, as a MEASURED fact, that this file makes exactly ONE
+# request carrying an `Authorization:` header, and that it is the forged bearer
+# asserted to answer 401. Everything that follows from it — «no assertion here
+# drives a verb to a success body, so the response validator never ran, so
+# turning it off in production costs this script nothing» — is true only while
+# that count is one. Nothing counted it, so the next `curl` added below would
+# widen the unvalidated surface with the justification still reading as
+# measured. This is that count, in the file it is about, on every run.
+#
+# THE NEEDLE IS ASSEMBLED FROM TWO HALVES so this arm does not count ITSELF: a
+# self-counting arm reads one too many forever and holds nothing, which is the
+# same shape as a pattern that matches nothing. It aims at the curl HEADER FLAG
+# rather than at the word, so the header's own prose about `Authorization:` is
+# not a subject — and both directions are failures. TOO MANY means a request was
+# added and the posture above needs restating; ZERO means the header moved to a
+# spelling this arm cannot see (a `--header`, a variable, a config file), which
+# is the rule silently holding nothing rather than the rule being obeyed.
+SMOKE_SELF="${BASH_SOURCE[0]}"
+auth_needle='-H "Auth'"orization:"
+auth_sites="$(grep -c -F -- "$auth_needle" "$SMOKE_SELF" || true)"
+if [ "$auth_sites" = "1" ]; then
+  pass "exactly 1 request carries an Authorization: header — the K-1332 posture's own measurement (K-1369)"
+else
+  fail "this script now passes an Authorization: header on ${auth_sites} request(s), not 1 (K-1369). The COVERAGE header above justifies running the deployed fleet without response validation on the measured fact that the only authenticated request here is the forged bearer asserted to answer 401, so nothing ever renders a verb payload. If a new request drives a verb to a 200 it is doing so with validation OFF — say so in that section and update this count; if the count is 0, the header flag was re-spelled and this arm is watching nothing."
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 # stylish: Devise sign-in + roles + manage page (the original three-bug surface)
 # ─────────────────────────────────────────────────────────────────────────────

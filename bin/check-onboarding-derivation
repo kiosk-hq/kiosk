@@ -80,13 +80,21 @@
 # THE PAGE IS RESOLVED IN A STATED ORDER, AND THE ORDER IS PRINTED:
 #
 #   1. `--page PATH`                 -- an explicit file.
-#   2. `$KIOSK_TECH_DIR/onboarding.html`
-#   3. `../kiosk.tech/onboarding.html` -- the sibling checkout, which is what a
-#      workspace session and the convergence loop have. Tree against tree: this
-#      mode is never spuriously red.
-#   4. `--network`                   -- https://kiosk.tech/onboarding.html, what
+#   2. `--network`                   -- https://kiosk.tech/onboarding.html, what
 #      an operator is actually reading. 3 attempts with backoff, so a blip does
 #      not read as drift.
+#   3. `$KIOSK_TECH_DIR/onboarding.html`
+#   4. `../kiosk.tech/onboarding.html` -- the sibling checkout, which is what a
+#      workspace session and the convergence loop have. Tree against tree: this
+#      mode is never spuriously red.
+#
+# THE TWO FLAGS OUTRANK THE ENVIRONMENT VARIABLE, AND `--network` DID NOT USED
+# TO (K-1388). It was resolved after `$KIOSK_TECH_DIR`, so setting that variable
+# silently turned the network mode into a local read while the run line claimed
+# a checkout. It now wins, and when it overrides a set variable the provenance
+# line SAYS the variable was ignored -- an override a reader cannot see is the
+# same defect one step quieter. `--page` together with `--network` is refused
+# outright: they are two explicit selectors, and picking one is guessing.
 #
 # IF NONE OF THEM RESOLVES, THIS EXITS 1 AND SAYS THE CHECK DID NOT RUN. It
 # does not skip. A guard that quietly no-ops when its subject is absent is
@@ -145,6 +153,11 @@
 require "net/http"
 require "uri"
 require "set"
+# Only `--self-test` writes anything: the K-1388 precedence arm needs a decoy
+# checkout on disk, because that is the only way to ask whether `--network`
+# really outranks `KIOSK_TECH_DIR`. An ordinary run touches neither.
+require "tmpdir"
+require "fileutils"
 
 ROOT = File.expand_path("..", __dir__)
 
@@ -275,7 +288,31 @@ end
 # The page, plus a sentence saying WHERE it came from. Never a silent skip:
 # every branch either returns bytes with a provenance or returns the reason
 # there are none, and the caller exits 1 on the second.
+# ── `--network` MEANS THE NETWORK, AND AN OVERRIDE IS NEVER SILENT (K-1388) ──
+#
+# The env var used to be read BEFORE this branch, so
+# `KIOSK_TECH_DIR=... bin/check-onboarding-derivation --network` handed back a
+# LOCAL CHECKOUT -- or exited 1 saying that local file was missing -- while the
+# operator had asked for the published page and the run line said a checkout had
+# been read. Clean exit code either way. That is the "answered a different
+# question than the one asked" shape, and it is worse than a plain bug because
+# the flag reads as a MODE SELECTOR: the whole reason to type it is to find out
+# what kiosk.tech is actually serving.
+#
+# So the precedence is the ordinary one -- an explicit FLAG beats ambient
+# configuration -- and the shadowing is SAID OUT LOUD in the provenance line
+# rather than left to be inferred. The one case that is not a precedence
+# question at all is `--page` WITH `--network`: two explicit selectors naming
+# two different sources, where preferring either silently is guessing. That is
+# refused by name.
 def resolve_page(explicit:, network:)
+  if explicit && network
+    return [nil, nil,
+            "--page #{explicit} and --network name two different sources and this script will not " \
+            "choose between them: one asks for a file on this disk, the other for the bytes " \
+            "kiosk.tech is serving. Drop one (K-1388)."]
+  end
+
   if explicit
     return [nil, nil, "--page #{explicit} does not exist"] unless File.file?(explicit)
 
@@ -283,6 +320,15 @@ def resolve_page(explicit:, network:)
   end
 
   env_dir = ENV["KIOSK_TECH_DIR"]
+
+  if network
+    body, err = fetch(PAGE_URL)
+    return [nil, nil, "#{PAGE_URL}: #{err}"] if body.nil?
+
+    shadowed = (env_dir && !env_dir.empty?) ? " -- KIOSK_TECH_DIR=#{env_dir} IGNORED, --network was asked for" : ""
+    return [body, "the published page #{PAGE_URL} (#{body.bytesize} bytes)#{shadowed}", nil]
+  end
+
   if env_dir && !env_dir.empty?
     path = File.join(env_dir, PAGE_BASENAME)
     return [nil, nil, "KIOSK_TECH_DIR is set but #{path} does not exist"] unless File.file?(path)
@@ -291,14 +337,7 @@ def resolve_page(explicit:, network:)
   end
 
   sibling = File.expand_path("../kiosk.tech/#{PAGE_BASENAME}", ROOT)
-  return [File.read(sibling), "sibling checkout #{sibling}", nil] if File.file?(sibling) && !network
-
-  if network
-    body, err = fetch(PAGE_URL)
-    return [nil, nil, "#{PAGE_URL}: #{err}"] if body.nil?
-
-    return [body, "the published page #{PAGE_URL} (#{body.bytesize} bytes)", nil]
-  end
+  return [File.read(sibling), "sibling checkout #{sibling}", nil] if File.file?(sibling)
 
   [nil, nil,
    "no sibling checkout at #{sibling}, no KIOSK_TECH_DIR, no --network. " \
@@ -2031,8 +2070,12 @@ end
 # first half and holds nothing.
 #
 # No socket is opened: `Net::HTTP.get_response` is aliased away for the
-# duration and put back afterwards. `KIOSK_TECH_DIR` comes off for the same
-# duration because it is resolved BEFORE `--network` and the CI leg sets it.
+# duration and put back afterwards. `KIOSK_TECH_DIR` IS LEFT EXACTLY AS THE
+# CALLER SET IT (K-1388): this helper used to unset it, because the variable was
+# resolved BEFORE `--network` and the CI leg sets it -- which meant the arms
+# below never exercised the precedence at all, and a regression of that
+# shadowing would have been invisible here. `--network` now outranks it, and one
+# of the arms sets it on purpose to prove so.
 def with_stubbed_response(bytes, charset: "utf-8")
   res = Net::HTTPOK.new("1.1", "200", "OK")
   res["content-type"] = "text/html#{charset ? "; charset=#{charset}" : ""}"
@@ -2040,12 +2083,10 @@ def with_stubbed_response(bytes, charset: "utf-8")
   res.instance_variable_set(:@read, true)
   Net::HTTP.singleton_class.send(:alias_method, :kiosk_self_test_get_response, :get_response)
   Net::HTTP.define_singleton_method(:get_response) { |*_a, **_k| res }
-  env = ENV.delete("KIOSK_TECH_DIR")
   yield
 ensure
   Net::HTTP.singleton_class.send(:alias_method, :get_response, :kiosk_self_test_get_response)
   Net::HTTP.singleton_class.send(:remove_method, :kiosk_self_test_get_response)
-  ENV["KIOSK_TECH_DIR"] = env if env
 end
 
 # What `--network` gets back for a given set of bytes, without a network.
@@ -2058,6 +2099,41 @@ end
 def network_arm(label, ok, detail)
   puts format("  %s  %-48s %s", ok ? "ok  " : "FAIL", label, detail)
   ok
+end
+
+# ── EVERY ARM DECLARES ITS OWN KIND (K-1389) ─────────────────────────────────
+#
+# The summary used to derive its planted-versus-vacuity split by SUBTRACTING two
+# totals -- `arms.size - RULES.size` planted, `RULES.size` vacuity -- which
+# assumes exactly one vacuity arm per rule and every other arm planted. Both
+# halves of that assumption are false and were already false when it was
+# written: PROPERTY_KEYWORDS carries TWO vacuity arms, and the network reader's
+# arms are neither kind. MEASURED at the fix: 25 planted, 18 vacuity, 4 network
+# = 47, against a printed «30 planted breaks, 17 vacuity». The verdict was never
+# wrong -- it counts the failures, not the split -- but a guard that derives a
+# self-description WRONGLY is the K-1340 class exactly, and the error grows with
+# every arm that is not one of the two assumed kinds.
+#
+# So the kind is DECLARED by the helper the call site uses, and the summary
+# COUNTS. Three kinds, and the names say what question the arm answers:
+#
+#   :plant    a break planted in the PAGE, asserting a rule still reddens.
+#   :vacuity  the DERIVATION side blanked, asserting the rule says it is holding
+#             nothing rather than passing over an empty subject.
+#   :network  the `--network` reader itself -- its decoding, its byte
+#             comparison, and its precedence over the environment.
+ARM_KINDS = %i[plant vacuity network].freeze
+
+def plant_arm(label, page, sources, expect_rule)
+  [:plant, self_test_arm(label, page, sources, expect_rule)]
+end
+
+def vacuity_arm(label, page, sources, expect_rule)
+  [:vacuity, self_test_arm(label, page, sources, expect_rule)]
+end
+
+def net_arm(label, ok, detail)
+  [:network, network_arm(label, ok, detail)]
 end
 
 # Every value the plants and the fixture are built from, read out of the repo.
@@ -2372,66 +2448,66 @@ def run_self_test
 
   puts "── planted breaks (page side) ──"
   arms = []
-  arms << self_test_arm("a handler class the generator does not teach",
+  arms << plant_arm("a handler class the generator does not teach",
                         page.sub(f[:handlers].first, "Kiosk::PlantedController"), sources, "HANDLER_NAMES")
-  arms << self_test_arm("#{WORKED_VERB} requires #{opt.inspect} instead",
+  arms << plant_arm("#{WORKED_VERB} requires #{opt.inspect} instead",
                         page.sub(req_lit, "required: [#{opt.inspect}]"), sources, "SLOTS_REQUIRED")
-  arms << self_test_arm("the #{opt.inspect} parameter renamed away",
+  arms << plant_arm("the #{opt.inspect} parameter renamed away",
                         page.sub(/\b#{Regexp.escape(opt)}:(\s*)\{(\s*)type:/, "#{opt}_planted:\\1{\\2type:"), sources, "SLOTS_PROPERTIES")
-  arms << self_test_arm("#{int} read with .to_i again",
+  arms << plant_arm("#{int} read with .to_i again",
                         page.sub("whole_number(params[:#{int}])", "params[:#{int}].to_i"), sources, "INTEGER_COERCION")
-  arms << self_test_arm("a calendar literal frozen into example_params",
+  arms << plant_arm("a calendar literal frozen into example_params",
                         page.sub("example_params({", 'example_params({ planted: "2026-08-12",'), sources, "FROZEN_DATE")
-  arms << self_test_arm("getgrocery's own #{divergent} un-named",
+  arms << plant_arm("getgrocery's own #{divergent} un-named",
                         page.gsub(divergent, "the read controller"), sources, "GETGROCERY_HANDLERS")
-  arms << self_test_arm("params.require(:#{opt}) back in the handler",
+  arms << plant_arm("params.require(:#{opt}) back in the handler",
                         page.sub("params[:#{opt}]", "params.require(:#{opt})"), sources, "REQUIRE_OPTIONAL")
   # gsub, not sub: the page names each floor more than once, and a plant that
   # leaves one copy standing proves nothing about the rule.
-  arms << self_test_arm("the page names a Rails line the gemspec excludes",
+  arms << plant_arm("the page names a Rails line the gemspec excludes",
                         page.gsub("Rails #{f[:rails]}", "Rails 7.1"), sources, "RAILS_FLOOR")
-  arms << self_test_arm("the page names a Ruby below the declared floor",
+  arms << plant_arm("the page names a Ruby below the declared floor",
                         page.gsub("Ruby #{f[:ruby]}", "Ruby 2.7.0"), sources, "RUBY_FLOOR")
   # sub, not gsub: ONE gem line loses the qualifier while its siblings keep it.
   # That is the half-relink shape -- the one a wave actually ships -- and a gsub
   # plant would never exercise it.
-  arms << self_test_arm("one gem line loses the canonical source qualifier",
+  arms << plant_arm("one gem line loses the canonical source qualifier",
                         page.sub(%(#{f[:install][0]}: "#{f[:install][1]}"), ""), sources, "INSTALL_SOURCE")
   # K-1338's shape: ONE verb's required list gains a name getgrocery does not
   # require. Renaming the anchor inside the list produces both halves at once —
   # a name required here and nowhere in getgrocery, and a name getgrocery
   # requires that the page now declares but no longer requires.
-  arms << self_test_arm("#{write_anchor.inspect} required under another name",
+  arms << plant_arm("#{write_anchor.inspect} required under another name",
                         page.sub(/(required:\s*\[[^\]]*)"#{Regexp.escape(write_anchor)}"/) {
                           "#{Regexp.last_match(1)}\"#{write_anchor}_planted\""
                         }, sources, "WRITE_REQUIRED")
   # And the other direction, the one a "page requires too much" rule alone
   # would miss: an argument getgrocery REQUIRES, still declared on the page,
   # demoted to optional.
-  arms << self_test_arm("#{write_anchor.inspect} demoted to optional on the page",
+  arms << plant_arm("#{write_anchor.inspect} demoted to optional on the page",
                         page.sub(/(required:\s*\[[^\]]*)"#{Regexp.escape(write_anchor)}",\s*/) {
                           Regexp.last_match(1)
                         }, sources, "WRITE_REQUIRED")
   # K-1339's shape: the element-shape guard removed from the handler that
   # indexes a declared array of objects.
-  arms << self_test_arm("the #{array_param} element-shape guard removed",
+  arms << plant_arm("the #{array_param} element-shape guard removed",
                         page.gsub("is_a?(Hash)", "respond_to?(:[])"), sources, "ITEM_SHAPE")
   # K-1341's shape, both halves: the page paraphrases the sentence the wire
   # actually sends, and the page stops naming the deliberate route.
-  arms << self_test_arm("the quoted #{errors_ns.split("::").last} hint paraphrased",
+  arms << plant_arm("the quoted #{errors_ns.split("::").last} hint paraphrased",
                         page.sub(redaction_hint, "check your arguments and try again."),
                         sources, "ERROR_REDACTION")
-  arms << self_test_arm("the page stops naming #{errors_ns}",
+  arms << plant_arm("the page stops naming #{errors_ns}",
                         page.gsub(errors_ns, "a Kiosk error"), sources, "ERROR_REDACTION")
   # K-1344's shape: a property BOTH sides declare gains a keyword getgrocery
   # does not, so the page publishes a stricter shape than the origin performs.
-  arms << self_test_arm("#{kw_over[0]}.#{kw_over[1]} gains #{kw_value[0]}: #{kw_value[1]}",
+  arms << plant_arm("#{kw_over[0]}.#{kw_over[1]} gains #{kw_value[0]}: #{kw_value[1]}",
                         page.sub(/(#{Regexp.escape(kw_over[1])}:\s*\{\s*type:\s*"[a-z]+")/,
                                  "\\1, #{kw_value[0]}: #{kw_value[1]}"),
                         sources, "PROPERTY_KEYWORDS")
   # And the other direction, which a "the page is too strict" rule alone would
   # not reach: a literal keyword getgrocery declares, dropped from the page.
-  arms << self_test_arm("#{kw_under[0]}.#{kw_under[1]} loses #{kw_under[2]}: #{kw_under[3]}",
+  arms << plant_arm("#{kw_under[0]}.#{kw_under[1]} loses #{kw_under[2]}: #{kw_under[3]}",
                         page.sub(/(#{Regexp.escape(kw_under[1])}:\s*\{[^}]*?),\s*#{kw_under[2]}:\s*#{Regexp.escape(kw_under[3])}/) {
                           Regexp.last_match(1)
                         }, sources, "PROPERTY_KEYWORDS")
@@ -2441,7 +2517,7 @@ def run_self_test
   # at all, and its handler answers an oversized one with the 500 K-1047 recorded
   # on the origin.
   elem_name = kw_elem[1].split("[].").last
-  arms << self_test_arm("#{kw_elem[0]}.#{kw_elem[1]} loses #{kw_elem[2]}: #{kw_elem[3]}",
+  arms << plant_arm("#{kw_elem[0]}.#{kw_elem[1]} loses #{kw_elem[2]}: #{kw_elem[3]}",
                         planted.call("element keyword #{kw_elem[1]}.#{kw_elem[2]}", page,
                                      page.sub(/(#{Regexp.escape(elem_name)}:\s*\{[^}]*?),\s*#{kw_elem[2]}:\s*#{Regexp.escape(kw_elem[3])}/) {
                                        Regexp.last_match(1)
@@ -2461,7 +2537,7 @@ def run_self_test
   drifted = (f[:ceiling].to_i / 1000).to_s
   # (a) THE SUM IS NOT BOUND -- the pre-fix shape, where the total goes straight
   # into the row and there is nothing for a guard to hold.
-  arms << self_test_arm("#{site[:verb]}'s summed total no longer bound to `#{local}`",
+  arms << plant_arm("#{site[:verb]}'s summed total no longer bound to `#{local}`",
                         planted.call("summed-total binding", page,
                                      page.sub(/^([ \t]*)#{Regexp.escape(local)}[ \t]*=[ \t]*(\S[^\n]*\.sum)/) {
                                        "#{Regexp.last_match(1)}#{Regexp.last_match(2)}"
@@ -2476,12 +2552,12 @@ def run_self_test
           else
             page.sub(/^([ \t]*#{Regexp.escape(token)}[ \t]*=[ \t]*)\S+/) { "#{Regexp.last_match(1)}#{drifted}" }
           end
-  arms << self_test_arm("the cart ceiling drifts to #{drifted}",
+  arms << plant_arm("the cart ceiling drifts to #{drifted}",
                         planted.call("cart ceiling #{token}", page, drift),
                         sources, "TOTAL_GUARD")
   # (c) THE GUARD IS TOO LATE -- something reads the total before the refusal.
   # A bound-and-guarded total whose guard nothing reaches first is not a guard.
-  arms << self_test_arm("`#{local}` consumed before the ceiling comparison",
+  arms << plant_arm("`#{local}` consumed before the ceiling comparison",
                         planted.call("guard ordering", page,
                                      page.sub(/^([ \t]*#{Regexp.escape(local)}[ \t]*=[^\n]*\.sum[^\n]*\n)/) {
                                        "#{Regexp.last_match(1)}    Rails.logger.info(#{local})\n"
@@ -2498,22 +2574,22 @@ def run_self_test
     return 1
   end
   window_verb = window_verb.first
-  arms << self_test_arm("#{window_verb} stops refusing a day that is already gone",
+  arms << plant_arm("#{window_verb} stops refusing a day that is already gone",
                         planted.call("day refusal in #{window_verb}", page,
                                      plant_in_verb(page, window_verb) { |r| r.gsub(f[:window][:day], "#{f[:window][:day]}_planted") }),
                         sources, "PAST_WINDOW")
-  arms << self_test_arm("#{window_verb} stops re-checking the window it books",
+  arms << plant_arm("#{window_verb} stops re-checking the window it books",
                         planted.call("window refusal in #{window_verb}", page,
                                      plant_in_verb(page, window_verb) { |r| r.gsub("#{f[:window][:window]}(", "#{f[:window][:window]}_planted(") }),
                         sources, "PAST_WINDOW")
   # K-1381's shape, both halves: the page stops carrying the README's claim,
   # and the page stops pointing at the section that states it.
   status_url = "https://github.com/#{f[:install][1]}##{f[:publication][2]}"
-  arms << self_test_arm("the page drops the README's publication-status claim",
+  arms << plant_arm("the page drops the README's publication-status claim",
                         planted.call("publication claim", page,
                                      page.gsub(f[:publication][0], "Kiosk gems install from git")),
                         sources, "PUBLICATION_STATUS")
-  arms << self_test_arm("the page stops pointing at the section that states it",
+  arms << plant_arm("the page stops pointing at the section that states it",
                         planted.call("canonical section url", page,
                                      page.gsub(status_url, "the reference monorepo")),
                         sources, "PUBLICATION_STATUS")
@@ -2532,20 +2608,20 @@ def run_self_test
   planted.call("constant #{kw_const[3]} renamed at its definition",
                sources[:uuid_check] + sources[:wire_arguments],
                const_sources[:uuid_check] + const_sources[:wire_arguments])
-  arms << self_test_arm("#{kw_const[3]} no longer resolves to a literal",
+  arms << vacuity_arm("#{kw_const[3]} no longer resolves to a literal",
                         page, const_sources, "PROPERTY_KEYWORDS")
-  arms << self_test_arm("generator template loses its c.handlers example", page,
+  arms << vacuity_arm("generator template loses its c.handlers example", page,
                         sources.merge(generator: sources[:generator].gsub(/c\.handlers\s*=\s*%w\[[^\]]*\]/, "c.handlers = []")), "HANDLER_NAMES")
-  arms << self_test_arm("getgrocery's #{WORKED_VERB} loses required:", page,
+  arms << vacuity_arm("getgrocery's #{WORKED_VERB} loses required:", page,
                         sources.merge(storefront: sources[:storefront].sub(req_lit, "")), "SLOTS_REQUIRED")
-  arms << self_test_arm("getgrocery's #{WORKED_VERB} is renamed away", page,
+  arms << vacuity_arm("getgrocery's #{WORKED_VERB} is renamed away", page,
                         sources.merge(storefront: sources[:storefront].sub(/^(\s*)def #{WORKED_VERB}$/, "\\1def #{WORKED_VERB}_renamed")), "SLOTS_PROPERTIES")
-  arms << self_test_arm("getgrocery declares no integer input parameter", page,
+  arms << vacuity_arm("getgrocery declares no integer input parameter", page,
                         sources.merge(storefront: sources[:storefront].gsub('type: "integer"', 'type: "number"'),
                                       orders: sources[:orders].gsub('type: "integer"', 'type: "number"')), "INTEGER_COERCION")
-  arms << self_test_arm("the page loses every example_params",
+  arms << vacuity_arm("the page loses every example_params",
                         page.gsub("example_params(", "example_args("), sources, "FROZEN_DATE")
-  arms << self_test_arm("getgrocery registers exactly the page's classes", page,
+  arms << vacuity_arm("getgrocery registers exactly the page's classes", page,
                         sources.merge(getgrocery_init: sources[:getgrocery_init].sub(divergent, f[:handlers].first)), "GETGROCERY_HANDLERS")
   # REQUIRE_OPTIONAL's subject is «an argument some SHARED verb leaves
   # optional», so blanking one verb no longer empties it -- the ban reaches
@@ -2561,26 +2637,26 @@ def run_self_test
               "required: [#{sch[1].map(&:inspect).join(", ")}]")
     end
   end
-  arms << self_test_arm("every getgrocery verb requires every parameter it declares", page,
+  arms << vacuity_arm("every getgrocery verb requires every parameter it declares", page,
                         sources.merge(storefront: require_everything.call(sources[:storefront]),
                                       orders: require_everything.call(sources[:orders])), "REQUIRE_OPTIONAL")
-  arms << self_test_arm("the engine's gemspec stops naming Rails", page,
+  arms << vacuity_arm("the engine's gemspec stops naming Rails", page,
                         sources.merge(server_gemspec: sources[:server_gemspec].gsub(/add_dependency\s+"(?:#{RAILS_COMPONENTS.join("|")})"[^\n]*/, "# removed")), "RAILS_FLOOR")
-  arms << self_test_arm("kiosk-core stops declaring required_ruby_version", page,
+  arms << vacuity_arm("kiosk-core stops declaring required_ruby_version", page,
                         sources.merge(core_gemspec: sources[:core_gemspec].gsub(/required_ruby_version[^\n]*/, "# removed")), "RUBY_FLOOR")
-  arms << self_test_arm("the README's canonical line loses its source qualifier", page,
+  arms << vacuity_arm("the README's canonical line loses its source qualifier", page,
                         sources.merge(readme: sources[:readme].gsub(/^gem\s+"kiosk-all"[^\n]*/, %(gem "kiosk-all"))), "INSTALL_SOURCE")
   # Both write-surface rules derive their SUBJECT from getgrocery, so blanking
   # that side must make them say so rather than pass. A renamed verb on the demo
   # side leaves nothing shared to compare.
   renamed = ->(src) { src.gsub(/^(\s*)def ([a-z_][a-zA-Z0-9_]*)$/) { "#{Regexp.last_match(1)}def #{Regexp.last_match(2)}_renamed" } }
-  arms << self_test_arm("getgrocery declares no verb the page also declares", page,
+  arms << vacuity_arm("getgrocery declares no verb the page also declares", page,
                         sources.merge(storefront: renamed.call(sources[:storefront]),
                                       orders: renamed.call(sources[:orders])), "WRITE_REQUIRED")
-  arms << self_test_arm("getgrocery declares no array-of-objects parameter", page,
+  arms << vacuity_arm("getgrocery declares no array-of-objects parameter", page,
                         sources.merge(storefront: sources[:storefront].gsub('type: "array"', 'type: "string"'),
                                       orders: sources[:orders].gsub('type: "array"', 'type: "string"')), "ITEM_SHAPE")
-  arms << self_test_arm("the engine's RESCUED_HINTS map is emptied", page,
+  arms << vacuity_arm("the engine's RESCUED_HINTS map is emptied", page,
                         sources.merge(server_errors: sources[:server_errors]
                           .sub(/RESCUED_HINTS\s*=\s*\{.*?\}\.freeze/m, "RESCUED_HINTS = {}.freeze")),
                         "ERROR_REDACTION")
@@ -2588,14 +2664,14 @@ def run_self_test
   # parseable, so the rule reaches its own vacuity test instead of failing
   # earlier for an unrelated reason.
   dekeyword = ->(src) { src.gsub(/\b(#{ASSERTION_KEYWORDS.join("|")}):/) { "x#{Regexp.last_match(1)}:" } }
-  arms << self_test_arm("getgrocery asserts no JSON Schema keyword anywhere", page,
+  arms << vacuity_arm("getgrocery asserts no JSON Schema keyword anywhere", page,
                         sources.merge(storefront: dekeyword.call(sources[:storefront]),
                                       orders: dekeyword.call(sources[:orders])), "PROPERTY_KEYWORDS")
   # R15's chain starts at the origin's summed total. Break the first link and the
   # whole ceiling is underivable -- the rule must SAY it holds nothing.
   no_sum = sources[:create_order_op].gsub(".sum", ".count")
   planted.call("getgrocery's create operation no longer sums", sources[:create_order_op], no_sum)
-  arms << self_test_arm("getgrocery's create operation sums no total", page,
+  arms << vacuity_arm("getgrocery's create operation sums no total", page,
                         sources.merge(create_order_op: no_sum), "TOTAL_GUARD")
   # R16's chain is rooted in the slot module's own clock reader. Rename it at
   # its DEFINITION and every guard that reads it still names it, so the chain
@@ -2603,14 +2679,14 @@ def run_self_test
   no_clock = sources[:delivery_slots].sub(/^(\s*)def now$/, "\\1def clock_renamed")
   planted.call("the slot module's clock reader renamed at its definition",
                sources[:delivery_slots], no_clock)
-  arms << self_test_arm("the slot module declares no clock reader", page,
+  arms << vacuity_arm("the slot module declares no clock reader", page,
                         sources.merge(delivery_slots: no_clock), "PAST_WINDOW")
   # R17 reads a **bolded** claim out of the README's install section. Strip the
   # emphasis and there is no canonical claim to copy -- red, naming itself,
   # rather than a page held to a sentence nobody states.
   no_claim = sources[:readme].gsub("**", "")
   planted.call("the README's bold emphasis removed", sources[:readme], no_claim)
-  arms << self_test_arm("the README states no bolded publication-status claim", page,
+  arms << vacuity_arm("the README states no bolded publication-status claim", page,
                         sources.merge(readme: no_claim), "PUBLICATION_STATUS")
 
   # ── the network reader (K-1367) ────────────────────────────────────────────
@@ -2630,7 +2706,7 @@ def run_self_test
       crash = "#{e.class}: #{e.message}"
     end
   end
-  arms << network_arm("an ASCII-8BIT body reaches every rule as text",
+  arms << net_arm("an ASCII-8BIT body reaches every rule as text",
                       decoded && clean,
                       if !decoded
                         "!! resolve_page returned #{got.nil? ? reason_net.to_s : got.encoding.to_s}"
@@ -2656,8 +2732,53 @@ def run_self_test
       crash = "#{e.class}: #{e.message}"
     end
   end
-  arms << network_arm("a break planted in those BYTES still goes red", caught,
+  arms << net_arm("a break planted in those BYTES still goes red", caught,
                       caught ? "-> RAILS_FLOOR" : "!! RAILS_FLOOR stayed green#{crash ? " (#{crash})" : ""}")
+
+  # ── THE PRECEDENCE ARMS (K-1388) ──────────────────────────────────────────
+  #
+  # A DECOY ON DISK is the only honest way to ask this. `KIOSK_TECH_DIR` used to
+  # be resolved BEFORE the network branch, so the flag handed back a local file
+  # while the run line said it had read the published page — and it went
+  # unnoticed precisely because the helper above unset the variable, which meant
+  # no arm ever put the two in the same room. So the arm sets it, points it at a
+  # page whose bytes could not possibly be the stub's, and asks what comes back.
+  # Bytes rather than provenance: a run line can say anything.
+  decoy_dir  = File.join(Dir.tmpdir, "onboarding-self-test-decoy-#{Process.pid}")
+  decoy_body = "<html>DECOY: this file must never be what --network returns</html>\n"
+  FileUtils.mkdir_p(decoy_dir)
+  File.write(File.join(decoy_dir, PAGE_BASENAME), decoy_body)
+  prev_env = ENV["KIOSK_TECH_DIR"]
+  begin
+    ENV["KIOSK_TECH_DIR"] = decoy_dir
+    shadow_body, shadow_prov, shadow_reason = network_resolved(page.dup.force_encoding(Encoding::BINARY))
+    served = !shadow_body.nil? && shadow_body.include?("Rails #{f[:rails]}") && !shadow_body.include?("DECOY")
+    arms << net_arm("KIOSK_TECH_DIR does not shadow --network", served,
+                    if shadow_body.nil?
+                      "!! resolve_page returned no page at all: #{shadow_reason}"
+                    elsif shadow_body.include?("DECOY")
+                      "!! --network handed back the local checkout (#{shadow_prov})"
+                    elsif !served
+                      "!! --network returned bytes that are neither the stub nor the decoy"
+                    else
+                      "-> #{shadow_prov}"
+                    end)
+
+    # And the other half of the same rule: two EXPLICIT selectors naming two
+    # sources is refused rather than silently resolved to whichever branch is
+    # written first. This one needs no stub — the refusal happens before any
+    # fetch — but it does need a file that exists, or the arm would pass on the
+    # ordinary «--page does not exist» error instead.
+    both_body, _both_prov, both_reason =
+      resolve_page(explicit: File.join(decoy_dir, PAGE_BASENAME), network: true)
+    refused = both_body.nil? && both_reason.to_s.include?("--network")
+    arms << net_arm("--page WITH --network is refused, not silently preferred", refused,
+                    refused ? "-> #{both_reason.to_s.split(" and ").first} and --network" \
+                            : "!! resolve_page returned #{both_body.nil? ? both_reason.inspect : "a page"}")
+  ensure
+    prev_env.nil? ? ENV.delete("KIOSK_TECH_DIR") : ENV["KIOSK_TECH_DIR"] = prev_env
+    FileUtils.rm_rf(decoy_dir)
+  end
 
   FAILURES.clear
   puts
@@ -2666,20 +2787,41 @@ def run_self_test
   clean = FAILURES.empty?
   puts "  #{clean ? "ok" : "FAIL"}   #{real ? "the working tree" : "the built-in fixture"} holds all #{RULES.size} rules"
 
-  bad = arms.count(false)
+  bad = arms.count { |(_kind, ok)| !ok }
+  # THE SPLIT IS COUNTED, NEVER SUBTRACTED (K-1389). Each arm above declared its
+  # kind by the helper it was pushed through, so this is a tally of what actually
+  # ran rather than arithmetic on two totals that assumed a shape the arms never
+  # had. An arm carrying a kind this file does not know, or a declared kind with
+  # no arm at all, FAILS the run: the first means a fourth helper was added
+  # without teaching the summary, and the second means a whole section stopped
+  # running while the remaining arms went on printing a clean verdict — which is
+  # the vacuity this counting exists to make visible.
+  tally   = arms.group_by(&:first).transform_values(&:size)
+  unknown = tally.keys - ARM_KINDS
+  empty   = ARM_KINDS - tally.keys
+  split   = ARM_KINDS.map { |k| "#{tally.fetch(k, 0)} #{k}" }.join(", ")
+  unless unknown.empty?
+    puts "  FAIL  arm kind(s) #{unknown.inspect} are not in ARM_KINDS — teach the summary the new " \
+         "helper, or push through one it knows."
+  end
+  unless empty.empty?
+    puts "  FAIL  declared arm kind(s) #{empty.inspect} ran ZERO arms. A section that stopped " \
+         "running leaves every remaining arm green over less than it says."
+  end
   puts
   # Name the flag in the output. A run that never says it self-tested is no
   # evidence the flag did anything, because a script that IGNORES an
   # unrecognised flag and performs its ordinary run looks identical from
   # outside -- so the line below is the only thing distinguishing the two.
-  if bad.zero? && clean
-    puts "check-onboarding-derivation --self-test: OK — #{arms.size} arm(s) " \
-         "(#{arms.size - RULES.size} planted breaks, #{RULES.size} vacuity), every one caught."
+  ok = bad.zero? && clean && unknown.empty? && empty.empty?
+  if ok
+    puts "check-onboarding-derivation --self-test: OK — #{arms.size} arm(s) (#{split}) over " \
+         "#{RULES.size} rules, every one caught."
   else
-    puts "check-onboarding-derivation --self-test: FAIL — #{arms.size} arm(s), " \
+    puts "check-onboarding-derivation --self-test: FAIL — #{arms.size} arm(s) (#{split}), " \
          "#{bad} did not go red; unplanted run #{clean ? "clean" : "RED"}."
   end
-  bad.zero? && clean ? 0 : 1
+  ok ? 0 : 1
 end
 
 # ── main ─────────────────────────────────────────────────────────────────────

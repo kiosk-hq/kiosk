@@ -376,6 +376,27 @@ if ARGV.include?("--self-test")
               "class CreateKioskAuditLog < ActiveRecord::Migration[8.0]\n  def change; end\nend\n"]],
       expect: /create_kiosk_audit_log\.rb\.tt: new install-generator template not declared/ },
 
+    { id: "ledger-id-in-generator-template", kind: :break,
+      rule: "NO LEDGER ID IN A SHIPPED GENERATOR TEMPLATE (K-1298)",
+      what: "a fix wave cites its own row in a template `kiosk:install` copies into a consumer's repo",
+      ops:  [[:edit, "kiosk-server/lib/generators/kiosk/install/templates/initializer.rb.tt",
+              "  # Column on `users` that holds the principal id. Default :id.",
+              "  # Column on `users` that holds the principal id. Default :id (K-830)."]],
+      expect: /initializer\.rb\.tt:\d+: a ledger id in a template the install generator WRITES INTO A/ },
+
+    { id: "ledger-id-in-demo-code", kind: :break,
+      rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
+      what: "an id lands in a `desc` body — what `rake -D` prints, K-1323's exact operator-facing shape",
+      ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
+              "DB-free unit spec for the WireArguments shape guards",
+              "DB-free unit spec for the WireArguments shape guards (K-1099)"]],
+      expect: /lib\/tasks\/demo\.rake:\d+: a ledger id OUTSIDE a comment, in code this demo RUNS/ },
+    { id: "vacuity-demo-ledger-ids", kind: :vacuity,
+      rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
+      what: "the detector stops counting its own comment subjects, so a BAN with a dead pattern must say so",
+      ops:  [[:edit, "bin/check-demo-copies", "        demo_id_comment += 1\n", ""]],
+      expect: /the K-1383 ledger-id detector matched NOTHING in \d+ demo/ },
+
     { id: "migration-pair-drift", kind: :break,
       rule: "Cross-demo singleton pairs: the migrations neither rule above sees (K-648)",
       what: "the hand-written migration that ships at demo-specific timestamps is edited in one demo",
@@ -2273,16 +2294,146 @@ end
 # constitution's rule -- so the ban is on the id, not on the marker that needs
 # one, and a template growing a real TODO should declare it here rather than
 # losing the reference that makes it actionable.
+# One spelling of «a ledger id», shared by this rule and the demo-tree rule
+# below it, because two copies of one pattern is two things to be wrong in
+# different ways -- and the second one to rot would rot silently, since both
+# rules are BANS whose obedience and whose blindness print the same zero.
+LEDGER_ID_RE = /\b[KT]-\d{3,4}\b/
+
 tpl_files.sort.each do |name|
   path = File.join(GENERATOR_TEMPLATES_DIR, name)
   File.read(File.join(ROOT, path)).each_line.with_index(1) do |line, lineno|
-    next unless line =~ /\b[KT]-\d{3,4}\b/
+    next unless line =~ LEDGER_ID_RE
     next if line =~ /\b(TODO|FIXME)\b/
 
     errors << "#{path}:#{lineno}: a ledger id in a template the install generator WRITES INTO A " \
               "CONSUMER'S REPOSITORY -- they cannot resolve it and it is not theirs to carry. " \
               "Say the reason instead of citing the row: #{line.strip[0, 90]}"
   end
+end
+
+# ── NO LEDGER ID IN CODE A DEMO RUNS (K-1383) ────────────────────────────────
+#
+# THE RULE ABOVE IS ONE DIRECTORY TOO NARROW. It bans a ledger id in the six
+# install-generator templates, because those are WRITTEN into a third party's
+# repository. The demo tree next door has the same reader problem for a
+# different reason: a `K-1099` inside a `desc`, an `abort`, a task banner or an
+# assertion label is printed AT A TERMINAL, to an operator who cannot open the
+# ledger it names and never will.
+#
+# WHY IT IS THIS NARROW, because the obvious wider ban is already refused. The
+# standing decision for this repository is that inline `K-`/`ADR-`/`T-` refs in
+# its code, READMEs and CHANGELOGs stay AS-IS, permanently -- there is no
+# publication scrub of them, ever, and this rule does not become one. The
+# separate and narrower instruction it does serve is «no archaeology in what a
+# demo SAYS OUT LOUD», which K-1323 executed down to a residue whose every
+# survivor is accounted for by name. So the ban covers the OPERATOR-FACING half
+# only, and is scoped by that argument rather than by taste: a ledger id in a
+# COMMENT is a note to the next maintainer and is left entirely alone, while the
+# same id in a string, a symbol or an identifier reaches somebody's screen.
+#
+# WHY IT EXISTS AT ALL, MEASURED. K-1323's sweep finished; nothing held it
+# afterwards. Its own two measurements are 568 occurrences immediately after an
+# earlier wave and 759 when the fix started -- 51 occurrences of 12 distinct ids
+# re-introduced in about a day, ALL of it by ordinary fix waves rather than by
+# anyone deciding to. Re-measured when this rule was written: **24 occurrences
+# under `kiosk-demo-*` (git grep -P, PCRE -- an ERE `\b` here matches NOTHING and
+# exits 1), 19 of them in Ruby this rule scans and every one of those in a
+# COMMENT, zero in code.** So the ban starts at zero survivors and needs no
+# exemption list at all; the day it needs one, the entry goes here with its
+# reason, exactly like every other manifest in this file.
+#
+# COMMENT versus CODE IS ASKED OF RIPPER, NOT OF A REGEX. `^\s*#` misses a
+# trailing comment and a `#` inside a string literal or a heredoc is not a
+# comment at all; both mistakes are silent and both point the wrong way. The
+# lexer answers exactly the question the rule asks, and a file it cannot lex is
+# an ERROR rather than a skip -- the fail-open discipline this file uses
+# everywhere else.
+#
+# WHAT IS NOT SCANNED, declared rather than assumed:
+#   * `kiosk-demo-*/bin/` -- Phil's standing exemption, alongside CHANGELOG.md
+#     and CLAUDE.md. Those are generator binstubs and maintainer documents, not
+#     something a demo prints.
+#   * `.md`, `.html`, `.erb`, `.sql` -- not Ruby, so «comment» means a different
+#     thing in each and Ripper cannot answer for them. The three `<!-- derived:
+#     -->` declarations and the two `before-after.md` transcript lines that carry
+#     an id today are all in that set, and all three are MACHINE-READ
+#     declarations `bin/check-demo-derivations` holds.
+#   * `spec/` and `test/` -- developer surfaces. An operator never runs them, and
+#     the constitution's own TODO/FIXME rule REQUIRES an id there.
+#
+# THE VACUITY GUARDS, and note the polarity: this is a BAN, so «no violations»
+# is the tree being clean rather than the rule being switched off. Two things
+# must therefore be asserted about the MECHANISM instead. The file count catches
+# a glob that stopped matching or a lexer that stopped running. The comment count
+# catches the pattern itself rotting -- and it cannot drain to zero by accident,
+# because seven `config/routes.rb` copies carry `(T-074 = A)` inside a sentence
+# FRAMEWORK_CLAIMS holds verbatim in this same script, itself held to the
+# protocol constant's own record of the deletion. Losing that count means the
+# regex broke, not that the tree got tidier.
+DEMO_ID_ROOTS = %w[app lib script config db].freeze
+DEMO_ID_TOP   = %w[Rakefile config.ru].freeze
+
+demo_id_files   = 0
+demo_id_comment = 0
+demo_id_unlexed = []
+
+demos.each do |dir|
+  paths = DEMO_ID_ROOTS.flat_map { |r| Dir[File.join(dir, r, "**", "*.{rb,rake,ru}")] } +
+          DEMO_ID_TOP.map { |n| File.join(dir, n) }.select { |p| File.file?(p) }
+  paths.sort.each do |abs|
+    rel = abs.delete_prefix("#{ROOT}/")
+    src = File.read(abs)
+    demo_id_files += 1
+    next unless src.match?(LEDGER_ID_RE)
+
+    tokens =
+      begin
+        Ripper.lex(src)
+      rescue StandardError
+        nil
+      end
+    if tokens.nil? || tokens.empty?
+      demo_id_unlexed << rel
+      next
+    end
+
+    tokens.each do |(pos, type, tok, _state)|
+      next unless tok.to_s.match?(LEDGER_ID_RE)
+
+      if type == :on_comment
+        demo_id_comment += 1
+        next
+      end
+
+      errors << "#{rel}:#{pos[0]}: a ledger id OUTSIDE a comment, in code this demo RUNS -- it " \
+                "reaches an operator's terminal (a `desc` that `rake -D` prints, a task banner, an " \
+                "`abort`, an assertion label) and names a private ledger row they cannot open " \
+                "(K-1383, the class K-1323 swept and nothing held afterwards). Say what the control " \
+                "IS rather than which row filed it — «past-slot filter», not «K-480» — and keep the " \
+                "id in a comment beside it if the provenance is worth carrying: " \
+                "#{tok.to_s.strip[0, 90]}"
+    end
+  end
+end
+
+if demo_id_files.zero?
+  errors << "check-demo-copies: the K-1383 ledger-id rule read 0 Ruby file(s) under " \
+            "kiosk-demo-*/{#{DEMO_ID_ROOTS.join(',')}} — the glob has stopped matching, and a BAN " \
+            "over an empty corpus reports the same clean zero as an obeyed one, forever."
+end
+unless demo_id_unlexed.empty?
+  errors << "#{demo_id_unlexed.sort.join(', ')}: Ripper returned no tokens for " \
+            "#{demo_id_unlexed.one? ? 'this file' : 'these files'}, which carry a ledger id somewhere — " \
+            "so the K-1383 rule could not tell a comment from a string in them and did not check them " \
+            "at all. A file this rule cannot read must not pass silently."
+end
+if demo_id_files.positive? && demo_id_comment.zero?
+  errors << "check-demo-copies: the K-1383 ledger-id detector matched NOTHING in #{demo_id_files} demo " \
+            "Ruby file(s) — not even a comment. It cannot have drained honestly: seven " \
+            "config/routes.rb copies carry `(T-074 = A)` inside a sentence FRAMEWORK_CLAIMS holds " \
+            "verbatim in this same script. So LEDGER_ID_RE has stopped matching the shape people " \
+            "write, and the ban is holding nothing."
 end
 
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
@@ -3068,6 +3219,35 @@ end
 # (K-860, K-883): a demo that grows a host-detecting task without being listed
 # fails here rather than becoming another copy nobody reasoned about, and a
 # listed demo that loses its last one fails too.
+#
+# `why:` FOR THE SET ITSELF, WHICH IT DID NOT CARRY (K-1379). Every COPIES entry
+# states a reason; this one named four demos and said nothing about the three it
+# leaves out, so a reader could not tell a decision from a half-finished sweep.
+# MEASURED at head, and the answer is: NOBODY DECIDED IT.
+#
+#   * philslist, stylish and tudu are operator demos that boot servers, have a
+#     deployed vanity host in `deploy/README.md` (`philslist.demo.kiosk.tech`,
+#     `stylish.demo.kiosk.tech`, `tudu.demo.kiosk.tech`, ports 3005-3007), and
+#     ship NO host-detection block: `command grep -c "host = begin"` over each
+#     one's `lib/tasks/demo.rake` -> 0, against 8 / 6 / 6 / 5 for the four
+#     listed. Their tasks hard-code `http://127.0.0.1:#{port}` and therefore
+#     print no hint that a vanity name exists.
+#   * There is nothing about them that makes the block inapplicable. It is
+#     opt-in on `KIOSK_DEMO_HOST_LOOKUP=1`, makes no outbound query otherwise,
+#     and falls back to loopback -- which is what those three do unconditionally.
+#   * The set is EXACTLY the four demos that carry a published `before-after.md`
+#     recording (`BEFORE_AFTER_FOUR` below is the same four names, arrived at
+#     independently). That is a correlation with the DOCUMENTS, not with any
+#     capability, and it is not chronological either: stylish predates two of the
+#     four. No ADR and no ledger row records a choice; K-1318 and K-1353 both
+#     swept «all twenty-five blocks» and neither asked about the demos with none.
+#
+# So this set is a PARTIAL SWEEP as far as anything written down goes, and that
+# is what this `why:` records rather than dressing up. Extending the block to the
+# other three is a product-facing change to what an operator's run prints, so it
+# is filed rather than taken here (K-1379). Until someone decides, the four names
+# below are the demos that HAVE the construct, and the rule holds those four in
+# lockstep -- which is all it ever claimed to do.
 HOST_BLOCK_REL   = "lib/tasks/demo.rake"
 HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling skooti].freeze
 HOST_BLOCK_OPEN  = /\A(\s*)host = begin\s*\z/
@@ -6023,7 +6203,9 @@ if errors.empty?
        "the engine's own hazard sentence, " \
        "no orphaned container tooling in #{container_tracked.length} #{container_source} path(s) " \
        "(#{container_ignores.length} ignore file(s), #{container_recipes.length} recipe(s); " \
-       "detector proved on #{container_truth.length} constructed names)"
+       "detector proved on #{container_truth.length} constructed names), " \
+       "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
+       "(#{demo_id_comment} carried by comments, which Phil's instruction leaves alone)"
   exit 0
 end
 

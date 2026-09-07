@@ -113,14 +113,367 @@
 # bin/check-demo-copies.
 #
 # Usage:
-#   bin/check-gem-packaging          # check
-#   bin/check-gem-packaging --list   # print what each gem packages and reaches for
+#   bin/check-gem-packaging            # check
+#   bin/check-gem-packaging --list     # print what each gem packages and reaches for
+#   bin/check-gem-packaging --self-test  # red on a planted break of every rule
 
 require "rubygems/package"
 require "tmpdir"
 require "shellwords"
 
 ROOT = File.expand_path("..", __dir__)
+
+# ── --self-test: one planted break per rule, in a MINIATURE workspace (K-1368)
+#
+# WHY THIS FILE HAS ONE, and it is not «every guard should» — that principle is
+# explicitly rejected in this workspace. Two facts about THIS script are the
+# argument:
+#
+#   * ITS NEWEST RULE IS PRESENCE-SHAPED, which is the shape that goes quietly
+#     green. Rule C fails when a packaged file teaches an install WITHOUT the
+#     pointer; if `INSTALL_TEACHING` stops recognising the shapes people write,
+#     the rule matches nothing and this script exits 0 — the same colour as a
+#     clean tree. There is an in-band vacuity guard for exactly that, and until
+#     now NOTHING PROVED THE GUARD ITSELF STILL FIRES.
+#   * THE PROOF WAS BEING THROWN AWAY. K-1343's rules were proven by a verify
+#     pass planting breaks BY HAND — a publication-day arm and a
+#     detector-switched-off arm — and neither was re-runnable afterwards. They
+#     existed only as prose in a ledger row, which is the K-1227 shape: a rule
+#     that reads as covered with no mechanism that goes red for it.
+#
+# HOW IT RUNS, AND WHY NOT ON THE REAL TREE. `check-demo-copies` copies the
+# working tree and runs itself from the copy's own `bin/`; that is right for a
+# guard whose subject IS the fleet. This one's subject is what `gem build`
+# produces, so the fixture is a MINIATURE WORKSPACE instead: a git repository
+# with two tiny gems, a monorepo README carrying the canonical install line and
+# the `## Install` heading, and this script copied into its `bin/`. `ROOT` is
+# derived from `__dir__`, so the copy walks the fixture and nothing here ever
+# writes inside the real repository. Two gems build in well under a second,
+# where fourteen take four — and the arms are aimed at RULES, which a miniature
+# can carry faithfully.
+#
+# THE FIXTURE MUST SATISFY EVERY MANIFEST IN THIS FILE, and that is a feature:
+# `NOT_PACKAGED`'s eight patterns, `OUT_OF_GEM` (empty) and
+# `INSTALL_MENTION_ONLY`'s one entry are all checked for STALENESS on every run,
+# so a fixture that did not carry a subject for each of them would be red before
+# any arm ran. The baseline is asserted green first for exactly that reason.
+#
+# TWO KINDS OF ARM, declared per row:
+#
+#   :break    a faithful mistake in the FIXTURE — the gemspec that forgets a
+#             directory (the defect this whole file exists for), a __dir__ that
+#             escapes the package, a README that teaches an install and points
+#             nowhere. None is a syntax error a parser would catch.
+#   :vacuity  the rule's SUBJECT removed rather than violated, to prove the
+#             in-band guard watching that rule's liveness still fires. Note the
+#             polarity: for Rule C — a PRESENCE requirement — «nothing matched»
+#             is the rule not running, and for the manifests it is an entry that
+#             has stopped guarding anything.
+#
+# WHAT IT DOES NOT COVER: it proves each rule reddens on ONE break in a
+# miniature. It does not prove the rule is right, does not enumerate the breaks
+# a rule could miss, and says nothing about the fourteen real gems — the bare
+# run is what answers for those.
+if ARGV.include?("--self-test")
+  require "fileutils"
+  require "open3"
+  require "rbconfig"
+
+  # ── the fixture workspace ─────────────────────────────────────────────────
+  #
+  # Two gems, because one cannot show a manifest entry that names a gem. Every
+  # file here exists to be a SUBJECT of some rule or manifest, and the comment
+  # on each says which.
+  ST_FIXTURE = {
+    # Rule C derives its pointer from this file: the slug off the canonical
+    # install line, the anchor off the heading. Both are planted against.
+    "README.md" => <<~'MD',
+      # Fixture monorepo
+
+      ## Install
+
+      Nothing here is published.
+
+      ```ruby
+      gem "kiosk-all", github: "kiosk-hq/kiosk"
+      ```
+    MD
+
+    # ── kiosk-server: the gem that carries a subject for every manifest ──
+    #
+    # NAMED `kiosk-server` on purpose: INSTALL_MENTION_ONLY declares a path in
+    # that gem, and a manifest entry naming a gem the workspace does not have is
+    # a stale entry — so a fixture without it would be red before any arm ran.
+    "kiosk-server/kiosk-server.gemspec" => <<~'RB',
+      Gem::Specification.new do |spec|
+        spec.name        = "kiosk-server"
+        spec.version     = "0.0.0"
+        spec.summary     = "self-test fixture"
+        spec.description = "A miniature gem, built by bin/check-gem-packaging --self-test."
+        spec.authors     = ["fixture"]
+        spec.email       = ["fixture@example.invalid"]
+        spec.homepage    = "https://kiosk.tech"
+        spec.license     = "Apache-2.0"
+        spec.files       = Dir.glob("lib/**/*") + Dir.glob("app/**/*") + %w[README.md]
+        spec.require_paths = ["lib"]
+      end
+    RB
+    # Rule B's subject: a packaged file resolving a path against __dir__ that
+    # lands on another packaged path. This is the shape of the defect the whole
+    # script exists for.
+    "kiosk-server/lib/kiosk/server.rb" => <<~'RB',
+      module Kiosk
+        module Server
+          VIEWS = File.expand_path("../../app/views", __dir__)
+        end
+      end
+    RB
+    # INSTALL_MENTION_ONLY's declared subject: prose ABOUT the resolver that
+    # names an install command without instructing anyone to run it.
+    "kiosk-server/lib/kiosk/server/request_validation.rb" => <<~'RB',
+      # A missing runtime dependency is what `gem install kiosk-server` resolves;
+      # run `bundle install` rather than reaching for a registry.
+      module Kiosk
+        module Server
+          module RequestValidation
+          end
+        end
+      end
+    RB
+    "kiosk-server/app/views/fixture.html.erb" => "<p>fixture view</p>\n",
+    # Rule C's ordinary subject: a PACKAGED file that teaches an install and
+    # therefore owes the pointer.
+    "kiosk-server/README.md" => <<~'MD',
+      # kiosk-server (fixture)
+
+      ```ruby
+      gem "kiosk-server"
+      ```
+
+      No Kiosk gem is on RubyGems — see https://github.com/kiosk-hq/kiosk#install.
+    MD
+    # NOT_PACKAGED's eight patterns, one subject each. A pattern with no subject
+    # anywhere is reported stale, so these are what keep the baseline green.
+    "kiosk-server/.gitignore" => "/pkg\n",
+    "kiosk-server/.rspec"     => "--require spec_helper\n",
+    "kiosk-server/Gemfile"    => "source \"https://rubygems.org\"\ngemspec\n",
+    "kiosk-server/Gemfile.lock" => "PATH\n  remote: .\n",
+    "kiosk-server/Rakefile"   => "task :default => :spec\n",
+    "kiosk-server/spec/spec_helper.rb" => "# fixture spec helper\n",
+    "kiosk-server/test/fixture_test.rb" => "# fixture minitest file\n",
+
+    # ── kiosk-core: a second gem, so `listing.size` is plural and a manifest
+    # entry naming a gem is distinguishable from one naming a path.
+    "kiosk-core/kiosk-core.gemspec" => <<~'RB',
+      Gem::Specification.new do |spec|
+        spec.name        = "kiosk-core"
+        spec.version     = "0.0.0"
+        spec.summary     = "self-test fixture"
+        spec.description = "A miniature gem, built by bin/check-gem-packaging --self-test."
+        spec.authors     = ["fixture"]
+        spec.email       = ["fixture@example.invalid"]
+        spec.homepage    = "https://kiosk.tech"
+        spec.license     = "Apache-2.0"
+        spec.files       = Dir.glob("lib/**/*") + %w[README.md]
+        spec.require_paths = ["lib"]
+      end
+    RB
+    "kiosk-core/lib/kiosk/core.rb" => "module Kiosk\n  module Core\n  end\nend\n",
+    "kiosk-core/README.md" => <<~'MD',
+      # kiosk-core (fixture)
+
+      Install with `bundle add kiosk-core` — see https://github.com/kiosk-hq/kiosk#install.
+    MD
+    "kiosk-core/.gitignore" => "/pkg\n",
+  }.freeze
+
+  # THE PLANT TABLE. `ops:` are [relative path, needle, replacement] applied to
+  # the fixture; a needle that no longer occurs FAILS the arm rather than running
+  # it, because a plant that changed nothing proves nothing. `expect:` must
+  # appear in the planted run's output, and the run must exit 1.
+  ST_PLANTS = [
+    { id: "A-gemspec-forgets-a-directory", kind: :break, rule: "A. COMPLETENESS",
+      what: "`spec.files` stops naming app/, exactly as kiosk-server's did — the defect this file exists for",
+      ops: [["kiosk-server/kiosk-server.gemspec", ' + Dir.glob("app/**/*")', ""]],
+      expect: "`app/views/fixture.html.erb` is tracked in this repo but is NOT in the built gem" },
+    { id: "A-manifest-entry-guards-nothing", kind: :vacuity, rule: "A. COMPLETENESS",
+      what: "the only file a NOT_PACKAGED pattern matches is deleted, leaving the pattern excusing nothing",
+      ops: [[:delete, "kiosk-server/test/fixture_test.rb"]],
+      expect: "NOT_PACKAGED pattern `test/**/*` matched no tracked-but-unpackaged file" },
+
+    { id: "B-reach-outside-the-package", kind: :break, rule: "B. REACHABILITY",
+      what: "packaged Ruby resolves a __dir__-relative path at a directory the gem does not ship",
+      ops: [["kiosk-server/lib/kiosk/server.rb", '"../../app/views"', '"../../config/views"']],
+      expect: "which is NOT in the built gem" },
+    { id: "B-escape-the-gem-root", kind: :break, rule: "B. REACHABILITY",
+      what: "the literal climbs out of the gem entirely — it can only exist in this monorepo checkout",
+      ops: [["kiosk-server/lib/kiosk/server.rb", '"../../app/views"', '"../../../kiosk-core/lib"']],
+      expect: "which escapes the gem root entirely" },
+    { id: "B-unreadable-dir-shape", kind: :break, rule: "B. REACHABILITY",
+      what: "a __dir__ in a shape RESOLVABLE does not know — the fail-open guard, which must ERROR not skip",
+      ops: [["kiosk-server/lib/kiosk/server.rb", 'File.expand_path("../../app/views", __dir__)',
+             'File.expand_path(File.join("..", "..", "app", "views"), __dir__)']],
+      expect: "It does not understand the shape used here" },
+
+    { id: "C-packaged-file-points-nowhere", kind: :break, rule: "C. THE INSTALL POINTER",
+      what: "a packaged README teaches `gem \"kiosk-server\"` and never says the gem is unpublished",
+      ops: [["kiosk-server/README.md", " — see https://github.com/kiosk-hq/kiosk#install", ""]],
+      expect: "teaches an install of a Kiosk gem, but does not point at" },
+    { id: "C-derivation-loses-the-slug", kind: :break, rule: "C. THE INSTALL POINTER",
+      what: "publication day: the canonical line loses its `github:` qualifier and the rule can no longer derive its subject",
+      ops: [["README.md", 'gem "kiosk-all", github: "kiosk-hq/kiosk"', 'gem "kiosk-all"']],
+      expect: "declares no canonical `gem \"kiosk-all\", github: \"...\"` line" },
+    { id: "C-derivation-loses-the-heading", kind: :break, rule: "C. THE INSTALL POINTER",
+      what: "the README's Install section is renamed, so the anchor the pointer names stops existing",
+      ops: [["README.md", "## Install", "## Getting started"]],
+      expect: "has no `## Install` heading" },
+    { id: "C-detector-matches-nothing", kind: :vacuity, rule: "C. THE INSTALL POINTER",
+      what: "no packaged file teaches an install any more — for a PRESENCE rule that is the rule not running",
+      ops: [["kiosk-server/README.md", 'gem "kiosk-server"', "kiosk_server_setup"],
+            ["kiosk-server/lib/kiosk/server/request_validation.rb", "gem install kiosk-server",
+             "the dependency resolution"],
+            ["kiosk-core/README.md", "bundle add kiosk-core", "vendoring it"]],
+      expect: "found NONE that teaches an install of a Kiosk gem" },
+    { id: "C-mention-only-outlives-its-reason", kind: :vacuity, rule: "C. THE INSTALL POINTER",
+      what: "the declared prose-only sentence is rewritten and the exemption is left standing",
+      ops: [["kiosk-server/lib/kiosk/server/request_validation.rb", "gem install kiosk-server",
+             "the dependency resolution"]],
+      expect: "no longer mentions installing a Kiosk gem at all" },
+  ].freeze
+
+  if ARGV.include?("--list")
+    puts "check-gem-packaging --self-test --list: #{ST_PLANTS.length} arm(s) over " \
+         "#{ST_PLANTS.map { |p| p[:rule] }.uniq.length} rule(s)"
+    ST_PLANTS.group_by { |p| p[:rule] }.each do |rule, arms|
+      puts "  #{rule}"
+      arms.each { |a| puts format("    %-6s %-34s %s", a[:kind] == :vacuity ? "V" : "B", a[:id], a[:what]) }
+    end
+    exit 0
+  end
+
+  st_bad = []
+  Dir.mktmpdir("check-gem-packaging-self-test") do |tmp|
+    ST_FIXTURE.each do |rel, body|
+      path = File.join(tmp, rel)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, body)
+    end
+    FileUtils.mkdir_p(File.join(tmp, "bin"))
+    FileUtils.copy_file(__FILE__, File.join(tmp, "bin", File.basename(__FILE__)), true)
+    File.chmod(0o755, File.join(tmp, "bin", File.basename(__FILE__)))
+
+    # Rule A reads `git ls-files`, so the fixture is a real repository. The index
+    # alone answers that question, so nothing is committed — and every git call
+    # excludes the machine's global config, because this must behave the same on
+    # a box with a global excludesFile, a signing key or a hooksPath.
+    git_cfg = ["-c", "core.excludesFile=/dev/null", "-c", "core.hooksPath=/dev/null",
+               "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid"]
+    _o, git_ok = Open3.capture2e("git", "-C", tmp, *git_cfg, "init", "-q")
+    _o2, add_ok = Open3.capture2e("git", "-C", tmp, *git_cfg, "add", "-A")
+    unless git_ok.success? && add_ok.success?
+      warn "check-gem-packaging --self-test: FAIL — could not make the fixture a git repository, and " \
+           "Rule A reads `git ls-files`. Nothing below would mean anything."
+      exit 1
+    end
+
+    st_run = lambda do
+      out, status = Open3.capture2e(RbConfig.ruby, File.join(tmp, "bin", File.basename(__FILE__)))
+      [out, status.exitstatus]
+    end
+
+    base_out, base_code = st_run.call
+    if base_code.zero?
+      puts format("  %-6s %s", "GREEN", "baseline: the untouched fixture exits 0, so every arm below is " \
+                                        "ONE planted break away from red")
+    else
+      st_bad << "the BASELINE fixture is not green (exit #{base_code.inspect}). No arm below means " \
+                "anything until it is:\n" +
+                base_out.lines.grep(/✗/).first(6).map { |l| "      #{l.rstrip[0, 180]}" }.join("\n")
+    end
+
+    if st_bad.empty?
+      ST_PLANTS.each do |plant|
+        bodies  = {}
+        deleted = []
+        aborted = false
+        plant[:ops].each do |op|
+          if op.first == :delete
+            rel = op[1]
+            unless File.file?(File.join(tmp, rel))
+              st_bad << "#{plant[:id]}: the fixture no longer carries #{rel}, so this arm deletes " \
+                        "nothing and proves nothing. Repair the fixture, not the arm."
+              aborted = true
+              break
+            end
+            deleted << rel
+            next
+          end
+
+          rel, needle, replacement = op
+          body  = bodies[rel] || ST_FIXTURE.fetch(rel)
+          after = body.sub(needle) { replacement }
+          if after == body
+            st_bad << "#{plant[:id]}: the fixture no longer contains #{needle.inspect} in #{rel}, so " \
+                      "this arm mutates nothing and proves nothing. Repair the fixture, not the arm."
+            aborted = true
+            break
+          end
+          bodies[rel] = after
+        end
+        next if aborted
+
+        if base_out.include?(plant[:expect])
+          st_bad << "#{plant[:id]}: its marker already appears in the CLEAN baseline output, so the arm " \
+                    "cannot tell a plant from a green run."
+          next
+        end
+
+        begin
+          bodies.each { |rel, body| File.write(File.join(tmp, rel), body) }
+          # A `:delete` must leave the INDEX, not just the disk. Rule A's subject
+          # is `git ls-files`, so a file removed from the working tree alone is
+          # still tracked and the arm would prove nothing while reading green —
+          # which is exactly what it did before this line existed.
+          deleted.each do |rel|
+            File.delete(File.join(tmp, rel))
+            Open3.capture2e("git", "-C", tmp, *git_cfg, "rm", "-q", "--cached", "--", rel)
+          end
+          out, code = st_run.call
+          if code.zero?
+            st_bad << "#{plant[:id]}: planted #{plant[:what]} and the guard stayed GREEN."
+          elsif !out.include?(plant[:expect])
+            st_bad << "#{plant[:id]}: went red, but NOT under its own name — the output does not " \
+                      "contain #{plant[:expect].inspect}, so a reader is sent to the wrong rule.\n" +
+                      out.lines.grep(/✗/).first(3).map { |l| "      #{l.rstrip[0, 180]}" }.join("\n")
+          else
+            puts format("  %-6s %-34s %s", plant[:kind] == :vacuity ? "V-RED" : "RED", plant[:id],
+                        plant[:what])
+          end
+        ensure
+          bodies.each_key { |rel| File.write(File.join(tmp, rel), ST_FIXTURE.fetch(rel)) }
+          deleted.each do |rel|
+            File.write(File.join(tmp, rel), ST_FIXTURE.fetch(rel))
+            Open3.capture2e("git", "-C", tmp, *git_cfg, "add", "--", rel)
+          end
+        end
+      end
+    end
+  end
+
+  if st_bad.empty?
+    kinds = ST_PLANTS.group_by { |p| p[:kind] }.transform_values(&:size)
+    puts "check-gem-packaging --self-test: OK — #{ST_PLANTS.length} arm(s) " \
+         "(#{kinds.fetch(:break, 0)} planted breaks, #{kinds.fetch(:vacuity, 0)} vacuity) over " \
+         "#{ST_PLANTS.map { |p| p[:rule] }.uniq.length} rules, every one red under its own name."
+    exit 0
+  end
+
+  warn "\ncheck-gem-packaging --self-test FAILED:\n"
+  st_bad.each { |b| warn "  ✗ #{b}" }
+  warn "\nA rule that no longer reddens on its own break is a rule that has stopped running, and the " \
+       "bare exit code cannot tell you which one it is."
+  exit 1
+end
 
 # ── Manifest A: what may legitimately stay out of a gem ──────────────────────
 #

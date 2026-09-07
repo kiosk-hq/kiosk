@@ -771,7 +771,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     unknown = client.query(a, name: "availability", property_id: 999_999,
                               check_in: PROBE_IN, check_out: PROBE_OUT)
     unless unknown.status == 404 && body_code(unknown) == "not_found"
-      @failures << "T-090 unknown property_id → HTTP #{unknown.status} " \
+      @failures << "unknown property_id → HTTP #{unknown.status} " \
                    "code=#{body_code(unknown).inspect} (want 404/not_found; a 200 [] would " \
                    "assert the hotel exists and merely has no rooms)"
     end
@@ -783,7 +783,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # end of the calendar asks the same question (a stay whose total overflows
     # `bookings.total_cents`) from the side the past-date floor does not stand
     # on.
-    refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay, K-968)",
+    refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay)",
             client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                           check_in: PROBE_IN, check_out: "9999-12-31"),
             supplied: "9999-12-31"

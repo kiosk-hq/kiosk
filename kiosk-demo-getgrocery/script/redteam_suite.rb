@@ -522,7 +522,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     max_int4 = 2_147_483_647
     { "unpriceable cart"     => (max_int4 / price) + 1,
       "unstorable qty"       => max_int4 + 1 }.each do |why, v|
-      refused "create_order items[0].qty=#{v} (#{why}, K-1047)",
+      refused "create_order items[0].qty=#{v} (#{why})",
               client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
                             delivery_slot_id: 1, delivery_address: ADDRESS),
               supplied: { sku: sku, qty: v }

@@ -334,7 +334,7 @@ kiosk-demo-atablefor/lib/tasks/demo.rake	task :pow do
 kiosk-demo-atablefor/lib/tasks/demo.rake	task :reputation do
 kiosk-demo-atablefor/lib/tasks/demo.rake	task binding: :setup do
 kiosk-demo-atablefor/lib/tasks/demo.rake	which is not a skill-vX.Y.Z.md cut (§4.5)
-kiosk-demo-atablefor/lib/tasks/demo.rake	── Discovery-signal assertions (K-927, protocol.md §4.5) ──
+kiosk-demo-atablefor/lib/tasks/demo.rake	── Discovery-signal assertions (protocol.md §4.5) ──
 kiosk-demo-atablefor/script/book_flow.rb	# Reference agent driver: no-human restaurant table booking end-to-end.
 kiosk-demo-atablefor/script/book_flow.rb	# The headline: a 2-top at tonight's 20:00 seating ("a table for two tonight at 8").
 kiosk-demo-atablefor/script/book_flow.rb	slot = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
@@ -662,7 +662,7 @@ kiosk-demo-stylish/lib/tasks/demo.rake	set spending cap via the manage page → 
 kiosk-demo-stylish/lib/tasks/demo.rake	task :walkthrough do
 kiosk-demo-stylish/lib/tasks/demo.rake	task binding: :setup do
 kiosk-demo-stylish/lib/tasks/demo.rake	task roles: :setup do
-kiosk-demo-stylish/script/descriptor_examples.rb	asserted almost nothing (T-097)
+kiosk-demo-stylish/script/descriptor_examples.rb	asserted almost nothing
 kiosk-demo-stylish/script/descriptor_examples.rb	example_params satisfies its own input_schema
 kiosk-demo-stylish/script/descriptor_examples.rb	example_row satisfies its own output_schema
 kiosk-demo-stylish/script/descriptor_examples.rb	exempt_names = Kiosk::Server::ArgumentDecoder::RESERVED.keys

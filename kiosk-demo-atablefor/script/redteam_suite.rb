@@ -433,9 +433,9 @@ invalid_filter_probes = [
    { party_size: 2, time: "18:00" }, %w[19:00 20:00 21:00]],
   ["date=#{FAR_FUTURE} (valid date, past the horizon)",
    { party_size: 2, date: FAR_FUTURE }, ["upcoming seatings"]],
-  ["date=#{PAST_DATE} (valid date, BEHIND the horizon — K-969)",
+  ["date=#{PAST_DATE} (valid date, BEHIND the horizon)",
    { party_size: 2, date: PAST_DATE }, ["upcoming seatings"]],
-  ["neighborhood=Atlantis (well-formed, unserved — T-090)",
+  ["neighborhood=Atlantis (well-formed, unserved)",
    { party_size: 2, neighborhood: "Atlantis" }, ["Alfama"]],
   ["both filters, no overlap",
    { party_size: 2, time: "18:00", date: FAR_FUTURE }, %w[19:00 20:00 21:00]],
@@ -486,7 +486,7 @@ horizon_probes = [
   # already started — call availability again for the still-bookable seatings»,
   # which names where a bookable value comes from rather than listing them. Both
   # are typed 400s an assistant recovers from, which is what is asserted.
-  ["date=#{PAST_DATE} (valid date, BEHIND the rolling horizon — K-969)",
+  ["date=#{PAST_DATE} (valid date, BEHIND the rolling horizon)",
    PAST_DATE, "already started"],
   ["date=#{Date.today.strftime('%Y%m%d')} (basic ISO-8601 — not the advertised YYYY-MM-DD)",
    Date.today.strftime("%Y%m%d"), "date"],

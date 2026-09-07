@@ -80,7 +80,7 @@ def atablefor_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate (T-137)."
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
   task :wire_args_spec do
     spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
     puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
@@ -300,11 +300,10 @@ namespace :demo do
     solver. The flow pays that toll MORE THAN ONCE: registration is tolled too,
     and script/equihash_register.rb solves it transparently for each identity
     the flow mints. So the run COUNTS every solve and prints the total beside
-    its verdict instead of promising a number typed here — this sentence used
-    to say "four", and the run it describes solves three (K-1221). The task
+    its verdict instead of promising a number typed here. The task
     prints the (n, k) it actually ran at, at boot and again beside its verdict,
     so a recording can never leave a viewer guessing which toll they watched
-    being paid (T-110).
+    being paid.
 
     Requires python3 + numpy.
   DESC
@@ -366,7 +365,7 @@ namespace :demo do
            "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
            "GiB is its table, not a floor these params impose on every solver. " \
            "The flow solves MORE than one proof — registration is tolled too — " \
-           "and the count it actually paid is printed beside the verdict (K-1221)."
+           "and the count it actually paid is printed beside the verdict."
     else
       puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
            "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
@@ -510,7 +509,7 @@ namespace :demo do
     if obpc.zero?
       puts "  ✓  per-identity counter: innocent identity's bad_proof_count=0"
     else
-      failures << "expected other_bad_proof_count=0 (per-identity, K-498), got #{obpc}"
+      failures << "expected other_bad_proof_count=0 (per-identity), got #{obpc}"
       puts "  ✗  other_bad_proof_count=#{obpc} (expected 0 — counter not per-identity)"
     end
 
@@ -1122,7 +1121,7 @@ namespace :demo do
     + /agents.json + /agents.txt).
 
     Asserts:
-      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header
       • discovery capabilities == [schema, queries, actions] and do NOT include `pay`
         (atablefor takes no payments — a reservation needs none)
       • agents.json carries NO payments block; agents.txt has no ap2 / Payments
@@ -1131,7 +1130,7 @@ namespace :demo do
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
-        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+        `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -1219,7 +1218,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -1247,7 +1246,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"
@@ -1403,7 +1402,7 @@ namespace :demo do
       BLOCKED  GarbageToken       — unparseable bearer → 401
       BLOCKED  SelfAssertedTokenForgery — a self-asserted
                                     `agent:u-…:a-…:r-owner` bearer resolves to
-                                    NO identity → 401, unconditionally (T-104)
+                                    NO identity → 401, unconditionally
       BLOCKED  UnknownQuery       — unregistered query name → 404
       BLOCKED  UnknownAction      — unregistered action name → 404
       BLOCKED  RetiredWire        — the deleted 0.3 POST /kiosk/{query,run} → 404
@@ -1416,7 +1415,7 @@ namespace :demo do
                                     bookable dates, never a confirmed booking
                                     for a seating availability never offered;
                                     the basic YYYYMMDD spelling is refused by
-                                    the declared format: date (K-767)
+                                    the declared format: date
       BLOCKED  HostileArgShapes   — boolean/array/object/junk values on
                                     book_table's party_size, restaurant_id,
                                     restaurant_table_id, date and time, on
@@ -1424,20 +1423,19 @@ namespace :demo do
                                     spellings included) and on cancel_booking's
                                     booking_id are a typed 400 carrying no
                                     runtime vocabulary — never a 500, never a
-                                    wrong answer served as 200 (K-773, K-1027, K-1028)
+                                    wrong answer served as 200
       BLOCKED  WholeValuedFloatBody — the two halves of one wire disagree about
                                     `2.0` ON PURPOSE (spec Section 8.1 item 8):
                                     `?party_size=2.0` on a query is a typed 400,
                                     while `{"party_size": 2.0}` on the action
                                     books a party of TWO. The only beat here
                                     that asserts an ACCEPTANCE, so the accepted
-                                    half cannot drift away unpinned (K-1029)
+                                    half cannot drift away unpinned
       BLOCKED  DeviceGrantRoleSelfSelection — the shared kiosk-redteam beat:
                                     the binding ceremony's unauthenticated
                                     opening request refuses `role`/`scope` at a
                                     DECLARED value as well as an invented one,
                                     and the role-less request still opens it
-                                    (K-072, K-1128)
 
     Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.

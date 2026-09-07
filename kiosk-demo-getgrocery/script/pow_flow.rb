@@ -136,7 +136,7 @@ unless bad_proof_count >= 1
         "the server did not count it, or this driver is reading a different store (#{BAD_PROOF_DB})"
 end
 unless other_bad_proof_count.zero?
-  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity (K-498)"
+  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity"
 end
 
 # ── Correct proof → 200 served ──────────────────────────────────────────────

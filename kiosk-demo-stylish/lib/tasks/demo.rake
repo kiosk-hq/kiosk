@@ -806,7 +806,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -834,7 +834,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"

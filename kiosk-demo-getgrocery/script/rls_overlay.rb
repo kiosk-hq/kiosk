@@ -47,11 +47,11 @@ unless ActiveRecord::Migration.include?(Kiosk::RLS::DSL)
       now has migrations that raise NoMethodError on `enable_rls_on`.
 
       Do NOT fix this by putting the include back in config/initializers: that
-      is the K-504 monkey-patch bin/check-demo-copies refuses.
+      is the monkey-patch bin/check-demo-copies refuses.
   MSG
 end
 puts "  Kiosk::RLS::DSL is on ActiveRecord::Migration — injected by the gem's railtie, " \
-     "no wiring in this app (K-504)."
+     "no wiring in this app."
 
 conn = ActiveRecord::Base.connection
 

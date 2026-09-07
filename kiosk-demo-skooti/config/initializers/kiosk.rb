@@ -73,7 +73,7 @@ unlock_signing_key_pem = Rails.configuration.x.kiosk.unlock_signing_key_pem
 if unlock_signing_key_pem.to_s.strip.empty?
   raise <<~MSG
     No unlock/rental-token signing key is configured, so this demo cannot
-    sign the Ed25519 tokens its locks verify (K-686).
+    sign the Ed25519 tokens its locks verify.
 
     config/environments/#{Rails.env}.rb resolves it, and every path it has
     came back empty:

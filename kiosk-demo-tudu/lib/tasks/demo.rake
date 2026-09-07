@@ -221,7 +221,7 @@ namespace :demo do
       # The same, for a token minted in the rebind's OWN wall-clock second —
       # the case a strict `iat < watermark` comparison lets through, and the
       # one a driver that slept before re-probing would never reach.
-      check.call("a pre-link token minted in the rebind's own second is revoked too (K-836)", r["same_second_prelink_status"] == 401 && r["same_second_prelink_revoked"])
+      check.call("a pre-link token minted in the rebind's own second is revoked too", r["same_second_prelink_status"] == 401 && r["same_second_prelink_revoked"])
       check.call("re-login mints a token whose sub is Alice",        r["relogin_sub_is_holder"])
       check.call("re-logged-in agent sees 'Hike' as owner under Alice", r["agent_sees_migrated_list"])
       check.call("Alice's browser session sees 'Hike'",             r["human_sees_migrated_list"])
@@ -251,7 +251,7 @@ namespace :demo do
       # The membership rows themselves, not just what a query renders: Alice
       # holds 'Hike' (migrated) and 'Flat 3B' (seeded) after the re-link.
       membership_count = `psql -X -d #{db} -tAc "SELECT count(*) FROM memberships WHERE account_id = '#{holder_id}'" 2>&1`.strip
-      check.call("DB: Alice still holds >=2 memberships after the re-link (K-783 destroyed all of them)", membership_count.to_i >= 2)
+      check.call("DB: Alice still holds >=2 memberships after the re-link", membership_count.to_i >= 2)
     ensure
       tudu_stop(server_pid)
     end
@@ -455,7 +455,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -483,7 +483,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"

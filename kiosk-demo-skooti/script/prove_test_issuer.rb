@@ -80,7 +80,7 @@ module ProveTestIssuer
     if ENV.fetch("RAILS_ENV") { ENV["RACK_ENV"] }.to_s == "production"
       raise <<~MSG
         ProveTestIssuer refuses to mint with the baked dev key under a
-        production environment (K-673/K-681).
+        production environment.
 
         #{DEV_KEY_PATH} is the broker's DEV/TEST key and its private half
         ships in this public repo — anything it signs is forgeable by anyone
@@ -133,7 +133,7 @@ module ProveTestIssuer
       ProveTestIssuer reads #{DEV_KEY_PATH} (or PROVE_KEY_PEM); the broker
       resolves its key in kiosk-demo-prove/config/environments/*.rb. Those two
       must name the same key — see the lockstep note in
-      kiosk-demo-skooti/script/prove_test_issuer.rb (K-681).
+      kiosk-demo-skooti/script/prove_test_issuer.rb.
     MSG
   end
 

@@ -635,7 +635,7 @@ self_asserted_staff_forgery = lambda do
         "suite drives (the role-carrying stand-in is deleted; nothing reads the header); the " \
         "owner's REAL Devise session still mints (201), so the refusal is not vacuous"
     elsif rc_forged != 401
-      "K-555 REGRESSION: forged X-Staff-Session was accepted at /kiosk/auth/link (HTTP #{rc_forged})"
+      "REGRESSION: forged X-Staff-Session was accepted at /kiosk/auth/link (HTTP #{rc_forged})"
     else
       "unexpected: the owner's REAL Devise session was refused too (HTTP #{rc_real}) — the 401 " \
         "above proves nothing"

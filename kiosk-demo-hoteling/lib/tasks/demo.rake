@@ -72,7 +72,7 @@ def hoteling_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate (T-137)."
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
   task :wire_args_spec do
     spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
     puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
@@ -94,7 +94,7 @@ namespace :demo do
   end
 
   desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), then the " \
-       "in-process capture-window regression (script/pay_window.rb, K-853), assert."
+       "in-process capture-window regression (script/pay_window.rb), assert."
   # `: :setup` IS LOAD-BEARING — it is what makes the headline task runnable
   # TWICE (K-1044), and it was the one task of the seven here declared without it.
   #
@@ -373,7 +373,7 @@ namespace :demo do
     # verbs through the registry the wire dispatches to. It rides inside
     # demo:book rather than becoming its own task because demo:book is already
     # this demo's pay-path gate.
-    puts "\n══ RUN 3: capture-anchored paid state (K-853) ══"
+    puts "\n══ RUN 3: capture-anchored paid state ══"
     window_rb = File.expand_path("../../script/pay_window.rb", __dir__)
     unless system("bundle exec rails runner #{window_rb.shellescape}")
       failures << "pay_window: capture-window assertions failed (see output above)"
@@ -395,7 +395,7 @@ namespace :demo do
   # ── demo:spending_cap ───────────────────────────────────────────────────────
   desc <<~DESC
     The per-assistant spending cap, and the one property that makes it a cap
-    rather than a suggestion (T-154, from K-1251).
+    rather than a suggestion.
 
     Boots hoteling, registers ONE assistant through the real Equihash toll,
     reserves two stays so the operator has QUOTED both totals, writes a cap ONE
@@ -406,7 +406,7 @@ namespace :demo do
       SETTLES   the first stay, spelled "eur", is under the cap
       REFUSED   the second, spelled "EUR", would cross it: 403
                 spending_cap_exceeded, with NO settlement row written
-      FOLDED    that refusal IS the K-1251 regression detector. A byte-scoped
+      FOLDED    that refusal IS the regression detector. A byte-scoped
                 tally sees an empty history for "EUR" and lets the charge
                 through; only a tally that folds the spelling counts it against
                 the same cap
@@ -414,10 +414,10 @@ namespace :demo do
                 the refusal cannot be read as "this operator rejects EUR" — and
                 both settlement rows are stored canonical, lower-case
 
-    Until this task existed the control was configured NOWHERE in the fleet:
-    `Executor#enforce_spending_cap!` returns at its first line without
-    `config.spending_cap`, so the fix for K-1251 had a gem suite behind it and
-    nothing that boots. Exits 1 on any assertion.
+    `Executor#enforce_spending_cap!` returns at its first line when
+    `config.spending_cap` is unset, so a cap nobody configures is not a cap at
+    all — and this is the only place in the fleet that boots one. Exits 1 on
+    any assertion.
   DESC
   task spending_cap: :setup do
     require "resolv"
@@ -750,9 +750,7 @@ namespace :demo do
     own beats against the chain (register PoW → no KYC → reserve_room → pay →
     confirm_booking) and asserts each applicable attack is BLOCKED. The suite
     prints the count it actually ran; this list names them. No count is kept
-    here on purpose: a count kept here is a count that rots (K-710, and the
-    guard commissioned by T-078 will diff this list against the suite's own
-    registry):
+    here on purpose — a count kept here is a count that rots:
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's booking, tries confirm_booking
       BLOCKED  SpentResourceReuse    — C3: re-confirm an already-confirmed booking
@@ -766,7 +764,7 @@ namespace :demo do
       BLOCKED  PrivilegeSelfSelection — client-chosen registration role ignored (server-pinned)
       BLOCKED  DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
                                        opening request refuses `role`/`scope`, at a
-                                       DECLARED value as well as an invented one (K-072)
+                                       DECLARED value as well as an invented one
       BLOCKED  RegistrationWithoutPow — register without a proof rejected (register PoW is ON)
       BLOCKED  WrongCurrencyCart     — usd cart at a EUR operator refused at capture
       BLOCKED  TamperedPriceCart     — below-quote total refused at capture
@@ -775,18 +773,17 @@ namespace :demo do
       BLOCKED  HostileArgShapes      — every hostile SHAPE on the integer and date arguments
                                        (boolean, array, object, junk integer, unparseable
                                        and out-of-horizon date), plus MAGNITUDE — a filter
-                                       one past PostgreSQL `integer` (T-125) → typed 400,
+                                       one past PostgreSQL `integer` → typed 400,
                                        never a 500 and never a wrong answer served as 200
-                                       (K-773, K-1047)
       BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
       BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are the ordinary 404
                                        an authenticated caller gets, 401 without a bearer
-                                       (the 0.3 pair was DELETED, not shimmed — T-074 = A)
+                                       (the 0.3 pair was DELETED, not shimmed)
       BLOCKED  MethodMismatch        — a GET at an action's path is 405 method_not_allowed
                                        with Allow:, never a silent 404
       BLOCKED  PastStay              — a check_in before today is a typed 400 on BOTH
                                        availability and reserve_room — never rooms,
-                                       never a hold (K-969)
+                                       never a hold
       SKIPPED  MissingKyc            — hoteling has no KYC gate
       SKIPPED  ExpiredKyc            — hoteling has no KYC gate
       SKIPPED  ForgedKyc             — hoteling has no KYC gate
@@ -889,16 +886,16 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
-      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped)
       • capabilities is the MODULE set schema/queries/actions/pay and NOT events
       • schema.queries includes properties, availability, my_bookings with descriptions
       • schema.actions includes reserve_room, confirm_booking, payment_setup with descriptions
-      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon (K-606)
+      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
-        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+        `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -988,7 +985,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -1016,7 +1013,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"
@@ -1136,24 +1133,24 @@ namespace :demo do
       names.each do |vname|
         entry = list.find { |e| e["name"] == vname }
         if entry.nil?
-          failures << "schema is missing #{vname} — the poll-budget assertion cannot run (K-606)"
-          puts "  FAIL  schema is missing #{vname} (K-606)"
+          failures << "schema is missing #{vname} — the poll-budget assertion cannot run"
+          puts "  FAIL  schema is missing #{vname}"
           next
         end
         desc = entry["description"].to_s
         tiers   = desc.match(poll_tiers)
         horizon = desc.match(poll_horizon)
         if tiers.nil?
-          failures << "#{vname} description publishes no poll cadence (K-477/K-605): #{desc.inspect}"
+          failures << "#{vname} description publishes no poll cadence: #{desc.inspect}"
           puts "  FAIL  #{vname} publishes no poll cadence"
         elsif tiers[2].to_i <= tiers[1].to_i
-          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s (K-605)"
+          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s"
           puts "  FAIL  #{vname} cadence does not back off (~#{tiers[1]}s then ~#{tiers[2]}s)"
         else
           puts "  OK    #{vname} publishes a backing-off cadence (~#{tiers[1]}s, then ~#{tiers[2]}s)"
         end
         if horizon.nil? || horizon[1].to_i <= 0
-          failures << "#{vname} description publishes no GIVE UP horizon (K-477): #{desc.inspect}"
+          failures << "#{vname} description publishes no GIVE UP horizon: #{desc.inspect}"
           puts "  FAIL  #{vname} publishes no GIVE UP horizon"
         else
           puts "  OK    #{vname} publishes a give-up horizon (~#{horizon[1]} minutes)"
@@ -1193,7 +1190,7 @@ end
 namespace :demo do
   # ── demo:search ─────────────────────────────────────────────────────────────
   desc <<~DESC
-    Pagination + detail-by-id proof (T-042 / K-452).
+    Pagination + detail-by-id proof.
 
     Boots the server over the ~100-hotel catalogue, registers a fresh agent, and
     runs script/search_flow.rb to PROVE the data-plane pagination shape:
@@ -1207,16 +1204,16 @@ namespace :demo do
         `Link` at all (complete result — the link's absence is the signal).
       • hotel_detail on a summary row's id returns a ONE-ROW ARRAY carrying the
         full property with rooms (the "search returns summaries, fetch detail on
-        demand" pattern; K-794 made it answer rows like every other query), and
+        demand" pattern, answering rows like every other query), and
         an id nobody has is 404 not_found on BOTH hotel_detail and availability
-        (T-090: that argument addresses a property, so an empty list would be a
+        (that argument addresses a property, so an empty list would be a
         false statement rather than an empty result).
       • §9.1's bad-argument rule in ALL THREE branches, which is one
-        discriminator rather than three checks (K-821): an addressed-but-absent
+        discriminator rather than three checks: an addressed-but-absent
         `property_id` is 404 (above), a FILTER that matched nothing is 200 with
         an empty array, and a value outside its declared domain is 400 whose
         detail NAMES THE VALID VALUES.
-      • the PUBLISHED CLAMP at BOTH bounds (K-1328): `limit=0` and a negative
+      • the PUBLISHED CLAMP at BOTH bounds: `limit=0` and a negative
         `limit` are clamped to ONE row — never refused, and never the default
         page of 20, which is a third behaviour neither bound describes — and
         `limit=500` is clamped to 50, while X-Total-Count keeps counting the
@@ -1476,7 +1473,7 @@ namespace :demo do
     Then drives ONE ACTION (`reserve_room`) through the same gate: the policy
     hook's write kind is `:run`, not the `:action` an operator declares above
     the handler, and a policy that branched on `:action` would return nil
-    forever without an error or a failing test (K-1329).
+    forever without an error or a failing test.
 
     Asserts: a non-empty free prefix, the demanded proof count becomes positive,
     the curve is monotonic non-decreasing, and an un-proofed `reserve_room` is

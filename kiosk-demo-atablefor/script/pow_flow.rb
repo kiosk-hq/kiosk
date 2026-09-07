@@ -184,7 +184,7 @@ unless bad_proof_count >= 1
 end
 other_bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, other_agent_id)
 unless other_bad_proof_count.zero?
-  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity (K-498)"
+  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity"
 end
 
 # ── Step 4: re-POST with correct proof(s) → expect 200 served ──────────────

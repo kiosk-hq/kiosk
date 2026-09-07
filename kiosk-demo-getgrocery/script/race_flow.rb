@@ -179,7 +179,7 @@ class CountingPsp
   def setup_required?(*) = false
 end
 
-puts "\n== K-544 (a): items cannot be swapped once /pay has begun =="
+puts "\n== (a) items cannot be swapped once /pay has begun =="
 
 # Create the cheap order O.
 o = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
@@ -247,7 +247,7 @@ state_window = my_order_payment_state(order_id)
 check(state_window == "paid",
       "my_orders publishes payment_state=paid for O on the CAPTURE alone, with zero settlement rows (got #{state_window.inspect})")
 
-puts "\n== K-544 (b): one order captures at most once under N racing /pay =="
+puts "\n== (b) one order captures at most once under N racing /pay =="
 
 n = 6
 o2 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
@@ -304,7 +304,7 @@ check(denied == n - 1,     "the other #{n - 1} /pay were cleanly rejected (got #
 check(errored.empty?,      "no /pay produced a raw error (got #{errored.inspect})")
 check(order_row(order2)["status"] == "paid", "order O2 settled to `paid`")
 
-puts "\n== K-579: a malformed order_id is a typed 4xx, never a 500 =="
+puts "\n== a malformed order_id is a typed 4xx, never a 500 =="
 
 # The cart's {"order_id": …} entry lands in an `::uuid` cast. A malformed one
 # used to reach Postgres, raise InvalidTextRepresentation and escape as a raw
@@ -370,7 +370,7 @@ reschedule_error = action_error("reschedule_delivery",
 check(reschedule_error.respond_to?(:code) && reschedule_error.code == "bad_request" && reschedule_error.http_status == 400,
       "reschedule_delivery rejects a malformed order_id with a 400 bad_request (got #{reschedule_error.class})")
 
-puts "\n== K-578: an order stuck in `paying` is reconciled from local evidence =="
+puts "\n== an order stuck in `paying` is reconciled from local evidence =="
 
 # Simulate the crash the finding describes: the capture SUCCEEDED and the
 # engine recorded the settlement (executor P3), but the local `paying → paid`
@@ -460,12 +460,12 @@ check(!sweep[:healed].include?(young_order) && !unresolved_ids.include?(young_or
 # ── Verdict ─────────────────────────────────────────────────────────────────
 puts
 if FAILURES.empty?
-  puts "getgrocery pay-path spec (K-544/K-578/K-579): ALL PASS"
+  puts "getgrocery pay-path spec: ALL PASS"
   puts JSON.generate(swap_blocked: true, at_most_once: true, captures_under_race: counting.count,
                      malformed_order_id: "bad_request", stuck_paying_healed: true)
   exit 0
 else
-  puts "getgrocery pay-path spec (K-544/K-578/K-579): #{FAILURES.size} FAILURE(S)"
+  puts "getgrocery pay-path spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

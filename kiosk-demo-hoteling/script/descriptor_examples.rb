@@ -132,7 +132,7 @@ def descriptor_example_failures(queries:, actions:, minimum:)
   else
     failures << "only #{checked} descriptor examples were found in the SERVED catalog, " \
                 "fewer than the #{minimum} this origin publishes — the §8.3 loop above " \
-                "asserted almost nothing (T-097)"
+                "asserted almost nothing"
     puts "  ✗  only #{checked} published examples found, want at least #{minimum}"
   end
 

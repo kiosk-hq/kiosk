@@ -96,7 +96,7 @@ this note checkable rather than a promise.
   OK  SKIP_PAY: http_confirm_booking == 403
   Server stopped.
 
-══ RUN 3: capture-anchored paid state (K-853) ══
+══ RUN 3: capture-anchored paid state ══
 [kiosk] WARNING: generated an EPHEMERAL signing key (development); set KIOSK_SIGNING_KEY_B64/PEM for a stable key.
 
 == (a) POSITIVE CONTROL: a booking nobody paid for reads `unpaid` ==

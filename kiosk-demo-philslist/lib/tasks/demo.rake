@@ -130,7 +130,7 @@ namespace :demo do
 
     Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with the two seeded principals (Alice and Bob) — each one EARNED through the
-    shipped binding ceremony, not a token the driver wrote down (T-104) — and
+    shipped binding ceremony, not a token the driver wrote down — and
     asserts all cross-owner denial properties:
 
       Assertion 1 (cross-owner browse): browse_listings returns BOTH owners'
@@ -148,7 +148,7 @@ namespace :demo do
         Bob's legitimate listing has DB owner_id == Bob and
         created_by_agent_id == the agent id /auth/register MINTED for Bob, so
         both ownership and attribution come from the token.
-      Assertion 6 (the departure is DECLARED — K-949/ADR-0028): the open board
+      Assertion 6 (the departure is DECLARED — ADR-0028): the open board
         is a §7.2 departure and must say so on the wire. 6a reads the
         UNAUTHENTICATED catalog and requires browse_listings to publish
         `reach: published` and my_listings `reach: principal`. 6b is the half a
@@ -524,7 +524,7 @@ namespace :demo do
       BLOCKED  DeviceGrantRoleSelfSelection — the shared kiosk-redteam beat:
                the binding ceremony's unauthenticated opening request refuses
                `role`/`scope` at a DECLARED value as well as an invented one,
-               and the role-less request still opens it (K-072, K-1128)
+               and the role-less request still opens it
 
     Exits 0 when all are BLOCKED (0 BREACH); exits 1 on any BREACH. A BREACH =
     a real hole — fix the app, not the scenario.
@@ -578,8 +578,8 @@ namespace :demo do
 
     Boots the server, authenticates a seeded principal, calls GET /kiosk/schema,
     /.well-known/kiosk.json, /agents.json, /agents.txt, and asserts:
-      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
-      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped)
       • capabilities is the MODULE set schema/queries/actions
       • schema.queries includes browse_listings and my_listings
       • schema.actions includes post_listing/edit_listing/close_listing
@@ -591,7 +591,7 @@ namespace :demo do
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
-        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+        `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -637,7 +637,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -665,7 +665,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"

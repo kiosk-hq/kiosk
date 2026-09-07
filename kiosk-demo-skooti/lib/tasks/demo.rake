@@ -91,7 +91,7 @@ namespace :demo do
   end
 
   desc "Boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
-       "in-process capture-window regression (script/pay_window.rb, K-853), assert."
+       "in-process capture-window regression (script/pay_window.rb), assert."
   task :rideflow do
     require "resolv"
     require "net/http"
@@ -590,7 +590,7 @@ namespace :demo do
     # verbs through the registry the wire dispatches to. It rides inside
     # demo:rideflow rather than becoming its own task because demo:rideflow is
     # already this demo's pay-path gate.
-    puts "\n══ Capture-anchored paid state (K-853) ══"
+    puts "\n══ Capture-anchored paid state ══"
     window_rb = File.expand_path("../../script/pay_window.rb", __dir__)
     unless system("bundle exec rails runner #{window_rb.shellescape}")
       failures << "pay_window: capture-window assertions failed (see output above)"
@@ -621,8 +621,7 @@ namespace :demo do
         then calls start_rental on A's reservation_id. Gate 1
         (user_id = kiosk.current_user_id() AND status='reserved') finds
         nothing → 403. The 403 isolates Gate 1 ownership because Gate 1b and
-        Gate 2 are both genuinely satisfied by B (start_rental has no KYC gate
-        — K-442).
+        Gate 2 are both genuinely satisfied by B (start_rental has no KYC gate).
       Assertion 2a (exclusion): B's my_reservations does NOT contain A's reservation.
       Assertion 2b (positive control): B's my_reservations DOES contain B's own
         reservation, proving the exclusion is not vacuous.
@@ -800,17 +799,14 @@ namespace :demo do
     register → KYC → reserve → pay → start_rental) and asserts each attack is
     BLOCKED. The suite prints the count it actually ran; this list names them.
 
-    NO (n, k) IS NAMED HERE, and it is NOT derived either (K-1035 class): the
-    register params follow KIOSK_POW_DIFFICULTY, so the literal that used to sit
-    on this line was false the moment an operator set `high` — but a `desc` body
-    is evaluated on EVERY rake/rails task load, so reading the knob here would
-    turn a documentation string into a load-time failure mode (the K-1033
-    argument). Naming the knob is the repair; the suite's own run header prints
-    the live pair.
+    NO (n, k) IS NAMED HERE, and it is NOT derived either: the register params
+    follow KIOSK_POW_DIFFICULTY, so a literal on this line would be false the
+    moment an operator sets `high` — but a `desc` body is evaluated on EVERY
+    rake/rails task load, so reading the knob here would turn a documentation
+    string into a load-time failure mode. Naming the knob is the repair; the
+    suite's own run header prints the live pair.
 
-    No count is kept here on purpose: a count kept here is a count that rots
-    (K-710, and the guard commissioned by T-078 will diff this list against the
-    suite's own registry):
+    No count is kept here on purpose — a count kept here is a count that rots:
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's reservation, tries start_rental
       BLOCKED  SpentResourceReuse    — C3: re-start_rental on already-active reservation
@@ -826,7 +822,7 @@ namespace :demo do
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
       BLOCKED  DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
                                        opening request refuses `role`/`scope`, at a
-                                       DECLARED value as well as an invented one (K-072)
+                                       DECLARED value as well as an invented one
       BLOCKED  WrongCurrencyCart     — pay own reservation in usd at a EUR operator → 403
       BLOCKED  TamperedPriceCart     — pay below the operator's quoted rental price → 403
       BLOCKED  InflatedTotalCart     — cart total ≠ the sum of its line items → 403
@@ -836,16 +832,16 @@ namespace :demo do
       BLOCKED  HostileArgShapes      — boolean/array/object/number on scooter_code,
                                        reservation_id and request_id → typed 400 (or,
                                        for an unknown id on a query, 404 not_found),
-                                       never a 500 (K-773)
+                                       never a 500
       BLOCKED  MotorcycleForgedKyc   — a forged attestation self-asserting
                                        {age_over_18, licence_a} leaves the
                                        attribute-gated rent_motorcycle at 403
       BLOCKED  MotorcycleViaStartRental — the KYC gate cannot be walked around by VERB:
                                        reserve(MC-001) → pay → start_rental is refused,
-                                       not answered with an unlock token (K-687)
+                                       not answered with an unlock token
       BLOCKED  IssuedKycJwsTheft     — a REAL issuer-signed jws minted for victim B
                                        cannot be replayed by attacker A; A's
-                                       rent_motorcycle stays 403 (K-440/K-443)
+                                       rent_motorcycle stays 403
       BLOCKED  CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
                                        operator is rejected at skooti's /kyc/callback
       BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
@@ -993,16 +989,16 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
-      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped)
       • capabilities is the MODULE set schema/queries/actions/pay and NOT events
       • schema.actions includes reserve, start_rental, rent_motorcycle,
         payment_setup with descriptions
-      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon (K-606)
+      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
-        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+        `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -1092,7 +1088,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -1120,7 +1116,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"
@@ -1254,24 +1250,24 @@ namespace :demo do
       names.each do |vname|
         entry = list.find { |e| e["name"] == vname }
         if entry.nil?
-          failures << "schema is missing #{vname} — the poll-budget assertion cannot run (K-606)"
-          puts "  FAIL  schema is missing #{vname} (K-606)"
+          failures << "schema is missing #{vname} — the poll-budget assertion cannot run"
+          puts "  FAIL  schema is missing #{vname}"
           next
         end
         desc = entry["description"].to_s
         tiers   = desc.match(poll_tiers)
         horizon = desc.match(poll_horizon)
         if tiers.nil?
-          failures << "#{vname} description publishes no poll cadence (K-477/K-605): #{desc.inspect}"
+          failures << "#{vname} description publishes no poll cadence: #{desc.inspect}"
           puts "  FAIL  #{vname} publishes no poll cadence"
         elsif tiers[2].to_i <= tiers[1].to_i
-          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s (K-605)"
+          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s"
           puts "  FAIL  #{vname} cadence does not back off (~#{tiers[1]}s then ~#{tiers[2]}s)"
         else
           puts "  OK    #{vname} publishes a backing-off cadence (~#{tiers[1]}s, then ~#{tiers[2]}s)"
         end
         if horizon.nil? || horizon[1].to_i <= 0
-          failures << "#{vname} description publishes no GIVE UP horizon (K-477): #{desc.inspect}"
+          failures << "#{vname} description publishes no GIVE UP horizon: #{desc.inspect}"
           puts "  FAIL  #{vname} publishes no GIVE UP horizon"
         else
           puts "  OK    #{vname} publishes a give-up horizon (~#{horizon[1]} minutes)"
@@ -1320,7 +1316,7 @@ namespace :demo do
 
       A1  rent_motorcycle WITHOUT KYC        → 403 whose RFC 9457 problem document
           carries the TOP-LEVEL code "kyc_required", and whose `hint` points the
-          agent at `request_kyc` (K-440/K-443 fix)
+          agent at `request_kyc`
       A2  POST /kiosk/request_kyc            → 200, returns a verification_url on
           the skooti host; human approves the stub KYC-provider page; poll
           GET /kiosk/kyc_status?request_id=… → approved returns the signed kyc_jws
@@ -1332,7 +1328,7 @@ namespace :demo do
     Exits 0 when all hold; exits 1 on any miss. A red assertion = the KYC gate is
     broken (or leaked onto the scooter path) — fix the app, not the test.
 
-    RUNS spec/licence_flag_spec.rb FIRST (K-724). Beat B above and the redteam
+    RUNS spec/licence_flag_spec.rb FIRST. Beat B above and the redteam
     battery's MotorcycleViaStartRental both drive the real schema, so they only
     ever hand the licence gate a real Ruby boolean — the one input on which a
     fail-OPEN hand-rolled coercion and the correct cast agree. The spec presents
@@ -1342,7 +1338,7 @@ namespace :demo do
   DESC
   task kyc: :setup do
     spec = File.expand_path("../../spec/licence_flag_spec.rb", __dir__)
-    puts "\n── K-724 licence-flag fail-closed spec (no server, no port) ──"
+    puts "\n── licence-flag fail-closed spec (no server, no port) ──"
     sh "bundle exec rails runner #{spec}"
 
     require "resolv"

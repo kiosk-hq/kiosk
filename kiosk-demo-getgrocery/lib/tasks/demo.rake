@@ -121,21 +121,21 @@ namespace :demo do
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
-  desc "DB-free unit spec for the delivery-slot past-filter + Dublin zone (K-480)."
+  desc "DB-free unit spec for the delivery-slot past-filter + Dublin zone."
   task :slots_spec do
     spec = File.expand_path("../../spec/delivery_slots_spec.rb", __dir__)
-    puts "\n── delivery_slots K-480 past-filter spec (no DB) ──"
+    puts "\n── delivery_slots past-filter spec (no DB) ──"
     sh "ruby #{spec}"
   end
 
-  desc "DB-free unit spec for the cashier's order-reference shape check (K-579)."
+  desc "DB-free unit spec for the cashier's order-reference shape check."
   task :cashier_spec do
     spec = File.expand_path("../../spec/cashier_order_ref_spec.rb", __dir__)
-    puts "\n── cashier K-579 order-ref shape spec (no DB) ──"
+    puts "\n── cashier order-ref shape spec (no DB) ──"
     sh "ruby #{spec}"
   end
 
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate (T-116)."
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
   task :wire_args_spec do
     spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
     puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
@@ -144,11 +144,11 @@ namespace :demo do
 
   desc <<~DESC
     Spec for the telemetry REQUEST path — the Rack middleware and the
-    /demo/activity.json endpoint the kiosk.tech landing tile fetches (K-622).
+    /demo/activity.json endpoint the kiosk.tech landing tile fetches.
     Complements demo:telemetry, which gates the store round-trip only.
 
     Three parts, cheapest first:
-      1. spec/telemetry_middleware_spec.rb — DB-free, no boot. The K-622
+      1. spec/telemetry_middleware_spec.rb — DB-free, no boot. The core
          regression (a telemetry failure must never re-dispatch the request),
          plus the recording rules: the four-path filter, 2xx-only, the per-app
          verb_map, the register body-buffering, the agent refs.
@@ -161,7 +161,7 @@ namespace :demo do
     mw   = File.expand_path("../../spec/telemetry_middleware_spec.rb", __dir__)
     ctrl = File.expand_path("../../spec/demo_activity_spec.rb", __dir__)
 
-    puts "\n── DemoTelemetryMiddleware K-622 spec (no DB, no boot) ──"
+    puts "\n── DemoTelemetryMiddleware spec (no DB, no boot) ──"
     sh "ruby #{mw}"
 
     puts "\n── GET /demo/activity.json — telemetry ON ──"
@@ -655,7 +655,7 @@ namespace :demo do
         forged user_id arg (A's UUID) → 400 bad_request naming user_id, refused
         by the published input_schema before the handler runs; and B's
         legitimate order has DB user_id == B, so ownership comes from the token.
-      Assertion 6: a re-pay of an already-settled order → 403 WITH a body (K-472)
+      Assertion 6: a re-pay of an already-settled order → 403 WITH a body
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -851,17 +851,17 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
-      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped)
       • capabilities is the MODULE set schema/queries/actions/pay and NOT events
       • schema.queries includes catalog, delivery_slots, my_orders (each with description)
       • schema.actions includes create_order, reschedule_delivery (each with description)
       • schema.queries does NOT include stores, products_by_store, substitution_options
       • schema.actions does NOT include add_to_cart, apply_substitution, confirm_delivery
-      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon (K-606)
+      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
-        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+        `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -952,7 +952,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    puts "\n── Discovery-signal assertions (protocol.md §4.5) ──"
     versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
     pinned_skill  =
       begin
@@ -980,7 +980,7 @@ namespace :demo do
       end
 
       if url == "https://kiosk.tech/skill.md"
-        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it"
         puts "  ✗  #{what} names the mutable alias #{url}"
       elsif versioned_cut.match?(url)
         puts "  ✓  #{what} names the versioned cut #{url}"
@@ -1098,7 +1098,7 @@ namespace :demo do
              .dig("input_schema", "properties", "order_id") || {}
       pattern = prop["pattern"]
       if pattern.nil?
-        failures << "#{aname}.order_id declares no uuid pattern (K-596)"
+        failures << "#{aname}.order_id declares no uuid pattern"
         puts "  ✗  #{aname}.order_id declares no uuid pattern"
         next
       end
@@ -1164,24 +1164,24 @@ namespace :demo do
       names.each do |vname|
         entry = list.find { |e| e["name"] == vname }
         if entry.nil?
-          failures << "schema is missing #{vname} — the poll-budget assertion cannot run (K-606)"
-          puts "  FAIL  schema is missing #{vname} (K-606)"
+          failures << "schema is missing #{vname} — the poll-budget assertion cannot run"
+          puts "  FAIL  schema is missing #{vname}"
           next
         end
         desc = entry["description"].to_s
         tiers   = desc.match(poll_tiers)
         horizon = desc.match(poll_horizon)
         if tiers.nil?
-          failures << "#{vname} description publishes no poll cadence (K-477/K-605): #{desc.inspect}"
+          failures << "#{vname} description publishes no poll cadence: #{desc.inspect}"
           puts "  FAIL  #{vname} publishes no poll cadence"
         elsif tiers[2].to_i <= tiers[1].to_i
-          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s (K-605)"
+          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s"
           puts "  FAIL  #{vname} cadence does not back off (~#{tiers[1]}s then ~#{tiers[2]}s)"
         else
           puts "  OK    #{vname} publishes a backing-off cadence (~#{tiers[1]}s, then ~#{tiers[2]}s)"
         end
         if horizon.nil? || horizon[1].to_i <= 0
-          failures << "#{vname} description publishes no GIVE UP horizon (K-477): #{desc.inspect}"
+          failures << "#{vname} description publishes no GIVE UP horizon: #{desc.inspect}"
           puts "  FAIL  #{vname} publishes no GIVE UP horizon"
         else
           puts "  OK    #{vname} publishes a give-up horizon (~#{horizon[1]} minutes)"
@@ -1237,20 +1237,20 @@ namespace :demo do
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
       BLOCKED  DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
                                         opening request refuses `role`/`scope`, at a
-                                        DECLARED value as well as an invented one (K-072)
+                                        DECLARED value as well as an invented one
       BLOCKED  WrongCurrencyCart      — usd cart at a EUR operator rejected at capture
       BLOCKED  TamperedPriceCart      — line price differing from the catalog rejected
       BLOCKED  InflatedTotalCart      — total above the sum of the lines rejected
       BLOCKED  MalformedItemsCart     — a non-array (or non-object-element) `items` is a
-                                        typed 400, never a 500 (K-693)
+                                        typed 400, never a 500
       BLOCKED  HostileArgShapes       — boolean/array/object/junk on delivery_slot_id,
                                         delivery_date, delivery_address and order_id →
-                                        typed 400, never a 500 (K-773)
+                                        typed 400, never a 500
       BLOCKED  RetiredWire            — POST /kiosk/query and POST /kiosk/run answer the
                                         ordinary 404 verb_not_found an AUTHENTICATED caller gets,
                                         and 401 unauthenticated without a bearer (auth
-                                        precedes verb dispatch); the 0.3 pair was DELETED
-                                        (T-074 = A), leaving no second conformance surface
+                                        precedes verb dispatch); the 0.3 pair was DELETED,
+                                        leaving no second conformance surface
       BLOCKED  MethodMismatch         — a GET at an action's path answers 405
                                         method_not_allowed with Allow: POST, never a silent
                                         404 an assistant would read as "cannot do that"
@@ -1368,7 +1368,7 @@ namespace :demo do
   # ── end demo:redteam ──────────────────────────────────────────────────────────
 
   desc <<~DESC
-    Pay-path regression (K-544 concurrency, K-579 typed 4xx, K-578 reconciliation).
+    Pay-path regression: concurrency, typed 4xx, reconciliation.
 
     Resets the DB, then runs script/race_flow.rb IN-PROCESS (real Postgres, real
     threads on pooled connections, a controllable PSP stub) to prove:
@@ -1391,20 +1391,20 @@ namespace :demo do
   task race: :setup do
     require "shellwords"
     driver = File.expand_path("../../script/race_flow.rb", __dir__)
-    puts "\n── Running script/race_flow.rb (pay path: K-544 / K-578 / K-579) ──"
+    puts "\n── Running script/race_flow.rb (pay path) ──"
     # A generous pool so N racing threads each get their own real connection.
     ok = system({ "RAILS_MAX_THREADS" => "12" }, "bundle exec rails runner #{driver.shellescape}")
     exit(ok ? 0 : 1)
   end
 
   desc <<~DESC
-    Reconcile orders stuck in `paying` (K-578) — LOCAL evidence only.
+    Reconcile orders stuck in `paying` — LOCAL evidence only.
 
-    OPERATOR UTILITY, NOT A GATE (K-616). Every other task in this namespace
+    OPERATOR UTILITY, NOT A GATE. Every other task in this namespace
     asserts an invariant and exits non-zero when it breaks. This one reports:
     on a freshly seeded database it prints "nothing stuck" and exits 0 no
     matter what the code does, so it can never go red and CI does not run it.
-    The logic below IS gated — by demo:race's K-578 block, which strands
+    The logic below IS gated — by demo:race's reconciliation block, which strands
     orders first and then sweeps them.
 
     A crash (or a failed status flip) between a successful capture and the
@@ -1416,7 +1416,7 @@ namespace :demo do
       • LISTS the rest as UNRESOLVED with their cart-mandate ids, because only
         the payment processor knows whether money moved. It deliberately does
         NOT release those claims: releasing one is exactly the blind retry that
-        could double-charge (K-545).
+        could double-charge.
 
     This demo runs no background worker — invoke it manually (or from cron).
     Set MINUTES=n to change the "old enough to be stuck" cutoff (default 15).
@@ -1474,11 +1474,10 @@ namespace :demo do
     solver. The flow pays that toll MORE THAN ONCE: registration is tolled too,
     and script/equihash_register.rb solves it transparently for each identity
     the flow mints. So the run COUNTS every solve and prints the total beside
-    its verdict instead of promising a number typed here — this sentence used
-    to say "four", and the run it describes solves three (K-1221). The task
+    its verdict instead of promising a number typed here. The task
     prints the (n, k) it actually ran at and ASSERTS it against the challenge
     the server issued, so a recording can never leave a viewer guessing which
-    toll they watched being paid (T-110).
+    toll they watched being paid.
 
     Requires python3 + numpy.
   DESC
@@ -1562,7 +1561,7 @@ namespace :demo do
              "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
              "GiB is its table, not a floor these params impose on every solver. " \
              "The flow solves MORE than one proof — registration is tolled too — " \
-             "and the count it actually paid is printed beside the verdict (K-1221)."
+             "and the count it actually paid is printed beside the verdict."
       else
         puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
              "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
@@ -1607,7 +1606,7 @@ namespace :demo do
       check.call("on_bad_proof penalized",           result["bad_proof_count"].to_i >= 1)
       # PER-IDENTITY (K-498): the flow's second, innocent identity must be
       # untouched by the first identity's wrong nonce.
-      check.call("per-identity counter: innocent identity stays 0 (K-498)",
+      check.call("per-identity counter: innocent identity stays 0",
                  result.key?("other_bad_proof_count") && result["other_bad_proof_count"].to_i.zero?)
     ensure
       begin

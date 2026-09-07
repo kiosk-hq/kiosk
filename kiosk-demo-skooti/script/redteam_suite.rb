@@ -20,7 +20,7 @@
 #   IssuedKycJwsTheft        — a REAL issuer-signed jws minted for victim B via
 #                              the stub-issuer approve page cannot be replayed by
 #                              attacker A (KycVerifier binds sub to the caller),
-#                              so A's rent_motorcycle stays 403 (K-440/K-443).
+#                              so A's rent_motorcycle stays 403.
 #
 # Three local cashier-check beats attack ValidatingRentalProvider (the monetary
 # check run at capture, before StubPsp settles):
@@ -581,7 +581,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # proves nothing unless the refusal really did echo the value back.
     unless JSON.generate(echo_resp.body).include?(echo_control)
       @failures << "CONTROL VACUOUS: reserve did not echo the scooter_code it refused, so the " \
-                   "oracle was never asked to tell an echo from a leak (T-121)"
+                   "oracle was never asked to tell an echo from a leak"
     end
 
     # ── CONTROL ─────────────────────────────────────────────────────────────
@@ -1266,7 +1266,7 @@ self_asserted_token_forgery = lambda do
               "(HTTP #{control_res.code}) — the 401s above prove nothing" }
   else
     { blocked: false,
-      detail: "K-539 REGRESSION: a self-asserted bearer was accepted over the wire — " \
+      detail: "REGRESSION: a self-asserted bearer was accepted over the wire — " \
               "#{forgeries.map(&:last).join("; ")} (want 401 for each)" }
   end
 rescue StandardError => e
@@ -1313,7 +1313,7 @@ self_asserted_user_bearer_forgery = lambda do
               "a link code (#{rc_real}), so the refusal is not vacuous" }
   elsif rc_forged != 401
     { blocked: false,
-      detail: "K-555 REGRESSION: forged self-asserted human bearer was accepted at " \
+      detail: "REGRESSION: forged self-asserted human bearer was accepted at " \
               "/kiosk/auth/link (HTTP #{rc_forged})" }
   else
     { blocked: false,

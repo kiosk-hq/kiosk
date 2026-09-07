@@ -153,6 +153,15 @@ GENERATOR_INITIALIZER = "kiosk-server/lib/generators/kiosk/install/templates/ini
 GETGROCERY_STOREFRONT = "kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb"
 GETGROCERY_ORDERS     = "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb"
 GETGROCERY_INITIALIZER = "kiosk-demo-getgrocery/config/initializers/kiosk.rb"
+# The two files that hold the Ruby CONSTANTS getgrocery writes INTO its
+# `input_schema` declarations -- `UuidCheck::JSON_SCHEMA_PATTERN` and
+# `WireArguments::MAX_INT4`. R14 used to count those keywords and print them
+# because the page's standalone controller can name no constant of the demo's;
+# it now RESOLVES them to the literal each one is assigned and asserts against
+# that, so a page that inlines the literal is held to it and a page that omits
+# it is red. A constant it cannot resolve is an error, never a pass (K-1354).
+GETGROCERY_UUID_CHECK     = "kiosk-demo-getgrocery/app/models/uuid_check.rb"
+GETGROCERY_WIRE_ARGUMENTS = "kiosk-demo-getgrocery/app/operations/wire_arguments.rb"
 # The engine's gemspec is the ONLY one that names Rails at all, so it is the
 # single authority for the floor an adopting operator has to clear (K-1320).
 SERVER_GEMSPEC = "kiosk-server/kiosk-server.gemspec"
@@ -1107,13 +1116,94 @@ def assertion_value(text)
   end
 end
 
-# A value this page could have written for itself. A Ruby constant
-# (`UuidCheck::JSON_SCHEMA_PATTERN`) is not: the page teaches a standalone
-# controller and has no such constant to name, so its absence there is a
-# simplification rather than drift, and the rule counts it instead of
-# asserting on it.
+# A value written out in the schema's own vocabulary -- a string, a number, an
+# array, a boolean -- as opposed to a Ruby name only the demo's own class tree
+# can resolve.
 def literal_assertion?(value)
   value.match?(/\A("|\d|-|\[|true\b|false\b)/)
+end
+
+# A Ruby constant reference as getgrocery writes one inside a declaration:
+# `UuidCheck::JSON_SCHEMA_PATTERN`, `WireArguments::MAX_INT4`. Scoped form only,
+# which is the only form these declarations use -- a bare `MAX_INT4` would be a
+# constant of the controller itself and is deliberately not recognised, so it
+# reads as UNRESOLVED rather than being guessed at.
+CONSTANT_REF = /\A[A-Z][A-Za-z0-9_]*::[A-Z][A-Z0-9_]*\z/
+
+def constant_reference?(value)
+  value.match?(CONSTANT_REF)
+end
+
+# Every `CONST = <literal>` in one file, keyed `Class::CONST`. Structure is read
+# off the masked copy and the value off the original, the same discipline every
+# other reader here uses: `masked` blanks a comment to spaces without moving a
+# byte, so rstripping the masked line is where the CODE ends, and a `#` inside
+# the string being assigned cannot truncate it.
+def constant_literals(src)
+  scope = nil
+  out   = {}
+  masked(src).lines.zip(src.lines).each do |mline, oline|
+    if (m = mline.match(/\A\s*(?:class|module)\s+([A-Z][A-Za-z0-9_]*)/))
+      scope = m[1]
+    elsif scope && (m = mline.match(/\A\s*([A-Z][A-Z0-9_]*)\s*=\s*/))
+      value = oline[m[0].length...mline.rstrip.length].to_s.strip.sub(/\.freeze\z/, "").strip
+      out["#{scope}::#{m[1]}"] = value unless value.empty?
+    end
+  end
+  out
+end
+
+# The constant table R14 resolves getgrocery's declarations against. Two files,
+# because that is where the two constants live; a third would be added here and
+# nowhere else.
+def demo_constants(sources)
+  constant_literals(sources[:uuid_check]).merge(constant_literals(sources[:wire_arguments]))
+end
+
+# `2_147_483_647` and `2147483647` are the same ceiling written twice. Nothing
+# else is normalised: a string's quoting and spelling are part of the value.
+def canonical_assertion(value)
+  v = value.to_s.strip
+  v.match?(/\A-?\d[\d_]*\z/) ? v.delete("_") : v
+end
+
+# The ELEMENT schema of an array property -- the `items: {...}` inside a
+# property's own body -- as {name => keywords}. `qty`'s ceiling lives here and
+# nowhere else, so a depth-1 reader cannot see it at all: it was invisible to
+# this rule, not merely uncompared, for as long as the rule stopped at depth 1.
+# The DEPTH-1 note on `property_assertions` still stands and this does not
+# violate it -- that note forbids reading the element's `maximum` AS THE ARRAY'S,
+# which conflates two facts. Keying it `items[].qty` keeps them apart, and
+# compares each side's element schema with the other side's.
+def element_property_assertions(src, prop_range)
+  slice = masked(src)[prop_range]
+  at    = slice.index(/items:\s*\{/)
+  return {} if at.nil?
+
+  open  = slice.index("{", at)
+  depth = 0
+  j     = open
+  while j < slice.length
+    depth += 1 if slice[j] == "{"
+    if slice[j] == "}"
+      depth -= 1
+      break if depth.zero?
+    end
+    j += 1
+  end
+  return {} unless depth.zero?
+
+  property_assertions(src, (prop_range.first + open)..(prop_range.first + j))
+end
+
+# Every property of one `input_schema`, its array elements included.
+def property_assertions_deep(src, range)
+  out  = property_assertions(src, range)
+  mask = masked(src)
+  property_body_ranges(mask, range).each do |name, body|
+    element_property_assertions(src, body).each { |sub, kws| out["#{name}[].#{sub}"] = kws }
+  end
+  out
 end
 
 def demo_property_assertions(sources, verb)
@@ -1125,7 +1215,7 @@ def demo_property_assertions(sources, verb)
     range = input_schema_range(mask, decl)
     next if range.nil?
 
-    return property_assertions(src, range)
+    return property_assertions_deep(src, range)
   end
   nil
 end
@@ -1138,7 +1228,7 @@ def page_property_assertions(ruby, verb)
   range = input_schema_range(mask, decl)
   return nil if range.nil?
 
-  property_assertions(ruby, range)
+  property_assertions_deep(ruby, range)
 end
 
 # R14 -- every property both sides declare carries the same VALIDATION
@@ -1158,17 +1248,38 @@ end
 # TWO DIRECTIONS, and they are not symmetrical:
 #   OVER   the page declares a keyword (or a different value) getgrocery does
 #          not -- the K-1344 shape, and the one that REFUSES real input.
-#   UNDER  getgrocery declares a keyword whose value is a JSON literal and the
-#          page omits it -- a copied schema looser than the origin.
-# UNDER is scoped to literals ON PURPOSE: getgrocery writes
-# `pattern: UuidCheck::JSON_SCHEMA_PATTERN`, a constant belonging to a class the
-# page's standalone controller does not have, so requiring it there would be red
-# for a difference that is not drift. Those are COUNTED AND PRINTED on every
-# run rather than asserted -- an honest number beats a rule someone switches off.
+#   UNDER  the page omits a keyword getgrocery declares -- a copied schema
+#          LOOSER than the origin, which is the direction K-1354 found: the page
+#          accepts what the origin refuses, so an operator copying it ships a
+#          verb whose own handler was never written to take that input. The page
+#          had no ceiling on `create_order`'s `qty` and no `pattern` on
+#          `reschedule_delivery`'s `order_id`, and its handler answers the first
+#          of those with the 500 K-1047 recorded on the origin.
+#
+# UNDER USED TO BE SCOPED TO LITERALS, AND THAT SCOPING WAS THE HOLE (K-1354).
+# getgrocery writes `pattern: UuidCheck::JSON_SCHEMA_PATTERN` and
+# `maximum: WireArguments::MAX_INT4` -- constants belonging to classes the page's
+# standalone controller does not have -- so the first writing COUNTED AND PRINTED
+# those instead of asserting on them. A rule that prints is a rule nothing holds:
+# the printed line said `reschedule_delivery.order_id.pattern` was not compared,
+# and it was read as a note rather than as the gap it was, for as long as it stood.
+# So the constant is RESOLVED to the literal it is assigned, from the file that
+# assigns it, and the page is held to that literal -- which it now inlines,
+# because a schema is the one place a shape has to be written in the schema's own
+# vocabulary. A constant this rule CANNOT resolve is an ERROR naming it, never a
+# note: the one thing that may not happen here is a silent pass.
+#
+# AND THE OTHER HALF OF K-1354 WAS NOT UNCOMPARED BUT INVISIBLE. `qty`'s ceiling
+# is declared inside `items:`'s ELEMENT schema, and this rule read depth 1 only,
+# so it never saw the property at all -- it was not in the printed list either.
+# `property_assertions_deep` keys the element's properties `items[].qty`, which
+# compares each side's element schema against the other's without ever reading an
+# element's `maximum` as the array's.
 def rule_property_keywords(page, sources)
   shared = shared_verbs(page, sources)
   return vacuous!("PROPERTY_KEYWORDS", "no verb is declared on both sides") if shared.empty?
 
+  consts    = demo_constants(sources)
   ruby      = page_ruby(page)
   pairs     = []            # [verb, prop, demo_assertions, page_assertions]
   derived   = 0
@@ -1189,34 +1300,46 @@ def rule_property_keywords(page, sources)
                     "keyword on getgrocery's side, so there is nothing to hold the page to")
   end
 
-  bad        = []
-  uncomparable = []
+  bad      = []
+  resolved = []
   pairs.each do |verb, prop, demo, mine|
-    (mine.keys - demo.keys).sort.each do |kw|
+    # getgrocery's side first, one property at a time: every constant it writes
+    # becomes the literal it is assigned, or the rule says so and fails.
+    want = {}
+    demo.each do |kw, value|
+      if constant_reference?(value)
+        literal = consts[value]
+        if literal.nil?
+          bad << "#{verb}.#{prop} declares #{kw}: #{value} in #{GETGROCERY_STOREFRONT} / " \
+                 "#{GETGROCERY_ORDERS} and this rule could not resolve that constant to a literal " \
+                 "in #{GETGROCERY_UUID_CHECK} or #{GETGROCERY_WIRE_ARGUMENTS}. It is not compared, " \
+                 "which is the state K-1354 closed -- re-point the resolution, do not drop the keyword"
+          next
+        end
+        resolved << "#{verb}.#{prop}.#{kw} = #{value}"
+        want[kw] = literal
+      else
+        want[kw] = value
+      end
+    end
+
+    (mine.keys - want.keys).sort.each do |kw|
       bad << "#{verb}.#{prop} declares #{kw}: #{mine[kw]}, which getgrocery does not declare at all"
     end
-    (mine.keys & demo.keys).sort.each do |kw|
-      next if mine[kw] == demo[kw]
+    (mine.keys & want.keys).sort.each do |kw|
+      next if canonical_assertion(mine[kw]) == canonical_assertion(want[kw])
 
-      if literal_assertion?(demo[kw]) && literal_assertion?(mine[kw])
-        bad << "#{verb}.#{prop} declares #{kw}: #{mine[kw]} where getgrocery declares #{demo[kw]}"
-      else
-        uncomparable << "#{verb}.#{prop}.#{kw} (getgrocery writes #{demo[kw]})"
-      end
+      bad << "#{verb}.#{prop} declares #{kw}: #{mine[kw]} where getgrocery declares #{want[kw]}"
     end
-    (demo.keys - mine.keys).sort.each do |kw|
-      if literal_assertion?(demo[kw])
-        bad << "#{verb}.#{prop} omits #{kw}: #{demo[kw]}, which getgrocery declares"
-      else
-        uncomparable << "#{verb}.#{prop}.#{kw} (getgrocery writes #{demo[kw]})"
-      end
+    (want.keys - mine.keys).sort.each do |kw|
+      bad << "#{verb}.#{prop} omits #{kw}: #{want[kw]}, which getgrocery declares"
     end
   end
 
   detail = bad.empty? ? "derived from #{GETGROCERY_STOREFRONT} + #{GETGROCERY_ORDERS}" : bad.join(" | ")
-  unless uncomparable.empty?
-    detail += "; #{uncomparable.size} keyword(s) NOT compared, getgrocery's value is a Ruby constant " \
-              "the page cannot name: #{uncomparable.join(", ")}"
+  unless resolved.empty?
+    detail += "; #{resolved.size} keyword(s) compared through a resolved getgrocery constant: " \
+              "#{resolved.join(", ")}"
   end
   check("PROPERTY_KEYWORDS",
         bad.empty?,
@@ -1239,7 +1362,7 @@ RULES = [
   [:rule_write_required,     "WRITE_REQUIRED",      "derivation", "the input_schema `required:` list of every verb both sides declare"],
   [:rule_item_shape,         "ITEM_SHAPE",          "ban",        "indexing an element of a declared array-of-objects without checking it is a Hash"],
   [:rule_error_redaction,    "ERROR_REDACTION",     "derivation", "what the rescue seam sends INSTEAD of the exception's own message, and the class it re-raises untouched"],
-  [:rule_property_keywords,  "PROPERTY_KEYWORDS",   "derivation", "the JSON Schema assertion keywords getgrocery declares on every property both sides declare"],
+  [:rule_property_keywords,  "PROPERTY_KEYWORDS",   "derivation", "the JSON Schema assertion keywords getgrocery declares on every property both sides declare, array ELEMENTS included, each Ruby constant resolved to the literal it is assigned"],
 ].freeze
 
 def load_sources
@@ -1247,6 +1370,8 @@ def load_sources
     storefront:      repo_read(GETGROCERY_STOREFRONT),
     orders:          repo_read(GETGROCERY_ORDERS),
     getgrocery_init: repo_read(GETGROCERY_INITIALIZER),
+uuid_check:      repo_read(GETGROCERY_UUID_CHECK),
+wire_arguments:  repo_read(GETGROCERY_WIRE_ARGUMENTS),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
     readme:          repo_read(MONOREPO_README),
@@ -1268,6 +1393,7 @@ def run_list
   puts
   puts "Derivation sources:"
   [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
+   GETGROCERY_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS,
    SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
     puts "  #{File.exist?(File.join(ROOT, rel)) ? "present" : "MISSING"}  #{rel}"
   end
@@ -1449,7 +1575,16 @@ def run_self_test
   #             plant is a real keyword of this schema family and not a token.
   #   KW_UNDER  a literal-valued keyword both sides carry, for the direction a
   #             one-sided rule would miss.
-  kw_over = kw_under = kw_value = nil
+  #   KW_ELEM   the same, one level down, inside an array's ELEMENT schema --
+  #             the depth this rule could not see at all until K-1354, so an arm
+  #             at the top level alone would have read as coverage of both.
+  #   KW_CONST  a keyword getgrocery writes as a Ruby CONSTANT, for the
+  #             resolution that replaced K-1344's printed note. Its plant is on
+  #             the DERIVATION side and lives in the vacuity section below.
+  # KW_OVER and KW_UNDER stay TOP-LEVEL by construction: their plants are written
+  # as `<name>: {` against the page, and a nested key is spelled `items[].qty`
+  # here and `qty:` there.
+  kw_over = kw_under = kw_value = kw_elem = kw_const = nil
   ruby_now = page_ruby(page)
   shared_verbs(page, sources).each do |verb|
     d = demo_property_assertions(sources, verb)
@@ -1458,17 +1593,32 @@ def run_self_test
 
     d.each_value { |as| as.each { |k, v| kw_value ||= [k, v] if literal_assertion?(v) } }
     (d.keys & m.keys).sort.each do |prop|
-      kw_over ||= [verb, prop] if d[prop].empty? && m[prop].empty?
+      nested = prop.include?("[].")
+      kw_over ||= [verb, prop] if !nested && d[prop].empty? && m[prop].empty?
       d[prop].each do |kw, v|
-        kw_under ||= [verb, prop, kw, v] if literal_assertion?(v) && m[prop][kw] == v
+        kw_under ||= [verb, prop, kw, v] if !nested && literal_assertion?(v) && m[prop][kw] == v
+        kw_elem  ||= [verb, prop, kw, m[prop][kw]] if nested && m[prop].key?(kw)
+        kw_const ||= [verb, prop, kw, v] if constant_reference?(v)
       end
     end
   end
-  if errors_ns.empty? || redaction_hint.nil? || kw_over.nil? || kw_under.nil? || kw_value.nil?
-    warn "self-test cannot derive its K-1341/K-1344 plants: " \
+  if errors_ns.empty? || redaction_hint.nil? || kw_over.nil? || kw_under.nil? || kw_value.nil? ||
+     kw_elem.nil? || kw_const.nil?
+    warn "self-test cannot derive its K-1341/K-1344/K-1354 plants: " \
          "errors_ns=#{errors_ns.inspect} hint=#{redaction_hint.inspect} " \
-         "over=#{kw_over.inspect} under=#{kw_under.inspect} value=#{kw_value.inspect}"
+         "over=#{kw_over.inspect} under=#{kw_under.inspect} value=#{kw_value.inspect} " \
+         "elem=#{kw_elem.inspect} const=#{kw_const.inspect}"
     return 1
+  end
+
+  # A plant that changed nothing proves nothing, and a rule can be red for a
+  # reason the arm never planted. So each K-1354 plant is built here and checked
+  # to have MOVED the text it aims at before the arm runs.
+  planted = lambda do |what, before, after|
+    next after unless before == after
+
+    warn "self-test plant is a NO-OP and would prove nothing: #{what}"
+    exit 1
   end
 
   puts "── planted breaks (page side) ──"
@@ -1536,8 +1686,35 @@ def run_self_test
                         page.sub(/(#{Regexp.escape(kw_under[1])}:\s*\{[^}]*?),\s*#{kw_under[2]}:\s*#{Regexp.escape(kw_under[3])}/) {
                           Regexp.last_match(1)
                         }, sources, "PROPERTY_KEYWORDS")
+  # K-1354's own shape, at the depth that made it invisible rather than merely
+  # uncompared: the page's copy of an ARRAY ELEMENT's schema loses a keyword
+  # getgrocery declares on it. The page had no ceiling on `create_order`'s `qty`
+  # at all, and its handler answers an oversized one with the 500 K-1047 recorded
+  # on the origin.
+  elem_name = kw_elem[1].split("[].").last
+  arms << self_test_arm("#{kw_elem[0]}.#{kw_elem[1]} loses #{kw_elem[2]}: #{kw_elem[3]}",
+                        planted.call("element keyword #{kw_elem[1]}.#{kw_elem[2]}", page,
+                                     page.sub(/(#{Regexp.escape(elem_name)}:\s*\{[^}]*?),\s*#{kw_elem[2]}:\s*#{Regexp.escape(kw_elem[3])}/) {
+                                       Regexp.last_match(1)
+                                     }),
+                        sources, "PROPERTY_KEYWORDS")
 
   puts "── vacuity (derivation side blanked) ──"
+  # The resolution K-1354 put in place of a printed note: rename the constant
+  # where it is DEFINED, and the declaration citing it stops resolving. The rule
+  # must SAY so and fail -- an unresolvable constant is precisely the state it
+  # used to pass over in silence.
+  const_short  = kw_const[3].split("::").last
+  const_rename = lambda do |src|
+    src.sub(/^(\s*)#{Regexp.escape(const_short)}(\s*=)/) { "#{Regexp.last_match(1)}SELF_TEST_RENAMED#{Regexp.last_match(2)}" }
+  end
+  const_sources = sources.merge(uuid_check: const_rename.call(sources[:uuid_check]),
+                                wire_arguments: const_rename.call(sources[:wire_arguments]))
+  planted.call("constant #{kw_const[3]} renamed at its definition",
+               sources[:uuid_check] + sources[:wire_arguments],
+               const_sources[:uuid_check] + const_sources[:wire_arguments])
+  arms << self_test_arm("#{kw_const[3]} no longer resolves to a literal",
+                        page, const_sources, "PROPERTY_KEYWORDS")
   arms << self_test_arm("generator template loses its c.handlers example", page,
                         sources.merge(generator: sources[:generator].gsub(/c\.handlers\s*=\s*%w\[[^\]]*\]/, "c.handlers = []")), "HANDLER_NAMES")
   arms << self_test_arm("getgrocery's #{WORKED_VERB} loses required:", page,

@@ -1585,6 +1585,168 @@ jobs:
       - name: Gems, constraints and the skill pin share the protocol's MAJOR.MINOR
         run: ./bin/check-version-parity
 
+  # Verb names and the reserved plane (spec §8.1 / §8.3). On the 0.4 wire a verb
+  # name IS a path segment, which makes four properties load-bearing that used
+  # to be cosmetic, and bin/check-kiosk-names is the only reader of two of them:
+  #
+  #   (i)   HandlerMixin::RESERVED_NAMES must be exactly the set of first path
+  #         segments the engine's own route table draws under the mount. The
+  #         per-verb pair is drawn LAST, so every route above it wins by
+  #         first-match: a route added to engine.rb without a name added to
+  #         RESERVED_NAMES silently re-opens a name an operator can declare and
+  #         never be reached at. Nothing else can ask this — the mixin cannot
+  #         read the route table (it is required first) and the route table
+  #         cannot read the mixin without a cycle.
+  #   (iv)  no `\` line continuation is followed by a blank line. `\` eats
+  #         exactly ONE newline, so a blank line in the middle ENDS the
+  #         expression and the remaining string literals become dangling no-ops
+  #         — the verb ships a silently TRUNCATED `description` to every
+  #         assistant. It parses, it boots, `ruby -c` is happy, and the only
+  #         symptom is prose that stops mid-sentence on the wire.
+  #
+  # The other two — §8.1's `^[a-z][a-z0-9_]*$` and query/action name collisions
+  # — are RAISED by the engine at declaration time, so the demos job reaches
+  # them by booting; this is a second, boot-free reading over the whole fleet at
+  # once, in a second or so, without a database.
+  #
+  # WHY IT IS A JOB ONLY NOW (K-1361). It never was one: `command grep -c
+  # check-kiosk-names .github/workflows/ci.yml` answered 0, so (i) and (iv) were
+  # held by nothing but a human remembering to type the command. MEASURED in a
+  # sibling-less worktree of this repo before wiring, which is the environment
+  # this job actually provides: exit 0, 52 verbs across 8 origins, 5 reserved
+  # names. Stdlib Ruby only — no sibling checkout, no bundle, no services, no
+  # database, no network.
+  verb-names:
+    name: verb names and the reserved plane (bin/check-kiosk-names)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Declared verb names, and the reserved plane the engine draws
+        run: ./bin/check-kiosk-names
+
+  # THE PUBLISHED ARTEFACTS — the one job that checks kiosk.tech out beside this
+  # repo, because three guards compare this tree against published BYTES and
+  # none of them can say anything without them (K-1361).
+  #
+  # WHAT WAS BROKEN. Every demo initializer pins `skill_url` + `skill_sha256`,
+  # and that pair is the entire supply-chain instruction an AI assistant gets:
+  # fetch this file, verify this digest, refuse it on a mismatch. MEASURED
+  # 2026-09-07 in a sibling-less worktree — the environment every other job in
+  # this file runs in — with a UNIFORM half-relink planted (all seven demos and
+  # the engine default moved to `skill-v0.4.11.md`, every `skill_sha256` left at
+  # v0.4.12's): `bin/check-live-skill-pin` exit 0, `bin/check-version-parity`
+  # exit 0, `kiosk-test-support`'s `skill_pin_spec.rb` exit 0 with NINE PENDING.
+  # A one-hex-digit corruption of every `skill_sha256`, URLs untouched, gave the
+  # same three zeroes. The same three planted breaks in the umbrella layout are
+  # exit 1, exit 0, exit 1 — so the property was real and held in exactly one
+  # place: a developer's workspace. Nothing in CI ran any of it.
+  #
+  # WHY A SIBLING CHECKOUT IS LEGITIMATE HERE, where it is not elsewhere in this
+  # file. `kiosk-hq/kiosk.tech` is a PUBLIC repository, so the default
+  # GITHUB_TOKEN clones it and no cross-repo secret is involved. And the thing
+  # being read is IMMUTABLE by rule: a published `skill-vX.Y.Z.md` is never
+  # edited (kiosk.tech/bin/check-skill-immutability enforces it in that repo, on
+  # the working tree and over the range), so this job compares against a fixed
+  # artefact rather than against a moving branch. That is what separates it from
+  # `solver-pin-live` and the onboarding job's live half, which fetch a DEPLOY
+  # and therefore run on a schedule: a deploy lags a commit, a published cut
+  # does not change.
+  #
+  # THE ORDERING CONSTRAINT THIS CREATES, stated because an unstated one is how
+  # a gate becomes red on a clean tree and then gets switched off: a relink wave
+  # spans two repositories, and this job requires the cut to be on kiosk.tech's
+  # default branch before this repo's pins point at it. PUSH kiosk.tech FIRST.
+  # In the other order the pins name a file the world cannot fetch — which is
+  # the assistant-visible break, not an artefact of the check.
+  #
+  # THE THREE STEPS, and each one is dead without the sibling:
+  #   * skill_pin_spec.rb — the nine byte-level examples: every demo's
+  #     `skill_sha256` against the SHA-256 of the file its `skill_url` names, the
+  #     engine default naming that same published artefact, and the K-871
+  #     assertion that the pinned cut bounds its device-code poll (it names every
+  #     error DeviceCodeGrant can emit, a GIVE UP horizon and a TERMINAL
+  #     outcome). `KIOSK_REQUIRE_SITE_SIBLING=1` makes an absent sibling a
+  #     FAILURE rather than nine pending examples — without it a checkout that
+  #     quietly produced nothing would restore the green this job exists to end.
+  #   * bin/check-live-skill-pin (offline, no network) — the cross-check the
+  #     spec does not make: that the cut every demo pins is the NEWEST one
+  #     published, so a wave that re-pins to a superseded cut is caught even
+  #     though its digest is perfectly correct. Its --network mode is a manual
+  #     deploy-time tool and must NOT be wired anywhere: it compares the LIVE
+  #     fleet against the working tree, and those two are supposed to differ
+  #     from a skill cut until the next deploy.
+  #   * bin/check-spec-schemas — the eight vendored JSON Schema copies against
+  #     the published originals. e2e/schema_conformance.rb validates live wire
+  #     bytes against the copies, so a schema edited on kiosk.tech and not here
+  #     leaves e2e green while the wire diverges from what implementers read.
+  #     Sibling-less this script prints "NOT COMPARED" and exits 0 — measured —
+  #     which is why wiring it into any other job would have been a gate that
+  #     never compares anything.
+  published-bytes:
+    name: pins and vendored schemas vs the published bytes (kiosk.tech sibling)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      # The umbrella layout, reproduced: this repo and kiosk.tech as siblings.
+      # Every script below resolves the site as `../kiosk.tech` from its own
+      # repository root, so the two paths here are load-bearing.
+      - uses: actions/checkout@v7
+        with:
+          path: reference
+
+      - uses: actions/checkout@v7
+        with:
+          repository: kiosk-hq/kiosk.tech
+          path: kiosk.tech
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      # Fails loudly rather than letting the three steps below decide for
+      # themselves that there is nothing to compare. Each of them is written to
+      # degrade politely when the sibling is missing — correct for a developer's
+      # single-repo clone, and exactly what must not happen here.
+      - name: The sibling is really there
+        run: |
+          set -eu
+          test -d kiosk.tech/spec/schemas
+          cuts=$(ls kiosk.tech/skill-v*.md | wc -l)
+          test "$cuts" -gt 0
+          echo "kiosk.tech checked out: $cuts published skill cut(s), spec/schemas present"
+
+      - name: Install dependencies
+        working-directory: reference/kiosk-test-support
+        run: bundle install
+
+      - name: Every pinned skill_sha256 is the digest of the published cut
+        working-directory: reference/kiosk-test-support
+        env:
+          KIOSK_REQUIRE_SITE_SIBLING: "1"
+        run: bundle exec rspec spec/skill_pin_spec.rb
+
+      - name: The cut the demos pin is the newest one published
+        working-directory: reference
+        run: ./bin/check-live-skill-pin --offline
+
+      - name: The vendored JSON Schemas still match the published originals
+        working-directory: reference
+        run: ./bin/check-spec-schemas
+
   # A Keep-a-Changelog file answers each kind ONCE per release — everything
   # added since the last release under one `### Added`, everything fixed under
   # one `### Fixed` — because a reader who has found the heading they want stops

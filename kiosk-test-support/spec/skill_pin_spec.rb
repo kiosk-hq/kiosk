@@ -26,15 +26,32 @@ require "digest"
 #
 #   NOT HERE — bin/check-version-parity owns it (rule C): that every pinned
 #   `skill_url`, the engine default included, shares MAJOR.MINOR with
-#   `Kiosk::Protocol::API_VERSION`. That check needs no sibling checkout and no
-#   network, so unlike this spec it runs in public CI. Do not restate it here.
+#   `Kiosk::Protocol::API_VERSION`. That check needs no sibling checkout at all,
+#   so it runs in every job in this repo's CI; this file's byte group needs one
+#   and runs in the single job that provides it. Do not restate it here.
 #   The division is by what each can honestly see: it reads version STRINGS
 #   against the protocol, this reads published BYTES.
 #
-# Umbrella layout only: the parent of reference/ contains kiosk.tech/. On a
-# checkout without that sibling (public CI) the byte-level group skips —
-# public CI must not depend on private/local workspace layout. The string-level
-# group below has no such dependency and always runs.
+# WHERE THE BYTE GROUP CAN RUN, AND WHY THE SKIP IS NOT ITS OWN AUTHORITY
+# (K-1361). The byte group needs the published cuts, which live in the kiosk.tech
+# repo, so it runs when that repo sits beside this one and SKIPS when it does
+# not. For as long as no CI job put it beside this one, that skip was the whole
+# story: MEASURED 2026-09-07, `12 examples, 0 failures, 9 pending` in a
+# sibling-less worktree against `12 examples, 0 failures` in the umbrella — and
+# the nine are every demo's sha256 byte check plus the device-grant poll below.
+# A UNIFORM half-relink was then planted (all seven demos AND the engine default
+# moved to `skill-v0.4.11.md`, every `skill_sha256` left at v0.4.12's) and,
+# sibling-less, this spec exited 0 with 9 pending while `bin/check-live-skill-pin`
+# and `bin/check-version-parity` both exited 0 as well. So did a one-hex-digit
+# corruption of every `skill_sha256` with the URLs untouched. Nothing held the
+# supply-chain property anywhere except a human's workspace.
+#
+# `ci.yml`'s `published-bytes` job now checks kiosk.tech out beside this repo
+# and runs this file there, so the nine RUN. Because a checkout that silently
+# produced nothing would restore exactly the green-with-nine-pending this row is
+# about, that job sets `KIOSK_REQUIRE_SITE_SIBLING=1`: with it, an absent sibling
+# is a FAILURE naming the path it looked in, never a skip. Unset — a developer's
+# `reference`-only clone — the skip stands and says so.
 RSpec.describe "the skill pin" do
   monorepo_root = File.expand_path("../..", __dir__)  # spec/ -> kiosk-test-support/ -> reference/
   site_root     = File.expand_path("../kiosk.tech", monorepo_root)
@@ -103,7 +120,21 @@ RSpec.describe "the skill pin" do
   # ── Byte level: needs the published files, so umbrella checkouts only ──────
   describe "against the published bytes" do
     before do
-      skip "sibling kiosk.tech checkout not present (public CI)" unless File.directory?(site_root)
+      next if File.directory?(site_root)
+
+      # Fail-closed for any environment that PROMISED the sibling. Without this
+      # arm a checkout step that resolved to nothing reads as nine pending
+      # examples and a green job — the exact shape of the false gate this arm
+      # was added for.
+      if ENV["KIOSK_REQUIRE_SITE_SIBLING"] == "1"
+        raise "KIOSK_REQUIRE_SITE_SIBLING=1 was set, so the caller undertook to put the " \
+              "published kiosk.tech checkout at #{site_root} — and it is not there. Do NOT " \
+              "relax this to a skip: these examples are the only thing that compares a demo's " \
+              "`skill_sha256` against the bytes an AI assistant will actually fetch, and a " \
+              "skipped example reads as a passing one in every summary line CI prints."
+      end
+
+      skip "sibling kiosk.tech checkout not present (public CI)"
     end
 
     # The engine default carries no sha256 of its own — `skill_sha256` is nil

@@ -2,8 +2,11 @@
 # frozen_string_literal: true
 
 # check-live-skill-pin — does the DEPLOYED fleet serve the skill cut this tree
-# ships? A MANUAL TRIAGE TOOL. It is deliberately NOT a CI job; read the next
-# section before wiring it into one.
+# ships? `--network` is A MANUAL TRIAGE TOOL and must never be a CI job; read
+# the next section before wiring it into one. `--offline` is a different
+# question with a different answer — since K-1361 it is a step of ci.yml's
+# `published-bytes` job, the one job that checks kiosk.tech out beside this
+# repo.
 #
 # WHY THIS EXISTS (K-1075). Every operator's `/.well-known/kiosk.json` carries a
 # `kiosk.skill` block — a URL naming one immutable `skill-vX.Y.Z.md` and the
@@ -32,24 +35,42 @@
 # the other six stayed FAIL and the tree-side cross-check went FAIL on the
 # diverged pin — so the comparison is a comparison and not a constant.
 #
-# WHY IT IS NOT A CI JOB, AND MUST NOT BECOME ONE.
+# WHY `--network` IS NOT A CI JOB, AND MUST NOT BECOME ONE.
 # It measures the LIVE fleet against the WORKING TREE, and those two are
 # supposed to differ: every commit that cuts a skill makes this red, and it
 # stays red — correctly — until someone deploys. A gate that is red on a clean
 # tree gets switched off, and a switched-off gate is worth less than no gate
 # (the same reasoning that kept `check-conformance-drift` a report rather than
-# a gate, K-1123). So this answers a question a HUMAN asks at deploy time:
+# a gate, K-1123). So that mode answers a question a HUMAN asks at deploy time:
 # "is the fleet still serving what we shipped?" — it does not answer "is the
 # tree correct", which is what CI is for.
+#
+# AND WHY `--offline` IS ONE (K-1361). It probes nothing; it reads the tree,
+# and in the umbrella layout it cross-checks the pins against the newest cut on
+# disk — the one assertion that catches a wave re-pinning to a SUPERSEDED cut
+# whose digest is perfectly correct. That is a property of the tree, it is
+# never red on a clean one, and until K-1361 nothing in CI asked it. MEASURED
+# 2026-09-07: sibling-less, this mode exits 0 on a uniform half-relink (all
+# seven demos and the engine default moved to an older cut with every
+# `skill_sha256` left behind) and exits 0 again on a one-hex-digit corruption
+# of every `skill_sha256`. Beside a kiosk.tech checkout, both are exit 1. So
+# the offline half is worth running ONLY where the sibling is, which is why it
+# lives in `published-bytes` and not in one of the single-checkout jobs — there
+# it would print SKIP and exit 0 forever.
 #
 # WHAT IT DOES NOT COVER, stated because an over-claimed guard is how a blind
 # spot survives:
 #   * NOT the tree-side agreement of the pins. That `skill_sha256` equals the
 #     sha256 of the file `skill_url` names is `kiosk-test-support/spec/
 #     skill_pin_spec.rb`; that every demo and the engine default share the
-#     protocol's MAJOR.MINOR is `bin/check-version-parity`. Both are real CI
-#     gates and neither is repeated here — the offline half below only resolves
-#     the expectation and refuses to proceed on an ambiguous one.
+#     protocol's MAJOR.MINOR is `bin/check-version-parity`. Neither is repeated
+#     here — the offline half below only resolves the expectation, cross-checks
+#     it against the newest cut on disk, and refuses to proceed on an ambiguous
+#     one. Both of those ARE CI gates today; the first was not, in the half that
+#     matters, until K-1361 gave it the sibling it needs (its nine byte-level
+#     examples were PENDING in every public-CI run, which is where the umbrella
+#     constitution's claim that THIS script holds `skill_sha256` came from — it
+#     does not, and never did).
 #   * NOT whether kiosk.tech actually SERVES the cut the fleet points at. That
 #     is `bin/check-solver-pin --network`'s side of the world (it fetches the
 #     published skill and the solver it pins).

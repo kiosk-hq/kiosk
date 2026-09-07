@@ -188,7 +188,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -318,7 +318,7 @@ namespace :demo do
       40.times do
         begin
           ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
-        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        rescue StandardError
           nil
         end
         break if ready
@@ -403,7 +403,7 @@ namespace :demo do
       40.times do
         begin
           ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
-        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        rescue StandardError
           nil
         end
         break if ready
@@ -518,7 +518,7 @@ namespace :demo do
       40.times do
         begin
           ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
-        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        rescue StandardError
           nil
         end
         break if ready
@@ -687,7 +687,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -772,7 +772,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1

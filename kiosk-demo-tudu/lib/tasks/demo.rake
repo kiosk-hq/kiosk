@@ -27,7 +27,7 @@ def tudu_boot_server(log:, port:, extra_env: {})
   40.times do
     begin
       ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
-    rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+    rescue StandardError
       nil
     end
     break if ready

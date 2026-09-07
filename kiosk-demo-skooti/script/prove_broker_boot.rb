@@ -179,7 +179,7 @@ module ProveBrokerBoot
           prove_public_pem = res.body
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1

@@ -196,7 +196,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -418,7 +418,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -618,7 +618,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -757,7 +757,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -892,7 +892,7 @@ namespace :demo do
             ready = true
             break
           end
-        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        rescue StandardError
           nil
         end
         sleep 1
@@ -1025,7 +1025,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -1185,7 +1185,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1
@@ -1505,7 +1505,7 @@ namespace :demo do
           ready = true
           break
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+      rescue StandardError
         nil
       end
       sleep 1

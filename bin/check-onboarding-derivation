@@ -1642,16 +1642,89 @@ def derived_facts(sources)
     # chain empties this and the self-test SAYS so instead of building a fixture
     # that agrees with nothing.
     ceiling: derived_total_ceiling(sources).first,
+    # K-1360: every verb's property ASSERTION KEYWORDS, array elements
+    # included, and the constant table they resolve through. The fixture writes
+    # these into the page it builds, which is what makes the fixture mode a
+    # real page rather than a page R14 is red on -- see `fixture_keywords`.
+    assertions: (declared_verbs(sources[:storefront]) | declared_verbs(sources[:orders]))
+                .to_h { |v| [v, demo_property_assertions(sources, v) || {}] },
+    consts: demo_constants(sources),
     rails: rails_floor(sources[:server_gemspec]),
     ruby: ruby_floor(sources[:core_gemspec]),
     install: canonical_install_source(sources[:readme]) }
+end
+
+# ── THE FIXTURE CARRIES getgrocery's KEYWORDS (K-1360) ───────────────────────
+#
+# A fixture that wrote every property as a bare `{ type: "string" }` is not "a
+# page that satisfies every rule by construction" -- it is a page R14 is RED
+# on, because getgrocery declares `format`, `minimum`, `maximum`, `minItems`
+# and `pattern` that such a page omits. Worse, it is a page the K-1344/K-1354
+# plants cannot aim at at all: their coordinates are derived from keywords BOTH
+# sides declare, so a keywordless fixture leaves `under` and `elem` nil and the
+# whole self-test aborts before its first arm.
+#
+# MEASURED 2026-09-07, in exactly the environment `.github/workflows/ci.yml`
+# runs this leg in: `KIOSK_TECH_DIR=/nonexistent bin/check-onboarding-derivation
+# --self-test` exited 1 at the plant-derivation guard. So the PUSH-BLOCKING half
+# of the CI job could only ever be red, and it read green everywhere it was run
+# by hand because a workspace checkout HAS the sibling. The remedy is not to let
+# the fixture mode skip those arms -- a leg that passes by covering less is the
+# failure this guard exists to detect -- it is to make the fixture carry what
+# the rules compare, which is what the header above has always claimed of it.
+#
+# Every keyword is READ OUT OF getgrocery, never typed, and every Ruby constant
+# is RESOLVED to the literal it is assigned: the page's standalone controller
+# can name no constant of the demo's, so the literal is the only thing it can
+# honestly write, and that is the same resolution R14 performs on the other side
+# of the comparison. A constant that resolves to nothing is fatal HERE too --
+# building a fixture that silently dropped the keyword would hand R14 two copies
+# of a hole instead of a comparison.
+def fixture_keywords(assertions, consts, where)
+  assertions.map do |kw, value|
+    literal = constant_reference?(value) ? consts[value] : value
+    if literal.nil?
+      warn "self-test cannot build its fixture: #{where} declares #{kw}: #{value}, which resolves " \
+           "to no literal in #{GETGROCERY_UUID_CHECK} or #{GETGROCERY_WIRE_ARGUMENTS}"
+      exit 1
+    end
+    ", #{kw}: #{literal}"
+  end.join
+end
+
+# One `properties:` block as the fixture writes it. A property getgrocery
+# declares as an ARRAY of objects additionally carries its ELEMENT schema under
+# `items:` -- the depth R14 was blind at until K-1354, and the depth the `elem`
+# plant aims at. The element's own keys come from the same derived hash, keyed
+# `<name>[].<sub>`, so nothing here is a second hand-typed copy of the origin.
+#
+# EVERY KEYWORD ENDS IN A COMMA, including the last one before a closing brace,
+# and that is load-bearing rather than a style choice: `assertion_value` reads a
+# non-bracketed value to the comma OR THE END OF THE LINE, so a keyword written
+# last on its line comes back as `"date" }` -- the closing brace included -- and
+# compares unequal to getgrocery's `"date"`. The origin never hits this because
+# its declarations are multi-line; a fixture that writes one property per line
+# does, and the first writing of this function did.
+def fixture_property_lines(names, assertions, consts, indent)
+  names.map do |n|
+    own   = assertions[n] || {}
+    elems = assertions.select { |k, _| k.start_with?("#{n}[].") }
+    next "#{indent}#{n}: { type: \"string\"#{fixture_keywords(own, consts, n)}, }," if elems.empty?
+
+    inner = elems.map { |k, kws|
+      "#{k.split("[].").last}: { type: \"string\"#{fixture_keywords(kws, consts, k)}, }"
+    }.join(", ")
+    "#{indent}#{n}: { type: \"array\"#{fixture_keywords(own, consts, n)}, " \
+      "items: { type: \"object\", properties: { #{inner} } }, },"
+  end.join("\n")
 end
 
 # A minimal page that satisfies every rule by construction, so the arms
 # below are testing the RULES rather than the fixture.
 def fixture_page(f)
   ruby_init = "Kiosk.configure do |c|\n  c.handlers = %w[#{f[:handlers].join(" ")}]\nend\n"
-  props     = f[:properties].map { |n| "                 #{n}: { type: \"string\" }," }.join("\n")
+  props     = fixture_property_lines(f[:properties], f[:assertions][WORKED_VERB] || {}, f[:consts],
+                                     " " * 17)
   reads     = f[:integers].map { |n| "    #{n} = whole_number(params[:#{n}])" }.join("\n")
   ruby_verb = <<~RUBY
     class #{f[:handlers].first} &lt; ApplicationController
@@ -1672,8 +1745,16 @@ def fixture_page(f)
   RUBY
   key, value = f[:install]
   gemfile = %(# Gemfile\ngem "kiosk-all", #{key}: "#{value}"\n)
+  # R13's two halves, both derived (K-1360). Without them the fixture is a page
+  # ERROR_REDACTION is red on WHATEVER is planted into it, so its two arms would
+  # have observed a rule that was already failing and read that as coverage --
+  # the same "passes by covering less" shape the fixture mode exists to avoid.
+  errors_ns = reraised_class(f[:seam]).to_s.sub(/::Base\z/, "")
+  hint      = f[:hints].values.first
   [%(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
    %(<p>Needs Rails #{f[:rails]} and Ruby #{f[:ruby]}.</p>),
+   %(<p>Raise what you would raise anyway: the caller is sent "#{hint}" in place of your
+      exception's own sentence, and #{errors_ns} is the route you speak deliberately through.</p>),
    %(<pre><code class="language-ruby">#{gemfile}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_init}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_verb}</code></pre>),
@@ -1687,7 +1768,7 @@ end
 # is the point of the vacuity tier.
 def fixture_write_surface(f)
   blocks = f[:orders_schemas].map do |verb, (req, props)|
-    prop_lines = props.map { |n| "                 #{n}: { type: \"string\" }," }.join("\n")
+    prop_lines = fixture_property_lines(props, f[:assertions][verb] || {}, f[:consts], " " * 17)
     # A verb that declares an array-of-objects parameter reads it the way the
     # ban requires: element shape checked before anything indexes it.
     # ... and totals it the way R15 requires: bound to a local, refused at the

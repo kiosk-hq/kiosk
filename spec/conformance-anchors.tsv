@@ -406,7 +406,7 @@ kiosk-demo-getgrocery/config/routes.rb	post "/kiosk/auth/register",
 kiosk-demo-getgrocery/db/migrate/20260630000001_create_stripe_customers.rb	create_table :stripe_customers do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      boot_env["STRIPE_SECRET_KEY"] = "sk_test_mock"
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      exit exit_status
-kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "  OK  K-480: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
+kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "  OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "\n  redteam: BREACH DETECTED or error — see output above. Exit #{exit_status}."
 kiosk-demo-getgrocery/lib/tasks/demo.rake	    abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 kiosk-demo-getgrocery/lib/tasks/demo.rake	    if psp_ref.match?(/\Api_/)

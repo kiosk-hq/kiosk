@@ -345,8 +345,8 @@ namespace :demo do
     if sat && chosen && sat == chosen
       puts "  OK  create_order slot_at == chosen delivery_slot slot_at (#{sat}) — no date drift"
     else
-      failures << "K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
-      puts "  FAIL  K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
+      failures << "slot-date agreement: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
+      puts "  FAIL  slot-date agreement: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
     end
 
     # If the flow ran late enough that some of today's windows had already
@@ -356,12 +356,12 @@ namespace :demo do
     # tomorrow, in which case this asserts nothing).
     psc = result["past_slot_check"]
     if psc.nil?
-      puts "  OK  K-480: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
+      puts "  OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
     elsif psc["http"] == 400 && psc["code"] == "bad_request"
-      puts "  OK  K-480: create_order on past slot id=#{psc["id"]} → 400 bad_request (un-bookable window rejected)"
+      puts "  OK  past-slot filter: create_order on past slot id=#{psc["id"]} → 400 bad_request (un-bookable window rejected)"
     else
-      failures << "K-480: create_order on past slot expected 400 bad_request, got #{psc.inspect}"
-      puts "  FAIL  K-480: create_order on past slot got #{psc.inspect}"
+      failures << "past-slot filter: create_order on past slot expected 400 bad_request, got #{psc.inspect}"
+      puts "  FAIL  past-slot filter: create_order on past slot got #{psc.inspect}"
     end
 
     # my_orders marks the settled order paid. The field is the TRI-state §11.6

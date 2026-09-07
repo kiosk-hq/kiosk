@@ -172,10 +172,10 @@ unless missing_ids.empty?
     { "Authorization" => "Bearer #{token}" },
   )
   past_code = past_resp["code"]
-  abort "K-480: create_order on a PAST slot (#{past_id} on #{slot_date}) expected 400 bad_request, got #{rc_past} #{past_code.inspect}" \
+  abort "past-slot filter: create_order on a PAST slot (#{past_id} on #{slot_date}) expected 400 bad_request, got #{rc_past} #{past_code.inspect}" \
     unless rc_past == 400 && past_code == "bad_request"
   past_slot_check = { id: past_id, http: rc_past, code: past_code }
-  STDERR.puts "  K-480: create_order on past slot id=#{past_id} → http=#{rc_past} code=#{past_code} (rejected, as expected)"
+  STDERR.puts "  past-slot filter: create_order on past slot id=#{past_id} → http=#{rc_past} code=#{past_code} (rejected, as expected)"
 end
 
 # -- Step 4: create_order (items + delivery slot + chosen slot's date + address) --
@@ -197,7 +197,7 @@ total_cents = order_value.fetch("total_cents")
 slot_at     = order_value.fetch("slot_at")
 # The booked slot_at MUST equal the date+start-time of the slot the agent
 # saw and chose in delivery_slots — same day, NOT +1.
-abort "K-470: create_order slot_at=#{slot_at.inspect} != chosen delivery_slot slot_at=#{chosen_slot_at.inspect} (date drift)" \
+abort "slot-date agreement: create_order slot_at=#{slot_at.inspect} != chosen delivery_slot slot_at=#{chosen_slot_at.inspect} (date drift)" \
   unless slot_at == chosen_slot_at
 abort "create_order result must carry currency=eur" unless order_value["currency"] == "eur"
 abort "create_order result must carry a total_eur display string" unless order_value["total_eur"].to_s.start_with?("€")

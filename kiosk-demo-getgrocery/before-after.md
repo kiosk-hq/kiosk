@@ -123,7 +123,7 @@ key whenever one is present.
   OK  order_id present (1af6fb28-c05a-416b-adb6-a6965251808d)
   OK  slot_at present (2026-08-27T08:00:00+01:00)
   OK  create_order slot_at == chosen delivery_slot slot_at (2026-08-27T08:00:00+01:00) — no date drift
-  OK  K-480: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op
+  OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op
   OK  my_orders own order payment_state == paid
   OK  pay.settlement_id present (ebac3e74-9087-4560-adb3-14157fc4f48b)
   OK  pay.psp_reference present (pi_RGA0cgHgjoCS0YF)

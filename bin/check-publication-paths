@@ -120,7 +120,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "d991d68601e5e2c5d10e14a85d365ed3e299e0337af91844854743bc19f3f1df"
+TWIN_DIGEST = "82ea3eba16a21f499e26144222d0ee659e216e05e1753f9cfdc24aadd39df65c"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -1065,7 +1065,7 @@ def run_self_test
   # NON-VACUITY over the REAL tree. A guard whose file set is empty exits 0 and
   # reads exactly like a clean repository.
   index, note = resolve_index
-  _, _, files, cites, _, keys = scan_repo(index, note)
+  _, _, files, cites, = scan_repo(index, note)
   failures << "the real tree scanned #{files} files -- the file set is empty or nearly so" if files < 50
   failures << "the real tree examined #{cites} section citations -- the section arm is vacuous here" if cites < 1
   puts "  real tree: #{files} tracked text file(s), #{cites} section citation(s) examined -- non-vacuous"

@@ -186,6 +186,17 @@ GETGROCERY_CREATE_ORDER = "kiosk-demo-getgrocery/app/operations/create_order_ope
 # Operation is picked up instead of being silently uncovered (K-1366).
 GETGROCERY_DELIVERY_SLOTS = "kiosk-demo-getgrocery/app/models/delivery_slots.rb"
 GETGROCERY_OPERATIONS_DIR = "kiosk-demo-getgrocery/app/operations"
+# THE ROUTES, WHICH THE PAGE NOW TEACHES LINE BY LINE (T-184). Until T-183 the
+# engine drew one constrained `:kiosk_verb` pair and the page could honestly say
+# «mounting it draws the entire surface -- you write no route of your own». That
+# pair is gone: the mount draws the PROTOCOL PLANE and the operator writes ONE
+# EXPLICIT LINE PER VERB. A page teaching that has to carry a worked routes file,
+# and a hand-typed one is exactly the drift this script exists to refuse -- so
+# both halves are derived from the origin the rest of the page is copied from.
+# `config/routes.rb` for the `draw` call that reaches the split, and
+# `config/routes/kiosk.rb` for the mount line and every verb route below it.
+GETGROCERY_APP_ROUTES  = "kiosk-demo-getgrocery/config/routes.rb"
+GETGROCERY_WIRE_ROUTES = "kiosk-demo-getgrocery/config/routes/kiosk.rb"
 # The engine's gemspec is the ONLY one that names Rails at all, so it is the
 # single authority for the floor an adopting operator has to clear (K-1320).
 SERVER_GEMSPEC = "kiosk-server/kiosk-server.gemspec"
@@ -610,11 +621,72 @@ end
 # a handler.
 ENTITIES = { "&lt;" => "<", "&gt;" => ">", "&quot;" => '"', "&#39;" => "'", "&amp;" => "&" }.freeze
 
-def page_ruby(page)
+# Every `language-ruby` block on the page, decoded, IN ORDER. A block is the
+# unit an operator copies -- the routes file the page teaches is ONE of them --
+# so the route rules below can ask "which block is the wire file" instead of
+# asking the concatenation, which cannot tell a block apart from its neighbour.
+def page_ruby_blocks(page)
   page.scan(%r{<code class="language-ruby">(.*?)</code>}m)
       .flatten
       .map { |b| b.gsub(/&(?:lt|gt|quot|#39|amp);/) { |e| ENTITIES[e] } }
-      .join("\n")
+end
+
+def page_ruby(page)
+  page_ruby_blocks(page).join("\n")
+end
+
+# ── THE ROUTES FILE, READ THE SAME WAY ON BOTH SIDES (T-184) ────────────────
+#
+# The same two expressions `bin/check-verb-routes` reads an origin's own wire
+# file with, so the page and the demo are parsed by one reader rather than by
+# two that can disagree. Deliberately anchored at line start: a route named
+# inside a COMMENT (getgrocery's wire file explains the deleted `POST
+# /kiosk/query` pair in its header) begins with `#` and cannot match.
+WIRE_ROUTE_LINE = /^[ \t]*(get|post|put|patch|delete|match)[ \t]+"([^"]+)"[ \t]*,[ \t]*to:[ \t]*"([^"]+)"([^\n]*)/
+WIRE_MOUNT_LINE = /^[ \t]*mount[ \t]+Kiosk::Server::Engine[ \t]*=>/
+# A dynamic path segment -- `:kiosk_verb` or `*splat`. This is the shape T-183
+# deleted, and the one thing a worked routes file must never re-teach.
+DYNAMIC_SEGMENT = /[:*][a-z_]/
+# `draw(:kiosk)` -- Rails' own routes-file split, which is how the wire file is
+# reached from `config/routes.rb`.
+DRAW_CALL = /^[ \t]*draw\(:([a-z_][a-zA-Z0-9_]*)\)/
+
+# Every drawn route in a routes source, with the verb name its `defaults:`
+# carries (nil when it carries none -- which is what the deleted catch-all
+# looked like) and the offset it was drawn at, because ORDER is the property
+# the mount rule holds.
+def wire_routes(src)
+  out = []
+  src.enum_for(:scan, WIRE_ROUTE_LINE).each do
+    m = Regexp.last_match
+    out << { method: m[1], path: m[2], to: m[3],
+             verb: m[4][/defaults:[ \t]*\{[ \t]*kiosk_verb:[ \t]*"([^"]+)"/, 1],
+             at: m.begin(0) }
+  end
+  out
+end
+
+# The engine mount: where it is drawn, and the line itself with its whitespace
+# squeezed -- so a page that mounts at a hard-coded "/kiosk" instead of
+# `Kiosk.configuration.mount_path` compares unequal rather than merely present.
+def wire_mount_at(src)
+  src.match(WIRE_MOUNT_LINE)&.begin(0)
+end
+
+def wire_mount_line(src)
+  src[/^[ \t]*mount[ \t]+Kiosk::Server::Engine[^\n]*/]&.strip&.gsub(/[ \t]+/, " ")
+end
+
+# getgrocery's own wire, keyed by verb: the line each verb is drawn with.
+def demo_verb_routes(sources)
+  wire_routes(sources[:wire_file]).each_with_object({}) do |r, h|
+    h[r[:verb]] = { method: r[:method], path: r[:path], to: r[:to] } if r[:verb]
+  end
+end
+
+# The block on the page that IS the routes file: the one carrying the mount.
+def page_wire_block(page)
+  page_ruby_blocks(page).find { |b| b.match?(WIRE_MOUNT_LINE) }
 end
 
 # The class names a `c.handlers = %w[...]` line registers, in order. Reads a
@@ -1991,6 +2063,141 @@ def rule_date_parser(page, sources)
                        "must parse their arguments the way they do")
 end
 
+# ── R19..R22: the routes file the page teaches (T-184) ──────────────────────
+#
+# WHY FOUR RULES AND NOT ONE. The page used to teach a single `mount` line, and
+# the sentence above it -- «mounting it draws the entire surface, you write no
+# route of your own» -- was TRUE of the shipped engine until T-183 deleted the
+# `:kiosk_verb` catch-all pair. It is now four separate facts, and they fail
+# independently: WHERE the wire lives (a `draw` split), WHAT draws the protocol
+# plane (the mount), WHAT draws the operator's verbs (one explicit line each),
+# and the ORDER the two are written in (the mount first, or a verb of the
+# operator's can shadow `schema`). One rule would go red on any of them and say
+# which only in its detail line; four say it in the name.
+#
+# Every one derives from getgrocery, the origin the rest of this page is copied
+# from -- so the worked routes cannot become the hand-typed table that drifts,
+# which is the whole class of defect K-1394 recorded.
+
+# R19 -- the page reaches the wire file the way getgrocery does.
+def rule_route_file(page, sources)
+  name = sources[:app_routes][DRAW_CALL, 1]
+  return vacuous!("ROUTE_FILE", "#{GETGROCERY_APP_ROUTES} makes no `draw(:name)` call, so there is no split to derive") if name.nil?
+
+  wire_rel = GETGROCERY_WIRE_ROUTES[%r{config/routes/[^/]+\.rb\z}]
+  return vacuous!("ROUTE_FILE", "#{GETGROCERY_WIRE_ROUTES} is not a config/routes/<name>.rb file") if wire_rel.nil?
+  unless wire_rel == "config/routes/#{name}.rb"
+    return vacuous!("ROUTE_FILE",
+                    "getgrocery calls draw(:#{name}) but keeps its wire in #{wire_rel}; Rails resolves " \
+                    "draw(:x) to config/routes/x.rb, so these two cannot both be right and there is no " \
+                    "single fact to hold the page to")
+  end
+
+  drawn   = page_ruby(page).match?(/^[ \t]*draw\(:#{Regexp.escape(name)}\)/)
+  named   = page.include?(wire_rel)
+  missing = []
+  missing << "no `draw(:#{name})` line in any Ruby block" unless drawn
+  missing << "the page never names #{wire_rel}" unless named
+  check("ROUTE_FILE",
+        missing.empty?,
+        "the page keeps the wire in #{wire_rel} and reaches it with Rails' own draw(:#{name})",
+        missing.empty? ? "derived from #{GETGROCERY_APP_ROUTES} + #{GETGROCERY_WIRE_ROUTES}" : missing.join("; "))
+end
+
+# R20 -- every verb the page declares is drawn with getgrocery's own line.
+def rule_verb_routes(page, sources)
+  demo = demo_verb_routes(sources)
+  return vacuous!("VERB_ROUTES", "#{GETGROCERY_WIRE_ROUTES} draws no `defaults: { kiosk_verb: … }` route") if demo.empty?
+
+  ruby = page_ruby(page)
+  mine = wire_routes(ruby).select { |r| r[:verb] }
+  return vacuous!("VERB_ROUTES", "the page draws no verb route at all") if mine.empty?
+
+  owed = declared_verbs(ruby) & demo.keys
+  return vacuous!("VERB_ROUTES", "the page declares no verb getgrocery also routes") if owed.empty?
+
+  drawn   = mine.each_with_object({}) { |r, h| h[r[:verb]] = { method: r[:method], path: r[:path], to: r[:to] } }
+  dupes   = mine.map { |r| r[:verb] }.tally.select { |_, c| c > 1 }.keys
+  missing = owed - drawn.keys
+  unknown = drawn.keys - demo.keys
+  wrong   = drawn.filter_map do |v, got|
+    next if demo[v].nil? || demo[v] == got
+
+    "#{v} is drawn `#{got[:method]} \"#{got[:path]}\" -> #{got[:to]}` where getgrocery draws " \
+      "`#{demo[v][:method]} \"#{demo[v][:path]}\" -> #{demo[v][:to]}`"
+  end
+
+  problems = []
+  problems << "declared but never routed: #{missing.sort.join(", ")}" unless missing.empty?
+  problems << "routed but getgrocery routes no such verb: #{unknown.sort.join(", ")}" unless unknown.empty?
+  problems << "routed more than once: #{dupes.sort.join(", ")}" unless dupes.empty?
+  problems.concat(wrong)
+  check("VERB_ROUTES",
+        problems.empty?,
+        "#{owed.size} verb(s) the page declares (#{owed.sort.join(", ")}) are drawn with getgrocery's own route line",
+        problems.empty? ? "derived from #{GETGROCERY_WIRE_ROUTES} (#{demo.size} verb route(s) there)" : problems.join("; "))
+end
+
+# R21 -- the mount is drawn, and drawn FIRST.
+def rule_mount_first(page, sources)
+  demo_at   = wire_mount_at(sources[:wire_file])
+  demo_line = wire_mount_line(sources[:wire_file])
+  demo_rts  = wire_routes(sources[:wire_file])
+  return vacuous!("MOUNT_FIRST", "#{GETGROCERY_WIRE_ROUTES} does not mount Kiosk::Server::Engine") if demo_at.nil?
+  return vacuous!("MOUNT_FIRST", "#{GETGROCERY_WIRE_ROUTES} draws no route for a mount to precede") if demo_rts.empty?
+  unless demo_at < demo_rts.map { |r| r[:at] }.min
+    return vacuous!("MOUNT_FIRST", "#{GETGROCERY_WIRE_ROUTES} draws its mount BELOW a route, so there is no ordering to derive")
+  end
+
+  ruby     = page_ruby(page)
+  mine_rts = wire_routes(ruby)
+  return vacuous!("MOUNT_FIRST", "the page draws no route for a mount to precede") if mine_rts.empty?
+
+  mine_at   = wire_mount_at(ruby)
+  mine_line = wire_mount_line(ruby)
+  first_rt  = mine_rts.map { |r| r[:at] }.min
+  problems  = []
+  problems << "no Ruby block on the page mounts Kiosk::Server::Engine" if mine_at.nil?
+  problems << "the mount is drawn BELOW a route, so an operator verb can shadow the protocol plane" if mine_at && mine_at > first_rt
+  problems << "the page mounts `#{mine_line}` where getgrocery mounts `#{demo_line}`" if mine_line && mine_line != demo_line
+  check("MOUNT_FIRST",
+        problems.empty?,
+        "the page draws `#{demo_line}` above all #{mine_rts.size} of its route line(s)",
+        problems.empty? ? "derived from #{GETGROCERY_WIRE_ROUTES}" : problems.join("; "))
+end
+
+# R22 -- BAN. No route on the page carries a dynamic segment or an unnamed verb.
+#
+# The subject is derived: getgrocery's wire file draws N routes and not one of
+# them is a pattern, so the ban has something live to be a ban ABOUT. If the
+# origin itself ever drew one, this says so and holds nothing, rather than
+# holding the page to a rule its own source breaks.
+def rule_route_pattern(page, sources)
+  demo = wire_routes(sources[:wire_file])
+  return vacuous!("ROUTE_PATTERN", "#{GETGROCERY_WIRE_ROUTES} draws no route at all") if demo.empty?
+
+  loose = demo.select { |r| DYNAMIC_SEGMENT.match?(r[:path]) || r[:verb].nil? }
+  unless loose.empty?
+    return vacuous!("ROUTE_PATTERN",
+                    "#{GETGROCERY_WIRE_ROUTES} itself draws #{loose.size} pattern route(s) " \
+                    "(#{loose.map { |r| r[:path] }.join(", ")}), so this ban has no origin to derive from")
+  end
+
+  block = page_wire_block(page)
+  return vacuous!("ROUTE_PATTERN", "no Ruby block on the page mounts Kiosk::Server::Engine, so the page shows no wire file") if block.nil?
+
+  mine = wire_routes(block)
+  return vacuous!("ROUTE_PATTERN", "the page's wire file draws no route") if mine.empty?
+
+  bad = mine.select { |r| DYNAMIC_SEGMENT.match?(r[:path]) || r[:verb].nil? }
+  check("ROUTE_PATTERN",
+        bad.empty?,
+        "all #{mine.size} route(s) in the page's wire file name one static path and one verb",
+        bad.empty? ? "derived from #{GETGROCERY_WIRE_ROUTES} (#{demo.size} static, named route(s) there)"
+                   : bad.map { |r| "`#{r[:method]} \"#{r[:path]}\"`#{r[:verb] ? "" : " names no kiosk_verb"} " \
+                                   "is the catch-all T-183 deleted, spelled on the page" }.join("; "))
+end
+
 RULES = [
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
@@ -2010,6 +2217,10 @@ RULES = [
   [:rule_past_window,        "PAST_WINDOW",         "derivation", "which verbs refuse a delivery day that has already gone and re-check the window they book, walked from each verb's Operation through the wire-argument guards to the clock reader those guards compare against"],
   [:rule_publication_status, "PUBLICATION_STATUS",  "derivation", "the publication-status claim the monorepo README states canonically, and the URL of the section that states it"],
   [:rule_date_parser,        "DATE_PARSER",         "derivation", "the `Date.` constructor getgrocery's read controller and wire-argument guards parse a date argument with"],
+  [:rule_route_file,         "ROUTE_FILE",         "derivation", "the `draw(:name)` split getgrocery reaches its wire file by, and that file's own path"],
+  [:rule_verb_routes,        "VERB_ROUTES",        "derivation", "getgrocery's own route line for every verb the page declares -- method, path, and the kiosk_verb it defaults"],
+  [:rule_mount_first,        "MOUNT_FIRST",        "derivation", "the engine mount getgrocery draws, and the fact it is drawn above every verb route"],
+  [:rule_route_pattern,      "ROUTE_PATTERN",      "ban",        "a dynamic path segment, or a route naming no verb -- the catch-all pair T-183 deleted"],
 ].freeze
 
 def load_sources
@@ -2022,6 +2233,8 @@ wire_arguments:  repo_read(GETGROCERY_WIRE_ARGUMENTS),
 create_order_op: repo_read(GETGROCERY_CREATE_ORDER),
 delivery_slots:  repo_read(GETGROCERY_DELIVERY_SLOTS),
 operations:      repo_read_dir(GETGROCERY_OPERATIONS_DIR),
+app_routes:      repo_read(GETGROCERY_APP_ROUTES),
+wire_file:       repo_read(GETGROCERY_WIRE_ROUTES),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
     readme:          repo_read(MONOREPO_README),
@@ -2045,6 +2258,7 @@ def run_list
   [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
    GETGROCERY_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS, GETGROCERY_CREATE_ORDER,
    GETGROCERY_DELIVERY_SLOTS, GETGROCERY_OPERATIONS_DIR,
+   GETGROCERY_APP_ROUTES, GETGROCERY_WIRE_ROUTES,
    SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
     path = File.join(ROOT, rel)
     puts "  #{File.exist?(path) ? "present" : "MISSING"}  #{rel}"
@@ -2257,7 +2471,17 @@ def derived_facts(sources)
     consts: demo_constants(sources),
     rails: rails_floor(sources[:server_gemspec]),
     ruby: ruby_floor(sources[:core_gemspec]),
-    install: canonical_install_source(sources[:readme]) }
+    install: canonical_install_source(sources[:readme]),
+    # T-184: the routes file, on the derivation side. `routes` is getgrocery's
+    # own line per verb, `mount` the mount line it draws above them, `draw` the
+    # split name its config/routes.rb reaches the file by, and `wire_rel` the
+    # path that name resolves to. All four are read, never typed, for the reason
+    # the fixture's date constructors were (K-1411): a literal copy here is a
+    # hand-kept duplicate of the very fact R19..R22 exist to derive.
+    routes: demo_verb_routes(sources),
+    mount: wire_mount_line(sources[:wire_file]),
+    draw: sources[:app_routes][DRAW_CALL, 1],
+    wire_rel: GETGROCERY_WIRE_ROUTES[%r{config/routes/[^/]+\.rb\z}] }
 end
 
 # ── THE FIXTURE CARRIES getgrocery's KEYWORDS (K-1360) ───────────────────────
@@ -2339,6 +2563,27 @@ def fixture_window_guard(f)
    "    return if slot_start &lt;= #{w[:clock]}"].join("\n")
 end
 
+# THE FIXTURE'S ROUTES FILE, DERIVED LIKE EVERYTHING ELSE IN IT (T-184).
+#
+# Two blocks, because the page teaches two: `config/routes.rb` reaching the
+# split with Rails' own `draw`, and the wire file itself -- the mount first,
+# then one line per verb THIS FIXTURE declares. The verb list is intersected
+# with getgrocery's routed verbs rather than assumed equal to it, so a demo
+# that stops routing a verb empties the arm loudly (VERB_ROUTES goes red on the
+# unplanted run) instead of the fixture quietly writing a line nobody drew.
+def fixture_app_routes(f)
+  "# config/routes.rb\nRails.application.routes.draw do\n  draw(:#{f[:draw]})\nend\n"
+end
+
+def fixture_wire_file(f)
+  verbs = (([WORKED_VERB] + f[:orders_schemas].keys) & f[:routes].keys).sort
+  lines = verbs.map { |v|
+    r = f[:routes][v]
+    %(#{r[:method]} "#{r[:path]}", to: "#{r[:to]}", defaults: { kiosk_verb: "#{v}" })
+  }
+  "# #{f[:wire_rel]}\n#{f[:mount]}\n\n#{lines.join("\n")}\n"
+end
+
 # A minimal page that satisfies every rule by construction, so the arms
 # below are testing the RULES rather than the fixture.
 def fixture_page(f)
@@ -2397,7 +2642,9 @@ def fixture_page(f)
    %(<pre><code class="language-ruby">#{gemfile}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_init}</code></pre>),
    %(<pre><code class="language-ruby">#{ruby_verb}</code></pre>),
-   %(<pre><code class="language-ruby">#{fixture_write_surface(f)}</code></pre>)].join("\n")
+   %(<pre><code class="language-ruby">#{fixture_write_surface(f)}</code></pre>),
+   %(<pre><code class="language-ruby">#{fixture_app_routes(f)}</code></pre>),
+   %(<pre><code class="language-ruby">#{fixture_wire_file(f)}</code></pre>)].join("\n")
 end
 
 # The write half of the fixture: one declaration per verb getgrocery's orders
@@ -2441,7 +2688,8 @@ def run_self_test
   if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? ||
      f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil? ||
      f[:orders_schemas].empty? || f[:arrays].empty? || f[:seam].nil? || f[:hints].empty? ||
-     f[:ceiling].nil? || f[:window].nil? || f[:publication].nil?
+     f[:ceiling].nil? || f[:window].nil? || f[:publication].nil? ||
+     f[:routes].empty? || f[:mount].nil? || f[:draw].nil? || f[:wire_rel].nil?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -2691,6 +2939,71 @@ def run_self_test
                                      page.gsub(status_url, "the reference monorepo")),
                         sources, "PUBLICATION_STATUS")
 
+# ── T-184's four plants ───────────────────────────────────────────────────
+#
+# THE COORDINATES ARE READ OFF THE PAGE, never typed: a verb the page BOTH
+# declares and routes, and the exact line it is routed with. A typed
+# "catalog" would go on matching a page that had renamed the verb, and the
+# arms would pass while aiming at nothing -- the failure this file's header
+# records about hand-kept plant tables.
+page_rts   = wire_routes(page_ruby(page)).select { |r| r[:verb] }
+route_verb = (declared_verbs(page_ruby(page)) & page_rts.map { |r| r[:verb] }).first
+if route_verb.nil?
+  warn "self-test cannot derive its T-184 plants: the page declares no verb it also routes " \
+       "(#{page_rts.size} route(s) drawn, #{declared_verbs(page_ruby(page)).size} verb(s) declared)"
+  return 1
+end
+route_re = /^[ \t]*(?:get|post)[ \t]+"[^"]*"[ \t]*,[ \t]*to:[ \t]*"[^"]*"[^\n]*kiosk_verb:[ \t]*"#{Regexp.escape(route_verb)}"[^\n]*\n/
+mount_re = /^[ \t]*mount[ \t]+Kiosk::Server::Engine[^\n]*\n/
+
+# (a) THE SPLIT IS GONE -- the page stops reaching its wire file the way
+# every origin does, so an operator copying it puts the wire back in
+# config/routes.rb interleaved with their own pages.
+arms << plant_arm("the page stops reaching the wire file with draw(:#{f[:draw]})",
+                  planted.call("the draw split", page,
+                               page.gsub("draw(:#{f[:draw]})", "draw(:wire)")),
+                  sources, "ROUTE_FILE")
+# (b) K-1394's own shape, one file over: a verb the page TEACHES and does not
+# ROUTE. Before T-183 that was impossible -- the catch-all served it -- which
+# is exactly why the page needs a rule for it now.
+arms << plant_arm("#{route_verb} is declared on the page and never routed",
+                  planted.call("the #{route_verb} route line", page, page.sub(route_re, "")),
+                  sources, "VERB_ROUTES")
+# (c) And the drift a well-meant edit makes: the METHOD stops following the
+# KIND, so a query is taught as a POST (or an action as a GET).
+arms << plant_arm("#{route_verb} routed with the other HTTP method",
+                  planted.call("the #{route_verb} method", page,
+                               page.sub(route_re) { |line|
+                                 line.sub(/\A([ \t]*)(get|post)\b/) { "#{$1}#{$2 == "get" ? "post" : "get"}" }
+                               }),
+                  sources, "VERB_ROUTES")
+# (d) THE MOUNT DEMOTED BELOW THE VERBS. Rails dispatches the first matching
+# route, so this is the ordering property in its broken state: an operator
+# verb drawn above the mount shadows the protocol plane, and the page would
+# be teaching it.
+demoted = lambda do
+  text = page[mount_re]
+  break page if text.nil?
+
+  rest = page.sub(mount_re, "")
+  last = rest.rindex(/^[ \t]*(?:get|post)[ \t]+"[^"]*"[ \t]*,[ \t]*to:[^\n]*\n/)
+  break page if last.nil?
+
+  eol = rest.index("\n", last)
+  break page if eol.nil?
+
+  rest[0..eol] + text + rest[(eol + 1)..]
+end.call
+arms << plant_arm("the mount drawn BELOW the page's verb routes",
+                  planted.call("the mount's position", page, demoted),
+                  sources, "MOUNT_FIRST")
+# (e) THE CATCH-ALL BACK ON THE PAGE, in the exact spelling the engine drew
+# through 0.4.12 and T-183 deleted.
+arms << plant_arm("the :kiosk_verb catch-all taught in place of #{route_verb}'s line",
+                  planted.call("the catch-all", page,
+                               page.sub(route_re, %(get "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show"\n))),
+                  sources, "ROUTE_PATTERN")
+
   puts "── vacuity (derivation side blanked) ──"
   # The resolution K-1354 put in place of a printed note: rename the constant
   # where it is DEFINED, and the declaration citing it stops resolving. The rule
@@ -2793,6 +3106,26 @@ def run_self_test
   planted.call("the README's bold emphasis removed", sources[:readme], no_claim)
   arms << vacuity_arm("the README states no bolded publication-status claim", page,
                         sources.merge(readme: no_claim), "PUBLICATION_STATUS")
+
+# T-184's four, one per rule. Each blanks the getgrocery side the rule reads,
+# so a rule that can no longer compute its own subject SAYS it holds nothing
+# rather than passing over an empty comparison.
+no_draw = sources[:app_routes].sub(/^([ \t]*)draw\(/) { "#{$1}nodraw(" }
+planted.call("getgrocery's draw call renamed", sources[:app_routes], no_draw)
+arms << vacuity_arm("getgrocery's config/routes.rb makes no draw call", page,
+                    sources.merge(app_routes: no_draw), "ROUTE_FILE")
+no_names = sources[:wire_file].gsub("kiosk_verb:", "other_key:")
+planted.call("getgrocery's routes stop defaulting kiosk_verb", sources[:wire_file], no_names)
+arms << vacuity_arm("getgrocery's wire file names no verb on any route", page,
+                    sources.merge(wire_file: no_names), "VERB_ROUTES")
+no_mount = sources[:wire_file].sub("mount Kiosk::Server::Engine", "mount Kiosk::Other::Engine")
+planted.call("getgrocery's engine mount renamed", sources[:wire_file], no_mount)
+arms << vacuity_arm("getgrocery's wire file mounts no Kiosk engine", page,
+                    sources.merge(wire_file: no_mount), "MOUNT_FIRST")
+no_routes = sources[:wire_file].gsub(/^(get|post)([ \t])/) { "x#{$1}#{$2}" }
+planted.call("getgrocery's route lines disabled", sources[:wire_file], no_routes)
+arms << vacuity_arm("getgrocery's wire file draws no route at all", page,
+                    sources.merge(wire_file: no_routes), "ROUTE_PATTERN")
 
   # ── the network reader (K-1367) ────────────────────────────────────────────
   puts

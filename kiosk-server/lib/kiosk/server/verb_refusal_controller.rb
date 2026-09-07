@@ -82,11 +82,11 @@ module Kiosk
         method = command == :query ? "GET" : "POST"
         raise Errors::Base,
           "#{name.inspect} is a registered #{command == :query ? "query" : "action"} at this " \
-          "origin, but no route reaches it. The operator draws ONE EXPLICIT ROUTE PER VERB " \
-          "(T-183). Add `#{method.downcase} \"#{Kiosk.configuration.mount_path}/#{name}\", to: " \
+          "origin, but no route reaches it. This engine draws the protocol plane; an " \
+          "operator draws ONE EXPLICIT ROUTE PER VERB. Add `#{method.downcase} " \
+          "\"#{Kiosk.configuration.mount_path}/#{name}\", to: " \
           "\"kiosk/server/verb##{command == :query ? "show" : "create"}\", defaults: " \
-          "{ kiosk_verb: \"#{name}\" }` to config/routes/kiosk.rb. " \
-          "bin/check-verb-routes finds this before a caller does."
+          "{ kiosk_verb: \"#{name}\" }` to config/routes/kiosk.rb."
       end
     end
   end

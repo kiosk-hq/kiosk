@@ -162,6 +162,11 @@ GETGROCERY_INITIALIZER = "kiosk-demo-getgrocery/config/initializers/kiosk.rb"
 # it is red. A constant it cannot resolve is an error, never a pass (K-1354).
 GETGROCERY_UUID_CHECK     = "kiosk-demo-getgrocery/app/models/uuid_check.rb"
 GETGROCERY_WIRE_ARGUMENTS = "kiosk-demo-getgrocery/app/operations/wire_arguments.rb"
+# The origin's create verb, and the only file that says WHICH guard the summed
+# cart total is handed to. R15 walks it: the local the sum is bound to, the
+# module function that local goes into, the constant that function bounds it
+# against, and the literal that constant is assigned (K-1359).
+GETGROCERY_CREATE_ORDER = "kiosk-demo-getgrocery/app/operations/create_order_operation.rb"
 # The engine's gemspec is the ONLY one that names Rails at all, so it is the
 # single authority for the floor an adopting operator has to clear (K-1320).
 SERVER_GEMSPEC = "kiosk-server/kiosk-server.gemspec"
@@ -1348,6 +1353,172 @@ def rule_property_keywords(page, sources)
         detail)
 end
 
+# ── R15's derivation chain ───────────────────────────────────────────────────
+#
+# The origin's total guard, resolved LINK BY LINK out of this repository rather
+# than named here: the local `create_order` binds its summed cart total to, the
+# module function that local is handed to, the constant that function bounds it
+# against, and the literal that constant is assigned. Nothing in this chain is
+# typed, so renaming any link reddens the rule instead of quietly emptying it --
+# and a link that does not resolve is reported as the reason the rule holds
+# nothing, never passed over. Same discipline R14 adopted for its constants.
+#
+# @return [Array(String, String, nil), Array(nil, nil, String)] ceiling +
+#   provenance, or the reason there is none.
+def derived_total_ceiling(sources)
+  op   = sources[:create_order_op]
+  mask = masked(op)
+  bind = mask.match(/^[ \t]*([a-z_][a-zA-Z0-9_]*)[ \t]*=[^\n]*\.sum\b/)
+  return [nil, nil, "#{GETGROCERY_CREATE_ORDER} binds no summed total to a local"] if bind.nil?
+
+  local = bind[1]
+  call  = mask.match(/([A-Z][A-Za-z0-9_]*)\.([a-z_][a-zA-Z0-9_]*)\(\s*#{Regexp.escape(local)}\s*\)/)
+  return [nil, nil, "nothing in #{GETGROCERY_CREATE_ORDER} hands `#{local}` to a guard"] if call.nil?
+
+  recv, meth = call[1], call[2]
+  wmask = masked(sources[:wire_arguments])
+  at    = wmask.index(/^[ \t]*def #{Regexp.escape(meth)}\b/)
+  return [nil, nil, "#{GETGROCERY_WIRE_ARGUMENTS} declares no `def #{meth}`"] if at.nil?
+
+  stop = wmask.index(/^[ \t]*def /, at + 1) || wmask.length
+  cmp  = wmask[at...stop].match(/(?:<=|<|>=|>)\s*([A-Z][A-Z0-9_]+)\b/)
+  return [nil, nil, "`#{recv}.#{meth}` bounds `#{local}` by no constant"] if cmp.nil?
+
+  key     = "#{recv}::#{cmp[1]}"
+  literal = demo_constants(sources)[key]
+  return [nil, nil, "`#{key}` resolves to no literal in #{GETGROCERY_WIRE_ARGUMENTS}"] if literal.nil?
+
+  [canonical_assertion(literal),
+   "#{GETGROCERY_CREATE_ORDER} `#{local} = ....sum` -> #{recv}.#{meth} -> #{key} = #{literal}",
+   nil]
+end
+
+# `NAME = <literal>` in the page's OWN Ruby, keyed by the bare name. The page's
+# controller is standalone by design and can name no constant of the demo's, so
+# a ceiling it guards with is either an inline literal or a constant it assigns
+# itself; both resolve here, and a name that resolves to NEITHER is an error
+# rather than a pass -- R14's rule about unresolvable constants, on the other
+# side of the boundary.
+def page_constants(ruby)
+  out = {}
+  masked(ruby).lines.zip(ruby.lines).each do |mline, oline|
+    next unless (m = mline.match(/\A\s*([A-Z][A-Z0-9_]+)\s*=\s*/))
+
+    value = oline[m[0].length...mline.rstrip.length].to_s.strip
+    out[m[1]] = value unless value.empty?
+  end
+  out
+end
+
+# Every page handler that SUMS a total, with the coordinates R15 judges and its
+# self-test plants aim at: what the sum is bound to, what that local is compared
+# against, and whether that comparison is the FIRST thing to touch the local.
+# One function so a plant can never aim at something the rule does not read.
+def page_total_sites(ruby)
+  mask = masked(ruby)
+  declared_verbs(ruby).filter_map do |verb|
+    range = handler_body_range(mask, verb)
+    next if range.nil?
+
+    body = mask[range]
+    next unless body.match?(/\.sum\b/)
+
+    bind = body.match(/^[ \t]*([a-z_][a-zA-Z0-9_]*)[ \t]*=[^\n]*\.sum\b/)
+    next({ verb: verb, local: nil, token: nil, guard_first: false }) if bind.nil?
+
+    local = bind[1]
+    tail  = body[bind.end(0)..].to_s
+    cmp   = tail.match(/\b#{Regexp.escape(local)}\b\s*(?:>=|>|<=|<)\s*([A-Za-z_][A-Za-z0-9_]*|\d[\d_]*)/)
+    { verb: verb, local: local, token: cmp && cmp[1],
+      guard_first: !cmp.nil? && tail.index(/\b#{Regexp.escape(local)}\b/) == cmp.begin(0) }
+  end
+end
+
+# R15 -- the page REFUSES a cart it cannot price, at the origin's own ceiling
+# and before anything is written (K-1359, which is K-1047's other half).
+#
+# THE DEFECT THIS CLOSES, and why no rule above could reach it. K-1354 gave the
+# page `qty`'s declared `maximum`, and R14 holds it there. That ceiling is per
+# LINE and the overflow is in the SUM: at the catalogue's cheapest row it takes
+# tens of millions of units to pass `orders.total_cents`, and every one of those
+# quantities is inside the `maximum` the page declares. So the page went on
+# computing `price_cents * qty` summed straight into `Order.create!`, where
+# activemodel raises `ActiveModel::RangeError` in RUBY before any SQL and the
+# wire answers 500 -- the identical shape K-1047 recorded on the origin and
+# closed there with `WireArguments.priceable_total`.
+#
+# WHY A NEW RULE RATHER THAN AN ARM OF R14. R14's subject is a DECLARED
+# PROPERTY: it walks each side's `properties:` hashes and compares the assertion
+# keywords found there. A cart total is not a property of anything -- it is a
+# value the handler COMPUTES from the operator's own catalogue prices, and JSON
+# Schema has no per-property keyword that could express a bound on it. That is
+# not an accident of R14's implementation; it is the same reason getgrocery's
+# own guard is a handler refusal and not a `maximum`, stated in `wire_arguments.rb`
+# and in `create_order`'s description. Extending R14 would have meant giving one
+# rule two unrelated subjects and two unrelated derivations, and the printed line
+# «12 shared properties carry getgrocery's keywords» would then have been true of
+# a run that also silently asserted something about a handler body. So: a rule of
+# its own, in the family of R4 and R12, which already read handler bodies.
+#
+# WHAT IT ASSERTS, per summing handler, and why each conjunct is load-bearing:
+#   BOUND      the sum is bound to a local. A sum written straight into the call
+#              that writes it is unrefusable by construction -- the pre-fix shape.
+#   CEILING    that local is compared against the ceiling DERIVED above. A
+#              different number is an invented basket size; the bound is the
+#              column's.
+#   ORDER      the comparison is the FIRST use of the local. A guard the value
+#              has already been consumed past is not a guard, and this is the
+#              half the origin states by taking its refusal the moment prices
+#              resolve and BEFORE the replace path locks a row.
+def rule_total_guard(page, sources)
+  ceiling, provenance, why = derived_total_ceiling(sources)
+  return vacuous!("TOTAL_GUARD", why) if ceiling.nil?
+
+  ruby   = page_ruby(page)
+  sites  = page_total_sites(ruby)
+  if sites.empty?
+    return vacuous!("TOTAL_GUARD",
+                    "no handler in the page's Ruby sums a total, so there is nothing to hold to " \
+                    "the ceiling derived from #{GETGROCERY_CREATE_ORDER}")
+  end
+
+  consts = page_constants(ruby)
+  bad    = []
+  sites.each do |site|
+    verb = site[:verb]
+    if site[:local].nil?
+      bad << "#{verb} sums its total straight into the value it writes, so nothing can refuse " \
+             "the cart first -- bind the sum to a local and guard the local"
+      next
+    end
+    if site[:token].nil?
+      bad << "#{verb} binds its summed total to `#{site[:local]}` and never compares it to a ceiling"
+      next
+    end
+    unless site[:guard_first]
+      bad << "#{verb} uses `#{site[:local]}` before the ceiling comparison, so the total is " \
+             "consumed before it is refused"
+      next
+    end
+    token = site[:token]
+    value = token.match?(/\A\d/) ? token : consts[token]
+    if value.nil?
+      bad << "#{verb} bounds `#{site[:local]}` by `#{token}`, which resolves to no literal in the " \
+             "page's own Ruby -- assign it on the page or inline the number, do not drop the bound"
+      next
+    end
+    next if canonical_assertion(value) == ceiling
+
+    bad << "#{verb} bounds `#{site[:local]}` at #{value} where getgrocery bounds the same sum at #{ceiling}"
+  end
+
+  check("TOTAL_GUARD",
+        bad.empty?,
+        "#{sites.size} summing handler(s) (#{sites.map { |s| s[:verb] }.sort.join(", ")}) refuse an " \
+        "unpriceable cart at #{ceiling} before anything is written",
+        bad.empty? ? provenance : bad.join(" | "))
+end
+
 RULES = [
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
@@ -1363,6 +1534,7 @@ RULES = [
   [:rule_item_shape,         "ITEM_SHAPE",          "ban",        "indexing an element of a declared array-of-objects without checking it is a Hash"],
   [:rule_error_redaction,    "ERROR_REDACTION",     "derivation", "what the rescue seam sends INSTEAD of the exception's own message, and the class it re-raises untouched"],
   [:rule_property_keywords,  "PROPERTY_KEYWORDS",   "derivation", "the JSON Schema assertion keywords getgrocery declares on every property both sides declare, array ELEMENTS included, each Ruby constant resolved to the literal it is assigned"],
+  [:rule_total_guard,        "TOTAL_GUARD",         "derivation", "the ceiling getgrocery refuses an unpriceable cart at, walked from the summed total in its create operation to the constant the guard bounds it by -- a COMPUTED value no declared-property rule can reach"],
 ].freeze
 
 def load_sources
@@ -1372,6 +1544,7 @@ def load_sources
     getgrocery_init: repo_read(GETGROCERY_INITIALIZER),
 uuid_check:      repo_read(GETGROCERY_UUID_CHECK),
 wire_arguments:  repo_read(GETGROCERY_WIRE_ARGUMENTS),
+create_order_op: repo_read(GETGROCERY_CREATE_ORDER),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
     readme:          repo_read(MONOREPO_README),
@@ -1393,7 +1566,7 @@ def run_list
   puts
   puts "Derivation sources:"
   [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
-   GETGROCERY_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS,
+   GETGROCERY_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS, GETGROCERY_CREATE_ORDER,
    SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
     puts "  #{File.exist?(File.join(ROOT, rel)) ? "present" : "MISSING"}  #{rel}"
   end
@@ -1464,6 +1637,11 @@ def derived_facts(sources)
     # reddens the arm rather than leaving it matching a string nobody sends.
     seam:  rescue_seam_body(sources[:handler_mixin]),
     hints: rescued_hints(sources[:server_errors]),
+    # K-1359: the ceiling the fixture's summing verb guards with, and the value
+    # the drift plant is built against. Derived, so a renamed link in the origin's
+    # chain empties this and the self-test SAYS so instead of building a fixture
+    # that agrees with nothing.
+    ceiling: derived_total_ceiling(sources).first,
     rails: rails_floor(sources[:server_gemspec]),
     ruby: ruby_floor(sources[:core_gemspec]),
     install: canonical_install_source(sources[:readme]) }
@@ -1512,8 +1690,12 @@ def fixture_write_surface(f)
     prop_lines = props.map { |n| "                 #{n}: { type: \"string\" }," }.join("\n")
     # A verb that declares an array-of-objects parameter reads it the way the
     # ban requires: element shape checked before anything indexes it.
+    # ... and totals it the way R15 requires: bound to a local, refused at the
+    # derived ceiling, and the refusal is the first thing to touch the local.
     reads = (props & f[:arrays]).map { |n|
-      "    return if params[:#{n}].is_a?(Array) && params[:#{n}].all? { |item| item.is_a?(Hash) }"
+      "    return if params[:#{n}].is_a?(Array) && params[:#{n}].all? { |item| item.is_a?(Hash) }\n" \
+      "    cart_total = params[:#{n}].sum { |item| item[:qty] }\n" \
+      "    return if cart_total &gt; #{f[:ceiling]}"
     }.join("\n")
     <<~VERB
       kind :action
@@ -1537,7 +1719,8 @@ def run_self_test
   f       = derived_facts(sources)
   if f[:handlers].nil? || f[:required].nil? || f[:properties].nil? || f[:optional].empty? ||
      f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil? ||
-     f[:orders_schemas].empty? || f[:arrays].empty? || f[:seam].nil? || f[:hints].empty?
+     f[:orders_schemas].empty? || f[:arrays].empty? || f[:seam].nil? || f[:hints].empty? ||
+     f[:ceiling].nil?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -1699,6 +1882,46 @@ def run_self_test
                                      }),
                         sources, "PROPERTY_KEYWORDS")
 
+  # K-1359's shape, three spellings. The coordinates come from the page itself
+  # through the same reader the rule uses, so a plant can never aim at text R15
+  # does not look at -- and `planted` refuses a substitution that changed nothing.
+  site = page_total_sites(ruby_now).find { |s| s[:local] && s[:token] }
+  if site.nil?
+    warn "self-test cannot derive its K-1359 plants: the page has no bound-and-guarded summed total"
+    return 1
+  end
+  local   = site[:local]
+  token   = site[:token]
+  drifted = (f[:ceiling].to_i / 1000).to_s
+  # (a) THE SUM IS NOT BOUND -- the pre-fix shape, where the total goes straight
+  # into the row and there is nothing for a guard to hold.
+  arms << self_test_arm("#{site[:verb]}'s summed total no longer bound to `#{local}`",
+                        planted.call("summed-total binding", page,
+                                     page.sub(/^([ \t]*)#{Regexp.escape(local)}[ \t]*=[ \t]*(\S[^\n]*\.sum)/) {
+                                       "#{Regexp.last_match(1)}#{Regexp.last_match(2)}"
+                                     }),
+                        sources, "TOTAL_GUARD")
+  # (b) THE CEILING DRIFTS to an invented basket size, in whichever spelling the
+  # page uses -- a constant it assigns, or an inline literal.
+  drift = if token.match?(/\A\d/)
+            page.sub(/(#{Regexp.escape(local)}\s*(?:&gt;|>|>=|<|<=)\s*)#{Regexp.escape(token)}/) {
+              "#{Regexp.last_match(1)}#{drifted}"
+            }
+          else
+            page.sub(/^([ \t]*#{Regexp.escape(token)}[ \t]*=[ \t]*)\S+/) { "#{Regexp.last_match(1)}#{drifted}" }
+          end
+  arms << self_test_arm("the cart ceiling drifts to #{drifted}",
+                        planted.call("cart ceiling #{token}", page, drift),
+                        sources, "TOTAL_GUARD")
+  # (c) THE GUARD IS TOO LATE -- something reads the total before the refusal.
+  # A bound-and-guarded total whose guard nothing reaches first is not a guard.
+  arms << self_test_arm("`#{local}` consumed before the ceiling comparison",
+                        planted.call("guard ordering", page,
+                                     page.sub(/^([ \t]*#{Regexp.escape(local)}[ \t]*=[^\n]*\.sum[^\n]*\n)/) {
+                                       "#{Regexp.last_match(1)}    Rails.logger.info(#{local})\n"
+                                     }),
+                        sources, "TOTAL_GUARD")
+
   puts "── vacuity (derivation side blanked) ──"
   # The resolution K-1354 put in place of a printed note: rename the constant
   # where it is DEFINED, and the declaration citing it stops resolving. The rule
@@ -1772,6 +1995,12 @@ def run_self_test
   arms << self_test_arm("getgrocery asserts no JSON Schema keyword anywhere", page,
                         sources.merge(storefront: dekeyword.call(sources[:storefront]),
                                       orders: dekeyword.call(sources[:orders])), "PROPERTY_KEYWORDS")
+  # R15's chain starts at the origin's summed total. Break the first link and the
+  # whole ceiling is underivable -- the rule must SAY it holds nothing.
+  no_sum = sources[:create_order_op].gsub(".sum", ".count")
+  planted.call("getgrocery's create operation no longer sums", sources[:create_order_op], no_sum)
+  arms << self_test_arm("getgrocery's create operation sums no total", page,
+                        sources.merge(create_order_op: no_sum), "TOTAL_GUARD")
 
   FAILURES.clear
   puts

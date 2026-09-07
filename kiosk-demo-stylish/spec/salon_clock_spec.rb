@@ -24,6 +24,10 @@ require "active_support/core_ext/time"
 require "date"
 
 require_relative "../app/models/salon_clock"
+# Loads clean without Rails: the class body defines methods and resolves no
+# model constant until one is CALLED, and {BookAppointmentOperation.example_slot}
+# calls nothing but {SalonClock}.
+require_relative "../app/operations/book_appointment_operation"
 
 FAILURES = []
 
@@ -98,6 +102,29 @@ rescue ArgumentError, TypeError
   true
 end
 assert(refused_int, "a non-string slot (12345) is refused, not read as a date")
+
+# ── 4. THE PUBLISHED EXAMPLE INSTANT IS ON THE SALON'S CLOCK (K-1350) ─────
+#
+# {BookAppointmentOperation.example_slot} is the one instant this demo publishes
+# as «copy this» — the catalog's `example_params`/`example_row` and both `slot`
+# refusals read it. It used to render 14:00 UTC, which no guard refuses and no
+# caller misresolves; what it demonstrated was a clock the salon does not keep.
+#
+# WATCHED FAIL: put `(Time.current + 7.days).utc.change(hour: 14).iso8601` back
+# and the wall-clock assertion goes red under both TZ values (16 in summer, 15
+# in winter), which is the point — the defect is about the SALON's hour, not the
+# process's, so a single-TZ run cannot be what catches it.
+example = BookAppointmentOperation.example_slot
+example_at = SalonClock.parse_slot(example)
+assert(example_at.hour == 14,
+       "the published example instant is 14:00 at the salon, got #{example_at.hour}:00 (#{example})")
+assert(!example.end_with?("Z"),
+       "…and it is rendered with the salon's own offset rather than as UTC, got #{example}")
+assert(example_at.utc_offset == SalonClock.zone.now.advance(days: 7).utc_offset,
+       "…the offset it carries is the salon's own at that instant (DST included), got " \
+       "#{example_at.utc_offset / 3600}")
+assert(example_at > Time.now,
+       "…and it is still in the future, so the guard it illustrates would accept it")
 
 puts
 if FAILURES.empty?

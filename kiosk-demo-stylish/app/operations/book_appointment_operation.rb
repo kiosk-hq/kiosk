@@ -111,12 +111,23 @@ class BookAppointmentOperation
   # THE ONE INSTANT THIS DEMO PUBLISHES AS AN EXAMPLE (K-969, K-972), read from
   # two places that must not disagree: the catalog's `example_params`/`example_row`
   # and the two `slot` refusals above. Both mean «here is a value that works», so
-  # both must name an instant this guard would ACCEPT. A week out at 14:00 UTC —
-  # ahead of now from any caller's clock, on a round wall-clock hour.
+  # both must name an instant this guard would ACCEPT. A week out at 14:00 ON THE
+  # SALON'S OWN CLOCK — ahead of now from any caller's clock, on a round
+  # wall-clock hour.
   #
-  # @return [String] an ISO 8601 instant with an offset, always later than now
+  # AND THE ZONE IS THE SALON'S BECAUSE THIS IS THE «COPY THIS» VALUE (K-1350).
+  # It used to render 14:00 UTC, which was never FALSE — the string carries an
+  # offset, so every guard here accepted it and every caller resolved it to the
+  # same instant. What it failed to be is EXEMPLARY: it demonstrated a clock the
+  # salon does not keep, in the demo whose whole point is that the salon's clock
+  # is the one that decides ({SalonClock}). An operator copying it learned the
+  # shape and not the rule. Rendered in the salon's zone it is the same kind of
+  # value the verb answers WITH, so the example and the response agree.
+  #
+  # @return [String] an ISO 8601 instant carrying the salon's own offset,
+  #   always later than now
   def self.example_slot
-    (Time.current + 7.days).utc.change(hour: 14).iso8601
+    SalonClock.zone.now.advance(days: 7).change(hour: 14).iso8601
   end
 
   # Every refusal this verb can make is a `bad_request` — see

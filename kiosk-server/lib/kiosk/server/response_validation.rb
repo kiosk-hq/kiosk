@@ -53,11 +53,25 @@ module Kiosk
     # artefact `onboarding.html` sends an adopting operator to copy: an example
     # is also an instruction.
     #
-    # THE INSTALL GENERATOR SETS NEITHER THIS FLAG NOR `validate_requests`.
-    # Measured: its initializer template contains no `validate` at all, so a
-    # freshly generated app inherits the default above and opts in when it wants
-    # the assertion. (An earlier revision of this paragraph said the generated
-    # app turned it on. It never did.)
+    # THE INSTALL GENERATOR NOW WRITES BOTH FLAGS, AS ACTIVE LINES (K-1336).
+    # Its initializer template sets `validate_requests` to `true` and
+    # `validate_responses` to `!Rails.env.production?` — the demos' posture,
+    # arrived at for the demos' reason — each under a comment giving its own
+    # reason, and both beneath a paragraph saying that the UNCONDITIONAL
+    # per-verb coerce-then-validate obligation is not either of them. So a
+    # freshly generated app does NOT inherit the `false` default above: it
+    # starts with the caller-facing shape check on and the operator-facing
+    # output check on everywhere except production, and an operator who wants
+    # the default opts OUT by editing the line.
+    #
+    # This paragraph has been wrong twice, in opposite directions — it once said
+    # the generated app turned the flag on when the template carried no
+    # `validate` line at all, and then said the template still carried none for
+    # three commits after K-1336 had put both in. It is BOUND now:
+    # `spec/generators/kiosk/install_generator_spec.rb` reads the two values out
+    # of the template and fails unless the sentence above states them, so the
+    # next change to what the generator writes reddens the suite instead of
+    # quietly falsifying this comment.
     #
     # `pay` and `schema` are engine verbs with no operator descriptor, so they
     # are not validated here; their shapes are fixed by the spec and asserted

@@ -164,6 +164,41 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         expect(body).to include("coerce-then-validate on the per-verb wire is UNCONDITIONAL")
         expect(body).to include("input_schema")
       end
+
+      # The fifth arm, and the one the four above did not cover (K-1336,
+      # reopened 2026-09-07). K-1332 wrote a paragraph into response_validation.rb
+      # saying the install generator set NEITHER flag and the template contained
+      # no `validate` at all; K-1336 made the template set both, three commits
+      # later, and left that paragraph standing — a shipped engine comment
+      # describing a generator that had stopped existing, carrying its own
+      # meta-correction so a reader was told it had already been checked. The
+      # four arms above hold the TEMPLATE and the vacuity arm holds the engine's
+      # HAZARD sentence; nothing held the engine's claim ABOUT the template.
+      #
+      # DERIVED, not transcribed: the expected strings are read out of the
+      # generated file, so changing what the generator writes fails here until
+      # the engine paragraph says the new thing. That is the property the row
+      # asked for — the next generator change cannot silently re-open this.
+      it "states in the engine what the generator writes, for both flags" do
+        invoke!
+        body   = read("config/initializers/kiosk.rb")
+        engine = File.read(engine_hazard_file)
+
+        %w[validate_requests validate_responses].each do |flag|
+          value = body[/^\s*c\.#{flag}\s*=\s*(.+?)\s*$/, 1]
+          expect(value).not_to be_nil,
+            "the generated initializer writes no active `c.#{flag} =` line, so the engine " \
+            "paragraph describing the generated posture cannot be checked against anything"
+          expect(engine).to include("`#{flag}` to `#{value}`"),
+            "response_validation.rb does not say the generator sets `#{flag}` to `#{value}` — " \
+            "the template and the engine paragraph that describes it have diverged (K-1336). " \
+            "Fix the paragraph, not this arm."
+        end
+
+        expect(engine).not_to include("INSTALL GENERATOR SETS NEITHER"),
+          "response_validation.rb still carries the retired K-1332 claim that the generator " \
+          "sets neither flag. The template sets both; delete the sentence rather than the arm."
+      end
     end
   end
 

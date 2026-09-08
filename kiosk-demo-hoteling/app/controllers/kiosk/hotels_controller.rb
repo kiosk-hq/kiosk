@@ -1,22 +1,14 @@
 # frozen_string_literal: true
 
 # hoteling's READ surface: the five verbs an assistant reaches with
-# `GET /kiosk/<query-name>`, arguments in the QUERY STRING. Kiosk ships a MIXIN,
-# not a base class — `include Kiosk::Handler` is the whole contract — and each
-# class-level macro records a declaration that the NEXT `def` claims, so a
-# method with no macros above it is a helper the wire cannot see.
+# `GET /kiosk/<query-name>`, arguments in the QUERY STRING. `include
+# Kiosk::Handler` is the whole contract, and each class-level macro records a
+# declaration that the NEXT `def` claims — so a method with no macros above it
+# is a helper the wire cannot see.
 #
-# The superclass is `ActionController::API` and not an `ApplicationController`:
-# hoteling is `config.api_only = true` with no Devise and no
-# ApplicationController at all, and the mixin leaves the base class to the
-# operator.
-#
-# `kind :query` is what puts a declaration on `GET`, and the kind belongs to the
-# DECLARATION rather than the class, so one controller may declare both
-# — keeping the write half next door in Kiosk::ReservationsController is this
-# demo's shape, not a rule. The two halves share an argument vocabulary: the
-# shape guard is {WireArguments} (which renders nothing, so the Operations use
-# it too) and rendering a refusal is {KioskRefusals}.
+# `kind :query` belongs to the DECLARATION and not to the class, so one
+# controller may declare both kinds; keeping the write half next door in
+# Kiosk::ReservationsController is this demo's shape, not a rule.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
 # reached only through the wire, where authentication, the registration PoW gate
@@ -142,11 +134,11 @@ class Kiosk::HotelsController < ActionController::API
   # `owned_by_current_principal` is the ONE place the identity predicate is
   # written (see Booking for why it stays SQL-side).
   #
-  # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
-  # §11.6 sends an assistant to after a `pay` whose response it never read, so
-  # what it publishes about money is normative. `payment_state` is a TRI-state on
-  # purpose — §11.6 requires a third answer distinct from paid and not-paid,
-  # because "no record" is not evidence that no money moved.
+  # THE RECONCILIATION SURFACE: the "per-user query" protocol.md §11.6 sends an
+  # assistant to after a `pay` whose response it never read, so what it
+  # publishes about money is normative. `payment_state` is a TRI-state because
+  # §11.6 requires an answer distinct from paid and not-paid: "no record" is not
+  # evidence that no money moved.
   kind :query
   description "List this principal's hotel bookings (scoped to authenticated user). " \
               "This is the query to re-read after a payment whose response never arrived: " \
@@ -209,41 +201,20 @@ class Kiosk::HotelsController < ActionController::API
   HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
   HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
 
-  # The «what should I have sent» tails for this verb's three INTEGER arguments.
-  # {WireArguments.integer} takes a hint because a refusal that only says «not an
-  # integer» leaves the caller to guess the domain; each of these names it, and
-  # `limit`'s names the clamp so a caller does not read its refusal as «this page
-  # size is too big».
+  # The «what should I have sent» tails for this verb's three INTEGER arguments:
+  # a refusal that only says «not an integer» leaves the caller guessing the
+  # domain, so each of these names it.
   HINT_SEARCH_LIMIT     = "`limit` is a whole number of rows, e.g. 20. It is CLAMPED to " \
                           "1..#{HOTELING_SEARCH_MAX} — an integer outside that range is adjusted, " \
                           "never refused; this refusal is about the SHAPE."
   HINT_SEARCH_MIN_STARS = "`min_stars` is a whole number 1..5 — the star rating to floor at."
   HINT_SEARCH_MAX_PRICE = "`max_price_cents` is a whole number of EUR CENTS, e.g. 20000 for €200."
 
-  # THE PROSE DESCRIPTION DOES NOT RESTATE THE SCHEMAS, AND THE ONE CARVE-OUT
-  # IS NARROW. The filters, their types and the row's
-  # fields are declared in the schemas, so the prose says none of them. What
-  # stays is the page-size default and its clamp, and it stays for the reason
-  # the published house style gives rather than by preference: `limit` and
-  # `cursor` are RESERVED names a verb never declares (spec §8.1 item 6), so
-  # there is no schema for the sentence to duplicate. MEASURED at head, the
-  # engine's derived OpenAPI injects `limit` as `{type: "integer", minimum: 1}`
-  # with NO `default:` and NO `maximum:` — twenty and fifty are stated NOWHERE
-  # else on this verb, which is exactly what makes them prose's job.
-  #
-  # THREE CLAUSES LEFT THAT WERE NOT ITS JOB. «Every filter is optional» is a
-  # required/optional marker, which `required: []` two declarations down already
-  # states and the house style names in its prohibitions. «Prices are EUR cents»
-  # is a UNIT, and a unit is a property OF a field: `max_price_cents` and
-  # `from_price_cents` each carry it in their own `description`. And the
-  # `X-Total-Count` sentence restated a response header the engine declares in
-  # every query operation with its own description — and restated it WRONG,
-  # calling it «how you tell a short page from the end of the results» where
-  # spec §8.4 and the skill both say the loop bound is the absence of the
-  # `rel="next"` link and that this header is advisory. How to FOLLOW that link
-  # is not here either — the skill states it once, for every operator. The
-  # currency went the same way as the unit: the row's own `currency` field
-  # declares «eur — the currency the cart must be signed in».
+  # The prose description does not restate the schemas. The one carve-out is the
+  # page size and its clamp: `limit` and `cursor` are RESERVED names a verb
+  # never declares (spec §8.1 item 6), so the engine's derived OpenAPI injects
+  # `limit` with no `default:` and no `maximum:` — twenty and fifty are stated
+  # nowhere else on this verb, which makes them prose's job.
   kind :query
   description "Search Istanbul hotels, returning a paginated page of SUMMARY rows — one per hotel, " \
               "priced from its cheapest room. Apply the human's stated constraints as filters so the " \
@@ -267,12 +238,12 @@ class Kiosk::HotelsController < ActionController::API
                  min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
                  amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
                },
-               # `limit` and `cursor` ARE NOT DECLARED HERE, and their absence is the
-               # declaration: spec §8.1 item 6 and §8.4 make them RESERVED names
-               # the wire always accepts and a verb never declares, so a schema shows an
-               # assistant this verb's BUSINESS parameters only. The decoder still coerces
-               # them, the validator exempts them from `additionalProperties: false`, and
-               # the OpenAPI renderer injects both into this operation.
+               # `limit` and `cursor` ARE NOT DECLARED HERE, and their absence is
+               # the declaration: spec §8.1 item 6 and §8.4 make them RESERVED
+               # names the wire always accepts and a verb never declares. The
+               # decoder still coerces them, the validator exempts them from
+               # `additionalProperties: false`, and the OpenAPI renderer injects
+               # both into this operation.
                required: []
   # ONE SHAPE: the cursor is a `Link` header, so a truncated page and a complete
   # one are the SAME array and the declaration says so once. `$defs` is kept
@@ -304,32 +275,21 @@ class Kiosk::HotelsController < ActionController::API
     from_price_cents: 15000, currency: "eur", room_type_count: 2,
   })
   def search_hotels
-    # The three integers this verb reads go through {WireArguments.integer}, not
-    # `params[…].to_s.to_i`: `.to_i` answers 0 for `"abc"` and 1 for `"1.5"`, so
-    # a junk filter would silently become «no floor at all» or a floor nobody
-    # asked for, and a junk `limit` the default page size. That guard is
-    # `Integer(raw, 10)` with base 10 explicit, so `"0x10"` is refused rather
-    # than read as 16; `property_id` and `room_type_id` use the same one.
+    # The three integers go through {WireArguments.integer}, not `.to_i`, which
+    # answers 0 for `"abc"` and 1 for `"1.5"` — a junk filter would silently
+    # become «no floor at all» and a junk `limit` the default page size. The
+    # guard is `Integer(raw, 10)` with base 10 explicit, so `"0x10"` is refused
+    # rather than read as 16.
     #
-    # It is NOT REACHABLE from the wire, and it is still the second layer:
-    # `search_hotels` is `kind :query`, so {Kiosk::Server::ArgumentDecoder} has
-    # already coerced `min_stars` and `max_price_cents` (both declared
-    # `type: "integer"`) and `limit` (a RESERVED name it coerces to integer by
-    # default, spec §8.1 item 6) through the same strict `Integer(v, 10)`, and a
-    # `1.5`, a `true` or an array is a typed 400 before this method runs. A layer
-    # that only holds while the layer in front of it holds is not a second layer.
+    # The engine's ArgumentDecoder has already coerced all three, so this is not
+    # wire-reachable — but a layer that only holds while the layer in front of
+    # it holds is not a second layer.
     #
-    # The clamp is what the description publishes: every INTEGER `limit` is
-    # adjusted into 1..HOTELING_SEARCH_MAX and never refused. A non-integer is
-    # not «a value outside that range» — it is not a page size at all, and the
-    # engine in front of this line already answers it 400.
-    #
-    # So `limit` takes no `max:`, and that is a decision rather than an omission:
-    # it is the one integer on this surface that reaches no COLUMN — it becomes
-    # `.limit()`, bounded by construction two lines below — and refusing a
-    # `limit` of 2**31 would contradict the sentence the descriptor publishes.
-    # The two FILTERS below take one, because each is compared against a 4-byte
-    # `integer` column.
+    # `limit` takes no `max:` deliberately: it is the one integer here that
+    # reaches no COLUMN — it becomes `.limit()`, bounded by construction two
+    # lines below — and refusing a `limit` of 2**31 would contradict the
+    # sentence the descriptor publishes. The two FILTERS take one, because each
+    # is compared against a 4-byte `integer` column.
     limit = HOTELING_SEARCH_PAGE
     if params[:limit].present?
       requested, refusal = WireArguments.integer(params[:limit], field: "limit",
@@ -338,24 +298,18 @@ class Kiosk::HotelsController < ActionController::API
 
       limit = requested
     end
-    # The floor is 1, NOT the default page size. `limit=0` and every negative
-    # integer are «a value outside that range», so they are CLAMPED into 1..50;
-    # mapping them to HOTELING_SEARCH_PAGE would be a third behaviour neither
-    # bound describes, and a caller asking for zero rows would silently get
-    # twenty. This verb's `description`, {HINT_SEARCH_LIMIT} and the descriptor
-    # house style published on kiosk.tech all say 1. `script/search_flow.rb`
-    # sends `limit=0` and demo:search asserts the one-row page, so the floor is
-    # a behaviour assertion rather than prose.
+    # The floor is 1, NOT the default page size: `limit=0` and every negative
+    # integer are CLAMPED into 1..50, because mapping them to
+    # HOTELING_SEARCH_PAGE would silently hand a caller asking for zero rows
+    # twenty of them. `script/search_flow.rb` sends `limit=0` and demo:search
+    # asserts the one-row page, so the floor is asserted, not just written.
     limit = 1 if limit < 1
     limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
 
-    # A cursor is OPAQUE BY CONTRACT — the assistant round-trips it and never
-    # parses or builds one — and `Cursor.decode_offset` holds the other side of
-    # that: an ABSENT cursor is the first page, and a cursor that is not one
-    # this endpoint issued is a typed 400 naming the parameter rather than a
-    # silent page one. It cannot return a negative offset, so nothing here needs
-    # to clamp one — an offset Postgres would answer with a 500 never reaches
-    # the query.
+    # A cursor is OPAQUE BY CONTRACT: the assistant round-trips it and never
+    # parses or builds one. An ABSENT cursor is the first page; one this
+    # endpoint did not issue is a typed 400 rather than a silent page one.
+    # `decode_offset` cannot return a negative offset, so nothing clamps here.
     offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
 
     # The filters, in the order they are applied — a refusal is raised where the
@@ -520,9 +474,7 @@ class Kiosk::HotelsController < ActionController::API
     end
     if dated
       # One date guard for the whole origin: {WireArguments.stay_dates}, which
-      # accepts `\A\d{4}-\d{2}-\d{2}\z` and nothing else. A local `Date.parse`
-      # here would be a second guard disagreeing with it about what a date is
-      # while carrying the SAME refusal sentence.
+      # accepts `\A\d{4}-\d{2}-\d{2}\z` and nothing else.
       #
       # The strict spelling, because `Date.parse` SCANS rather than validates:
       # `"x2026-09-01x"`, `"2026-09-01'; --"` and `["2026-09-01"].to_s` all
@@ -530,14 +482,6 @@ class Kiosk::HotelsController < ActionController::API
       # assistant sending it means; and `"Tue"`, `"sep"` and `"1st"` are
       # completed from TODAY'S CLOCK, so the accepted set would depend on the
       # day the call is made and there is no set to name.
-      #
-      # The descriptor above publishes `format: "date"` on both arguments.
-      # Measured against this demo's own json_schemer 2.5.0, the only spelling
-      # that reaches this line through the wire is YYYY-MM-DD naming a real day
-      # — `"20260901"`, `"2026-244"`, `"09/01/2026"` and `"2026-02-30"` are all
-      # refused before the handler runs — and this controller is NOT ROUTABLE by
-      # any other path (see the class header). So the strict guard costs an
-      # assistant nothing it can observe.
       dates, refusal = WireArguments.stay_dates(ci_raw, co_raw)
       return render_refusal(refusal) if refusal
 

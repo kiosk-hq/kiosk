@@ -56,16 +56,8 @@ class ValidatingBookingProvider
 
   # ── THE PORT, ENUMERATED ────────────────────────────────────────────────────
   #
-  # This used to be `method_missing` + `respond_to_missing?` forwarding
-  # everything to `@provider`, which is the worst available interface for a
-  # decorator on the MONEY path. Its surface was «whatever the wrapped object
-  # happens to answer», so a method added to a PSP adapter upstream became
-  # silently reachable THROUGH the validating wrapper without passing any of the
-  # checks above, and a typo at a call site became a delegation instead of a
-  # NoMethodError. Neither failure shows up in a diff of this file.
-  #
-  # So the two methods below are the whole of what this decorator forwards, and
-  # they are the whole of the PSP port an operator's app actually calls:
+  # The two methods below are the whole of what this decorator forwards, and
+  # they are the whole of the PSP port an operator's app calls:
   #
   #   * `setup_required?(user_id:)` — {Kiosk::PaymentProviders::Base} defines it
   #     and the engine's executor asks it before it burns any mandate ids.
@@ -75,12 +67,14 @@ class ValidatingBookingProvider
   #     With the shipped {StubPsp} that branch is never taken; with
   #     `kiosk-pay-stripe` swapped in it is the card-on-file flow, and a wrapper
   #     that could not forward it would break the swap this demo advertises.
-  #     A provider that defines neither raises NoMethodError naming ITSELF,
-  #     which is the honest receiver.
+  #     A provider that defines neither raises NoMethodError naming ITSELF.
   #
   # `capture` is above, overridden rather than forwarded — it is the cashier.
-  # Anything else on the wrapped object is now unreachable through this wrapper
-  # BY CONSTRUCTION, which is the point: adding a method here is a decision
+  # DO NOT make this a `method_missing` delegator: on the MONEY path that
+  # exposes «whatever the wrapped object happens to answer», so a method added
+  # to a PSP adapter upstream becomes reachable THROUGH the wrapper without
+  # passing any of the checks above, and a typo at a call site becomes a
+  # delegation instead of a NoMethodError. Adding a method here is a decision
   # somebody makes, in this file, with the checks in front of them.
   def setup_required?(user_id:)
     @provider.setup_required?(user_id: user_id)

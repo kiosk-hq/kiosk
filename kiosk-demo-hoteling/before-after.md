@@ -362,11 +362,11 @@ class Kiosk::HotelsController < ActionController::API
   # `owned_by_current_principal` is the ONE place the identity predicate is
   # written (see Booking for why it stays SQL-side).
   #
-  # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
-  # §11.6 sends an assistant to after a `pay` whose response it never read, so
-  # what it publishes about money is normative. `payment_state` is a TRI-state on
-  # purpose — §11.6 requires a third answer distinct from paid and not-paid,
-  # because "no record" is not evidence that no money moved.
+  # THE RECONCILIATION SURFACE: the "per-user query" protocol.md §11.6 sends an
+  # assistant to after a `pay` whose response it never read, so what it
+  # publishes about money is normative. `payment_state` is a TRI-state because
+  # §11.6 requires an answer distinct from paid and not-paid: "no record" is not
+  # evidence that no money moved.
   kind :query
   description "…"   # elided — see the shipped file
   input_schema type: "object", additionalProperties: false, properties: {}, required: []

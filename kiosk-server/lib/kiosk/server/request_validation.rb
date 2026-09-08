@@ -5,7 +5,8 @@ require "kiosk/server/argument_decoder"
 
 module Kiosk
   module Server
-    # Opt-in request-shape validation.
+    # Request-shape validation of a submitted PoW proof. ON by default; an
+    # operator turns it off with `c.validate_requests = false`.
     #
     # When `Kiosk.configuration.validate_requests` is true, {WireController}
     # validates the proof(s) parsed from the `Kiosk-PoW` request header
@@ -37,13 +38,20 @@ module Kiosk
     # operator coerce-then-validate before the handler sees an argument, so a
     # flag-gated check would be non-conformant with the flag off, and a typed
     # 400 for an invalid argument would exist on some origins and not others.
-    # `validate_requests` keeps its own job below — the opt-in PoW-SHAPE check
-    # on requests that carry a `Kiosk-PoW` header, on the wire and on the auth
+    # `validate_requests` keeps its own job below — the PoW-SHAPE check on
+    # requests that carry a `Kiosk-PoW` header, on the wire and on the auth
     # plane. The verb's ANSWER is checked by the sibling {ResponseValidation},
-    # behind its own `validate_responses` flag.
+    # behind its own `validate_responses` flag, which defaults OFF.
     #
-    # Still out of scope: response-conformance CI and a sync-check of the
-    # vendored schema against its normative source.
+    # THE VENDORED SCHEMA IS HELD AGAINST ITS NORMATIVE SOURCE, and this is
+    # the file that has to say so, because {POW_SCHEMA_PATH} below is the copy.
+    # `bin/check-spec-schemas` parses this copy and the published original
+    # side by side — every published schema must have a copy and every copy a
+    # published original — and the `$comment` provenance marker is the one
+    # permitted difference. It compares only where the two repositories are
+    # checked out beside each other, and says so and skips where they are not,
+    # so the comparison is wired into the one CI job that guarantees the
+    # sibling rather than into a job that would never compare anything.
     #
     # == Lazy require, real dependency
     #

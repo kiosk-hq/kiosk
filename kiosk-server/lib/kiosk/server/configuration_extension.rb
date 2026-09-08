@@ -337,7 +337,7 @@ module Kiosk
       # cap. Default nil = all-time cumulative. E.g. 7 for a weekly allowance.
       attr_accessor :spending_cap_window_days
 
-      # ── Request-shape validation (opt-in; UNIFORM-VALIDATION slice-1) ─────
+      # ── Request-shape validation ──────────────────────────────────────────
 
       # When true, {WireController} validates a PRESENT `pow` field on a wire
       # request against the vendored normative PoW schema BEFORE {PowGate.gate}

@@ -218,7 +218,7 @@ no flag at all — so bundler resolves it whether or not a demo names it.
 
 **2. Run the generator**
 
-<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once (K-1099) -->
+<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once -->
 ```
 rails g kiosk:install
 ```
@@ -476,10 +476,10 @@ class Kiosk::StorefrontController < ActionController::API
                           # offers the window and `create_order` books it, both
                           # on the DELIVERY zone's; this is the reconciliation
                           # read of that same booking, so it answers there too.
-                          # It published "+00:00" — one instant in a second
-                          # spelling — and an assistant formatting that without
-                          # converting reads a human the 07:00 of an 08:00
-                          # Dublin window (K-1370).
+                          # Published as "+00:00" it would be one instant in a
+                          # second spelling, and an assistant formatting that
+                          # without converting reads a human the 07:00 of an
+                          # 08:00 Dublin window.
                           #
                           # A String, and THAT is what the byte-stability
                           # argument here was always for: `pluck` hands back a
@@ -487,7 +487,7 @@ class Kiosk::StorefrontController < ActionController::API
                           # the encoder's `time_precision`, so the published
                           # bytes would be the app's configuration talking.
                           "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone)&.iso8601,
-                          # The window said out loud, zone named (K-1371).
+                          # The window said out loud, zone named.
                           # `slot_at` carries the offset; nobody speaks an
                           # offset. This is the verb §11.6 sends an assistant to
                           # after a lost `pay`, so it is the row most likely to
@@ -616,8 +616,8 @@ class Kiosk::OrdersController < ActionController::API
   end
 
   # reschedule_delivery — move an ALREADY-PAID order's delivery. See
-  # {RescheduleDeliveryOperation}. No call signature in the prose: ADR-0023
-  # §Decision 4 puts the arguments, and which are optional, in `input_schema`.
+  # {RescheduleDeliveryOperation}. No call signature in the prose: the
+  # arguments, and which are optional, are declared in `input_schema`.
   kind :action
   description "…"   # elided — see the shipped file
   input_schema type: "object",

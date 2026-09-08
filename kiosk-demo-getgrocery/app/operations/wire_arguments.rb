@@ -161,14 +161,14 @@ module WireArguments
     [nil, OperationResult.refused(code: "bad_request", message: past_message.call(date))]
   end
 
-  # ── A PARTIAL DATE IS COMPLETED FROM THE ORIGIN'S TODAY (K-1411) ─────────
+  # ── A PARTIAL DATE IS COMPLETED FROM THE ORIGIN'S TODAY ──────────────────
   #
   # `Date.parse` accepts values that name only PART of a date — "Tue", "sep",
   # "1st", "250" — and fills the rest in from the PROCESS's today, read off the
   # machine's `TZ`. Everything else on this surface reads
   # `DeliverySlots.now`, and the file says «ONE CLOCK FOR THE WHOLE ORIGIN»
-  # three times, so the one value that silently consulted a second clock was the
-  # one an assistant is likeliest to get wrong anyway. On a server whose zone is
+  # three times, so this parse reads that clock too rather than the process's.
+  # On a server whose zone is
   # a day ahead of or behind Dublin, "1st" on the 30th of a month resolves to a
   # different MONTH, and "Tue" across a week boundary to a different WEEK — a
   # wrong date rather than a refusal, which is the direction that hurts.

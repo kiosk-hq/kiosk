@@ -18,7 +18,7 @@
 # engine about a boolean. The grant IS the row: present means granted, absent
 # means not, and the only place a spelling is judged is the engine's write.
 # Only the NAMES are ever stored — never the DOB, licence number, or any
-# document (the anonymized property ADR-0020 exists for).
+# document — the whole point of an anonymizing broker.
 class KycAttribute < ApplicationRecord
   self.table_name = "kiosk.kyc_attributes"
 

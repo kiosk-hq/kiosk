@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Resolv is required at file scope because the opt-in host-detection block below
-# runs in EVERY task that boots a server (K-1400).
+# runs in EVERY task that boots a server.
 require "resolv"
 
 # tudu demo orchestration (MULTI-USER COLLABORATIVE todo app, NO payments).

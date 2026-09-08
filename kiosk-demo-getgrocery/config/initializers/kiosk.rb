@@ -147,7 +147,7 @@ Kiosk.configure do |c|
   # capabilities at all. A verb registers only when its class is named here.
   c.handlers = %w[Kiosk::StorefrontController Kiosk::OrdersController]
 
-  # Validate the proof(s) parsed from the `Kiosk-PoW` request header (ADR-0022)
+  # Validate the proof(s) parsed from the `Kiosk-PoW` request header
   # against the normative PoW schema at the wire choke point, so a malformed
   # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
   # re-issued 402 loop. There is no `pow` body field to validate — the header is

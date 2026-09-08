@@ -143,7 +143,7 @@ or not a demo names it.
 
 **2. Run the generator**
 
-<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once (K-1099) -->
+<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once -->
 ```
 rails g kiosk:install
 ```
@@ -272,7 +272,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # see rows where user_id matches kiosk.current_user_id(), enforced in the
   # query itself — `owned_by_current_principal` is the ONE place that predicate
   # is written.
-  # ADR-0023: semantics only; naming the follow-on VERB in the description is
+  # Semantics only; naming the follow-on VERB in the description is
   # the sanctioned form, naming its argument is not.
   kind :query
   description "…"   # elided — see the shipped file
@@ -362,7 +362,7 @@ class Kiosk::BookingsController < ApplicationController
   # Contention is finite: a UNIQUE index on (restaurant_table_id, seating_at)
   # among confirmed rows makes a table already held a clean 409 Conflict. No
   # payment — any deposit shown is settled at the restaurant.
-  # ADR-0023: the description says WHAT booking means and WHEN it is refused; it
+  # The description says WHAT booking means and WHEN it is refused; it
   # names no argument — `input_schema` below declares all five.
   kind :action
   description "…"   # elided — see the shipped file

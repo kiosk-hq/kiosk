@@ -185,7 +185,7 @@ class Kiosk::StorefrontController < ActionController::API
     # completes those from the SERVER PROCESS's today. Every other date question
     # on this surface is answered off `DeliverySlots.now`, so the parse is too —
     # otherwise the day this verb offers and the day `create_order` books could
-    # come from two different clocks (K-1411).
+    # come from two different clocks.
     date = begin
       WireArguments.parse_date(params[:date].to_s)
     rescue ArgumentError, TypeError
@@ -266,10 +266,10 @@ class Kiosk::StorefrontController < ActionController::API
                           # offers the window and `create_order` books it, both
                           # on the DELIVERY zone's; this is the reconciliation
                           # read of that same booking, so it answers there too.
-                          # It published "+00:00" — one instant in a second
-                          # spelling — and an assistant formatting that without
-                          # converting reads a human the 07:00 of an 08:00
-                          # Dublin window (K-1370).
+                          # Published as "+00:00" it would be one instant in a
+                          # second spelling, and an assistant formatting that
+                          # without converting reads a human the 07:00 of an
+                          # 08:00 Dublin window.
                           #
                           # A String, and THAT is what the byte-stability
                           # argument here was always for: `pluck` hands back a
@@ -277,7 +277,7 @@ class Kiosk::StorefrontController < ActionController::API
                           # the encoder's `time_precision`, so the published
                           # bytes would be the app's configuration talking.
                           "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone)&.iso8601,
-                          # The window said out loud, zone named (K-1371).
+                          # The window said out loud, zone named.
                           # `slot_at` carries the offset; nobody speaks an
                           # offset. This is the verb §11.6 sends an assistant to
                           # after a lost `pay`, so it is the row most likely to

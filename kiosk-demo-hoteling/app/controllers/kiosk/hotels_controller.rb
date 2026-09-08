@@ -27,7 +27,7 @@ class Kiosk::HotelsController < ActionController::API
   include KioskRefusals
 
   # ── properties — the whole (small) catalogue of hotels, name-ordered.
-  # ADR-0023: the `description` carries semantics only; fields live in the schema.
+  # The `description` carries semantics only; fields live in the schema.
   kind :query
   description "Browse the whole hotel catalogue this origin serves — an empty answer would mean this " \
               "origin lists no hotels at all. Once the human narrows to one, `availability` says " \
@@ -220,8 +220,8 @@ class Kiosk::HotelsController < ActionController::API
   HINT_SEARCH_MIN_STARS = "`min_stars` is a whole number 1..5 — the star rating to floor at."
   HINT_SEARCH_MAX_PRICE = "`max_price_cents` is a whole number of EUR CENTS, e.g. 20000 for €200."
 
-  # ADR-0023, AND ITS ONE CARVE-OUT — AND THE CARVE-OUT IS NARROWER THAN THIS
-  # PARAGRAPH USED TO CLAIM (K-1407). The filters, their types and the row's
+  # THE PROSE DESCRIPTION DOES NOT RESTATE THE SCHEMAS, AND THE ONE CARVE-OUT
+  # IS NARROW. The filters, their types and the row's
   # fields are declared in the schemas, so the prose says none of them. What
   # stays is the page-size default and its clamp, and it stays for the reason
   # the published house style gives rather than by preference: `limit` and
@@ -350,12 +350,12 @@ class Kiosk::HotelsController < ActionController::API
     limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
 
     # A cursor is OPAQUE BY CONTRACT — the assistant round-trips it and never
-    # parses or builds one — and since K-1403 `Cursor.decode_offset` holds the
-    # other side of that: an ABSENT cursor is the first page, and a cursor that
-    # is not one this endpoint issued is a typed 400 naming the parameter rather
-    # than a silent page one. It can no longer return a negative offset (the
-    # thing Postgres answered with a 500), so the clamp that used to guard it is
-    # gone with the lenience it was covering.
+    # parses or builds one — and `Cursor.decode_offset` holds the other side of
+    # that: an ABSENT cursor is the first page, and a cursor that is not one
+    # this endpoint issued is a typed 400 naming the parameter rather than a
+    # silent page one. It cannot return a negative offset, so nothing here needs
+    # to clamp one — an offset Postgres would answer with a 500 never reaches
+    # the query.
     offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
 
     # The filters, in the order they are applied — a refusal is raised where the

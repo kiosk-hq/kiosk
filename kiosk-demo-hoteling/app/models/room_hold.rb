@@ -4,7 +4,7 @@
 # alongside the domain booking — the reserve-then-pay primitive, stamped with the
 # deadline by which the guest is expected to have paid.
 #
-# THE DEADLINE IS RECORDED, NOT ENFORCED, AND THAT IS THE HONEST SENTENCE (K-936).
+# THE DEADLINE IS RECORDED, NOT ENFORCED, AND THAT IS THE HONEST SENTENCE.
 # Nothing in this demo reads `expires_at` back: {ConfirmBookingOperation} gates on
 # ownership and payment only, so a hold stamped an hour ago still confirms. The
 # engine ships the column and `idx_reservations_expiry` precisely so an operator

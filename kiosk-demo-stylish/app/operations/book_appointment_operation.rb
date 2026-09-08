@@ -119,14 +119,13 @@ class BookAppointmentOperation
   # Rendered in the salon's zone the example is the same kind of value the verb
   # answers WITH, so the example and the response agree.
   #
-  # THAT LAST SENTENCE WAS TRUE OF THE INSTANT AND FALSE OF THE CLOCK when it
-  # was written (K-1372): the example was `+02:00` and the response was `Z`,
-  # because the confirmation rendered the value straight off the record and an
-  # `ActiveSupport::TimeWithZone` renders through `Time.zone`. The code moved to
-  # meet the sentence rather than the other way round — every published instant
-  # in this demo now goes through {SalonClock.publish} — because the demo's own
-  # invariant is that the salon's clock decides, and a response on a different
-  # clock from the example is the reader's first reason to doubt it.
+  # AND THE SENTENCE ABOVE IS TRUE OF THE CLOCK AS WELL AS THE INSTANT, which
+  # takes work on the response side: an `ActiveSupport::TimeWithZone` rendered
+  # straight off the record goes out through `Time.zone`, so a confirmation
+  # built that way answers `Z` beside a `+02:00` example. Every published
+  # instant in this demo goes through {SalonClock.publish} instead, because the
+  # demo's own invariant is that the salon's clock decides, and a response on a
+  # different clock from the example is the reader's first reason to doubt it.
   #
   # @return [String] an ISO 8601 instant carrying the salon's own offset,
   #   always later than now

@@ -54,7 +54,7 @@ class ValidatingBookingProvider
     settled
   end
 
-  # ── THE PORT, ENUMERATED (K-1402) ───────────────────────────────────────────
+  # ── THE PORT, ENUMERATED ────────────────────────────────────────────────────
   #
   # This used to be `method_missing` + `respond_to_missing?` forwarding
   # everything to `@provider`, which is the worst available interface for a

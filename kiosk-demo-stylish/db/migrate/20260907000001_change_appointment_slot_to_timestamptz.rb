@@ -3,14 +3,14 @@
 # appointments.slot — from `timestamp without time zone` to `timestamp with
 # time zone`, so the column carries the thing the demo says it carries.
 #
-# WHY. stylish's whole argument after K-1345 is that an instant must never
-# depend on an ambiguous environmental zone: {SalonClock} names Europe/Paris
+# WHY. stylish's whole argument is that an instant must never depend on an
+# ambiguous environmental zone: {SalonClock} names Europe/Paris
 # once, a wire `slot` with no offset is read AT THE SALON rather than in the
 # server process's zone, and every published instant is rendered back on that
 # clock. The column underneath was the one place in the fleet that carried no
 # zone at all — atablefor's `seating_at` and getgrocery's `slot_at` are both
 # `timestamptz` — so the invariant rested on `ActiveRecord.default_timezone`
-# being `:utc` rather than on the schema (K-1373).
+# being `:utc` rather than on the schema.
 #
 # It was CORRECT, and that is why this is an alignment and not a repair: with
 # the default in force every value went in as UTC and came back as the same

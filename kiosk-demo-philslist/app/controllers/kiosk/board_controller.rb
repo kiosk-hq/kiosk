@@ -25,7 +25,7 @@ class Kiosk::BoardController < ApplicationController
   # default. Quoting does NOT neutralise LIKE metacharacters, which is what
   # `sanitize_sql_like` below is for.
   #
-  # `reach :published` (ADR-0028) declares the departure from spec §7.2,
+  # `reach :published` declares this verb's departure from spec §7.2,
   # whose default is that a verb touches only the calling principal's rows — an
   # open board showing you only your own listings would not be a board. It is
   # `published`, not `consented`: nobody consented, philslist publishes by its

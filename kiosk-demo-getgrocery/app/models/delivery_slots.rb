@@ -68,8 +68,7 @@ module DeliverySlots
   # (Europe/Dublin)". ONE writer for the whole demo: `delivery_slots` publishes
   # the window it is offering and `my_orders` publishes the window that was
   # booked, and those are the same string about the same window. Written twice
-  # they are two answers that drift, which is what the offsets on `slot_at`
-  # already did (K-1370).
+  # they are two answers that drift.
   #
   # It takes an INSTANT rather than a slot_id because `my_orders` has only the
   # stored instant, and it reads the hour off THIS zone rather than off the

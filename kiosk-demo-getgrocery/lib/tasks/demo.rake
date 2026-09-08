@@ -1724,7 +1724,7 @@ end
 namespace :demo do
   # ── demo:agecheck ──────────────────────────────────────────────────────────
   #
-  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE (K-1392). The task
+  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE. The task
   # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
   # disclosure surfaces for that are this demo README's generated PREREQS block
   # and the banner the helper prints immediately before the drop. `rake -T`

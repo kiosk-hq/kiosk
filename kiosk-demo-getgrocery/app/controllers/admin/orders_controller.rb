@@ -73,11 +73,11 @@ module Admin
           "short_id"         => id.to_s[0, 8],
           "status"           => status,
           "total_cents"      => total_cents,
-          # THE WINDOW IS RENDERED HERE, THROUGH THE ONE WRITER THE WIRE USES
-          # (K-1391). `slot_at` is a `timestamptz` and comes back on whatever
-          # clock the connection is on — the SERVER's, because this page runs
-          # outside the wire and no `SET LOCAL` has been issued — so a view that
-          # re-parsed it printed 07:00 where the customer had been told
+          # THE WINDOW IS RENDERED HERE, THROUGH THE ONE WRITER THE WIRE USES.
+          # `slot_at` is a `timestamptz` and comes back on whatever clock the
+          # connection is on — the SERVER's, because this page runs outside the
+          # wire and no `SET LOCAL` has been issued — so a view that re-parsed
+          # it would print 07:00 where the customer was told
           # «08:00–10:00 (Europe/Dublin)». {DeliverySlots.label} is the single
           # writer for that string and {DeliverySlots.zone} for the day beside
           # it, so the shop's own staff and the assistant read ONE answer about
@@ -87,12 +87,11 @@ module Admin
           "slot_window"      => slot_at && "#{slot_at.in_time_zone(DeliverySlots.zone).strftime('%a %-d %b')}, " \
                                            "#{DeliverySlots.label(slot_at)}",
           "created_at"       => created_at,
-          # AND THE ORDER'S OWN TIMESTAMP IS ON THE SAME CLOCK (K-1414). The
-          # window above moved to {DeliverySlots.zone} and this one did not, so
-          # for one wave the card showed a Dublin delivery window beside a UTC
-          # «Ordered» time with nothing on the page saying which was which —
-          # arguably worse for the operator than the uniform wrongness it
-          # replaced. `created_at` is a `timestamptz` and arrives on the
+          # AND THE ORDER'S OWN TIMESTAMP IS ON THE SAME CLOCK. A Dublin
+          # delivery window beside an «Ordered» time on the server's clock, with
+          # nothing on the page saying which is which, is worse for the operator
+          # than two wrong times that at least agree.
+          # `created_at` is a `timestamptz` and arrives on the
           # connection's clock for the same reason `slot_at` does, so it is read
           # through the SAME zone and NAMES it, exactly as {DeliverySlots.label}
           # names it for the window. One screen, one clock, both of them said out

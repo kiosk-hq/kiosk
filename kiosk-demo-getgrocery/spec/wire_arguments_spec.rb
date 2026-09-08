@@ -387,7 +387,7 @@ at_dublin("2026-08-07T11:00:00") do
            "Date.parse's loose form #{raw.inspect} → #{want} (published behaviour, not an oversight)")
   end
 
-  # ── WHAT THE PARSER REALLY ACCEPTS, WRITTEN DOWN (K-1411) ─────────────────
+  # ── WHAT THE PARSER REALLY ACCEPTS, WRITTEN DOWN ──────────────────────────
   #
   # The three forms above were the whole of this demo's record of its own
   # looseness, and the parser takes a good deal more. The rest is asserted here
@@ -473,7 +473,7 @@ at_dublin("2026-08-08T00:01:00") do
          "is DeliverySlots.now and not the runner's")
 end
 
-# ── AND SO IS THE CLOCK A PARTIAL VALUE IS COMPLETED AGAINST (K-1411) ────────
+# ── AND SO IS THE CLOCK A PARTIAL VALUE IS COMPLETED AGAINST ─────────────────
 #
 # The two blocks above prove the PAST test reads Dublin. This proves the same
 # of the parse itself, which `Date.parse` alone could not: it fills a missing

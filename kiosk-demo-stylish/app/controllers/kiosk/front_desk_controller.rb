@@ -16,7 +16,7 @@ class Kiosk::FrontDeskController < ApplicationController
   include Kiosk::Handler
 
   # salons — the full catalogue; no per-user scoping, any authenticated principal
-  # may browse. ADR-0023: the description carries semantics only.
+  # may browse. The description carries semantics only.
   kind :query
   description "Browse the public salon catalogue — every salon this front desk books for. Once the " \
               "human picks one, `book_appointment` takes it from there."
@@ -147,9 +147,9 @@ class Kiosk::FrontDeskController < ApplicationController
                               # every verb of this demo publishes an instant
                               # with — see {SalonClock.publish}. Rendered
                               # straight off the pluck it would follow
-                              # `Time.zone` instead, which is how this verb and
-                              # `book_appointment` came to answer the same
-                              # booking in two spellings (K-1372).
+                              # `Time.zone` instead, and this verb and
+                              # `book_appointment` would answer the same
+                              # booking in two spellings.
                               { id: id, salon_id: salon_id, slot: SalonClock.publish(slot) }
                             }
   end
@@ -167,7 +167,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # construction, and so the query still works outside a wire request (an RLS
   # journey test), where kiosk_identity is nil but the GUCs are set anyway.
   #
-  # `reach :role` — ADR-0028's third declared departure and the only verb in the
+  # `reach :role` — a declared departure from spec §7.2, and the only verb in the
   # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
   # because a role is ASSIGNED by the operator and never client-requested.
   #

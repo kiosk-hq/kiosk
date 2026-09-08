@@ -187,7 +187,7 @@ namespace :demo do
 
     # The transport slots the helper takes: ->(url) and ->(url, body, headers = {}),
     # each returning [status, parsed_body]. The header slot carries Kiosk-PoW on
-    # the retry (ADR-0022).
+    # the retry.
     reg_get = lambda do |url, headers = {}|
       uri = URI(url)
       res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
@@ -778,7 +778,7 @@ end
 namespace :demo do
   # ── demo:redteam ─────────────────────────────────────────────────────────
   #
-  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE (K-1392). The task
+  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE. The task
   # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
   # disclosure surfaces for that are this demo README's generated PREREQS block
   # and the banner the helper prints immediately before the drop. `rake -T`
@@ -1305,7 +1305,7 @@ end
 namespace :demo do
   # ── demo:kyc ───────────────────────────────────────────────────────────────
   #
-  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE (K-1392). The task
+  # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE. The task
   # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
   # disclosure surfaces for that are this demo README's generated PREREQS block
   # and the banner the helper prints immediately before the drop. `rake -T`

@@ -58,11 +58,11 @@ module SalonClock
   #
   # EVERY verb that answers with an appointment instant goes through here —
   # `book_appointment`'s confirmation and its refusals, `my_appointments`,
-  # `salon_calendar` — so the demo cannot spell one instant two ways. It did:
-  # `book_appointment`'s reason for computing {BookAppointmentOperation.example_slot}
-  # on the salon's clock is that «the example and the response agree», and the
-  # response was UTC, because the value came back off the record and rendered
-  # through `Time.zone` (K-1372). This is the answer the sentence claimed.
+  # `salon_calendar` — so the demo cannot spell one instant two ways.
+  # {BookAppointmentOperation.example_slot} computes its example on the salon's
+  # clock so that the example and the response agree; this method is what makes
+  # the response side of that true. Rendered off the record instead, a value
+  # goes out through `Time.zone` and the agreement is lost.
   #
   # A String, not a Time, and that is the second half of the pin: an
   # `ActiveSupport::TimeWithZone` renders through `Time.zone` and the JSON

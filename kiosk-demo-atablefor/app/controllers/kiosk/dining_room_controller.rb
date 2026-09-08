@@ -33,7 +33,7 @@ class Kiosk::DiningRoomController < ApplicationController
   #
   # No caller value is ever spliced into SQL — the filters below are ordinary
   # ActiveRecord conditions. The result is small and NOT paginated.
-  # ADR-0023: the description carries semantics only; `input_schema` declares
+  # The description carries semantics only; `input_schema` declares
   # what each filter accepts and refuses, `output_schema` names every row field.
   kind :query
   description "List open restaurant tables across the aggregator for the " \
@@ -215,7 +215,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # see rows where user_id matches kiosk.current_user_id(), enforced in the
   # query itself — `owned_by_current_principal` is the ONE place that predicate
   # is written.
-  # ADR-0023: semantics only; naming the follow-on VERB in the description is
+  # Semantics only; naming the follow-on VERB in the description is
   # the sanctioned form, naming its argument is not.
   kind :query
   description "List this principal's table bookings across every restaurant on the aggregator, " \

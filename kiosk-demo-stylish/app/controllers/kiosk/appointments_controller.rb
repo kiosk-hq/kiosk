@@ -16,7 +16,7 @@ class Kiosk::AppointmentsController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals
 
-  # ADR-0023: no argument names and no "pass its `x`" clause — `input_schema`
+  # No argument names and no "pass its `x`" clause — `input_schema`
   # declares those. This says what booking MEANS and where the refusals are.
   kind :action
   description "Book an appointment for the authenticated visitor. Naming a service is OPTIONAL and " \

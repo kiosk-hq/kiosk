@@ -60,7 +60,8 @@ class Kiosk::HouseholdController < ApplicationController
   # my_lists — the lists the caller is a MEMBER of (owner OR member): a list it
   # was invited into is listed alongside its own. The agent supplies no filter.
   #
-  # `reach :consented` (ADR-0028): a row here may be a list somebody else
+  # `reach :consented`, a declared departure from spec §7.2: a row here may
+  # be a list somebody else
   # owns, and what admits it is an act by the human whose data it is — an owner
   # minted a single-use invite, `accept_invite` turned it into a `memberships`
   # row. That row IS the authorising artefact, and every verb below reads it.

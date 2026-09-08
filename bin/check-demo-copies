@@ -390,9 +390,17 @@ if ARGV.include?("--self-test")
       expect: /lib\/tasks\/demo\.rake:\d+: a ledger id OUTSIDE a comment, in code this demo RUNS/ },
     { id: "vacuity-demo-ledger-ids", kind: :vacuity,
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
-      what: "the detector stops counting its own comment subjects, so a BAN with a dead pattern must say so",
-      ops:  [[:edit, "bin/check-demo-copies", "        demo_id_comment += 1\n", ""]],
-      expect: /the K-1383 ledger-id detector matched NOTHING in \d+ demo/ },
+      what: "the pattern stops matching a shape people write, so a BAN with a dead pattern must say so",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "  \"# The past-slot filter, K-480.\",\n", "  \"# The past-slot filter, 480.\",\n"]],
+      expect: /the K-1383 ledger-id pattern no longer matches its own fixture/ },
+    { id: "vacuity-demo-ledger-lexer", kind: :vacuity,
+      rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
+      what: "the comment-versus-code distinction the whole ban rests on must be proved, not assumed",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "DEMO_ID_IN_COMMENT = \"# The past-slot filter, K-480.\\n\"\n",
+              "DEMO_ID_IN_COMMENT = %q{MSG = \"K-480\"} + \"\n\"\n"]],
+      expect: /Ripper no longer separates an id in a COMMENT from an id in a STRING/ },
 
     { id: "migration-pair-drift", kind: :break,
       rule: "Cross-demo singleton pairs: the migrations neither rule above sees (K-648)",
@@ -2309,21 +2317,20 @@ end
 # assertion label is printed AT A TERMINAL, to an operator who cannot open the
 # ledger it names and never will.
 #
-# WHY IT IS THIS NARROW HERE, AND WHY THAT IS NO LONGER THE WHOLE STORY. This
-# rule covers the DEMO tree, whose reader is an operator at a terminal: a
-# ledger id in a `desc`, a banner, an `abort` or an assertion label reaches
-# somebody's screen, while one in a comment is a note to the next maintainer
-# standing beside the code. So the ban here is scoped by that argument rather
-# than by taste, and demo comments are left alone.
+# WHY IT IS THIS NARROW HERE, AND WHAT HOLDS THE REST. This rule speaks for one
+# reader: the operator at a terminal. A ledger id in a `desc`, a banner, an
+# `abort` or an assertion label reaches somebody's screen, and that is a
+# different failure from a citation in prose, so it keeps its own message and
+# its own remedy.
 #
-# The sentence this paragraph used to carry -- that inline `K-`/`ADR-`/`T-`
-# refs across this repository stay AS-IS permanently and no publication scrub
-# of them will ever happen -- was TRUE when it was written and Phil overruled
-# it (T-186). The SHIPPED GEMS are scrubbed, comments included, because their
-# reader is the adopter and comments are the surface they read;
-# `bin/check-shipped-archaeology` holds that half and declares its own
-# exemptions. Phil's standing exemption -- `bin/`, `CHANGELOG.md`,
-# `CLAUDE.md` -- is unchanged and is what survives of the old sentence.
+# COMMENTS ARE NO LONGER LEFT ALONE -- they are held next door, by
+# `bin/check-shipped-archaeology`, which bans a ledger id, an ADR reference and
+# Cyrillic prose in the demo tree's comments and prose alike, on the argument
+# that a demo is the first thing an operator opens and its comments are read
+# exactly as a shipped gem's are. This file therefore no longer counts demo
+# comment citations as evidence that its pattern still works: at head there are
+# NONE, by design. Phil's standing exemption -- `bin/`, `CHANGELOG.md`,
+# `CLAUDE.md` -- is unchanged in both guards.
 #
 # WHY IT EXISTS AT ALL, MEASURED. K-1323's sweep finished; nothing held it
 # afterwards. Its own two measurements are 568 occurrences immediately after an
@@ -2358,18 +2365,38 @@ end
 # THE VACUITY GUARDS, and note the polarity: this is a BAN, so «no violations»
 # is the tree being clean rather than the rule being switched off. Two things
 # must therefore be asserted about the MECHANISM instead. The file count catches
-# a glob that stopped matching or a lexer that stopped running. The comment count
-# catches the pattern itself rotting. That count is NOT anchored to a named
-# sentence any more: it used to cite the seven `config/routes/kiosk.rb` copies
-# of «(T-074 = A)», and T-186 deleted that sentence as retired-wire narration,
-# which is exactly how an anchor written into a rule goes stale. What the arm
-# asserts is the mechanism: some demo comment still matches. If the demo tree
-# is ever scrubbed of comment citations too -- which is a decision somebody
-# may take, and is what `bin/check-shipped-archaeology` already did to the
-# gems -- this arm goes red for an honest reason and must be REPLACED by a
-# fixture the rule owns, not deleted.
+# a glob that stopped matching or a lexer that stopped running. The FIXTURE
+# catches the pattern itself rotting.
+#
+# THE FIXTURE IS OWNED BY THIS RULE, and it is the second spelling of that arm.
+# The first counted demo comment citations and asserted the count was positive,
+# which was evidence only while the demo tree still carried some. It stopped
+# being evidence the day `bin/check-shipped-archaeology` took the comment half
+# and the tree was scrubbed to zero -- the arm went red for an honest reason,
+# exactly as it said it would, and this is the replacement it demanded rather
+# than the deletion it forbade. The arm before that was worse still: it cited a
+# LIVE sentence, the seven `config/routes/kiosk.rb` copies of «(T-074 = A)»,
+# and T-186 deleted that sentence as retired-wire narration.
+#
+# {DEMO_ID_FIXTURES} is therefore neither a census nor a citation. It is the
+# shapes people write, held in this file, asserted to match {LEDGER_ID_RE} and
+# asserted to be classified by Ripper the way this rule needs -- an id in a
+# comment token is a comment, an id in a string literal is not. A pattern that
+# stops matching them, or a lexer that stops separating them, fails here and
+# says which.
 DEMO_ID_ROOTS = %w[app lib script config db].freeze
 DEMO_ID_TOP   = %w[Rakefile config.ru].freeze
+
+# The shapes people write, owned by this rule. Each must match LEDGER_ID_RE,
+# and the pair below must stay separable by the lexer.
+DEMO_ID_FIXTURES = [
+  "# The past-slot filter, K-480.",
+  "# widened by T-158",
+  "  desc \"reset the demo\" # K-1099",
+  "abort(\"see K-1099\")"
+].freeze
+DEMO_ID_IN_COMMENT = "# The past-slot filter, K-480.\n"
+DEMO_ID_IN_STRING  = "MSG = \"blocked by K-480\"\n"
 
 demo_id_files   = 0
 demo_id_comment = 0
@@ -2425,12 +2452,26 @@ unless demo_id_unlexed.empty?
             "so the K-1383 rule could not tell a comment from a string in them and did not check them " \
             "at all. A file this rule cannot read must not pass silently."
 end
-if demo_id_files.positive? && demo_id_comment.zero?
-  errors << "check-demo-copies: the K-1383 ledger-id detector matched NOTHING in #{demo_id_files} demo " \
-            "Ruby file(s) — not even a comment. Either LEDGER_ID_RE has stopped matching the " \
-            "shape people write, and this ban is holding nothing, or the demo tree has been " \
-            "scrubbed of comment citations as well. Find out which: if it is the second, this " \
-            "arm must be replaced by a fixture the rule owns, never deleted."
+# VACUITY, against a fixture this rule owns rather than against the tree. See
+# the paragraph above for why the tree stopped being evidence.
+dead_fixtures = DEMO_ID_FIXTURES.reject { _1.match?(LEDGER_ID_RE) }
+unless dead_fixtures.empty?
+  errors << "check-demo-copies: the K-1383 ledger-id pattern no longer matches its own fixture " \
+            "(#{dead_fixtures.map(&:inspect).join(', ')}). LEDGER_ID_RE has stopped matching a " \
+            "shape people write, so this ban is holding nothing and its clean zero means nothing."
+end
+
+fixture_tokens = ->(src) {
+  (Ripper.lex(src) || []).select { |(_pos, _type, tok, _st)| tok.to_s.match?(LEDGER_ID_RE) }
+}
+comment_toks = fixture_tokens.call(DEMO_ID_IN_COMMENT)
+string_toks  = fixture_tokens.call(DEMO_ID_IN_STRING)
+unless comment_toks.size == 1 && comment_toks.first[1] == :on_comment &&
+       string_toks.size == 1 && string_toks.first[1] != :on_comment
+  errors << "check-demo-copies: Ripper no longer separates an id in a COMMENT from an id in a " \
+            "STRING on this rule's own fixtures (comment → #{comment_toks.map { _1[1] }.inspect}, " \
+            "string → #{string_toks.map { _1[1] }.inspect}). The whole ban is that distinction, " \
+            "so it cannot be assumed."
 end
 
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
@@ -6316,8 +6357,9 @@ if errors.empty?
        "(#{container_ignores.length} ignore file(s), #{container_recipes.length} recipe(s); " \
        "detector proved on #{container_truth.length} constructed names), " \
        "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
-       "(#{demo_id_comment} carried by comments, which THIS rule leaves alone -- the shipped " \
-       "gems are held comments included by bin/check-shipped-archaeology)"
+       "(pattern and lexer proved against #{DEMO_ID_FIXTURES.size} fixtures this rule owns; " \
+       "comments and prose are held, in the demos and in the gems alike, by " \
+       "bin/check-shipped-archaeology)"
   exit 0
 end
 

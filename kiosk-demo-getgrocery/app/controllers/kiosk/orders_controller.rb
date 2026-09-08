@@ -191,8 +191,8 @@ class Kiosk::OrdersController < ActionController::API
   end
 
   # reschedule_delivery — move an ALREADY-PAID order's delivery. See
-  # {RescheduleDeliveryOperation}. No call signature in the prose: ADR-0023
-  # §Decision 4 puts the arguments, and which are optional, in `input_schema`.
+  # {RescheduleDeliveryOperation}. No call signature in the prose: the
+  # arguments, and which are optional, are declared in `input_schema`.
   kind :action
   description "Move an ALREADY-PAID order's delivery to a different window, and optionally to a " \
               "different address. It REUSES the payment already on that order: there is no new " \

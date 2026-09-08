@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Resolv is required at file scope because the opt-in host-detection block below
-# runs in EVERY task that boots a server (K-1400).
+# runs in EVERY task that boots a server.
 require "resolv"
 
 # philslist demo orchestration (NON-COMMERCE classifieds board). Sub-tasks:
@@ -151,7 +151,7 @@ namespace :demo do
         Bob's legitimate listing has DB owner_id == Bob and
         created_by_agent_id == the agent id /auth/register MINTED for Bob, so
         both ownership and attribution come from the token.
-      Assertion 6 (the departure is DECLARED — ADR-0028): the open board
+      Assertion 6 (the departure is DECLARED): the open board
         is a §7.2 departure and must say so on the wire. 6a reads the
         UNAUTHENTICATED catalog and requires browse_listings to publish
         `reach: published` and my_listings `reach: principal`. 6b is the half a

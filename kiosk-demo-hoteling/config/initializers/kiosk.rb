@@ -162,7 +162,7 @@ Kiosk.configure do |c|
   # in dev/test — the posture lives in config/environments/*.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # Validate the proof(s) parsed from the `Kiosk-PoW` request header (ADR-0022)
+  # Validate the proof(s) parsed from the `Kiosk-PoW` request header
   # against the normative PoW schema at the wire choke point, so a malformed
   # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
   # re-issued 402 loop. There is no `pow` body field to validate — the header is the only

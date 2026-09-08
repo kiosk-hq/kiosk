@@ -29,7 +29,7 @@ class Kiosk::BookingsController < ApplicationController
   # Contention is finite: a UNIQUE index on (restaurant_table_id, seating_at)
   # among confirmed rows makes a table already held a clean 409 Conflict. No
   # payment — any deposit shown is settled at the restaurant.
-  # ADR-0023: the description says WHAT booking means and WHEN it is refused; it
+  # The description says WHAT booking means and WHEN it is refused; it
   # names no argument — `input_schema` below declares all five.
   kind :action
   description "Book a specific restaurant table for a chosen upcoming " \

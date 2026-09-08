@@ -186,16 +186,16 @@
         paid       = order["paid"] == "t" || order["paid"] == true
         status     = order["status"].to_s
         scheduled  = %w[scheduled rescheduled].include?(status)
-        # THE WINDOW IS NOT COMPOSED HERE (K-1391). The controller renders it
-        # through DeliverySlots — the one writer `delivery_slots` and
-        # `my_orders` already answer from — so this page names the same hours,
-        # in the same zone, as the assistant was told. Re-parsing `slot_at` in
-        # the view printed the SERVER's hour and put the back office an hour
-        # off the customer.
-        # And the order's own timestamp is composed the same way, in the same
-        # zone, for the same reason (K-1414): re-parsing `created_at` here
-        # printed the SERVER's hour beside a Dublin window, so one card carried
-        # two clocks and named neither.
+        # THE WINDOW IS NOT COMPOSED HERE. The controller renders it through
+        # DeliverySlots — the one writer `delivery_slots` and `my_orders`
+        # already answer from — so this page names the same hours, in the same
+        # zone, as the assistant was told. Re-parsing `slot_at` in the view
+        # would print the SERVER's hour and put the back office an hour off the
+        # customer.
+        # The order's own timestamp is composed the same way, in the same zone,
+        # for the same reason: re-parsing `created_at` here would print the
+        # SERVER's hour beside a Dublin window, so one card would carry two
+        # clocks and name neither.
         slot_time  = order["slot_window"].to_s
         created    = order["created_label"].to_s
         # Glyph reflects the currency the order actually SETTLED in (the controller

@@ -198,7 +198,7 @@ payments; this demo does not carry it, and uses a stub PSP instead.
 
 **2. Run the generator**
 
-<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once (K-1099) -->
+<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once -->
 ```
 rails g kiosk:install
 ```
@@ -274,7 +274,7 @@ class Kiosk::HotelsController < ActionController::API
   include KioskRefusals
 
   # ── properties — the whole (small) catalogue of hotels, name-ordered.
-  # ADR-0023: the `description` carries semantics only; fields live in the schema.
+  # The `description` carries semantics only; fields live in the schema.
   kind :query
   description "…"   # elided — see the shipped file
   # A verb that takes nothing still declares the empty closed object, so "takes

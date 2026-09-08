@@ -88,9 +88,9 @@ class Kiosk::RentalsController < ActionController::API
   # reserve — the hold, and the quote a cart must be signed against. See
   # {ReserveOperation}; the principal below is all this controller contributes,
   # and it comes from the identity the wire resolved rather than from arguments,
-  # which is what makes a forged `user_id` in the body inert. Per ADR-0023 the
-  # answer's fields, and the pay hint that spells the expected mandate out in
-  # words, are declared in `output_schema`.
+  # which is what makes a forged `user_id` in the body inert. The answer's
+  # fields, and the pay hint that spells the expected mandate out in words,
+  # are declared in `output_schema` rather than in this prose.
   kind :action
   description "Hold one fleet vehicle for the authenticated principal. Rentals here are METERED by " \
               "the minute, so what is settled up front is a single minute at that vehicle's rate — " \

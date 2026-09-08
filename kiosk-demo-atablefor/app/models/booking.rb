@@ -54,11 +54,12 @@ class Booking < ApplicationRecord
   # persistence layer happens to return — and a String is the strongest pin
   # there is, identical here, in CI and on a box in another zone.
   #
-  # THE CLOCK, which the old line chose silently while arguing about the type
-  # (K-1370). It pinned "+00:00", so `my_bookings` answered a different offset
-  # from the `book_table` confirmation of the same booking — one instant in two
-  # spellings, under output schemas that describe the field identically. The
-  # restaurant's clock is the one that decides here, the same {Seatings.zone}
+  # THE CLOCK, chosen here rather than inherited. Every verb that publishes a
+  # booking instant goes through this one writer, so `my_bookings` and the
+  # `book_table` confirmation answer the same booking in the same spelling —
+  # two offsets under output schemas that describe the field identically would
+  # be one instant in two spellings. The restaurant's clock decides here, the
+  # same {Seatings.zone}
   # that decides which seatings exist at all: the table is in Lisbon, and that
   # is where the service happens.
   def self.publish_instant(time)

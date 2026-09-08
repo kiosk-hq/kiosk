@@ -6,6 +6,15 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- A payment-free or KYC-free origin answers `POST /kiosk/pay` and
+  `POST /kiosk/agents/kyc` with `module_not_served` (501). The behaviour is
+  unchanged; the route table's own comments had promised 403, and now say 501
+  and why: whether an origin serves a module at all is a fact about the origin,
+  not about the caller's identity.
+- `c.validate_requests` is documented as what it is — ON by default, with the
+  one line that turns it off — where two comments had still called it opt-in.
+- Source comments are in English throughout: quoted design conversation and
+  maintainer attributions are restated as statements about the code.
 - Source comments, the README, the gemspec and the emitted identity-table SQL no
   longer cite this project's private tracker or its ADRs. Every sentence that
   explained the code is kept, restated in the present tense where it had been

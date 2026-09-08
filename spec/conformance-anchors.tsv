@@ -448,7 +448,7 @@ kiosk-demo-hoteling/README.md	this origin serves, never the registered verb name
 kiosk-demo-hoteling/app/models/room_hold.rb	  # this as an expiry: nothing enforces it.
 kiosk-demo-hoteling/app/models/room_hold.rb	  PAY_BY = 15.minutes
 kiosk-demo-hoteling/app/models/room_hold.rb	# Nothing in this demo reads `expires_at` back: {ConfirmBookingOperation} gates on
-kiosk-demo-hoteling/app/models/room_hold.rb	# THE DEADLINE IS RECORDED, NOT ENFORCED, AND THAT IS THE HONEST SENTENCE (K-936).
+kiosk-demo-hoteling/app/models/room_hold.rb	# THE DEADLINE IS RECORDED, NOT ENFORCED, AND THAT IS THE HONEST SENTENCE.
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	Gate 2: THIS principal has paid for THIS booking
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	no settlement for this booking
 kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	          expires_at:    RoomHold::PAY_BY.from_now },

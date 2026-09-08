@@ -22,14 +22,14 @@ module Kiosk
     class Stripe < Base
       VERSION = StripeVersion::VERSION
 
-      # How many open Checkout Sessions the K-492 reuse lookup asks Stripe for.
+      # How many open Checkout Sessions the reuse lookup asks Stripe for.
       # Reuse only ever needs the ONE `mode:setup` session this adapter minted
       # for this customer, and the adapter mints at most one per customer, so a
       # single page is normally enough. But the page is a page: a principal
       # holding more open sessions than this could have the reusable one fall
       # off it, and "it was not on the page I asked for" is NOT the same fact as
-      # "there is none" — a second, quieter route to the wrong answer K-492 was
-      # about. It is not raised to a number that could not truncate (no such
+      # "there is none" — a second, quieter route to minting a fresh session on
+      # every poll. It is not raised to a number that could not truncate (no such
       # number exists) — instead a FULL page with no match is logged, see
       # #outstanding_setup_session.
       SETUP_SESSION_LIST_LIMIT = 10
@@ -75,7 +75,7 @@ module Kiosk
       # card is saved as a PaymentMethod on the Customer; the gem never sees
       # card data.
       #
-      # ## STABLE ACROSS POLLS (K-492)
+      # ## STABLE ACROSS POLLS
       # Hosts document `payment_setup` as the readiness probe an assistant POLLS
       # while its human is still at the hosted page, so this call must not mint a
       # session per poll. It reuses the `mode:setup` Checkout Session already
@@ -91,8 +91,8 @@ module Kiosk
       # @param user_id [String] synthetic principal identifier
       # @return [String] hosted Stripe Checkout URL
       def setup_url(user_id:)
-        # Resolve the return URL FIRST: it fails LOUD when nothing is configured
-        # (K-553), and that must happen before ANY Stripe call — the reuse
+        # Resolve the return URL FIRST: it fails LOUD when nothing is
+        # configured, and that must happen before ANY Stripe call — the reuse
         # lookup included — so a misconfigured deploy still crashes loudly
         # instead of listing sessions it could never match.
         success_url = resolved_return_url
@@ -203,7 +203,7 @@ module Kiosk
           rescue ::Stripe::StripeError
             # Timeout / connectivity / API error: the charge outcome is UNKNOWN
             # (Stripe may or may not have captured). NOT safe to blind-retry —
-            # the caller must reconcile before trying again (K-545). No raw PSP
+            # the caller must reconcile before trying again. No raw PSP
             # detail is surfaced.
             raise PaymentFailed.new(
               "the payment processor could not confirm the charge; its status is unknown",
@@ -259,7 +259,7 @@ module Kiosk
       private
 
       # The `mode:setup` Checkout Session already outstanding for this customer,
-      # or nil when there is none to reuse (K-492).
+      # or nil when there is none to reuse.
       #
       # "Outstanding" means Stripe still lists it as `status: "open"` — i.e. the
       # human has neither completed it nor let it expire (a Checkout Session
@@ -271,13 +271,12 @@ module Kiosk
       # mistaken for a real outstanding session.
       #
       # BEST EFFORT, BUT NEVER SILENT: a Stripe error while looking up degrades
-      # to minting a fresh session (the pre-K-492 behaviour) — a readiness probe
-      # must not start failing because a list call did — but "the lookup broke"
-      # is NOT the same fact as "there is no outstanding session", so it is
-      # LOGGED. Without that line the two are indistinguishable from outside,
-      # and a wrong filter, a renamed field or an API change silently reverts
-      # the fix to one session per poll while every response still looks
-      # perfectly healthy.
+      # to minting a fresh session — a readiness probe must not start failing
+      # because a list call did — but "the lookup broke" is NOT the same fact
+      # as "there is no outstanding session", so it is LOGGED. Without that
+      # line the two are indistinguishable from outside, and a wrong filter, a
+      # renamed field or an API change silently reverts reuse to one session
+      # per poll while every response still looks perfectly healthy.
       def outstanding_setup_session(cus_id, success_url:)
         listed = ::Stripe::Checkout::Session.list(
           customer: cus_id, status: "open", limit: SETUP_SESSION_LIST_LIMIT,
@@ -298,13 +297,13 @@ module Kiosk
         nil
       end
 
-      # Say out loud that the K-492 reuse lookup did not answer, so degrading to
+      # Say out loud that the reuse lookup did not answer, so degrading to
       # a fresh session is visible in the operator's log instead of passing for
       # the happy path. Operator-side only — nothing here reaches the wire.
       def log_setup_session_lookup_failed(error)
         message = "[kiosk-pay-stripe] could not check for an outstanding setup session " \
                   "(#{error.class}: #{error.message}) — minting a FRESH Checkout Session, so " \
-                  "setup_url is NOT stable across polls until this clears (K-492)."
+                  "setup_url is NOT stable across polls until this clears."
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
         logger ? logger.warn(message) : warn(message)
       end
@@ -316,7 +315,7 @@ module Kiosk
         message = "[kiosk-pay-stripe] no outstanding setup session among a FULL page of #{count} open " \
                   "Checkout Sessions for this customer — the reusable one may have been truncated off " \
                   "the page rather than absent, so a FRESH Checkout Session is being minted and " \
-                  "setup_url may not be stable across polls (K-492)."
+                  "setup_url may not be stable across polls."
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
         logger ? logger.warn(message) : warn(message)
       end
@@ -343,14 +342,14 @@ module Kiosk
       # The `success_url` Stripe redirects the human's BROWSER to after they
       # enter a card on the hosted page. It MUST be a real, operator-owned
       # origin: a hardcoded localhost fallback would send a paying customer to
-      # their OWN machine on a deploy that forgot to wire it (K-553). Resolution
+      # their OWN machine on a deploy that forgot to wire it. Resolution
       # order:
       #   1. the explicit return_url the host injected (e.g. getgrocery passes
       #      "#{Kiosk.configuration.issuer}/payment/return");
       #   2. else derive it from the configured Kiosk issuer/origin — the
-      #      operator's real https origin in production (fail-loud per K-510) and
-      #      localhost:PORT in local dev, so it is correct in both WITHOUT ever
-      #      hardcoding localhost;
+      #      operator's real https origin in production and localhost:PORT in
+      #      local dev, so it is correct in both WITHOUT ever hardcoding
+      #      localhost;
       #   3. else (no return_url and no configured issuer) fail LOUD — a hosted
       #      SetupIntent with no valid return target is a misconfiguration, not
       #      something to paper over with a localhost address a real human's
@@ -365,7 +364,7 @@ module Kiosk
               "Pass return_url: to Kiosk::PaymentProviders::Stripe.new " \
               "(e.g. \"\#{Kiosk.configuration.issuer}/payment/return\"), or configure Kiosk's " \
               "issuer so it can be derived. A localhost fallback is refused because it would " \
-              "send the paying human's browser to their own machine (K-553)."
+              "send the paying human's browser to their own machine."
       end
 
       # The configured Kiosk issuer/origin, or nil if Kiosk is not configured

@@ -183,7 +183,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
       expect { resolver_adapter.setup_url(user_id: "user-1") }
-        .to output(/could not check for an outstanding setup session.*K-492/m).to_stderr
+        .to output(%r{could not check for an outstanding setup session.*setup_url is NOT stable}m).to_stderr
     end
 
     it "says NOTHING on the ordinary no-session path (the log line means a real fault)" do
@@ -207,7 +207,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
       expect { resolver_adapter.setup_url(user_id: "user-1") }
-        .to output(/FULL page of #{described_class::SETUP_SESSION_LIST_LIMIT} open.*K-492/m).to_stderr
+        .to output(/FULL page of #{described_class::SETUP_SESSION_LIST_LIMIT} open.*setup_url may not be stable/m).to_stderr
     end
 
     it "stays quiet when a SHORT page came back with nothing reusable (nothing was truncated)" do

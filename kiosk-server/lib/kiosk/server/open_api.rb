@@ -37,15 +37,16 @@ module Kiosk
     # `input_schema` the authoritative INPUT CONTRACT — both travel into this
     # document verbatim rather than being restated in it.
     #
-    # ── PROVISIONAL, by Phil's own revisit clause ────────────────────────
+    # ── PROVISIONAL: THIS DOCUMENT IS MEANT TO STAY REMOVABLE ────────────
     #
-    # «Если не понадобится, уберём». So: nothing else may come to depend on
-    # this document. It is a pure derivation with no independent source of
-    # truth, and removing it stays ONE FILE plus ONE `items <<` line in
-    # {WellKnown.api_catalog} plus the route and the controller. Do not let a
-    # demo, the e2e harness, the skill or the normative spec require it.
+    # Nothing else may come to depend on it. It is a pure derivation with no
+    # independent source of truth, and deleting it must stay ONE FILE plus ONE
+    # `items <<` line in {WellKnown.api_catalog} plus the route and the
+    # controller. Do not let a demo, the e2e harness, the skill or the
+    # normative spec require it — the moment one of them does, this ceases to
+    # be a convenience and becomes a wire element nobody decided to ship.
     #
-    # ── The four things this document must get right ─────────────────────
+    # ── The five things this document must get right ─────────────────────
     #
     #   1. `style` and `explode` are written EXPLICITLY on every parameter.
     #      Stoplight Prism 5.16.0 ignores the spec's defaults (`el.explode ||
@@ -66,7 +67,7 @@ module Kiosk
     #      query style OpenAPI defines that Rails already speaks — and it is
     #      ONE LEVEL WITH SCALAR LEAVES. The decoder refuses anything richer,
     #      so no such shape can reach a descriptor and be published.
-    #   5. THE TWO PAGINATION FACTS ARE RESPONSE HEADERS, and OpenAPI declares
+    #   4. THE TWO PAGINATION FACTS ARE RESPONSE HEADERS, and OpenAPI declares
     #      a response header in `responses.<code>.headers` — NOT as a property
     #      of the body schema. Getting that wrong would publish `Link` and
     #      `X-Total-Count` as fields of a row array, which is not merely
@@ -75,7 +76,7 @@ module Kiosk
     #      descriptors say. The two live in `components.headers` and are
     #      `$ref`d from every QUERY's `200`; actions never paginate (spec
     #      §8.4), so their operations do not carry them.
-    #   4. `limit` and `cursor` are INJECTED into every query operation. They
+    #   5. `limit` and `cursor` are INJECTED into every query operation. They
     #      are reserved names the wire always accepts and a verb never has to
     #      declare (§8.1 item 6), so they appear in no `input_schema` — and a
     #      strict validator in front of a porter's server answers `400 Unknown
@@ -236,7 +237,7 @@ module Kiosk
         JSON.generate(build(**kwargs))
       end
 
-      # ── WHAT THE ENDPOINT SERVES, AND ITS VALIDATOR ─────────────────────
+      # ── WHAT THE ENDPOINT SERVES, AND ITS HTTP CACHE VALIDATOR ──────────
       #
       # `GET <endpoint>/openapi.json` is public and cacheable now, so it owes a
       # caller a strong `ETag` and a 304 — and neither is affordable if the

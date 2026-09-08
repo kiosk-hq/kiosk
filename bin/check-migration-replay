@@ -164,6 +164,14 @@ FLEET_SCHEMA_BASELINE = "2026-08-28"
 # stale declaration and fails. An entry that matched nothing in the window is
 # NOT a failure — see the reach line in the summary for why.
 ACCEPTED_LEFTOVERS = {
+  "public.demo_telemetry_events" => {
+    row: "T-191",
+    why: "the demos' live-activity store, retired whole with the surface that wrote it. Its creating " \
+         "migration was retired with it, so a box provisioned before the retirement keeps the table " \
+         "and no later migration drops it. Three of its columns are NOT NULL with no DEFAULT; there " \
+         "is no INSERT to refuse, because head has no such table — it is absent from every demo's " \
+         "db/structure.sql, which is what the retired/live split below reads.",
+  },
   "kiosk.actions" => {
     row: "K-828",
     why: "the 0.3 action catalogue, retired whole. Its creating migration was retired with it, so a " \

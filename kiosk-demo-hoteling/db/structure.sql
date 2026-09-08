@@ -295,38 +295,6 @@ CREATE TABLE public.bookings (
 
 
 --
--- Name: demo_telemetry_events; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.demo_telemetry_events (
-    id bigint NOT NULL,
-    app text NOT NULL,
-    action_kind text NOT NULL,
-    agent_hash text NOT NULL,
-    at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: demo_telemetry_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.demo_telemetry_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: demo_telemetry_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.demo_telemetry_events_id_seq OWNED BY public.demo_telemetry_events.id;
-
-
---
 -- Name: properties; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -415,13 +383,6 @@ CREATE TABLE public.users (
     email character varying,
     encrypted_password character varying DEFAULT ''::character varying NOT NULL
 );
-
-
---
--- Name: demo_telemetry_events id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.demo_telemetry_events ALTER COLUMN id SET DEFAULT nextval('public.demo_telemetry_events_id_seq'::regclass);
 
 
 --
@@ -583,14 +544,6 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: demo_telemetry_events demo_telemetry_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.demo_telemetry_events
-    ADD CONSTRAINT demo_telemetry_events_pkey PRIMARY KEY (id);
-
-
---
 -- Name: properties properties_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -739,20 +692,6 @@ CREATE INDEX idx_settlements_cart ON kiosk.settlements USING btree (cart_mandate
 --
 
 CREATE INDEX idx_settlements_user_id ON kiosk.settlements USING btree (user_id);
-
-
---
--- Name: idx_demo_telemetry_events_app_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_demo_telemetry_events_app_at ON public.demo_telemetry_events USING btree (app, at);
-
-
---
--- Name: idx_demo_telemetry_events_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_demo_telemetry_events_at ON public.demo_telemetry_events USING btree (at);
 
 
 --
@@ -907,7 +846,6 @@ SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
 ('20260827000002'),
-('20260823000001'),
 ('20260820140001'),
 ('20260820130117'),
 ('20260820130116'),

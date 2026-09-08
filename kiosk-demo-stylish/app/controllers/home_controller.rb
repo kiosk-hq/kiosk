@@ -10,7 +10,7 @@ class HomeController < ApplicationController
 
   def index
     # Cheap domain counts, rendered server-side on page load (a refresh is
-    # enough — no JS polling). These read stylish's OWN tables, not telemetry.
+    # enough — no JS polling). These read stylish's OWN tables.
     # The model is an EVERGREEN service MENU: every service is always
     # bookable (infinite capacity, overbooking allowed — the salon never fills
     # up), while bookings accumulate as visitors book (starts at 0).

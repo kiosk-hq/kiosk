@@ -10,7 +10,7 @@
 class HomeController < ApplicationController
   def index
     # Cheap domain counts, rendered server-side on page load (a refresh is
-    # enough — no JS polling). These read skooti's OWN tables, not telemetry.
+    # enough — no JS polling). These read skooti's OWN tables.
     @scooters_in_fleet    = Scooter.where(kind: "scooter").count
     @motorcycles_in_fleet = Scooter.where(kind: "motorcycle").count
     @vehicles_reserved    = Reservation.count

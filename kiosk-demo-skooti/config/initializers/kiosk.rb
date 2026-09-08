@@ -249,18 +249,3 @@ Kiosk.configure do |c|
   c.unlock_signing_key = unlock_signing_key
 end
 
-# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
-# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
-# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
-if ENV["KIOSK_TELEMETRY"] == "1"
-  SKOOTI_VERB_MAP = {
-    "reserve"         => "reserved",
-    "start_rental"    => "ran",
-    "rent_motorcycle" => "ran",
-    "payment_setup"   => "ran",
-  }.freeze
-  Rails.application.config.middleware.use(
-    DemoTelemetryMiddleware, verb_map: SKOOTI_VERB_MAP,
-  )
-end
-

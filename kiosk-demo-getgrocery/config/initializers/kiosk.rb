@@ -320,20 +320,3 @@ Kiosk.configure do |c|
   # this default is in use with PoW on, but a warning nobody reads is not the
   # mitigation; this comment and the README are.
 end
-
-# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
-# Off unless KIOSK_TELEMETRY=1. When on, one event is recorded per successful
-# wire action via a Rack middleware; the aggregate is served at
-# GET /demo/activity.json. NOT part of kiosk-core (satellite neutrality).
-# GETGROCERY_VERB_MAP maps this vertical's concrete run-verbs onto the generic
-# action kinds so the landing aggregate reads uniformly across demos.
-if ENV["KIOSK_TELEMETRY"] == "1"
-  GETGROCERY_VERB_MAP = {
-    "create_order"        => "ordered",
-    "reschedule_delivery" => "scheduled",
-    "payment_setup"       => "ran",
-  }.freeze
-  Rails.application.config.middleware.use(
-    DemoTelemetryMiddleware, verb_map: GETGROCERY_VERB_MAP,
-  )
-end

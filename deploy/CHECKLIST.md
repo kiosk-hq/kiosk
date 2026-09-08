@@ -31,7 +31,6 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 ## 3. Databases (one Postgres cluster)
 - [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… -f deploy/postgres-init.sql`  → 8 app DBs + least-priv roles (7 demos + `kiosk_prove`). (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
 - [ ] **Only if you renamed something:** the DB/role names default to the shipped ones. If you changed `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_USER` in an app's env (§4), pass the SAME value here as `-v <xx>_db=` / `-v <xx>_user=` (`gg af ho sk st pl td pv`) — otherwise provisioning creates one name and the app connects to another. See `deploy/README.md` §"Database names".
-- [ ] `psql -v tm_pw=… -f deploy/telemetry-init.sql`  → the shared `kiosk_demo_telemetry` DB + role.
 
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
 For EACH of the 7 apps:
@@ -73,8 +72,6 @@ For EACH of the 7 apps:
       ownership and KYC. Provision/flash the locks with the matching public half
       (`openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32`); any lock still carrying the old
       repo key (`8857880d…`) must be reflashed. The other six operator demos have no locks and need nothing here.
-- [ ] **Telemetry:** `KIOSK_TELEMETRY=1`, `KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:…@…/kiosk_demo_telemetry`,
-      and a **distinct** `KIOSK_TELEMETRY_SALT=<random>` per app (keeps the per-app agent hashes non-joinable).
 - [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
 - [ ] **Card-setup Checkout render (getgrocery, K-473):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
@@ -230,7 +227,6 @@ For EACH of the 7 apps:
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).
 - [ ] The demo **root page** loads (what it is + a curl one-liner + the live activity counters).
-- [ ] `GET https://<app>.demo.kiosk.tech/demo/activity.json` returns aggregates.
 - [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
 - [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
 

@@ -4,20 +4,17 @@
 # Cross-demo copy check (K-623, K-607, K-624, K-640).
 #
 # WHY THIS EXISTS. The eight demos are eight standalone Rails apps, so shared
-# application code is not shared at all — it is HAND-COPIED. `app/services/demo_telemetry.rb`
-# ships in seven demos, `app/controllers/demo_activity_controller.rb` in seven,
-# `app/services/pow_difficulty.rb` in seven, `app/models/uuid_check.rb` in six, and eleven
+# application code is not shared at all — it is HAND-COPIED.
+# `app/services/pow_difficulty.rb` ships in seven demos,
+# `app/models/uuid_check.rb` in six, and nine
 # db/migrate files in up to seven. Nothing checked that the copies still agree.
 #
-# They drift, and the drift is invisible. The telemetry module carried a stale
-# `schedule_delivery` comment in six of its seven copies for weeks — corrected
-# only by accident, when the K-622 fix happened to touch all seven at once. That
-# left the seven byte-identical again, which is a STATE, not a GUARD: the next
-# edit that lands in one copy and not the others is exactly as undetectable, and
-# the next one may be executable rather than a comment. `script/equihash_register.rb`
-# is the proof that it need not be a comment — a constant rename reached three of
-# its five copies (057196e) and stopped there, unnoticed, until this check was
-# written.
+# They drift, and the drift is invisible, and it need not be a comment:
+# `script/equihash_register.rb` is the proof — a constant rename reached three
+# of its five copies (057196e) and stopped there, unnoticed, until this check
+# was written. A set of copies that happens to agree today is a STATE, not a
+# GUARD: the next edit that lands in one copy and not the others is exactly as
+# undetectable.
 #
 # So this is a CHECK, not a convention: it derives every relative path that
 # exists in two or more demos, and fails when a copy disagrees with its siblings
@@ -146,8 +143,8 @@
 # and an undeclared one fails the build, same as an undeclared path.
 #
 # WHAT THIS IS NOT. It is not an argument that copying is right. Promoting
-# UuidCheck or DemoTelemetry into a shipped gem is a public-API decision (K-607,
-# K-495/K-502) and this check does not pre-empt it — it only makes the interim
+# UuidCheck into a shipped gem is a public-API decision (K-607) and this check
+# does not pre-empt it — it only makes the interim
 # state honest, and it is what should be deleted the day the extraction lands.
 #
 # MAGIC COMMENTS ARE THE ONE COMMENT `:code` STILL COMPARES (K-628). Ripper drops
@@ -405,11 +402,11 @@ if ARGV.include?("--self-test")
               "add_index :users, :email, unique: true, where: \"email IS NOT NULL\""]],
       expect: /db\/migrate\/\*_add_devise_columns_to_users\.rb: declared :code — the copies must agree/ },
 
-    { id: "telemetry-autoload-line-gone", kind: :break,
-      rule: "The telemetry cluster's own wiring (K-623, K-624)",
+    { id: "autoload-once-line-gone", kind: :break,
+      rule: "The app/services autoload-once declaration (K-502)",
       what: "the autoload_once_paths line K-502 made load-bearing is dropped from one demo",
       ops:  [[:edit, "kiosk-demo-skooti/config/application.rb", /^.*autoload_once_paths.*\n/, ""]],
-      expect: /skooti: ships app\/services\/demo_telemetry\.rb but config\/application\.rb does not put app\/services/ },
+      expect: /skooti: ships app\/services\/pow_difficulty\.rb but config\/application\.rb does not put app\/services/ },
 
     { id: "operation-result-regrows", kind: :break,
       rule: "What is LEFT in a per-demo operation_result.rb (K-792)",
@@ -1144,37 +1141,6 @@ COPIES = {
           "(K-532); kept in lockstep for the same reason (K-643).",
   },
 
-  # ── The telemetry cluster (K-623) ──────────────────────────────────────────
-  "app/services/demo_telemetry.rb" => {
-    rule: :identical,
-    why:  "The live-activity telemetry module. It owns the INSERT column list (which must " \
-          "match deploy/telemetry-init.sql), the agent_hash privacy salt, the 10-minute and " \
-          "1-hour aggregate windows, and the Rack middleware. Only getgrocery's copy is " \
-          "executed by a CI gate (demo:telemetry, demo:telemetry_spec); byte-identity is what " \
-          "extends those two gates to the other six copies.",
-  },
-  "app/services/demo_telemetry_record.rb" => {
-    rule: :identical,
-    why:  "The abstract AR class that binds telemetry writes to the SHARED hosted store when " \
-          "KIOSK_TELEMETRY_DB_URL is set — a dedicated pool, so telemetry never contends with " \
-          "request transactions. Split out of demo_telemetry.rb by K-502 so Zeitwerk can reach " \
-          "it by name; held identical for the same reason the module is.",
-  },
-  "app/services/demo_telemetry_middleware.rb" => {
-    rule: :identical,
-    why:  "The Rack middleware — the half that produces every real telemetry event, and the half " \
-          "K-622 (a failed record RE-DISPATCHING the request, minting a second agent at " \
-          "/auth/register) lived in. Split out of demo_telemetry.rb by K-502. Only getgrocery's " \
-          "copy is executed by a CI gate (demo:telemetry_spec); byte-identity is what extends " \
-          "that gate to the other six.",
-  },
-  "app/controllers/demo_activity_controller.rb" => {
-    rule: :identical,
-    why:  "GET /demo/activity.json — the read half of the telemetry surface, and the half " \
-          "kiosk.tech's landing tile calls. Same argument as app/services/demo_telemetry.rb: getgrocery's " \
-          "copy is the only one any gate boots.",
-  },
-
   # ── Shared demo helpers, hand-copied into every demo's app/ (K-502) ────────
   # They used to live under lib/ and be loaded by hand from the initializer;
   # the paths moved, the copy-not-symlink arrangement did not.
@@ -1559,15 +1525,6 @@ COPIES = {
           "prove has no `kiosk.settlements` (it adopts no engine schema) and must not acquire a " \
           "copy by accident.",
   },
-  "db/migrate/20260823000001_create_demo_telemetry_events.rb" => {
-    rule:  :identical,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:  "The live-activity store, one shape for the seven demos that record into it (K-714 — it " \
-          "used to be CREATE TABLE IF NOT EXISTS issued from the request path). Its shape must also " \
-          "match deploy/telemetry-init.sql, which provisions the SHARED hosted store no app " \
-          "migration can reach; `ships:` is declared because prove records nothing and must not " \
-          "acquire a copy by accident.",
-  },
 
   # ── script/ — the per-demo flow drivers ────────────────────────────────────
   #
@@ -1650,8 +1607,8 @@ COPIES = {
 #     undeclared-copy guard; the skeleton has a record instead.
 #
 # (2) "Not compared" is not "not covered". config/routes.rb and
-#     config/initializers/kiosk.rb ARE asserted, on the four telemetry-wiring
-#     patterns at the bottom of this file; db/structure.sql is the output of
+#     config/initializers/kiosk.rb ARE asserted by the rules at the bottom of
+#     this file; db/structure.sql is the output of
 #     migrations this check compares byte-for-byte; and every demo's whole
 #     skeleton is exercised by that demo's CI job, which boots the app.
 #
@@ -1683,15 +1640,15 @@ SKELETON_NOT_COMPARED = {
   "config/database.yml" => "Per-demo: each resolves its own KIOSK_<APP>_DB / _DB_USER (deploy/README).",
   "config/routes.rb" =>
     "Per-demo: each demo's own pages, plus the one `draw(:kiosk)` that reaches the wire "\
-    "file beside it. The telemetry route IS asserted below.",
+    "file beside it. Its framework prose is compared across demos by the K-1069 block below.",
   "config/routes/kiosk.rb" =>
     "Per-demo: the mount is identical in all eight and the verb lines are that storefront's "\
     "own, so the file as a whole is not comparable. Its FRAMEWORK PROSE is compared across "\
     "demos by the K-1069 block below, and bin/check-verb-routes holds every route line in it "\
     "to the verbs that demo's own handler controllers declare (T-183).",
   "config/initializers/kiosk.rb" =>
-    "Per-demo: capabilities, verbs, PoW policy and adapters differ per storefront. The telemetry " \
-    "require and middleware insertion ARE asserted below.",
+    "Per-demo: capabilities, verbs, PoW policy and adapters differ per storefront. The " \
+    "response-validation posture and the app/services autoload-once declaration ARE asserted below.",
   "config/initializers/devise.rb" => "Only the demos with a human login ship it, with per-demo settings.",
   "config/initializers/cors.rb" =>
     "Rails generator output, identical, and inert: every line in it is commented out.",
@@ -1793,8 +1750,8 @@ NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
 GENERATOR_TEMPLATES = {
   "initializer.rb.tt" => {
     not_compared: "emits config/initializers/kiosk.rb — per-demo by design (capabilities, verbs, " \
-                  "PoW policy, adapters), recorded in SKELETON_NOT_COMPARED; its telemetry wiring " \
-                  "IS asserted at the bottom of this file.",
+                  "PoW policy, adapters), recorded in SKELETON_NOT_COMPARED; the one line every " \
+                  "copy of it must carry IS asserted at the bottom of this file.",
   },
   "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
   "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
@@ -2617,65 +2574,37 @@ MIGRATION_PAIRS.each do |base, entry|
   end
 end
 
-# ── The telemetry cluster's own wiring (K-623, K-624) ────────────────────────
+# ── The app/services autoload-once declaration (K-502) ───────────────────────
 #
-# Byte-identity of the module and the controller extends getgrocery's two
-# telemetry gates to the other six copies of that CODE. It says nothing about
-# the per-demo WIRING, which lives in config/routes.rb and
-# config/initializers/kiosk.rb — files that legitimately differ per demo and so
-# cannot be compared byte-for-byte. Without this block a demo could lose its
-# route, its middleware or its require and stay green: the four pieces are only
-# ever exercised together in getgrocery.
+# Every operator demo names an app/services constant from
+# `config/initializers/kiosk.rb` — `PowDifficulty` in all seven, and the
+# adapters, brokers and stub PSPs beside it in four of them. Rails sets the
+# RELOADABLE autoloader up in its `finisher`, AFTER config/initializers have
+# run, so the initializer can only name those constants because app/services is
+# in `config.autoload_once_paths`, whose loader `bootstrap` sets up first. Drop
+# that one line and the demo aborts at boot with `NameError: uninitialized
+# constant`.
 #
-# The `require` this block used to assert is GONE (K-502), and the split it asked
-# for is done: the cluster is three path-matching files under app/services, so
-# `DemoTelemetryMiddleware` and `DemoTelemetryRecord` are reachable by autoload
-# under their own names. What replaced the require as the deletable-and-silently-
-# fatal line is the once-path declaration in config/application.rb. Rails sets
-# the RELOADABLE autoloader up in its `finisher`, AFTER config/initializers have
-# run, so the initializer can only name `DemoTelemetryMiddleware` because
-# app/services is in `config.autoload_once_paths`, whose loader `bootstrap` sets
-# up first. Drop that one line and every one of these seven demos aborts at boot
-# with `NameError: uninitialized constant` — so it is asserted here, in the same
-# breath as the middleware insertion it makes possible.
-#
-# Honest scope: this is a static assertion that the four pieces are present, not
-# a boot of the six. Booting seven apps to GET /demo/activity.json is what
-# getgrocery's demo:telemetry_spec already does, twice, over byte-identical code.
-TELEMETRY_WIRING = [
-  ["app/controllers/demo_activity_controller.rb", nil,
-   "the GET /demo/activity.json controller is missing"],
-  ["config/routes.rb", %r{get\s+"/demo/activity\.json",\s*to:\s*"demo_activity#show"},
-   "config/routes.rb does not draw GET /demo/activity.json -> demo_activity#show"],
-  ["config/application.rb", /autoload_once_paths\s*<<\s*Rails\.root\.join\("app\/services"\)/,
-   "config/application.rb does not put app/services in config.autoload_once_paths — the " \
-   "reloadable autoloader is set up AFTER config/initializers run, so the initializer's " \
-   "DemoTelemetryMiddleware reference would abort the boot with NameError (K-502, was K-624)"],
-  ["config/initializers/kiosk.rb", /middleware\.use\(\s*DemoTelemetryMiddleware\b/m,
-   "config/initializers/kiosk.rb does not insert DemoTelemetryMiddleware — the module is shipped " \
-   "but never records anything"],
-].freeze
+# `config/application.rb` is :per_demo — the module name IS the demo name — so
+# nothing above compares this line, and it is the deletable-and-silently-fatal
+# kind: no static reader of the initializer would notice. Honest scope: this
+# asserts the declaration is PRESENT, not that a boot succeeds; each demo's own
+# CI job boots the app.
+AUTOLOAD_ONCE_PATTERN = /autoload_once_paths\s*<<\s*Rails\.root\.join\("app\/services"\)/
+autoload_once_demos = (dups["app/services/pow_difficulty.rb"] || {}).keys
 
-telemetry_demos = (dups["app/services/demo_telemetry.rb"] || {}).keys
-(dups["app/controllers/demo_activity_controller.rb"] || {}).each_key do |demo|
-  next if telemetry_demos.include?(demo)
-
-  errors << "#{short.(demo)}: ships app/controllers/demo_activity_controller.rb but not " \
-            "app/services/demo_telemetry.rb — GET /demo/activity.json would 500 on the " \
-            "missing DemoTelemetry"
-end
-
-telemetry_demos.each do |demo|
-  TELEMETRY_WIRING.each do |rel, pattern, message|
-    path = File.join(ROOT, demo, rel)
-    unless File.exist?(path)
-      errors << "#{short.(demo)}: ships app/services/demo_telemetry.rb but #{rel} does not exist — #{message}"
-      next
-    end
-    next if pattern.nil? || File.read(path).match?(pattern)
-
-    errors << "#{short.(demo)}: ships app/services/demo_telemetry.rb but #{message}"
+autoload_once_demos.each do |demo|
+  path = File.join(ROOT, demo, "config/application.rb")
+  unless File.exist?(path)
+    errors << "#{short.(demo)}: ships app/services/pow_difficulty.rb but config/application.rb does not exist"
+    next
   end
+  next if File.read(path).match?(AUTOLOAD_ONCE_PATTERN)
+
+  errors << "#{short.(demo)}: ships app/services/pow_difficulty.rb but config/application.rb does not " \
+            "put app/services in config.autoload_once_paths — the reloadable autoloader is set up " \
+            "AFTER config/initializers run, so the initializer's PowDifficulty reference would abort " \
+            "the boot with NameError (K-502)"
 end
 
 # ── What is LEFT in a per-demo operation_result.rb (K-792) ───────────────────
@@ -3480,9 +3409,9 @@ end
 #     boundary buys a versioned public API, a CHANGELOG entry and a release for
 #     each future word of a refusal message — while the copies stop being
 #     readable next to the guard that calls them, which is most of their value.
-#     This file's own header already says the promotion of UuidCheck and
-#     DemoTelemetry is a public-API decision (K-607, K-495/K-502) that it must
-#     not pre-empt; the same restraint applies twice as hard one level down.
+#     This file's own header already says the promotion of UuidCheck is a
+#     public-API decision (K-607) that it must not pre-empt; the same restraint
+#     applies twice as hard one level down.
 #   * DECLARING the set as a known duplicate with a reason buys detection of a
 #     THIRD copy and nothing else — the one-sided edit, which is the entire
 #     class this script exists for, stays exactly as undetectable as it was.
@@ -4923,8 +4852,8 @@ FRAMEWORK_PATCH = /
 # which run.sh patches the same way it patches config/application.rb.
 #
 # Bare `ENV["FLAG"]` reads are NOT caught, and must not be: K-650 carved them
-# out explicitly, because a mode flag (KIOSK_POW_DEMO, KIOSK_TELEMETRY,
-# KIOSK_RLS_ENFORCE) selects a demo MODE rather than a per-environment posture,
+# out explicitly, because a mode flag (KIOSK_POW_DEMO, KIOSK_RLS_ENFORCE)
+# selects a demo MODE rather than a per-environment posture,
 # and there is no default for an environment file to hold.
 #
 # ALLOWED names are declared one at a time, each with the row that owns the
@@ -5068,8 +4997,8 @@ end
 #
 # `config/initializers/kiosk.rb` is `:per_demo` and rightly so — capabilities,
 # verbs, PoW policy and adapters differ per storefront — so nothing above
-# compares this line. It is asserted here for the same reason the telemetry
-# wiring is: the FILE is per-demo, one LINE in it is not.
+# compares this line. It is asserted here for the same reason the autoload-once
+# declaration is: the FILE is per-demo, one LINE in it is not.
 #
 # BOUND TO THE ENGINE, not to a remembered rule. If `response_validation.rb`
 # stops documenting the hazard, this assertion is enforcing a posture its own
@@ -5291,8 +5220,7 @@ E2E_FIXTURES = {
   "demo_audit_sink.rb" => {
     pairs: nil,
     why:   "The K-828 audit-sink callable, written the way an adopter would write it. No demo " \
-           "ships app/services/demo_audit_sink.rb — the demos emit through DemoTelemetry instead, " \
-           "which is a different surface with its own lockstep entry above.",
+           "ships app/services/demo_audit_sink.rb: the seam is exercised by the harness alone.",
   },
   "environment_kiosk.rb" => {
     pairs: nil,
@@ -5672,7 +5600,7 @@ end
 # WHAT THIS BLOCK DOES. It declares a CORPUS — the per-demo documents every rule
 # above leaves uncompared (`before-after.md`, declared per-demo at
 # SKELETON_NOT_COMPARED with no checker of its own until now; `config/routes.rb`,
-# declared per-demo there too and compared above only for its telemetry route) —
+# declared per-demo there too and otherwise uncompared) —
 # and a manifest of FRAMEWORK CLAIMS over it. Each claim carries up to five
 # declarations, and each one answers a different one of the three shapes:
 #
@@ -6334,7 +6262,7 @@ if errors.empty?
        "#{tpl_checked} install-generator templates byte-matched against their copies in all " \
        "#{operator_demos.size} operator demos (no exceptions available), " \
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
-       "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
+       "app/services autoload-once declared in #{autoload_once_demos.size} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
        "no env resolution and no Rails-framework patching in the initializers of " \
        "#{initializer_demos} operator demos nor in the #{e2e_initializers} e2e harness " \

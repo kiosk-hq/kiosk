@@ -13,14 +13,14 @@ class HomeController < ApplicationController
 
   def index
     # Cheap domain counts, rendered server-side on page load (a refresh is
-    # enough — no JS polling). These read philslist's OWN tables, not telemetry.
+    # enough — no JS polling). These read philslist's OWN tables.
     @listings_posted = Listing.count
     @open_listings   = Listing.where(status: "open").count
     @closed_listings = Listing.where(status: "closed").count
     @categories      = Category.count
 
     # The public board itself: current OPEN listings across ALL owners, newest
-    # first. Reading the OWN tables (not telemetry) — a refresh shows a freshly
+    # first. Reading the OWN tables — a refresh shows a freshly
     # posted listing. Same read `browse_listings` exposes over the wire.
     @board_listings = open_board_listings
 

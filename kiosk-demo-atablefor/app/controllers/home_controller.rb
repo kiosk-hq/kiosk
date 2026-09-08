@@ -8,7 +8,7 @@
 # reservations board so a viewer SEES an assistant's booking tied to its diner.
 class HomeController < ActionController::Base
   # The home page (protocol-primary framing) + the reservations board rendered
-  # inline. Reading the OWN tables, not telemetry; a refresh is enough.
+  # inline. Reading the OWN tables; a refresh is enough.
   def index
     @tables_booked  = Booking.where(status: "confirmed").count
     @covers_seated  = Booking.where(status: "confirmed").sum(:party_size)

@@ -31,11 +31,4 @@ Rails.application.routes.draw do
   # config/routes/kiosk.rb so the wire reads as one file and this one stays
   # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
   draw(:kiosk)
-
-  # ─── Live-activity telemetry aggregate (opt-in) ─────────────────
-  # Privacy-safe counts for the demo page + the kiosk.tech landing tile.
-  # Drawn ONLY when KIOSK_TELEMETRY=1 so it is a no-op in CI/local flows.
-  if ENV["KIOSK_TELEMETRY"] == "1"
-    get "/demo/activity.json", to: "demo_activity#show", defaults: { format: :json }
-  end
 end

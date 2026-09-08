@@ -15,7 +15,6 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
-| `telemetry-init.sql` | The ONE shared live-activity store: `kiosk_demo_telemetry` DB + `kiosk_telemetry` login role + the append-only events table. Only needed if you turn telemetry on — see [Live-activity telemetry](#live-activity-telemetry--wired-opt-in). |
 | `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box (K-509/K-540): strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
 | `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template would have said OK for as long as the box was serving without the header — which is exactly what happened (K-1295). `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
@@ -484,62 +483,3 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 > "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s
 > (measured on an M-series laptop core; other hardware differs).
 
-## Live-activity telemetry — WIRED (opt-in)
-
-Aggregate, privacy-safe **live-activity counters** are now wired into all seven
-demos <!-- count: 7 ¦ from: git ls-files 'kiosk-demo-*/app/services/demo_telemetry.rb' | wc -l --> (app-layer, NOT kiosk-core — satellite neutrality). Off by default; a demo
-that never sets `KIOSK_TELEMETRY=1` behaves exactly as before.
-
-**Shared store.** Provision the one shared DB once:
-
-    psql -v ON_ERROR_STOP=1 -v tm_pw="'<telemetry-pw>'" -f telemetry-init.sql
-
-This creates the `kiosk_demo_telemetry` DB + `kiosk_telemetry` LOGIN role + the
-append-only `demo_telemetry_events(app, action_kind, agent_hash, at)` table.
-Run it BEFORE pointing any app at the store: the apps do not create the table at
-runtime, and an app migration cannot reach a database its app does not own.
-
-**Per-app env** (add to each `env/<app>.env`):
-
-    KIOSK_TELEMETRY=1
-    KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:<pw>@127.0.0.1/kiosk_demo_telemetry
-    KIOSK_TELEMETRY_SALT=<a DISTINCT random salt PER APP>   # keeps agent hashes non-joinable
-
-`KIOSK_TELEMETRY_DB_URL` unset ⇒ the app writes to its OWN DB (local/CI
-testable). Set it on every hosted app to the shared DB so the landing aggregate
-spans all demos.
-
-**Endpoint.** Each app serves `GET /demo/activity.json` (only when
-`KIOSK_TELEMETRY=1`), cached `max-age=10`, `Access-Control-Allow-Origin: *`:
-
-    { assistants_active_10m, registered_total,
-      actions_last_hour: { browsed, ordered, booked, paid, … },
-      generated_at, scope }
-
-`?scope=app` = this demo's own page counts; default `scope=all` = the ALL-apps
-aggregate the **kiosk.tech landing tile** fetches (point the tile at any hosted
-app's `/demo/activity.json`, or a dedicated one, all reading the shared DB).
-
-**Privacy guard.** Counts only. `agent_hash` is a per-app *salted* hash used
-solely for distinct-counts — never surfaced, **never joined across apps**
-(joining an agent across demos would be the cross-provider tracking Kiosk
-forbids; the per-app salt makes it impossible by construction). No IPs, no UAs,
-no raw agent id, no per-assistant detail.
-
-**Demonstrate before real traffic.** `rake demo:telemetry` (in getgrocery)
-seeds simulated events and prints both aggregates — the exact JSON the endpoint
-and landing tile return. It also runs in CI against the job's throwaway
-database, so seeding the SHARED store is deliberate rather than incidental: with
-`KIOSK_TELEMETRY_DB_URL` set the task ABORTS unless you also pass
-`SEED_SHARED=1` (K-620). To seed the hosted store:
-
-    KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:<pw>@127.0.0.1/kiosk_demo_telemetry \
-      SEED_SHARED=1 bundle exec rake demo:telemetry
-
-Those rows are SYNTHETIC and indistinguishable from real activity in the
-aggregate — seed once before launch, not after there is traffic to report.
-
-Housekeeping of this store is manual: the aggregates look back 10 min / 1 h /
-all-time-registered, so rows past the registered-count horizon can be trimmed to
-reclaim disk. Nothing does it for you — `kiosk_telemetry` is granted only SELECT
-and INSERT, so a trim is a DB-owner/superuser `DELETE`, run by hand.

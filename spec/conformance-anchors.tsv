@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1666 anchors.
+# 1665 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -406,7 +406,6 @@ kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :rls do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :shop do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task isolation: :setup do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task redteam: :setup do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	  task telemetry: :environment do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	def start_stripe_mock
 kiosk-demo-getgrocery/lib/tasks/demo.rake	psp_reference expected /^pi_/
 kiosk-demo-getgrocery/lib/tasks/demo.rake	task :claim do

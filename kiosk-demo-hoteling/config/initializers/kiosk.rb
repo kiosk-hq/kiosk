@@ -310,17 +310,3 @@ AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
 # enum from a VOCABULARY table, never from a column on an INVENTORY table.
 NEIGHBOURHOOD_POOL = %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
                         Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı].freeze
-
-# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
-# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
-# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
-if ENV["KIOSK_TELEMETRY"] == "1"
-  HOTELING_VERB_MAP = {
-    "reserve_room"    => "reserved",
-    "confirm_booking" => "booked",
-    "payment_setup"   => "ran",
-  }.freeze
-  Rails.application.config.middleware.use(
-    DemoTelemetryMiddleware, verb_map: HOTELING_VERB_MAP,
-  )
-end

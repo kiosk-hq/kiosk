@@ -33,8 +33,8 @@ class ListsController < ApplicationController
     @lists = user_signed_in? ? kiosk_as_human { List.reachable_rows } : nil
     @housemate_board = housemate_board unless user_signed_in?
 
-    # App-wide live DOMAIN activity summary (real counts, not telemetry, and
-    # NOT principal-scoped — this is the public "what's happening here" tile a
+    # App-wide live DOMAIN activity summary (real counts, and NOT
+    # principal-scoped — this is the public "what's happening here" tile a
     # visitor lands on). Cheap Model.count reads on tudu's OWN tables.
     @activity = {
       lists:    List.count,

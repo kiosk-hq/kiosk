@@ -231,8 +231,8 @@ MOUNTED, and this operator's own VERBS are one explicit route each. Both live in
 `config/routes/kiosk.rb`, which `config/routes.rb` reaches with Rails' own
 `draw(:kiosk)`. That is the whole file below, verbatim and in order — only its
 comments are trimmed. This demo's own non-Kiosk routes (`devise_for`, `root`,
-`/kyc/callback`, `/admin/orders`, the `/payment/return` landing page and a
-telemetry route drawn only under `KIOSK_TELEMETRY=1`) stay in `config/routes.rb`
+`/kyc/callback`, `/admin/orders` and the `/payment/return` landing page) stay
+in `config/routes.rb`
 and are not part of it.
 
 <!-- derived: snippet | from: config/routes/kiosk.rb | abridged: the route statements only; the file's own comments are out -->

@@ -40,11 +40,4 @@ Rails.application.routes.draw do
   # under his account. A viewer SEES the collaboration land without a second
   # identity store. Shares ListsController#shared with the home-page board.
   get "/shared", to: "lists#shared"
-
-  # ─── Live-activity telemetry aggregate (opt-in) ─────────────────
-  # Privacy-safe counts for the demo page + the kiosk.tech landing tile.
-  # Drawn ONLY when KIOSK_TELEMETRY=1 so it is a no-op in CI/local flows.
-  if ENV["KIOSK_TELEMETRY"] == "1"
-    get "/demo/activity.json", to: "demo_activity#show", defaults: { format: :json }
-  end
 end

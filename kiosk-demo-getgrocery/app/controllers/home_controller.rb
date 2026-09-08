@@ -6,9 +6,8 @@
 class HomeController < ApplicationController
   def index
     # Live DOMAIN activity counters, rendered server-side on page load (a refresh
-    # is enough — no JS polling). These read getgrocery's OWN tables, not
-    # telemetry. Catalog = in-stock products (out-of-stock is hidden from the
-    # catalog query).
+    # is enough — no JS polling). These read getgrocery's OWN tables. Catalog =
+    # in-stock products (out-of-stock is hidden from the catalog query).
     #
     # THE DELIVERY COUNTER READS THE CONSTANT, NOT A LITERAL, AND THAT IS THE
     # WHOLE OF ITS HISTORY. It used to count `status: "scheduled"` — a value the

@@ -446,16 +446,3 @@ Kiosk.configure do |c|
   # this default is in use with PoW on, but a warning nobody reads is not the
   # mitigation; this comment and the README are.
 end
-
-# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
-# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
-# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
-if ENV["KIOSK_TELEMETRY"] == "1"
-  ATABLEFOR_VERB_MAP = {
-    "book_table"     => "booked",
-    "cancel_booking" => "cancelled",
-  }.freeze
-  Rails.application.config.middleware.use(
-    DemoTelemetryMiddleware, verb_map: ATABLEFOR_VERB_MAP,
-  )
-end

@@ -10,7 +10,7 @@
 class HomeController < ApplicationController
   def index
     # Cheap domain counts, rendered server-side on page load (a refresh is
-    # enough — no JS polling). These read hoteling's OWN tables, not telemetry.
+    # enough — no JS polling). These read hoteling's OWN tables.
     @rooms_booked   = Booking.where(status: "confirmed").count
     # Nights reserved: Postgres date subtraction yields integer days per stay.
     @nights_reserved = Booking.where(status: "confirmed")

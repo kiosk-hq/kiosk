@@ -141,35 +141,6 @@ namespace :demo do
     sh "ruby #{spec}"
   end
 
-  desc <<~DESC
-    Spec for the telemetry REQUEST path — the Rack middleware and the
-    /demo/activity.json endpoint the kiosk.tech landing tile fetches.
-    Complements demo:telemetry, which gates the store round-trip only.
-
-    Three parts, cheapest first:
-      1. spec/telemetry_middleware_spec.rb — DB-free, no boot. The core
-         regression (a telemetry failure must never re-dispatch the request),
-         plus the recording rules: the four-path filter, 2xx-only, the per-app
-         verb_map, the register body-buffering, the agent refs.
-      2/3. spec/demo_activity_spec.rb under a real boot, ONCE WITH
-         KIOSK_TELEMETRY=1 and once without — the route is drawn and the
-         middleware inserted at boot time, so "present" and "absent" are two
-         processes. Needs the demo database (demo:setup); no server, no port.
-  DESC
-  task :telemetry_spec do
-    mw   = File.expand_path("../../spec/telemetry_middleware_spec.rb", __dir__)
-    ctrl = File.expand_path("../../spec/demo_activity_spec.rb", __dir__)
-
-    puts "\n── DemoTelemetryMiddleware spec (no DB, no boot) ──"
-    sh "ruby #{mw}"
-
-    puts "\n── GET /demo/activity.json — telemetry ON ──"
-    sh({ "KIOSK_TELEMETRY" => "1" }, "bundle exec rails runner #{ctrl}")
-
-    puts "\n── GET /demo/activity.json — telemetry OFF (404 by absence) ──"
-    sh({ "KIOSK_TELEMETRY" => nil }, "bundle exec rails runner #{ctrl}")
-  end
-
   desc "Boot the server, run script/getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."
   task :shop do
     require "resolv"
@@ -1749,67 +1720,6 @@ namespace :demo do
   # ── end demo:rls ──────────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:telemetry ─────────────────────────────────────────────────────────
-  desc <<~DESC
-    Live-activity telemetry demo. Seeds simulated events into the
-    (shared) telemetry store and prints the privacy-safe aggregate — the JSON
-    the /demo/activity.json endpoint and the kiosk.tech landing tile return,
-    BEFORE any real deploy traffic. Sets KIOSK_TELEMETRY=1 for this process.
-
-      rake demo:telemetry            # 40 events / 8 agents, then print aggregate
-      EVENTS=100 AGENTS=20 rake demo:telemetry
-
-    No server boot; talks to the telemetry store directly (the demo's own DB
-    locally, or KIOSK_TELEMETRY_DB_URL if the shared hosted DB is set — the
-    latter needs SEED_SHARED=1, see the guard below).
-
-      KIOSK_TELEMETRY_DB_URL=… SEED_SHARED=1 rake demo:telemetry   # hosted tile
-  DESC
-  task telemetry: :environment do
-    # Write-target guard. This task WRITES synthetic rows, and which store
-    # it writes them into is decided by an environment variable: unset ⇒ this
-    # demo's own database (a throwaway, which is what CI has); set ⇒ the SHARED
-    # hosted store the public kiosk.tech landing tile reads, where 40 fabricated
-    # events would surface as "live activity". The task is safe in CI today only
-    # because that variable happens to be unset — one workflow edit away from not
-    # being safe. So refuse the shared target unless an operator asks for it by
-    # name; the pre-launch seeding in deploy/README.md passes SEED_SHARED=1.
-    if !ENV["KIOSK_TELEMETRY_DB_URL"].to_s.empty? && ENV["SEED_SHARED"] != "1"
-      abort <<~MSG
-        demo:telemetry refuses to seed SYNTHETIC events into the SHARED telemetry
-        store: KIOSK_TELEMETRY_DB_URL is set, and that store feeds the public
-        kiosk.tech landing tile.
-          SEED_SHARED=1 rake demo:telemetry   # seed the shared store deliberately
-          unset KIOSK_TELEMETRY_DB_URL        # seed this demo's own database
-      MSG
-    end
-
-    ENV["KIOSK_TELEMETRY"] ||= "1"
-
-    events = (ENV["EVENTS"] || 40).to_i
-    agents = (ENV["AGENTS"] || 8).to_i
-
-    puts "\n── Seeding #{events} simulated events across #{agents} agents (app=#{DemoTelemetry.app_name}) ──"
-    written = DemoTelemetry.simulate!(events: events, agents: agents)
-    puts "  wrote #{written} rows into #{DemoTelemetry::TABLE}"
-
-    puts "\n── Aggregate (scope=this app) — what GET /demo/activity.json?scope=app returns ──"
-    puts JSON.pretty_generate(DemoTelemetry.aggregates(app: DemoTelemetry.app_name))
-
-    puts "\n── Aggregate (scope=all) — what the kiosk.tech landing tile fetches ──"
-    puts JSON.pretty_generate(DemoTelemetry.aggregates(app: nil))
-
-    agg = DemoTelemetry.aggregates(app: DemoTelemetry.app_name)
-    if agg[:assistants_active_10m].to_i > 0 && agg[:registered_total].to_i > 0
-      puts "\n  OK  telemetry aggregate populated (active #{agg[:assistants_active_10m]}, registered #{agg[:registered_total]})."
-    else
-      puts "\n  FAIL  telemetry aggregate empty after seeding — #{agg.inspect}"
-      exit 1
-    end
-  end
-  # ── end demo:telemetry ─────────────────────────────────────────────────────
-end
 
 namespace :demo do
   # ── demo:agecheck ──────────────────────────────────────────────────────────

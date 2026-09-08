@@ -38,7 +38,7 @@ class Kiosk::AppointmentsController < ApplicationController
                                             "an instant that has passed is refused 400. Carry an offset " \
                                             "(\"…Z\", \"…+02:00\"); without one it is read in the salon's own clock." },
                  service_id: { type: "integer",
-                               description: "Optional service id from availability/service_menu; its EUR price is captured." },
+                               description: "Service id from availability/service_menu; its EUR price is captured." },
                },
                required: ["salon_id", "slot"]
   # The four price fields travel together or not at all: a bare salon booking

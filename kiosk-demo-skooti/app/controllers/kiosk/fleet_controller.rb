@@ -23,11 +23,16 @@ class Kiosk::FleetController < ActionController::API
   # ── scooters_available — the public fleet catalogue. No per-principal
   # scoping: every authenticated agent may browse what is available.
   kind :query
+  # The unit lives on `price_per_min_cents`, the currency on `currency`, and
+  # «takes no parameters» is the empty closed `input_schema` below — so none of
+  # the three is restated here: a description carries semantics, the schema
+  # carries shape. What stays is semantics: a cart is signed at the total the
+  # OPERATOR quotes, not at a per-minute figure the assistant multiplies out.
   description "Browse the available fleet — each row carries the vehicle's name and pickup dock/location " \
               "so you can pick one by name or nearest dock. needs_licence flags the KYC-gated combustion " \
               "motorcycle (rent it via rent_motorcycle); licence-free scooters use start_rental. " \
-              "price_per_min_cents is EUR cents per minute — carts must be signed in eur at the operator-quoted total. " \
-              "Takes no parameters and returns the whole available fleet; reference a " \
+              "A cart is signed at the total the operator quotes, never at a per-minute rate " \
+              "multiplied out by the caller. Reference a " \
               "vehicle by its `code` (e.g. \"SK-001\") when reserving."
   # The empty closed object publishes "takes no arguments" as a fact rather than
   # as an absence the assistant has to interpret.

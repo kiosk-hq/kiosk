@@ -34,7 +34,7 @@ class Kiosk::BoardController < ApplicationController
   kind :query
   reach :published
   description "Browse the public classifieds board across ALL sellers — this is the open board, not " \
-              "the caller's own corner of it. Every filter is optional and they AND together, so an " \
+              "the caller's own corner of it. Filters AND together, so an " \
               "EMPTY array means nothing on the board matched. Sellers are named by an opaque, " \
               "stable pseudonym, never by an " \
               "address — this operator brokers no messages, so the only way to reach a seller is the " \

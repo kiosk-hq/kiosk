@@ -26,10 +26,18 @@ universal agent skill is `skill.md` on the same site.
 4. **Merge gate.** Tests covering the change must be green before merge; for
    `reference` that means the touched gem's own suite + `e2e/run.sh`.
 5. **Changelog rule.** Significant changes — anything altering behavior, spec
-   text, skill instructions, or claims — get ONE line in the touched repo's
-   `CHANGELOG.md`: 1–2 sentences stating the essence and intent of the
-   change, not its content. Tests-only changes, refactors, typos do not
-   qualify.
+   text, skill instructions, or claims — get an entry in the touched repo's
+   `CHANGELOG.md` stating the essence and intent of the change, not its
+   content. Tests-only changes, refactors, typos do not qualify.
+   **Two files, two registers, and the difference was measured — do not
+   collapse them.** A per-gem `CHANGELOG.md` ships inside the package and its
+   reader meets it with no repository around them, so the concise 1–2 sentence
+   form is what those release notes are written TO. A repository-root
+   `CHANGELOG.md` is a dated engineering journal: one entry per significant
+   change, written for someone who was not there, as long as that takes. The
+   umbrella constitution carries the derivation (K-1342 measured that only 4%
+   of this repo's root entries ever met the one-line form; K-1382 re-derived
+   the per-gem corpus) — re-measure rather than quoting a number from it.
 
 ## Repo specifics
 

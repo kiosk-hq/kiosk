@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# NO ARCHAEOLOGY IN A SHIPPED GEM (T-186).
+# NO ARCHAEOLOGY IN A PUBLISHED ARTEFACT (T-186, K-1435).
 #
 # Phil, 2026-09-07: «Я ж просил - убери из демок ВСЮ археологию.» The gems in
 # this repository are published. A stranger who adds one to their Gemfile and
@@ -11,16 +11,26 @@
 # a private repository. The constitution's rule is «a public artefact describes
 # what IS»; a citation to a document the reader cannot open is the opposite.
 #
-# ── WHY THIS IS WIDER THAN THE DEMO RULE IT EXTENDS ──────────────────────────
+# ── COMMENTS ARE IN SCOPE, IN THE GEMS AND IN THE DEMOS ──────────────────────
 #
-# `bin/check-demo-copies` bans a ledger id in the demo tree's CODE TOKENS and
-# deliberately leaves demo COMMENTS alone, on the argument that a comment is a
-# note to the next maintainer while a `desc`, a banner or an `abort` reaches an
-# operator's terminal. That argument does not carry over to a shipped gem. The
-# reader of `kiosk-server/lib` IS the adopter: comments are the surface they
-# read, and the measurement that opened this rule was 576 ledger ids across the
-# fourteen gems' `lib/`, 473 of them in `kiosk-server` and effectively all of
-# them in comments. So HERE the ban covers comment and code alike.
+# The reader of `kiosk-server/lib` IS the adopter: comments are the surface
+# they read, and the measurement that opened this rule was 576 ledger ids
+# across the fourteen gems' `lib/`, 473 of them in `kiosk-server` and
+# effectively all of them in comments.
+#
+# THE DEMO TREE IS HELD ON THE SAME TERMS, and the narrower rule it used to be
+# held on is why this file says so at length. `bin/check-demo-copies` bans a
+# ledger id in the demo tree's CODE TOKENS only — a `desc`, a banner, an
+# `abort`, an assertion label — on the argument that those reach an operator's
+# terminal while a comment is a note to the next maintainer. Phil's instruction
+# is «убери из демок ВСЮ археологию», and the demos are the first thing an
+# operator opens: somebody evaluating Kiosk reads `kiosk-demo-hoteling/app` to
+# find out what adopting it looks like, and a comment there is read exactly as
+# a comment in `kiosk-server/lib` is. The exempt half was measured regrowing —
+# 24 comment-carried occurrences of 9 ids, then 41 of 17 one day later, all of
+# it by ordinary fix waves rather than by anyone deciding to. So the ban covers
+# comment and code alike, in both trees, and `bin/check-demo-copies` keeps its
+# code-token rule as the narrower statement about terminals.
 #
 # That also RETIRES the sentence the demo rule used to carry — «the standing
 # decision for this repository is that inline K-/ADR-/T- refs in its code,
@@ -42,6 +52,20 @@
 #   * `README.md`   — listed in every gemspec's `spec.files`.
 #   * `<gem>.gemspec` — RubyGems renders its description on the gem's page.
 #
+# And every `kiosk-demo-*` directory, where the receiver is an operator reading
+# a worked example rather than an adopter installing a package, so the file set
+# is what somebody browsing the app actually opens:
+#
+#   * `app/**`, `lib/**`, `script/**`, `config/**`, `db/**` — the application,
+#     its tasks, its initializers and its migrations.
+#   * `Rakefile`, `config.ru`, `README.md`, `before-after.md` — the root files
+#     a reader meets first. `before-after.md` is the demo's published
+#     narrative and carries derived transcripts of the code above.
+#
+#   Restricted to TEXT extensions (.rb .rake .ru .erb .yml .sql .md .json .tt
+#   .txt .html) because `config/` also holds credentials keys and `.enc`
+#   blobs, and a byte-scan of those answers a question nobody asked.
+#
 # ── WHAT IS EXEMPT, DECLARED WITH ITS REASON ─────────────────────────────────
 #
 #   * `bin/`, `CHANGELOG.md`, `CLAUDE.md` — Phil's standing exemption. The
@@ -54,8 +78,10 @@
 #     which is a rule these directories have to be able to obey.
 #   * `Gemfile`, `Rakefile`, `.rubocop.yml` and the rest of a gem's root —
 #     build and dev tooling, not packaged, never read by an adopter.
-#   * `kiosk-demo-*` — held by `bin/check-demo-copies`, on the narrower
-#     code-token rule described above.
+#   * `kiosk-demo-*/bin/` — generator binstubs, and Phil's exemption again.
+#   * a demo's `Gemfile`, `Gemfile.lock`, `mise.toml`, `public/`, `log/`,
+#     `tmp/`, `storage/` — build output and runtime state, not something a
+#     reader browses for the example.
 #   * A line carrying a live `TODO` or `FIXME` marker, anywhere in scope. The
 #     constitution requires that marker to name a `K-`/`T-` row so it stays
 #     actionable, so the ban is on the citation, not on the marker that needs
@@ -64,8 +90,22 @@
 #
 # ── WHAT IS ASSERTED ─────────────────────────────────────────────────────────
 #
-#   R1  no ledger id — /\b[KT]-\d{3,4}\b/ — anywhere in the scope.
-#   R2  no ADR reference — /\bADR-\d{4}\b/ — anywhere in the scope.
+#   R1  no ledger id — /\b[KT]-\d{3,4}\b/ — anywhere in either scope.
+#   R2  no ADR reference — /\bADR-\d{4}\b/ — anywhere in either scope.
+#   R3  no Cyrillic — /[Ѐ-ӿ]/ — anywhere in either scope. This
+#       repository's working language is Russian and its published language is
+#       English, and twelve lines of quoted Russian shipped inside five
+#       `kiosk-server/lib` files for months. It is the same unresolvable-reader
+#       defect as a ledger id, one layer worse: a reader cannot even tell
+#       whether the sentence binds them. Guillemets, em dashes and § are Latin
+#       and stay; only the Cyrillic block is banned, so the rule cannot argue
+#       with the house punctuation.
+#   R4  no maintainer named in prose — /\bPhil\b/ — in the GEM scope only.
+#       «Phil accepted this control's weakness openly» tells an adopter to trust
+#       a person they have never met instead of stating the property. Say what
+#       the code does and why; the name belongs in `spec.authors` and in git.
+#       DEMO-EXEMPT because `kiosk-demo-philslist` is an app called Phil's List
+#       and the word is its subject matter, not an attribution.
 #
 # Both rules read every file as lines, so `.md`, `.json`, `.erb` and `.tt` are
 # covered as well as Ruby. For a RUBY file the hit is additionally CLASSIFIED
@@ -105,11 +145,27 @@ REPO = File.expand_path("..", __dir__)
 # there is a single thing to be wrong about rather than two that rot apart.
 LEDGER_ID_RE = /\b[KT]-\d{3,4}\b/
 ADR_RE       = /\bADR-\d{4}\b/
+CYRILLIC_RE  = /[Ѐ-ӿ]/
+MAINTAINER_RE = /\bPhil\b/
 
+# `scopes` is which published surface each rule speaks for. R4 is gem-only for
+# the reason given in the header: one demo is NAMED after the maintainer.
 RULES = [
-  { id: "R1", re: LEDGER_ID_RE, what: "a ledger id",       none: "no ledger id" },
-  { id: "R2", re: ADR_RE,       what: "an ADR reference", none: "no ADR reference" }
+  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo], what: "a ledger id",
+    none: "no ledger id" },
+  { id: "R2", re: ADR_RE,        scopes: %i[gem demo], what: "an ADR reference",
+    none: "no ADR reference" },
+  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo], what: "Cyrillic prose",
+    none: "no Cyrillic" },
+  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem],      what: "the maintainer named in prose",
+    none: "no maintainer named in prose" }
 ].freeze
+
+def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
+
+# `spec.authors` is where a gem states its author, and RubyGems reads it. It is
+# the one place R4 does not reach; every other mention is prose.
+AUTHORS_RE = /^\s*spec\.authors\s*=/
 
 # A live TODO/FIXME is REQUIRED to carry its id — see the exemption list above.
 TODO_RE = /\b(?:TODO|FIXME)\b/
@@ -140,8 +196,26 @@ def shipped_files(gem_dir)
     .sort
 end
 
+def demo_dirs
+  Dir.glob(File.join(REPO, "kiosk-demo-*")).select { |d| File.directory?(d) }.sort
+end
+
+# Text only: `config/` also holds `credentials.yml.enc` and `*.key`, and a
+# byte-scan of those answers a question nobody asked.
+DEMO_ROOTS = %w[app lib script config db].freeze
+DEMO_TOP   = %w[Rakefile config.ru README.md before-after.md].freeze
+DEMO_EXTS  = %w[.rb .rake .ru .erb .yml .sql .md .json .tt .txt .html].freeze
+
+def demo_files(demo_dir)
+  (DEMO_ROOTS.flat_map { |r| Dir.glob(File.join(demo_dir, r, "**", "*")) }
+     .select { |p| DEMO_EXTS.include?(File.extname(p)) } +
+   DEMO_TOP.map { |n| File.join(demo_dir, n) })
+    .select { |p| File.file?(p) }
+    .sort
+end
+
 def ruby_file?(path)
-  path.end_with?(".rb", ".rake", ".ru", ".gemspec")
+  path.end_with?(".rb", ".rake", ".ru", ".gemspec") || File.basename(path) == "Rakefile"
 end
 
 # ── the scan ────────────────────────────────────────────────────────────────
@@ -151,9 +225,9 @@ Hit = Struct.new(:path, :line, :rule, :where, :text)
 # Every rule violation in one file, with a Ruby file's hits classified as
 # :comment or :code. Returns [hits, lexed] — `lexed` is false when the file is
 # Ruby, carries a hit, and Ripper could not read it.
-def scan(path)
+def scan(path, rules = RULES)
   src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
-  return [[], true] unless RULES.any? { |r| src.match?(r[:re]) }
+  return [[], true] unless rules.any? { |r| src.match?(r[:re]) }
 
   code_lines  = {}
   token_lines = {}
@@ -171,7 +245,7 @@ def scan(path)
       tokens.each do |(pos, type, tok, _state)|
         token_lines[pos[0]] = true
         next if type == :on_comment
-        next unless RULES.any? { |r| tok.to_s.match?(r[:re]) }
+        next unless rules.any? { |r| tok.to_s.match?(r[:re]) }
 
         code_lines[pos[0]] = true
       end
@@ -182,8 +256,10 @@ def scan(path)
   src.each_line.with_index(1) do |line, lineno|
     next if line.match?(TODO_RE)
 
-    RULES.each do |rule|
+    rules.each do |rule|
       next unless line.match?(rule[:re])
+      # The one place a gem states its author, and RubyGems reads it.
+      next if rule[:id] == "R4" && line.match?(AUTHORS_RE)
 
       # A citation line the lexer never reached cannot be classified, and
       # defaulting it to :comment would be a guess dressed as an answer.
@@ -200,66 +276,96 @@ def scan(path)
   [hits, lexed]
 end
 
+# Two axes: WHERE the hit is (what the reader is doing when they meet it) and
+# WHAT the rule bans (what to do about it). A citation and a Russian sentence
+# are both unreadable to the same stranger and neither has the same remedy.
+WHERE = {
+  code:    "in code this RUNS — it reaches a reader's screen",
+  comment: "in a comment a reader READS",
+  text:    "in prose a reader READS"
+}.freeze
+
 REMEDY = {
-  code: "in code this gem RUNS — it reaches an adopter's screen. Say what the control IS, " \
-        "not which row filed it",
-  comment: "in a comment an adopter READS — they cannot open the ledger it names. Drop the " \
-           "citation and keep the sentence that explains the code",
-  text: "in prose an adopter READS — they cannot open the ledger it names. Drop the citation " \
-        "and keep the sentence"
+  "R1" => "they cannot open the ledger it names. Drop the citation and keep the sentence that " \
+          "explains the code",
+  "R2" => "the ADRs are in a private repository. Drop the reference and state the rule it " \
+          "decided",
+  "R3" => "this repository publishes in English. Say the same thing in English, as a statement " \
+          "about the code rather than as a quotation",
+  "R4" => "naming a maintainer asks a stranger to trust a person instead of reading a property. " \
+          "State the property"
+}.freeze
+
+SCOPES = {
+  gem: { label: "a shipped gem", dirs: -> { shipped_gems }, files: ->(d) { shipped_files(d) },
+         per: "lib/**, app/**, README.md, <gem>.gemspec" },
+  demo: { label: "a demo", dirs: -> { demo_dirs }, files: ->(d) { demo_files(d) },
+          per: "app/**, lib/**, script/**, config/**, db/** (text extensions), " \
+               "Rakefile, config.ru, README.md, before-after.md" }
 }.freeze
 
 def run_check
-  gems = shipped_gems
-  files = gems.flat_map { |g| shipped_files(g) }
-  ruby = files.count { |p| ruby_file?(p) }
-
   puts "SCOPE (derived from the directory layout, not listed)"
-  puts "  gems           : #{gems.size} — #{gems.map { |g| File.basename(g) }.join(', ')}"
-  puts "  files          : #{files.size} (#{ruby} Ruby, #{files.size - ruby} other)"
-  puts "  per gem        : lib/**, app/**, README.md, <gem>.gemspec"
+  scoped = SCOPES.to_h do |name, spec|
+    dirs  = spec[:dirs].call
+    files = dirs.flat_map { |d| spec[:files].call(d) }
+    ruby  = files.count { |p| ruby_file?(p) }
+    puts "  #{name}s".ljust(17) + ": #{dirs.size} — #{dirs.map { |d| File.basename(d) }.join(', ')}"
+    puts "    files        : #{files.size} (#{ruby} Ruby, #{files.size - ruby} other)"
+    puts "    per directory: #{spec[:per]}"
+    [name, files]
+  end
   puts "  exempt         : bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption); " \
        "spec/, test/ (developer surfaces);"
-  puts "                   Gemfile/Rakefile and the rest of a gem root (not packaged); " \
-       "kiosk-demo-* (bin/check-demo-copies);"
+  puts "                   Gemfile/Gemfile.lock/mise.toml and the rest of a directory root " \
+       "(not packaged, not browsed);"
+  puts "                   a demo's public/, log/, tmp/, storage/ and its non-text config " \
+       "(credentials keys, *.enc);"
   puts "                   any line carrying a live TODO/FIXME (the constitution requires " \
-       "that marker to cite a row)"
+       "that marker to cite a row);"
+  puts "                   `spec.authors` for R4 only"
   puts
 
-  if gems.empty? || files.empty?
-    puts "FAIL: the scope is EMPTY — a ban over no files reports the same clean zero as an " \
+  if scoped.any? { |_, files| files.empty? }
+    puts "FAIL: a scope is EMPTY — a ban over no files reports the same clean zero as an " \
          "obeyed one, forever."
     return 1
   end
 
-  hits = []
-  unlexed = []
-  files.each do |path|
-    file_hits, lexed = scan(path)
-    hits.concat(file_hits)
-    unlexed << path.delete_prefix("#{REPO}/") unless lexed
-  end
-
   failed = false
-
-  unless unlexed.empty?
-    puts "FAIL: Ripper returned no tokens for #{unlexed.size} Ruby file(s) that carry a citation, " \
-         "so this guard could not tell a comment from a string in them and did not classify them:"
-    unlexed.each { |rel| puts "  #{rel}" }
-    puts "  A file this rule cannot read must not pass silently."
-    failed = true
-  end
-
-  RULES.each do |rule|
-    mine = hits.select { |h| h.rule[:id] == rule[:id] }
-    if mine.empty?
-      puts "#{rule[:id]}. #{rule[:none]} in a shipped gem — OK (#{files.size} files)"
-      next
+  scoped.each do |scope, files|
+    rules = rules_for(scope)
+    hits = []
+    unlexed = []
+    files.each do |path|
+      file_hits, lexed = scan(path, rules)
+      hits.concat(file_hits)
+      unlexed << path.delete_prefix("#{REPO}/") unless lexed
     end
-    failed = true
-    puts "#{rule[:id]}. #{rule[:what]} in a shipped gem — #{mine.size} occurrence(s):"
-    mine.each do |h|
-      puts "  FAIL #{h.path}:#{h.line} — #{rule[:what]} #{REMEDY[h.where]}: #{h.text}"
+
+    unless unlexed.empty?
+      puts "FAIL: Ripper returned no tokens for #{unlexed.size} Ruby file(s) that carry a " \
+           "citation, so this guard could not tell a comment from a string in them and did not " \
+           "classify them:"
+      unlexed.each { |rel| puts "  #{rel}" }
+      puts "  A file this rule cannot read must not pass silently."
+      failed = true
+    end
+
+    rules.each do |rule|
+      mine = hits.select { |h| h.rule[:id] == rule[:id] }
+      if mine.empty?
+        puts "#{rule[:id]}/#{scope}. #{rule[:none]} in #{SCOPES[scope][:label]} — OK " \
+             "(#{files.size} files)"
+        next
+      end
+      failed = true
+      puts "#{rule[:id]}/#{scope}. #{rule[:what]} in #{SCOPES[scope][:label]} — " \
+           "#{mine.size} occurrence(s):"
+      mine.each do |h|
+        puts "  FAIL #{h.path}:#{h.line} — #{rule[:what]} #{WHERE[h.where]} — " \
+             "#{REMEDY[rule[:id]]}: #{h.text}"
+      end
     end
   end
 
@@ -306,7 +412,15 @@ def self_test
       ["R1 in an ERB template comment",
        "h.html.erb", "<%# The access line is a CONSENT field (K-072). %>\n", :text],
       ["R1 in a generator template",
-       "i.rb.tt", "# Emitted into the host app (K-830).\n", :text]
+       "i.rb.tt", "# Emitted into the host app (K-830).\n", :text],
+      ["R3 quoted Russian in a Ruby comment",
+       "j.rb", "# The trade-off, weighed: «пусть будет 1m».\ndef f = 1\n", :comment],
+      ["R3 Cyrillic in a Ruby string (code)",
+       "k.rb", "MSG = \"это паблик\"\n", :code],
+      ["R3 Cyrillic in a Markdown README",
+       "README.md", "Убери из демок всю археологию.\n", :text],
+      ["R4 the maintainer named in a Ruby comment",
+       "l.rb", "# Phil accepted this control's weakness openly.\ndef f = 1\n", :comment]
     ].each do |name, basename, body, expected_where|
       _, path = plant.call(name, basename, body)
       hits, lexed = scan(path)
@@ -335,6 +449,26 @@ def self_test
 
     _, short = plant.call("short", "short.rb", "# K-12 and T-9 and ADR-12 are not ledger ids.\n")
     check.call("does NOT flag too-few-digit lookalikes", scan(short).first.empty?)
+
+    _, authors = plant.call("authors", "m.gemspec", "  spec.authors       = [\"Phil Pirozhkov\"]\n")
+    check.call("does NOT flag R4 on the `spec.authors` line a gemspec is REQUIRED to carry",
+               scan(authors).first.empty?)
+
+    _, punct = plant.call("punct", "n.rb", <<~RUBY)
+      # frozen_string_literal: true
+
+      # The window is said out loud — «08:00–10:00 (Europe/Dublin)» — per §11.6,
+      # and a naïve reader gets the same bytes. ← → ✓ €200.
+      def f = 1
+    RUBY
+    check.call("does NOT flag R3 on guillemets, em dashes, §, arrows or accented Latin",
+               scan(punct).first.empty?)
+
+    _, demo_only = plant.call("demo-only", "o.rb", "# Phil's List is the board this demo serves.\n")
+    check.call("R4 does not apply in the demo scope (one demo is NAMED after the maintainer)",
+               scan(demo_only, rules_for(:demo)).first.empty?)
+    check.call("…and DOES apply in the gem scope",
+               !scan(demo_only, rules_for(:gem)).first.empty?)
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.
@@ -373,8 +507,34 @@ def self_test
     "the scope reaches a gemspec and a README",
     files.any? { |p| p.end_with?(".gemspec") } && files.any? { |p| p.end_with?("/README.md") }
   )
-  check.call("the demo tree is NOT in scope", files.none? { |p| p.include?("/kiosk-demo-") })
+  check.call("the demo tree is NOT in the GEM scope", files.none? { |p| p.include?("/kiosk-demo-") })
   check.call("spec/ is NOT in scope", files.none? { |p| p.include?("/spec/") })
+
+  # ── VACUITY: the same three questions of the demo scope ───────────────────
+  demos      = demo_dirs
+  demo_paths = demos.flat_map { |d| demo_files(d) }
+  demo_ruby  = demo_paths.select { |p| ruby_file?(p) }
+  check.call("the demo scope names at least one demo", !demos.empty?)
+  check.call("the demo scope reads files", !demo_paths.empty?)
+  check.call("the demo scope contains Ruby files to lex", !demo_ruby.empty?)
+  check.call(
+    "Ripper actually lexes them (a sampled demo Ruby file yields tokens)",
+    demo_ruby.take(25).all? { |p| !(Ripper.lex(File.read(p)) || []).empty? }
+  )
+  check.call(
+    "the demo scope reaches an operator-facing surface of every demo",
+    demos.all? { |d| demo_files(d).any? { |p| p.include?("/app/") } }
+  )
+  check.call(
+    "the demo scope reaches the published narrative and the task file",
+    demo_paths.any? { |p| p.end_with?("/before-after.md") } &&
+      demo_paths.any? { |p| p.end_with?("/lib/tasks/demo.rake") }
+  )
+  check.call(
+    "the demo scope skips the non-text config a byte-scan should never read",
+    demo_paths.none? { |p| p.end_with?(".key", ".pem", ".enc") }
+  )
+  check.call("a gem is NOT in the demo scope", demo_paths.none? { |p| p.include?("/kiosk-server/") })
 
   corpus = vacuity_corpus
   check.call("the vacuity corpus is non-empty", !corpus.empty?)

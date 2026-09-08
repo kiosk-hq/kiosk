@@ -20,8 +20,10 @@ module Kiosk
     #
     # The cursor is opaque BY CONTRACT: the assistant never parses it, it only
     # round-trips it. A handler is free to encode an offset, a keyset token, or
-    # anything else behind it. {Cursor} provides a base64 offset helper for the
-    # common case; a handler MAY use its own scheme.
+    # anything else behind it. {Cursor} provides a decimal offset helper for
+    # the common case — the token it emits is the integer in clear, and the
+    # opacity is the client's contract, not a property of the string; a handler
+    # MAY use its own scheme.
     #
     # NEITHER FIELD REACHES THE BODY. The rows ARE the body — a bare JSON
     # array, the same shape every other query answers — and the two facts about

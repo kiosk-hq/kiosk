@@ -1864,7 +1864,7 @@ def derived_window_guards(sources)
    "(day #{day}, window #{slot_mod}.#{window} vs #{slot_mod}.#{clock})"]
 end
 
-# R16 -- every worked write verb REFUSES a delivery day that has passed and
+# R16 -- every worked verb REFUSES a delivery day that has passed and
 # RE-CHECKS the window it is about to book, exactly as the origin does
 # (K-1366).
 #
@@ -1884,6 +1884,12 @@ end
 # midnight, which is why the origin states it as a handler refusal and not as an
 # `enum`. TOTAL_GUARD is the nearest neighbour (a computed value no declared
 # property can carry) and its subject is the cart sum.
+#
+# THE SUBJECT SET IS NOT METHOD-SHAPED, so this rule names no HTTP verb for it:
+# the subjects are whichever verbs take a stale-window refusal on the origin,
+# and on getgrocery that is two actions AND the `get`-routed `delivery_slots`
+# read, which hides a window whose start has passed. Calling them «write verbs»
+# would be a sentence about this rule that the origin's route table refutes.
 def rule_past_window(page, sources)
   chain, provenance, why = derived_window_guards(sources)
   return vacuous!("PAST_WINDOW", why) if chain.nil?
@@ -1931,7 +1937,7 @@ def rule_past_window(page, sources)
 
   check("PAST_WINDOW",
         bad.empty?,
-        "#{subjects.size} worked write verb(s) (#{subjects.keys.sort.join(", ")}) refuse a stale day " \
+        "#{subjects.size} worked verb(s) (#{subjects.keys.sort.join(", ")}) refuse a stale day " \
         "and a stale window (#{derived} refusal(s) derived)",
         bad.empty? ? provenance : bad.join(" | "))
 end

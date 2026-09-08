@@ -247,10 +247,10 @@ of the app bounds the request RATE (K-540).
 
 **Why it came off anyway, measured.** A proof verifies in **4.46 ms** at the
 params the fleet runs. One worker completes a full registration **60 times a
-second** and a plain read **1075 times a second**. The limit that used to run on
-the box was **one request a second**, keyed per-IP across every vhost -- so
-bursting one demo refused the other seven, which is a self-inflicted outage on
-the traffic these demos exist to receive. The app-side half of K-540 is what
+second** and a plain read **1075 times a second**. The snippet as shipped is
+**one request a second** (60 events a minute), keyed per-IP in a single zone
+shared by every vhost -- so bursting one demo refuses the other seven, which is
+a self-inflicted outage on the traffic these demos exist to receive. The app-side half of K-540 is what
 changed the arithmetic: an issued challenge drives at most one verify, and the
 verifier checks cheapest-first and hashes lazily, so a garbage proof costs
 **0.30 ms** -- 0.012 ms if the attacker did not even order the indices --

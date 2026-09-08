@@ -1,0 +1,401 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# NO ARCHAEOLOGY IN A SHIPPED GEM (T-186).
+#
+# Phil, 2026-09-07: «Я ж просил - убери из демок ВСЮ археологию.» The gems in
+# this repository are published. A stranger who adds one to their Gemfile and
+# opens the source meets «the K-1035 class», «the T-090 rule», «ADR-0018» —
+# inside code they are being asked to adopt. NONE of those ids resolves for
+# them, and none ever will: the findings ledger is private and the ADRs live in
+# a private repository. The constitution's rule is «a public artefact describes
+# what IS»; a citation to a document the reader cannot open is the opposite.
+#
+# ── WHY THIS IS WIDER THAN THE DEMO RULE IT EXTENDS ──────────────────────────
+#
+# `bin/check-demo-copies` bans a ledger id in the demo tree's CODE TOKENS and
+# deliberately leaves demo COMMENTS alone, on the argument that a comment is a
+# note to the next maintainer while a `desc`, a banner or an `abort` reaches an
+# operator's terminal. That argument does not carry over to a shipped gem. The
+# reader of `kiosk-server/lib` IS the adopter: comments are the surface they
+# read, and the measurement that opened this rule was 576 ledger ids across the
+# fourteen gems' `lib/`, 473 of them in `kiosk-server` and effectively all of
+# them in comments. So HERE the ban covers comment and code alike.
+#
+# That also RETIRES the sentence the demo rule used to carry — «the standing
+# decision for this repository is that inline K-/ADR-/T- refs in its code,
+# READMEs and CHANGELOGs stay AS-IS, permanently». It was true when written and
+# Phil overruled it. What survives of it is the exemption list below, which is
+# his and is unchanged.
+#
+# ── THE SCOPE, DERIVED RATHER THAN LISTED ────────────────────────────────────
+#
+# Every non-demo `kiosk-*` gem directory in this repository, and inside it the
+# four things a consumer actually receives:
+#
+#   * `lib/**`      — everything, any file type. The install-generator
+#                     templates under `lib/generators/**/templates` are in here
+#                     and are the worst case of all: `kiosk:install` COPIES
+#                     them into a third party's own repository.
+#   * `app/**`      — `kiosk-server` ships `app/views`; two controllers resolve
+#                     their templates from it, so it is packaged, not optional.
+#   * `README.md`   — listed in every gemspec's `spec.files`.
+#   * `<gem>.gemspec` — RubyGems renders its description on the gem's page.
+#
+# ── WHAT IS EXEMPT, DECLARED WITH ITS REASON ─────────────────────────────────
+#
+#   * `bin/`, `CHANGELOG.md`, `CLAUDE.md` — Phil's standing exemption. The
+#     first is maintainer tooling, the second is append-only history that is
+#     SUPPOSED to say what things used to be, the third is a maintainer
+#     document. None of the three is inside the scope globs above; they are
+#     named here so the boundary is a decision rather than an accident.
+#   * `spec/`, `test/` — developer surfaces, absent from every `spec.files`,
+#     and the constitution REQUIRES an inline TODO/FIXME to carry a ledger id,
+#     which is a rule these directories have to be able to obey.
+#   * `Gemfile`, `Rakefile`, `.rubocop.yml` and the rest of a gem's root —
+#     build and dev tooling, not packaged, never read by an adopter.
+#   * `kiosk-demo-*` — held by `bin/check-demo-copies`, on the narrower
+#     code-token rule described above.
+#   * A line carrying a live `TODO` or `FIXME` marker, anywhere in scope. The
+#     constitution requires that marker to name a `K-`/`T-` row so it stays
+#     actionable, so the ban is on the citation, not on the marker that needs
+#     one. Zero such lines exist in scope today; the carve-out is here so that
+#     obeying one rule cannot break the other.
+#
+# ── WHAT IS ASSERTED ─────────────────────────────────────────────────────────
+#
+#   R1  no ledger id — /\b[KT]-\d{3,4}\b/ — anywhere in the scope.
+#   R2  no ADR reference — /\bADR-\d{4}\b/ — anywhere in the scope.
+#
+# Both rules read every file as lines, so `.md`, `.json`, `.erb` and `.tt` are
+# covered as well as Ruby. For a RUBY file the hit is additionally CLASSIFIED
+# by Ripper, because the two halves need different remedies and the message
+# should say which: an id inside a string, a symbol or an identifier reaches a
+# caller's screen and the fix is to say what the control IS, while an id in a
+# comment is prose and the fix is to drop the citation and keep the sentence.
+# `^\s*#` cannot answer that question — a `#` inside a string or a heredoc is
+# not a comment and a trailing comment is not at the start of a line — and both
+# mistakes are silent. A Ruby file this script cannot lex is an ERROR rather
+# than a skip, the same fail-open discipline the other guards here use.
+#
+# ── THE VACUITY ARMS, AND THE POLARITY THEY EXIST FOR ────────────────────────
+#
+# This is a BAN, so «no violations» is the tree being clean rather than the
+# rule being switched off, and the two look identical from outside. Three
+# things are therefore asserted about the MECHANISM instead:
+#
+#   * the scope is non-empty — gems found, files read, Ruby files LEXED. A glob
+#     that stops matching, or a lexer that stops running, prints the same clean
+#     zero as an obeyed ban, forever.
+#   * each pattern still matches the shape people write. Both are re-run over a
+#     corpus that is OUTSIDE this ban and cannot honestly drain: the repository
+#     journal `CHANGELOG.md` (append-only by rule, hundreds of ledger ids and
+#     dozens of ADR references) and `bin/`. If `LEDGER_ID_RE` or `ADR_RE` ever
+#     matches nothing there, the regex has rotted and this guard is holding
+#     nothing — which is exactly how three earlier invariants in this workspace
+#     covered nothing at all for their whole existence.
+#
+# Usage: bin/check-shipped-archaeology [--self-test]
+
+require "ripper"
+
+REPO = File.expand_path("..", __dir__)
+
+# One spelling of each shape, shared by the check and by the vacuity arms, so
+# there is a single thing to be wrong about rather than two that rot apart.
+LEDGER_ID_RE = /\b[KT]-\d{3,4}\b/
+ADR_RE       = /\bADR-\d{4}\b/
+
+RULES = [
+  { id: "R1", re: LEDGER_ID_RE, what: "a ledger id",       none: "no ledger id" },
+  { id: "R2", re: ADR_RE,       what: "an ADR reference", none: "no ADR reference" }
+].freeze
+
+# A live TODO/FIXME is REQUIRED to carry its id — see the exemption list above.
+TODO_RE = /\b(?:TODO|FIXME)\b/
+
+# The corpus the vacuity arms re-run the patterns against: outside the ban,
+# append-only, and Phil-exempt, so it cannot drain for an honest reason.
+def vacuity_corpus
+  ([File.join(REPO, "CHANGELOG.md")] + Dir.glob(File.join(REPO, "bin", "*")))
+    .select { |p| File.file?(p) }
+    .sort
+end
+
+# ── the scope ───────────────────────────────────────────────────────────────
+
+def shipped_gems
+  Dir.glob(File.join(REPO, "kiosk-*"))
+     .select { |d| File.directory?(d) }
+     .reject { |d| File.basename(d).start_with?("kiosk-demo-") }
+     .sort
+end
+
+def shipped_files(gem_dir)
+  name = File.basename(gem_dir)
+  (Dir.glob(File.join(gem_dir, "lib", "**", "*")) +
+   Dir.glob(File.join(gem_dir, "app", "**", "*")) +
+   [File.join(gem_dir, "README.md"), File.join(gem_dir, "#{name}.gemspec")])
+    .select { |p| File.file?(p) }
+    .sort
+end
+
+def ruby_file?(path)
+  path.end_with?(".rb", ".rake", ".ru", ".gemspec")
+end
+
+# ── the scan ────────────────────────────────────────────────────────────────
+
+Hit = Struct.new(:path, :line, :rule, :where, :text)
+
+# Every rule violation in one file, with a Ruby file's hits classified as
+# :comment or :code. Returns [hits, lexed] — `lexed` is false when the file is
+# Ruby, carries a hit, and Ripper could not read it.
+def scan(path)
+  src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+  return [[], true] unless RULES.any? { |r| src.match?(r[:re]) }
+
+  code_lines  = {}
+  token_lines = {}
+  lexed = true
+  if ruby_file?(path)
+    tokens =
+      begin
+        Ripper.lex(src)
+      rescue StandardError
+        nil
+      end
+    if tokens.nil? || tokens.empty?
+      lexed = false
+    else
+      tokens.each do |(pos, type, tok, _state)|
+        token_lines[pos[0]] = true
+        next if type == :on_comment
+        next unless RULES.any? { |r| tok.to_s.match?(r[:re]) }
+
+        code_lines[pos[0]] = true
+      end
+    end
+  end
+
+  hits = []
+  src.each_line.with_index(1) do |line, lineno|
+    next if line.match?(TODO_RE)
+
+    RULES.each do |rule|
+      next unless line.match?(rule[:re])
+
+      # A citation line the lexer never reached cannot be classified, and
+      # defaulting it to :comment would be a guess dressed as an answer.
+      lexed = false if ruby_file?(path) && !token_lines[lineno]
+
+      where =
+        if !ruby_file?(path) then :text
+        elsif code_lines[lineno] then :code
+        else :comment
+        end
+      hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, where, line.strip[0, 100])
+    end
+  end
+  [hits, lexed]
+end
+
+REMEDY = {
+  code: "in code this gem RUNS — it reaches an adopter's screen. Say what the control IS, " \
+        "not which row filed it",
+  comment: "in a comment an adopter READS — they cannot open the ledger it names. Drop the " \
+           "citation and keep the sentence that explains the code",
+  text: "in prose an adopter READS — they cannot open the ledger it names. Drop the citation " \
+        "and keep the sentence"
+}.freeze
+
+def run_check
+  gems = shipped_gems
+  files = gems.flat_map { |g| shipped_files(g) }
+  ruby = files.count { |p| ruby_file?(p) }
+
+  puts "SCOPE (derived from the directory layout, not listed)"
+  puts "  gems           : #{gems.size} — #{gems.map { |g| File.basename(g) }.join(', ')}"
+  puts "  files          : #{files.size} (#{ruby} Ruby, #{files.size - ruby} other)"
+  puts "  per gem        : lib/**, app/**, README.md, <gem>.gemspec"
+  puts "  exempt         : bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption); " \
+       "spec/, test/ (developer surfaces);"
+  puts "                   Gemfile/Rakefile and the rest of a gem root (not packaged); " \
+       "kiosk-demo-* (bin/check-demo-copies);"
+  puts "                   any line carrying a live TODO/FIXME (the constitution requires " \
+       "that marker to cite a row)"
+  puts
+
+  if gems.empty? || files.empty?
+    puts "FAIL: the scope is EMPTY — a ban over no files reports the same clean zero as an " \
+         "obeyed one, forever."
+    return 1
+  end
+
+  hits = []
+  unlexed = []
+  files.each do |path|
+    file_hits, lexed = scan(path)
+    hits.concat(file_hits)
+    unlexed << path.delete_prefix("#{REPO}/") unless lexed
+  end
+
+  failed = false
+
+  unless unlexed.empty?
+    puts "FAIL: Ripper returned no tokens for #{unlexed.size} Ruby file(s) that carry a citation, " \
+         "so this guard could not tell a comment from a string in them and did not classify them:"
+    unlexed.each { |rel| puts "  #{rel}" }
+    puts "  A file this rule cannot read must not pass silently."
+    failed = true
+  end
+
+  RULES.each do |rule|
+    mine = hits.select { |h| h.rule[:id] == rule[:id] }
+    if mine.empty?
+      puts "#{rule[:id]}. #{rule[:none]} in a shipped gem — OK (#{files.size} files)"
+      next
+    end
+    failed = true
+    puts "#{rule[:id]}. #{rule[:what]} in a shipped gem — #{mine.size} occurrence(s):"
+    mine.each do |h|
+      puts "  FAIL #{h.path}:#{h.line} — #{rule[:what]} #{REMEDY[h.where]}: #{h.text}"
+    end
+  end
+
+  failed ? 1 : 0
+end
+
+# ── self-test ───────────────────────────────────────────────────────────────
+
+def self_test
+  require "tmpdir"
+  failures = []
+
+  check = lambda do |name, ok|
+    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
+    failures << name unless ok
+  end
+
+  Dir.mktmpdir("shipped-archaeology-selftest") do |dir|
+    plant = lambda do |name, basename, body|
+      path = File.join(dir, basename)
+      File.write(path, body)
+      [name, path]
+    end
+
+    # ── one planted RED arm per rule, in each place a citation can hide ──────
+    [
+      ["R1 in a Ruby comment",
+       "a.rb", "# frozen_string_literal: true\n\n# The past-slot filter, K-480.\ndef f = 1\n",
+       :comment],
+      ["R1 in a Ruby string (code)",
+       "b.rb", "MSG = \"blocked by K-072\"\n", :code],
+      ["R1 in a Ruby symbol (code)",
+       "c.rb", "SYM = :\"K-1035\"\n", :code],
+      ["R1 in a trailing comment after code",
+       "d.rb", "VALUE = 1 # widened by T-158\n", :comment],
+      ["R2 in a Ruby comment",
+       "e.rb", "# The refusal shape is fixed by ADR-0018.\ndef f = 1\n", :comment],
+      ["R2 in a Ruby string (code)",
+       "f.rb", "MSG = \"see ADR-0007\"\n", :code],
+      ["R1 in a Markdown README",
+       "README.md", "The wire error contract (T-054) is closed.\n", :text],
+      ["R1 in a JSON schema description",
+       "g.json", "{ \"description\": \"the toll, K-512\" }\n", :text],
+      ["R1 in an ERB template comment",
+       "h.html.erb", "<%# The access line is a CONSENT field (K-072). %>\n", :text],
+      ["R1 in a generator template",
+       "i.rb.tt", "# Emitted into the host app (K-830).\n", :text]
+    ].each do |name, basename, body, expected_where|
+      _, path = plant.call(name, basename, body)
+      hits, lexed = scan(path)
+      check.call("detects #{name}", !hits.empty? && lexed)
+      next if hits.empty?
+
+      check.call("…and classifies it as #{expected_where}", hits.first.where == expected_where)
+    end
+
+    # ── the exemption, and the pattern's own boundaries ──────────────────────
+    _, todo = plant.call("todo", "todo.rb", "# TODO(K-1099): widen the filter.\ndef f = 1\n")
+    check.call("does NOT flag a live TODO carrying its required id", scan(todo).first.empty?)
+
+    _, fixme = plant.call("fixme", "fixme.rb", "# FIXME: T-186 — narrow this.\ndef f = 1\n")
+    check.call("does NOT flag a live FIXME carrying its required id", scan(fixme).first.empty?)
+
+    _, clean = plant.call("clean", "clean.rb", <<~RUBY)
+      # frozen_string_literal: true
+
+      # The past-slot filter refuses a booking whose start has gone by. OK-1234
+      # is a fixture id, RFC 8628 is a standard, and CVE-2021-0001 is neither.
+      def f = 1
+    RUBY
+    check.call("does NOT flag OK-1234 / RFC 8628 / CVE-… (no word boundary before K)",
+               scan(clean).first.empty?)
+
+    _, short = plant.call("short", "short.rb", "# K-12 and T-9 and ADR-12 are not ledger ids.\n")
+    check.call("does NOT flag too-few-digit lookalikes", scan(short).first.empty?)
+
+    # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
+    # What silences it is a file it cannot tokenize at all — here, NUL bytes.
+    _, unlexable = plant.call("unlexable", "broken.rb", "\0\0# K-1035\n")
+    unlexable_hits, lexed = scan(unlexable)
+    check.call("a Ruby file carrying a citation that Ripper cannot read is an ERROR, not a skip",
+               !lexed && !unlexable_hits.empty?)
+
+    # …and the same when the lexer reads SOME of the file but never reaches the
+    # citation line, which would otherwise be silently classified :comment.
+    _, truncated = plant.call("truncated", "truncated.rb", "S = \"unterminated\n# K-1035\n")
+    _, part_lexed = scan(truncated)
+    check.call("a citation on a line the lexer never reached is an ERROR too", !part_lexed)
+  end
+
+  # ── VACUITY: the guard must be looking at something real ──────────────────
+  gems  = shipped_gems
+  files = gems.flat_map { |g| shipped_files(g) }
+  ruby  = files.select { |p| ruby_file?(p) }
+  check.call("the shipped-gem scope names at least one gem", !gems.empty?)
+  check.call("the shipped-gem scope reads files", !files.empty?)
+  check.call("the shipped-gem scope contains Ruby files to lex", !ruby.empty?)
+  check.call(
+    "Ripper actually lexes them (a sampled shipped Ruby file yields tokens)",
+    ruby.take(25).all? { |p| !(Ripper.lex(File.read(p)) || []).empty? }
+  )
+  check.call(
+    "the scope reaches kiosk-server/lib",
+    files.any? { |p| p.include?("/kiosk-server/lib/") }
+  )
+  check.call(
+    "the scope reaches an install-generator template",
+    files.any? { |p| p.include?("/lib/generators/") && p.end_with?(".tt") }
+  )
+  check.call(
+    "the scope reaches a gemspec and a README",
+    files.any? { |p| p.end_with?(".gemspec") } && files.any? { |p| p.end_with?("/README.md") }
+  )
+  check.call("the demo tree is NOT in scope", files.none? { |p| p.include?("/kiosk-demo-") })
+  check.call("spec/ is NOT in scope", files.none? { |p| p.include?("/spec/") })
+
+  corpus = vacuity_corpus
+  check.call("the vacuity corpus is non-empty", !corpus.empty?)
+  RULES.each do |rule|
+    hits = corpus.count do |p|
+      File.read(p, encoding: "UTF-8", invalid: :replace, undef: :replace).match?(rule[:re])
+    end
+    check.call(
+      "#{rule[:id]}'s pattern still matches #{rule[:what]} outside the ban " \
+      "(CHANGELOG.md + bin/): #{hits} file(s)",
+      hits.positive?
+    )
+  end
+
+  if failures.empty?
+    puts "SELF-TEST OK"
+    0
+  else
+    puts "SELF-TEST FAILED: #{failures.size} arm(s)"
+    1
+  end
+end
+
+exit(ARGV.include?("--self-test") ? self_test : run_check)

@@ -1233,6 +1233,41 @@ jobs:
       - name: No process-spawning construct is reachable from the served PoW path
         run: ./bin/check-served-pow-purity
 
+  # A ledger id in a SHIPPED GEM points a stranger at a document they cannot
+  # open: the findings ledger is private and the ADRs live in a private repo.
+  # Phil, on the demos: «убери из демок ВСЮ археологию». The measurement that
+  # opened this job was 576 ledger ids across the fourteen gems' lib/, 473 of
+  # them in kiosk-server, effectively all in comments — which is why this guard
+  # bans comment and code alike where bin/check-demo-copies (a demo prints to a
+  # terminal, so only its code tokens matter) deliberately does not.
+  #
+  # Nothing held this before: a planted K-9999 in kiosk-server/lib left
+  # check-demo-copies, check-publication-paths and check-gem-packaging all at
+  # exit 0. The --self-test step plants each shape in each file type it claims
+  # to cover and carries the vacuity arms — an empty scope and a rotted pattern
+  # both print the same clean zero as an obeyed ban.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~1 s for both steps.
+  shipped-archaeology:
+    name: no unresolvable citation in a shipped gem (bin/check-shipped-archaeology)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every shape, and non-vacuous here
+        run: ./bin/check-shipped-archaeology --self-test
+
+      - name: No ledger id and no ADR reference in what a gem ships
+        run: ./bin/check-shipped-archaeology
+
   # Since T-183 an operator draws ONE EXPLICIT ROUTE PER VERB, so "declared but
   # unrouted / routed but undeclared" is a real bug class here again — it was
   # impossible while the engine resolved names at request time from one

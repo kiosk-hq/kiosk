@@ -117,7 +117,7 @@ class BookTableOperation
         # SAME helper `availability` and `my_bookings` label their rows with, so
         # the three surfaces cannot spell one seating three ways.
         seating_label:       Seatings.label(time),
-        seating_at:          seating_at.iso8601,
+        seating_at:          Booking.publish_instant(seating_at),
         status:              booking["status"],
       })
     end

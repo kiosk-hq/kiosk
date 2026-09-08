@@ -201,7 +201,7 @@ class Kiosk::DiningRoomController < ApplicationController
           seating_date:        date.iso8601,
           seating_time:        time,
           seating_label:       Seatings.label(time),
-          seating_at:          seating_at.iso8601,
+          seating_at:          Booking.publish_instant(seating_at),
           deposit_eur:         deposit_eur,
         }
       end

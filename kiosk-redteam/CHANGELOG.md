@@ -19,6 +19,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - The `pow_required` explanation and the device-grant scenario's
   control-registration refusal, both printed by a battery run, now say what the
   condition is instead of naming an internal tracker row.

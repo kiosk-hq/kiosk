@@ -13,10 +13,10 @@ Requiring `kiosk-all` loads `Kiosk` and `Kiosk::Server`.
 
 ## Install
 
-> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
 
 ```ruby
-gem "kiosk-all"
+gem "kiosk-all", github: "kiosk-hq/kiosk"
 ```
 
 That's it for the data plane. Optional pieces you add per stack:
@@ -26,7 +26,7 @@ That's it for the data plane. Optional pieces you add per stack:
 `kiosk-all` does **not** pull in `kiosk-rls`. Kiosk's isolation comes from the sanctioned per-verb query/action/pay surface with app-layer authz; Postgres RLS is available as belt-and-suspenders hardening. Opt in explicitly:
 
 ```ruby
-gem "kiosk-rls"           # opt-in: DB-level RLS defense-in-depth
+gem "kiosk-rls", github: "kiosk-hq/kiosk"   # opt-in: DB-level RLS defense-in-depth
 ```
 
 That line is the whole installation: kiosk-rls's railtie puts `enable_rls_on`
@@ -52,8 +52,8 @@ Why not bundled: test-support gems pull in `rspec`/`minitest` and host-test infr
 `kiosk-all` does **not** pull in any adapter gem. Add the ones you actually use:
 
 ```ruby
-gem "kiosk-user-idp-devise"      # only shipped user-IdP adapter today
-gem "kiosk-pay-stripe"           # only shipped PSP adapter today
+gem "kiosk-user-idp-devise", github: "kiosk-hq/kiosk"   # only shipped user-IdP adapter today
+gem "kiosk-pay-stripe",      github: "kiosk-hq/kiosk"   # only shipped PSP adapter today
 ```
 
 Further `kiosk-user-idp-*` (Warden, JWT-bearer, Clerk, Auth0, …) and `kiosk-pay-*` (Paddle, regional PSPs, …) adapters are planned per market and stack — none exist yet.

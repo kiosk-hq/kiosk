@@ -135,10 +135,10 @@ result. Run this after any change to either implementation.
 
 ## Installation
 
-> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
 
 ```ruby
-gem "kiosk-pow"
+gem "kiosk-pow", github: "kiosk-hq/kiosk"
 ```
 
 ```ruby

@@ -30,16 +30,16 @@ No Rails dependency. Loadable in any Ruby app. Heavier `kiosk-server`, `kiosk-rl
 
 ## Install
 
-> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
 
 ```ruby
-gem "kiosk-core"
+gem "kiosk-core", github: "kiosk-hq/kiosk"
 ```
 
 For the data plane (core + server), install the meta-gem — add RLS, payment, and IdP adapters per stack:
 
 ```ruby
-gem "kiosk-all"
+gem "kiosk-all", github: "kiosk-hq/kiosk"
 ```
 
 ## Status

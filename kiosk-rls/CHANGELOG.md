@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - Now truly opt-in: no longer a dependency of kiosk-server, kiosk-all, or
   kiosk-test-support. `ConfigurationExtension` now contributes only
   `system_role`; `schema` and `app_role` moved to kiosk-core,

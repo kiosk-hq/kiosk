@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - **`Policy#challenge_for`'s `verb:` contract is stated as closed, and a wrong branch is no longer silent (K-1395).** The hook receives one of `:query`, `:run`, `:pay` and nothing else; a handler declared `kind :action` in kiosk-server arrives as `:run`. Branching on `:action` matched nothing and declined to toll every write with no error, log line or failing test. `kiosk-server` now refuses such a policy at configuration time. No behaviour change in this gem.
 
 ### Added

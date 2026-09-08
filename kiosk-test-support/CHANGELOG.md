@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - Dropped the `kiosk-rls` dependency (RLS is opt-in now). This gem never
   used `Kiosk::RLS` constants — `Errors::RLSDenied` is its own class and
   stays.

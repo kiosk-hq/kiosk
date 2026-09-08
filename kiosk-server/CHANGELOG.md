@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - A payment-free or KYC-free origin answers `POST /kiosk/pay` and
   `POST /kiosk/agents/kyc` with `module_not_served` (501). The behaviour is
   unchanged; the route table's own comments had promised 403, and now say 501

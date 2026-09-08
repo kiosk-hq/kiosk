@@ -26,7 +26,7 @@ kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord an
 
 ## Install
 
-> **Not on RubyGems yet** — until they are published, every `gem` line below needs `github: "kiosk-hq/kiosk"`. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
 
 ### Preconditions
 

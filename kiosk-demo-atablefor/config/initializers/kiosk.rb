@@ -1,84 +1,49 @@
 # frozen_string_literal: true
 
-# Kiosk-demo (atablefor-shape) configuration. Concrete values for the
-# restaurant table-booking reference shape: uuid users, the engine's own agent IdP,
-# NO payment provider (a reservation takes no money), two queries and two
-# actions, all of them ordinary Rails controllers named below.
+# atablefor — a restaurant table-booking aggregator across a few Lisbon
+# neighbourhoods (static roster, db/seeds.rb). Seatings are ROLLING-CURRENT:
+# computed relative to NOW in Europe/Lisbon (app/models/seatings.rb); tables
+# are FINITE and CAN sell out for a given seating.
 #
-# atablefor is a restaurant AGGREGATOR across a few Lisbon neighbourhoods
-# (a static roster — see db/seeds.rb). Seatings are ROLLING-CURRENT: the
-# upcoming evening seatings are computed relative to NOW in Europe/Lisbon
-# (app/models/seatings.rb), never stale, but the tables are FINITE and CAN sell out
-# for a given seating.
-
-# Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
-# in config/environments/{development,test,production}.rb; this file reads the
-# resolved values from Rails.configuration.x.kiosk.*.
+# Env posture (signing key, PoW secret, issuer, test flags) lives in
+# config/environments/*; this file reads Rails.configuration.x.kiosk.*.
 
 require "kiosk/user_identity_providers/devise"
 
 # ── PoW / Reputation — the :query toll, selected by ATABLEFOR_POW_MODE ──────
 #
-# Gate: the Equihash PoW challenge is issued ONLY for the :query verb.
-# The :run verb is left ungated, so the existing no-human booking flow
-# (script/book_flow.rb / rake demo:book) pays no :query toll. It is not
-# proof-of-work-free: register is a SEPARATE gate and is ALWAYS ON, so the flow
-# solves one Equihash proof on every run. That gate's own section below owns its
-# detail; it is not restated here.
+# The Equihash challenge is issued ONLY for :query. :run is ungated, so
+# `rake demo:book` pays no :query toll; registration PoW is a separate,
+# always-on gate (own section below).
 #
-# The guard is intentional, and it is about the :query toll ONLY:
-#   - rake demo:book boots the server WITHOUT KIOSK_POW_DEMO=1 → no :query toll.
-#   - rake demo:pow  boots the server WITH   KIOSK_POW_DEMO=1 → :query toll active.
+#   rake demo:book — no KIOSK_POW_DEMO → no :query toll
+#   rake demo:pow  — KIOSK_POW_DEMO=1  → :query toll active
 #
-# `c.registration_pow_count` and `c.registration_pow_params` are assigned inside
-# `Kiosk.configure` and AFTER the `case ATABLEFOR_POW_MODE` block has ended, so
-# no mode — `off` included — can reach them.
+# Reservation-scalping is the abuse a table-booking provider fears: scripts
+# that mass-claim prime-time 2-tops to resell. PoW prices that at the door —
+# a metered toll per query, tuned per provider, not a hardware wall.
 #
-# The header names the SELECTOR, not one of the env aliases that reach it: the
-# mapping from variables to modes is written out exactly once, at the selector
-# below, so there is no second copy of it to keep true.
-#
-# Reservation-scalping is exactly the abuse a table-booking provider fears:
-# scripts that mass-claim prime-time 2-tops to resell. PoW prices that at the
-# door — a metered toll per query, tuned per provider, not a hardware wall.
-#
-# Equihash params are chosen by KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
-#   low  (default) → n=96 k=5  — small, non-toy instance the reference solver
-#                    clears in well under a second; local flows + CI stay fast.
-#   high           → n=168 k=7 — what the hosted deploy ships: ~1.3 GiB per
-#                    proof, and ~10s on the reference numpy solver as measured
-#                    on one M-series laptop core (the GiB is that solver's
-#                    sorted-nonce table, not a floor those params impose on
-#                    every solver — a memory-optimised solver trades it for
-#                    time; the seconds are that machine class). A real
-#                    memory+CPU toll so a scalper feels the anti-scalping cost
-#                    first-hand. Unset = low.
-# Both the :query toll (KIOSK_POW_DEMO) and the anti-scalping reputation gate
-# (KIOSK_POW_REPUTATION_DEMO) inherit this level.
-#
-# atablefor is INTENTIONALLY the ONE demo pinned to high in the hosted deploy
-# (deploy/env/atablefor.env.example ships KIOSK_POW_DIFFICULTY=high). It is the
-# designated production-grade showcase: a scalper feels the real
-# anti-reservation-scalping toll first-hand, at the (n=168, k=7) cost stated
-# just above; see the "beware" banner on the demo root page. Every other demo
-# is knob-adjustable but defaults light so CI and quick poking stay fast; unset
-# here still resolves to low.
+# KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb) picks the params; both
+# the :query toll and the reputation gate inherit the level. Unset = low.
+#   low  (default) → n=96 k=5  — sub-second on the reference solver; CI stays fast.
+#   high           → n=168 k=7 — ~1.3 GiB and ~10s on the reference numpy solver
+#                    on one M-series laptop core. The GiB is that solver's
+#                    sorted-nonce table, not a floor the params impose: a
+#                    memory-optimised solver trades it for time.
+# The hosted atablefor deploy pins high (deploy/env/atablefor.env.example) so a
+# scalper feels the real toll; see the "beware" banner on the demo root page.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
 # ── Registration PoW gate — ALWAYS ON ───────────────────────────────────────
 #
 # register is a verb like any other: a table-booking SaaS prices fresh-identity
 # minting (one Equihash proof) so a scalper renting throwaway agents pays at the
-# door. This is INDEPENDENT of the :query/:reputation/:backoff verb tolls above.
-# Register is now uniformly tolled on every demo (no per-demo env flag to
-# remember): it activates on code-deploy and can't be forgotten. Params follow
-# KIOSK_POW_DIFFICULTY (atablefor ships high in the hosted deploy, so register
-# inherits n=168 k=7 automatically).
+# door. Independent of the :query verb toll above; params follow
+# KIOSK_POW_DIFFICULTY, and there is no env flag to forget.
 #
-# The gate REQUIRES kiosk-pow-equihash + kiosk-reputation required and the
-# Equihash backend registered; those must run UNCONDITIONALLY (else
-# RegistrationPow.gate raises ConfigurationError at register). require +
-# Backends.register are idempotent, so the verb-toll guards below re-run them harmlessly.
+# The require + Backends.register below must run UNCONDITIONALLY, outside any
+# mode branch, or RegistrationPow.gate raises ConfigurationError at register.
+# Both are idempotent.
 ATABLEFOR_REGISTRATION_POW_PARAMS = PowDifficulty.params
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
@@ -86,30 +51,24 @@ Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equ
 
 # ── PoW verb-toll MODE — exactly one, explicitly selected ──────────────────
 #
-# atablefor advertises ONE anti-scalping PoW policy on the :query verb, and the
-# mode is selected explicitly so exactly one can ever run. Independent
-# `if ENV[…]` blocks each assigning `reputation_policy` inside the same
-# Kiosk.configure block would silently leave only the LAST assignment in effect
-# — and a co-active Backoff branch's empty factors would reset the reputation DB
-# lookup with it. One selector:
-#
 #   KIOSK_POW_MODE = reputation | demo | backoff | off
 #
-#   reputation — the FLAGSHIP anti-scalping showcase: the shipped
-#                RateAndReputation policy with a REAL confirmed-bookings DB
-#                factor. A fresh/low-reputation agent pays escalating PoW to
-#                browse prime-time availability; the cost DROPS as it builds a
-#                genuine booking record. Hosted default (see below).
-#   demo       — flat AtableforDemoPowPolicy: always toll :query (the demo:pow flow).
+#   reputation — the FLAGSHIP: the shipped RateAndReputation policy with a REAL
+#                confirmed-bookings DB factor. A fresh agent pays escalating PoW
+#                to browse prime-time availability; the cost DROPS as it builds
+#                a genuine booking record.
+#   demo       — flat AtableforDemoPowPolicy: always toll :query (rake demo:pow).
 #   backoff    — "solve once, next N calls free" (N = KIOSK_POW_BACKOFF_DEMO, else 10).
 #   off        — no :query toll. Registration PoW (below) stays on regardless.
 #
+# ONE selector, because independent `if ENV[…]` blocks each assigning
+# `reputation_policy` would leave only the LAST in effect, and a co-active
+# branch's empty factors would reset the reputation DB lookup with it.
+#
 # The legacy per-policy flags (KIOSK_POW_DEMO / KIOSK_POW_REPUTATION_DEMO /
-# KIOSK_POW_BACKOFF_DEMO) are still honoured as single-mode aliases so the
-# existing rake flows keep working, but setting MORE THAN ONE RAISES at boot
-# rather than silently picking one of them. When nothing is set the mode is
-# REPUTATION in production (the decided flagship policy) and OFF in dev/test, so
-# demo:book / demo:isolation / demo:redteam / demo:schema and CI stay toll-free.
+# KIOSK_POW_BACKOFF_DEMO) are honoured as single-mode aliases, but setting MORE
+# THAN ONE RAISES at boot. Unset → REPUTATION in production, OFF in dev/test, so
+# the demo flows and CI stay toll-free.
 ATABLEFOR_POW_MODE = begin
   legacy = []
   legacy << :demo       if ENV["KIOSK_POW_DEMO"] == "1"
@@ -139,20 +98,17 @@ ATABLEFOR_POW_MODE = begin
   end
 end
 
-# Per-mode setup that must run BEFORE Kiosk.configure (the demo policy class and
-# the bad-proof counter stores). require + Backends.register already ran
-# unconditionally above for registration PoW; they are idempotent.
+# Per-mode setup that must run BEFORE Kiosk.configure: the demo policy class and
+# the bad-proof counter stores.
 case ATABLEFOR_POW_MODE
 when :demo
-  # Demo policy: always challenge :query (availability lookup); let :run through
-  # freely. A real provider replaces this with Policies::RateAndReputation or a
-  # domain-specific subclass. The inline class keeps the demo self-contained.
+  # Demo policy: always challenge :query, let :run through. A real provider
+  # replaces this with Policies::RateAndReputation or a domain subclass.
   class AtableforDemoPowPolicy < Kiosk::Reputation::Policy
     def initialize(pow_params)
       @pow_params = pow_params
     end
 
-    # @return [{alg:, params:}] when verb is :query; nil otherwise.
     def challenge_for(identity:, verb:, factors:)
       return nil unless verb == :query
 
@@ -160,51 +116,29 @@ when :demo
     end
   end
 
-  # ⚠ TOY COUNTER — NOT a reputation signal. Its ONLY job is to let the local
-  # `script/pow_flow.rb` driver print "the server counted MY bad proof";
-  # nothing reads it for policy (`reputation_factors` below feeds a hardcoded
-  # `bad_proof_count: 0`). It counts PER IDENTITY in sqlite
-  # (app/services/bad_proof_counter.rb): one abusive assistant cannot inflate
-  # anyone else's count, and concurrent server processes do not fight over one
-  # flat file. One toy aspect REMAINS, deliberately, labelled:
-  #   · NO TTL — and never resetting is equally wrong: a count that only grows
-  #     condemns an identity for something a year old.
-  # A production bad-proof count keeps the per-identity keying and adds decay
-  # plus durability across restarts (the same gap as the in-process revocation
-  # watermark). It must be specified before it is built, not bolted on here.
+  # ⚠ TOY COUNTER — NOT a reputation signal. Nothing reads it for policy
+  # (`reputation_factors` below hardcodes `bad_proof_count: 0`); it exists so
+  # `script/pow_flow.rb` can print "the server counted MY bad proof". Keyed per
+  # identity in sqlite (app/services/bad_proof_counter.rb), so one abuser cannot
+  # inflate anyone else's count. It has NO TTL, and a count that only grows is
+  # equally wrong: a production signal needs decay and durability first.
   #
-  # WHERE IT LIVES, AND WHO WIPES IT. This file is what an adopter copies, so
-  # it may not hardcode a path under /tmp, and it may not truncate a store AT
-  # BOOT — a redeploy would silently zero the accumulated signal. `rake
-  # demo:pow` OWNS the location: it wipes the file for a clean slate and
-  # exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the driver that
-  # reads the counts back, so the two processes cannot drift onto different
-  # files and report zero at each other. The PATH ITSELF is resolved in
-  # config/environments/* like every other env input; this file only reads it,
-  # and the default over there is only for a bare `rails s`.
+  # `rake demo:pow` owns the file's location — it wipes it and exports
+  # KIOSK_BAD_PROOF_DB to both the server and the driver, so the two cannot
+  # drift onto different files and report zero at each other.
   ATABLEFOR_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
 when :reputation
-  # Anti-scalping mechanic: a fresh/low-reputation agent pays ESCALATING PoW
-  # (N×PoW) to browse prime-time availability, and that cost DROPS as it builds a
-  # real booking history (see the configure block for the RateAndReputation
-  # params + the REAL confirmed-bookings DB factor that makes this a demo OF
-  # reputation): 0 bookings → 2 proofs · 1 booking → 1 proof · 2+ → free pass.
-  # ⚠ TOY COUNTER — the reputation branch's copy of the demo counter above; the
-  # caveat there applies verbatim (per-identity in sqlite, no TTL). Note this
-  # branch's policy really does declare `bad_proof_count_factor: 3` — but its
-  # factors hardcode `bad_proof_count: 0`, so this store still feeds nothing.
-  # Wiring it in would at least penalize only the offender, but a real signal
-  # also needs decay before it becomes policy.
-  # Same location rule as the :demo branch above. Nothing asserts these counts —
-  # no driver reads this branch's store — so nothing wipes it either; the
-  # "NO TTL" caveat above is the whole of its behaviour.
+  # Anti-scalping: 0 bookings → 2 proofs · 1 booking → 1 proof · 2+ → free pass
+  # (params in the configure block below).
+  # ⚠ TOY COUNTER — same caveat as the :demo branch. This branch's policy does
+  # declare `bad_proof_count_factor: 3`, but its factors hardcode
+  # `bad_proof_count: 0`, so the store still feeds nothing and nothing wipes it.
   ATABLEFOR_REPUTATION_BAD_PROOF_DB = Rails.configuration.x.kiosk.reputation_bad_proof_db
 end
 
-# ── PoW HMAC secret ─────────────────────────────────────────────────────────
-# The HMAC key the engine signs every PoW challenge with. Required in
-# production, stable (non-secret) default in dev/test — that posture lives in
-# config/environments/*; here we only read the resolved value.
+# ── PoW HMAC secret — the key the engine signs every challenge with ─────────
+# Required in production, stable non-secret default in dev/test; posture in
+# config/environments/*.
 pow_secret = Rails.configuration.x.kiosk.pow_secret
 
 Kiosk.configure do |c|
@@ -213,63 +147,47 @@ Kiosk.configure do |c|
   c.user_id_column = :id
 
   # ── Where the wire verbs live ──────────────────────────────────────────────
-  # The queries and actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros
-  # (`kind` says which verb reaches each one), plain `render json:`. This line
-  # only NAMES them; the engine loads and registers them (once in production,
-  # again after every reload in development, so an edited verb needs no
-  # restart).
+  # Ordinary Rails controllers under app/controllers/kiosk/. This line only
+  # NAMES them; the engine loads and registers them, re-running after every
+  # development reload so an edited verb needs no restart.
   c.handlers = %w[Kiosk::DiningRoomController Kiosk::BookingsController]
 
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
-  # The Rails connection's role owns the tables AND issues queries (no
-  # role separation in this demo). This demo runs WITHOUT RLS enforcement —
-  # isolation is enforced at the app layer (book_table's explicit user_id
-  # scoping and the WHERE clauses in the two handler controllers named above) —
-  # so app_role and system_role are set to the same role only to satisfy the
-  # config; no enable_rls_on / GRANT statements run here.
   # ── Postgres role names ──────────────────────────────────────────────────
-  # Resolved in config/environments/*, like every other env input; read here.
+  # No RLS in this demo: isolation is enforced at the app layer (book_table's
+  # explicit user_id scoping, and the WHERE clauses in the two handler
+  # controllers above). app_role and system_role are the SAME role, set only to
+  # satisfy the config — no enable_rls_on / GRANT runs here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
 
   # ── Issuer origin ─────────────────────────────────────────────────────────
-  # This operator's canonical origin — advertised in /.well-known/kiosk.json,
-  # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
-  # assistant proof-of-possession. Required in production, localhost default
-  # in dev/test — the posture lives in config/environments/*.
+  # Advertised in /.well-known/kiosk.json, minted as the `iss` of every Kiosk
+  # JWT, and enforced as the `aud` of every assistant proof-of-possession.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # Validate the proof(s) parsed from the `Kiosk-PoW` request header
-  # against the normative PoW schema at the wire choke point, so a malformed
-  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
-  # re-issued 402 loop. There is no `pow` body field to validate — the header is
-  # the only channel. Needs the json_schemer gem (in the Gemfile). Absent/valid
-  # proofs unchanged.
+  # Validate the `Kiosk-PoW` header's proofs against the normative PoW schema,
+  # so a malformed proof gets a clear 400 instead of a silent re-issued 402
+  # loop. Needs the json_schemer gem.
   c.validate_requests = true
 
-  # Every query/action answer is validated against the `output_schema` that verb
-  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
-  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
-  # caller sends can trigger it — and it is what makes this demo's own CI task
-  # list a per-verb conformance proof of the descriptors rather than a smoke
-  # test.
+  # Validate every answer against the `output_schema` its verb declares: a
+  # mismatch is a loud 500 rather than a lie shipped to an assistant. It is a
+  # DEVELOPMENT/CI assertion — nothing a caller sends can trigger it — and it is
+  # what makes the demo task list a per-verb conformance proof.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
-  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
-  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
-  # the proof: every demo task list runs in development.
+  # OFF IN PRODUCTION deliberately: with it on, a descriptor typo becomes a 500
+  # for a caller who did nothing wrong, and this demo is deployed. Nothing is
+  # lost — every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
-  # owner is free-form and flows verbatim into /.well-known/kiosk.json. When
-  # KIOSK_POW_DIFFICULTY=high, surface an honest "beware: intensive PoW" notice
-  # here so an agent/reader sees the anti-scalping toll up front (the 402
-  # challenge params carry the same heavy n/k).
+  # owner is free-form and flows verbatim into /.well-known/kiosk.json. At
+  # KIOSK_POW_DIFFICULTY=high it also carries a "beware: intensive PoW" notice,
+  # so a reader sees the toll before the 402 does.
   c.owner  = { name: "atablefor", support: "demo@kiosk.tech" }
   if (notice = PowDifficulty.pow_notice)
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
@@ -278,44 +196,31 @@ Kiosk.configure do |c|
   c.skill_url    = "https://kiosk.tech/skill-v0.4.12.md"
   c.skill_sha256 = "7d5be9bf841f8e05fd67b62b60d140fab584de373f8e28944298c93139f9a9ca"
 
-  # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence. An assistant
-  # authenticates with the kiosk-pop JWT this very engine minted at
-  # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
-  # engine already ships the adapter that verifies its own tokens:
-  # `IdentityResolution.agent_idp` falls back to
-  # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured.
-  # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
-  # Okta, an ID-JAG-style broker) by subclassing
+  # ── NO c.agent_idp — deliberate ──────────────────────────────────────────
+  # An assistant authenticates with the kiosk-pop JWT this engine minted, and
+  # the engine verifies its own tokens: `IdentityResolution.agent_idp` falls
+  # back to `AgentIdentityProviders::DefaultAgentIdp` when nothing is set.
+  # SET IT only to front an EXTERNAL agent-identity issuer, by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID.
+  # the `agent_id` it returns must be a UUID.
   #
-  # The provider's own web-session channel (Devise/Warden): authenticates the
-  # signed-in human diner on the account-binding surfaces — the link-code mint,
-  # the device verify page, and unlink. A diner mints a link code here and their
-  # assistant redeems it, binding the assistant to the diner's account. Walked
-  # by `rake demo:binding`.
+  # user_idp is the provider's own web session (Devise/Warden): it authenticates
+  # the signed-in human diner on the account-binding surfaces — link-code mint,
+  # device verify, unlink. Walked by `rake demo:binding`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
-  # Where the engine bounces an UNAUTHENTICATED browser visitor to the
-  # manage-assistants page (this app's Devise sign-in). The engine stays
-  # IdP-neutral, so the sign-in URL is supplied here; without it the page
-  # would render a bare 401.
+  # Where the engine bounces an unauthenticated browser visitor to the
+  # manage-assistants page. The engine stays IdP-neutral, so the URL is supplied
+  # here; without it the page renders a bare 401.
   c.sign_in_path = "/users/sign_in"
 
   # ── NO payment_provider ──────────────────────────────────────────────────
-  # This is deliberate and load-bearing: with no AP2 provider configured,
-  # `pay` drops out of `capabilities` and the discovery documents carry no
-  # payments block. atablefor books restaurant tables — a reservation takes
-  # no money. The advertised capabilities are [schema, queries, actions].
+  # Deliberate and load-bearing: with no AP2 provider configured, `pay` drops
+  # out of `capabilities` and the discovery documents carry no payments block.
+  # A reservation takes no money, so capabilities are [schema, queries, actions].
 
   # ── PoW verb-toll gate — exactly one mode ───────────────────────────────
-  # ATABLEFOR_POW_MODE (resolved at the top of this file) selects exactly one
-  # :query PoW policy, so the branches cannot clobber each other's
-  # reputation_policy / reputation_factors — in particular the reputation
-  # branch's REAL confirmed-bookings DB factor cannot be reset to Factors.empty
-  # by a co-active backoff/demo branch. pow_secret is the required HMAC key
-  # resolved above.
+  # ATABLEFOR_POW_MODE (top of this file) selects exactly one :query policy, so
+  # the branches cannot clobber each other's reputation_policy / factors.
   case ATABLEFOR_POW_MODE
   when :demo
     # Small, non-toy Equihash instance for demo speed (sub-second solve).
@@ -324,23 +229,17 @@ Kiosk.configure do |c|
     c.reputation_policy = AtableforDemoPowPolicy.new(pow_params)
     c.pow_ttl           = 300
 
-    # Factors: always return empty (the demo policy ignores factors and
-    # challenges :query unconditionally). A real provider wires DB lookups.
+    # The demo policy ignores factors and challenges :query unconditionally.
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
 
-    # on_bad_proof: bump the TOY counter (see its definition above — TTL-less)
-    # so script/pow_flow.rb can assert the rejection was counted. PER IDENTITY:
-    # keyed by the verified agent credential id the gate hands in, so one
-    # abuser's rejections never appear in anyone else's count.
+    # Bump the TOY counter (defined above) so script/pow_flow.rb can assert the
+    # rejection was counted. Keyed by the verified agent credential id.
     c.on_bad_proof = ->(identity:) {
       BadProofCounter.increment(ATABLEFOR_BAD_PROOF_DB, identity.agent_id)
     }
   when :reputation
-    # The FLAGSHIP policy: the shipped RateAndReputation with REAL
-    # confirmed-booking-count factors, escalating by PROOF COUNT (N×PoW):
-    #   proven_purchases_threshold: 2  → 2 confirmed bookings → free pass
-    #   base_count: 1, unproven_count_bonus: 1 → 0 bookings: 2 proofs;
-    #                                            1 booking: 1 proof; 2+: nil
+    # The shipped RateAndReputation, escalating by PROOF COUNT (N×PoW):
+    #   0 bookings: 2 proofs · 1 booking: 1 proof · 2+ (the threshold): free.
     c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
       proven_purchases_threshold: 2,
       low_rate_threshold:         100,
@@ -356,25 +255,14 @@ Kiosk.configure do |c|
     )
     c.pow_ttl = 300
 
-    # Factors: REAL DB lookup — COUNT(*) of the principal's CONFIRMED bookings.
-    # This is what makes the flagship a demo OF reputation; it MUST NOT be reset
-    # to Factors.empty or the policy can never grant relief. A confirmed
-    # reservation is this provider's "proven completed action", mapped into
-    # settled_purchases_count.
-    #
-    # It is a projection, so it reads through the model like every other
-    # atablefor read, reusing {Booking.confirmed} rather than restating what
-    # "confirmed" means beside the unique partial index that enforces it.
+    # Factors: REAL DB lookup — COUNT(*) of the principal's CONFIRMED bookings,
+    # this provider's "proven completed action". It MUST NOT be reset to
+    # Factors.empty or the policy can never grant relief.
     #
     # `where(user_id:)` and NOT `Booking.owned_by_current_principal`, which is
     # sitting right there and is the wrong tool: the gate runs BEFORE the
     # Executor opens its SessionContext, so `kiosk.current_user_id()` is not set
     # yet. The principal arrives as the hook's `identity:` argument instead.
-    #
-    # Shape: `where(user_id:)` casts an unparseable value to NULL and simply
-    # counts zero — i.e. the assistant is asked for MORE proof, never less. And
-    # `identity.user_id` is server-derived from the verified token, so an
-    # unparseable value is not caller-reachable in the first place.
     c.reputation_factors = ->(identity:, **) {
       count = Booking.confirmed.where(user_id: identity.user_id).count
       Kiosk::Reputation::Factors.new(
@@ -388,18 +276,15 @@ Kiosk.configure do |c|
       )
     }
 
-    # Same TOY instrumentation as the :demo branch: per-identity, feeds no
-    # policy. Demo output only.
+    # Same TOY instrumentation as the :demo branch: feeds no policy.
     c.on_bad_proof = ->(identity:) {
       BadProofCounter.increment(ATABLEFOR_REPUTATION_BAD_PROOF_DB, identity.agent_id)
     }
   when :backoff
-    # "Solve once, next N calls free": one solved proof grants the assistant
-    # `count` ungated follow-up calls, then it is re-challenged. The env value IS
-    # the count (KIOSK_POW_BACKOFF_DEMO=10 grants 10; demo:backoff sets 3); when
-    # mode is `backoff` with no count, default 10. base demands ONE fresh
-    # Equihash proof. The in-process BackoffStore is authoritative per worker — a
-    # multi-worker deploy needs a shared store (see BackoffStore's caveat).
+    # "Solve once, next N calls free": one proof grants `count` ungated
+    # follow-up calls, then the assistant is re-challenged. The env value IS the
+    # count (demo:backoff sets 3); default 10. The in-process BackoffStore is
+    # per worker — a multi-worker deploy needs a shared store.
     backoff_count = ENV["KIOSK_POW_BACKOFF_DEMO"].to_i
     backoff_count = 10 if backoff_count < 1
     c.reputation_policy = Kiosk::Reputation::Policies::Backoff.new(
@@ -412,37 +297,28 @@ Kiosk.configure do |c|
     )
     c.pow_ttl = 300
 
-    # The Backoff strategy ignores factors, but the gate still gathers them
-    # (config.reputation_factors is called before challenge_for). Return empty.
+    # Backoff ignores factors, but the gate still gathers them before
+    # challenge_for, so this must be set.
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
   end
 
-  # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
-  # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the verb toll above; pow_secret is set unconditionally so the
-  # gate works even in :off mode (RegistrationPow.gate raises without it) — the
-  # mode branches above share this one assignment.
+  # ── Registration PoW gate — ALWAYS ON ────────────────────────────────────
+  # Registering an agent costs ONE Equihash proof. pow_secret is assigned
+  # unconditionally, outside the mode branches, so the gate still works in
+  # :off mode — RegistrationPow.gate raises without it.
   c.registration_pow_count  = 1
   c.registration_pow_params = ATABLEFOR_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
 
   # ── One process today. Before this origin ever runs two, read this ───────
-  # `pow_spent_store` is left at its IN-PROCESS default here, and that is
-  # correct only because each demo origin runs a SINGLE process. Two Puma
-  # workers, two dynos or two pods — or a rolling deploy where the old and the
-  # new process overlap for a minute — each keep their OWN spent-id set, so
-  # one proof is accepted once PER PROCESS and the toll above is silently
-  # discounted by however many processes are running.
-  #
-  # WHY THIS IS WRITTEN DOWN RATHER THAN DETECTED: a replayed proof is not an
-  # error. It verifies, it is accepted, the request succeeds — no exception,
-  # no metric, no log line, no failed request, nothing in any dashboard. An
-  # operator who scales from one worker to two gets NO signal at all that
-  # their origin stopped conforming (kiosk.tech protocol.md §15.2 and the
-  # §16.1 operator profile). So the remedy is stated, not inferred:
+  # `pow_spent_store` is left at its IN-PROCESS default, which is correct only
+  # because each demo origin runs a SINGLE process. Two Puma workers, two pods,
+  # or a rolling deploy where old and new overlap, each keep their OWN spent-id
+  # set: one proof is then accepted once PER PROCESS and the toll above is
+  # silently discounted. A replayed proof is not an error — it verifies, it is
+  # accepted, and nothing appears in any dashboard — so the operator gets no
+  # signal that their origin stopped conforming. The remedy:
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
-  # plus the one table it needs — see the kiosk-server README, "Multi-process
-  # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on, but a warning nobody reads is not the
-  # mitigation; this comment and the README are.
+  # plus the one table it needs; see the kiosk-server README, "Multi-process
+  # deployments".
 end

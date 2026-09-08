@@ -20,61 +20,22 @@ module WireArguments
   # ones that would CRASH are refused.
   MAX_INT4 = 2_147_483_647
 
-  # The party a caller wants seated.
+  # The party a caller wants seated: SHAPE first, then RANGE, one answer per
+  # thing that can be wrong.
   #
-  # SHAPE AND RANGE, in that order — one answer per thing that can be wrong:
+  # The {MAX_INT4} arm is the one that is not obvious. Without it a well-formed
+  # `party_size: 2_147_483_648` walks into
+  # `RestaurantTable.where(capacity.gteq(party_size))` and ActiveRecord raises
+  # `ActiveModel::RangeError` CASTING the comparison — HTTP 500 for an argument
+  # a client simply got wrong. The two identifiers next door reach ActiveRecord
+  # as EQUALITY predicates, which answer zero rows instead of raising; it is the
+  # COMPARISON that casts, and `party_size` is the only argument that reaches one.
   #
-  #   * ABSENT (`nil`) → the SHAPE sentence, "party_size must be a whole number
-  #     >= 1 — got nil", because {#whole_number} answers nil for a nil;
-  #   * GIVEN, WRONG SHAPE (`1.5`, `"abc"`, `true`, `[]`, `{}`) → the same SHAPE
-  #     sentence with the value echoed;
-  #   * GIVEN, OUT OF RANGE (`0` or a negative) → the RANGE sentence,
-  #     "party_size must be >= 1".
-  #   * GIVEN, TOO LARGE TO STORE (past {MAX_INT4}) → the ceiling sentence.
-  #     Without this arm and the descriptor's `maximum`, a well-formed
-  #     `party_size: 2_147_483_648` walks into
-  #     `RestaurantTable.where(capacity.gteq(party_size))` and ActiveRecord
-  #     raises `ActiveModel::RangeError` CASTING the comparison — HTTP 500 for
-  #     an argument a client simply got wrong, on BOTH surfaces at once, with
-  #     the runtime's own class name in the body. Probed by this demo's
-  #     HostileArgShapes beat so it stays measured.
-  #     NOTE the asymmetry with the two identifiers next door: they reach
-  #     ActiveRecord as EQUALITY predicates, where an out-of-range value is
-  #     answered with zero rows rather than a raise. It is the COMPARISON that
-  #     casts, and `party_size` is the only wire argument that reaches one.
-  #
-  # WHETHER THE ARGUMENT WAS GIVEN AT ALL is a fourth question and this guard
-  # does not answer it — `availability` asks it one layer up, answering
-  # {#missing_party_size} for a missing key before ever reaching here
-  # (`Kiosk::DiningRoomController#availability`). `book_table` does not ask it:
-  # `party_size` is `required` in its `input_schema`, so no wire body can omit
-  # it, and a descriptor-less `BookTableOperation.call(party_size: nil, …)`
-  # lands on the SHAPE arm above. {BookTableOperation.identifier} does carry a
-  # `nil` arm of its own ("missing param: …") because its ids have no such
-  # question-asking verb in front of them.
-  #
-  # The declared `{type: "integer", minimum: 1}` refuses a zero party on the wire
-  # first, so this is defence in depth; it stays because {BookTableOperation} is
-  # reachable with no descriptor in front of it and must not open a transaction
-  # on a party of zero.
-  #
-  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s. A bare `raw.to_i` here gets two
-  # things wrong at once:
-  #
-  #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` AT
-  #     ALL, so each raises `NoMethodError` — a `500 action_failed` on the wire
-  #     for a value the published descriptor already forbids;
-  #   * `1.5.to_i` is 1, so a fractional party comes out of that line INSIDE the
-  #     declared range and is seated as a party of ONE rather than refused.
-  #
-  # (`"abc"`, `nil` and `"0x10"` coerce to 0 and the range arm below catches
-  # them, and `2.0` is 2 — which it still is, see {#whole_number}.)
-  #
-  # No WIRE call can reach either mistake — an action's body is schema-validated
-  # first and a query's arguments pass {Kiosk::Server::ArgumentDecoder} — but
-  # {BookTableOperation} is an ordinary class with an ordinary `call`, and on
-  # that descriptor-less path nothing has coerced the argument. A layer that
-  # only holds while the layer in front of it holds is not a second layer at all.
+  # Do NOT reduce this to `raw.to_i`: `true`/`[]`/`{}` have no `to_i` at all and
+  # raise, and `1.5.to_i` is 1, so a fractional party would be seated as a party
+  # of ONE rather than refused. No wire call can reach either mistake, but
+  # {BookTableOperation} is callable with no descriptor in front of it, and a
+  # layer that only holds while the layer in front of it holds is not a layer.
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def party_size(raw)
@@ -100,24 +61,14 @@ module WireArguments
 
   # JSON Schema's `integer`, in Ruby — and nothing looser.
   #
-  # NOT `is_a?(Integer)`, and the difference is measured rather than assumed:
-  # draft 2020-12 defines `integer` NUMERICALLY, not by wire type, so
-  # `{"party_size": 2.0}` is a VALID integer and json_schemer (2.5.0 in this
-  # bundle) accepts it. A bare class test here would therefore refuse a call the
-  # published schema allows, which is the one way this guard could get the story
-  # wrong in the other direction. JSON parsing yields Integer or Float and
-  # nothing else, so those are the two cases; every other type — nil,
-  # true/false, String, Array, Hash — and every fractional or non-finite Float
-  # is not a party.
+  # NOT `is_a?(Integer)`: draft 2020-12 defines `integer` NUMERICALLY, so
+  # `{"party_size": 2.0}` is a VALID integer and json_schemer accepts it. A bare
+  # class test would refuse a call the published schema allows.
   #
-  # WHAT THAT COSTS: a STRING is not a party, so `availability` works only
-  # because its declared `{type: "integer"}` makes
-  # {Kiosk::Server::ArgumentDecoder} coerce `?party_size=2` to `2` before the
-  # handler runs. Drop that declaration and this guard refuses the legal call
-  # along with the hostile ones. That is the correct trade for a layer whose
-  # whole job is to be the schema's `integer` and nothing looser — but it means
-  # the query half's second layer sits DOWNSTREAM of the descriptor rather than
-  # independent of it, which the action half's does not.
+  # The cost: a STRING is not a party, so `availability` works only because its
+  # declared `{type: "integer"}` makes {Kiosk::Server::ArgumentDecoder} coerce
+  # `?party_size=2` first. The query half's second layer therefore sits
+  # DOWNSTREAM of the descriptor; the action half's does not.
   #
   # @return [Integer, nil] nil when `raw` is not a whole number
   def whole_number(raw)
@@ -128,26 +79,20 @@ module WireArguments
   end
 
   # The sentence `availability` answers for a party_size it was not GIVEN at all.
-  # It lives here so both of that verb's party_size answers sit beside the one it
-  # shares with `book_table`, which uses neither.
   def missing_party_size
     OperationResult.refused(code: "bad_request", message: "missing param: party_size")
   end
 
   # ── AN INVALID FILTER VALUE IS A TYPED 400, NEVER AN EMPTY LIST ───────────
   #
-  # The house rule for every filter-shaped query in the fleet: a value this
-  # origin cannot serve is refused 400 with the servable ones named, because
-  # `200 []` is indistinguishable from an honest sell-out. The empty list
-  # survives for that honest case only.
+  # A value this origin cannot serve is refused 400 with the servable ones
+  # named, because `200 []` is indistinguishable from an honest sell-out. The
+  # empty list survives for that honest case only.
   #
-  # WHICH LAYER ANSWERS. `time` is a closed set, so it is declared as an `enum`
-  # and the schema layer — validated on every 0.4 call — refuses `time=18:00`
-  # before the handler runs; {#seating_time} is kept as defence in depth for the
-  # Operations, which reach these guards with no descriptor in between. `date`
-  # needs a guard and always will: the horizon rolls forward daily, so no `enum`
-  # written at declaration time can name it, and `format: "date"` can only say
-  # the string is a calendar date.
+  # `time` is a closed set and is also declared as an `enum`, so this guard is
+  # defence in depth for the descriptor-less Operations path. `date` needs a
+  # guard and always will: the horizon rolls forward daily, so no `enum` written
+  # at declaration time can name it.
 
   # A seating TIME the roster actually offers.
   #
@@ -163,17 +108,12 @@ module WireArguments
     )]
   end
 
-  # The "currently …" tail both DB-DERIVED refusals end in, and the reason it is
-  # a method rather than a `join` at each site: `[].join(", ")` is `""`, which
-  # leaves «… serves — currently » — a promise of a set with nothing after it.
-  # The empty set is not a corner case: an origin with no restaurants, or none
-  # with an upcoming seating, is exactly the state a fresh operator install is
-  # in, so this is the FIRST refusal a new operator's assistant sees.
-  #
-  # "none" rather than dropping the clause, because the two say different things.
-  # Dropping it leaves the assistant unable to tell "there is a set and I am not
-  # in it" from "there is no set"; "none" says the second, and says that
-  # retrying with another value is pointless.
+  # The "currently …" tail both DB-derived refusals end in. It is a method and
+  # not a `join` at each site because `[].join(", ")` is `""`, leaving «… serves
+  # — currently » — a promise of a set with nothing after it. A fresh operator
+  # install has exactly that empty set, so it is the first refusal an assistant
+  # sees there. "none" tells the assistant retrying is pointless; a dropped
+  # clause leaves it unable to tell an empty set from a set it is not in.
   #
   # @return [String]
   def served_list(values)
@@ -198,14 +138,10 @@ module WireArguments
 
   # A NEIGHBOURHOOD the aggregator actually serves.
   #
-  # The set is DB-DERIVED — an operator adds one by inserting a restaurant — so
-  # no static `enum` in `input_schema` can name it and this guard is the only
-  # place the refusal can live. It names the served neighbourhoods
-  # exactly as {#seating_time} and {#seating_date} name theirs.
-  #
-  # It is a FILTER over a collection in the §9.1 sense, so why not `200 []`?
-  # Because the value is outside its DOMAIN, which is §9.1's first branch. The
-  # third branch is what a SERVED neighbourhood with every table taken gets.
+  # The set is DB-derived — an operator adds one by inserting a restaurant — so
+  # no static `enum` can name it and this guard is the only place the refusal
+  # can live. An unserved value is outside its DOMAIN (§9.1's first branch), not
+  # an empty result; `200 []` is what a served neighbourhood fully booked gets.
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def neighborhood(raw, served)
@@ -221,19 +157,12 @@ module WireArguments
 
   # The booking `cancel_booking` acts on: PRESENT, then shaped like an id.
   #
-  # Two refusals, and the split is BEHAVIOUR. `blank?` answers the first: an
-  # absent key, an explicit `null`, `""`, `"   "` — and `false`, because
-  # `false.blank?` is true — are all "you did not give me one". Anything else
-  # that is not a uuid is "you gave me the wrong thing", and that sentence names
-  # where a right one comes from.
-  #
-  # The declared `format: "uuid"` refuses both classes on the wire first, so this
-  # is defence in depth — but it must stay, because ActiveRecord does not refuse
-  # a malformed uuid, it CASTS it to NULL: `where(id: junk)` then matches
-  # no row, so {CancelBookingOperation}, which is callable with no descriptor in
-  # front of it, would answer a typo as an OWNERSHIP refusal (403) rather than a
-  # shape one (400). A well-formed but foreign id still gets the 403, so the
-  # shape check never softens the ownership answer.
+  # It must stay even though `format: "uuid"` refuses both classes on the wire
+  # first, because ActiveRecord does not refuse a malformed uuid — it CASTS it
+  # to NULL, so `where(id: junk)` matches no row and {CancelBookingOperation},
+  # callable with no descriptor in front of it, would answer a typo as an
+  # OWNERSHIP refusal (403) rather than a shape one (400). A well-formed but
+  # foreign id still gets the 403.
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def booking_id(raw)

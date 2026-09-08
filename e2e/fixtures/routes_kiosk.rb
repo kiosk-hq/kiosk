@@ -25,10 +25,6 @@
 #    `defaults: { kiosk_verb: … }` hands the name to kiosk-server's
 #    VerbController — nothing is inferred from the path.
 #
-# NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
-# multiplexed pair outright (T-074 = A). Every verb is its own endpoint, and
-# its own line below.
-#
 # THE MOUNT IS DRAWN FIRST, and that is load-bearing: Rails dispatches the FIRST
 # matching route, so every protocol path wins over anything written below it and
 # no operator verb can shadow `schema`, `pay` or the auth plane. kiosk-server

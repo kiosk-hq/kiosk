@@ -2309,16 +2309,21 @@ end
 # assertion label is printed AT A TERMINAL, to an operator who cannot open the
 # ledger it names and never will.
 #
-# WHY IT IS THIS NARROW, because the obvious wider ban is already refused. The
-# standing decision for this repository is that inline `K-`/`ADR-`/`T-` refs in
-# its code, READMEs and CHANGELOGs stay AS-IS, permanently -- there is no
-# publication scrub of them, ever, and this rule does not become one. The
-# separate and narrower instruction it does serve is «no archaeology in what a
-# demo SAYS OUT LOUD», which K-1323 executed down to a residue whose every
-# survivor is accounted for by name. So the ban covers the OPERATOR-FACING half
-# only, and is scoped by that argument rather than by taste: a ledger id in a
-# COMMENT is a note to the next maintainer and is left entirely alone, while the
-# same id in a string, a symbol or an identifier reaches somebody's screen.
+# WHY IT IS THIS NARROW HERE, AND WHY THAT IS NO LONGER THE WHOLE STORY. This
+# rule covers the DEMO tree, whose reader is an operator at a terminal: a
+# ledger id in a `desc`, a banner, an `abort` or an assertion label reaches
+# somebody's screen, while one in a comment is a note to the next maintainer
+# standing beside the code. So the ban here is scoped by that argument rather
+# than by taste, and demo comments are left alone.
+#
+# The sentence this paragraph used to carry -- that inline `K-`/`ADR-`/`T-`
+# refs across this repository stay AS-IS permanently and no publication scrub
+# of them will ever happen -- was TRUE when it was written and Phil overruled
+# it (T-186). The SHIPPED GEMS are scrubbed, comments included, because their
+# reader is the adopter and comments are the surface they read;
+# `bin/check-shipped-archaeology` holds that half and declares its own
+# exemptions. Phil's standing exemption -- `bin/`, `CHANGELOG.md`,
+# `CLAUDE.md` -- is unchanged and is what survives of the old sentence.
 #
 # WHY IT EXISTS AT ALL, MEASURED. K-1323's sweep finished; nothing held it
 # afterwards. Its own two measurements are 568 occurrences immediately after an
@@ -2354,11 +2359,15 @@ end
 # is the tree being clean rather than the rule being switched off. Two things
 # must therefore be asserted about the MECHANISM instead. The file count catches
 # a glob that stopped matching or a lexer that stopped running. The comment count
-# catches the pattern itself rotting -- and it cannot drain to zero by accident,
-# because seven `config/routes/kiosk.rb` copies carry `(T-074 = A)` inside a sentence
-# FRAMEWORK_CLAIMS holds verbatim in this same script, itself held to the
-# protocol constant's own record of the deletion. Losing that count means the
-# regex broke, not that the tree got tidier.
+# catches the pattern itself rotting. That count is NOT anchored to a named
+# sentence any more: it used to cite the seven `config/routes/kiosk.rb` copies
+# of «(T-074 = A)», and T-186 deleted that sentence as retired-wire narration,
+# which is exactly how an anchor written into a rule goes stale. What the arm
+# asserts is the mechanism: some demo comment still matches. If the demo tree
+# is ever scrubbed of comment citations too -- which is a decision somebody
+# may take, and is what `bin/check-shipped-archaeology` already did to the
+# gems -- this arm goes red for an honest reason and must be REPLACED by a
+# fixture the rule owns, not deleted.
 DEMO_ID_ROOTS = %w[app lib script config db].freeze
 DEMO_ID_TOP   = %w[Rakefile config.ru].freeze
 
@@ -2418,11 +2427,10 @@ unless demo_id_unlexed.empty?
 end
 if demo_id_files.positive? && demo_id_comment.zero?
   errors << "check-demo-copies: the K-1383 ledger-id detector matched NOTHING in #{demo_id_files} demo " \
-            "Ruby file(s) — not even a comment. It cannot have drained honestly: seven " \
-            "config/routes/kiosk.rb copies carry `(T-074 = A)` inside a sentence FRAMEWORK_CLAIMS " \
-            "holds " \
-            "verbatim in this same script. So LEDGER_ID_RE has stopped matching the shape people " \
-            "write, and the ban is holding nothing."
+            "Ruby file(s) — not even a comment. Either LEDGER_ID_RE has stopped matching the " \
+            "shape people write, and this ban is holding nothing, or the demo tree has been " \
+            "scrubbed of comment citations as well. Find out which: if it is the second, this " \
+            "arm must be replaced by a fixture the rule owns, never deleted."
 end
 
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
@@ -5680,17 +5688,16 @@ FRAMEWORK_CLAIMS = {
            "now bound to the controller that still states the one-endpoint-per-verb shape, and " \
            "`bin/check-verb-routes` is what holds the demos' actual lines to it.",
   },
-  "no-multiplexed-pair" => {
-    doc:   "config/routes/kiosk.rb",
-    text:  "NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the multiplexed " \
-           "pair outright (T-074 = A). Every verb is its own endpoint, and its own line below.",
-    ships: OPERATOR_SEVEN,
-    source: { file: "kiosk-core/lib/kiosk/protocol.rb", must: /T-074 = A/ },
-    why:   "The retired-wire fact, in the file an integrator copies. Seven copies of a sentence " \
-           "about the PROTOCOL, held to the protocol constant's own record of the deletion. The " \
-           "sentence lost its «the pair that serves them is drawn LAST» tail at T-183, because " \
-           "there is no pair any more — every verb is a line somebody wrote.",
-  },
+  # The `no-multiplexed-pair` claim used to live here: eight copies of «NO `POST
+  # /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the multiplexed
+  # pair outright», held to the protocol constant’s own record of that deletion.
+  # Both ends of it are gone (T-186). Phil’s rule is that a public artefact
+  # describes what IS, so the narration of a retired wire element is one
+  # changelog line and nothing else — it was deleted from `kiosk/protocol.rb`
+  # and from the eight `config/routes/kiosk.rb` copies in the same wave. What a
+  # reader needs is already one entry up: `one-endpoint-per-verb` says every
+  # verb is its own endpoint, and `bin/check-verb-routes` holds the demos’
+  # actual lines to it.
   "mount-draws-the-protocol-plane" => {
     doc:   "config/routes/kiosk.rb",
     text:  "THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way.",
@@ -6309,7 +6316,8 @@ if errors.empty?
        "(#{container_ignores.length} ignore file(s), #{container_recipes.length} recipe(s); " \
        "detector proved on #{container_truth.length} constructed names), " \
        "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
-       "(#{demo_id_comment} carried by comments, which Phil's instruction leaves alone)"
+       "(#{demo_id_comment} carried by comments, which THIS rule leaves alone -- the shipped " \
+       "gems are held comments included by bin/check-shipped-archaeology)"
   exit 0
 end
 

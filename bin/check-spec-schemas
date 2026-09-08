@@ -38,13 +38,19 @@
 # every copy must have a published original — a mirror that quietly stopped
 # mirroring one file is the failure mode this exists to prevent.
 #
-# WHERE IT CAN RUN. kiosk.tech is a SEPARATE repo and is not checked out in
-# this repo's CI, so — exactly like `bin/check-solver-pin --offline` — this
-# check runs the comparison when the umbrella layout puts kiosk.tech next to
-# this repo, and SAYS SO and skips when it does not, rather than printing a
-# green line for a comparison it never made.
+# WHERE IT CAN RUN, AND WHAT AN ABSENT SIBLING MEANS. kiosk.tech is a SEPARATE
+# repository. In a developer's single-repo clone it is not there, and a check
+# that went red for that would be red on every laptop, so this one SAYS SO and
+# skips — the same split `bin/check-solver-pin --offline` makes.
 #
-# Usage: bin/check-spec-schemas [--spec-dir PATH]
+# THAT IS THE WRONG ANSWER IN CI, and the difference is not taste: a checkout
+# step that quietly produced nothing would restore exactly the green this guard
+# exists to end. So `KIOSK_REQUIRE_SITE_SIBLING=1` turns an absent sibling into
+# a FAILURE, and the workflow sets it on the one job that checks kiosk.tech out
+# beside this repo. Same variable, same reason, as the published-bytes job's
+# skill-pin examples.
+#
+# Usage: bin/check-spec-schemas [--spec-dir PATH] [--self-test]
 
 require "json"
 
@@ -62,79 +68,211 @@ COPIES = {
   File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/pow.schema.json") => "pow.schema.json",
 }.freeze
 
+# ── the comparison, as ONE function so the self-test can plant into it ───────
+
+# Returns the failure list for `copies` against `spec_dir`. `spec_dir` may be
+# absent — then only the copies themselves are checked and `compared` is false.
+def compare(copies:, spec_dir:)
+  failures = []
+
+  # S1/S2: every vendored copy exists and parses.
+  copies.each_key do |path|
+    next failures << "vendored copy missing: #{rel(path)}" unless File.exist?(path)
+
+    begin
+      JSON.parse(File.read(path))
+    rescue JSON::ParserError => e
+      failures << "vendored copy is not valid JSON: #{rel(path)} — #{e.message}"
+    end
+  end
+
+  return [failures, false] unless File.directory?(spec_dir.to_s)
+
+  # S3: the mirror is COMPLETE in both directions.
+  published = Dir[File.join(spec_dir, "*.schema.json")].map { |p| File.basename(p) }.sort
+  vendored  = copies.values.sort
+
+  (published - vendored).each do |name|
+    failures << "#{name} is published on kiosk.tech and vendored NOWHERE here — " \
+                "e2e/schema_conformance.rb cannot check the wire against it"
+  end
+  (vendored - published).each do |name|
+    failures << "#{name} is vendored here but no longer published — a copy of a schema " \
+                "that does not exist upstream is a fiction the e2e gate would still enforce"
+  end
+
+  # S4: content, modulo the provenance marker.
+  copies.each do |path, name|
+    upstream_path = File.join(spec_dir, name)
+    next unless File.exist?(path) && File.exist?(upstream_path)
+
+    local    = JSON.parse(File.read(path))
+    upstream = JSON.parse(File.read(upstream_path))
+    # The provenance marker is the ONE permitted difference: it says the file is
+    # a copy, which is a true statement the original must not carry.
+    local.delete("$comment")
+    upstream.delete("$comment")
+    next if local == upstream
+
+    failures << "#{name} has DRIFTED from #{upstream_path}. Re-vendor it (keeping the " \
+                "$comment) — do not edit the copy to match some third thing."
+  end
+
+  [failures, true]
+end
+
+def rel(path) = path.delete_prefix("#{REPO}/")
+
+def run_check(spec_dir)
+  failures, compared = compare(copies: COPIES, spec_dir: spec_dir)
+
+  unless compared
+    if ENV["KIOSK_REQUIRE_SITE_SIBLING"] == "1"
+      warn "  FAIL #{spec_dir} is not here, and KIOSK_REQUIRE_SITE_SIBLING=1 says that is a " \
+           "failure rather than a skip: this run was supposed to check kiosk.tech out beside " \
+           "this repo and did not."
+      failures.each { |f| warn "  FAIL #{f}" }
+      return 1
+    end
+    puts "bin/check-spec-schemas: #{COPIES.size} vendored copies present and parseable."
+    puts "  NOT COMPARED against the published originals — #{spec_dir} is not here."
+    puts "  kiosk.tech is a separate repo; run this from the umbrella checkout (or pass"
+    puts "  --spec-dir) to compare. This is the same split bin/check-solver-pin makes."
+    puts "  Set KIOSK_REQUIRE_SITE_SIBLING=1 to make this state a failure, as CI does."
+    return 0 if failures.empty?
+
+    failures.each { |f| warn "  FAIL #{f}" }
+    return 1
+  end
+
+  if failures.empty?
+    puts "bin/check-spec-schemas: #{COPIES.size} vendored schemas match #{spec_dir}."
+    return 0
+  end
+
+  failures.each { |f| warn "  FAIL #{f}" }
+  warn "\nbin/check-spec-schemas: #{failures.size} problem(s)."
+  1
+end
+
+# ── self-test ───────────────────────────────────────────────────────────────
+#
+# One planted RED arm per rule, plus VACUITY arms: a mirror that has stopped
+# mirroring, and a `$comment` carve-out that has stopped excusing anything,
+# both report the same clean zero as a correct one.
+def self_test
+  require "tmpdir"
+  failures = []
+  check = lambda do |name, ok|
+    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
+    failures << name unless ok
+  end
+
+  doc = { "$schema" => "https://json-schema.org/draft/2020-12/schema",
+          "$id" => "https://kiosk.tech/spec/schemas/a.schema.json",
+          "type" => "object" }
+
+  Dir.mktmpdir("spec-schemas-selftest") do |dir|
+    up  = File.join(dir, "published")
+    loc = File.join(dir, "vendored")
+    [up, loc].each { |d| Dir.mkdir(d) }
+
+    write = lambda do |root, name, body|
+      path = File.join(root, name)
+      File.write(path, JSON.pretty_generate(body))
+      path
+    end
+
+    copy = write.call(loc, "a.schema.json",
+                      doc.merge("$comment" => "VENDORED copy of the normative kiosk.tech schema."))
+    write.call(up, "a.schema.json", doc)
+    copies = { copy => "a.schema.json" }
+
+    check.call("a faithful copy PASSES, and the $comment is the permitted difference",
+               compare(copies: copies, spec_dir: up).first.empty?)
+
+    # S4 — content drift.
+    File.write(File.join(up, "a.schema.json"), JSON.pretty_generate(doc.merge("type" => "array")))
+    check.call("S4 RED: the published original changes and the copy does not",
+               compare(copies: copies, spec_dir: up).first.any? { _1.include?("has DRIFTED") })
+    write.call(up, "a.schema.json", doc)
+
+    # S4 again, from the other side: a copy edited to something upstream never said.
+    File.write(copy, JSON.pretty_generate(doc.merge("$comment" => "VENDORED", "type" => "array")))
+    check.call("S4 RED: the COPY is edited and the original is not",
+               compare(copies: copies, spec_dir: up).first.any? { _1.include?("has DRIFTED") })
+    File.write(copy, JSON.pretty_generate(doc.merge("$comment" => "VENDORED copy.")))
+
+    # S3 — the mirror, both directions.
+    write.call(up, "b.schema.json", doc)
+    check.call("S3 RED: a schema is published upstream and vendored nowhere here",
+               compare(copies: copies, spec_dir: up).first.any? { _1.include?("vendored NOWHERE") })
+    File.delete(File.join(up, "b.schema.json"))
+
+    check.call("S3 RED: a copy is vendored here and no longer published",
+               compare(copies: copies.merge(File.join(loc, "gone.schema.json") => "gone.schema.json"),
+                       spec_dir: up).first.any? { _1.include?("no longer published") })
+
+    # S2 — a copy that does not parse.
+    bad = File.join(loc, "bad.schema.json")
+    File.write(bad, "{ not json")
+    check.call("S2 RED: a vendored copy stops being valid JSON",
+               compare(copies: { bad => "bad.schema.json" }, spec_dir: up)
+                 .first.any? { _1.include?("not valid JSON") })
+
+    # S1 — a copy that is gone.
+    check.call("S1 RED: a vendored copy is deleted",
+               compare(copies: { File.join(loc, "nope.schema.json") => "nope.schema.json" },
+                       spec_dir: up).first.any? { _1.include?("vendored copy missing") })
+
+    # The sibling split, both spellings.
+    absent = File.join(dir, "not-here")
+    _, compared = compare(copies: copies, spec_dir: absent)
+    check.call("an absent sibling is reported as NOT COMPARED rather than as a comparison",
+               compared == false)
+  end
+
+  # ── VACUITY: the real manifest, and the real published set ────────────────
+  check.call("the vendored manifest is non-empty", !COPIES.empty?)
+  check.call("every declared copy is a path inside this repository",
+             COPIES.keys.all? { _1.start_with?("#{REPO}/") })
+  present = COPIES.keys.count { File.exist?(_1) }
+  check.call("every declared copy exists on disk (#{present}/#{COPIES.size})",
+             present == COPIES.size)
+  check.call("the manifest reaches BOTH homes — e2e/schemas and kiosk-server/lib",
+             COPIES.keys.any? { _1.include?("/e2e/schemas/") } &&
+               COPIES.keys.any? { _1.include?("/kiosk-server/lib/") })
+
+  # The `$comment` carve-out excuses a real difference or it excuses nothing.
+  carriers = COPIES.keys.select do |p|
+    File.exist?(p) && JSON.parse(File.read(p)).key?("$comment")
+  end
+  check.call("the $comment carve-out still excuses something real " \
+             "(#{carriers.size} vendored copies carry a provenance marker)",
+             carriers.size == COPIES.size)
+
+  default_dir = File.expand_path("../kiosk.tech/spec/schemas", REPO)
+  if File.directory?(default_dir)
+    published = Dir[File.join(default_dir, "*.schema.json")]
+    check.call("the published set beside this repo is non-empty (#{published.size} schemas)",
+               !published.empty?)
+  else
+    puts "  skip the published-set arm — #{default_dir} is not here (single-repo clone)"
+  end
+
+  if failures.empty?
+    puts "SELF-TEST OK"
+    0
+  else
+    puts "SELF-TEST FAILED: #{failures.size} arm(s)"
+    1
+  end
+end
+
 spec_dir = nil
 if (i = ARGV.index("--spec-dir"))
   spec_dir = ARGV[i + 1]
 end
 spec_dir ||= File.expand_path("../kiosk.tech/spec/schemas", REPO)
 
-failures = []
-
-# ── every vendored copy exists and parses ───────────────────────────────────
-COPIES.each_key do |path|
-  next if File.exist?(path)
-
-  failures << "vendored copy missing: #{path.delete_prefix("#{REPO}/")}"
-end
-
-COPIES.each_key do |path|
-  next unless File.exist?(path)
-
-  begin
-    JSON.parse(File.read(path))
-  rescue JSON::ParserError => e
-    failures << "vendored copy is not valid JSON: #{path.delete_prefix("#{REPO}/")} — #{e.message}"
-  end
-end
-
-unless File.directory?(spec_dir)
-  puts "bin/check-spec-schemas: #{COPIES.size} vendored copies present and parseable."
-  puts "  NOT COMPARED against the published originals — #{spec_dir} is not here."
-  puts "  kiosk.tech is a separate repo; run this from the umbrella checkout (or pass"
-  puts "  --spec-dir) to compare. This is the same split bin/check-solver-pin makes."
-  if failures.empty?
-    exit 0
-  else
-    failures.each { |f| warn "  FAIL #{f}" }
-    exit 1
-  end
-end
-
-# ── the mirror is COMPLETE in both directions ───────────────────────────────
-published = Dir[File.join(spec_dir, "*.schema.json")].map { |p| File.basename(p) }.sort
-vendored  = COPIES.values.sort
-
-(published - vendored).each do |name|
-  failures << "#{name} is published on kiosk.tech and vendored NOWHERE here — " \
-              "e2e/schema_conformance.rb cannot check the wire against it"
-end
-(vendored - published).each do |name|
-  failures << "#{name} is vendored here but no longer published — a copy of a schema " \
-              "that does not exist upstream is a fiction the e2e gate would still enforce"
-end
-
-# ── content ─────────────────────────────────────────────────────────────────
-COPIES.each do |path, name|
-  upstream_path = File.join(spec_dir, name)
-  next unless File.exist?(path) && File.exist?(upstream_path)
-
-  local    = JSON.parse(File.read(path))
-  upstream = JSON.parse(File.read(upstream_path))
-  # The provenance marker is the ONE permitted difference: it says the file is
-  # a copy, which is a true statement the original must not carry.
-  local.delete("$comment")
-  upstream.delete("$comment")
-  next if local == upstream
-
-  failures << "#{name} has DRIFTED from #{upstream_path}. Re-vendor it (keeping the " \
-              "$comment) — do not edit the copy to match some third thing."
-end
-
-if failures.empty?
-  puts "bin/check-spec-schemas: #{COPIES.size} vendored schemas match #{spec_dir}."
-  exit 0
-end
-
-failures.each { |f| warn "  FAIL #{f}" }
-warn "\nbin/check-spec-schemas: #{failures.size} problem(s)."
-exit 1
+exit(ARGV.include?("--self-test") ? self_test : run_check(spec_dir))

@@ -1795,9 +1795,12 @@ jobs:
   #     the published originals. e2e/schema_conformance.rb validates live wire
   #     bytes against the copies, so a schema edited on kiosk.tech and not here
   #     leaves e2e green while the wire diverges from what implementers read.
-  #     Sibling-less this script prints "NOT COMPARED" and exits 0 — measured —
-  #     which is why wiring it into any other job would have been a gate that
-  #     never compares anything.
+  #     Sibling-less this script prints "NOT COMPARED" and exits 0 — correct for
+  #     a developer's single-repo clone, and exactly what must not happen here,
+  #     so this job sets KIOSK_REQUIRE_SITE_SIBLING=1 and a checkout that
+  #     produced nothing is RED rather than a skip. Its --self-test runs first,
+  #     because a comparison whose planted breaks no longer redden is a green
+  #     line about nothing.
   published-bytes:
     name: pins and vendored schemas vs the published bytes (kiosk.tech sibling)
     runs-on: ubuntu-latest
@@ -1849,8 +1852,14 @@ jobs:
         working-directory: reference
         run: ./bin/check-live-skill-pin --offline
 
+      - name: The vendored-schema guard still reddens on a planted drift
+        working-directory: reference
+        run: ./bin/check-spec-schemas --self-test
+
       - name: The vendored JSON Schemas still match the published originals
         working-directory: reference
+        env:
+          KIOSK_REQUIRE_SITE_SIBLING: "1"
         run: ./bin/check-spec-schemas
 
   # A Keep-a-Changelog file answers each kind ONCE per release — everything

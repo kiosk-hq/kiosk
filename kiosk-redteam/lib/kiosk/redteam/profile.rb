@@ -21,18 +21,17 @@ module Kiosk
     # @!attribute declared_roles [Array<String>]
     #   The roles this origin DECLARES (`Kiosk.configuration.roles`), as
     #   strings. Read by {Scenarios::DeviceGrantRoleSelfSelection}, which must
-    #   name a role the origin actually has: an UNDECLARED role was refused by
-    #   the vulnerable code too, so a probe that only injects `role: "master"`
-    #   cannot fail and prints BLOCKED against a live escalation. That is not
-    #   hypothetical — it is exactly what {PrivilegeSelfSelection} did while
-    #   K-072 was open.
+    #   name a role the origin actually has: an origin that honours a
+    #   client-chosen role still refuses an UNDECLARED one, so a probe that only
+    #   injects `role: "master"` cannot fail and prints BLOCKED against a live
+    #   escalation.
     #
     #   Empty is legal and costs nothing: that scenario ALSO derives a declared
     #   role from the wire (the `role` claim of a token this origin itself
     #   mints at registration), so the probe set is never vacuous even when this
     #   list is stale or absent. Supply it anyway when the origin declares more
     #   than one role — the registration role is only ever ONE of them, and the
-    #   escalation K-072 was about is precisely a SECOND, more privileged one.
+    #   escalation being hunted here is precisely a SECOND, more privileged one.
     #
     # @!attribute requires_kyc [Boolean]
     #   Whether the provider's gated action requires a prior KYC attestation.

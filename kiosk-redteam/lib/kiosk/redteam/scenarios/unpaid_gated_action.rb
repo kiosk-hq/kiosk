@@ -28,10 +28,10 @@ module Kiosk
           a = register_principal(client, name: "redteam-uga-a", profile:)
 
           # KYC if the provider requires it (so the gated action is only
-          # blocked by missing payment, not by missing KYC).  That result used
-          # to be discarded (K-731) — and it is the ONLY thing separating this
-          # scenario from MissingKyc: if the attestation was not accepted, the
-          # refusal below is the KYC gate wearing the payment gate's name.
+          # blocked by missing payment, not by missing KYC).  Asserting that
+          # result is the ONLY thing separating this scenario from MissingKyc:
+          # if the attestation was not accepted, the refusal below is the KYC
+          # gate wearing the payment gate's name.
           kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
           failure  = setup_failure(
             kyc_resp,
@@ -51,11 +51,11 @@ module Kiosk
           # an unsettled principal as unauthenticated answers 401. The KYC
           # confusion is ruled out by the setup assertion above.
           #
-          # A 402 no longer counts (K-736). It reads like the payment gate, but
-          # the status alone cannot say WHICH of pow_required (a toll — the
-          # action never ran) / payment_setup_required (no card on file) /
-          # payment_failed (the rail declined after every gate said yes) came
-          # back, and only the last two are about paying for THIS resource.
+          # A 402 does not count. It reads like the payment gate, but the status
+          # alone cannot say WHICH of pow_required (a toll — the action never
+          # ran) / payment_setup_required (no card on file) / payment_failed
+          # (the rail declined after every gate said yes) came back, and only
+          # the last two are about paying for THIS resource.
           # Measured: all three consuming demos answer 403 here, so nothing
           # moves; a provider whose pay gate really does answer 402 must name
           # its code with expect_code: rather than have this scenario guess.

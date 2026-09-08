@@ -35,17 +35,17 @@ module Kiosk
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_expired.call(a.user_id))
 
           # A metered /kyc answers 402 BEFORE the attestation is examined, so the
-          # expiry check never ran and neither did its opposite. This branch used
-          # to count that 402 as "the expired attestation did not take effect"
-          # (K-736); falling through instead would be worse still — the gated
-          # action below would then be attacked by an un-attested principal, i.e.
-          # MissingKyc running under this scenario's name.
+          # expiry check never ran and neither did its opposite. Counting that
+          # 402 as "the expired attestation did not take effect" claims a proof
+          # nobody earned; falling through instead would be worse still — the
+          # gated action below would then be attacked by an un-attested
+          # principal, i.e. MissingKyc running under this scenario's name.
           stall = payment_required_stall(kyc_resp, step: "the expired attestation this scenario submits to /kyc")
           return stall if stall
 
           # If the KYC endpoint itself rejected the expired attestation → BLOCKED.
-          # Left permissive on purpose (K-728): this branch genuinely admits
-          # several gates — a provider that verifies `exp` inside its attestation
+          # Left permissive on purpose: this branch genuinely admits several
+          # gates — a provider that verifies `exp` inside its attestation
           # verifier answers 403 forbidden, and one that treats a dead attestation
           # as a failed authentication answers 401. Both mean the same thing here
           # — the expired attestation did not take effect — and the scenario is
@@ -60,7 +60,7 @@ module Kiosk
 
           # SETUP, not the attack: a refused payment leaves the gated action to
           # be refused by the payment gate, which this scenario would then read
-          # as the expiry check (K-731).
+          # as the expiry check.
           failure = setup_failure(
             pay_resp,
             step:    "the payment this scenario stages before the gated action",

@@ -20,7 +20,7 @@ module Kiosk
     # route their answer through {#with_pow_retry}: a `pow_required` 402 is
     # solved once and the identical request re-sent with the proofs in the
     # `Kiosk-PoW` header. A toll is a price, not a refusal — an attacker pays
-    # it, so a harness that cannot pay it cannot attack a tolled verb (K-760).
+    # it, so a harness that cannot pay it cannot attack a tolled verb.
     #
     # Two registration entry points:
     #   - {#register_raw} — always returns a {Response}; use in scenarios that
@@ -108,8 +108,8 @@ module Kiosk
       # @param client_id  [String] identifier of the calling client
       # @param public_key [String] PEM of the RSA key the ceremony would bind
       # @param extra      [Hash]   additional form fields. THE ADVERSARIAL
-      #   CHANNEL: `role:` / `scope:` are what K-072 read a client-chosen role
-      #   out of, and the engine now refuses both.
+      #   CHANNEL: `role:` / `scope:` are where a stranger names a role of their
+      #   own choosing, and the engine refuses both.
       # @return [Response] status + parsed JSON body
       def device_authorization(client_id:, public_key:, **extra)
         form = { "client_id" => client_id, "public_key" => public_key }
@@ -142,7 +142,7 @@ module Kiosk
       # PoW fingerprint binds to.
       #
       # A tolled query is ATTACKED, not stalled around: a `pow_required` 402 is
-      # answered with one solve-and-resend ({#with_pow_retry}, K-760).
+      # answered with one solve-and-resend ({#with_pow_retry}).
       #
       # @param principal [Principal]
       # @param name      [String]  query name registered by the provider
@@ -162,7 +162,7 @@ module Kiosk
       # is the arguments and nothing else.
       #
       # A tolled action is ATTACKED, not stalled around: a `pow_required` 402 is
-      # answered with one solve-and-resend ({#with_pow_retry}, K-760).
+      # answered with one solve-and-resend ({#with_pow_retry}).
       #
       # @param principal [Principal]
       # @param name      [String] action name registered by the provider
@@ -293,8 +293,7 @@ module Kiosk
         # Negative-test strategies short-circuit: :skip omits the proof
         # (missing-proof test), a verbatim String sends a malformed Kiosk-PoW
         # header value (bad-proof test). Both expect rejection, so we post once
-        # and return. The proof rides in the Kiosk-PoW header now (ADR-0022), not
-        # the body.
+        # and return. The proof rides in the Kiosk-PoW header, not the body.
         if pow == :skip
           return [post_json("/kiosk/auth/register", body), key]
         elsif pow.is_a?(String)
@@ -303,10 +302,9 @@ module Kiosk
 
         # :solve — post; if the provider gates registration (402 Equihash), solve
         # every challenge and resubmit the SAME signed body, sending the proof(s)
-        # in the Kiosk-PoW request header as raw JSON. Since K-760 that is the
-        # SHARED {#with_pow_retry}, not a branch that lives only here — register
-        # was the only tolled verb this client could pay, which is precisely
-        # what made a tolled query/action unattackable.
+        # in the Kiosk-PoW request header as raw JSON. That is the SHARED
+        # {#with_pow_retry}, not a branch that lives only here: every tolled verb
+        # pays the same way, so a tolled query or action stays attackable.
         resp = post_json("/kiosk/auth/register", body)
         resp = with_pow_retry(resp) do |pow|
           post_json("/kiosk/auth/register", body, pow: pow)
@@ -316,15 +314,15 @@ module Kiosk
 
       # ONE bounded 402-PoW retry: solve every challenge the provider issued and
       # re-send the IDENTICAL request with the proofs in the `Kiosk-PoW` header.
-      # Shared by registration and by every wire verb (K-760).
+      # Shared by registration and by every wire verb.
       #
       # WHY A HARNESS PAYS TOLLS. A `pow_required` 402 is a price, not a refusal
-      # (K-736) — so an attacker pays it, and a harness that cannot pay it
-      # cannot attack a tolled verb AT ALL. Until this method existed the solve
-      # branch lived inside {#build_register}, so the day an operator tolled a
-      # real query or action every scenario touching it went from "tested and
-      # blocked" to "cannot be tested" — total loss of coverage on exactly the
-      # surface the battery exists to exercise.
+      # — so an attacker pays it, and a harness that cannot pay it cannot attack
+      # a tolled verb AT ALL. Were the solve branch to live inside
+      # {#build_register} alone, the day an operator tolled a real query or
+      # action every scenario touching it would go from "tested and blocked" to
+      # "cannot be tested" — total loss of coverage on exactly the surface the
+      # battery exists to exercise.
       #
       # BOUNDED BY CONSTRUCTION: exactly one solve-and-resend per call, no
       # loop. A provider that re-demands the toll gets the second 402 handed
@@ -420,7 +418,7 @@ module Kiosk
       # @param body   [Hash]        request body (serialised to JSON)
       # @param bearer [String, nil] Bearer token for Authorization header
       # @param pow    [String, nil] raw Kiosk-PoW header value (the proof(s) as
-      #   raw JSON, ADR-0022) — used by the register + wire-verb PoW retries
+      #   raw JSON) — used by the register + wire-verb PoW retries
       # @return [Response]
       def post_json(path, body, bearer: nil, pow: nil)
         uri = URI("#{@base_url}#{path}")
@@ -451,11 +449,10 @@ module Kiosk
       # @param params [Hash]        query-string parameters
       # @param bearer [String, nil] Bearer token for Authorization header
       # @param pow    [String, nil] raw Kiosk-PoW header value. A GET has no
-      #   body, so the header is the ONLY channel a proof can travel on — which
-      #   is why ADR-0022 moved it there before the wire needed it. {#query} now
-      #   passes it, on the one bounded retry {#with_pow_retry} performs (K-760):
-      #   a toll DEFERS a request rather than refusing it (K-736), and a
-      #   deferred attack that is never re-sent is an attack that was never run.
+      #   body, so the header is the ONLY channel a proof can travel on. {#query}
+      #   passes it on the one bounded retry {#with_pow_retry} performs: a toll
+      #   DEFERS a request rather than refusing it, and a deferred attack that is
+      #   never re-sent is an attack that was never run.
       def get_json(path, params: {}, bearer: nil, pow: nil)
         uri = URI("#{@base_url}#{path}")
         uri.query = URI.encode_www_form(params) unless params.nil? || params.empty?

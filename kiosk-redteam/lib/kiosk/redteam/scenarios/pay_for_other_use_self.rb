@@ -41,8 +41,8 @@ module Kiosk
           b = register_principal(client, name: "redteam-c2-b", profile:)
 
           # B KYC'd (so the gated action isn't blocked by missing KYC; we
-          # want to test the ownership gate specifically).  That result was
-          # discarded — the K-731 class: an attestation the provider refused
+          # want to test the ownership gate specifically).  That result is
+          # asserted rather than discarded: an attestation the provider refused
           # leaves B un-attested, and the KYC gate then answers in the
           # ownership gate's name.
           kyc_resp = (submit_valid_kyc(client, b, profile) if profile.requires_kyc)
@@ -64,11 +64,11 @@ module Kiosk
           # Payment may or may not succeed depending on whether the provider
           # validates resource ownership at pay time.  An EARLY OWNERSHIP CHECK
           # is a 403 forbidden / rls_denied — the same gate, moved to pay time.
-          # It used to be any blocked? at all (K-732), so a 402 decline (the
-          # card, the toll, no payment method on file) and a 401 expired token
-          # were both reported as "blocked at pay step (early ownership check)"
-          # and the attack was never attempted: the scenario returned a pass
-          # naming a gate it had not reached.
+          # Nothing wider counts: admit any blocked? at all and a 402 decline
+          # (the card, the toll, no payment method on file) or a 401 expired
+          # token would be reported as "blocked at pay step (early ownership
+          # check)" while the attack was never attempted — a pass naming a gate
+          # the scenario had not reached.
           if pay_resp.status == 403 && %w[forbidden rls_denied].include?(error_code(pay_resp))
             return Verdict.new(
               blocked: true,

@@ -57,9 +57,9 @@ module Kiosk
       #
       # Two things catch a spurious skip.  {Runner#all_blocked?} refuses to go
       # green on a battery with no proofs at all, so a profile that skips
-      # EVERYTHING cannot exit 0 (K-734).  Above that floor, the
-      # expected-applicable assertion in each demo names which skips are
-      # expected for that provider and fails when the set changes.
+      # EVERYTHING cannot exit 0.  Above that floor, the expected-applicable
+      # assertion in each demo names which skips are expected for that provider
+      # and fails when the set changes.
       #
       # @param reason [String] human-readable reason, e.g. "no per_user_query"
       # @return [Verdict]
@@ -85,7 +85,7 @@ module Kiosk
       # as enforcement (see {Kiosk::Redteam.blocked?}).
       #
       # HTTP 402 is never blocked unless `expect_code:` names the code that came
-      # back (K-736). Three wire codes share that status and two of them are not
+      # back. Three wire codes share that status and two of them are not
       # refusals at all, so `expect: 402` alone demands nothing; on the
       # permissive path a 402 returns the "could not test" verdict
       # {#payment_required_stall} builds, which is not a pass and not a breach
@@ -100,10 +100,10 @@ module Kiosk
       # @return [Verdict]
       def verdict_from(response, expect: nil, expect_code: nil, detail: nil)
         if expect.nil? && expect_code.nil?
-          # A bare 402 delegation is the K-736 defect itself: `blocked?` used to
-          # answer true for all three of pow_required / payment_setup_required /
-          # payment_failed, so a tolled verb printed BLOCKED for an attack that
-          # never executed. Name which one answered instead of guessing.
+          # A bare 402 cannot be delegated: pow_required, payment_setup_required
+          # and payment_failed all ride that status, and scoring any of them a
+          # block would print BLOCKED for an attack that never executed. Name
+          # which one answered instead of guessing.
           stall = payment_required_stall(response)
           return stall if stall
 
@@ -122,7 +122,7 @@ module Kiosk
         misses << "want error.code #{Array(expect_code).map(&:inspect).join("/")}" \
           if expect_code && !Array(expect_code).include?(code)
         misses << "5xx is never a block" if response.status >= 500
-        # Naming 402 without naming the code names nothing (K-736).
+        # Naming 402 without naming the code names nothing.
         misses << "HTTP 402 is conclusive only with an explicit expect_code — " \
                   "#{Kiosk::Redteam::PAYMENT_REQUIRED_CODES.keys.join("/")} all ride that status" \
           if response.status == 402 && expect_code.nil?
@@ -138,17 +138,17 @@ module Kiosk
       end
 
       # A 402 answer means the attack was NOT evaluated — say so, rather than
-      # scoring it either way (K-736).
+      # scoring it either way.
       #
-      # `Kiosk::Server::Errors::CODES` maps three codes onto HTTP 402 and
-      # `blocked?` counted all three as "explicit auth/authz rejection".  Two of
-      # them are nothing of the sort: `pow_required` says "pay the toll and
-      # retry", while `payment_setup_required` says the attacker never put a
-      # card on file.  Both were printed as `BLOCKED ✓ … (HTTP 402)` for an
-      # attack that never ran.  Demonstrated on a stub transport before the fix.
+      # `Kiosk::Server::Errors::CODES` maps three codes onto HTTP 402, and
+      # counting any of them as an "explicit auth/authz rejection" prints
+      # `BLOCKED ✓ … (HTTP 402)` for an attack that never ran.  Two of the three
+      # are nothing of the sort: `pow_required` says "pay the toll and retry",
+      # while `payment_setup_required` says the attacker never put a card on
+      # file.
       #
-      # K-760 closed the half of that which was this harness's own doing:
-      # {Client#with_pow_retry} now solves the toll and re-sends the identical
+      # The half of that which is this harness's own doing is closed here:
+      # {Client#with_pow_retry} solves the toll and re-sends the identical
       # request ONCE, on every verb and not only on registration.  So a
       # `pow_required` that still arrives here survived a PAID retry — the
       # verdict says so, and it is a statement about the provider rather than
@@ -184,9 +184,9 @@ module Kiosk
       # state it means to attack, as opposed to the attack itself.  Returns a
       # diagnostic non-blocked Verdict when it did not, or nil to continue.
       #
-      # Discarding a setup response is how one gate ends up certifying another
-      # (K-731).  If the payment a KYC scenario stages is itself refused 402,
-      # the gated action that follows is refused by the PAYMENT gate — and that
+      # Discarding a setup response is how one gate ends up certifying another.
+      # If the payment a KYC scenario stages is itself refused 402, the gated
+      # action that follows is refused by the PAYMENT gate — and that
       # refusal is what gets printed as "BLOCKED ✓ MissingKyc".  The KYC gate
       # could be deleted outright and the line would not change.
       #
@@ -279,18 +279,18 @@ module Kiosk
       #
       # @param response [Response]
       # @return [Array<Hash>]
-      # ONE SHAPE (spec §8.2, since T-092): a query answers a BARE JSON ARRAY
-      # of rows, paginating or not. Truncation is an RFC 8288 `Link` header,
-      # not a body field, so there is nothing left to unwrap.
+      # ONE SHAPE (spec §8.2): a query answers a BARE JSON ARRAY of rows,
+      # paginating or not. Truncation is an RFC 8288 `Link` header, not a body
+      # field, so there is nothing left to unwrap.
       #
       # THE `{"rows": …}` BRANCH IS KEPT, AND ON PURPOSE. What this method
       # defends against is a VACUOUS PASS: an ownership check that asks "does
       # A's list contain the row B created" reads `[]` off a shape it does not
       # understand, concludes "not leaked", and reports BLOCKED for an origin
-      # it never actually tested — the exact defect class T-076 found six of.
-      # A redteam battery is pointed at THIRD-PARTY origins, including ones
-      # still serving an older cut, and silently scoring such an origin BLOCKED
-      # is far worse than reading a shape the current spec no longer produces.
+      # it never actually tested. A redteam battery is pointed at THIRD-PARTY
+      # origins, including ones still serving an older cut, and silently scoring
+      # such an origin BLOCKED is far worse than reading a shape the current
+      # spec no longer produces.
       # It costs two lines and it cannot produce a false ATTACK.
       def rows_from(response)
         body = response.body

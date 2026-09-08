@@ -7,7 +7,7 @@ module Kiosk
     # Decide whether a refusal carries the RUNTIME's own vocabulary — without
     # letting the ATTACKER decide the answer.
     #
-    # == The defect this exists to remove (T-121)
+    # == The defect this exists to remove
     #
     # Every hostile-shape beat in this fleet asserts the same third property
     # beside the status and the code: the error body must not name a Ruby class,

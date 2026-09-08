@@ -10,36 +10,36 @@ module Kiosk
       # Privilege self-selection at the ACCOUNT-BINDING CLAIM CEREMONY.
       #
       # {PrivilegeSelfSelection} is this scenario's sibling and covers the OTHER
-      # door: `POST /auth/register`, where the role has always been pinned from
+      # door: `POST /auth/register`, where the role is pinned from
       # `config.registration_role` and the body is never read. This one covers
-      # the door that was actually open — RFC 8628
-      # `POST <endpoint>/oauth/device_authorization`, the UNAUTHENTICATED
-      # request that opens the claim half of the binding ceremony.
+      # the wider door — RFC 8628 `POST <endpoint>/oauth/device_authorization`,
+      # the UNAUTHENTICATED request that opens the claim half of the binding
+      # ceremony.
       #
-      # == Why this exists (K-072, and it is not a hypothetical)
+      # == Why this exists, and why it is not a hypothetical
       #
       # That request carries no Cookie and no Authorization header, so anything
-      # in it is an assertion by a stranger. Until the K-072 fix the engine read
-      # `role` (or its OAuth spelling `scope`) off it, wrote it onto the
-      # authorization row, and baked it into the JWT the token poll returns —
-      # with membership of `config.roles` as the ONLY filter. Measured on a
-      # booted provider declaring two roles: a stranger's `role=owner` reached a
-      # token whose `role` claim was `owner`, approved by a plain customer whose
-      # consent page never showed the word.
+      # in it is an assertion by a stranger. An origin that reads `role` (or its
+      # OAuth spelling `scope`) off it, writes it onto the authorization row and
+      # bakes it into the JWT the token poll returns — with membership of
+      # `config.roles` as the ONLY filter — hands a stranger the role they asked
+      # for. Measured on a booted provider declaring two roles: `role=owner`
+      # reached a token whose `role` claim was `owner`, approved by a plain
+      # customer whose consent page never showed the word.
       #
-      # The role now comes from the APPROVING HUMAN's own identity, captured at
-      # the verify page, and `role`/`scope` on the opening request are REFUSED
-      # (400 `invalid_request`) rather than ignored — a silently dropped
-      # parameter leaves the caller believing it got what it asked for.
+      # In this engine the role comes from the APPROVING HUMAN's own identity,
+      # captured at the verify page, and `role`/`scope` on the opening request
+      # are REFUSED (400 `invalid_request`) rather than ignored — a silently
+      # dropped parameter leaves the caller believing it got what it asked for.
       #
       # == Why the probe must name a DECLARED role
       #
-      # The vulnerable code refused an UNDECLARED role: `config.roles` was the
-      # filter, so `role=master` came back 400 then exactly as it does now. A
-      # battery that injects only an invented role therefore CANNOT FAIL, and
-      # prints BLOCKED against a live escalation — which is what
-      # {PrivilegeSelfSelection}'s `ESCALATED_ROLE = "master"` did for the
-      # nineteen days K-072 was open.
+      # A vulnerable origin refuses an UNDECLARED role all the same:
+      # `config.roles` is the filter either way, so `role=master` comes back 400
+      # whether or not the escalation is live. A battery that injects only an
+      # invented role therefore CANNOT FAIL, and prints BLOCKED against a live
+      # escalation — the blind spot {PrivilegeSelfSelection}'s
+      # `ESCALATED_ROLE = "master"` has by construction.
       #
       # So the probe set here is built from roles the origin actually HAS:
       #
@@ -49,15 +49,15 @@ module Kiosk
       #      floor that cannot go stale: an origin whose declared set grows
       #      while a hand-kept profile list does not is still probed with a real
       #      role, because the token is read from the provider under test rather
-      #      than from a constant. (`config.roles` growing to two while the
-      #      battery still described one is the precise shape of how K-072's
-      #      recorded mitigation expired without anyone noticing.)
+      #      than from a constant. (An origin whose `config.roles` grows to two
+      #      while the battery still describes one is precisely how a recorded
+      #      mitigation expires without anyone noticing.)
       #   3. PLUS {UNDECLARED_ROLE}, which proves nothing on its own and is kept
       #      only so the verdict line shows both filters answering.
       #
       # Each role is probed under BOTH spellings, `role=` and `scope=`, because
-      # the vulnerable code read `params[:role] || params[:scope]` and a fix
-      # that guarded one would leave the other.
+      # a vulnerable origin reads `params[:role] || params[:scope]` and a guard
+      # on one of them leaves the other open.
       #
       # == Control
       #
@@ -70,8 +70,8 @@ module Kiosk
       # all, in which case there is no declared role for a client to name and
       # the escalation has nothing to escalate to.
       class DeviceGrantRoleSelfSelection < Scenario
-        # A role no provider declares. On its own it proves NOTHING — the
-        # vulnerable code refused it too. It is probed so the verdict detail
+        # A role no provider declares. On its own it proves NOTHING — a
+        # vulnerable origin refuses it too. It is probed so the verdict detail
         # shows the declared and undeclared filters side by side.
         UNDECLARED_ROLE = "master"
 
@@ -163,8 +163,8 @@ module Kiosk
             resp.status == 201 ? nil : resp,
             step:    "the CONTROL registration this scenario reads a declared role from",
             because: "without a role the origin actually declares, the only probe left is an " \
-                     "invented one — which the vulnerable code refused too, so the battery " \
-                     "would print BLOCKED without testing anything (K-072).",
+                     "invented one — which even a vulnerable origin refuses, so the battery " \
+                     "would print BLOCKED without testing anything.",
           ))
             return [nil, failure]
           end

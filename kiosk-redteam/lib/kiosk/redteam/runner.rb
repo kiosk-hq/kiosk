@@ -11,11 +11,11 @@ module Kiosk
     #   runner.run(scenarios)
     #   exit 1 unless runner.all_blocked?
     #
-    # Use THAT form, not `exit 1 if runner.breaches.any?` (which this docstring
-    # taught until K-728): `breaches` answers `[]` when `run` never happened, so
-    # the `if` idiom exits 0 for a battery that never ran — fail-open, on the
-    # gate whose whole job is to fail closed.  `all_blocked?` is false until a
-    # non-empty run has produced verdicts.
+    # Use THAT form, not `exit 1 if runner.breaches.any?`: `breaches` answers
+    # `[]` when `run` never happened, so the `if` idiom exits 0 for a battery
+    # that never ran — fail-open, on the gate whose whole job is to fail
+    # closed.  `all_blocked?` is false until a non-empty run has produced
+    # verdicts.
     #
     # Output per scenario:
     #   "  BLOCKED ✓ <name> (HTTP <status>)" — attack correctly blocked
@@ -43,7 +43,7 @@ module Kiosk
             # The status is part of the claim: "BLOCKED" alone does not say
             # WHICH gate answered, so a battery that went green because an
             # unrelated 404 or 402 satisfied a permissive check reads exactly
-            # like one that proved the gate (K-728).
+            # like one that proved the gate.
             puts "  BLOCKED ✓ #{scenario.name} (HTTP #{verdict.status})"
           else
             puts "  BREACH  ✗ #{scenario.name} — #{verdict.detail}"
@@ -76,16 +76,16 @@ module Kiosk
       #   (i.e. no breaches) AND at least one scenario actually ran.  Skipped
       #   scenarios do NOT count as passes.
       #
-      # That second clause is the K-734 floor.  "No breaches" is satisfied by a
+      # That second clause is the floor.  "No breaches" is satisfied by a
       # battery in which NOTHING was exercised: skip every scenario — one nil
-      # profile key does it — and this answered true, so `exit 1 unless
-      # all_blocked?` exited 0 on a run that proved nothing.  The safeguard
-      # cited for that (each demo's EXPECTED_SKIP_NAMES assertion) lives in the
-      # consuming demos, hand-copied per demo, and cannot protect a consumer
-      # that has not written it; this gem's own exit predicate can.  The demos
-      # keep their assertion — it names WHICH skips are expected, which is
-      # genuinely per-provider data — but the floor beneath it is now the gem's:
-      # never green without at least one proof.
+      # profile key does it — and without the clause this would answer true, so
+      # `exit 1 unless all_blocked?` would exit 0 on a run that proved nothing.
+      # A demo's EXPECTED_SKIP_NAMES assertion cannot carry that weight: it
+      # lives in the consuming demos, hand-copied per demo, and cannot protect a
+      # consumer that has not written it; this gem's own exit predicate can.
+      # The demos keep their assertion — it names WHICH skips are expected,
+      # which is genuinely per-provider data — but the floor beneath it is the
+      # gem's: never green without at least one proof.
       def all_blocked?
         return false if @results.nil? || @results.empty?
 

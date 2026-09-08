@@ -54,9 +54,9 @@ module Kiosk
   module Redteam
     # Canonical set of HTTP statuses that constitute a deliberate block.
     #
-    # 402 is deliberately ABSENT (K-736) — see {PAYMENT_REQUIRED_CODES}. That
-    # is unchanged by K-760: the harness now PAYS a PoW toll and re-sends, so a
-    # 402 that still reaches here is one the retry could not settle.
+    # 402 is deliberately ABSENT — see {PAYMENT_REQUIRED_CODES}. The harness
+    # PAYS a PoW toll and re-sends, so a 402 that still reaches here is one the
+    # retry could not settle.
     BLOCKED_STATUSES = [401, 403].freeze
 
     # The THREE problem-document `code`s kiosk-server maps onto HTTP 402
@@ -69,9 +69,9 @@ module Kiosk
     PAYMENT_REQUIRED_CODES = {
       "pow_required" =>
         "a toll was DEMANDED, not a refusal — the request was deferred until a proof is " \
-        "supplied. Since K-760 this harness PAYS that toll on every verb, so seeing this " \
-        "code here means the demand survived a paid retry (or arrived with no challenges " \
-        "to solve); either way the attack itself was never evaluated",
+        "supplied. This harness PAYS that toll on every verb, so seeing this code here " \
+        "means the demand survived a paid retry (or arrived with no challenges to " \
+        "solve); either way the attack itself was never evaluated",
       "payment_setup_required" =>
         "the principal has no payment instrument on file — a gap in the ATTACKER's setup, " \
         "not a decision about the attack",
@@ -85,8 +85,8 @@ module Kiosk
     # Note: "bad_request" (400) is intentionally excluded — a validation error
     # is NOT evidence of an auth/authz gate.  RegistrationWithoutPow uses its
     # own self-sufficient check instead of delegating to blocked?.
-    # "pow_required" is excluded for the reason 402 is (K-736): a toll defers a
-    # request, it does not refuse it.
+    # "pow_required" is excluded for the reason 402 is: a toll defers a request,
+    # it does not refuse it.
     BLOCKED_ERROR_CODES = %w[forbidden unauthenticated rls_denied].freeze
 
     # Read the problem document's `code` defensively — the body may not be a
@@ -122,10 +122,9 @@ module Kiosk
       why = PAYMENT_REQUIRED_CODES[code] ||
             "kiosk-server maps three codes onto 402 — #{PAYMENT_REQUIRED_CODES.keys.join(", ")} — " \
             "and this answer named none of them, so which gate fired (if any did) is unknowable"
-      # K-760: distinguish "the harness does not pay tolls" from "the toll was
-      # paid and demanded AGAIN". The first was a capability gap in this gem and
-      # is gone; the second is the provider's behaviour and an operator needs to
-      # be told which one they are looking at.
+      # Say whether the toll was already paid once: a demand that survives a
+      # paid retry is the provider's behaviour rather than a gap in this
+      # harness, and an operator needs to be told which one they are looking at.
       paid = response.pow_retried ? " [the harness already solved every issued " \
                                     "challenge and re-sent the identical request once]" : ""
       "HTTP #{response.status} code=#{code.inspect}:#{paid} #{why}"
@@ -135,17 +134,17 @@ module Kiosk
     #
     # Returns false for 5xx and connection-error responses so that a crash
     # can never be counted as "blocked" and mask a real breach.  The status
-    # test comes FIRST and is absolute: until K-728 the denial-code branch had
-    # no status guard, so a 500 whose body happened to carry `forbidden` — the
-    # shape a crashing authorization filter renders — was counted as a block,
-    # which is the one thing the paragraph above promises cannot happen.
+    # test comes FIRST and is absolute: without it a 500 whose body happens to
+    # carry `forbidden` — the shape a crashing authorization filter renders —
+    # would count as a block, which is the one thing the paragraph above
+    # promises cannot happen.
     #
-    # 402 answers false for the same family of reasons (K-736): two of the
-    # three codes behind that status are not refusals of anything, and the
-    # third is the payment rail's verdict rather than a gate's.  A scenario
-    # that genuinely means a payment gate names the code it accepts —
-    # {Scenario#verdict_from}'s `expect_code:` — instead of leaning on this
-    # predicate, which has no way to tell the three apart for it.
+    # 402 answers false for the same family of reasons: two of the three codes
+    # behind that status are not refusals of anything, and the third is the
+    # payment rail's verdict rather than a gate's.  A scenario that genuinely
+    # means a payment gate names the code it accepts — {Scenario#verdict_from}'s
+    # `expect_code:` — instead of leaning on this predicate, which has no way to
+    # tell the three apart for it.
     #
     # @param response [Response]
     # @return [Boolean]

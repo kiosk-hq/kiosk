@@ -15,7 +15,7 @@ module Kiosk
       #   5. BREACH  iff B's rows DO include it, iff B's query is not answered,
       #      or iff the control leg does not hold.
       #
-      # The control is not decoration (K-729). "B's rows do not contain A's id"
+      # The control is not decoration. "B's rows do not contain A's id"
       # is satisfied by every way of returning nothing: a provider with no
       # isolation logic whose query happens to answer `[]`, a `row_id_key` that
       # names no field in the rows (under which a REAL leak reads as clean), a

@@ -35,15 +35,15 @@ module Kiosk
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_forged.call(a.user_id))
 
           # A metered /kyc answers 402 BEFORE the issuer/signature is examined,
-          # so the forgery was neither caught nor accepted. This branch used to
-          # count that 402 as "the forged attestation did not take effect"
-          # (K-736); falling through instead would attack the gated action with
+          # so the forgery was neither caught nor accepted. Counting that 402 as
+          # "the forged attestation did not take effect" claims a proof nobody
+          # earned; falling through instead would attack the gated action with
           # an un-attested principal, i.e. MissingKyc under this scenario's name.
           stall = payment_required_stall(kyc_resp, step: "the forged attestation this scenario submits to /kyc")
           return stall if stall
 
-          # Left permissive on purpose (K-728): this branch genuinely admits
-          # several gates — an untrusted issuer is rejected as 403 forbidden by
+          # Left permissive on purpose: this branch genuinely admits several
+          # gates — an untrusted issuer is rejected as 403 forbidden by
           # a verifier that checks `iss`, and as 401 by one that treats an
           # unverifiable signature as a failed authentication. Both mean the
           # forged attestation did not take effect, which is all this claims.
@@ -55,7 +55,7 @@ module Kiosk
 
           # SETUP, not the attack: a refused payment leaves the gated action to
           # be refused by the payment gate, which this scenario would then read
-          # as the issuer/signature check (K-731).
+          # as the issuer/signature check.
           failure = setup_failure(
             pay_resp,
             step:    "the payment this scenario stages before the gated action",

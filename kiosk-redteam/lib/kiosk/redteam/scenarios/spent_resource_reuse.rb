@@ -31,10 +31,10 @@ module Kiosk
 
           a = register_principal(client, name: "redteam-srr-a", profile:)
 
-          # Same discarded-setup class as K-731's four named sites: an
-          # attestation that was not accepted makes the first use fail for a
-          # reason that has nothing to do with C3.  (The pay below needs no such
-          # assertion — the first-use control already requires a 200.)
+          # SETUP, not the attack: an attestation that was not accepted makes
+          # the first use fail for a reason that has nothing to do with C3.
+          # (The pay below needs no such assertion — the first-use control
+          # already requires a 200.)
           kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
           failure  = setup_failure(
             kyc_resp,

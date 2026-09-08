@@ -19,7 +19,7 @@ module Kiosk
       # a 400 "bad_request" validation error is not evidence of a PoW gate — only
       # the absence of a successful registration (HTTP 201 + access_token) is.
       #
-      # The control is what makes "both were rejected" mean anything (K-730).
+      # The control is what makes "both were rejected" mean anything.
       # A server that rejects EVERY registration satisfies both attack legs
       # without owning a PoW gate at all: this scenario was demonstrated
       # printing BLOCKED against a server that answered 404 on every path.

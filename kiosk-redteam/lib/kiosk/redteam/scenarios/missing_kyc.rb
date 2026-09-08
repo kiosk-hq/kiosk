@@ -36,9 +36,9 @@ module Kiosk
           pay_resp   = client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
 
           # The payment is SETUP: "after payment" is half this scenario's claim.
-          # Its response used to be discarded, so a pay that came back 402 left
-          # the gated action to be refused by the PAYMENT gate — and that
-          # refusal printed as BLOCKED ✓ MissingKyc (K-731, demonstrated).
+          # Discard its response and a pay that comes back 402 leaves the gated
+          # action to be refused by the PAYMENT gate — a refusal that would
+          # print as BLOCKED ✓ MissingKyc.
           failure = setup_failure(
             pay_resp,
             step:    "the payment this scenario stages before the gated action",

@@ -19,7 +19,7 @@ module Kiosk
       #      BLOCKED iff the server ignored it (issued role != "master") or
       #      refused the registration outright — but a refusal counts ONLY once
       #      a CONTROL registration, identical but for the injected role, has
-      #      returned 201 with a token (K-730).
+      #      returned 201 with a token.
       #
       # Without that control a refusal is free: a server that refuses every
       # registration refuses the escalation too, and this scenario was

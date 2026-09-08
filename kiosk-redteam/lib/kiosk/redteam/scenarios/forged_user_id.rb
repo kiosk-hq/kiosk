@@ -52,7 +52,7 @@ module Kiosk
           # whether the injected user_id would have been honoured, and the
           # ownership check below cannot run either — there is no new resource
           # to look for. Say could-not-test rather than reading the rest of this
-          # method's silence as a pass (K-736).
+          # method's silence as a pass.
           stall = payment_required_stall(resp, step: "the forged-user_id #{profile.forge_action} call")
           return stall if stall
 
@@ -68,8 +68,8 @@ module Kiosk
           #
           # `blocked?` cannot say so and must not be taught to: it excludes
           # `bad_request` on purpose, because a validation error in general is
-          # not evidence of an auth gate (K-728). What makes THIS 400 evidence
-          # is the one thing a generic predicate cannot check — that the refusal
+          # not evidence of an auth gate. What makes THIS 400 evidence is the
+          # one thing a generic predicate cannot check — that the refusal
           # names the property we injected. So the check lives here, where the
           # injected name is known, and nowhere else.
           if resp.status == 400 && Kiosk::Redteam.error_code(resp) == "bad_request" &&
@@ -84,7 +84,7 @@ module Kiosk
           end
 
           # If the call was rejected outright, the server caught it — but only
-          # an auth/authz refusal is "caught it" (K-728).
+          # an auth/authz refusal is "caught it".
           # 401 and 403 are both admitted: a provider may treat a caller
           # claiming another principal as unauthenticated rather than forbidden.
           if Kiosk::Redteam.blocked?(resp)

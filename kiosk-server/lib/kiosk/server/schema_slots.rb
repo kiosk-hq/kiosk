@@ -20,13 +20,12 @@ module Kiosk
     # defers BOTH problems: nothing is called while the class body is read, and
     # what is called is called again later.
     #
-    # ── Two things Phil asked for, and they pull against each other ────────
+    # ── Two requirements, and they pull against each other ─────────────────
     #
-    #   (1) «Можно закешировать при первом вызове» — resolve once and reuse.
-    #       Necessary: {Queries.describe} is on the PER-REQUEST validation path
-    #       (see {VerbController#arguments_for}), so an unmemoized proc is a
-    #       database round-trip added to every verb call.
-    #   (2) «каталог должен обновляться динамически, без деплоя» — an operator
+    #   (1) RESOLVE ONCE AND REUSE. {Queries.describe} is on the PER-REQUEST
+    #       validation path (see {VerbController#arguments_for}), so an
+    #       unmemoized proc is a database round-trip added to every verb call.
+    #   (2) THE CATALOGUE UPDATES DYNAMICALLY, WITHOUT A DEPLOY. An operator
     #       who adds a category must not have to restart or redeploy to
     #       publish it.
     #

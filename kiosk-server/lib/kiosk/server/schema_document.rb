@@ -48,9 +48,9 @@ module Kiosk
     #
     # A descriptor slot may be a PROC — `enum: -> { Category.pluck(:slug) }` —
     # which makes the catalogue a function of the operator's ROWS, not only of
-    # their code. Phil's constraint is that such a change «должен обновляться
-    # динамически, без деплоя»: adding a category must publish itself without
-    # a restart. A memo keyed on the verb NAMES cannot see that change — the
+    # their code, and such a change must publish itself DYNAMICALLY, WITHOUT A
+    # DEPLOY: an operator who adds a category gets it into the served catalogue
+    # without a restart. A memo keyed on the verb NAMES cannot see that — the
     # names did not move — so {cache_key} carries {SchemaSlots.epoch} too, and
     # this document re-derives once per refresh window while any slot is
     # dynamic. On an origin with no proc anywhere the epoch is a constant `0`

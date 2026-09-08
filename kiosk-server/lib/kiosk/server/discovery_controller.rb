@@ -31,8 +31,8 @@ module Kiosk
     # provider that mounts these routes serves the correct origin without
     # extra config. Unauthenticated by design — discovery is public.
     class DiscoveryController < ::ActionController::API
-      # NO `Vary`, ON ANY OF THE SIX (Phil, 2026-08-19: «А Vary зачем? Это
-      # паблик, общедоступная инфа.»).
+      # NO `Vary`, ON ANY OF THE SIX: every one of them is public, and a
+      # public document has one answer for everybody.
       #
       # None of these documents reads a request header — every one of them is
       # composed from `Kiosk.configuration` plus `request.base_url` — so there

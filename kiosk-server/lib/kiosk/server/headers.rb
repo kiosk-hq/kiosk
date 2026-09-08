@@ -158,19 +158,17 @@ module Kiosk
       # any more. It is the asset-pipeline pattern, and it is what makes a
       # year safe rather than a bug.
       #
-      # WHY THE SHORT ONE IS SIXTY SECONDS AND NOT FIVE MINUTES (Phil,
-      # 2026-08-19). The number is not a cache-efficiency knob; it is the
-      # length of time an operator has to live with AFTER A DEPLOY, during
-      # which some callers still hold the previous pointer document and follow
-      # the previous `?v=` link. Phil weighed exactly that: «это после деплоя
-      # придётся … мириться с тем, что все будут получать старый документ. На
-      # другой стороне весов — чтобы не слишком часто дёргался backend.
-      # Кажется, max-age в 1m будет сносным компромиссом.» A minute of
-      # post-deploy staleness is tolerable; five was chosen when nobody had
-      # asked that question. The load side of the trade is NOT paid by this
-      # number — it is paid by {IMMUTABLE_MAX_AGE} on the versioned URL, which
-      # is where the bytes actually are, because an assistant follows the link
-      # from the pointer rather than re-fetching the catalogue itself.
+      # WHY THE SHORT ONE IS SIXTY SECONDS. The number is not a
+      # cache-efficiency knob; it is the length of time an operator has to live
+      # with AFTER A DEPLOY, during which some callers still hold the previous
+      # pointer document and follow the previous `?v=` link. A minute of
+      # post-deploy staleness is what this wire is willing to serve. The load
+      # side of the trade is NOT paid by this number — it is paid by
+      # {IMMUTABLE_MAX_AGE} on the versioned URL, which is where the bytes
+      # actually are, because an assistant follows the link from the pointer
+      # rather than re-fetching the catalogue itself. Raising it trades
+      # post-deploy staleness for nothing: the backend load a longer TTL would
+      # save is already saved on the versioned URL.
       SHORT_MAX_AGE     = 60          # one minute — the fixed, unversioned URL
       IMMUTABLE_MAX_AGE = 31_536_000  # a year — a digest-versioned URL
 
@@ -184,8 +182,8 @@ module Kiosk
 
       # Apply the public policy to ONE response.
       #
-      # IT SETS NO `Vary`, AND THAT IS THE POINT — Phil, 2026-08-19, on the
-      # discovery documents: «А Vary зачем? Это паблик, общедоступная инфа.»
+      # IT SETS NO `Vary`, AND THAT IS THE POINT. These documents are public:
+      # one answer, the same for every caller, whatever they sent.
       # `Vary` belongs on the per-identity plane, where the answer really does
       # depend on `Authorization` and `Kiosk-PoW`, and those answers are
       # `private, no-store` anyway. A public document has one answer for

@@ -65,15 +65,17 @@ module DeliverySlots
   end
 
   # The window rendered for a human, IN THE ZONE IT NAMES — "08:00–10:00
-  # (Europe/Dublin)". ONE writer for the whole demo: `delivery_slots` publishes
-  # the window it is offering and `my_orders` publishes the window that was
-  # booked, and those are the same string about the same window. Written twice
-  # they are two answers that drift.
+  # (Europe/Dublin)". ONE writer for the whole demo, and every verb that speaks
+  # this window goes through it: `delivery_slots` offers a window, `create_order`
+  # books it, `reschedule_delivery` moves it and `my_orders` reads it back —
+  # four verbs, one string about one window. Written four times they are four
+  # answers that drift.
   #
   # It takes an INSTANT rather than a slot_id because `my_orders` has only the
   # stored instant, and it reads the hour off THIS zone rather than off the
-  # value's own offset — a `timestamptz` comes back from the database on
-  # whatever clock the connection is using, and the label must name Dublin's.
+  # value's own offset: ActiveRecord hands a `timestamptz` back as a
+  # TimeWithZone in `Time.zone`, which is UTC here because this app sets no
+  # `config.time_zone`, and the label must name Dublin's.
   def label(time)
     hour = time.in_time_zone(zone).hour
     "#{hour.to_s.rjust(2, "0")}:00–#{(hour + WINDOW_HOURS).to_s.rjust(2, "0")}:00 (#{ZONE_NAME})"

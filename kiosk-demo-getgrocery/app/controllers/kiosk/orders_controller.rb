@@ -161,9 +161,13 @@ class Kiosk::OrdersController < ActionController::API
                   total_eur:   { type: "string", description: "The same total rendered for a human, e.g. \"€12.87\"." },
                   currency:    { type: "string", description: "eur — the currency the cart must be signed in." },
                   slot_at:     { type: "string", description: "The booked delivery window's start instant, ISO 8601 with offset." },
+                  slot_label:  { type: "string", description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
+                                                              "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\". The wall clock " \
+                                                              "is the delivery address's, not the caller's; `slot_at` carries " \
+                                                              "the same instant with its resolved offset." },
                   pay_hint:    { type: "string", description: "The mandate this order expects, in words." },
                 },
-                required: %w[order_id total_cents total_eur currency slot_at pay_hint]
+                required: %w[order_id total_cents total_eur currency slot_at slot_label pay_hint]
   # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
   # publish a `delivery_date` the operation refuses as past. `slot_at` derives
   # from the SAME day and the slot id beside it, so they cannot drift apart.
@@ -177,6 +181,7 @@ class Kiosk::OrdersController < ActionController::API
     order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", total_cents: 1287,
     total_eur: "€12.87", currency: "eur",
     slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
+    slot_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
@@ -225,13 +230,17 @@ class Kiosk::OrdersController < ActionController::API
                 properties: {
                   order_id:       { type: "string", description: "The order that moved, echoed." },
                   rescheduled_at: { type: "string", description: "The NEW delivery window's start instant, ISO 8601 with offset." },
+                  rescheduled_label: { type: "string", description: "The NEW window rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                    "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\" — from the same " \
+                                                                    "writer as `delivery_slots`, `create_order` and `my_orders`." },
                 },
-                required: %w[order_id rescheduled_at]
+                required: %w[order_id rescheduled_at rescheduled_label]
   # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
-                rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 } })
+                rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
+                rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) } })
   def reschedule_delivery
     render_operation RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],

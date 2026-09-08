@@ -110,7 +110,13 @@ class RescheduleDeliveryOperation
              updated_at: Time.current,
            )
 
-      OperationResult.ok({ order_id: order_id, rescheduled_at: slot_at.iso8601 })
+      # The label travels beside the instant here for the same reason it does
+      # on `delivery_slots`, `create_order` and `my_orders`: this is the fourth
+      # verb that publishes this window, and a window published without its zone
+      # is the one an assistant reads back an hour wrong.
+      OperationResult.ok({ order_id:         order_id,
+                           rescheduled_at:   slot_at.iso8601,
+                           rescheduled_label: DeliverySlots.label(slot_at) })
     end
   end
 end

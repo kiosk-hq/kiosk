@@ -74,9 +74,9 @@ module Admin
           "status"           => status,
           "total_cents"      => total_cents,
           # THE WINDOW IS RENDERED HERE, THROUGH THE ONE WRITER THE WIRE USES.
-          # `slot_at` is a `timestamptz` and comes back on whatever clock the
-          # connection is on — the SERVER's, because this page runs outside the
-          # wire and no `SET LOCAL` has been issued — so a view that re-parsed
+          # `slot_at` is a `timestamptz` and ActiveRecord hands it back as a
+          # TimeWithZone in `Time.zone` — UTC here, because this app sets no
+          # `config.time_zone` — so a view that re-parsed
           # it would print 07:00 where the customer was told
           # «08:00–10:00 (Europe/Dublin)». {DeliverySlots.label} is the single
           # writer for that string and {DeliverySlots.zone} for the day beside
@@ -91,8 +91,8 @@ module Admin
           # delivery window beside an «Ordered» time on the server's clock, with
           # nothing on the page saying which is which, is worse for the operator
           # than two wrong times that at least agree.
-          # `created_at` is a `timestamptz` and arrives on the
-          # connection's clock for the same reason `slot_at` does, so it is read
+          # `created_at` is a `timestamptz` and arrives in `Time.zone` for the
+          # same reason `slot_at` does, so it is read
           # through the SAME zone and NAMES it, exactly as {DeliverySlots.label}
           # names it for the window. One screen, one clock, both of them said out
           # loud.

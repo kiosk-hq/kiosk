@@ -473,9 +473,10 @@ class Kiosk::StorefrontController < ActionController::API
                           "status"        => status,
                           "total_cents"   => total_cents,
                           # ONE FIELD, ONE CLOCK, EVERY VERB. `delivery_slots`
-                          # offers the window and `create_order` books it, both
-                          # on the DELIVERY zone's; this is the reconciliation
-                          # read of that same booking, so it answers there too.
+                          # offers the window, `create_order` books it and
+                          # `reschedule_delivery` moves it, all three on the
+                          # DELIVERY zone's; this is the reconciliation read of
+                          # that same booking, so it answers there too.
                           # Published as "+00:00" it would be one instant in a
                           # second spelling, and an assistant formatting that
                           # without converting reads a human the 07:00 of an
@@ -586,9 +587,10 @@ class Kiosk::OrdersController < ActionController::API
                   total_eur:   { type: "string" },
                   currency:    { type: "string" },
                   slot_at:     { type: "string" },
+                  slot_label:  { type: "string" },
                   pay_hint:    { type: "string" },
                 },
-                required: %w[order_id total_cents total_eur currency slot_at pay_hint]
+                required: %w[order_id total_cents total_eur currency slot_at slot_label pay_hint]
   # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
   # publish a `delivery_date` the operation refuses as past. `slot_at` derives
   # from the SAME day and the slot id beside it, so they cannot drift apart.
@@ -602,6 +604,7 @@ class Kiosk::OrdersController < ActionController::API
     order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", total_cents: 1287,
     total_eur: "€12.87", currency: "eur",
     slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
+    slot_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
@@ -638,13 +641,15 @@ class Kiosk::OrdersController < ActionController::API
                 properties: {
                   order_id:       { type: "string" },
                   rescheduled_at: { type: "string" },
+                  rescheduled_label: { type: "string" },
                 },
-                required: %w[order_id rescheduled_at]
+                required: %w[order_id rescheduled_at rescheduled_label]
   # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
-                rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 } })
+                rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
+                rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) } })
   def reschedule_delivery
     render_operation RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],

@@ -140,13 +140,15 @@ key and not a time zone — `zone` would mean something else in a row that also
 publishes a delivery window.
 
 **Every verb that publishes this window publishes it the same way.**
-`delivery_slots` offers a window, `create_order` books it, and `my_orders` reads
-it back after the fact — one field, one clock: `slot_at` carries the DELIVERY
-zone's offset in every one of them, and a zone-bearing label travels beside it
-in every one of them (`label` on a slot row, `slot_label` on an order). `my_orders` used to
-answer `+00:00` where the booking said `+01:00` — the same instant, spelled a
-second way, with no clock named beside it — and it is the verb §11.6 sends an
-assistant to after a `pay` whose response was lost, which is exactly the row a
+`delivery_slots` offers a window, `create_order` books it,
+`reschedule_delivery` moves it, and `my_orders` reads it back after the fact —
+one field, one clock: the instant carries the DELIVERY zone's offset in every
+one of the four, and a zone-bearing label from the one writer
+(`DeliverySlots.label`) travels beside it in every one of the four (`label` on a
+slot row, `slot_label` on an order and on the booking, `rescheduled_label` on
+the move). An instant published with no clock named beside it is the same
+instant in a second spelling, and `my_orders` is the verb §11.6 sends an
+assistant to after a `pay` whose response was lost — which is exactly the row a
 human hears read back.
 
 `delivery_slots` returns only **still-bookable** windows: for **today**, a slot

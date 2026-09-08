@@ -195,6 +195,13 @@ class CreateOrderOperation
         total_eur:   Product.format_eur(total_cents),
         currency:    "eur",
         slot_at:     slot_at.iso8601,
+        # ONE FIELD, ONE CLOCK, EVERY VERB — and the label travels with it.
+        # `delivery_slots` offered this window with a zone-bearing label beside
+        # it; the booking answers with the same string from the same writer, so
+        # an assistant reading the confirmation back to a human speaks the
+        # window in the delivery zone rather than in an offset nobody says out
+        # loud.
+        slot_label:  DeliverySlots.label(slot_at),
         pay_hint:    "pay in EUR with a cart mandate whose line_items mirror this order: " \
                      "one {\"order_id\": \"#{new_order_id}\"} entry plus one " \
                      "{\"sku\", \"qty\", \"price_cents\"} entry per item at catalog prices — " \

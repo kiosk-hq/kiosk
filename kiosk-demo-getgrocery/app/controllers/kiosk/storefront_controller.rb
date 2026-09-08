@@ -31,9 +31,14 @@ class Kiosk::StorefrontController < ActionController::API
   # ── catalog — the public shelf. No per-principal scoping: every authenticated
   # agent browses the same in-stock catalogue.
   kind :query
+  # The unit and the currency are declared on `price_cents` and `currency`
+  # below, so this prose does not restate them: a description carries semantics,
+  # the schema carries shape. What stays is semantics no schema can hold — that
+  # a cart is signed at the price on the shelf, so a cached price is not a
+  # price.
   description "Browse the getgrocery catalogue. Only what is IN STOCK appears — a sold-out product is " \
-              "absent rather than listed as unavailable. Prices are EUR cents and a " \
-              "cart is signed at exactly these, so re-read the shelf before paying rather than " \
+              "absent rather than listed as unavailable. A cart is signed at exactly the price the " \
+              "shelf shows, so re-read it before paying rather than " \
               "trusting a price you cached. Two flags matter to an assistant: one marks a product " \
               "whose stock is running out, and one marks alcohol — which `create_order` accepts only " \
               "from an account that has already completed an 18+ anonymized-KYC check, and " \
@@ -236,9 +241,9 @@ class Kiosk::StorefrontController < ActionController::API
                     status:        { type: "string", description: "The operator's order status — where the BASKET stands (created, paying, paid, rescheduled). Read payment_state for where the money stands." },
                     total_cents:   { type: "integer", description: "EUR cents." },
                     slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null. " \
-                                                                        "The offset is the DELIVERY zone's — the same one `delivery_slots` and " \
-                                                                        "`create_order` gave you for this window, so the three verbs spell one " \
-                                                                        "instant one way." },
+                                                                        "The offset is the DELIVERY zone's — the same one `delivery_slots`, " \
+                                                                        "`create_order` and `reschedule_delivery` gave you for this window, so " \
+                                                                        "the four verbs spell one instant one way." },
                     slot_label:    { type: %w[string null], description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
                                                                         "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\" — or null when no window " \
                                                                         "is booked. The wall clock is the delivery address's, not the caller's; " \
@@ -263,9 +268,10 @@ class Kiosk::StorefrontController < ActionController::API
                           "status"        => status,
                           "total_cents"   => total_cents,
                           # ONE FIELD, ONE CLOCK, EVERY VERB. `delivery_slots`
-                          # offers the window and `create_order` books it, both
-                          # on the DELIVERY zone's; this is the reconciliation
-                          # read of that same booking, so it answers there too.
+                          # offers the window, `create_order` books it and
+                          # `reschedule_delivery` moves it, all three on the
+                          # DELIVERY zone's; this is the reconciliation read of
+                          # that same booking, so it answers there too.
                           # Published as "+00:00" it would be one instant in a
                           # second spelling, and an assistant formatting that
                           # without converting reads a human the 07:00 of an

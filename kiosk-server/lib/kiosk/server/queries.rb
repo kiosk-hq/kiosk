@@ -12,21 +12,14 @@ module Kiosk
     # agent can only ever supply a query name + param values — never SQL — so the
     # no-agent-SQL property holds regardless of what a handler does.
     #
-    # ONE WAY IN (K-495 / T-053 / T-081). A verb is declared by `include
-    # Kiosk::Handler` in a controller the operator owns, where class-level macros
-    # bind to the next-defined method and the handler is an ordinary controller
-    # action; `kind :query` is what puts it HERE rather than in {Actions}, and
-    # the same class may declare both (K-921). See {Kiosk::Handler}. The
-    # operator names those classes in
-    # `Kiosk.configuration.handlers` and {HandlerRegistrations} — driven by the
-    # engine's `to_prepare` — puts them here. It is what all seven demos, the
-    # e2e harness and the install generator use.
-    #
-    # The `register(name) { |args| … }` call this registry used to expose
-    # alongside that is GONE (T-081). It was a second shape for the same thing
-    # that could not be reloaded, could not be reached by Rails' own filters,
-    # rescue_from or params handling, and taught operators — in the very file an
-    # adopter copies — that Rails does not apply to their wire surface.
+    # ONE WAY IN. A verb is declared by `include Kiosk::Handler` in a
+    # controller the operator owns, where class-level macros bind to the
+    # next-defined method and the handler is an ordinary controller action;
+    # `kind :query` is what puts it HERE rather than in {Actions}, and the same
+    # class may declare both. See {Kiosk::Handler}. The operator names those
+    # classes in `Kiosk.configuration.handlers` and {HandlerRegistrations} —
+    # driven by the engine's `to_prepare` — puts them here. It is what all
+    # seven demos, the e2e harness and the install generator use.
     #
     # A handler runs inside a GUC-scoped {SessionContext}, so
     # `kiosk.current_user_id()` and friends are available for per-user scoping.
@@ -40,10 +33,9 @@ module Kiosk
     # TWO of them are REQUIRED of every verb — `schema-descriptor.schema.json`
     # lists `input_schema` and `output_schema` in the descriptor's `required`,
     # protocol.md Section 8.3 says both are REQUIRED, and {HandlerMixin} raises
-    # at class-body load for a declaration missing either (T-073 = A, landed by
-    # T-068; K-598 / K-671 / K-680):
+    # at class-body load for a declaration missing either:
     #   reach:          REQUIRED, and DEFAULTED. Whose rows this verb may touch
-    #                   (spec §7.2, ADR-0028): `principal` (the default and the
+    #                   (spec §7.2): `principal` (the default and the
     #                   norm — only the caller's own rows, or rows that belong to
     #                   no principal), `published`, `consented` or `role`. A
     #                   declaration that says nothing means `principal`, so the
@@ -53,7 +45,7 @@ module Kiosk
     #                   verb is scoped to you" is a fact an assistant should read
     #                   rather than infer from a missing key.
     #   description:    prose semantics — what this verb does and what the result
-    #                   MEANS. Never a field list or a type (ADR-0023 / K-500).
+    #                   MEANS. Never a field list or a type.
     #   input_schema:   REQUIRED. A JSON-Schema object describing this query's
     #                   INPUTS (required/optional, types, enums, ranges). THE
     #                   input contract — every name and type lives here, and the
@@ -69,9 +61,6 @@ module Kiosk
     #                   verbatim. It ILLUSTRATES input_schema, and loses to it.
     #   example_row:    OPTIONAL. An example of ONE row this query returns. It
     #                   ILLUSTRATES output_schema, and loses to it.
-    #
-    # `params` — the free-text hint ADR-0023 retired — is not a macro, and since
-    # T-085 it is not a descriptor key either: spec §8.3 removed the slot.
     module Queries
       # Which registry a memoized descriptor belongs to ({SchemaSlots}).
       SCOPE = :query
@@ -94,7 +83,7 @@ module Kiosk
                     input_schema: nil, output_schema: nil, example_params: nil,
                     example_row: nil)
           # A declaration whose schema slots carry a proc puts this origin on
-          # the resolving path (K-922). STRUCTURAL: it looks for procs, it
+          # the resolving path. STRUCTURAL: it looks for procs, it
           # never calls one — a class body is read at `db:create` too.
           SchemaSlots.note_declaration(
             input_schema: input_schema, output_schema: output_schema,
@@ -119,15 +108,10 @@ module Kiosk
 
         # Returns a descriptor Hash for the named query:
         #   { name: String, description: String|nil, reach: String }
-        # plus, ONLY when the operator declared them, the ADR-0021 machine-readable
-        # keys `input_schema`, `output_schema`, `example_params`, `example_row`.
+        # plus, ONLY when the operator declared them, the machine-readable keys
+        # `input_schema`, `output_schema`, `example_params`, `example_row`.
         # Absent keys are omitted entirely, so an undeclared extension is absent
         # rather than a null an assistant has to interpret.
-        #
-        # `params` — the free-text hint ADR-0023 retired — is NOT here. It was
-        # published as a literal nil long after no macro could set one, and spec
-        # §8.3 now says a descriptor MUST NOT carry it (T-085), so the key is
-        # gone from every descriptor this implementation serves.
         def describe(name)
           entry = registry.fetch(name.to_s) do
             raise Errors::VerbNotFound.new(
@@ -135,7 +119,7 @@ module Kiosk
               hint: verb_not_found_hint(name),
             )
           end
-          # A slot may be a PROC (K-922) — a schema derived from the operator's
+          # A slot may be a PROC — a schema derived from the operator's
           # own rows, `enum: -> { Category.pluck(:slug) }`. {SchemaSlots}
           # resolves it lazily and memoizes it with a lifetime, so an operator
           # who adds a row does not have to redeploy to publish it, and the

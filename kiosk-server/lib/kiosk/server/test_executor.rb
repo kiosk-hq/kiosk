@@ -200,13 +200,13 @@ module Kiosk
 
       private
 
-      # `lease_connection`, not `connection` (K-782): the LAST
-      # `ActiveRecord::Base.connection` in this gem. It is soft-deprecated in
-      # Rails 8.1 and RAISES under `permanent_connection_checkout =
-      # :disallowed`, so a host on the new default could not build a
-      # TestExecutor without injecting a connection by hand — and one survivor
-      # is enough to keep teaching the idiom the rest of the engine just gave
-      # up. Not `with_connection`: this object holds its connection across many
+      # `lease_connection`, not `connection`: `ActiveRecord::Base.connection`
+      # is soft-deprecated in Rails 8.1 and RAISES under
+      # `permanent_connection_checkout = :disallowed`, so a host on the new
+      # default could not build a TestExecutor without injecting a connection
+      # by hand — and one survivor anywhere in this gem would be enough to keep
+      # teaching an idiom the rest of the engine does not use. Not
+      # `with_connection`: this object holds its connection across many
       # `as_user`/`as_agent` blocks, each of which opens its own GUC-scoped
       # transaction on it, so the connection outlives any single block.
       def default_connection = ::ActiveRecord::Base.lease_connection
@@ -219,7 +219,7 @@ module Kiosk
       end
 
       # `[sql, binds]` pairs through `exec_query` — the identity GUCs travel as
-      # bind parameters (K-789), so this mirrors `SessionContext#apply_gucs`
+      # bind parameters, so this mirrors `SessionContext#apply_gucs`
       # rather than re-implementing it.
       def apply_gucs(identity)
         SessionContext.new(connection: connection, identity: identity)

@@ -33,7 +33,7 @@ module Kiosk
     # a truthy-but-not-true grant past a downstream `== true` gate.
     module KycVerifier
       # The claims an attestation MUST carry, named ONCE so the decode below
-      # and the hint the wire publishes cannot drift (K-1307). The JWT gem's
+      # and the hint the wire publishes cannot drift. The JWT gem's
       # own wording is not published here: it is that library's sentence, not
       # this protocol's, and it moves when the dependency is upgraded.
       REQUIRED_CLAIMS = %w[exp iss aud sub].freeze
@@ -50,13 +50,13 @@ module Kiosk
         config = Kiosk.configuration
         key    = config.kyc_public_key
 
-        # `module_not_served` (501) and not `forbidden` (403) since T-158: this
-        # refusal is a fact about the ORIGIN, not about the caller's identity.
-        # `forbidden` is glossed "authenticated, but this identity may not do
-        # this" and this one is true of every caller including an anonymous
-        # one, which is exactly the mis-fit K-1207 measured. `detail` names the
-        # module because that is the only thing separating "no KYC here" from
-        # "no payments here" to a reader of the answer.
+        # `module_not_served` (501) and not `forbidden` (403): this refusal is
+        # a fact about the ORIGIN, not about the caller's identity. `forbidden`
+        # is glossed "authenticated, but this identity may not do this", and
+        # this refusal holds for every caller including an anonymous one, so
+        # that code does not fit it. `detail` names the module because that is
+        # the only thing separating "no KYC here" from "no payments here" to a
+        # reader of the answer.
         raise Errors::ModuleNotServed.new(
           "this operator does not serve the KYC module",
           hint: "no KYC attestation is accepted at this origin; retrying will not help. " \

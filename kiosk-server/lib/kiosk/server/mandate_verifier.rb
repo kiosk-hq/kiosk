@@ -21,9 +21,9 @@ module Kiosk
     # `verify_cart` additionally enforces the AP2 spending envelope: the cart
     # must reference the presented intent and stay within its cap.
     module MandateVerifier
-      # The mandate `currency` domain, closed on ISO 4217 alpha-3 (T-159; K-1252,
-      # Phil 2026-08-31, «accept iso codes»). Matched against the CANONICAL form
-      # — {canonical_currency} has already trimmed and lower-cased — so `"EUR"`,
+      # The mandate `currency` domain, closed on ISO 4217 alpha-3. Matched
+      # against the CANONICAL form — {canonical_currency} has already trimmed
+      # and lower-cased — so `"EUR"`,
       # `"eur"` and `"  eur "` all reach here as `eur` and all pass, while
       # `"Euro"`, `"US"`, `"978"` and `"\u20ac"` do not.
       #
@@ -44,7 +44,7 @@ module Kiosk
         # would nil-coerce to 0 in the verify_cart cap comparison, making that
         # comparison vacuous; reject it here, before any .to_i.
         require_amount!(payload, :cap_amount_cents)
-        # CANONICAL, not the raw bytes (K-1251) — see `require_currency!`.
+        # CANONICAL, not the raw bytes — see `require_currency!`.
         currency = require_currency!(payload)
 
         Kiosk::Mandate::IntentMandate.new(
@@ -80,7 +80,7 @@ module Kiosk
         # `verify_cart`, which ran this same guard. Comparing the raw payload
         # byte-for-byte against it would refuse `"EUR"` against an `"eur"` cart
         # — one code spelled two ways — while still letting the two spellings
-        # open two spending-cap tallies, which is the K-1251 defect from the
+        # open two spending-cap tallies, which is the same defect from the
         # other end.
         unless payload[:amount_cents].to_i == cart.total_amount_cents.to_i &&
                currency == cart.currency
@@ -150,7 +150,7 @@ module Kiosk
       # otherwise satisfy the spending-envelope checks vacuously (0 <= cap,
       # 0 == 0) and persist a 0-cent row.
       #
-      # K-543: a NEGATIVE amount launders the spending cap. A negative cart total
+      # A NEGATIVE amount launders the spending cap. A negative cart total
       # passes the cap comparison (−100000 <= 5000), matches a negative payment,
       # settles on any PSP that echoes the amount, and drives the settlements SUM
       # negative — permanently RAISING this agent's effective cap by that amount.
@@ -173,23 +173,20 @@ module Kiosk
         )
       end
 
-      # Reject a cart whose `line_items` are ABSENT or are not an array (K-741).
+      # Reject a cart whose `line_items` are ABSENT or are not an array.
       #
-      # `line_items` was OPTIONAL until Phil's `LINE-ITEMS-REQUIRED` decision
-      # (2026-08-16, answering P6 of the third-party review). The reason it
-      # could not stay optional is that the settlement and reconciliation path
-      # READS it and has no fallback: the demos' `my_orders` join and the
-      # `line_items @> …::jsonb` replace-guard (K-544, which the K-545 pay-race
-      # fix stands on) both look inside it. An assistant that omitted it could
-      # legally pay and leave the operator holding a settlement it cannot match
-      # to any domain object — degraded audit and reconciliation with no error
-      # raised anywhere, which is the worst shape a money path can have.
+      # `line_items` is REQUIRED and cannot be optional, because the settlement
+      # and reconciliation path READS it and has no fallback: the demos'
+      # `my_orders` join and the `line_items @> …::jsonb` replace-guard the
+      # pay-race fix stands on both look inside it. An assistant that omitted it
+      # could legally pay and leave the operator holding a settlement it cannot
+      # match to any domain object — degraded audit and reconciliation with no
+      # error raised anywhere, which is the worst shape a money path can have.
       #
-      # The alternative the review offered — leave it optional and tell
-      # operators whose reconciliation depends on it to reject the omission
-      # themselves — was explicitly DECLINED: it makes every operator
-      # re-implement the same guard and makes the wire mean different things at
-      # different origins.
+      # The alternative — leave it optional and tell operators whose
+      # reconciliation depends on it to reject the omission themselves — is
+      # DECLINED: it makes every operator re-implement the same guard and makes
+      # the wire mean different things at different origins.
       #
       # `Errors::Forbidden`, not `BadRequest`, because that is what every other
       # missing REQUIRED mandate field answers here (`require_amount!`,
@@ -197,11 +194,11 @@ module Kiosk
       # carry is not authorisation, and the assistant learns the same way for
       # all of them.
       #
-      # An EMPTY array does NOT conform (K-857, settling what K-741 left open).
-      # `[]` is present, so it satisfies both the schema's `required` and the
-      # nil-check below, while carrying exactly as much reconciliation value as
-      # omission did — which is the whole defect K-741 was filed against. §11.2
-      # now says so normatively ("MUST carry at least one entry") and
+      # An EMPTY array does NOT conform either. `[]` is present, so it
+      # satisfies both the schema's `required` and the nil-check below, while
+      # carrying exactly as much reconciliation value as omission does — the
+      # same defect in a shape that passes a presence test. §11.2
+      # says so normatively ("MUST carry at least one entry") and
       # `mandates.schema.json` states `minItems: 1`; this is the same
       # constraint at the verifier, so the two refuse the same set.
       def require_line_items!(payload)
@@ -235,38 +232,37 @@ module Kiosk
       # verify_payment match (`nil == nil` → true) both pass vacuously, then the
       # NOT NULL currency column 500s after partial persist (same class as the missing-amount case).
       #
-      # K-1250: PRESENCE WAS THE WHOLE CHECK, AND PRESENCE IS NOT THE CONSTRAINT.
-      # `{currency: ""}` and `{currency: 5}` both passed this guard. Nothing
-      # downstream closed it either, and that is the part worth writing down: the
-      # §11.2 rules compare the three mandates' currencies to EACH OTHER
-      # (`cart.currency != intent.currency`, `payment.currency == cart.currency`)
+      # PRESENCE IS NOT THE CONSTRAINT, so presence is not the whole check.
+      # `{currency: ""}` and `{currency: 5}` must be refused HERE, because
+      # nothing downstream refuses them, and that is the part worth writing
+      # down: the §11.2 rules compare the three mandates' currencies to EACH
+      # OTHER (`cart.currency != intent.currency`, `payment.currency ==
+      # cart.currency`)
       # and never to a domain, so `""` on all three is internally consistent the
       # whole way through the chain. It then reaches the PSP as the `currency` of a
       # real charge (`kiosk-pay-stripe`'s `currency: cart_mandate.currency`) and
       # becomes the key `Executor#settled_total_cents` scopes the spending-cap
-      # tally by (`WHERE agent_id = $1 AND currency = $2`, K-551). A non-String
-      # does the same and additionally binds a type that column is not. Mandates
-      # arrive as signed JWS payloads and are never validated against
-      # `mandates.schema.json`, so the schema was not the missing check either.
+      # tally by. A non-String does the same and additionally binds a type that
+      # column is not. Mandates arrive as signed JWS payloads and are never
+      # validated against
+      # `mandates.schema.json`, so the schema is not the check either.
       #
       # ONLY WHAT THE SPEC ALREADY SAYS IS ENFORCED HERE. The published schema
-      # types this member `string`, so a non-String is refused; and an empty or
+      # types this member `string`, so a non-String is refused; an empty or
       # all-blank string is not a code under any reading of the ISO 4217 that same
-      # schema names. The DOMAIN is deliberately NOT closed — whether "US" or
-      # "Euro" names anything is a rule nothing in the spec states, and minting an
-      # allow-list here would be this guard writing wire rather than enforcing it.
-      # That question is K-1252.
+      # schema names; and §11.1 closes the domain to an alpha-3 code, which is
+      # {CURRENCY_CODE} above. Nothing beyond that is minted here — a guard that
+      # invented its own allow-list would be writing wire rather than enforcing
+      # it.
       #
-      # K-1251: IT RETURNS THE CANONICAL FORM, AND THE RETURN VALUE IS THE POINT.
-      # What this guard used to hand back was `nil`, and every caller then built
-      # its mandate out of the RAW payload bytes. Those bytes are the key §11.5's
-      # spending-cap tally is scoped by (`Executor#settled_total_cents`), so
-      # `"eur"` and `"EUR"` were TWO tallies for one currency and an assistant
-      # that alternated the spelling between chains collected the cap TWICE — the
-      # residue of K-551, which scoped a currency-BLIND sum by the currency string
-      # and left "a string is not a currency" standing. `" eur "` did the same
-      # thing more quietly, because the emptiness test below already strips and
-      # the identity test did not.
+      # IT RETURNS THE CANONICAL FORM, AND THE RETURN VALUE IS THE POINT. A
+      # guard that only raised, leaving every caller to build its mandate out of
+      # the RAW payload bytes, would put those bytes in the key §11.5's
+      # spending-cap tally is scoped by (`Executor#settled_total_cents`): `"eur"`
+      # and `"EUR"` would be TWO tallies for one currency, and an assistant that
+      # alternated the spelling between chains would collect the cap TWICE.
+      # `" eur "` does it more quietly still, because the emptiness test below
+      # strips and an identity test would not.
       #
       # SO THE FOLD BELONGS HERE, AT THE BOUNDARY WHERE AN UNTRUSTED SIGNED
       # PAYLOAD BECOMES A VERIFIED VALUE OBJECT — not at the query. A query-side
@@ -291,13 +287,14 @@ module Kiosk
       # the operator to refuse a `pay` that would push the settled total past the
       # cap, and a tally keyed on raw bytes computes a total that is not the total.
       #
-      # T-159 CLOSED THE DOMAIN, AND {CURRENCY_CODE} IS WHERE IT IS CLOSED (K-1252,
-      # Phil 2026-08-31, «accept iso codes»). Until then `"Euro"`, `"US"` and
-      # `"xyz"` were all accepted, signed into the chain and passed verbatim to the
-      # PSP, so a human who typed a currency NAME was told their card had failed.
-      # §11.1 now says `currency` MUST be an ISO 4217 alpha-3 code and that an
-      # operator MUST refuse anything that is not three ASCII letters; this is that
-      # sentence, and the two must move together or the document is a D1.
+      # {CURRENCY_CODE} IS WHERE THE DOMAIN IS CLOSED. Without it `"Euro"`,
+      # `"US"` and `"xyz"` are all accepted, signed into the chain and passed
+      # verbatim to the PSP, so a human who typed a currency NAME is told their
+      # card has failed. §11.1 says `currency` MUST be an ISO 4217 alpha-3 code
+      # and that an operator MUST refuse anything that is not three ASCII
+      # letters; this is that
+      # sentence in code, and the two must move together or the implementation
+      # contradicts the spec.
       #
       # WHY A SHAPE AND NOT A LIST, because that is the judgement and it should not
       # have to be re-derived from the diff. THREE MEASURED REASONS:
@@ -328,10 +325,9 @@ module Kiosk
       # `Errors::Forbidden`, not `BadRequest`, because `currency` is one of the
       # seven limbs of the mandate carve-out (§9.1, §11.1): a mandate that does not
       # carry what a mandate must carry has authorised nothing. The two mandate
-      # checks that answer 400 are named in §9.1 and neither is this one. The new
-      # domain refusal joins that class rather than starting a second one: T-150
-      # published the list, and a 400 here would contradict a freshly-published
-      # normative sentence.
+      # checks that answer 400 are named in §9.1 and neither is this one. The
+      # domain refusal joins that class rather than starting a second one: §9.1
+      # publishes that list, and a 400 here would contradict it.
       #
       # @return [String] the canonical currency — trimmed and lower-cased
       def require_currency!(payload)
@@ -438,14 +434,14 @@ module Kiosk
           )
         end
 
-        # K-551: `iat`/`exp` reach `Time.at` in the mandate constructors. A
+        # `iat`/`exp` reach `Time.at` in the mandate constructors. A
         # numeric-STRING exp slips past JWT's decode-time expiry check (it
         # coerces via to_i) and a string iat is not checked by JWT at all, so
         # both would raise `TypeError` in `Time.at(String)` as an HTTP 500.
         # Validate the type here → a clean 400, before any Time.at.
         require_numeric_timestamp!(payload, :iat)
         require_numeric_timestamp!(payload, :exp)
-        # K-551: JWT rejects an EXPIRED mandate but not an effectively
+        # JWT rejects an EXPIRED mandate but not an effectively
         # non-expiring one (exp in the year 3000). The spec says a non-expiring
         # mandate MUST be rejected — cap the lifetime.
         enforce_max_lifetime!(payload)
@@ -454,8 +450,8 @@ module Kiosk
       rescue ::JWT::ExpiredSignature
         raise Errors::Forbidden.new("mandate expired")
       rescue ::JWT::MissingRequiredClaim
-        # The JWT gem's own "Missing required claim …" text is not published
-        # (K-1307) — REQUIRED_CLAIMS above is this protocol's own answer to
+        # The JWT gem's own "Missing required claim …" text is not published —
+        # REQUIRED_CLAIMS above is this protocol's own answer to
         # the same question and cannot drift from what the decode enforces.
         raise Errors::Forbidden.new(
           "mandate missing a required claim",

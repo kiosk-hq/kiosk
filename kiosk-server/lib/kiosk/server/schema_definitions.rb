@@ -12,55 +12,21 @@ module Kiosk
     #   006 create_kiosk_kyc_attributes        → kiosk.kyc_attributes, one row per
     #       named anonymized boolean an attestation granted an agent
     #
-    # REBUILT FROM SCRATCH AND RENUMBERED 2026-08-20 (K-646, Phil: «Поменяй
-    # шаблон генерации миграций и сделай миграции начисто в демо. прод базы
-    # можно дропнуть»). The set that shipped until then carried its own
-    # history: ten ordinals of which one was retired, a `create` for
-    # device_authorizations whose table migration 008 immediately DROPPED and
-    # rebuilt, and three `add_*_to_kiosk_agents` migrations amending columns
-    # onto a table two migrations earlier. A fresh adopter ran ten files to
-    # reach a schema that six files state outright. There are no adopters, and the
-    # databases on both sides are dropped, so keeping the amendments preserves
-    # nothing — each is folded into the `create` it amended:
+    # EVERY `CREATE` HERE IS GUARDED WITH `IF NOT EXISTS`, AND THAT IS NOT
+    # DECORATION. A migration file that has shipped is recorded in the
+    # `schema_migrations` of every database that ran it, and `db:migrate` never
+    # re-runs a recorded version — so a database provisioned from an earlier
+    # vintage of this set can reach these six files carrying objects they
+    # create, and an unguarded `CREATE` then aborts `db:migrate` ONE STEP IN
+    # (`PG::DuplicateTable: relation "agents" already exists`), leaving every
+    # later migration on that box unreachable, including any corrective one.
     #
-    #   old 007 add_kyc_verified_at            → a column in 002's agents table
-    #   old 010 add_kiosk_agent_governance_columns → two columns in 002's agents table
-    #   old 008 rebuild_device_authorizations  → 004 creates the final shape
-    #   old 003 create_kiosk_actions_log       → retired 2026-08-20 (K-828); the
-    #       audit trail is the operator's now (`c.audit_sink`) and Kiosk stores
-    #       none of it, so there is no slot to keep
-    #   old 009 add_kyc_attributes             → 006, which creates a table
-    #       rather than adding a jsonb column (K-656)
-    #
-    # RENUMBERING WAS MEASURED, NOT ASSUMED. The rule that kept 004-010 frozen
-    # when 003 retired was "those numbers are named in shipped comments and
-    # CHANGELOG history". Counted at the rewrite: EIGHT live references to an
-    # old ordinal existed outside the artifacts this change rewrites anyway
-    # (device_authorization_stores.rb ×2 and its spec, configuration_extension.rb,
-    # server.rb, audit_sink.rb, ADR-0019 ×2 — two of which were ALREADY stale,
-    # naming 009 for columns that became 010). Eight is a sweep, not a project,
-    # so they were swept. CHANGELOG entries keep their old numbers on purpose:
-    # they are dated statements about what shipped then, not claims about now.
-    #
-    # EVERY `CREATE` HERE IS GUARDED WITH `IF NOT EXISTS`, AND THE RENUMBERING
-    # ABOVE IS WHY (K-1083, MEASURED 2026-08-27). Renumbering a migration is
-    # invisible from zero and fatal on a running deployment: the deleted
-    # versions are the ones a pre-2026-08-20 database carries in
-    # `schema_migrations`, so all six re-emitted files read as PENDING there and
-    # `db:migrate` replays them onto tables that already exist. Reproduced
-    # exactly — load the tudu `db/structure.sql` of `267e67b3^`, run `db:migrate`
-    # at head, and it aborts ONE STEP IN at
-    # `20260820130113_create_kiosk_identity_tables` with `PG::DuplicateTable:
-    # relation "agents" already exists`, having already recorded
-    # `20260820130112` (001 was idempotent, 002 was not). Every later migration
-    # on that box is then unreachable — including any corrective one.
-    #
-    # A guarded `CREATE` buys that at a price the ledger names: it ACCEPTS an
+    # A guarded `CREATE` buys that at a price: it ACCEPTS an
     # existing table instead of failing loudly, so a table that has DRIFTED from
     # what this file states passes silently. Two things pay for it, and neither
-    # is optional. First, guarded creates are paired with idempotent repairs
-    # wherever a fold moved a column (see {.identity_tables_sql}) — the guard
-    # skips, but the repair still runs. Second, `bin/check-migration-replay`
+    # is optional. First, guarded creates are paired with idempotent repairs for
+    # every column an older table may lack (see {.identity_tables_sql}) — the
+    # guard skips, but the repair still runs. Second, `bin/check-migration-replay`
     # runs the whole replay in CI on every push and diffs the resulting catalog
     # against the tracked `db/structure.sql`, so drift is not silent: it is a
     # red build naming the missing object, BEFORE a deploy, rather than an
@@ -113,11 +79,11 @@ module Kiosk
       # issued tokens for revocation; `agent_mappings` — external IdP
       # subject ↔ local `agent_id` mapping.
       #
-      # `agents` carries three columns that until 2026-08-20 arrived as three
-      # separate later migrations amending this table (K-646). They are
-      # nullable and cost an operator who never uses them nothing, and a
-      # provider who DOES enable the surface reading them should not have to
-      # discover that the column is in a migration they were told was optional:
+      # `agents` carries three OPTIONAL columns, created here rather than in a
+      # migration of their own. They are nullable and cost an operator who
+      # never uses them nothing, and a provider who DOES enable the surface
+      # reading them should not have to discover that the column is in a
+      # migration they were told was optional:
       #
       #   kyc_verified_at    — non-NULL once the agent has submitted a valid
       #                        KYC attestation; the binary KYC gate
@@ -130,42 +96,16 @@ module Kiosk
       #   human_label        — a human-friendly name for the manage-assistants
       #                        page.
       #
-      # `notification_pubkey` WAS HERE AND IS GONE (K-1290, Phil 2026-09-05:
-      # «Мёртвую колонку прибери. Убери из миграции, переделай миграции демо с
-      # нуля»). It was provisioned for a push mechanism nobody ever designed and
-      # it had ZERO readers and ZERO writers tree-wide — eight occurrences at the
-      # time, every one of them this declaration or a `db/structure.sql` copy of
-      # it. The T-046 events design does not resolve it either: that socket is
-      # bearer-authenticated over TLS like every other verb, and a signed or
-      # encrypted event envelope is on its not-building list. A schema is read as
-      # a promise, and this one promised an out-of-band channel to an assistant
-      # that does not exist.
-      #
-      # NO `DROP COLUMN` REPAIR SHIPS WITH THE REMOVAL, and that is a decision
-      # rather than an oversight. `20260827000002_drop_kiosk_settlement_raw_jws`
-      # exists because `settlements.raw_jws` was `text NOT NULL` with no DEFAULT:
-      # head's INSERT stopped naming it, so Postgres refused EVERY settlement on
-      # a box that still had it. This column is nullable and nothing writes the
-      # table's row list by position, so a box that keeps it is not walled by it
-      # — the `kyc_attributes` shape (K-656), not the `raw_jws` one. The demos'
-      # databases are disposable (`demo:setup` is drop/create/schema:load/seed),
-      # so their migration history simply never creates it again; the leftover on
-      # a box of an older vintage is DECLARED, with this row id, in
-      # `bin/check-migration-replay`'s ACCEPTED_LEFTOVERS, and leaves on the next
-      # `deploy/demo-reset.sh`.
-      #
       # THE THREE `ADD COLUMN IF NOT EXISTS` LINES BELOW ARE THE OTHER HALF OF
-      # THAT FOLD, AND THEY ARE NOT DECORATION (K-1083). Folding three amendment
-      # migrations into this `CREATE` is only lossless for a database built FROM
-      # ZERO. A database that ran the pre-2026-08-20 set already has an `agents`
-      # table — built by the old 002 — and reaches this migration with whichever
-      # subset of the three columns its vintage had amended on. MEASURED on the
-      # structure.sql the reference fleet's boxes were built from: `human_label`
-      # and `spending_cap_cents` present, `kyc_verified_at` ABSENT. A guarded
-      # `CREATE` alone would step over that table and record itself as applied,
-      # leaving the column the binary KYC gate SELECTs permanently missing — the
-      # K-436 / K-1074 failure exactly. So 002 does not merely skip a table it
-      # finds; it brings it up to the shape this file states.
+      # THE GUARD, AND THEY ARE NOT DECORATION. Creating these three columns
+      # here is only lossless for a database built FROM ZERO. A database
+      # provisioned from an earlier vintage of this set already has an `agents`
+      # table, carrying whichever subset of the three that vintage created, and
+      # a guarded `CREATE` alone would step over it and record itself as
+      # applied — leaving a column permanently missing, `kyc_verified_at`
+      # included, which is the one the binary KYC gate SELECTs. So 002 does not
+      # merely skip a table it finds; it brings it up to the shape this file
+      # states.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -183,11 +123,11 @@ module Kiosk
             created_at          timestamptz NOT NULL DEFAULT now(),
             revoked_at          timestamptz
           );
-          -- Brings a pre-K-646 `agents` table up to the shape above: these are
-          -- exactly the three columns that used to arrive as separate amending
-          -- migrations, so a database of that vintage has some, all or none of
-          -- them. No-ops on the FROM-ZERO path — the CREATE above already made
-          -- them, so `db/structure.sql` is unchanged either way.
+          -- Brings an older `agents` table up to the shape above: these three
+          -- columns are optional, so a database provisioned from an earlier
+          -- vintage of this migration set may have some, all or none of them.
+          -- No-ops on the FROM-ZERO path — the CREATE above already made them,
+          -- so `db/structure.sql` is unchanged either way.
           ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS human_label        text;
           ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS spending_cap_cents bigint;
           ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS kyc_verified_at    timestamptz;
@@ -269,19 +209,14 @@ module Kiosk
       #     possession of it before any binding).
       #   - `kind` — `claim` (agent-initiated) or `link` (human-initiated, rows
       #     born pre-approved and already bound to the human).
-      #   - `requested_role` — A MISNOMER, and kept on purpose (K-1126).
+      #   - `requested_role` — A MISNOMER, and kept on purpose.
       #     Nothing requests it: on a `claim` row it is written at APPROVAL
       #     from the approving human's `Identity#role`, on a `link` row at MINT
-      #     from the minting human's own — never by a client, which since K-072
-      #     is refused outright for naming a role. Read it as `approved_role`.
-      #     The spelling stays because ADR-0011 states its invariant under this
-      #     name and because renaming a shipped column means a new migration in
-      #     each of the seven demo `db/structure.sql` files plus a
+      #     from the minting human's own — never by a client, which is refused
+      #     outright for naming a role. Read it as `approved_role`.
+      #     The spelling stays because renaming a shipped column means a new
+      #     migration in each of the seven demo `db/structure.sql` files plus a
       #     `bin/check-migration-replay` pass — a migration wave for a word.
-      #
-      # Until 2026-08-20 this arrived in two migrations: an 0.1 shape nothing
-      # ever wrote, and a `rebuild` that DROPPED and recreated it in this one
-      # (K-646 folded them; there was no data either could have carried).
       def device_authorizations_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -328,32 +263,27 @@ module Kiosk
       # plus `settlements` (PSP settlement receipt). Each signed-mandate row
       # carries its original JWS so the chain is auditable end-to-end.
       #
-      # A SETTLEMENT HAS NO `raw_jws`, AND THAT IS THE POINT (K-948). The three
+      # A SETTLEMENT HAS NO `raw_jws`, AND THAT IS THE POINT. The three
       # mandate tables each hold one — the assistant signed those, and §11.6's
       # replay check compares all three byte for byte — but a settlement is a
       # SERVER-MINTED receipt: nobody signs it, so there is no signature to
-      # store. It shipped until 2026-08-23 as a `text NOT NULL` column that its
-      # only writer set to `''` on every row, which read like the sibling
-      # tables' load-bearing column and was exactly the misreading K-876 found
-      # published («non-repudiation both ways»). An operator counter-signature
-      # would be a new normative protocol element — an ADR, not a column — so
-      # the column goes rather than waiting for a producer. ADR-0002 has said
-      # `settlements` has «no `mandate_id` and no `raw_jws`» since the table
-      # was named; this makes the schema agree with it.
+      # store. A column here would read like the sibling tables' load-bearing
+      # one and invite the misreading that a settlement gives «non-repudiation
+      # both ways»; it does not. An operator counter-signature would be a new
+      # normative protocol element, not a column.
       #
-      # REMOVING IT FROM THIS `CREATE` WAS ONLY HALF THE CHANGE (K-1086). This
-      # DDL reaches a database that is built FROM ZERO; a database built while
-      # the old CREATE was head still carries `raw_jws text NOT NULL` with no
-      # DEFAULT, head's INSERT does not name it, and Postgres refuses every
-      # settlement INSERT there — permanently, because nothing in this file can
-      # take a column away from a table that already exists. The drop ships as
+      # THIS DDL ONLY EVER REACHES A DATABASE BUILT FROM ZERO, so removing a
+      # column from it is only half the change. A database provisioned before
+      # the removal still carries the column, and nothing in this file can take
+      # a column away from a table that already exists — so if it was `NOT
+      # NULL` with no DEFAULT, an INSERT that no longer names it is refused
+      # there forever. That is why the drop of `settlements.raw_jws` ships as
       # its own migration,
       # `db/migrate/20260827000002_drop_kiosk_settlement_raw_jws.rb`, in each of
       # the seven demos that hold this table. THE RULE IS SYMMETRICAL: a column
       # REMOVED from this file needs a shipped `DROP` for exactly the reason a
-      # column ADDED needs a shipped `ADD` (T-103 clause (vii); K-1074 is the
-      # additive half of the same delivery gap, and only that half had ever been
-      # written down). `bin/check-migration-replay` is what says it out loud.
+      # column ADDED needs a shipped `ADD`. `bin/check-migration-replay` is what
+      # says it out loud.
       #
       # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
       # supplied by the caller, so one principal cannot pre-occupy or block
@@ -443,11 +373,9 @@ module Kiosk
       # `kyc_attributes` — ONE ROW per NAMED ANONYMIZED boolean a valid KYC
       # attestation granted an agent (`age_over_18`, `licence_a`, ...). Only
       # the NAMES are stored — never the DOB, licence number, or any underlying
-      # document, which is the anonymized property ADR-0020 exists for.
+      # document, which is the anonymizing property the KYC surface is built on.
       #
-      # A TABLE, not the `agents.kyc_attributes jsonb` column that shipped
-      # until 2026-08-20 as migration 009 (decision KYC-ATTRIBUTES-TABLE,
-      # Phil 2026-08-12; K-656/T-061).
+      # A TABLE, not a `kyc_attributes jsonb` column on `agents`.
       #
       # THERE IS NO VALUE COLUMN, AND THAT IS THE POINT. The grant IS the row:
       # an attribute is granted iff `(agent_id, name)` exists. A jsonb map had
@@ -484,7 +412,7 @@ module Kiosk
 
       # Table backing {PowSpentStores::ActiveRecord}, the shared spent-id
       # store a MULTI-PROCESS operator must configure so that PoW single-use
-      # holds across web workers (K-738).
+      # holds across web workers.
       #
       # This is deliberately NOT one of the six canonical migrations and the
       # `kiosk:install` generator does not lay it down: the shipped default
@@ -515,7 +443,7 @@ module Kiosk
         SQL
       end
 
-      # The SHARED auth-challenge table for multi-process operators (K-751) —
+      # The SHARED auth-challenge table for multi-process operators —
       # the sibling of {.pow_spent_sql}, and not part of the canonical
       # migration set for the same reason: a single-process operator does not
       # need it. See the kiosk-server README, "Multi-process deployments".

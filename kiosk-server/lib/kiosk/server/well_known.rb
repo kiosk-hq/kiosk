@@ -38,12 +38,10 @@ module Kiosk
       # for the modules the RFC 9727 catalog links as plain `item`s. `schema`
       # is absent because it is linked as a `service-desc` instead.
       #
-      # `queries` and `actions` LEFT this table at the 0.4 cutover, with the
-      # two multiplexed endpoints they mapped to (T-074 = A), and they do not
-      # come back: a module that holds N verbs has N endpoints, so the catalog
-      # links THE VERBS (see {api_catalog}, T-093) rather than inventing a
-      # module-level URL that answers nothing. `pay` stays because it really is
-      # one fixed endpoint.
+      # `pay` is the only entry, and the only one there can be: a module that
+      # holds N verbs has N endpoints, so the catalog links THE VERBS (see
+      # {api_catalog}) rather than inventing a module-level URL that answers
+      # nothing. `pay` really is one fixed endpoint.
       MODULE_ENDPOINTS = { "pay" => "pay" }.freeze
 
       # Build the well-known document as a Hash, ready to JSON-serialize.
@@ -79,21 +77,19 @@ module Kiosk
             claim_url:                "#{endpoint}/auth/claim",
           },
           # The MODULES this origin serves — subset of
-          # schema/queries/actions/pay, computed from the live registry
-          # (T-075 = A, ADR-0025). Not the registered verb NAMES, and since
-          # T-094 that is a MODELLING statement rather than a security one: the
-          # catalog is public now, so the names are one hop away at
-          # `schema_url` below. What the module set buys is what an assistant
-          # can act on BEFORE it fetches anything — which branches of its own
-          # instructions apply: is there a catalog at all, are there writes,
-          # can this origin take money.
+          # schema/queries/actions/pay, computed from the live registry. Not
+          # the registered verb NAMES, and that is a MODELLING statement rather
+          # than a security one: the catalog is public, so the names are one
+          # hop away at `schema_url` below. What the module set buys is what an
+          # assistant can act on BEFORE it fetches anything — which branches of
+          # its own instructions apply: is there a catalog at all, are there
+          # writes, can this origin take money.
           #
-          # It is also the ONE place the module set is published. `schema`'s
-          # descriptor carried a byte-identical copy under `verbs` until T-095;
-          # it was the same `Array(config.capabilities)` call, so it was one
-          # value with two names rather than two facts.
+          # It is also the ONE place the module set is published: a second copy
+          # of the same `Array(config.capabilities)` call under another name
+          # would be one value with two names rather than two facts.
           capabilities: Array(config.capabilities),
-          # THE CACHE-BUSTED LINK TO THE CATALOG (T-094). The digest is
+          # THE CACHE-BUSTED LINK TO THE CATALOG. The digest is
           # {SchemaDocument}'s, derived at boot from the registry + this config
           # + the gem version, so it moves on any deploy that changes what
           # `schema` answers. That is what lets the catalog be cached for a
@@ -192,17 +188,15 @@ module Kiosk
           identity:  "required",
         }
         doc[:skills] = skills_list(config)
-        # Kiosk extension: WHERE to read the contract, not a copy of it
-        # (T-075 = A, ADR-0025). `x-` is the sanctioned experimental prefix.
+        # Kiosk extension: WHERE to read the contract, not a copy of it. `x-`
+        # is the sanctioned experimental prefix.
         #
-        # This block used to echo `capabilities` under `wire.verbs`. It stops:
-        # a discovery envelope that restates the catalog is a second source of
-        # truth for it, and `kiosk.json` is canonical for the module set. So
-        # the block carries two POINTERS (the catalog and the RFC 9727
-        # linkset) and the two facts a client needs before it can dial either
-        # (where the wire is mounted, which protocol series it speaks).
-        # `min_client` went with `wire.verbs` for the same reason: it is
-        # `kiosk.json`'s field.
+        # It carries no copy of `capabilities` and no `min_client`: a discovery
+        # envelope that restates the catalog is a second source of truth for
+        # it, and `kiosk.json` is canonical for both. So the block carries two
+        # POINTERS (the catalog and the RFC 9727 linkset) and the two facts a
+        # client needs before it can dial either (where the wire is mounted,
+        # which protocol series it speaks).
         #
         # The `schema` pointer carries the same `?v=<digest>` cache-buster
         # `kiosk.json` publishes, for the same reason — a pointer that a
@@ -259,34 +253,29 @@ module Kiosk
       # verbs in a form generic OpenAPI tooling can consume. Every other link is
       # a plain `item`.
       #
-      # ── WHY IT HYPERLINKS EVERY REGISTERED VERB (K-799 = b, T-093) ───────
+      # ── WHY IT HYPERLINKS EVERY REGISTERED VERB ──────────────────────────
       #
-      # It did not, until 2026-08-19. Slice 5 withheld the verb names because
-      # this document is served UNAUTHENTICATED at the origin root, and three
-      # separate places had paid a design cost to keep the catalogue behind a
-      # token. Phil overruled the premise rather than the arithmetic: «на
-      # статичных GET endpoint'ах — пожалуйста… Пускай долбятся в них сколько
-      # хотят без аутентификации». The verb roster is not a secret, and a
-      # document composed from in-process state caches behind a CDN, so
-      # anonymous enumeration costs this origin nothing.
+      # This document is served UNAUTHENTICATED at the origin root, and the
+      # verb roster is not a secret: the document is composed from in-process
+      # state and caches behind a CDN, so anonymous enumeration costs this
+      # origin nothing.
       #
-      # THE ACCEPTANCE HAS A CONDITION, and this renderer is what keeps it
-      # true: it covers documents that are CHEAP AND STATIC TO COMPOSE. Every
-      # value below comes from `config` or from the two registries — no query,
-      # no per-request work, no caller-dependent branch. A future member that
-      # needed a backend call would NOT be covered by that answer and would be
-      # a fresh question, not a bigger loop.
+      # THAT HAS A CONDITION, and this renderer is what keeps it true: it
+      # covers documents that are CHEAP AND STATIC TO COMPOSE. Every value
+      # below comes from `config` or from the two registries — no query, no
+      # per-request work, no caller-dependent branch. A member that needed a
+      # backend call would NOT be covered and is a fresh question, not a
+      # bigger loop.
       #
-      # ── The RFC reading, re-settled (T-093) ──────────────────────────────
+      # ── The RFC reading ──────────────────────────────────────────────────
       #
-      # Slice 5 read RFC 9727 strictly: a catalog lists APIs and points at
-      # their DESCRIPTIONS, so members were `service-desc` links. Phil's answer
-      # overruled the security objection, not that reading — so BOTH survive
-      # here. The two `service-desc` members stay exactly as they were, and the
-      # per-verb operations are added ALONGSIDE them as plain `item`s. A
-      # consumer that only understands `service-desc` still finds the whole
-      # surface described; one that wants the operations finds them hyperlinked
-      # without parsing a description first.
+      # RFC 9727 read strictly: a catalog lists APIs and points at their
+      # DESCRIPTIONS, so those members are `service-desc` links. Both readings
+      # live here — the two `service-desc` members, and the per-verb operations
+      # ALONGSIDE them as plain `item`s. A consumer that only understands
+      # `service-desc` still finds the whole surface described; one that wants
+      # the operations finds them hyperlinked without parsing a description
+      # first.
       #
       # A verb's METHOD rides an EXTENSION target attribute, `kiosk-method`,
       # serialized as an array of strings per RFC 9264 §4.2.4.3 (that is how a
@@ -305,19 +294,18 @@ module Kiosk
         items = []
         # schema is the machine-readable service description (service-desc).
         if modules.include?("schema")
-          # BOTH DESCRIPTIONS ARE LINKED AT `?v=<version>` (K-804). This
-          # document is a POINTER — short TTL, re-read often — and the two it
-          # points at are large, identical for every caller and immutable at a
-          # versioned url. A pointer that links the BARE path hands its reader
-          # the one url that may not be cached, which is the whole conflict
-          # `schema_url` was introduced to resolve in {build}; the api-catalog
-          # had simply never been given the same treatment. One version serves
-          # both links: {SchemaDocument.digest} covers every input of either
-          # renderer (see {SchemaDocument.digest_inputs}).
+          # BOTH DESCRIPTIONS ARE LINKED AT `?v=<version>`. This document is a
+          # POINTER — short TTL, re-read often — and the two it points at are
+          # large, identical for every caller and immutable at a versioned url.
+          # A pointer that links the BARE path hands its reader the one url
+          # that may not be cached, which is the same conflict `schema_url`
+          # resolves in {build}. One version serves both links:
+          # {SchemaDocument.digest} covers every input of either renderer (see
+          # {SchemaDocument.digest_inputs}).
           version = SchemaDocument.digest(config: config)
           items << { href: "#{endpoint}/schema?v=#{version}", rel: "service-desc" }
           # ONE LINE, AND IT IS THE WHOLE ADVERTISEMENT of the derived OpenAPI
-          # document (T-071 = C). RFC 8631 allows more than one `service-desc`,
+          # document. RFC 8631 allows more than one `service-desc`,
           # and there genuinely are two descriptions of one API here: `schema`
           # is CANONICAL and is what the skill teaches an assistant to read;
           # `openapi.json` is the derived one a code generator, a mock server or
@@ -541,7 +529,7 @@ module Kiosk
         MARKDOWN
       end
 
-      # One linkset member for one registered verb (T-093). `rel: "item"` is
+      # One linkset member for one registered verb. `rel: "item"` is
       # RFC 9727's catalogued-API relation; `kiosk-method` is the extension
       # target attribute carrying the HTTP method, an ARRAY OF STRINGS because
       # RFC 9264 §4.2.4.3 serializes every extension attribute that way.

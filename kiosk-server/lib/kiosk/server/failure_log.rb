@@ -2,8 +2,7 @@
 
 module Kiosk
   module Server
-    # THE OPERATOR-SIDE HALF OF A REFUSAL THAT DELIBERATELY DROPS A SENTENCE
-    # (K-1307, K-1310).
+    # THE OPERATOR-SIDE HALF OF A REFUSAL THAT DELIBERATELY DROPS A SENTENCE.
     #
     # Two places in the engine answer the wire with words this protocol chose
     # instead of the words a raised exception happened to carry: {Executor}'s

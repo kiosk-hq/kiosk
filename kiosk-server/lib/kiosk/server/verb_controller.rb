@@ -16,16 +16,13 @@ module Kiosk
     #   POST <endpoint>/<action-name>          an action — JSON body
     #
     # so `curl -H "Authorization: Bearer …" https://…/kiosk/catalog` is the
-    # whole invocation, and the HTTP method carries the read/write semantics
-    # the retired 0.3 wire spelled out in a `name` field. Since the cutover
-    # this is the ONLY way to reach an operator verb, `POST <endpoint>/query`
-    # and `POST <endpoint>/run` included (T-074 = A): no dedicated route is
-    # drawn for either name, so both fall through to {VerbRefusalController} and
-    # answer `404 verb_not_found` — an ordinary problem document whose `hint`
-    # names the registered verbs — because nobody declared a verb called `query`
-    # or `run` (K-1112).
+    # whole invocation, and the HTTP method carries the read/write semantics:
+    # queries are GET, actions are POST. This is the ONLY way to reach an
+    # operator verb — a path that names no registered verb reaches
+    # {VerbRefusalController} and answers `404 verb_not_found`, an ordinary
+    # problem document whose `hint` names the verbs this origin does register.
     #
-    # ── Where the routes come from (T-183 reversed this) ────────────────
+    # ── Where the routes come from ───────────────────────────────────────
     #
     # THE OPERATOR DRAWS THEM, one explicit line per registered verb, in their
     # own `config/routes/kiosk.rb`:
@@ -40,36 +37,24 @@ module Kiosk
     # about the request path is inferred: `params[:kiosk_verb]` is a constant
     # the route supplies.
     #
-    # UNTIL T-183 THE ENGINE DREW THE ROUTES — one constrained single-segment
-    # pair (`get "/:kiosk_verb"`, `post "/:kiosk_verb"`) LAST in its own table,
-    # resolving the name against the registry at request time. That bought
-    # three things and they are the honest cost of the change: the "declared but
-    # unrouted / routed but undeclared" bug class could not occur, because there
-    # was nothing to keep in sync; the reserved plane won by first-match; and a
-    # verb added in development was served on the next reload. What it cost was
-    # the one thing an operator most wants from a routes file — `rails routes`
-    # listed the pair, not the verbs.
+    # Hand-drawn routes buy an operator the one thing they most want out of a
+    # routes file — `rails routes` lists the verbs themselves — and they cost
+    # three things, each answered where it lands:
     #
-    # Phil, 2026-09-07: «Я НЕ СОГЛАСЕН с тем что у нас должна быть какая-то
-    # магия с роутами. Сделаем пока по-простому. GET/QUERY для query, POST для
-    # run. Вручную для каждого в routes.» So the trade is taken the other way,
-    # and each of the three is answered where it now lands rather than left
-    # implied:
-    #
-    #   * declared-but-unrouted is a REAL bug class again, and
+    #   * declared-but-unrouted is a REAL bug class, and
     #     `reference/bin/check-verb-routes` is the check — it derives the
     #     expected list from each origin's own handler controllers and fails on
     #     a missing route, an extra route, or a method that disagrees with the
     #     kind. At runtime {VerbRefusalController} refuses rather than serves.
-    #   * the reserved plane still wins by first-match, because the operator
+    #   * the reserved plane wins by first-match, because the operator
     #     draws `mount Kiosk::Server::Engine` FIRST and their verbs after it —
     #     and, more strongly, {HandlerMixin::RESERVED_NAMES} refuses such a
     #     declaration at boot.
-    #   * a verb added in development now needs a line in the routes file.
+    #   * a verb added in development needs a line in the routes file.
     #     Rails reloads routes when a routes file changes, so the reload is
     #     still automatic; writing the line is not.
     #
-    # ── Order of the gates, and why it is not the first draft's ──────────
+    # ── Order of the gates ───────────────────────────────────────────────
     #
     #   1. identity            401  IdentityResolution
     #   2. the verb exists     404  the registry (`verb_not_found` + name-hint)
@@ -77,39 +62,27 @@ module Kiosk
     #   3. the arguments       400  ArgumentDecoder + the declared input_schema
     #   4. the toll            402  PowGate, via WireController#execute_wire
     #
-    # The 0.4 wire was first drafted with the declared-verb check BEFORE
-    # authentication. This order is the one that ships, and the reason is now
-    # ORDINARY GATE ORDER rather than a security defence — which is a change of
-    # justification, not of behaviour, and it is written down because the old
-    # reason is dead.
+    # IDENTITY RESOLVES FIRST because it is a precondition of every gate below
+    # it. The toll is priced against the caller's reputation, the argument
+    # check runs against a descriptor the caller may or may not be allowed to
+    # reach, and the handler runs inside a session bound to the identity — so
+    # resolving it first is the straight code path and any other order
+    # re-derives it later anyway.
     #
-    # IT WAS an anti-enumeration measure: checking the verb first answers an
-    # anonymous probe 404 for a name that does not exist and 401 for one that
-    # does, which is an enumeration oracle, and the catalogue was behind a
-    # Bearer token.
-    # BOTH halves of that are gone (2026-08-19). `GET <endpoint>/schema` is
-    # PUBLIC (T-094) and `/.well-known/api-catalog` hyperlinks every verb
-    # unauthenticated (T-093), so the complete list is one anonymous GET away
-    # and there is nothing left for this ordering to withhold — not narrowed to
-    # "one at a time", gone.
-    #
-    # WHAT KEEPS IT: identity is a precondition of every gate below it. The
-    # toll is priced against the caller's reputation, the argument check runs
-    # against a descriptor the caller may or may not be allowed to reach, and
-    # the handler runs inside a session bound to the identity — so resolving it
-    # first is the straight code path and any other order re-derives it later
-    # anyway. It costs nothing and it explains itself; that is the whole of the
-    # case now.
+    # It is ORDINARY GATE ORDER and not an anti-enumeration measure: the order
+    # withholds nothing. `GET <endpoint>/schema` is PUBLIC and
+    # `/.well-known/api-catalog` hyperlinks every verb unauthenticated, so the
+    # complete list of verbs is one anonymous GET away whatever this controller
+    # answers first.
     #
     # ── The answer ───────────────────────────────────────────────────────
     #
-    # SUCCESS is the handler's rendered payload, VERBATIM (T-072 = C); ERRORS
-    # are RFC 9457 problem documents. Neither is here: both seams live in
-    # {WireController}, because since the cutover (T-074 = A) there is exactly
-    # ONE answer shape on this wire and `GET <endpoint>/schema` and
-    # `POST <endpoint>/pay` answer it too. What this class adds to its parent
-    # is the name resolution, the method fork and the argument channel —
-    # nothing about how a response is written.
+    # SUCCESS is the handler's rendered payload, VERBATIM; ERRORS are RFC 9457
+    # problem documents. Neither is here: both seams live in {WireController},
+    # because there is exactly ONE answer shape on this wire and
+    # `GET <endpoint>/schema` and `POST <endpoint>/pay` answer it too. What this
+    # class adds to its parent is the name resolution, the method fork and the
+    # argument channel — nothing about how a response is written.
     class VerbController < WireController
       # A verb name (spec §8.1). Also the route constraint, so a path that
       # cannot be a verb name never reaches this controller and stays a routing
@@ -141,12 +114,10 @@ module Kiosk
       # useful — and the two refusals are deliberately DIFFERENT STATUSES.
       #
       # A name nobody registered is `404 verb_not_found` with the registry's
-      # own hint, which lists the registered names so a mistyped `listings` for
       # `browse_listings` self-corrects without a schema round-trip. It is NOT
-      # `not_found`: since T-158 that code means an ARGUMENT addressed something
-      # absent (spec §9.1 rule 2), and an assistant recovers from the two
-      # differently — re-read the catalogue, versus tell the human it is not
-      # there.
+      # `not_found`: that code means an ARGUMENT addressed something absent
+      # (spec §9.1 rule 2), and an assistant recovers from the two differently
+      # — re-read the catalogue, versus tell the human it is not there.
       #
       # A name registered as the OTHER KIND is `405 method_not_allowed` with
       # `Allow:` naming the method the verb does accept. The verb EXISTS —
@@ -185,14 +156,14 @@ module Kiosk
                  parse_body!
                end
 
-        # UNCONDITIONAL, and that is the point of this slice. `input_schema` is
-        # REQUIRED on every 0.4 verb (T-073 = A) and §8.1 item 5 makes the
-        # operator coerce-then-validate before the handler sees an argument, so
-        # a per-verb endpoint that validated only when a flag was set would be
-        # non-conformant with the flag off — and K-717's typed 400 for an
-        # invalid filter value would fall out of the schema layer on some
-        # origins and not others. `validate_requests` stays what it always was:
-        # the opt-in PoW-SHAPE check on the 0.3 wire and the auth plane.
+        # UNCONDITIONAL, deliberately. `input_schema` is REQUIRED on every 0.4
+        # verb and §8.1 item 5 makes the operator coerce-then-validate before
+        # the handler sees an argument, so a per-verb endpoint that validated
+        # only when a flag was set would be non-conformant with the flag off —
+        # and the typed 400 for an invalid filter value would fall out of the
+        # schema layer on some origins and not others. `validate_requests`
+        # covers something else: the opt-in PoW-SHAPE check on requests that
+        # carry a `Kiosk-PoW` header, on the wire and on the auth plane.
         #
         # Which is why `json_schemer` is a REAL runtime dependency of this gem
         # since 0.4 (see the gemspec): an origin that cannot load a validator

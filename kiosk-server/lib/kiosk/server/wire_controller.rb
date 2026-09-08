@@ -20,7 +20,7 @@ module Kiosk
     # The wire's own two RESERVED endpoints, and the base class every other
     # wire surface inherits its seams from:
     #
-    #   GET  <endpoint>/schema   the catalog     — PUBLIC (T-094)
+    #   GET  <endpoint>/schema   the catalog     — PUBLIC
     #   POST <endpoint>/pay      settle an AP2 cart
     #
     # The two no longer share a request path. `schema` resolves no identity,
@@ -30,23 +30,16 @@ module Kiosk
     # this class and {VerbController} are about.
     #
     # Every OTHER verb is one endpoint per verb, served by {VerbController},
-    # which subclasses this one. `POST <endpoint>/query` and
-    # `POST <endpoint>/run` — 0.3's multiplexed pair — were DELETED at the 0.4
-    # cutover (T-074 = A): no dedicated route is drawn for either name and no
-    # tombstone stands in for one, so both fall through to {VerbController}
-    # and answer the ordinary `404 verb_not_found` problem document — hint and all
-    # — that any unregistered verb name gets (K-1112). One wire, one
-    # conformance surface.
+    # which subclasses this one.
     #
     # Wire response (JSON): success is the handler's payload VERBATIM
     # ({Result#to_payload}), error is an RFC 9457 problem document
     # ({Errors::Base#to_problem}) under `application/problem+json`. Both seams
-    # live HERE, not in the subclass, because after the cutover there is only
-    # one answer shape — the two-shapes split that put them in
-    # {VerbController} was the build-time intermediate, and it is over. A
-    # paginating query is not a third shape either: since T-092 its page facts
-    # ride the `Link` (RFC 8288) and `X-Total-Count` response headers and its
-    # body is the same bare array — see {#add_pagination_headers}.
+    # live HERE, not in the subclass, because there is exactly ONE answer shape
+    # and {VerbController} has nothing of its own to add. A paginating query is
+    # not a third shape either: its page facts ride the `Link` (RFC 8288) and
+    # `X-Total-Count` response headers and its body is the same bare array —
+    # see {#add_pagination_headers}.
     #
     # Identity resolution: {IdentityResolution.resolve} — the
     # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
@@ -57,8 +50,8 @@ module Kiosk
     class WireController < ::ActionController::API
       # Every Kiosk wire error — raised by the Executor, a gate, a verifier
       # or a handler dispatch — renders as the spec's problem document from
-      # this ONE seam (T-054), Rails' own idiom rather than a hand-rolled
-      # rescue inside each action.
+      # this ONE seam, Rails' own idiom rather than a hand-rolled rescue
+      # inside each action.
       rescue_from Errors::Base, with: :render_wire_error
 
       # A body that is not JSON at all, answered as a Kiosk `bad_request`
@@ -84,28 +77,23 @@ module Kiosk
         )
       end
 
-      # GET <endpoint>/schema — THE ONE PUBLIC ENDPOINT UNDER THE MOUNT
-      # (T-094, Phil 2026-08-19).
+      # GET <endpoint>/schema — A PUBLIC ENDPOINT UNDER THE MOUNT.
       #
       # No identity, no toll, and it does not go through {Executor} at all: the
       # answer is {SchemaDocument}'s bytes, derived at boot, written straight
-      # out. Three things went at once and they went together:
+      # out. Three things it deliberately does NOT do, and they stand together:
       #
-      #   * THE BEARER GATE. The document holds verb names, descriptions,
+      #   * NO BEARER GATE. The document holds verb names, descriptions,
       #     input/output schemas and examples — nothing per-agent and no
-      #     secret. Gating it while `/.well-known/*` is wide open was an
-      #     inconsistency that raised a question instead of answering one, and
+      #     secret. Gating it while `/.well-known/*` is wide open would be an
+      #     inconsistency that raises a question instead of answering one, and
       #     the decisive test is «does this need the backend, or is it a static
       #     file?»: it is a static file.
-      #   * THE TOLL. `schema` was tolled as `:schema` so that ENUMERATING the
-      #     catalogue cost something. That warrant died with the gate — a toll
-      #     needs an identity to charge, and there is none here. `:schema`
-      #     stopped being a policy verb altogether at K-804, when
-      #     `/kiosk/openapi.json` — the one surface still paying that toll —
-      #     went public for the same reasons; see {Executor::VERBS}.
-      #   * `Vary: Authorization, Kiosk-PoW`. See {Headers.add_public_cache_policy}:
-      #     a public document that varies on headers it does not read is one a
-      #     shared cache can never reuse.
+      #   * NO TOLL. A toll needs an identity to charge, and there is none
+      #     here; `:schema` is not a policy verb at all — see {Executor::VERBS}.
+      #   * NO `Vary: Authorization, Kiosk-PoW`. See
+      #     {Headers.add_public_cache_policy}: a public document that varies on
+      #     headers it does not read is one a shared cache can never reuse.
       #
       # The `?v=<digest>` fork is the cache-busting half, not a second
       # endpoint: same bytes either way, only the TTL differs. A `v` that does
@@ -128,12 +116,10 @@ module Kiosk
       # THE ONE PLACE A PUBLIC KIOSK DOCUMENT IS WRITTEN — the mirror of
       # {#render_wire_body}, and the two are deliberately not the same seam.
       #
-      # Shared by `schema` here and by {OpenApiController#show}, which K-804
-      # moved onto this path: two derived, identity-free descriptions of the
-      # same registry, so anything either does about caching the other must do
-      # too. Before K-804 the openapi document rendered through the WIRE seam,
-      # and "give it the same treatment as `schema`" would have meant copying
-      # four steps and the Rails workaround below into a second controller.
+      # Shared by `schema` here and by {OpenApiController#show}: two derived,
+      # identity-free descriptions of the same registry, so anything either
+      # does about caching the other must do too. One seam rather than four
+      # steps and the Rails workaround below copied into a second controller.
       #
       # @param json    [String] the serialized body, already JSON
       # @param version [String] the digest this URL's `?v=` is compared against
@@ -177,12 +163,10 @@ module Kiosk
         raw.split(",").any? { |tag| tag.strip.delete_prefix("W/") == etag }
       end
 
-      # `pay`, the one reserved endpoint left on this path. Its wire NAME is
-      # its command name, so the name travels to the request fingerprint
-      # exactly as a per-verb call's does and its `"<METHOD> <verb>"` half
-      # needs no special case. (`schema` shared this path until T-094 made it
-      # public; it resolves no identity and pays no toll, so it has nothing
-      # left to share.)
+      # `pay`, the one reserved endpoint on this path. Its wire NAME is its
+      # command name, so the name travels to the request fingerprint exactly
+      # as a per-verb call's does and its `"<METHOD> <verb>"` half needs no
+      # special case.
       def run_command(command)
         # parse_body! runs inside the action, so the rescue_from above covers
         # it: a malformed body raises Errors::BadRequest, which must render a
@@ -231,13 +215,13 @@ module Kiosk
         # `kiosk_identity`), and the caller's headers/address are seeded from
         # this env. Block handlers registered the old way ignore both.
         #
-        # `handler_headers` is the only thing that travels the other way
-        # (K-823): {HandlerDispatch} writes the handler's own `Cache-Control`
-        # into it, so §3.7.4's "an operator MAY relax a 200 to `private,
-        # max-age=N`" is a permission an operator can actually exercise. It is
-        # applied to the response BEFORE {#render_result}, which is what puts
-        # it in front of {Headers.add_cache_policy} — the seam that keeps an
-        # operator's own policy and, since K-823, refuses a shared-cache one.
+        # `handler_headers` is the only thing that travels the other way:
+        # {HandlerDispatch} writes the handler's own `Cache-Control` into it,
+        # so §3.7.4's "an operator MAY relax a 200 to `private, max-age=N`" is
+        # a permission an operator can actually exercise. It is applied to the
+        # response BEFORE {#render_result}, which is what puts it in front of
+        # {Headers.add_cache_policy} — the seam that keeps an operator's own
+        # policy and refuses a shared-cache one.
         handler_headers = {}
         result = CurrentRequest.with(identity: identity, env: request.env,
                                      handler_headers: handler_headers) do
@@ -257,12 +241,8 @@ module Kiosk
       # THE TOLL, on its own — the whole of what a caller pays before a Kiosk
       # surface answers, and nothing else.
       #
-      # It is still its own method, one caller below, because the toll is one
-      # idea and {#execute_wire} is four. It had a SECOND caller until K-804:
-      # {OpenApiController} paid it with no {Executor} call behind it, tolled
-      # as `:schema` so a second spelling of the catalog could not be read
-      # around the price. That endpoint is public and untolled now, for the
-      # same reasons `schema` is, and `:schema` is not a policy verb any more.
+      # It is its own method, with one caller below, because the toll is one
+      # idea and {#execute_wire} is four.
       #
       # @param identity [Kiosk::Identity] the resolved caller
       # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
@@ -272,20 +252,20 @@ module Kiosk
       #   half of the request fingerprint, with the request method
       # @param body [Hash] the arguments the fingerprint binds to
       def toll!(identity:, command:, name:, body:)
-        # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER
-        # (ADR-0022), NOT the body: the body is now ONLY verb args, so the
-        # challenge fingerprint binds to the plain body untouched, and a GET
-        # (schema) can carry its proof via the header too (a GET has no body).
-        # proofs_from_header raises Errors::BadRequest (→ 400) on malformed
-        # header JSON, inside the caller's rescue.
+        # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER, NOT
+        # the body: the body is ONLY verb args, so the challenge fingerprint
+        # binds to the plain body untouched, and a GET (schema) can carry its
+        # proof via the header too (a GET has no body). proofs_from_header
+        # raises Errors::BadRequest (→ 400) on malformed header JSON, inside
+        # the caller's rescue.
         pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
 
-        # Opt-in request-shape validation (UNIFORM-VALIDATION slice-1, K-479).
-        # Only when the flag is on AND a proof was actually submitted: validate
-        # each parsed proof against the vendored normative schema so a MALFORMED
-        # proof (e.g. `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises
-        # a clear 400 with a shape hint — instead of PowGate silently ignoring
-        # it and re-issuing a fresh 402 on every retry. An ABSENT proof is left
+        # Opt-in request-shape validation, and only when the flag is on AND a
+        # proof was actually submitted: validate each parsed proof against the
+        # vendored normative schema so a MALFORMED proof (e.g.
+        # `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises a clear
+        # 400 with a shape hint — instead of PowGate silently ignoring it and
+        # re-issuing a fresh 402 on every retry. An ABSENT proof is left
         # untouched (the initial request must still get its normal 402
         # challenge), and a WELL-FORMED proof passes through unchanged to the
         # gate below, which still does the real cryptographic check.
@@ -299,21 +279,18 @@ module Kiosk
         )
       end
 
-      # How a SUCCESS reaches the wire: the handler's payload, VERBATIM
-      # (T-072 = C). No `ok`, no `kind`, no wrapper — the status line says
-      # success and `output_schema` says what the shape is.
+      # How a SUCCESS reaches the wire: the handler's payload, VERBATIM. No
+      # `ok`, no `kind`, no wrapper — the status line says success and
+      # `output_schema` says what the shape is.
       #
-      # ONE seam for every endpoint. Until the cutover this was overridden in
-      # {VerbController} because `schema`/`pay` still answered 0.3's envelope
-      # and the demo flow scripts read `.value` off them; they answer this
-      # shape now, so the override is gone and there is nowhere left for the
-      # two to disagree.
+      # ONE seam for every endpoint, never overridden in {VerbController}, so
+      # there is nowhere for the two to disagree.
       def render_result(result)
         add_pagination_headers(result)
         render_wire_body(result.to_payload, status: result.http_status)
       end
 
-      # PAGINATION LEAVES THE BODY (T-092, spec §8.4). The two facts a page
+      # PAGINATION LEAVES THE BODY (spec §8.4). The two facts a page
       # carries about itself are transport metadata, so they travel as response
       # headers and the body stays the bare array every other query answers:
       #
@@ -343,8 +320,8 @@ module Kiosk
       # Not cached, and that needs no special case: {Headers.add_cache_policy}
       # already puts `private, no-store` on every verb response (spec §3.7.4),
       # so a page cannot be served to a second caller, and §3.7.3 forbids
-      # `public`/`s-maxage` on this plane outright. The CDN story T-094
-      # shipped is for `GET <endpoint>/schema` alone.
+      # `public`/`s-maxage` on this plane outright. The CDN story is for
+      # `GET <endpoint>/schema` alone.
       def add_pagination_headers(result)
         return unless result.kind == :rows
 
@@ -436,7 +413,7 @@ module Kiosk
       # / app_role connection-pool plumbing lands in a
       # follow-up release.
       #
-      # `lease_connection`, not `connection` (K-654): Rails 8.1 soft-deprecates
+      # `lease_connection`, not `connection`: Rails 8.1 soft-deprecates
       # `ActiveRecord::Base.connection`, and under
       # `config.active_record.permanent_connection_checkout = :disallowed` it
       # RAISES — so the whole wire surface would 500 on a host that has opted
@@ -482,7 +459,7 @@ module Kiosk
       # RFC 7235 challenge header that de-overloads the two 402 gates:
       # the header NAMES the gate, the JSON body still CARRIES the payload
       # (the PoW N-challenge list / the payment_setup pointer). Keyed on the
-      # wire CODE, not the exception class (T-054) — so a handler that
+      # wire CODE, not the exception class — so a handler that
       # RENDERS `payment_setup_required` gets the same challenge header as
       # the gate that raises it. nil for every other code (no header
       # emitted; `payment_failed` deliberately bare — no scheme names it).

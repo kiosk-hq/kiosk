@@ -16,38 +16,36 @@ module Kiosk
     # eager-loads `app/` in production, so that happens at boot; development
     # (`config.eager_load = false`) autoloads on first reference, and nothing
     # references a handler controller — the wire reaches it through the
-    # registry, and the registry is what is missing. Measured on the T-057
-    # pilot before this shipped: `GET /kiosk/schema` → `queries=[] actions=[]`,
-    # every verb path → 404, `/.well-known/kiosk.json` →
-    # `"capabilities": []` (computed from the live registry). An operator
-    # following the published onboarding got a DEAD ORIGIN in development —
-    # every verb missing, discovery advertising nothing.
+    # registry, and the registry is what is missing. Without this pass, in
+    # development: `GET /kiosk/schema` → `queries=[] actions=[]`, every verb
+    # path → 404, `/.well-known/kiosk.json` → `"capabilities": []` (computed
+    # from the live registry). An operator following the published onboarding
+    # meets a DEAD ORIGIN — every verb missing, discovery advertising nothing.
     #
     # ── Why an operator-supplied LIST and not a convention ───────────────
     # The alternative was to glob `app/controllers/kiosk/**` and eager-load it.
     # It is rejected on neutrality: Kiosk ships a mixin, not a base class —
-    # which superclass a handler has is the operator's decision (K-495) — and
+    # which superclass a handler has is the operator's decision — and
     # dictating the DIRECTORY and NAMESPACE is the same imposition one level
     # up. It also cannot see handlers that live in another engine, in a
     # `packs/` tree, or anywhere else the host app puts controllers, and its
     # failure mode is the silent empty catalog above. Naming the classes is
     # one declarative line in the initializer the operator already has, it
-    # composes with any layout, and it stays true when 0.4 (T-067) turns the
-    # verbs into per-verb REST endpoints.
+    # composes with any layout, and it holds for the per-verb REST endpoints
+    # the wire serves.
     #
     # ── Why a full REBUILD and not "declare once more" ───────────────────
     # Declaring is idempotent per name, so re-declaring would cover an ADDED or
     # EDITED verb — but not a REMOVED one: the entry from the previous
     # generation of the class would linger in the registry and the wire would
     # keep serving a verb whose method no longer exists. So each pass first
-    # DROPS every entry and then re-declares from the listed classes. Since
-    # T-081 an entry can only have come from the mixin — the `register` API
-    # that used to install unreloadable entries alongside these is gone — so
-    # the drop needs no test for what it is dropping.
+    # DROPS every entry and then re-declares from the listed classes. Every
+    # entry can only have come from the mixin, so the drop needs no test for
+    # what it is dropping.
     #
     # Classes are resolved BY NAME on every pass. Holding a Class object
     # across a reload pins the stale, unloaded generation — the same fork
-    # {HandlerDispatch} settled for dispatch (T-053).
+    # {HandlerDispatch} settled for dispatch.
     module HandlerRegistrations
       class << self
         # Drops every registration and rebuilds from +handlers+ (default: the
@@ -73,7 +71,7 @@ module Kiosk
         # This is the CROSS-CLASS half. A collision inside ONE class body is
         # caught earlier, at declaration time, where the operator has both
         # methods in hand ({HandlerMixin::ClassMethods#kiosk_refuse_bad_declaration!})
-        # — since K-921 a controller may declare both kinds, so that half exists
+        # — a controller may declare both kinds, which is why that half exists
         # at all. Two SEPARATE controller classes still cannot see each other,
         # and this pass has just rebuilt both registries from a cleared state, so
         # it is the first moment the whole surface exists at once.

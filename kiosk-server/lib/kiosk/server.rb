@@ -13,7 +13,7 @@ require "kiosk"
 # ActiveRecord::Base.lease_connection is how the auth plane and the durable
 # device-authorization store reach the database; nothing in this gem
 # provides an alternative for those paths. Every statement they run carries
-# BIND PARAMETERS (K-654, K-782) — this gem calls `connection.quote` nowhere.
+# BIND PARAMETERS — this gem calls `connection.quote` nowhere.
 require "active_record"
 
 require "kiosk/server/version"
@@ -101,7 +101,7 @@ module Kiosk
     #                                         GET <endpoint>/<query-name>,
     #                                         POST <endpoint>/<action-name>
     #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,
-    #                                         per the T-070/T-087 encoding rule
+    #                                         per the normative encoding rule
     #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)
     #   - {Kiosk::Server::Queries}          — read-side query registry
     #   - {Kiosk::Handler}                  — the mixin an operator includes into
@@ -112,10 +112,9 @@ module Kiosk
     #   - {Kiosk::OperationResult}          — answer-or-refusal value object a write
     #                                         Operation returns; subclass it and
     #                                         declare your own STATUSES map
-    #   - {Kiosk::Server::Result}           — success payload value type (it
-    #                                         renders {Result#to_payload}; the
-    #                                         0.3 envelope it used to render is
-    #                                         gone, T-074 = A)
+    #   - {Kiosk::Server::Result}           — success payload value type; it
+    #                                         renders {Result#to_payload}, which
+    #                                         is the answer body verbatim
     #   - {Kiosk::Server::Errors}           — exception hierarchy + RFC 9457
     #                                         problem-document serialisation
     #   - {Kiosk::Server::SessionContext}   — transaction + four transaction-local GUCs

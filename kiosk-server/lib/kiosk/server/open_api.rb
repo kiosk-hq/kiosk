@@ -12,14 +12,13 @@ require "kiosk/server/well_known"
 
 module Kiosk
   module Server
-    # THE DERIVED OPENAPI RENDERER (T-068 slice 4, decision T-071 = C,
-    # ADR-0024).
+    # THE DERIVED OPENAPI RENDERER.
     #
     # A SECOND RENDERER over the SAME model `GET <endpoint>/schema` renders:
     # {Queries.catalog} and {Actions.catalog}, read exactly as
     # {SchemaDocument} reads them. Nothing here holds a declaration of
     # its own, and nothing here may be edited to say something the descriptors
-    # do not — that is the whole property the decision bought, and it is the
+    # do not — that is the whole property this renderer rests on, and it is the
     # same one {WellKnown} already proves across six discovery surfaces.
     #
     # ── What this is FOR, and what it is not ─────────────────────────────
@@ -29,15 +28,14 @@ module Kiosk
     # normative. `/kiosk/openapi.json` is for TOOLING — a porter pointing a
     # code generator, a mock server or a request validator at a Kiosk origin —
     # and it is named NOWHERE in the skill, so no assistant pays cold-start
-    # context for it. That property is the reason the decision went to C
-    # rather than to "OpenAPI replaces the catalog"; do not undermine it by
-    # teaching this document anywhere an assistant reads.
+    # context for it. That property is the reason OpenAPI is published BESIDE
+    # the catalog rather than in place of it; do not undermine it by teaching
+    # this document anywhere an assistant reads.
     #
-    # ADR-0021 («Explicitly NOT OpenAPI») is NARROWED by this, not reversed:
-    # OpenAPI is an ADDITIONAL DESCRIPTION surface. The prose `description`
-    # remains the authoritative SEMANTICS and `input_schema` the authoritative
-    # INPUT CONTRACT — both travel into this document verbatim rather than
-    # being restated in it.
+    # OPENAPI IS AN ADDITIONAL DESCRIPTION SURFACE and never the authority.
+    # The prose `description` remains the authoritative SEMANTICS and
+    # `input_schema` the authoritative INPUT CONTRACT — both travel into this
+    # document verbatim rather than being restated in it.
     #
     # ── PROVISIONAL, by Phil's own revisit clause ────────────────────────
     #
@@ -47,7 +45,7 @@ module Kiosk
     # {WellKnown.api_catalog} plus the route and the controller. Do not let a
     # demo, the e2e harness, the skill or the normative spec require it.
     #
-    # ── The four things the T-086 research says this must get right ──────
+    # ── The four things this document must get right ─────────────────────
     #
     #   1. `style` and `explode` are written EXPLICITLY on every parameter.
     #      Stoplight Prism 5.16.0 ignores the spec's defaults (`el.explode ||
@@ -66,8 +64,8 @@ module Kiosk
     #      One taught form, one tolerated form, one declared name.
     #   3. An OBJECT parameter is `style: deepObject, explode: true` — the one
     #      query style OpenAPI defines that Rails already speaks — and it is
-    #      ONE LEVEL WITH SCALAR LEAVES (T-087). The decoder refuses anything
-    #      richer, so no such shape can reach a descriptor and be published.
+    #      ONE LEVEL WITH SCALAR LEAVES. The decoder refuses anything richer,
+    #      so no such shape can reach a descriptor and be published.
     #   5. THE TWO PAGINATION FACTS ARE RESPONSE HEADERS, and OpenAPI declares
     #      a response header in `responses.<code>.headers` — NOT as a property
     #      of the body schema. Getting that wrong would publish `Link` and
@@ -92,10 +90,8 @@ module Kiosk
     #
     # The whole wire: `GET <endpoint>/<query-name>`,
     # `POST <endpoint>/<action-name>`, and the two RESERVED endpoints
-    # `GET <endpoint>/schema` and `POST <endpoint>/pay`, which joined at the
-    # 0.4 cutover in the same wave that moved them onto the payload-verbatim
-    # shape (T-074 = A). Before that they still answered the 0.3 envelope, and
-    # describing them would have published an envelope that was being deleted.
+    # `GET <endpoint>/schema` and `POST <endpoint>/pay`, which answer the same
+    # payload-verbatim shape every operator verb answers.
     #
     # THE TWO RESERVED OPERATIONS ARE THE ONE PLACE THIS RENDERER SPEAKS FOR
     # ITSELF, and it is worth being precise about why that is not the drift
@@ -240,7 +236,7 @@ module Kiosk
         JSON.generate(build(**kwargs))
       end
 
-      # ── WHAT THE ENDPOINT SERVES, AND ITS VALIDATOR (K-804) ─────────────
+      # ── WHAT THE ENDPOINT SERVES, AND ITS VALIDATOR ─────────────────────
       #
       # `GET <endpoint>/openapi.json` is public and cacheable now, so it owes a
       # caller a strong `ETag` and a 304 — and neither is affordable if the
@@ -321,9 +317,9 @@ module Kiosk
           operationId: name,
           tags:        [kind == :query ? "queries" : "actions"],
         }
-        # A descriptor's `description` is the AUTHORITATIVE SEMANTICS
-        # (ADR-0021/0023) and travels VERBATIM. It is `String|nil` on the wire;
-        # an absent one is omitted rather than emitted as an empty string.
+        # A descriptor's `description` is the AUTHORITATIVE SEMANTICS and
+        # travels VERBATIM. It is `String|nil` on the wire; an absent one is
+        # omitted rather than emitted as an empty string.
         op[:description] = descriptor[:description] unless descriptor[:description].nil?
 
         if kind == :query
@@ -541,7 +537,7 @@ module Kiosk
                        "serves is `capabilities` in /.well-known/kiosk.json.",
           # The document declares `bearerAuth` globally; this ONE operation
           # opts out. An empty `security` array is OpenAPI's way of saying
-          # "no credential required" (T-094), and getting it wrong here would
+          # "no credential required", and getting it wrong here would
           # make a generated client send a token this endpoint never reads —
           # or, worse, refuse to call it without one.
           security:    [],

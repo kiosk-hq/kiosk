@@ -15,12 +15,12 @@ module Kiosk
     # and there is no principal yet, so a bad proof cannot be attributed to a
     # reputation record — it is simply rejected (403).
     #
-    # == Anti-DoS: one challenge → at most one verify (K-540)
+    # == Anti-DoS: one challenge → at most one verify
     #
     # This gate runs UNAUTHENTICATED, before PopVerifier, so a caller can take a
     # free 402 challenge and resubmit it with a valid HMAC sig but garbage
     # indices. {PowGate.enforce} claims the challenge id atomically BEFORE the
-    # equihash verify (K-542), so a bad proof CONSUMES its challenge: a replay of
+    # equihash verify, so a bad proof CONSUMES its challenge: a replay of
     # the same id is turned away with a fresh re-challenge (402) without a second
     # verify. One issued challenge therefore drives at most one hash-loop verify.
     #
@@ -48,7 +48,7 @@ module Kiosk
       # @raise  [Errors::Forbidden]         (403) on a bad-faith proof
       # @raise  [Errors::ConfigurationError] when the gate is on but misconfigured —
       #   kiosk-reputation absent, `pow_secret` unset, or `registration_pow_params`
-      #   naming a difficulty no proof could satisfy (K-843, raised by {PowGate.enforce})
+      #   naming a difficulty no proof could satisfy (raised by {PowGate.enforce})
       def gate(public_key_pem:, pow:, config: Kiosk.configuration)
         count = config.registration_pow_count.to_i
         return if count <= 0

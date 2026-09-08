@@ -9,17 +9,12 @@ module Kiosk
     # `Kiosk.configuration.audit_sink`. With no sink configured NOTHING is
     # built and nothing is emitted; Kiosk itself stores none of this.
     #
-    # ── WHY THIS IS A VALUE OBJECT AND NOT A TABLE (K-828, 2026-08-20) ────
+    # ── WHY THIS IS A VALUE OBJECT AND NOT A TABLE ────────────────────────
     #
-    # It used to be a table. `kiosk.action_log` was a canonical migration
-    # every adopter installed, and `Kiosk::Server::ActionLog` — both since
-    # deleted — wrote a row per invocation.
-    # Phil reversed that on 2026-08-20: «Хранить в БД в рамках kiosk reference
-    # impl/demo не будем. Дадим интерфейс для возможности их куда-то выливать
-    # по желанию оператора, и на его ответственность по PII.» So Kiosk offers
-    # the CAPABILITY and keeps none of the data: no table, no retention, no
-    # purge task it would then owe you, and no undiscussed decision about
-    # somebody else's PII.
+    # Kiosk offers the CAPABILITY and keeps none of the data: no table, no
+    # retention, no purge task it would then owe you, and no undiscussed
+    # decision about somebody else's PII — an operator who wants a durable
+    # trail writes it in their own sink, under their own policy.
     #
     # ── ARGUMENTS ARRIVE IN FULL. THAT IS THE POINT. ─────────────────────
     #
@@ -71,8 +66,7 @@ module Kiosk
     # @!attribute [r] error_class
     #   The raised exception's class name on the {ERROR} branch, else nil.
     # @!attribute [r] error_message
-    #   The raised exception's message, UNTRUNCATED (the old 500-char cap was
-    #   a `text` column's problem, not yours), else nil.
+    #   The raised exception's message, UNTRUNCATED, else nil.
     # @!attribute [r] cause_class
     #   The class name of what the error above WRAPS, when it wraps anything —
     #   see the note below. nil on the {OK} branch and on a raise with no cause.
@@ -81,13 +75,13 @@ module Kiosk
     # @!attribute [r] invoked_at
     #   When the invocation STARTED — not when the sink was called.
     #
-    # ── THE CAUSE, BECAUSE THE ERROR IS OFTEN A WRAPPER (K-1311) ─────────
+    # ── THE CAUSE, BECAUSE THE ERROR IS OFTEN A WRAPPER ──────────────────
     #
     # {Executor} emits whatever reached its audit seam, and on the failure
     # branch that is usually a Kiosk wrapper rather than the handler's own
     # exception: an unhandled raise becomes `Errors::ActionFailed` reading
-    # `Action "place_order" raised RuntimeError`, because since K-1307 the
-    # handler's sentence is not the wire's to publish. That is right FOR THE
+    # `Action "place_order" raised RuntimeError`, because the handler's own
+    # sentence is not the wire's to publish. That is right FOR THE
     # WIRE and wrong here — a sink is operator-side, in the operator's own
     # process, already receiving the arguments in full, and it is what an
     # operator builds alerting on.

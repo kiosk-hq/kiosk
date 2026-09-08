@@ -2,31 +2,29 @@
 
 module Kiosk
   module Server
-    # THE WIRE ERROR CONTRACT (T-054, K-495 sub-decision 4).
+    # THE WIRE ERROR CONTRACT.
     #
     # The taxonomy is the closed, stable `code` VOCABULARY the spec's
     # "Error vocabulary" section publishes — {CODES}, a table, because the
     # contract is data: an assistant branches on the FLAT top-level `code` of
     # the problem document, which `error.code` is only the HANDLER-side
-    # spelling of (K-1095). A code
-    # exists precisely where an HTTP status alone cannot carry the meaning
-    # (four codes share 403, three share 402). It is NOT a class hierarchy
-    # mirroring Rails/HTTP: handler controllers express errors in Rails'
-    # own idiom — `render json:, status:` or a Rails-registered raise — and
-    # the mapping onto codes happens in one seam
+    # spelling of. A code exists precisely where an HTTP status alone cannot
+    # carry the meaning (four codes share 403, three share 402). It is NOT a
+    # class hierarchy mirroring Rails/HTTP: handler controllers express errors
+    # in Rails' own idiom — `render json:, status:` or a Rails-registered
+    # raise — and the mapping onto codes happens in one seam
     # ({HandlerMixin::InstanceMethods#kiosk_rescue_to_wire} +
     # {HandlerDispatch#decode}).
     #
-    # Exception classes exist in two tiers, each annotated below with its
-    # T-054 audit verdict:
+    # Exception classes exist in two tiers:
     #
     #   * WIRE-ONLY codes — a bare status cannot name them, and gate-style
     #     internals raise them (some carry payload or a fixed hint). These
     #     stay.
     #   * RAILS-DUPLICATE codes — each merely restates what its bare HTTP
     #     status already says. New code must not raise them; they remain
-    #     only for the gem's own pre-T-054 internals and the demo
-    #     initializers T-057 migrates.
+    #     only because the gem's own protocol internals and some demo
+    #     initializers still raise them.
     #
     # Each subclass declares CODE — the problem document's TOP-LEVEL `code`,
     # not `error.code`: a problem document is flat, and {Base#to_problem} below
@@ -34,32 +32,31 @@ module Kiosk
     # and the suite asserts it.
     module Errors
       # `code` → canonical HTTP status. `code`, not `error.code`: the keys of
-      # this table are the problem document's flat top-level member, which is
-      # what the paragraph four lines above already says and what this comment
-      # contradicted until K-1095. The closed vocabulary: these
-      # seventeen codes ARE the spec's "Error vocabulary" table — narrative
-      # (specification.html), formal (protocol.md §9) and `problem.schema.json`
-      # all carry the same seventeen, `payment_failed` among them since
-      # kiosk.tech a2f4089, `method_not_allowed` since 0.4 (T-068 slice 2), and
-      # `verb_not_found` + `module_not_served` since T-158.
+      # this table are the problem document's flat top-level member. The closed
+      # vocabulary: these seventeen codes ARE the spec's "Error vocabulary"
+      # table — narrative (specification.html), formal (protocol.md §9) and
+      # `problem.schema.json` all carry the same seventeen, `payment_failed`
+      # among them since kiosk.tech a2f4089, `method_not_allowed` since the 0.4
+      # per-verb wire, and `verb_not_found` + `module_not_served` since the
+      # three-way split below.
       # Not a superset of the published table and not a subset of it; the two
       # are the same list, and a schema-validating client rejects anything
       # else. Adding a code here is a WIRE change: spec first (rule 1).
       #
-      # `method_not_allowed` is the 0.4 addition and the reason it exists is
+      # `method_not_allowed` is a 0.4 addition and the reason it exists is
       # the per-verb wire: once the HTTP METHOD carries the read/write
       # semantics, `GET <endpoint>/<action-name>` is a resource that EXISTS
       # and refuses this method, which is a different fact from "no such
-      # verb" and RFC 9110 §15.5.6 already has a status for it. Slice 1
-      # answered it `404 not_found` with a hint because adding to a closed
-      # vocabulary is spec-first; slice 2 is the spec change.
+      # verb" and RFC 9110 §15.5.6 already has a status for it. Adding to a
+      # closed vocabulary is spec-first, so the code is here because the
+      # spec's own table carries it.
       #
-      # THREE CODES ANSWER "IT IS NOT HERE", AND THAT IS T-158 (K-1207, Phil's
-      # decision «A», 2026-08-31). `not_found` used to carry all three at once,
-      # and `code` is the ONE field the spec tells an assistant to branch on, so
-      # an assistant told «not found» for a hotel nobody has re-read the
-      # catalogue and retried — right for one of the three, a wasted round trip
-      # and a wrong report to the human for the others:
+      # THREE CODES ANSWER "IT IS NOT HERE". A single `not_found` would carry
+      # all three at once, and `code` is the ONE field the spec tells an
+      # assistant to branch on, so an assistant told «not found» for a hotel
+      # nobody serves re-reads the catalogue and retries — right for one of the
+      # three, a wasted round trip and a wrong report to the human for the
+      # others:
       #
       #   * `verb_not_found` (404) — no verb by that NAME is registered here.
       #     Raised by {Queries}/{Actions} when the registry has no entry, BEFORE
@@ -132,8 +129,8 @@ module Kiosk
       # ENCOURAGES dereferencing ("when dereferenced, it might provide
       # human-readable documentation"); the normative documentation for every
       # code is the spec's own error-vocabulary table. Publishing a page per
-      # code on kiosk.tech is a site-side follow-up (K-793), and because the
-      # URI is fixed here it can be done later without touching the wire.
+      # code on kiosk.tech is a site-side follow-up, and because the URI is
+      # fixed here it can be done later without touching the wire.
       #
       # An AI assistant MUST branch on the `code` extension member, never on
       # this URI: the code is the contract, the URI is its name.
@@ -173,8 +170,8 @@ module Kiosk
       #         operator meaning `module_not_served` raises it by name.
       #
       # 404 IS PRESENT EVEN THOUGH TWO CODES SHARE IT, and that is not an
-      # oversight in the rule above (T-158). Only ONE of the two is reachable
-      # from a Rails-native raise: `verb_not_found` comes from the registry
+      # oversight in the rule above. Only ONE of the two is reachable from a
+      # Rails-native raise: `verb_not_found` comes from the registry
       # lookup in {Queries}/{Actions}, which raises its own class before any
       # handler is entered, so the only 404 a handler's `RecordNotFound` can
       # mean is the addressed-thing-is-absent `not_found` — which is exactly
@@ -198,9 +195,10 @@ module Kiosk
       # while still naming enough for an assistant to spot a near-miss typo.
       MAX_HINT_NAMES = 20
       # Plural of each wire-name kind, for the hint below. Only reachable when
-      # NOTHING is registered for that kind, which is why "No querys are
-      # registered" survived to the T-057 pilot: `"#{verb}s"` is wrong for
-      # exactly one of the two words this vocabulary has.
+      # NOTHING is registered for that kind — which is a rare enough path that
+      # a naive `"#{verb}s"` can say "No querys are registered" for a long time
+      # unnoticed: it is wrong for exactly one of the two words this vocabulary
+      # has.
       HINT_PLURALS = { "query" => "queries", "action" => "actions" }.freeze
 
       # Builds the `hint` for a {VerbNotFound} raised on an unknown query/action name.
@@ -230,26 +228,21 @@ module Kiosk
 
       # ── THE TWO MALFORMED-REQUEST SENTENCES, BUILT HERE AND NOWHERE ELSE ────
       #
-      # Both used to be assembled at the call site by splicing a Ruby
-      # exception's `message` into the problem document's `detail`, at five
-      # sites across three controllers, and the wire carried the result
-      # verbatim (K-1294). Measured live against the deployed fleet on
-      # 2026-09-05, `POST /kiosk/auth/register` with an empty object answered
-      # `"detail":"missing field: key not found: :public_key"` — `KeyError#message`,
-      # Ruby symbol and all, on the FIRST call an assistant makes — and a body
-      # that was not JSON answered `"detail":"invalid JSON body: unexpected token
-      # 'notjson' at line 1 column 1"`, which is the json gem's wording and moves
-      # when the parser does.
+      # Neither a Ruby exception's `message` nor a parser's is ours to publish,
+      # so neither is ever spliced into the problem document's `detail`. Spliced,
+      # `KeyError#message` answers `POST /kiosk/auth/register` with an empty
+      # object as `missing field: key not found: :public_key` — Ruby symbol and
+      # all, on the FIRST call an assistant makes — and the json gem answers a
+      # body that is not JSON as `invalid JSON body: unexpected token 'notjson'
+      # at line 1 column 1`, which is the json gem's wording and moves when the
+      # parser does.
       #
-      # Neither is ours to publish. `missing field: <name>` is the house
-      # sentence: the seven demos answer an absent argument with it
-      # (`WireArguments.missing`, held in lockstep across three of them by
-      # bin/check-demo-copies) and it is the one an assistant's error handling
-      # matches on. The same controller that leaked the symbol already words its
-      # own query-parameter refusal `missing public_key query parameter` a
-      # hundred lines away, so the clean wording was never in doubt — only
-      # unenforced, because the house-sentence rule's file set was `kiosk-demo-*`
-      # and could not see the engine.
+      # `missing field: <name>` is the house sentence: the seven demos answer an
+      # absent argument with it (`WireArguments.missing`, held in lockstep
+      # across three of them by bin/check-demo-copies) and it is the one an
+      # assistant's error handling matches on. The controller that raises it
+      # words its own query-parameter refusal `missing public_key query
+      # parameter` a hundred lines away, in the same register.
       #
       # A detail says WHAT is wrong in this repository's own words; anything the
       # caller needs in order to retry goes in `hint`, which is where the
@@ -294,26 +287,23 @@ module Kiosk
         BadRequest.new("invalid JSON body", hint: hint)
       end
 
-      # ── THE SENTENCE A RAILS-NATIVE RAISE ANSWERS WITH (K-1310) ─────────────
+      # ── THE SENTENCE A RAILS-NATIVE RAISE ANSWERS WITH ──────────────────────
       #
       # {HandlerMixin::InstanceMethods#kiosk_rescue_to_wire} is the seam that
       # turns a raise Rails knows a status for — `params.require`'s
       # `ParameterMissing`, Active Record's `RecordNotFound`, whatever the host
       # registered in `config.action_dispatch.rescue_responses` — into a wire
-      # code, with NO Kiosk classes in the handler. It used to render
-      # `exception.message` into the sub-dispatch envelope, and
-      # {HandlerDispatch#error_message} re-wrapped that as the wire `detail`:
-      # MEASURED at head on 2026-09-06, a `params.require(:sku)` handler
-      # answered `"detail":"param is missing or the value is empty or invalid:
-      # sku"` — actionpack's own sentence, verbatim, on a 400.
+      # code, with NO Kiosk classes in the handler.
       #
-      # Same class as the two sentences above and as the nine sites K-1307
-      # closed: the text is not ours, it moves when a dependency is upgraded,
-      # and on a path a caller can reach it can echo the caller's own bytes back
-      # out. So the seam publishes OUR sentence for the code it decided, and the
-      # exception's own class, message and backtrace go to the operator's log
-      # ({FailureLog}) — which is where {Executor}'s two 500 paths already send
-      # theirs.
+      # Same class as the two sentences above: the exception's own text is not
+      # ours, it moves when a dependency is upgraded, and on a path a caller can
+      # reach it can echo the caller's own bytes back out. Rendered into the
+      # sub-dispatch envelope, a `params.require(:sku)` handler would answer a
+      # 400 with `"detail":"param is missing or the value is empty or invalid:
+      # sku"` — actionpack's own sentence, verbatim. So the seam publishes OUR
+      # sentence for the code it decided, and the exception's own class, message
+      # and backtrace go to the operator's log ({FailureLog}) — which is where
+      # {Executor}'s two 500 paths already send theirs.
       #
       # WHAT THIS DOES NOT SILENCE, because it is the reason the redaction is
       # safe to make wholesale: an operator who MEANS to speak to the agent has
@@ -413,10 +403,9 @@ module Kiosk
         # from configuration ({WireController#www_authenticate_for}).
         def response_headers = {}
 
-        # RFC 9457 problem document — THE error shape (T-072 = C), served as
-        # `application/problem+json`. It is the only one: 0.3's
-        # `{ok:false, error:{…}}` envelope was deleted with the endpoints that
-        # served it at the cutover (T-074 = A).
+        # RFC 9457 problem document — THE error shape, served as
+        # `application/problem+json`. It is the only error shape any endpoint
+        # serves.
         #
         # THE CLOSED VOCABULARY SURVIVES TWICE OVER, deliberately:
         #
@@ -436,10 +425,8 @@ module Kiosk
         # `instance` is deliberately NOT emitted: it would restate the request
         # URL the client just dialed, and RFC 9457 makes it OPTIONAL.
         #
-        # One JSON-path change comes with the move and is not hidden: the
-        # branch point is `code`, not `error.code` — a problem document is
-        # flat, and BOTH spellings the decision offered (`type` URI or
-        # extension member) put it at the top level.
+        # The branch point is `code`, not `error.code`: a problem document is
+        # flat, so the member sits at the top level.
         def to_problem
           {
             type:   Errors.problem_type(code),
@@ -452,8 +439,8 @@ module Kiosk
         end
       end
 
-      # A wire error named by CODE, not by class (T-054). The carrier the
-      # handler seam raises when a rendered non-2xx has to travel to the wire
+      # A wire error named by CODE, not by class. The carrier the handler seam
+      # raises when a rendered non-2xx has to travel to the wire
       # as a coded envelope: the code is data (any {CODES} key), the status
       # comes from the table, and `extra:` carries additional envelope
       # fields (a rendered `challenges`, say) through verbatim. One class for
@@ -478,17 +465,16 @@ module Kiosk
       end
 
       # ── RAILS-DUPLICATE CODES ─────────────────────────────────────────
-      # T-054 audit verdict: each of the five classes below restates what
-      # its bare HTTP status already says, i.e. exactly the parallel
-      # framework K-495 killed. Do not raise them from new code — render the
-      # status (handlers) or raise {WireError} / the Rails exception. They
-      # survive only because the gem's own protocol internals and the
-      # pre-T-057 demo initializers still raise them; QuotaExceeded, which
-      # nothing raised, is already gone. The CODE stays in {CODES} and is now
-      # live on the wire — getgrocery and skooti refuse a fourth outstanding
-      # KYC intake with it (K-586) — but through `OperationResult.refused`,
-      # which is the operator-side spelling, so the engine still raises it
-      # nowhere and needs no class for it.
+      # Each of the five classes below restates what its bare HTTP status
+      # already says, i.e. exactly the parallel framework Kiosk deliberately
+      # does not have. Do not raise them from new code — render the status
+      # (handlers) or raise {WireError} / the Rails exception. They survive
+      # only because the gem's own protocol internals and some demo
+      # initializers still raise them. `quota_exceeded` has NO class here and
+      # needs none: the code is live on the wire — getgrocery and skooti refuse
+      # a fourth outstanding KYC intake with it — but through
+      # `OperationResult.refused`, which is the operator-side spelling, so the
+      # engine raises it nowhere.
 
       # DUPLICATE of a bare 400. Malformed body, unknown verb, missing
       # required arg.
@@ -511,25 +497,25 @@ module Kiosk
       end
 
       # DUPLICATE of a bare 404. An ARGUMENT addressed a resource that does not
-      # exist -- spec §9.1 rule 2. Since T-158 this is the whole of what it
-      # means: the unknown-VERB-NAME half moved to {VerbNotFound} below, because
-      # an assistant recovers from the two differently and `code` is the only
-      # field the spec lets it branch on.
+      # exist -- spec §9.1 rule 2, and that is the whole of what it means: an
+      # unknown VERB NAME is {VerbNotFound} below, because an assistant recovers
+      # from the two differently and `code` is the only field the spec lets it
+      # branch on.
       class NotFound < Base
         CODE        = "not_found"
         HTTP_STATUS = 404
       end
 
-      # No verb by that NAME is registered at this origin (T-158, K-1207). The
-      # path's last segment matched nothing in either registry, so nothing about
+      # No verb by that NAME is registered at this origin. The path's last
+      # segment matched nothing in either registry, so nothing about
       # what this operator can DO has been established -- a different verb may
       # well do the thing the caller wanted, which is why this is not
       # {NotFound}. `hint` carries the registered names
       # ({Errors.unknown_name_hint}), so a mistyped `listings` for
       # `browse_listings` self-corrects without a catalogue round-trip.
       #
-      # WIRE-ONLY by the T-054 test even though 404 is a bare status: the status
-      # alone cannot name it, because the OTHER 404 in this vocabulary is what a
+      # WIRE-ONLY even though 404 is a bare status: the status alone cannot
+      # name it, because the OTHER 404 in this vocabulary is what a
       # bare 404 means ({STATUS_CODES}). Raised only by {Queries}/{Actions},
       # before any handler is entered.
       class VerbNotFound < Base
@@ -571,9 +557,9 @@ module Kiosk
       end
 
       # ── WIRE-ONLY CODES ───────────────────────────────────────────────
-      # T-054 audit verdict: these codes are why the vocabulary exists — a
-      # bare status cannot name them. The classes stay because gate-style
-      # internals raise them; a handler can just as well RENDER the code
+      # These codes are why the vocabulary exists — a bare status cannot name
+      # them. The classes stay because gate-style internals raise them; a
+      # handler can just as well RENDER the code
       # (`render json: {error: {code: "rls_denied", …}}, status: :forbidden`)
       # and the seam carries the code into the problem document verbatim.
       # `error.code` is the HANDLER-side spelling; what travels is the flat
@@ -638,8 +624,8 @@ module Kiosk
       # human corrects the payment method (payment_setup). Distinct CODE from
       # payment_setup_required (which means «no card on file yet») and from the
       # PoW 402. The adapter translates its PSP-specific error into a human-safe
-      # message BEFORE it reaches here, so no raw PSP internals leak to the wire
-      # (K-545). In the published error vocabulary since kiosk.tech a2f4089 —
+      # message BEFORE it reaches here, so no raw PSP internals leak to the
+      # wire. In the published error vocabulary since kiosk.tech a2f4089 —
       # the spec's own table, not an extension of it — and specified there as
       # the one 402 that is NOT a gate: no `challenges`, and deliberately no
       # `WWW-Authenticate`, so a client MUST branch on `code`.
@@ -657,7 +643,7 @@ module Kiosk
       # more PoW challenges for this request. The client solves EACH challenge
       # (each has a distinct salt — no amortisation, that is the N×PoW
       # anti-abuse dial) and re-sends the SAME request with the proof(s) in the
-      # `Kiosk-PoW` request header as raw JSON (ADR-0022). HTTP 402.
+      # `Kiosk-PoW` request header as raw JSON. HTTP 402.
       class PowRequired < Base
         CODE        = "pow_required"
         HTTP_STATUS = 402
@@ -677,13 +663,13 @@ module Kiosk
         def extensions = { challenges: challenges }
       end
 
-      # This ORIGIN does not serve the OPTIONAL MODULE the request reaches
-      # (T-158, K-1207) -- account binding (spec §6), payment (§11) or KYC
+      # This ORIGIN does not serve the OPTIONAL MODULE the request reaches --
+      # account binding (spec §6), payment (§11) or KYC
       # (§12). HTTP 501, and the spec argues the status at length: the path is
       # PUBLISHED and correct -- §4.3 requires all six auth URLs even of an
       # operator that serves no binding -- so a 404 would be a false statement
-      # about the URL, and it would put this case back on the same status as the
-      # two genuine 404s, recreating the ambiguity the T-158 split removed. No
+      # about the URL, and it would put this case on the same status as the two
+      # genuine 404s, recreating the ambiguity the three-way split removes. No
       # 4xx means it: `forbidden` is identity-scoped while this refusal is
       # ORIGIN-WIDE and true of an anonymous caller too, `410 Gone` asserts the
       # capability once existed, `405` is method-scoped. RFC 9110 §15.6.2 is the

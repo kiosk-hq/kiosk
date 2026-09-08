@@ -3,8 +3,7 @@
 module Kiosk
   module Server
     # DATA-DERIVED DESCRIPTOR SLOTS — a `Proc` in a declaration, resolved
-    # LAZILY, memoized, and refreshed WITHOUT A RESTART (K-922, Phil
-    # 2026-08-21).
+    # LAZILY, memoized, and refreshed WITHOUT A RESTART.
     #
     #   input_schema type: "object", additionalProperties: false,
     #                properties: {
@@ -96,8 +95,8 @@ module Kiosk
       # `description`, `kind` and `wire_name` are deliberately NOT here.
       # `kind` and `wire_name` are ROUTING facts, fixed when the route is
       # drawn — a proc there would promise a path that can change under a
-      # running process, and it cannot. `description` is prose semantics
-      # (ADR-0023): what a verb MEANS does not vary with a row.
+      # running process, and it cannot. `description` is prose semantics: what
+      # a verb MEANS does not vary with a row.
       RESOLVABLE_SLOTS = %i[input_schema output_schema example_params example_row].freeze
 
       # How long a resolved value is reused before it is re-resolved. Matches

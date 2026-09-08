@@ -77,8 +77,7 @@ Gem::Specification.new do |spec|
   # install-time lie paid for at request time. `validate_responses` (the
   # development/CI output check) uses the same validator.
   #
-  # «UNCONDITIONALLY» IS LITERAL AND IS NOT ABOUT THE TWO CONFIG FLAGS, which
-  # is a conflation this sentence has already caused once (K-1336). The
+  # «UNCONDITIONALLY» IS LITERAL AND IS NOT ABOUT THE TWO CONFIG FLAGS. The
   # obligation is enforced in `VerbController#arguments_for`, which calls
   # `RequestValidation.validate_arguments!` behind no flag at all, so a freshly
   # generated app carries it with an empty initializer — `validate_requests` is

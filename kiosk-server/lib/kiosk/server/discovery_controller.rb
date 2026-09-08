@@ -110,22 +110,21 @@ module Kiosk
         response.set_header("Access-Control-Allow-Origin", "*")
       end
 
-      # THE SHORT HALF OF THE CACHE-BUSTING PAIR (T-094).
+      # THE SHORT HALF OF THE CACHE-BUSTING PAIR.
       #
       # These three documents carry the `?v=<digest>` link to
       # `<endpoint>/schema`, which is cacheable for a YEAR precisely because
       # nothing is pointed at a stale copy of it. That property is only true
       # while the POINTER expires quickly: a deploy changes the digest, and a
       # client re-reads this document within {Headers::SHORT_MAX_AGE} seconds
-      # — sixty of them, since Phil weighed post-deploy staleness against
-      # backend load and picked a minute — to find the new link. A long TTL
-      # here would move the staleness rather than remove it, and the load it
-      # would save is not saved here anyway: the bytes live behind the
-      # versioned URL, which is immutable.
+      # — sixty of them, weighing post-deploy staleness against backend load —
+      # to find the new link. A long TTL here would move the staleness rather
+      # than remove it, and the load it would save is not saved here anyway:
+      # the bytes live behind the versioned URL, which is immutable.
       #
       # `public`, because these documents are the same bytes for every caller
-      # and are meant to be absorbed by a CDN — which is exactly what the
-      # K-799 answer leans on when it accepts anonymous enumeration.
+      # and are meant to be absorbed by a CDN — which is also why they are
+      # served anonymously: they carry nothing that is not already public.
       def short_ttl
         response.set_header("Cache-Control", Headers::PUBLIC_SHORT)
       end

@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1665 anchors.
+# 1663 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -993,14 +993,14 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_mandates.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_reservations.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_schema.rb.tt",
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # SIX `create` migrations and no amendments, since 2026-08-20 (K-646).
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # SIX `create` migrations and NO amendments. Every table is created in
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc "Generate Kiosk initializer and the six base migrations (001-006)."
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_kyc_attributes.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_schema.rb.tt",
 kiosk-server/lib/kiosk/server/account_binding.rb	        # object and run the operator's `assistant_claimed` /
 kiosk-server/lib/kiosk/server/account_binding.rb	      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(public_key_pem:, user_id:, requested_role: nil)
-kiosk-server/lib/kiosk/server/account_binding.rb	    #     ceremony can carry — K-072), `allowed_roles` is REMAPPED to
+kiosk-server/lib/kiosk/server/account_binding.rb	    #     ceremony can carry), `allowed_roles` is REMAPPED to
 kiosk-server/lib/kiosk/server/account_binding.rb	effective_role = new_role
 kiosk-server/lib/kiosk/server/actions.rb	    # Process-wide registry of Action handlers: a name -> callable map plus the
 kiosk-server/lib/kiosk/server/assistants_controller.rb	class AssistantsController < ::ActionController::Base
@@ -1064,15 +1064,13 @@ kiosk-server/lib/kiosk/server/errors.rb	class NotFound < Base
 kiosk-server/lib/kiosk/server/errors.rb	class PowRequired < Base
 kiosk-server/lib/kiosk/server/executor.rb	            "this operator does not serve the payment module",
 kiosk-server/lib/kiosk/server/executor.rb	            enforce_spending_cap!(cart)
-kiosk-server/lib/kiosk/server/executor.rb	      # Kiosk::Event type is gone, and the stub only ever raised a raw
-kiosk-server/lib/kiosk/server/executor.rb	      # `events` was removed long before: it was never a capability, the
 kiosk-server/lib/kiosk/server/executor.rb	      VERBS = %i[query run pay].freeze
 kiosk-server/lib/kiosk/server/executor.rb	      def enforce_spending_cap!(cart)
-kiosk-server/lib/kiosk/server/executor.rb	THERE USED TO BE A SECOND CONSTANT, `POLICY_VERBS`, which was this list
 kiosk-server/lib/kiosk/server/executor.rb	VERBS = %i[query run pay].freeze
 kiosk-server/lib/kiosk/server/executor.rb	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
-kiosk-server/lib/kiosk/server/executor.rb	`GET <endpoint>/schema` public — it resolves no identity, and an
+kiosk-server/lib/kiosk/server/executor.rb	`schema` is NOT one of them and is not tolled: `GET <endpoint>/schema`
 kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
+kiosk-server/lib/kiosk/server/executor.rb	resolves an identity — an {Executor} cannot be built without one.
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	      def mark_kyc_verified!(agent_id, attributes: {})
@@ -1087,7 +1085,7 @@ kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verified_attributes(raw)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, identity:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/link_code.rb	        # `requested_role:` carries what was stamped at MINT, from the human's
-kiosk-server/lib/kiosk/server/link_code.rb	      # `requested_role:` IS A MISNOMER HERE AND EVERYWHERE (K-1126): nothing
+kiosk-server/lib/kiosk/server/link_code.rb	`requested_role:` IS A MISNOMER HERE AND EVERYWHERE: nothing
 kiosk-server/lib/kiosk/server/link_code.rb	def mint(user_id:,
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	        require_amount!(payload, :cap_amount_cents)
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	        return if payload[:exp].to_i - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
@@ -1104,9 +1102,7 @@ kiosk-server/lib/kiosk/server/oauth_token_controller.rb	grant_type required
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	only the device_code grant is served here — 
 kiosk-server/lib/kiosk/server/pop_verifier.rb	PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
 kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.configuration.issuer
-kiosk-server/lib/kiosk/server/pow_gate.rb	            # :bad_params (K-541) joins them deliberately: a challenge naming
 kiosk-server/lib/kiosk/server/pow_gate.rb	            expect:               { alg: spec[:alg] || spec["alg"], params: spec[:params] || spec["params"] },
-kiosk-server/lib/kiosk/server/pow_gate.rb	          # K-542: atomically claim the id as spent BEFORE the expensive verify.
 kiosk-server/lib/kiosk/server/pow_gate.rb	          # and proceeds; the losers get false and treat it as a replay — a
 kiosk-server/lib/kiosk/server/pow_gate.rb	          when :expired, :bad_sig, :bad_params
 kiosk-server/lib/kiosk/server/pow_gate.rb	        spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
@@ -1116,6 +1112,8 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	      def issue_challenge(spec, fp, se
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def issue_challenges(count, spec, fp, secret, config)
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def validate_spec_params!(spec)
+kiosk-server/lib/kiosk/server/pow_gate.rb	:bad_params joins them deliberately: a challenge naming off-spec
+kiosk-server/lib/kiosk/server/pow_gate.rb	Atomically claim the id as spent BEFORE the expensive verify.
 kiosk-server/lib/kiosk/server/pow_gate.rb	def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
 kiosk-server/lib/kiosk/server/pow_gate.rb	def issue_challenges(count, spec, fp, secret, config)
 kiosk-server/lib/kiosk/server/pow_gate.rb	def pow_count
@@ -1138,14 +1136,14 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schem
 kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/verb_controller.rb	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/lib/kiosk/server/verb_controller.rb	    # SUCCESS is the handler's rendered payload, VERBATIM (T-072 = C); ERRORS
+kiosk-server/lib/kiosk/server/verb_controller.rb	    # SUCCESS is the handler's rendered payload, VERBATIM; ERRORS are RFC 9457
 kiosk-server/lib/kiosk/server/verb_controller.rb	    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
 kiosk-server/lib/kiosk/server/verb_controller.rb	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
 kiosk-server/lib/kiosk/server/verb_controller.rb	THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
 kiosk-server/lib/kiosk/server/verb_controller.rb	class VerbController < WireController
 kiosk-server/lib/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/lib/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
-kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane still wins by first-match, because the operator
+kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane wins by first-match, because the operator
 kiosk-server/lib/kiosk/server/well_known.rb	            kind:          "kiosk-pop",
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
 kiosk-server/lib/kiosk/server/well_known.rb	          auth_modes: ["kiosk-pop", "user-claimed", "link-code"],

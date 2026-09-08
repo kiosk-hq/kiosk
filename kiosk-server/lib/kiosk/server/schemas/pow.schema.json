@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/pow.schema.json",
   "title": "Kiosk proof-of-work",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref). Keeping it in sync with the upstream normative copy is tracked as T-045.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref) and must be kept in sync with the upstream normative copy.",
   "description": "The PoW challenge object (issued in a pow_required 402) and the proof(s) an agent returns in the Kiosk-PoW request header (raw JSON) on retry.",
   "$ref": "#/$defs/powHeader",
   "$defs": {

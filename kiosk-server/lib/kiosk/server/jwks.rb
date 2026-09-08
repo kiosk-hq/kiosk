@@ -13,8 +13,8 @@ module Kiosk
     # format has room for the outgoing and the incoming key at once, which is
     # what an operator would need to roll a key without a break.
     #
-    # THE SHIPPED DEPLOYMENT PUBLISHES EXACTLY ONE KEY, and this comment used
-    # to describe the overlap window as if it existed (K-933).
+    # THE SHIPPED DEPLOYMENT PUBLISHES EXACTLY ONE KEY, so that room stays
+    # unused.
     # {JwksController#show} renders `build(keys: [Kiosk.configuration.signing_key])`
     # and no configuration can add a second, so there is no window to publish
     # into: every verifier holding the outgoing `kid` fails the moment the key

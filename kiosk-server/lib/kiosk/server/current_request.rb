@@ -34,7 +34,7 @@ module Kiosk
       # previous values (nesting is safe; an inner `with` that omits a value
       # BLANKS it rather than inheriting it — pass it through explicitly).
       #
-      # `handler_headers` is the ONE slot that carries data back UP (K-823):
+      # `handler_headers` is the ONE slot that carries data back UP:
       # the caller passes a hash it still holds, {HandlerDispatch} writes the
       # handler's own response headers into it, and the wire reads it after the
       # block returns. It is here rather than on {Result} for the same reason

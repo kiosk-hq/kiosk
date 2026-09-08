@@ -28,7 +28,7 @@ module Kiosk
     #   2. Expiry check (integer compare)
     #   3. Parameter re-derivation: the challenge must name the alg/params this
     #      server's live config demands right now, not merely params we once
-    #      signed (K-541 — see the `expect:` argument below)
+    #      signed (see the `expect:` argument below)
     #   4. Equihash backend eval (at n=168 k=7: ~18 ms + KB of RAM for a VALID
     #      proof — memory is the asymmetry, since SOLVING the same proof costs
     #      the reference numpy solver ~1.3 GiB. That is THAT solver's
@@ -37,7 +37,7 @@ module Kiosk
     #      which is how Equihash 200/9's real footprint fell to ~144 MB.)
     # A flood of forged, expired or off-spec proofs is rejected at step 1/2/3
     # without burning a backend evaluation. Cheap-before-expensive holds INSIDE
-    # step 4 too (K-540): the backend checks structure before hashing and folds
+    # step 4 too: the backend checks structure before hashing and folds
     # the tree as it hashes, so a proof that gets this far and is simply wrong
     # costs ~0.3 ms, not the full ~18 ms.
     #
@@ -50,7 +50,7 @@ module Kiosk
     # otherwise one proof is accepted once per worker. This is a normative
     # requirement on the operator, not a tuning suggestion: protocol.md
     # Section 15.2 and the Section 16.1 operator profile state it. Ship-ready
-    # override: {PowSpentStores::ActiveRecord} (K-738).
+    # override: {PowSpentStores::ActiveRecord}.
     module PowGate
       module_function
 
@@ -62,9 +62,9 @@ module Kiosk
       #
       # It covers the HTTP METHOD, the VERB NAME as it appears in the path,
       # and the canonical (key-order-independent) JSON serialisation of the
-      # arguments. The proof travels in the `Kiosk-PoW` HEADER (ADR-0022), NOT
-      # in the body, so all three are identical at issue time (no proof) and
-      # verify time (proof in the header) — the fingerprint matches on retry.
+      # arguments. The proof travels in the `Kiosk-PoW` HEADER, NOT in the
+      # body, so all three are identical at issue time (no proof) and verify
+      # time (proof in the header) — the fingerprint matches on retry.
       #
       # WHY METHOD AND VERB, AND NOT 0.3's `command`. Through 0.3 every read
       # was `POST <endpoint>/query` and every write `POST <endpoint>/run`, so
@@ -103,7 +103,7 @@ module Kiosk
       # @raise  [Errors::PowRequired]       (HTTP 402) when a challenge must be solved
       # @raise  [Errors::Forbidden]         (HTTP 403) when a submitted proof is invalid
       # @raise  [Errors::ConfigurationError] when the policy is set but pow_secret is
-      #   missing, or the difficulty it demands is one no proof could satisfy (K-843)
+      #   missing, or the difficulty it demands is one no proof could satisfy
       def gate(identity:, command:, body:, pow:, method: "POST", verb: nil)
         config = Kiosk.configuration
         policy = config.reputation_policy
@@ -175,9 +175,9 @@ module Kiosk
       # @raise  [Errors::PowRequired] (402) when more valid proofs are needed
       # @raise  [Errors::Forbidden]   (403) on a bad-faith (wrong) proof
       # @raise  [Errors::ConfigurationError] when `spec` names a difficulty the
-      #   registered backend refuses (K-843)
+      #   registered backend refuses
       def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
-        # ── Is this difficulty answerable at all? (K-843) ─────────────────────
+        # ── Is this difficulty answerable at all? ─────────────────────────────
         # Before anything is minted or verified. `spec` comes from operator
         # configuration — the policy's `challenge_for`, or
         # `config.registration_pow_params` — and nothing between here and the
@@ -211,8 +211,8 @@ module Kiosk
 
           next if id.nil? || accepted.key?(id)
 
-          # K-551/K-540 cheap structural pre-check: a well-formed proof echoes
-          # the challenge object verbatim, `params` included. A missing/non-Hash
+          # Cheap structural pre-check: a well-formed proof echoes the
+          # challenge object verbatim, `params` included. A missing/non-Hash
           # `params` would blow up in the challenge sig computation
           # (`nil.sort_by`) as an HTTP 500 — reject it here as a clean 400,
           # before the claim or any hash work.
@@ -223,25 +223,25 @@ module Kiosk
             )
           end
 
-          # K-542: atomically claim the id as spent BEFORE the expensive verify.
+          # Atomically claim the id as spent BEFORE the expensive verify.
           # The FIRST of N racing submitters of one valid proof wins the claim
           # and proceeds; the losers get false and treat it as a replay — a
           # replayed/already-spent proof does not count toward the quota, but it
           # is NOT bad faith (an at-least-once HTTP retry may resend a served
           # proof), so skip it without penalty. Claiming before the verify also
-          # means a bad proof's id is consumed (K-540): one issued challenge can
-          # drive at most one verify.
+          # means a bad proof's id is consumed: one issued challenge can drive
+          # at most one verify.
           next unless config.pow_spent_store.claim(id, challenge[:exp].to_i)
 
           # Cheap sig + expiry + parameter checks first (inside
           # Challenge.verify), then the one cheap backend eval.
           #
-          # K-541: `expect` is the alg/params THIS request's `spec` just
-          # re-derived from live config (the policy, or
-          # `config.registration_pow_params` for register) — the same source
-          # `issue_challenges` mints from. Passing it means a challenge is
-          # honoured only at the difficulty the server demands right now, not
-          # merely at the difficulty its HMAC says we once minted.
+          # `expect` is the alg/params THIS request's `spec` just re-derived
+          # from live config (the policy, or `config.registration_pow_params`
+          # for register) — the same source `issue_challenges` mints from.
+          # Passing it means a challenge is honoured only at the difficulty the
+          # server demands right now, not merely at the difficulty its HMAC
+          # says we once minted.
           outcome = ::Kiosk::Reputation::Challenge.verify(
             challenge:            challenge,
             nonce:                nonce,
@@ -259,14 +259,14 @@ module Kiosk
             # The id stays CLAIMED (consumed): a proof that reached the backend
             # had a valid sig + live expiry, i.e. it targeted a real issued
             # challenge — burning it is what stops one free challenge from
-            # fuelling unlimited garbage-proof verifies (K-540).
+            # fuelling unlimited garbage-proof verifies.
             #
-            # K-512: a bare "wrong" is a dead end — a live agent that hand-rolled
-            # its own Equihash solver got this 403 and had nothing to act on.
-            # Name the ONE recovery step (run the shipped solver) without naming
-            # WHICH check failed: the construction stays out of band, and the
-            # agent is steered away from both improvised solvers and the
-            # unvetted PyPI packages it otherwise reaches for.
+            # A bare "wrong" is a dead end — an agent that hand-rolled its own
+            # Equihash solver gets this 403 with nothing to act on. Name the
+            # ONE recovery step (run the shipped solver) without naming WHICH
+            # check failed: the construction stays out of band, and the agent
+            # is steered away from both improvised solvers and the unvetted
+            # PyPI packages it otherwise reaches for.
             raise Errors::Forbidden.new("invalid proof of work", hint: POW_INVALID_HINT)
           when :expired, :bad_sig, :bad_params
             # Doesn't count; falls through to a fresh re-challenge below if the
@@ -275,9 +275,9 @@ module Kiosk
             # release the claim — never retain a forged-sig id (it would let an
             # attacker fill the spent store with junk exp anchors).
             #
-            # :bad_params (K-541) joins them deliberately: a challenge naming
-            # off-spec difficulty is either OURS from before a difficulty change
-            # (an honest client, owed a fresh challenge at the new params — 402,
+            # :bad_params joins them deliberately: a challenge naming off-spec
+            # difficulty is either OURS from before a difficulty change (an
+            # honest client, owed a fresh challenge at the new params — 402,
             # never 403) or forged with a leaked secret (which a 402 loop denies
             # just as effectively, at no cost to us since no hash loop ran).
             config.pow_spent_store.release(id)
@@ -298,11 +298,11 @@ module Kiosk
         end
       end
 
-      # Parse the PoW proof(s) out of the `Kiosk-PoW` request HEADER
-      # (ADR-0022). The proof is carried in a header, NOT in the request body:
-      # the body is now ONLY verb args, so the challenge fingerprint binds to the
-      # plain body untouched, and a GET (schema) can carry its proof too — a body
-      # is not available on a GET.
+      # Parse the PoW proof(s) out of the `Kiosk-PoW` request HEADER. The proof
+      # is carried in a header, NOT in the request body: the body is ONLY verb
+      # args, so the challenge fingerprint binds to the plain body untouched,
+      # and a GET (schema) can carry its proof too — a body is not available on
+      # a GET.
       #
       # `raw` is the raw header value — for repeated same-name headers Rack joins
       # them with "\n" (`env["HTTP_KIOSK_POW"]`), so we split on "\n" first, then
@@ -337,7 +337,7 @@ module Kiosk
 
         proofs.empty? ? nil : proofs
       rescue JSON::ParserError
-        # The json gem's own parser text is deliberately NOT appended (K-1307):
+        # The json gem's own parser text is deliberately NOT appended:
         # it is that library's sentence rather than this protocol's, it moves
         # when the dependency is upgraded, and it echoes the caller's own bytes
         # back on a header path reachable before any credential is presented.
@@ -348,9 +348,8 @@ module Kiosk
         )
       end
 
-      # Human-readable description of the expected Kiosk-PoW header shape, echoed
-      # in the 400 hint (K-451 style — name the shape so the agent can
-      # self-correct).
+      # Human-readable description of the expected Kiosk-PoW header shape,
+      # echoed in the 400 hint: name the shape so the agent can self-correct.
       POW_HEADER_HINT =
         "the Kiosk-PoW header carries the proof(s) as raw minified JSON: a single " \
         "proof {\"challenge\": <the challenge object from the 402, echoed verbatim>, " \
@@ -359,7 +358,7 @@ module Kiosk
         "work. Solve every challenge issued in the pow_required 402 and echo it " \
         "back verbatim."
 
-      # Hint on the 403 raised for a cryptographically WRONG proof (K-512).
+      # Hint on the 403 raised for a cryptographically WRONG proof.
       # Sibling of POW_HEADER_HINT: that one names the SHAPE a malformed proof
       # must take (400), this one names the TOOL a wrong proof must be produced
       # with (403). Deliberately says nothing about the Equihash construction,
@@ -367,7 +366,7 @@ module Kiosk
       # actionable fact is «use the shipped solver», and the solver itself is
       # the executable spec. The URL is first-party (kiosk.tech) so skill and
       # solver come from ONE origin we control; it MUST stay identical to the
-      # URL the skill pins (K-490(e)) or the two drift.
+      # URL the skill pins, or the two drift.
       POW_INVALID_HINT =
         "solve with the reference solver at https://kiosk.tech/pow/solve.py — " \
         "a hand-written Equihash solver will not match this verifier"
@@ -389,7 +388,7 @@ module Kiosk
         )
       end
 
-      # Raise unless the registered backend accepts `spec`'s parameters (K-843).
+      # Raise unless the registered backend accepts `spec`'s parameters.
       #
       # {Errors::ConfigurationError}, not a 4xx: no caller chose these values
       # and no caller can correct them. The message names the two places a

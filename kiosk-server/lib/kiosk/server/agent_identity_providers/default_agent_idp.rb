@@ -67,12 +67,12 @@ module Kiosk
         # stored — never the DOB, licence number, or any document (the
         # anonymized point).
         #
-        # Since K-656/T-061 the grants live in `<schema>.kyc_attributes`, one
-        # ROW per granted name, rather than in a jsonb column — so there is no
-        # stored value to parse and no spelling of `true` for this method to
-        # adjudicate. Every returned value is the Ruby `true` this method
-        # synthesises from the row's EXISTENCE, which is what makes a caller's
-        # `== true` (see {#kyc_has_attributes?}) safe rather than lucky.
+        # The grants live in `<schema>.kyc_attributes`, one ROW per granted
+        # name — so there is no stored value to parse and no spelling of `true`
+        # for this method to adjudicate. Every returned value is the Ruby
+        # `true` this method synthesises from the row's EXISTENCE, which is
+        # what makes a caller's `== true` (see {#kyc_has_attributes?}) safe
+        # rather than lucky.
         #
         # The join to `agents` is what keeps a REVOKED agent answering `{}`: the
         # rows survive revocation (the agent row does), and a gate must not.
@@ -100,7 +100,7 @@ module Kiosk
 
         # THE MINT INSTANT — never earlier than the agent's revocation
         # watermark, so this IdP can never hand out a token that is already
-        # revoked (K-836).
+        # revoked.
         #
         # JWT timestamps are second-resolution and {RevocationStore} compares
         # `iat < watermark`, so "revoke everything for this agent" and "mint a
@@ -151,18 +151,17 @@ module Kiosk
           row.fetch("user_id")
         end
 
-        # ONE live-agent lookup for all three single-column callers (K-782).
-        # Four copies of the same statement were four places to forget a
-        # `quote`; the private `def quote` that fed them is gone with them.
-        # ({#kyc_attributes} is the fourth reader and no longer one of them —
-        # since K-656 it reads a TABLE, not a column on this row.)
+        # ONE live-agent lookup for all three single-column callers. Separate
+        # copies of the same statement would be that many more places to get
+        # the identifier/value split below wrong. ({#kyc_attributes} is not one
+        # of them: it reads a TABLE, not a column on this row.)
         #
         # `column` is an IDENTIFIER chosen from the three literals above — never
         # an argument, never caller-reachable — and Postgres cannot bind an
         # identifier anyway. `agent_id` is a VALUE and travels as `$1`. It comes
-        # off a verified JWT claim or a row this engine wrote, so it was not
-        # attacker-reachable before either; it binds because "safe today because
-        # of who calls it" is what this row exists to stop shipping.
+        # off a verified JWT claim or a row this engine wrote, so it is not
+        # attacker-reachable either way; it binds because "safe today because of
+        # who calls it" is not a guarantee this gem is willing to ship.
         #
         # `lease_connection`, not `connection`: `ActiveRecord::Base.connection`
         # is soft-deprecated in Rails 8.1 and RAISES under

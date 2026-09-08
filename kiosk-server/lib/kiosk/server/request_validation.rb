@@ -5,13 +5,12 @@ require "kiosk/server/argument_decoder"
 
 module Kiosk
   module Server
-    # Opt-in request-shape validation (slice-1 of the UNIFORM-VALIDATION
-    # decision; closes K-479).
+    # Opt-in request-shape validation.
     #
     # When `Kiosk.configuration.validate_requests` is true, {WireController}
     # validates the proof(s) parsed from the `Kiosk-PoW` request header
-    # (ADR-0022) against the VENDORED normative PoW schema BEFORE {PowGate.gate}
-    # consumes them. The motivating failure (K-479): an agent submitted a
+    # against the VENDORED normative PoW schema BEFORE {PowGate.gate}
+    # consumes them. The motivating failure: an agent submitted a
     # `{solutions:[…]}` shape instead of the schema shape
     # `{challenge:<echoed verbatim>,nonce:{indices,…}}`; {PowGate.extract_proofs}
     # silently returned `[]`, so the gate re-issued a fresh 402 on every retry —
@@ -20,31 +19,31 @@ module Kiosk
     #
     # == Scope
     #
-    # SLICE-1 validated the PoW proof(s) only, and only when present. This is NOT
+    # The flag covers the PoW proof(s) only, and only when present. This is NOT
     # the gate: a well-formed-but-forged proof still fails the real cryptographic
     # check inside {PowGate.gate}. That layer converts a SILENT re-challenge on a
     # malformed shape into a CLEAR 400.
     #
-    # T-068 SLICE 1 (the 0.4 per-verb wire) adds the second consumer,
-    # {.validate_arguments!}: a verb's own `input_schema` validating the
-    # ARGUMENTS of a request to `<endpoint>/<verb-name>`, which is what T-073's
-    # «`input_schema` becomes REQUIRED» buys — an executable input contract
-    # rather than a published one. It runs on the COERCED arguments
+    # The second consumer is {.validate_arguments!}: a verb's own `input_schema`
+    # validating the ARGUMENTS of a request to `<endpoint>/<verb-name>`, which is
+    # what a REQUIRED `input_schema` buys — an executable input contract rather
+    # than a published one. It runs on the COERCED arguments
     # ({ArgumentDecoder}) because json_schemer cannot check a query string's
     # `"4"` against `{type: "integer"}`.
     #
-    # SLICE 3 TOOK IT OUT FROM BEHIND THE FLAG. `validate_arguments!` is now
+    # THAT SECOND CONSUMER IS NOT BEHIND THE FLAG. `validate_arguments!` is
     # UNCONDITIONAL on the per-verb wire ({VerbController#arguments_for}):
     # `input_schema` is REQUIRED on every 0.4 verb and §8.1 item 5 makes the
     # operator coerce-then-validate before the handler sees an argument, so a
-    # flag-gated check would be non-conformant with the flag off and K-717's
-    # typed 400 would exist on some origins and not others. `validate_requests`
-    # keeps its ORIGINAL job below — the opt-in PoW-shape check on the 0.3 wire
-    # and the auth plane. The verb's ANSWER is checked by the sibling
-    # {ResponseValidation}, behind its own `validate_responses` flag.
+    # flag-gated check would be non-conformant with the flag off, and a typed
+    # 400 for an invalid argument would exist on some origins and not others.
+    # `validate_requests` keeps its own job below — the opt-in PoW-SHAPE check
+    # on requests that carry a `Kiosk-PoW` header, on the wire and on the auth
+    # plane. The verb's ANSWER is checked by the sibling {ResponseValidation},
+    # behind its own `validate_responses` flag.
     #
-    # Still out of scope: response-conformance CI and the vendored-schema
-    # sync-check (T-045).
+    # Still out of scope: response-conformance CI and a sync-check of the
+    # vendored schema against its normative source.
     #
     # == Lazy require, real dependency
     #
@@ -63,7 +62,7 @@ module Kiosk
       module_function
 
       # Path to the VENDORED normative PoW schema (see the header $comment in the
-      # file; sync-check is T-045).
+      # file).
       POW_SCHEMA_PATH = File.expand_path("schemas/pow.schema.json", __dir__)
 
       # Validate the proof(s) parsed from the `Kiosk-PoW` header against the
@@ -94,7 +93,7 @@ module Kiosk
       # carries strings, and `"4"` is not an `integer` to any validator) and
       # BEFORE the handler runs.
       #
-      # RESERVED NAMES (T-070 rule 7). `limit` and `cursor` are always accepted
+      # RESERVED NAMES. `limit` and `cursor` are always accepted
       # and never required to be declared, so a verb that does not declare them
       # never sees them here — otherwise getgrocery's `catalog`, whose schema is
       # the closed empty object `{additionalProperties: false, properties: {}}`,
@@ -133,9 +132,9 @@ module Kiosk
       end
 
       # Human-readable description of the expected proof shape, echoed in the 400
-      # hint (K-451 style — name the shape so the agent can self-correct).
+      # hint — naming the shape is what lets the agent self-correct.
       #
-      # THE NONCE IS NAMED RELATIVE TO `alg`, not absolutely (K-1410). The
+      # THE NONCE IS NAMED RELATIVE TO `alg`, not absolutely. The
       # schema types the nonce conditionally on the challenge's algorithm, so a
       # hint that said «nonce: {indices…}» flatly would tell an operator running
       # a backend of their own to send a shape their own verifier does not want.
@@ -179,7 +178,7 @@ module Kiosk
         require "json_schemer"
       rescue LoadError
         # The message an operator reads while debugging must match the
-        # gemspec (K-931): `json_schemer` has been a RUNTIME dependency since
+        # gemspec: `json_schemer` has been a RUNTIME dependency since
         # 0.4 (`add_dependency`, kiosk-server.gemspec), so reaching here does
         # not mean "you skipped an optional extra" — it means the dependency
         # that `gem install kiosk-server` resolves is not loadable in this

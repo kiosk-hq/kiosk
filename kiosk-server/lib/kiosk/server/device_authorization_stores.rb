@@ -31,7 +31,7 @@ module Kiosk
       # {#claim_consume} is the single-use gate and it is deliberately NOT
       # expressible as `find` + `update`: single-use has to be decided BY THE
       # ROW, in one operation, or two concurrent redemptions of the same code
-      # both pass a check made against a snapshot and both bind (K-887). The
+      # both pass a check made against a snapshot and both bind. The
       # sibling controls in this gem take the same shape and say so in the same
       # words -- {PowSpentStore#claim} ("NOT a read-then-write, which
       # reintroduces the very TOCTOU this method closes") and
@@ -88,7 +88,7 @@ module Kiosk
           end
         end
 
-        # Atomic single-use claim (K-887). The status is re-read INSIDE the
+        # Atomic single-use claim. The status is re-read INSIDE the
         # mutex, so a caller holding a stale `:approved` snapshot loses the
         # race rather than overwriting the winner's consume.
         # @return [DeviceAuthorization, nil] the consumed row, or nil when it
@@ -156,18 +156,15 @@ module Kiosk
           raise UniqueConstraintError, e.message
         end
 
-        # `requested_role` IS IN THE SET LIST, and it has to be (K-072). It
-        # used to be absent because the column was written once, at INSERT: a
-        # claim row carried whatever role the opening request asked for, and a
-        # link row carried the minting human's, so nothing ever changed it
-        # afterwards. Since the claim ceremony's role is captured at APPROVAL
-        # instead — from the approving human's `Identity#role` — `approve` is
-        # exactly a mid-life write to this column, and a store that dropped it
-        # would persist the approval while silently discarding the role, so
-        # every claim-bound assistant on a durable store would fall back to
-        # `registration_role`. The in-memory adapter replaces the whole value
-        # object and never had the gap, which is precisely why this is the
-        # adapter where such a bug hides from a unit suite.
+        # `requested_role` IS IN THE SET LIST, and it has to be. The claim
+        # ceremony's role is captured at APPROVAL — from the approving human's
+        # `Identity#role` — so `approve` is exactly a mid-life write to this
+        # column, and a store that dropped it would persist the approval while
+        # silently discarding the role, leaving every claim-bound assistant on
+        # a durable store to fall back to `registration_role`. The in-memory
+        # adapter replaces the whole value object and so cannot have the gap,
+        # which is precisely why this is the adapter where such a bug hides
+        # from a unit suite.
         def update(da)
           sql = <<~SQL
             UPDATE #{table}
@@ -190,7 +187,7 @@ module Kiosk
           da
         end
 
-        # Atomic single-use claim (K-887). ONE conditional statement: the
+        # Atomic single-use claim. ONE conditional statement: the
         # `AND status = 'approved'` predicate is what makes the row -- not a
         # Ruby check against a snapshot -- decide the winner, so two concurrent
         # redemptions of one link code produce one bind and one `409`.
@@ -237,7 +234,7 @@ module Kiosk
 
         private
 
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`, which would 500 the
@@ -245,7 +242,7 @@ module Kiosk
         # method here is one statement in no transaction of its own, so
         # `with_connection` would also be correct; the lease is taken because
         # every call site is inside a Rails request that already holds one, and
-        # because two connection idioms in one engine is what K-782 closes.
+        # because this engine keeps ONE connection idiom rather than two.
         def connection = ::ActiveRecord::Base.lease_connection
         def table = %("#{Kiosk.configuration.schema}".device_authorizations)
 

@@ -8,7 +8,7 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 The full host-side surface is shipped and covered by the gem's own suite
 (`bundle exec rspec` in this directory runs it and prints how many examples that is):
 
-- **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification. (Protocol 0.4 deleted 0.3's multiplexed `POST <mount>/query` and `POST <mount>/run` outright — no dedicated route is drawn for either name and no tombstone stands in for one, so both fall through to `VerbController` and answer the same `404 not_found` problem document any unregistered verb name gets.)
+- **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
@@ -389,7 +389,7 @@ helper methods stay invisible to the wire.
 | --- | --- |
 | `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. `:action` is the DECLARATION name and nothing else: the wire command an action travels under is **`:run`**, so a `kind :action` verb reaches a reputation policy as `verb: :run` (`VerbController#create` → `serve(:run)`; the reserved pay endpoint arrives as `:pay`). Branch on `:run` there, not on `:action` — see `kiosk-reputation`'s README. |
 | `reach` | Optional, and the default is the strong one. Whose rows this verb may touch (spec §7.2): `:principal` (default — only the caller's own, or rows that belong to no principal), `:published`, `:consented` or `:role`. Declare nothing and the verb is held to per-principal scoping absolutely; a departure costs one line and is published on the catalog, so an assistant can tell an open board from a scoping bug. |
-| `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas (ADR-0023). |
+| `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas. |
 | `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the wire coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
 | `output_schema` | **Required.** JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe — the only machine-readable statement of the answer, now that there is no response envelope. |
 | `example_params` | A params object an assistant can copy verbatim. |
@@ -503,16 +503,15 @@ assistant branches on. Three Rails-native moves cover all of it:
 
 ### The initializer holds configuration, not verbs
 
-There is no second way to declare a verb. `Kiosk::Server::Queries.register(name)
-{ |args| … }` and its `Actions` counterpart shipped through the 0.3 series and
-were removed in 0.4 (T-081): a block
-in an initializer cannot be reloaded, cannot be reached by your filters,
-`rescue_from` or strong parameters, and taught — in the very file an adopter
-copies — that Rails does not apply to the surface you expose to assistants.
-Write a controller, name it in `c.handlers`, and the initializer keeps what an
-initializer is for: the identity providers, the payment provider, the PoW gates.
+There is no second way to declare a verb — no block you register from an
+initializer. A block there cannot be reloaded, cannot be reached by your
+filters, `rescue_from` or strong parameters, and would teach — in the very file
+an adopter copies — that Rails does not apply to the surface you expose to
+assistants. Write a controller, name it in `c.handlers`, and the initializer
+keeps what an initializer is for: the identity providers, the payment provider,
+the PoW gates.
 
-Every registration is now rebuilt from `c.handlers` on each `to_prepare` pass,
+Every registration is rebuilt from `c.handlers` on each `to_prepare` pass,
 so a handler class you forget to list stops being served even if something else
 in your app loads it. The list is the whole truth about what this origin serves.
 

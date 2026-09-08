@@ -20,15 +20,10 @@ module Kiosk
     #   - db/migrate/<ts+4>_create_kiosk_mandates.rb
     #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
     #
-    # SIX `create` migrations and no amendments, since 2026-08-20 (K-646).
-    # The generator used to emit ten ordinals, of which one was retired, one
-    # created a table the next-but-two DROPPED and rebuilt, and three added
-    # columns to a table created two files earlier — so a fresh adopter ran a
-    # migration HISTORY to arrive at a schema the current templates can state
-    # outright. Each amendment is now folded into the `create` it amended and
-    # the set is renumbered 001-006; {Kiosk::Server::SchemaDefinitions} records
-    # the fold, the retirement (K-828's audit tables) and the reference count
-    # that made renumbering safe.
+    # SIX `create` migrations and NO amendments. Every table is created in
+    # its final shape by the file that creates it, numbered 001-006, so a
+    # fresh adopter installs a schema outright instead of replaying a
+    # migration HISTORY to arrive at one.
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL

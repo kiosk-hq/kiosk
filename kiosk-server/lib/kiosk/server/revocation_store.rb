@@ -25,21 +25,21 @@ module Kiosk
     # revocation was never the defense.
     #
     # THAT ARGUMENT DOES NOT TRANSFER to a watermark stamped AGAINST the key's
-    # current access, and BOTH such callers now pass the NEXT second so the
+    # current access, and BOTH such callers pass the NEXT second so the
     # whole ambiguous second is covered:
     #
-    #   * `unlink!` (K-835) — afterwards the key cannot log in at all, so a
-    #     token slipping through the gap is the last one it will ever hold and
-    #     it keeps full access for its remaining lifetime (measured 3600s).
+    #   * `unlink!` — afterwards the key cannot log in at all, so a token
+    #     slipping through the gap is the last one it will ever hold and it
+    #     keeps full access for its remaining lifetime (measured 3600s).
     #     Nothing is returned, so nothing needs to survive.
-    #   * the claim REBIND (K-836) — the pre-link tokens carry the previous
-    #     principal and §6.3 says they MUST stop verifying. This caller DOES
-    #     return a replacement, and §6.3 names `/auth/login` as a second way
-    #     back in, so a `+1` watermark would have killed the very next token
-    #     too. Neither is spared by a rule in the caller: the bundled IdP reads
-    #     {#watermark_for} and dates every mint at the watermark when one is
-    #     ahead of the clock, so a token issued AFTER a revocation is never
-    #     born revoked.
+    #   * the claim REBIND — the pre-link tokens carry the previous principal
+    #     and §6.3 says they MUST stop verifying. This caller DOES return a
+    #     replacement, and §6.3 names `/auth/login` as a second way back in, so
+    #     on its own a `+1` watermark would kill the very next token too.
+    #
+    # Neither is spared by a rule in the caller: the bundled IdP reads
+    # {#watermark_for} and dates every mint at the watermark when one is ahead
+    # of the clock, so a token issued AFTER a revocation is never born revoked.
     #
     # The comparison itself stays dumb: who is being revoked, and whether a
     # replacement token needs to survive, is the caller's knowledge, not this
@@ -83,7 +83,7 @@ module Kiosk
       # Read by {AgentIdentityProviders::DefaultAgentIdp} so a freshly minted
       # token is never dated BEFORE a watermark that was just stamped — the one
       # place that keeps "revoke against this key" and "mint a token for this
-      # key" from colliding inside a single second (K-836). Part of the store
+      # key" from colliding inside a single second. Part of the store
       # interface: an override that omits it re-opens that aperture for its own
       # deployment rather than crashing.
       #

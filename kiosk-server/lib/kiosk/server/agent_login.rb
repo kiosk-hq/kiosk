@@ -25,14 +25,14 @@ module Kiosk
         payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
         AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
 
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`. This site is one
         # statement in no transaction, so `with_connection` would be correct
         # too — it takes the lease anyway, because a login runs inside a Rails
-        # request that already holds one, and because an engine with two
-        # connection idioms is what K-782 exists to close.
+        # request that already holds one, and because this engine keeps ONE
+        # connection idiom rather than two.
         #
         # The key is CALLER-SUPPLIED — it is the request body — so it is `$1`.
         conn = ::ActiveRecord::Base.lease_connection

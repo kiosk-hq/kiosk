@@ -23,7 +23,7 @@ module Kiosk
     # accepted, once per worker. Providers running multiple processes MUST
     # override it with a store shared by all of them; protocol.md Section 15.2
     # and the Section 16.1 operator profile make that a requirement, not a
-    # tuning knob (K-738). A ready implementation ships in this gem:
+    # tuning knob. A ready implementation ships in this gem:
     #
     #   Kiosk.configure do |c|
     #     c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
@@ -52,10 +52,9 @@ module Kiosk
       # This is the single-use guard for PoW proofs and MUST be called BEFORE
       # the (expensive) proof verify: of N submitters racing the SAME valid
       # proof id, exactly one wins the claim and proceeds to verify; the losers
-      # get false and treat it as a replay (K-542). Because the claim precedes
-      # the verify, a bad proof's id is also consumed by the claim it already
-      # won, so one issued challenge cannot fuel unlimited garbage verifies
-      # (K-540).
+      # get false and treat it as a replay. Because the claim precedes the
+      # verify, a bad proof's id is also consumed by the claim it already won,
+      # so one issued challenge cannot fuel unlimited garbage verifies.
       #
       # A shared multi-process override MUST implement this as ONE atomic op —
       # Redis `SET id <v> NX EX <ttl>` (SETNX), or SQL

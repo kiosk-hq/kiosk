@@ -31,17 +31,13 @@ module Kiosk
     # and code entry is attempt-capped per session on top of the codes being
     # single-use, short-TTL and stored hashed.
     #
-    # THE ROLE IS CAPTURED HERE, AND DISCLOSED HERE (ADR-0011 amendment;
-    # K-072). `@identity.role` — the provider's own answer for the human
-    # whose session this is — is both what the panel names and what
-    # {DeviceVerification.approve} stamps onto the row, so the human reads the
-    # very value the token will carry. Before K-072 the row's role came from
-    # the unauthenticated request that opened the ceremony and this page
-    # mentioned no role at all: an approver could hand over `owner` while the
-    # page showed a fingerprint and a timestamp. One field could have been
-    # fixed without the other, and neither alone is enough — a disclosed
-    # self-selected role is still an escalation, and an undisclosed correct
-    # role is still an approval given blind.
+    # THE ROLE IS CAPTURED HERE, AND DISCLOSED HERE. `@identity.role` — the
+    # provider's own answer for the human whose session this is — is both what
+    # the panel names and what {DeviceVerification.approve} stamps onto the
+    # row, so the human reads the very value the token will carry. Both halves
+    # are needed and neither alone is enough: a role the requester picked for
+    # itself is an escalation even when the page discloses it, and a correct
+    # role the page never names is an approval given blind.
     class DeviceVerifyController < ::ActionController::Base
       # Failed user_code lookups tolerated per session before a 429.
       # Generous for fat-fingering; hopeless for guessing one of the
@@ -53,7 +49,7 @@ module Kiosk
       append_view_path File.expand_path("../../../app/views", __dir__)
       layout false
 
-      # AGENT-SIGNPOST (K-459) — same rule as {AssistantsController}, whose
+      # AGENT-SIGNPOST — same rule as {AssistantsController}, whose
       # copy carries the full explanation. Short version: an assistant that
       # POSTs JSON to this human consent page trips Rails' forgery gate, and
       # in production Rails answers with the host's generic error material —
@@ -61,10 +57,9 @@ module Kiosk
       # error page) a bodyless 422 — never a pointer to the wire. Answer a
       # JSON-shaped caller with the courtesy body below + a pointer to the
       # wire; re-raise for browsers so real CSRF failures still fail. NOT «the
-      # Kiosk error envelope», which is what this comment used to call it: that
-      # names the wire CONTRACT, and the wire's is a flat RFC 9457 problem
-      # document (K-1092). {#wrong_door_envelope} below records why this page
-      # deliberately does not borrow it.
+      # Kiosk error envelope»: that names the wire CONTRACT, and the wire's is
+      # a flat RFC 9457 problem document. {#wrong_door_envelope} below records
+      # why this page deliberately does not borrow it.
       rescue_from ::ActionController::InvalidAuthenticityToken do |error|
         raise error unless json_request?
 

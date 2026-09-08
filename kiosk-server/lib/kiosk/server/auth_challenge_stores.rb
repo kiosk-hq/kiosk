@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # Shared-store adapters for the auth-challenge nonce table (K-751).
+    # Shared-store adapters for the auth-challenge nonce table.
     #
     # The DEFAULT challenge store is {Kiosk::Server::AuthChallengeStore} — a
     # Hash + Mutex living in ONE process (`configuration_extension.rb`,
@@ -88,7 +88,7 @@ module Kiosk
         # No `max_entries` cap, unlike the in-process store: that cap exists
         # because a distinct-key flood on the unauthenticated
         # `GET /auth/challenge` can hold rate x TTL live entries in a Ruby
-        # process's heap (K-548). A table is bounded by disk rather than by
+        # process's heap. A table is bounded by disk rather than by
         # RSS, and evicting the oldest LIVE row would need a second statement
         # and an ordering index for a bound the TTL sweep already approximates.
         # An operator who needs a hard cap enforces it at the edge, where the
@@ -155,7 +155,7 @@ module Kiosk
           prune! if due
         end
 
-        # `lease_connection`, not `connection` (K-782): the latter is
+        # `lease_connection`, not `connection`: the latter is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`, and this store sits in
         # front of `/auth/challenge` and both `/auth/{register,login}` calls, so

@@ -10,8 +10,8 @@ require "kiosk/server/result"
 module Kiosk
   module Server
     # The callable a {HandlerMixin} declaration puts in the Actions/Queries
-    # registry — since T-081 the ONLY thing that goes in one. The {Executor}
-    # calls it like any other handler and needs to know nothing about it.
+    # registry — the ONLY thing that goes in one. The {Executor} calls it like
+    # any other handler and needs to know nothing about it.
     #
     # Calling it dispatches ONE controller action through the router's own
     # mechanism — `Controller.action(:name).call(env)` — so the handler is a
@@ -25,22 +25,22 @@ module Kiosk
     # a query's array of rows lands under `rows`, an action's object under
     # `value`. A query that called `render_kiosk_page` comes back as a {Page}
     # so the opaque cursor and the total still reach the wire — as the `Link`
-    # and `X-Total-Count` response headers since T-092, never as body fields.
+    # and `X-Total-Count` response headers, never as body fields.
     #
     # ── Two gates on the method name ─────────────────────────────────────
     # The agent-supplied WIRE name never reaches Ruby: it is looked up in the
     # registry, which was built from the class's own declarations, and only the
     # method name recorded THERE is dispatched. `action_methods` is re-checked
-    # at dispatch as a second, Rails-native gate (K-495).
+    # at dispatch as a second, Rails-native gate.
     #
-    # ── Errors (T-054: the wire contract, consumed Rails-natively) ───────
+    # ── Errors: the wire contract, consumed Rails-natively ───────────────
     # A handler that renders a non-2xx answers the wire like this:
     #
     #   * the body names an explicit vocabulary `error.code` — the HANDLER-side
-    #     spelling, since what TRAVELS is the flat top-level `code` (K-1095) —
-    #     whose canonical
-    #     status ({Errors::CODES}) matches the rendered status → that code
-    #     travels verbatim, extra envelope fields (`challenges`, …) included.
+    #     spelling, since what TRAVELS is the flat top-level `code` — whose
+    #     canonical status ({Errors::CODES}) matches the rendered status → that
+    #     code travels verbatim, extra envelope fields (`challenges`, …)
+    #     included.
     #     This is how a plain `render json:, status:` says `rls_denied`, or a
     #     SPECIFIC 402 — naming, not guessing.
     #   * otherwise the status' lone wire code decides
@@ -64,13 +64,13 @@ module Kiosk
       IDENTITY_KEY = "kiosk.identity"
       DISPATCH_KEY = "kiosk.dispatch"
       PAGE_KEY     = "kiosk.page"
-      # What `kiosk_rescue_to_wire` was handling when it rendered a refusal
-      # (K-1311). The wire error this seam raises for that render is built HERE,
-      # in a frame where nothing is being rescued, so Ruby would attach no
-      # `cause` and the handler's own exception would be unreachable to
-      # {ActionEvent} — which is what an operator's audit sink is built on. The
-      # mixin leaves it on the sub-request env, this seam raises with it, and
-      # nothing about the WIRE changes: `cause` is not serialised anywhere.
+      # What `kiosk_rescue_to_wire` was handling when it rendered a refusal.
+      # The wire error this seam raises for that render is built HERE, in a
+      # frame where nothing is being rescued, so Ruby would attach no `cause`
+      # and the handler's own exception would be unreachable to {ActionEvent}
+      # — which is what an operator's audit sink is built on. The mixin leaves
+      # it on the sub-request env, this seam raises with it, and nothing about
+      # the WIRE changes: `cause` is not serialised anywhere.
       RESCUED_KEY  = "kiosk.rescued"
 
       # Keys copied from the wire request into the sub-request, so a handler
@@ -88,8 +88,7 @@ module Kiosk
       # @param controller [Class, String] the handler class, or its NAME. A
       #   named class is stored as a String and re-resolved on every call, so
       #   Zeitwerk reloading in development picks up handler edits without a
-      #   server restart (K-495 charge 2). Anonymous classes (specs) are held
-      #   directly.
+      #   server restart. Anonymous classes (specs) are held directly.
       # @param method_name [Symbol, String] the controller action to dispatch.
       # @param wire_name [String] the name agents call it by.
       # @param kind [Symbol] :action or :query — used in messages only.
@@ -104,7 +103,7 @@ module Kiosk
       #   registered as an anonymous class.
       def controller_name = @controller.is_a?(String) ? @controller : @controller.name
 
-      # ── What the SUB-RESPONSE's headers do (K-823) ───────────────────────
+      # ── What the SUB-RESPONSE's headers do ───────────────────────────────
       #
       # Exactly one of them survives the seam, and it is named rather than
       # inferred: `Cache-Control`, on a 2xx. Spec §3.7.4 grants the operator
@@ -182,10 +181,10 @@ module Kiosk
 
         @controller.constantize
       rescue NameError
-        # `verb_not_found` and not `not_found` since T-158: the vocabulary now
-        # reserves `not_found` for an ARGUMENT that addressed something absent,
-        # and nothing was addressed here. It stays a 404 rather than becoming a
-        # 500 -- the decision {#gate!} below records -- and the caller's move is
+        # `verb_not_found` and not `not_found`: the vocabulary reserves
+        # `not_found` for an ARGUMENT that addressed something absent, and
+        # nothing was addressed here. It stays a 404 rather than becoming a
+        # 500 -- the same call {#gate!} below makes -- and the caller's move is
         # the `verb_not_found` move: stop calling this name.
         raise Errors::VerbNotFound.new(
           "#{@kind} #{@wire_name.inspect} is registered to #{@controller}, which is not loaded",
@@ -269,7 +268,7 @@ module Kiosk
       # `rescued` is the exception the mixin's `rescue_from` seam mapped onto
       # this status, when that is how the non-2xx came about. It becomes the
       # raised wire error's `cause` and travels no further: {ActionEvent} reads
-      # it for the operator's audit sink (K-1311), and no wire body carries it.
+      # it for the operator's audit sink, and no wire body carries it.
       def decode(status, raw, rescued: nil)
         return parse_json(raw) if status >= 200 && status < 300
 
@@ -310,7 +309,7 @@ module Kiosk
 
         JSON.parse(raw)
       rescue JSON::ParserError
-        # The json gem's parse text is not appended (K-1307): the hint below
+        # The json gem's parse text is not appended: the hint below
         # already names the one thing the operator has to change.
         raise Errors::ActionFailed.new(
           "#{@kind} #{@wire_name.inspect} rendered a non-JSON body",

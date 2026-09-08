@@ -28,7 +28,7 @@ module Kiosk
       # signing key, and that's a deliberate operator action (rotation).
       # We leave HTTP caching off here; operators put a CDN in front if
       # they care.
-      # ONE key, always (K-933): there is no configuration that adds a second,
+      # ONE key, always: there is no configuration that adds a second,
       # so the rotation overlap window {Jwks} describes cannot be opened from
       # here. `ROADMAP.md` ("Key rotation") carries the gap.
       def show

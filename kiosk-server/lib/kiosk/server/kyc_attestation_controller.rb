@@ -72,9 +72,8 @@ module Kiosk
 
       # Records verification: stamps `kyc_verified_at` and persists the NAMED
       # ANONYMIZED attributes the attestation granted, as ROWS in
-      # `<schema>.kyc_attributes` (K-656/T-061 — they were a jsonb column on
-      # the agents row until 2026-08-20). Only the NAMES are stored — the
-      # underlying documents never reach this layer.
+      # `<schema>.kyc_attributes`. Only the NAMES are stored — the underlying
+      # documents never reach this layer.
       #
       # ONE TRANSACTION, and the stamp gates the grants: the UPDATE is filtered
       # on `revoked_at IS NULL` and RETURNS the id, so a revoked agent stamps
@@ -82,21 +81,17 @@ module Kiosk
       # happily accept grant rows for an agent this endpoint just refused to
       # stamp.
       #
-      # THE GRANT SET IS REPLACED, NOT MERGED — the jsonb column's semantics,
-      # kept deliberately: an attestation states the whole set of facts it
-      # grants, so a later attestation granting fewer of them must take the
-      # others away. That is why the DELETE is unconditional.
+      # THE GRANT SET IS REPLACED, NOT MERGED: an attestation states the whole
+      # set of facts it grants, so a later attestation granting fewer of them
+      # must take the others away. That is why the DELETE is unconditional.
       #
       # THE SPELLING OF `true` IS JUDGED HERE, IN POSTGRES, ONCE FOR EVERY
       # OPERATOR. `jsonb_each` + `WHERE value = 'true'::jsonb` inserts a name
       # only for a value that is the JSON boolean `true`: the STRING `"true"`,
       # `1`, `"yes"` and `null` are all different jsonb values and none of them
-      # match, so none of them grant. That check used to live on the READ side,
-      # re-implemented per demo as `COALESCE(kyc_attributes ->> 'name',
-      # 'false') = 'true'` because a Ruby comparison would accept one spelling
-      # and refuse the other inside a KYC gate; with the grant stored as a row's
-      # EXISTENCE there is nothing left for a reader to adjudicate, and this is
-      # the one place that still has to. It is deliberately belt-and-braces with
+      # match, so none of them grant. With the grant stored as a row's
+      # EXISTENCE there is nothing left for a reader to adjudicate, so this is
+      # the one place that has to. It is deliberately belt-and-braces with
       # {KycVerifier.verified_attributes}, which drops non-`true` values in Ruby
       # first: a KYC gate should fail closed twice rather than once.
       #
@@ -107,7 +102,7 @@ module Kiosk
       # off the verified token — the payload is caller-supplied, so it never
       # reaches the statement text.
       def mark_kyc_verified!(agent_id, attributes: {})
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`.

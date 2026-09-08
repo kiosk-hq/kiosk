@@ -54,7 +54,7 @@ module Kiosk
   # transaction like any other statement on that connection, so per-principal
   # scoping (and RLS, where the operator opted in) applies to it. Name the class
   # in `Kiosk.configuration.handlers` — that list is how the engine finds it,
-  # and since T-081 it is the only way in.
+  # and it is the only way in.
   #
   # A DESCRIPTOR SLOT MAY BE A PROC when the constraint is a fact about the
   # operator's data — `enum: -> { Category.pluck(:slug) }`. It is called when

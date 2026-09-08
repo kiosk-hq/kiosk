@@ -26,7 +26,7 @@ module Kiosk
         return nil if agent_id.nil?
 
         schema = @schema || Kiosk.configuration.schema
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`. Not `with_connection`:

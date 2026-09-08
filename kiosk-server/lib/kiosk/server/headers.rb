@@ -10,15 +10,15 @@ module Kiosk
       # may override (e.g. tests).
       #
       # `Kiosk-Min-Client` is read from `Kiosk.configuration.min_client`, NOT
-      # from the {Kiosk::Protocol::MIN_CLIENT} constant (K-747). Both surfaces
-      # that publish this advisory number are now the same number: the header
-      # here and `kiosk.min_client` in `/.well-known/kiosk.json` ({WellKnown}),
-      # which has always read the settable value. Emitting the constant here
-      # meant an operator who set `c.min_client = "0.5.0"` got a discovery
-      # document saying 0.5.0 and every wire response saying 0.4.0, with
-      # nothing to tell a client which was authoritative — a knob that worked
-      # on one of the two places it is read. The default is unchanged: the
-      # setter itself defaults to the constant.
+      # from the {Kiosk::Protocol::MIN_CLIENT} constant, so both surfaces that
+      # publish this advisory number publish the SAME number: the header here
+      # and `kiosk.min_client` in `/.well-known/kiosk.json` ({WellKnown}),
+      # which reads the settable value. Emitting the constant here would mean
+      # an operator who set `c.min_client = "0.5.0"` got a discovery document
+      # saying 0.5.0 and every wire response saying 0.4.0, with nothing to tell
+      # a client which was authoritative — a knob that worked on one of the two
+      # places it is read. The constant is still the DEFAULT: it is what the
+      # setter falls back to.
       def self.add_to(headers, server_version: Kiosk::Server::VERSION)
         headers[Kiosk::Protocol::HEADER_SERVER_VERSION] = server_version
         headers[Kiosk::Protocol::HEADER_API_VERSION]    = Kiosk::Protocol::API_VERSION
@@ -31,13 +31,13 @@ module Kiosk
         add_to({}, server_version: server_version)
       end
 
-      # The `Vary` a wire response MUST carry (spec §3.7.1, T-068
-      # slice 2). Two request headers change the answer and neither is in the
-      # URL: `Authorization` (every wire response is identity-scoped) and
-      # `Kiosk-PoW` (a tolled 200 and its 402 differ ONLY by this header).
-      # Without the second, a private cache keyed on the URL serves a paid 200
-      # to an unpaid retry — defeating the toll — or a stale 402 to a paid
-      # one, which is an infinite retry loop.
+      # The `Vary` a wire response MUST carry (spec §3.7.1). Two request
+      # headers change the answer and neither is in the URL: `Authorization`
+      # (every wire response is identity-scoped) and `Kiosk-PoW` (a tolled 200
+      # and its 402 differ ONLY by this header). Without the second, a private
+      # cache keyed on the URL serves a paid 200 to an unpaid retry — defeating
+      # the toll — or a stale 402 to a paid one, which is an infinite retry
+      # loop.
       WIRE_VARY = %w[Authorization Kiosk-PoW].freeze
 
       # Cache policy for ONE wire response. Applied at the render seam, not in
@@ -56,9 +56,9 @@ module Kiosk
       #     genuinely identity-independent payload be served
       #     `private, max-age=N`, which is also how an assistant's own cache
       #     saves a toll: a fresh cached response is never re-requested and
-      #     therefore never re-challenged. Reachable from a handler since
-      #     K-823 — {HandlerDispatch} carries the handler's own
-      #     `Cache-Control` out to here.
+      #     therefore never re-challenged. Reachable from a handler:
+      #     {HandlerDispatch} carries the handler's own `Cache-Control` out
+      #     to here.
       #   * `Cache-Control` NAMING A SHARED CACHE — refused. See
       #     {.shared_cacheable?} below.
       #
@@ -81,16 +81,14 @@ module Kiosk
         headers
       end
 
-      # §3.7.3, ENFORCED RATHER THAN MERELY UNBREAKABLE (K-823).
+      # §3.7.3, ENFORCED RATHER THAN MERELY UNBREAKABLE.
       #
       # "An operator MUST NOT send `public` or `s-maxage` on a verb response.
       # Shared caching of an identity-scoped payload is a cross-tenant leak."
-      # Until K-823 nothing enforced this and nothing needed to: the seam
-      # discarded every header a handler set, so the prohibition held by
-      # accident — and §3.7.4's neighbouring `MAY` was unreachable for the same
-      # accident. Now that a handler's `Cache-Control` reaches the wire, the
-      # permission and the prohibition arrive by the same road and the second
-      # has to be a real check.
+      # A handler's own `Cache-Control` reaches the wire ({HandlerDispatch}),
+      # so §3.7.4's permission and §3.7.3's prohibition arrive by the same
+      # road — which is what makes the prohibition a check to run rather than
+      # a property of a seam that discarded every header a handler set.
       #
       # IT REFUSES THE VALUE RATHER THAN EDITING IT. Stripping `public` out of
       # `public, max-age=600` would hand back `private, max-age=600` — a policy
@@ -101,16 +99,14 @@ module Kiosk
       # here: the wire's own `private, no-store` applies and the operator is
       # TOLD, once per offending response, with the value they sent.
       #
-      # THE LIST IS RFC 9111 §3.5's, AND SINCE K-826 IT IS ALSO §3.7.3's.
+      # THE LIST IS RFC 9111 §3.5's, AND IT IS ALSO §3.7.3's.
       # That default is: a shared cache MUST NOT reuse a response to a request
       # carrying `Authorization` UNLESS the response names one of `public`,
       # `s-maxage` **or `must-revalidate`**. Every verb request carries
       # `Authorization` (there is no anonymous verb — §3, point 2), so those
       # three directives are exactly the set that opens the door, and the third
-      # is as much of a cross-tenant leak as the other two. The spec named only
-      # the first two until K-826 amended both spec files to name all three;
-      # this seam blocked all three before that amendment and is unchanged by
-      # it. `private, max-age=N` remains the one relaxation §3.7.4 allows.
+      # is as much of a cross-tenant leak as the other two. `private,
+      # max-age=N` remains the one relaxation §3.7.4 allows.
       SHARED_CACHE_DIRECTIVES = /\b(?:public|s-maxage|must-revalidate)\b/i
 
       def self.shared_cacheable?(cache_control)
@@ -132,14 +128,13 @@ module Kiosk
         logger ? logger.warn(message) : warn(message)
       end
 
-      # ── THE WRITTEN EXCEPTION to the policy above (T-094, K-804) ─────────
+      # ── THE WRITTEN EXCEPTION to the policy above ────────────────────────
       #
-      # `GET <endpoint>/schema` is PUBLIC since T-094, and
-      # `GET <endpoint>/openapi.json` joined it at K-804: both carry verb
-      # names, descriptions and schemas, nothing per-agent and no secret, and
-      # both are rendered from in-process state. So the two rules the default
-      # encodes stop applying to them, and both must be actively UNDONE rather
-      # than merely relaxed:
+      # `GET <endpoint>/schema` and `GET <endpoint>/openapi.json` are PUBLIC:
+      # both carry verb names, descriptions and schemas, nothing per-agent and
+      # no secret, and both are rendered from in-process state. So the two
+      # rules the default encodes stop applying to them, and both must be
+      # actively UNDONE rather than merely relaxed:
       #
       #   * `private, no-store` becomes `public, max-age=…`. A shared cache is
       #     the point — an origin that answers every assistant with the same

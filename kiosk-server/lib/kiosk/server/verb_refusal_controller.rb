@@ -14,26 +14,27 @@ module Kiosk
     # controller RAISES, because that state is a misconfigured origin rather
     # than a call to serve.
     #
-    # ── Why it exists, and why it is not the route magic T-183 deleted ──────
+    # ── Why it exists, and why it is not route magic ────────────────────────
     #
-    # Until T-183 the engine drew ONE constrained pair — `get "/:kiosk_verb"`,
-    # `post "/:kiosk_verb"` — LAST in its own table, and {VerbController}
-    # resolved the name against the registry at request time. That pair SERVED
-    # every registered verb, which is the route magic Phil rejected: an
-    # operator could not read their own wire off their own routes file.
+    # Every verb this origin serves has an EXPLICIT route in the operator's
+    # own routes file. A catch-all pair — `get "/:kiosk_verb"`, `post
+    # "/:kiosk_verb"` drawn last and resolved against the registry at request
+    # time — would serve every registered verb without a single one of them
+    # appearing there, and that is the route magic this design rejects: an
+    # operator has to be able to read their own wire off their own routes file.
     #
-    # Deleting it leaves a hole the spec does not allow to stay open. An
-    # unregistered NAME has, by construction, no explicit route, so without a
-    # tail route it answers Rails' own HTML routing 404: no `code`, no `hint`
+    # Explicit routes alone leave a hole the spec does not allow to stay open.
+    # An unregistered NAME has, by construction, no explicit route, so without
+    # a tail route it answers Rails' own HTML routing 404: no `code`, no `hint`
     # naming the verbs that DO exist, and an AI assistant that is told to branch
     # on `code` has nothing to branch on. The same hole swallows the `405`: a
     # query called with POST simply matches no route.
     #
     # So this controller is drawn — by the engine, into the HOST's route set,
     # AFTER the operator's own routes (see the `kiosk-server.verb_refusal_route`
-    # initializer in {Engine}) — behind the same single-segment constraint the
-    # deleted pair used. What makes it a different thing is not where it is
-    # drawn but WHAT IT CAN DO:
+    # initializer in {Engine}) — behind the same single-segment constraint such
+    # a pair would use. What makes it a refusal rather than magic is not where
+    # it is drawn but WHAT IT CAN DO:
     #
     #   * a name registered as the OTHER kind → 405 with `Allow`
     #   * a name registered as NEITHER        → 404 `verb_not_found` + the hint

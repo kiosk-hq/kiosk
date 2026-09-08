@@ -18,10 +18,9 @@ module Kiosk
     # leak across requests»).
     class SessionContext
       # `SET LOCAL <name> = <value>` with the value BOUND. Postgres accepts no
-      # bind parameters in `SET`, so the engine used to build this statement
-      # with a hand-rolled `quote_literal` — the last value escaped by hand in
-      # this gem after K-654 and K-782, and the one value the whole system
-      # trusts (K-789). `set_config(name, value, is_local)` is the function
+      # bind parameters in `SET`, and spelling it that way would leave the one
+      # value the whole system trusts escaped by hand, through a rolled
+      # `quote_literal`. `set_config(name, value, is_local)` is the function
       # spelling of the same statement and takes both halves as binds; the
       # third argument `true` IS `LOCAL`.
       #
@@ -29,8 +28,8 @@ module Kiosk
       # `session_context_spec.rb`'s real-database examples: identical value
       # inside the transaction, gone after COMMIT and after ROLLBACK, GUC names
       # case-folded the same way, and no `quote_ident` needed for
-      # `app.current_role` (a reserved keyword that `SET` could not parse
-      # unquoted, which is why the name was quoted segment-by-segment before).
+      # `app.current_role` (a reserved keyword that `SET` itself cannot parse
+      # unquoted).
       #
       # THE ONE OBSERVABLE DIFFERENCE, recorded rather than glossed: run
       # OUTSIDE a transaction, `SET LOCAL` logs `WARNING: SET LOCAL can only be

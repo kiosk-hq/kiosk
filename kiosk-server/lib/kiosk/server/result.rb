@@ -4,7 +4,7 @@ module Kiosk
   module Server
     # A paginated slice of query rows. A `query` handler that returns a large
     # list opts into cursor pagination by returning one of these instead of a
-    # bare Array (T-042 / K-452 / ADR-0021).
+    # bare Array.
     #
     #   rows        — the (truncated) Array<Hash> for THIS page.
     #   next_cursor — an OPAQUE String the assistant echoes back in the next
@@ -23,10 +23,10 @@ module Kiosk
     # anything else behind it. {Cursor} provides a base64 offset helper for the
     # common case; a handler MAY use its own scheme.
     #
-    # SINCE T-092 NEITHER FIELD REACHES THE BODY. The rows ARE the body — a
-    # bare JSON array, the same shape every other query answers — and the two
-    # facts about the page travel as RESPONSE HEADERS: `Link: <…>; rel="next"`
-    # (RFC 8288) and `X-Total-Count`. See {WireController#add_pagination_headers}.
+    # NEITHER FIELD REACHES THE BODY. The rows ARE the body — a bare JSON
+    # array, the same shape every other query answers — and the two facts about
+    # the page travel as RESPONSE HEADERS: `Link: <…>; rel="next"` (RFC 8288)
+    # and `X-Total-Count`. See {WireController#add_pagination_headers}.
     #
     # Pagination applies to LIST results only. Single-object/action/pay results
     # (kind: :value) never carry a cursor.
@@ -48,13 +48,13 @@ module Kiosk
     #   Cursor.decode_offset("40", default: 0) # => 40
     #
     # THE OFFSET IS PUBLISHED AS A DECIMAL INTEGER, IN CLEAR, AND THIS PARAGRAPH
-    # IS THE «SAY SO» HALF OF THAT (K-1403). It used to be `offset:N` wrapped in
-    # urlsafe base64, and that encoding was a costume: not a secret, not signed,
-    # not stable across a collection that changes under the reader, and decodable
-    # by anyone in one line. It told a reader «opaque, do not parse» while
-    # providing not one of the properties opacity is FOR, which is worse than
-    # saying nothing — a reader who believes the token is protected reasons
-    # about it wrongly. So it says what it is.
+    # IS THE «SAY SO» HALF OF THAT. Wrapping `offset:N` in urlsafe base64 would
+    # be a costume: not a secret, not signed, not stable across a collection
+    # that changes under the reader, and decodable by anyone in one line. It
+    # would tell a reader «opaque, do not parse» while providing not one of the
+    # properties opacity is FOR, which is worse than saying nothing — a reader
+    # who believes the token is protected reasons about it wrongly. So it says
+    # what it is.
     #
     # OPACITY IS STILL THE CONTRACT, AND THE CONTRACT IS ON THE CLIENT, NOT ON
     # THE TOKEN. The specification requires an assistant never to parse a cursor
@@ -78,12 +78,12 @@ module Kiosk
     # present that is not a non-negative decimal integer is a typed 400 naming
     # the parameter, which is what every other bad argument on this wire gets.
     #
-    # THIS MODULE SURVIVED THE 0.4 CUTOVER, AND IT SURVIVED T-092 TOO. Nothing
-    # about an offset cursor was ever about the envelope or about where the
-    # cursor travels: the wire still has `limit`/`cursor` as reserved request
-    # parameters, and a truncated page still hands back a token the client
-    # round-trips — inside a `Link` header's target URI now instead of a body
-    # field — so a handler paginating by offset needs exactly this helper.
+    # AN OFFSET CURSOR IS INDEPENDENT OF WHERE THE CURSOR TRAVELS, which is
+    # why this helper is unaffected by the two page facts being headers. The
+    # wire has `limit`/`cursor` as reserved request parameters, and a truncated
+    # page hands back a token the client round-trips — inside a `Link` header's
+    # target URI, not a body field — so a handler paginating by offset needs
+    # exactly this helper and nothing more.
     module Cursor
       # A cursor this helper wrote: one or more decimal digits, nothing else.
       OFFSET_RE = /\A[0-9]+\z/
@@ -153,10 +153,9 @@ module Kiosk
 
       def http_status = 200
 
-      # THE SUCCESS BODY (T-072 = C): the handler's rendered payload,
-      # VERBATIM. No `ok`, no `kind`, no wrapper, and since T-092 no composite
-      # case either — the status line already says "success" and
-      # `output_schema` says what the shape is.
+      # THE SUCCESS BODY: the handler's rendered payload, VERBATIM. No `ok`,
+      # no `kind`, no wrapper, and no composite case either — the status line
+      # already says "success" and `output_schema` says what the shape is.
       #
       # A PAGINATING QUERY ANSWERS THE SAME BARE ARRAY AS EVERY OTHER QUERY.
       # It used to answer `{"rows": …, "next": …}`, which was the one body

@@ -21,11 +21,10 @@ module Kiosk
   #
   # A refusal carries the wire's `code` STRING — the flat top-level member of
   # the problem document, which `error.code` is only the HANDLER-side spelling
-  # of (K-1095) — rather than an exception class: the code table is the
-  # contract, not a hierarchy. Both surfaces
-  # branch on that string — a handler maps it to an HTTP status, a web
-  # controller decides between a flash and a re-raise — and neither can be
-  # surprised by a class it has never heard of.
+  # of — rather than an exception class: the code table is the contract, not
+  # a hierarchy. Both surfaces branch on that string — a handler maps it to an
+  # HTTP status, a web controller decides between a flash and a re-raise — and
+  # neither can be surprised by a class it has never heard of.
   #
   # == The one thing you must supply: STATUSES
   #
@@ -53,9 +52,9 @@ module Kiosk
   # It is a frozen plain value object: four attributes, no ActiveRecord, no
   # database, no reach into the host application's models — so it does not
   # engage the constraint that keeps Kiosk neutral toward the host's schema.
-  # It belongs next to {Kiosk::Handler}, the operator-facing
-  # mixins whose handlers are the things that return it, in the one gem every
-  # origin already installs (K-792, T-089).
+  # It belongs next to {Kiosk::Handler}, the operator-facing mixin whose
+  # handlers are the things that return it, in the one gem every origin
+  # already installs.
   class OperationResult
     # Empty on purpose — the base class refuses NOTHING, because it does not
     # know your app. A subclass that forgets to declare its own inherits this

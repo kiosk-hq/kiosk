@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # Shared-store adapters for the PoW spent-id set (K-738).
+    # Shared-store adapters for the PoW spent-id set.
     #
     # The DEFAULT spent store is {Kiosk::Server::PowSpentStore} — a Hash + Mutex
     # living in ONE process (`configuration_extension.rb`, `pow_spent_store`).
@@ -70,7 +70,7 @@ module Kiosk
         # produce exactly one `true`. The `ON CONFLICT … DO UPDATE … WHERE
         # s.expires_at <= now()` arm makes an already-expired row reclaimable
         # in that same statement — never a read-then-write, which would
-        # reintroduce the TOCTOU {PowGate} closes (K-542).
+        # reintroduce the TOCTOU {PowGate} closes.
         #
         # @param id  [String, nil]
         # @param exp [Integer] Unix timestamp at or after which the entry is stale
@@ -161,18 +161,17 @@ module Kiosk
           prune! if due
         end
 
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed` — and this store sits in
         # front of `/auth/register` and every tolled verb, so that would be a
         # 500 on the gate itself. `with_connection` would also be correct here
         # (each method is one statement, deliberately outside any transaction);
-        # the lease is taken so the engine has ONE acquisition idiom, which is
-        # half of what K-782 asks, and it does not change the transaction story
-        # either way — the claim's durability comes from the call sites running
-        # before any transaction opens, not from which method fetched the
-        # connection.
+        # the lease is taken so the engine has ONE acquisition idiom, and it
+        # does not change the transaction story either way — the claim's
+        # durability comes from the call sites running before any transaction
+        # opens, not from which method fetched the connection.
         def connection = ::ActiveRecord::Base.lease_connection
         def table = %("#{Kiosk.configuration.schema}".pow_spent)
       end

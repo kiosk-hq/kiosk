@@ -24,14 +24,6 @@ module Kiosk
     #
     # ── WHY THERE IS NO TABLE BEHIND THIS ────────────────────────────────
     #
-    # There was one. `kiosk.actions` / `kiosk.action_log` had a canonical
-    # migration of their own and `Kiosk::Server::ActionLog` (all three since
-    # deleted — the migration set was rebuilt without them at K-646) wrote a
-    # row per invocation (T-088).
-    # Phil reversed that on 2026-08-20 — «Хранить в БД в рамках kiosk
-    # reference impl/demo не будем. Дадим интерфейс для возможности их
-    # куда-то выливать по желанию оператора, и на его ответственность по
-    # PII» — and the two tables left the canonical set with the writer.
     # Kiosk storing an audit trail means Kiosk owning retention, encryption,
     # purge and somebody else's PII; offering the seam means the operator
     # owns all four, deliberately, in a place they chose. See {ActionEvent}
@@ -40,8 +32,7 @@ module Kiosk
     # ── WHAT IS EMITTED, AND WHAT IS NOT ─────────────────────────────────
     #
     # ACTIONS ONLY — the `run` verb, and only names the {Actions} registry
-    # knows. Three exclusions survive the reversal unchanged, because each
-    # had its own reason:
+    # knows. Three things are excluded, each for its own reason:
     #
     #   * QUERIES are not emitted. A query changes nothing, and emitting
     #     every read would drown the trail in the least security-relevant

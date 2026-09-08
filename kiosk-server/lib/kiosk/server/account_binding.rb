@@ -21,14 +21,14 @@ module Kiosk
     #     reputation carries over untouched (no whitewash, no inherited
     #     trust). When the ceremony carries a `requested_role` (roles-from-
     #     IdP, Path A: the NEW human's own role, which is the only role either
-    #     ceremony can carry — K-072), `allowed_roles` is REMAPPED to
+    #     ceremony can carry), `allowed_roles` is REMAPPED to
     #     it — the agent adopts the role of the principal it is now bound to,
     #     the same "adopt the new principal's context" rule reputation-carry
     #     follows; a role-less ceremony leaves `allowed_roles` untouched. The
     #     `assistant_claimed` hook then lets the vertical migrate domain data
     #     (core never touches provider rows) — but ONLY when the holder
     #     actually changed: re-binding a key to the human it is already bound
-    #     to transitions nothing and fires no hook (K-783).
+    #     to transitions nothing and fires no hook.
     #
     # Tokens are ALWAYS minted through the same {AgentIdentityProviders::
     # DefaultAgentIdp}/{JwtIssuer} path as `/auth/login` — the ceremony is
@@ -40,9 +40,9 @@ module Kiosk
       # kiosk-pop access token for it. Call ONLY after possession of
       # `public_key_pem` has been proven (BIND-POP).
       #
-      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
-      # (K-072). Both callers read it off the row, and both rows got it from
-      # a HUMAN's `Identity#role`: the link row at mint ({LinkCode.mint}, over
+      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony. Both
+      # callers read it off the row, and both rows got it from a HUMAN's
+      # `Identity#role`: the link row at mint ({LinkCode.mint}, over
       # the minting session), the claim row at approval
       # ({DeviceVerification.approve}, over the approving session). The
       # `config.roles` membership check in {.validated_role} below is a
@@ -58,7 +58,7 @@ module Kiosk
 
         warn_role_resolution_not_total(config, requested_role)
 
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`. Not `with_connection`
@@ -121,7 +121,7 @@ module Kiosk
 
         # Outstanding tokens die NOW, not at their natural expiry.
         #
-        # The watermark is stamped at the NEXT second, not this one (K-835).
+        # The watermark is stamped at the NEXT second, not this one.
         # {RevocationStore} compares `iat < watermark` and JWT timestamps are
         # second-resolution, so a watermark of `Time.now.to_i` leaves a token
         # minted in the SAME wall-clock second uncovered — and, because unlink
@@ -155,16 +155,16 @@ module Kiosk
         # `allowed_roles` untouched, so single-role / no-IdP providers keep
         # today's behavior with no regression.
         #
-        # THE INVARIANT THAT MAKES THE RETENTION SAFE IS NOT IN THIS FILE
-        # (K-1124). Read the clause above on an origin declaring more than one
-        # role and it says: an agent already carrying the privileged role,
-        # rebound to a DIFFERENT human who holds none, KEEPS the privilege
-        # while `sub` becomes that human's. Nothing here prevents that — the
-        # branch is ADR-0011's no-regression clause and deliberately does not.
+        # THE INVARIANT THAT MAKES THE RETENTION SAFE IS NOT IN THIS FILE.
+        # Read the clause above on an origin declaring more than one role and
+        # it says: an agent already carrying the privileged role, rebound to a
+        # DIFFERENT human who holds none, KEEPS the privilege while `sub`
+        # becomes that human's. Nothing here prevents that — the retention is
+        # the deliberate no-regression branch above, and does not.
         #
         # What prevents it is upstream, and it is worth stating because it is
-        # the kind of precondition that expires quietly: post-K-072 a `:claim`
-        # row acquires its role from the approving human at the verify page and
+        # the kind of precondition that expires quietly: a `:claim` row
+        # acquires its role from the approving human at the verify page and
         # a `:link` row from its minter, so `requested_role` is nil here ONLY
         # when the configured `user_idp` reported no role for a signed-in
         # human. That is a property of the HOST's identity system, not of this
@@ -186,7 +186,7 @@ module Kiosk
           effective_role = new_role || primary_role(existing.fetch("allowed_roles"))
 
           # A re-bind to the SAME principal transitions nothing, so the hook
-          # does not fire (K-783). `assistant_claimed` is a NOTIFICATION —
+          # does not fire. `assistant_claimed` is a NOTIFICATION —
           # "this key's holder changed from A to B, migrate A's domain rows to
           # B" — and every host that acts on it is entitled to believe it. Call
           # it with `previous_user_id == user_id` and the host is being told a
@@ -206,9 +206,9 @@ module Kiosk
           # human under a NEW role is a real change, and a blanket no-op on
           # `bind!` would silently drop it), and the watermark revocation +
           # fresh token still happen, so nothing an assistant can observe on the
-          # wire moved. That an idempotent re-bind STILL revokes is no longer
-          # spec-silent: protocol.md §6.3 says so normatively, and says the
-          # response is indistinguishable from any other rebind's (K-787).
+          # wire moved. That an idempotent re-bind STILL revokes is normative:
+          # protocol.md §6.3 says so, and says the response is
+          # indistinguishable from any other rebind's.
           transition = previous.to_s != user_id.to_s
           # The role remap is a STATEMENT SHAPE, not a value (the same
           # distinction `executor.rb#settled_total_cents` draws about its
@@ -234,11 +234,11 @@ module Kiosk
           # "linking makes the agent re-login" holds literally, which is what
           # §6.3's MUST says.
           #
-          # The watermark is the NEXT second, not this one (K-836, the residue
-          # of K-835). JWT timestamps are second-resolution and the store's
-          # comparison is a strict `iat < watermark`, so a watermark of
-          # `Time.now.to_i` leaves EVERY pre-link token minted in the same
-          # wall-clock second verifying for its full remaining lifetime —
+          # The watermark is the NEXT second, not this one. JWT timestamps are
+          # second-resolution and the store's comparison is a strict
+          # `iat < watermark`, so a watermark of `Time.now.to_i` leaves EVERY
+          # pre-link token minted in the same wall-clock second verifying for
+          # its full remaining lifetime —
           # measured 3/3 against a booted demo: a pre-link token whose `iat`
           # equals the rebind second still authenticated 200 afterwards.
           #
@@ -269,7 +269,7 @@ module Kiosk
           # `'{}'::text[]` is a statement shape (no role at all),
           # `ARRAY[$3]::text[]` a bound value — same split as the rebind UPDATE
           # above. The empty array and NOT `NULL` for the reason spelled out on
-          # `agent_registration.rb`'s copy of this branch (K-788): the column is
+          # `agent_registration.rb`'s copy of this branch: the column is
           # `NOT NULL`, so a literal NULL 500'd every fresh-key bind for a
           # provider that configures no role.
           allowed_roles_sql, role_binds =
@@ -303,12 +303,12 @@ module Kiosk
           role
         end
 
-        # ROLE RESOLUTION IS TOTAL, OR THE OPERATOR HAS NO ROLES (T-165, Phil
-        # 2026-09-02, deciding K-1134). An operator that declares roles at all
-        # owes one to EVERY human who can approve a binding; a role for staff
-        # and nothing for customers is a MISCONFIGURATION of the operator's
-        # identity system, not a case the ceremony has to define. kiosk.tech
-        # `protocol.md` §6.3 and `specification.html` state the contract.
+        # ROLE RESOLUTION IS TOTAL, OR THE OPERATOR HAS NO ROLES. An operator
+        # that declares roles at all owes one to EVERY human who can approve a
+        # binding; a role for staff and nothing for customers is a
+        # MISCONFIGURATION of the operator's identity system, not a case the
+        # ceremony has to define. kiosk.tech `protocol.md` §6.3 and
+        # `specification.html` state the contract.
         #
         # WHY THIS WARNS INSTEAD OF CRASHING AT BOOT. The `signing_key`
         # precedent crashes on a fact the engine can settle with certainty
@@ -325,11 +325,11 @@ module Kiosk
         # resetting are the same value there) and a role-less origin has
         # nothing to resolve.
         #
-        # It does not raise. Phil's ruling was that the ENGINE keeps its
-        # behaviour and the operator fixes the configuration, so this is a
-        # loud, actionable line in the operator's log and no change on the
-        # wire. It fires per ceremony rather than once: a misconfiguration
-        # that shows up in one log line and never again is one nobody reads.
+        # It does not raise. The ENGINE keeps its behaviour and the operator
+        # fixes the configuration, so this is a loud, actionable line in the
+        # operator's log and no change on the wire. It fires per ceremony
+        # rather than once: a misconfiguration that shows up in one log line
+        # and never again is one nobody reads.
         def warn_role_resolution_not_total(config, requested_role)
           return unless requested_role.nil? || requested_role.to_s.strip.empty?
           return unless config.roles.to_a.size > 1

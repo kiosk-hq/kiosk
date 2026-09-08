@@ -51,27 +51,26 @@ module Kiosk
           return render_oauth_error(:invalid_request, e.message, status: 400)
         end
 
-        # THE AGENT NEVER SELF-SELECTS ITS ROLE (ADR-0011 amendment; K-072).
+        # THE AGENT NEVER SELF-SELECTS ITS ROLE.
         #
         # This request is UNAUTHENTICATED — anyone holding a keypair can send
-        # it — so anything it carries is an assertion by a stranger. Until
-        # K-072 the `role`/`scope` parameter was read from HERE, written onto
-        # the row, and baked into the JWT the poll returns; the only filter was
-        # membership of `config.roles`. On an origin declaring more than one
-        # role that is a privilege-escalation primitive with no authenticated
-        # step behind it: at `kiosk-demo-stylish` (`%i[customer owner]`) a
-        # stranger's `role=owner` reached a token whose `role` claim was
-        # `owner`, and the approving human — a plain customer — was never shown
-        # the word. `config.roles` is a DECLARATION of the roles this origin
-        # has, not a grant of them to whoever asks.
+        # it — so anything it carries is an assertion by a stranger. A
+        # `role`/`scope` parameter read from HERE, written onto the row and
+        # baked into the JWT the poll returns, filtered only by membership of
+        # `config.roles`, would be a privilege-escalation primitive with no
+        # authenticated step behind it on any origin declaring more than one
+        # role: at `kiosk-demo-stylish` (`%i[customer owner]`) a stranger's
+        # `role=owner` would reach a token whose `role` claim is `owner`, and
+        # the approving human — a plain customer — would never be shown the
+        # word. `config.roles` is a DECLARATION of the roles this origin has,
+        # not a grant of them to whoever asks.
         #
-        # The role is now sourced where ADR-0011 puts it: from the APPROVING
-        # HUMAN's own identity, captured by {DeviceVerification.approve} off
-        # `user_idp`'s `Identity#role` at the verify page — the same capture
-        # {AuthController#link} already performed for the link direction, so
-        # both halves of the binding ceremony read the role from the same
-        # place and a ceremony can never mint a privilege its approver does
-        # not hold.
+        # The role is sourced instead from the APPROVING HUMAN's own identity,
+        # captured by {DeviceVerification.approve} off `user_idp`'s
+        # `Identity#role` at the verify page — the same capture
+        # {AuthController#link} performs for the link direction, so both halves
+        # of the binding ceremony read the role from the same place and a
+        # ceremony can never mint a privilege its approver does not hold.
         #
         # REFUSED, NOT IGNORED. A silently dropped parameter leaves the caller
         # believing it got what it asked for, and leaves the next reader of

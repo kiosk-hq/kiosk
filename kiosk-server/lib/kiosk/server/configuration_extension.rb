@@ -69,9 +69,9 @@ module Kiosk
       #
       # Members are MODULE NAMES — the parts of the protocol this origin
       # serves — drawn from the canonical set `schema`, `queries`, `actions`,
-      # `pay` and emitted in that order (T-068 slice 5, decision T-075 = A,
-      # ADR-0025). Computed from the live registry — NOT a static list — so
-      # the document never advertises a module the provider hasn't wired:
+      # `pay` and emitted in that order. Computed from the live registry — NOT
+      # a static list — so the document never advertises a module the provider
+      # hasn't wired:
       #   * `schema`  — present whenever ≥1 query OR ≥1 action is registered
       #     (schema is the self-description of those).
       #   * `queries` — present iff ≥1 named query is registered.
@@ -79,18 +79,13 @@ module Kiosk
       #   * `pay`     — present iff a payment provider (AP2) is configured.
       #
       # WHY MODULES AND NOT VERB NAMES — AND IT IS A MODELLING RULE, NOT A
-      # SECURITY ONE. It used to be the other way round: `GET
-      # <endpoint>/schema` was Bearer-gated, {OpenApiController} was gated for
-      # the same reason, and {VerbController} answers `401` before `404` so an
-      # anonymous prober could not enumerate names. All three defences are
-      # retired (T-094, K-804, T-093) — the catalog is public, the derived
-      # OpenAPI document is public, and `/.well-known/api-catalog` hyperlinks
-      # every verb unauthenticated — so there is nothing here left to withhold.
-      # What survives is that a second copy of the verb list would be a second
-      # SOURCE OF TRUTH for it, and the two would drift; the catalog is the
-      # contract and this document is the pointer. A module set tells an
-      # assistant which branches of the skill apply, which is what its Step 1
-      # actually needs.
+      # SECURITY ONE. Nothing here is withheld: the catalog is public, the
+      # derived OpenAPI document is public, and `/.well-known/api-catalog`
+      # hyperlinks every verb unauthenticated. The reason is that a second copy
+      # of the verb list would be a second SOURCE OF TRUTH for it, and the two
+      # would drift; the catalog is the contract and this document is the
+      # pointer. A module set tells an assistant which branches of the skill
+      # apply, which is what its Step 1 actually needs.
       #
       # HTTP methods are never encoded here: in 0.4 the method follows the
       # KIND of the verb (a query is GET, an action is POST), which the
@@ -118,11 +113,8 @@ module Kiosk
       # {WellKnown}) and the per-response `Kiosk-Min-Client` header (see
       # {Headers}). Default: {Kiosk::Protocol::MIN_CLIENT}. Advisory only: no
       # code compares any incoming request's client version against it, so a
-      # bump is informational.
-      #
-      # Until K-747 the header ignored this value and emitted the constant, so
-      # a bumped provider advertised the new number in one place and the old
-      # one in the other, with nothing to say which was authoritative.
+      # bump is informational. Both surfaces read THIS value, so a provider
+      # that bumps it advertises one number, not two.
       attr_writer :min_client
       def min_client
         @min_client ||= Kiosk::Protocol::MIN_CLIENT
@@ -194,10 +186,11 @@ module Kiosk
       # to demand different (n, k).
       attr_accessor :registration_pow_params
 
-      # Removed 2026-07-08 (spec amended: "one PoW = Equihash"). The old
-      # SHA256 leading-zero-bits registration hashcash is gone — SHA256 is the
-      # most ASIC-optimised hash on Earth, exactly the CPU-hard PoW the ADR
-      # drops. Use `registration_pow_count` (Equihash) instead.
+      # There is no SHA256 leading-zero-bits registration hashcash: the spec
+      # settles on "one PoW = Equihash", and SHA256 — the most ASIC-optimised
+      # hash on Earth — is the opposite of the CPU-hard PoW that calls for.
+      # This setter exists only to say so. Use `registration_pow_count`
+      # (Equihash) instead.
       def registration_difficulty=(_)
         raise ArgumentError,
           "registration_difficulty (SHA256 hashcash) was removed — spec amended, " \
@@ -212,13 +205,12 @@ module Kiosk
       # every RLS policy trusts). Privileged roles are obtainable only through
       # the human-approved device-grant flow.
       #
-      # OPTIONAL (roles are hook-or-absent in 0.1, and ADR-0011 is explicit
-      # that registration MUST NOT fail when this is unset). When unset,
-      # self-registered agents get NO role — `agents.allowed_roles` is the
-      # EMPTY array, never NULL, because the shipped migration declares that
-      # column `NOT NULL` (K-788) — and a provider that needs roles may
-      # assign them inside its
-      # `assistant_creation` hook instead. When set, it must be one of {#roles}.
+      # OPTIONAL: roles are hook-or-absent, and registration MUST NOT fail when
+      # this is unset. When unset, self-registered agents get NO role —
+      # `agents.allowed_roles` is the EMPTY array, never NULL, because the
+      # shipped migration declares that column `NOT NULL` — and a provider that
+      # needs roles may assign them inside its `assistant_creation` hook
+      # instead. When set, it must be one of {#roles}.
       #   Kiosk.configure { |c| c.registration_role = :customer }
       attr_accessor :registration_role
 
@@ -350,36 +342,28 @@ module Kiosk
       # When true, {WireController} validates a PRESENT `pow` field on a wire
       # request against the vendored normative PoW schema BEFORE {PowGate.gate}
       # consumes it, and rejects a malformed shape with a `bad_request` (400)
-      # carrying a hint naming the expected shape — instead of the K-479 silent
+      # carrying a hint naming the expected shape — instead of a silent
       # re-challenge loop (a malformed pow whose proofs {PowGate.extract_proofs}
       # cannot parse yields [], so the gate re-issues a fresh 402 forever with no
-      # diagnostic). Default false = byte-identical old behaviour.
+      # diagnostic).
       #
       # This is a SHAPE check in front of the gate — NOT a replacement for it: a
       # well-formed-but-forged proof still fails the real cryptographic
       # verification inside the gate. An ABSENT pow is untouched (the initial
       # no-pow request still gets its normal 402 challenge). `json_schemer` is a
-      # RUNTIME dependency of this gem since 0.4 (K-1333), not an optional extra
+      # RUNTIME dependency of this gem since 0.4, not an optional extra
       # tied to this flag — it is still required LAZILY, so a vendored checkout
       # missing it gets a {Errors::ConfigurationError} naming the gem rather than
-      # a LoadError at boot. The fuller uniform-validation layer is v0.5 (T-045).
+      # a LoadError at boot. The fuller uniform-validation layer is v0.5.
       #
-      # **DEFAULT TRUE SINCE K-1399, and the asymmetry with the flag below is
-      # the whole reason.** This shipped `false` as "byte-identical old
-      # behaviour" while every one of the seven showcase origins turned it on
-      # and `rails g kiosk:install` writes it on (K-1336) — a default nobody
-      # wanted and one an adopter who skipped the generator inherited in
-      # silence. What that adopter inherited was the K-479 loop: a malformed
-      # `Kiosk-PoW` yields no parseable proofs, so the gate re-issues a fresh
-      # 402 forever with no diagnostic, and the assistant on the other end can
-      # neither see nor fix what it sent. Off is the setting that produces the
-      # silent failure; on is the setting that produces a 400 naming the shape.
-      #
-      # It is a BEHAVIOUR CHANGE for an existing adopter, and the honest
-      # accounting is that there are none: nothing is published to RubyGems, so
-      # the flip cannot break a deployment that exists. It is written here
-      # because that will stop being true, and the next person to weigh a
-      # default should know this one was weighed rather than assumed.
+      # **DEFAULT TRUE, and the asymmetry with the flag below is the whole
+      # reason.** OFF is the setting that produces the silent failure: a
+      # malformed `Kiosk-PoW` yields no parseable proofs, so the gate re-issues
+      # a fresh 402 forever with no diagnostic, and the assistant on the other
+      # end can neither see nor fix what it sent. ON produces a 400 naming the
+      # shape. Every one of the seven showcase origins sets it on, and
+      # `rails g kiosk:install` writes it on, so an adopter who skips the
+      # generator gets the same behaviour as one who does not.
       attr_writer :validate_requests
       def validate_requests
         return @validate_requests unless @validate_requests.nil?
@@ -398,7 +382,7 @@ module Kiosk
       # schema validation per answer — so it belongs in development and CI,
       # where a descriptor that lies about its handler is cheap to fix, and not
       # in front of a production caller who did nothing wrong. THE REASON DOES
-      # NOT TRANSFER (K-1399): a request-shape refusal is a 400 to a caller who
+      # NOT TRANSFER: a request-shape refusal is a 400 to a caller who
       # sent a bad request, not a 500 to one who did nothing wrong, which is why
       # the two defaults point opposite ways. Uses `json_schemer` on the same
       # lazily-required terms as `validate_requests`.
@@ -407,7 +391,7 @@ module Kiosk
         @validate_responses ||= false
       end
 
-      # ── The audit seam (K-828) ────────────────────────────────────────────
+      # ── The audit seam ────────────────────────────────────────────────────
 
       # THE AUDIT SINK — a callable the operator sets to receive one
       # {Kiosk::Server::ActionEvent} per action invocation, success and
@@ -416,12 +400,11 @@ module Kiosk
       #
       #   c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
       #
-      # Kiosk used to keep this trail itself, in a `kiosk.action_log` table
-      # every adopter installed. Phil reversed that on 2026-08-20 — «Хранить в
-      # БД в рамках kiosk reference impl/demo не будем. Дадим интерфейс для
-      # возможности их куда-то выливать по желанию оператора, и на его
-      # ответственность по PII» — so the tables left the canonical migration
-      # set and this seam replaced them.
+      # Kiosk keeps no audit trail of its own: there is no table in the
+      # canonical migration set for it, and this seam is the whole of the
+      # interface. Where the events go, how long they are kept and what PII
+      # they carry are the operator's to decide and the operator's to answer
+      # for.
       #
       # **THE ARGUMENTS ARRIVE IN FULL, AND THAT IS DELIBERATE.**
       # `event.args` is exactly what the handler received — an address, a
@@ -457,7 +440,7 @@ module Kiosk
       # (`count` is the N×PoW proof-count escalation lever; the gate defaults it
       # to 1 when omitted).
       #
-      # THE VERB IT IS HANDED IS `:run`, NEVER `:action` (K-1395), and a
+      # THE VERB IT IS HANDED IS `:run`, NEVER `:action`, and a
       # policy that branches on the wrong spelling is REFUSED HERE rather than
       # declining to toll every write in silence. See {VerbVocabulary} for why
       # the refusal is a load error and not an alias.
@@ -490,7 +473,7 @@ module Kiosk
       # nil-policy apps without kiosk-reputation still boot.
       #
       # It receives the SAME coarse verb the policy does, so it carries the
-      # same trap and the same refusal (K-1395): a factors lambda branching on
+      # same trap and the same refusal: a factors lambda branching on
       # `:action` is rejected at configuration time.
       def reputation_factors=(value)
         VerbVocabulary.assert!(value, nil, "reputation_factors callable") unless value.nil?
@@ -513,12 +496,12 @@ module Kiosk
       # deployment (`WEB_CONCURRENCY > 1`, or several app hosts) **MUST**
       # override this with a store shared by every process — with the default,
       # PoW single-use holds per worker, so one proof is accepted once per
-      # worker (K-738; protocol.md Section 15.2 + the Section 16.1 operator
+      # worker (protocol.md Section 15.2 + the Section 16.1 operator
       # profile state the requirement). {Kiosk::Server::PowSpentStores::ActiveRecord}
       # ships as the ready override. The override MUST implement #claim as ONE
       # atomic op (Redis SETNX / SQL INSERT..ON CONFLICT) — the gate claims
-      # before the verify, so a read-then-write reintroduces the replay TOCTOU
-      # (K-542).
+      # before the verify, so a read-then-write reintroduces the replay
+      # TOCTOU.
       #
       # @return [Kiosk::Server::PowSpentStore, #claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
       attr_writer :pow_spent_store
@@ -531,7 +514,7 @@ module Kiosk
       # In-process store binding a public key to its outstanding, single-use
       # auth challenge nonce (the server side of `/auth/challenge`). Override
       # with a shared-store implementation in multi-process deployments —
-      # §15.2 requires it, and one ships in this gem (K-751):
+      # §15.2 requires it, and one ships in this gem:
       # {AuthChallengeStores::ActiveRecord}, backed by
       # {SchemaDefinitions.auth_challenge_sql}. Unshared, the handshake fails
       # CLOSED: worker B cannot see the nonce worker A issued, so a
@@ -567,7 +550,7 @@ module Kiosk
       # with a shared/durable implementation in multi-process deployments; set
       # to nil to disable revocation enforcement.
       #
-      # THE INTERFACE IS THREE METHODS, NOT TWO (K-836). `watermark_for` is
+      # THE INTERFACE IS THREE METHODS, NOT TWO. `watermark_for` is
       # read by {AgentIdentityProviders::DefaultAgentIdp} so a token minted in
       # the same wall-clock second as a revocation is dated AT the watermark
       # instead of being born already-revoked. An override that omits it keeps

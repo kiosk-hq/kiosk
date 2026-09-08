@@ -5,7 +5,7 @@ require "kiosk/server/errors"
 module Kiosk
   module Server
     # THE POLICY SEAM SPEAKS ONE VOCABULARY, AND THE OTHER SPELLING IS A LOAD
-    # ERROR RATHER THAN A SILENT NO-OP (K-1395).
+    # ERROR RATHER THAN A SILENT NO-OP.
     #
     # There are two vocabularies in this system and exactly one of their three
     # words is shared. An operator DECLARES a handler as `kind :query` or

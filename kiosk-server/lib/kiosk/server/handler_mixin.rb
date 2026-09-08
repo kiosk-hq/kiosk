@@ -14,9 +14,8 @@ module Kiosk
     # module — they include the public one, which is the whole of the contract:
     #
     #   Kiosk ships a MIXIN, not a base class. Which superclass a handler
-    #   controller has is the operator's decision (K-495: "не наследуем.
-    #   Наследование решает оператор"), so nothing here inherits, and the
-    #   only requirement is that the including class BE a controller —
+    #   controller has is the operator's decision, so nothing here inherits,
+    #   and the only requirement is that the including class BE a controller —
     #   dispatch goes through `Controller.action(…)`.
     #
     # ── The macros ───────────────────────────────────────────────────────
@@ -29,18 +28,18 @@ module Kiosk
     #                    this verb may touch: `:principal` (default — only the
     #                    calling principal's own, which is spec §7.2's absolute
     #                    requirement), `:published`, `:consented` or `:role`.
-    #                    K-949 / ADR-0028; see the long note below.
+    #                    See the long note below.
     #   kind           — REQUIRED. `:query` (reached by `GET <mount>/<name>`) or
     #                    `:action` (`POST <mount>/<name>`). THE single source of
     #                    truth for which verb reaches this handler, and it is a
     #                    property of the DECLARATION: one controller may declare
-    #                    both, in any order (K-921). It is required rather than
+    #                    both, in any order. It is required rather than
     #                    defaulted because either default silently assigns an
     #                    HTTP method — a write behind `GET` is the expensive
     #                    direction of that mistake.
     #   description    — semantics ONLY: what this verb does, how, and what it
     #                    returns IN MEANING. Never a field list, a type, a
-    #                    required marker, or a param name (ADR-0023 / K-500).
+    #                    required marker, or a param name.
     #   input_schema   — REQUIRED. JSON Schema for the params. THE input
     #                    contract: every name, type, enum and range lives here.
     #   output_schema  — REQUIRED. JSON Schema for what comes back, so an
@@ -55,7 +54,7 @@ module Kiosk
     #                    the method name (a Ruby keyword, or a name that would
     #                    collide with a controller method).
     #
-    # ── `reach` — WHOSE ROWS A VERB MAY TOUCH (K-949, ADR-0028) ──────────
+    # ── `reach` — WHOSE ROWS A VERB MAY TOUCH ────────────────────────────
     # Spec §7.2 used to say, unconditionally, that every read is scoped to the
     # authenticated `user_id` and that another `user_id`'s rows are never
     # readable. Three shipped demos contradicted it BY DESIGN — philslist's open
@@ -74,7 +73,7 @@ module Kiosk
     #   :published  The operator PUBLISHES these owner-carrying rows to every
     #               principal, by intent — a classifieds board. Costly by design:
     #               §7.2 forbids putting an account's login identifier in such a
-    #               row (K-913 is what that sentence is made of).
+    #               row.
     #   :consented  A principal SHARED them, and the authorising artefact is one
     #               the operator can point at — tudu's single-use invite becomes
     #               a membership, and the membership is what permits the read.
@@ -91,7 +90,7 @@ module Kiosk
     # intends otherwise" would have swallowed §7.2 whole (every leak is intended
     # from the leaker's side).
     #
-    # ── A SLOT MAY BE A PROC, for a schema derived from DATA (K-922) ──────
+    # ── A SLOT MAY BE A PROC, for a schema derived from DATA ──────────────
     # Any part of `input_schema`, `output_schema`, `example_params` or
     # `example_row` may be a zero-arity proc:
     #
@@ -116,11 +115,10 @@ module Kiosk
     # and the call it made.
     #
     # ── Errors ───────────────────────────────────────────────────────────
-    # Rails' idiom, end to end (T-054): `render json:, status:` answers the
-    # wire with the status' lone code; a body naming an explicit vocabulary
-    # `error.code` (a 403 `rls_denied`, a SPECIFIC 402) — the HANDLER-side
-    # spelling, since what TRAVELS is the flat top-level `code` (K-1095) —
-    # travels verbatim; and
+    # Rails' idiom, end to end: `render json:, status:` answers the wire with
+    # the status' lone code; a body naming an explicit vocabulary `error.code`
+    # (a 403 `rls_denied`, a SPECIFIC 402) — the HANDLER-side spelling, since
+    # what TRAVELS is the flat top-level `code` — travels verbatim; and
     # a raise Rails knows a status for — `params.require`, RecordNotFound,
     # anything in `config.action_dispatch.rescue_responses` — is mapped by
     # the one `rescue_from` this include installs
@@ -128,19 +126,17 @@ module Kiosk
     # handler code; the wire-only gate classes remain raisable.
     #
     # ── What is NOT here ─────────────────────────────────────────────────
-    # `params:` (the free-text name → hint hash) is retired by ADR-0023 and has
-    # no macro: a hint is either a constraint (schema) or a meaning
-    # (description), and there is no third thing. Since T-081 there was no way to
-    # set one at all, and since T-085 there is no slot to set: spec §8.3 removed
-    # the key, so a descriptor this registry builds does not carry it.
+    # There is no `params:` macro — no free-text name → hint hash: a hint is
+    # either a constraint (schema) or a meaning (description), and there is no
+    # third thing. Spec §8.3 carries no such key either, so a descriptor this
+    # registry builds does not have a slot for one.
     #
-    # ── The property the two-mixin split used to carry ───────────────────
-    # Until K-921 there were TWO public mixins, `Kiosk::Query` and
-    # `Kiosk::Action`, and a controller included exactly one — so "this class
-    # provably cannot write" was readable off the include. Phil removed the
-    # split (2026-08-21): the same namespace legitimately both answers queries
-    # and performs actions, and forcing the split at class granularity
-    # fragmented a cohesive resource for a reason the domain does not have.
+    # ── The read-only guarantee this mixin does NOT make ─────────────────
+    # One mixin serves both kinds, so "this class provably cannot write" is not
+    # readable off the include. That is deliberate: the same namespace
+    # legitimately both answers queries and performs actions, and forcing a
+    # split at class granularity would fragment a cohesive resource for a
+    # reason the domain does not have.
     #
     # The property is DEFERRED, not lost. If it is ever wanted it returns as an
     # OPT-IN controller-level macro — `read_only!` / `query_only!`, refusing an
@@ -177,8 +173,8 @@ module Kiosk
       NAME_PATTERN = /\A[a-z][a-z0-9_]*\z/
 
       # `RESERVED_NAMES` are the first path segments the ENGINE itself draws
-      # under the mount, and since T-183 this list is the PRIMARY control rather
-      # than a courtesy. Rails' first-match still protects those paths — the
+      # under the mount, and this list is the PRIMARY control rather than a
+      # courtesy. Rails' first-match still protects those paths — the
       # operator draws the mount FIRST in config/routes/kiosk.rb and their own
       # verb routes after it, so a verb called `schema` is shadowed, never
       # shadowing — but that ordering is now a property of a file somebody
@@ -194,18 +190,17 @@ module Kiosk
       # table, so a route added there without a name added here fails the build
       # instead of quietly re-opening a shadowed name.
       #
-      # `query` and `run` LEFT this list at the 0.4 cutover, and that is the
-      # check earning its keep in the other direction: the engine no longer
-      # draws those segments (T-074 = A deleted the multiplexed pair), so
+      # `query` and `run` are NOT on this list, and that is the check earning
+      # its keep in the other direction: the engine draws no such segments, so
       # reserving them would be reserving nothing — a boot-time refusal for a
-      # name that is, in fact, free. An operator may now declare a verb called
+      # name that is, in fact, free. An operator may declare a verb called
       # `query` or `run`; none does, and one that did would be served at
       # `<endpoint>/query` like any other.
       RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
 
-      # The descriptor fields 0.4 makes REQUIRED on every verb (T-073 = A,
-      # Phil 2026-08-17). Both are contracts a caller acts on — `input_schema`
-      # is what the wire coerces and validates arguments against (§8.1 item 5),
+      # The descriptor fields 0.4 makes REQUIRED on every verb. Both are
+      # contracts a caller acts on — `input_schema` is what the wire coerces
+      # and validates arguments against (§8.1 item 5),
       # `output_schema` is the ONLY machine-readable statement of the answer
       # shape now that the envelope's `kind` is gone (§8.2) — so a verb that
       # omits either publishes an incomplete contract, and the engine refuses
@@ -243,10 +238,10 @@ module Kiosk
         # way in. Only a dispatch through the Kiosk seam sets the marker.
         base.before_action(:kiosk_require_wire_dispatch!) if base.respond_to?(:before_action)
 
-        # THE ONE Rails-raise → wire-code seam (T-054, K-495 sub-decision 4).
-        # Registered at include time, so any `rescue_from` the operator
-        # declares later — below the include, or in a subclass — matches
-        # first and wins; this is the floor, not a ceiling. See
+        # THE ONE Rails-raise → wire-code seam. Registered at include time, so
+        # any `rescue_from` the operator declares later — below the include, or
+        # in a subclass — matches first and wins; this is the floor, not a
+        # ceiling. See
         # {InstanceMethods#kiosk_rescue_to_wire} for what it maps.
         base.rescue_from(StandardError, with: :kiosk_rescue_to_wire) if base.respond_to?(:rescue_from)
       end
@@ -273,7 +268,7 @@ module Kiosk
           kiosk_pending[:kind] = value
         end
 
-        # Whose rows this verb may touch (spec §7.2, ADR-0028). Omit it and the
+        # Whose rows this verb may touch (spec §7.2). Omit it and the
         # verb is `:principal` — the absolute case, and the one most operators
         # want. Declared per DECLARATION, like `kind`, so one controller may hold
         # an owner-scoped verb and a published one.
@@ -364,7 +359,7 @@ module Kiosk
           kiosk_register_one(declaration)
         end
 
-        # The name rules of spec §8.1 / §8.3 and T-073's required descriptor
+        # The name rules of spec §8.1 / §8.3 and the required descriptor
         # fields, raised at DECLARATION time so the operator meets them at boot
         # with the class and the method in hand.
         def kiosk_refuse_bad_declaration!(declaration)
@@ -385,7 +380,7 @@ module Kiosk
           # cross-class half is {HandlerRegistrations.refuse_cross_kind_collisions!},
           # which is the first moment the whole surface exists at once; this is
           # the same rule caught earlier, where the operator has both methods in
-          # hand. Before K-921 the case could not arise inside one class.
+          # hand.
           clash = kiosk_declarations[name]
           if clash && clash[:kind] != declaration[:kind]
             raise ArgumentError,
@@ -479,7 +474,7 @@ module Kiosk
         # why this is not defaulted to `rows.length` — on a TRUNCATED page that
         # would state the page size as the total.
         #
-        # WHAT THE ASSISTANT SEES (T-092). Not this hash: the body is the bare
+        # WHAT THE ASSISTANT SEES. Not this hash: the body is the bare
         # `rows` array, exactly like a non-paginating query's, and the two page
         # facts leave as response headers — `Link: <…?cursor=…>; rel="next"`
         # (RFC 8288) and `X-Total-Count`. The hash below is the INTERNAL
@@ -490,8 +485,8 @@ module Kiosk
           render json: { rows: rows, next_cursor: next_cursor, total: total }
         end
 
-        # T-054: the one place a Rails-native raise becomes a wire code.
-        # Three kinds of raise reach it:
+        # The one place a Rails-native raise becomes a wire code. Three kinds
+        # of raise reach it:
         #
         #   * a Kiosk wire error ({Errors::Base}) — re-raised untouched: it
         #     already names its code, and the Kiosk seam renders it.
@@ -508,13 +503,13 @@ module Kiosk
         #   * anything else — re-raised, so the {Executor} wraps it as
         #     `action_failed` exactly as it always has.
         #
-        # THE EXCEPTION'S OWN SENTENCE DOES NOT TRAVEL (K-1310). This branch
-        # exists for exceptions the operator did NOT author — «no Kiosk classes
-        # in the handler» is its whole purpose — so the message it used to
-        # render was some library's wording: MEASURED at head, a
-        # `params.require(:sku)` handler put actionpack's «param is missing or
-        # the value is empty or invalid: sku» on a 400 problem document. The
-        # wire gets {Errors.rescued_wire}'s sentence and hint for the code this
+        # THE EXCEPTION'S OWN SENTENCE DOES NOT TRAVEL. This branch exists
+        # for exceptions the operator did NOT author — «no Kiosk classes in the
+        # handler» is its whole purpose — so its message is always some
+        # library's wording: rendered, a `params.require(:sku)` handler would
+        # put actionpack's «param is missing or the value is empty or invalid:
+        # sku» on a 400 problem document. The wire gets
+        # {Errors.rescued_wire}'s sentence and hint for the code this
         # seam decided; the class, the message and the backtrace go to the
         # operator's log ({FailureLog}), the way {Executor}'s two 500 paths
         # already send theirs. An operator who means to SPEAK to the agent has
@@ -532,7 +527,7 @@ module Kiosk
           )
 
           # Hand the exception to {HandlerDispatch} so the wire error it builds
-          # for this render carries it as `cause` (K-1311). Operator-side only:
+          # for this render carries it as `cause`. Operator-side only:
           # it reaches the audit sink and nothing else, because a `cause` is not
           # part of any problem document.
           request.env[HandlerDispatch::RESCUED_KEY] = exception
@@ -549,18 +544,15 @@ module Kiosk
         # — the same answer the operator's app gives for any other path it does
         # not serve.
         #
-        # THE BODY IS A FLAT RFC 9457 PROBLEM DOCUMENT (K-1092), built by
-        # {Errors::VerbNotFound} itself so it cannot drift from the one the
-        # wire renders. `verb_not_found` and not `not_found` since T-158: the
+        # THE BODY IS A FLAT RFC 9457 PROBLEM DOCUMENT, built by
+        # {Errors::VerbNotFound} itself so it cannot drift from the one the wire
+        # renders. `verb_not_found` and not `not_found`: the
         # caller dialed a path that is not a wire verb path at all, so nothing
         # was ADDRESSED, and the hint below tells it to call the verb's own
         # route -- which is precisely the `verb_not_found` recovery. This render is CLIENT-FACING and nothing re-wraps it: the
         # guard returns early under sub-dispatch, so it only ever fires on a
         # route the operator drew straight at a handler controller, where there
-        # is a machine on the other end and no human page in sight. It answered
-        # the 0.3 `{ok:false, error:{…}}` envelope until K-1092 — deleted with
-        # the endpoints that served it (K-808, T-074 = A) — which made it the
-        # last shipped body emitting that shape to a client.
+        # is a machine on the other end and no human page in sight.
         #
         # NOT the same call as {#kiosk_rescue_to_wire} above, which keeps the
         # nested shape ON PURPOSE: that one is the internal sub-dispatch

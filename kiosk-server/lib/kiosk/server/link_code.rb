@@ -30,7 +30,7 @@ module Kiosk
       # `:approved` with `user_id` already stamped — the human IS the
       # approval; no verify step follows.
       #
-      # `requested_role:` IS A MISNOMER HERE AND EVERYWHERE (K-1126): nothing
+      # `requested_role:` IS A MISNOMER HERE AND EVERYWHERE: nothing
       # requests it. On a `:link` row it is the MINTING human's own role, read
       # off their session by the caller ({AuthController#link},
       # {AssistantsController#link}, both passing `Identity#role`) — the
@@ -98,8 +98,8 @@ module Kiosk
         payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
         AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
 
-        # SINGLE-USE IS DECIDED BY THE ROW, NOT BY THE `consumed?` CHECK ABOVE
-        # (K-887). That check is read off the snapshot taken at
+        # SINGLE-USE IS DECIDED BY THE ROW, NOT BY THE `consumed?` CHECK
+        # ABOVE. That check is read off the snapshot taken at
         # `find_by_device_code_hash`, so on its own it lets two concurrent
         # redemptions of ONE code -- with two DIFFERENT public keys -- both
         # reach the bind and both attach an assistant to the human's account.
@@ -117,7 +117,7 @@ module Kiosk
 
         # `requested_role:` carries what was stamped at MINT, from the human's
         # own session — never anything the redeeming assistant sent, which is
-        # why the name is a misnomer kept only for the column (K-1126).
+        # why the name is a misnomer kept only for the column.
         result = AccountBinding.bind!(
           public_key_pem: pem,
           user_id:        da.user_id,

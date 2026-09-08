@@ -8,10 +8,8 @@ require "kiosk/server/errors"
 module Kiosk
   module Server
     # Decodes a QUERY's arguments out of the URL query string, per the
-    # normative encoding Phil decided in T-070 (option B, 2026-08-17) and
-    # narrowed in T-087 (option A, 2026-08-19). That decision is the source of
-    # truth for the rule until both specs are rewritten in 0.4; the numbered
-    # clauses quoted below are its clauses.
+    # normative query-string encoding. The numbered clauses below restate that
+    # rule and name the code in this file that enforces each half of it.
     #
     # ── The rule, and where each half of it lives here ───────────────────
     #
@@ -31,11 +29,10 @@ module Kiosk
     #       array — Rack keeps only the last value and a server MUST NOT
     #       invent one. See {#fold_declared_arrays} for the ONE exception the
     #       rule does allow, which is type coercion rather than invention.
-    #   (4) OBJECTS are `o%5Bk%5D=v`, ONE LEVEL, **SCALAR LEAVES ONLY**.
-    #       T-087 dropped the array-of-scalar leaf that T-070-B originally
-    #       allowed: `o%5Bk%5D%5B%5D=v` is expressible in no OpenAPI style,
-    #       breaks four of the twelve surveyed validators, and had zero
-    #       instances in the tree. {#reject_undecodable_shapes!} refuses it.
+    #   (4) OBJECTS are `o%5Bk%5D=v`, ONE LEVEL, **SCALAR LEAVES ONLY**. An
+    #       array-valued leaf — `o%5Bk%5D%5B%5D=v` — is expressible in no
+    #       OpenAPI style and breaks four of the twelve surveyed validators,
+    #       so {#reject_undecodable_shapes!} refuses it.
     #   (5) NOTHING DEEPER IS A QUERY. Two levels of nesting, or an array of
     #       objects, is an ACTION (POST) — refused here with a 400 that says
     #       so, rather than half-decoded.
@@ -95,10 +92,10 @@ module Kiosk
       def parse!(query_string)
         Rack::Utils.parse_nested_query(query_string.to_s)
       rescue ::Rack::BadRequest
-        # Rack's own message is not appended (K-1307). The three refusals "all
-        # mean the same thing on the wire" — the sentence above says so four
-        # lines up — so the caller's remedy is SHAPE_HINT's grammar, not a
-        # library sentence that changes with the Rack version.
+        # Rack's own message is not appended. The three refusals "all mean the
+        # same thing on the wire" — the sentence above says so four lines up —
+        # so the caller's remedy is SHAPE_HINT's grammar, not a library
+        # sentence that changes with the Rack version.
         raise Errors::BadRequest.new(
           "the query string could not be decoded",
           hint: SHAPE_HINT,
@@ -158,9 +155,8 @@ module Kiosk
       end
 
       # Two refusals that read alike and mean different things, so they say
-      # different things: an ARRAY leaf is the T-087 narrowing (the shape was
-      # normative for two days and is not any more), a HASH leaf is rule (5)'s
-      # depth limit.
+      # different things: an ARRAY leaf is rule (4)'s scalar-leaves-only
+      # narrowing, a HASH leaf is rule (5)'s depth limit.
       def reject_nonscalar_leaves!(name, value)
         value.each do |key, leaf|
           next if leaf.nil? || leaf.is_a?(::String)
@@ -243,7 +239,7 @@ module Kiosk
       # spells dates as strings. What the declared `format` buys is that an
       # unparseable one is refused HERE, naming the parameter, instead of
       # reaching a handler that will `Date.parse` it into a 500 or, worse,
-      # answer an invalid filter with a valid-looking empty list (K-717).
+      # answer an invalid filter with a valid-looking empty list.
       def to_string(value, property, path)
         scalar!(value, "a string", path)
         case fetch(property, :format).to_s

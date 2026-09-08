@@ -28,15 +28,15 @@ module Kiosk
       append_view_path File.expand_path("../../../app/views", __dir__)
       layout false
 
-      # AGENT-SIGNPOST (K-459). This is a HUMAN, browser-only page that
+      # AGENT-SIGNPOST. This is a HUMAN, browser-only page that
       # happens to sit under the `/kiosk/…` prefix an assistant is told to
       # probe. An assistant POSTing JSON here carries no CSRF token, so Rails
       # raises ActionController::InvalidAuthenticityToken — and in production
       # nothing downstream names the machine surface. ShowExceptions hands off
       # to PublicExceptions, whose answer depends on the host and on what the
-      # caller negotiated: the host's static public/422.html — every Kiosk
-      # demo ships one since K-532 — when the request offered `*/*` or no
-      # Accept at all; a generic `{"status":422,"error":"Unprocessable
+      # caller negotiated: the host's static public/422.html — every Kiosk demo
+      # ships one — when the request offered `*/*` or no Accept at all; a
+      # generic `{"status":422,"error":"Unprocessable
       # Content"}` echo on an explicit JSON Accept; and, on a host shipping no
       # such page, PublicExceptions cascades and ShowExceptions#pass_response
       # answers a BODYLESS 422 (`text/html`, `Content-Length: 0`). A human
@@ -60,15 +60,15 @@ module Kiosk
         render_page
       end
 
-      # roles-from-IdP (ADR-0011 Path A) on the BROWSER path — the same
-      # capture {AuthController#link} performs for the JSON endpoint, and for
+      # roles-from-IdP on the BROWSER path — the same capture
+      # {AuthController#link} performs for the JSON endpoint, and for
       # the same reason: this page IS the account-binding link ceremony, so the
       # role the provider's `user_idp` reports for the signed-in human
       # (`@identity.role`) belongs on the link row. Both controllers resolve
       # `@identity` from the SAME `Kiosk.configuration.user_idp&.verify`, so
       # there is no case where the JSON surface can source a role and this one
-      # cannot; a surface that dropped it made the ceremony's outcome depend on
-      # which door the human walked through, which is the K-437 shape (K-995).
+      # cannot; a surface that dropped it would make the ceremony's outcome
+      # depend on which door the human walked through.
       #
       # Both halves of {AccountBinding.bind!} depend on it, and the REBIND half
       # is the subtler one: a fresh key would merely be provisioned at
@@ -81,10 +81,9 @@ module Kiosk
       #
       # `nil` stays meaningful and is NOT normalized here: a role-less
       # `user_idp` (or a single-role provider) reports no role, and the binding
-      # then falls back to `registration_role`/absent exactly as before — the
-      # no-regression clause of the ADR amendment. The role is never validated
-      # at mint; `bind!` validates it against `config.roles` at redeem, which
-      # is where the JSON path validates it too.
+      # then falls back to `registration_role`/absent. The role is never
+      # validated at mint; `bind!` validates it against `config.roles` at
+      # redeem, which is where the JSON path validates it too.
       def link
         return unless require_account_holder!
 
@@ -113,7 +112,7 @@ module Kiosk
       def update
         return unless require_account_holder!
 
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`, which would turn this
@@ -172,8 +171,8 @@ module Kiosk
 
       def render_page(status: :ok)
         @assistants = bound_assistants
-        # K-1014. The cap editor below is rendered unconditionally, and on an
-        # origin that wires no `config.spending_cap` seam the number it saves is
+        # The cap editor below is rendered unconditionally, and on an origin
+        # that wires no `config.spending_cap` seam the number it saves is
         # stored on the assistant's row and read by nothing: `Executor
         # #enforce_spending_cap!` returns on `seam.nil?` before it looks at the
         # column. A control that binds nothing must SAY so where it is rendered,

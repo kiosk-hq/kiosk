@@ -9,8 +9,7 @@ require "kiosk/server/version"
 
 module Kiosk
   module Server
-    # THE `schema` CATALOG, DERIVED ONCE PER BOOT AND SERVED FROM MEMORY
-    # (T-094, Phil 2026-08-19).
+    # THE `schema` CATALOG, DERIVED ONCE PER BOOT AND SERVED FROM MEMORY.
     #
     # `GET <endpoint>/schema` answers `{queries, actions}` — the descriptors of
     # every verb this origin registered. Nothing in it is per-request or
@@ -45,7 +44,7 @@ module Kiosk
     # stale catalogue. That check is three array reads; the DERIVATION — build
     # every descriptor, serialize, hash — is what happens once.
     #
-    # ── "Once per boot" HAS AN EXCEPTION SINCE K-922, and it is the point ───
+    # ── "Once per boot" HAS AN EXCEPTION, and it is the point ──────────────
     #
     # A descriptor slot may be a PROC — `enum: -> { Category.pluck(:slug) }` —
     # which makes the catalogue a function of the operator's ROWS, not only of
@@ -71,8 +70,8 @@ module Kiosk
     # is what makes a year-long TTL safe — see {Headers} for the two cache
     # policies and why a fixed URL cannot carry the long one.
     #
-    # SINCE K-804 IT IS THE ORIGIN'S DOCUMENT VERSION, not this document's.
-    # `GET <endpoint>/openapi.json` went public in the same shape, and the
+    # THIS DIGEST IS THE ORIGIN'S DOCUMENT VERSION, not this document's alone.
+    # `GET <endpoint>/openapi.json` is public in the same shape, and the
     # api-catalog hangs THIS value on the `?v=` of both links, because
     # {digest_inputs} covers every input of either renderer. The two documents
     # keep their own `ETag`s — an entity tag identifies bytes at one url — but
@@ -88,12 +87,11 @@ module Kiosk
       class << self
         # The catalog document, ready to serialize: `{queries:, actions:}`.
         #
-        # `verbs` is NOT here (T-095, K-801). It rendered
-        # `Array(Kiosk.configuration.capabilities)` — literally the same call
-        # `/.well-known/kiosk.json` renders as `capabilities`, so it was one
-        # value published twice under two names. The module set lives in the
-        # discovery document, which is the same trust state as this one now
-        # that both are public.
+        # THE MODULE SET IS NOT HERE. `Array(Kiosk.configuration.capabilities)`
+        # is published once, as `capabilities` in `/.well-known/kiosk.json` —
+        # the same trust state as this document, now that both are public — and
+        # publishing it twice under two names would be one value with two
+        # places to disagree.
         def document(config: Kiosk.configuration)
           derive(config: config).fetch(:document)
         end
@@ -129,7 +127,7 @@ module Kiosk
         # route may call it too.
         #
         # A DYNAMIC SLOT MAY NOT BE RESOLVABLE YET, and that is not an error
-        # here (K-922). `after_initialize` runs on EVERY boot — `db:create`,
+        # here. `after_initialize` runs on EVERY boot — `db:create`,
         # `db:migrate` and `assets:precompile` included — and a slot declared
         # `enum: -> { Category.pluck(:slug) }` has no table to read at the
         # first two. Deriving eagerly is an optimisation, so when it fails on
@@ -219,15 +217,15 @@ module Kiosk
         #     in this gem and a PATCH bump can change what it emits, and the
         #     protocol's, for the same reason one level up.
         #
-        # `owner` IS ONE OF THEM, and it joined at K-804 rather than at T-094.
-        # This digest stopped being the catalog's alone the day the api-catalog
-        # began hanging it on the `?v=` of BOTH derived documents: {OpenApi}
-        # renders `info.title` from `WellKnown.site_name`, which reads
-        # `owner[:name]`. Leaving it out would have let an operator rename
-        # itself, publish an unchanged version, and have a year-long cache
-        # keep serving the old title. It is a cheap read and it makes the one
-        # sentence this constant depends on — "every input of either document
-        # is an input here" — true rather than nearly true.
+        # `owner` IS ONE OF THEM, and it is here because this digest is not
+        # the catalog's alone: the api-catalog hangs it on the `?v=` of BOTH
+        # derived documents, and {OpenApi} renders `info.title` from
+        # `WellKnown.site_name`, which reads `owner[:name]`. Leaving it out
+        # would let an operator rename itself, publish an unchanged version,
+        # and have a year-long cache keep serving the old title. It is a cheap
+        # read and it makes the one sentence this constant depends on — "every
+        # input of either document is an input here" — true rather than nearly
+        # true.
         def digest_inputs(config, document)
           {
             gem_version:      Kiosk::Server::VERSION,

@@ -13,7 +13,7 @@ module Kiosk
     #
     # Mirrors {PowSpentStore}: Mutex-guarded, pruned opportunistically, and NOT
     # shared across web workers. Multi-process providers MUST override — the
-    # referent implementation ships beside this one (K-751):
+    # referent implementation ships beside this one:
     # `Kiosk.configure { |c| c.auth_challenge_store =
     # Kiosk::Server::AuthChallengeStores::ActiveRecord.new }`, or any object
     # answering the two methods below. Unshared, the failure is fail-CLOSED —
@@ -29,7 +29,7 @@ module Kiosk
       # un-rate-limited, so pruning expired entries alone does not bound memory
       # within the TTL window — a distinct-key flood can issue rate×TTL LIVE
       # challenges before any expire. The cap evicts the oldest live entry once
-      # reached, so the store can never exceed this many entries (K-548).
+      # reached, so the store can never exceed this many entries.
       # A single-process provider under real load holds far fewer; an override
       # (Redis) enforces its own bound. Configurable via the constructor.
       DEFAULT_MAX_ENTRIES = 50_000

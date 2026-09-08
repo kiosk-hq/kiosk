@@ -50,7 +50,7 @@ module Kiosk
         payload = PopVerifier.verify!(public_key_pem: public_key_pem, signed: signed)
         AuthChallenge.consume!(public_key_pem: public_key_pem, nonce: payload.fetch(:nonce))
 
-        # `lease_connection`, not `connection` (K-782, following
+        # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`. Not `with_connection`
@@ -94,18 +94,17 @@ module Kiosk
           # explicitly. That is a statement SHAPE — there is no value to bind —
           # while the role itself, when there is one, is `$3`.
           #
-          # `'{}'::text[]` and NOT `NULL` (K-788): the shipped migration
-          # declares `allowed_roles text[] NOT NULL DEFAULT '{}'::text[]`, so a
-          # literal NULL here made every register and every fresh-key bind 500
-          # on a not-null violation for exactly the operator ADR-0011 protects
-          # — "registration MUST NOT fail when [registration_role] is unset".
-          # No demo could reach it (all seven configure a role) and a fake
-          # accepted the statement, so the suite vouched for it for a series.
-          # Not `DEFAULT` either: that defers to whatever default the operator's
-          # own table happens to carry, and one that has none puts the NULL
-          # straight back. An empty array SAYS "no roles" — the same move
-          # `executor.rb` makes with its `"on_file"` sentinel rather than
-          # writing NULL into a NOT NULL column.
+          # `'{}'::text[]` and NOT `NULL`: the shipped migration declares
+          # `allowed_roles text[] NOT NULL DEFAULT '{}'::text[]`, so a literal
+          # NULL here would 500 every register and every fresh-key bind on a
+          # not-null violation — and it would do it for exactly the operator
+          # who configures no `registration_role`, the one for whom
+          # registration MUST NOT fail. Not `DEFAULT` either: that defers to
+          # whatever default the operator's own table happens to carry, and one
+          # that has none puts the NULL straight back. An empty array SAYS
+          # "no roles" — the same move `executor.rb` makes with its
+          # `"on_file"` sentinel rather than writing NULL into a NOT NULL
+          # column.
           allowed_roles_sql, role_binds =
             role ? ["ARRAY[$3]::text[]", [role]] : ["'{}'::text[]", []]
           sql = <<~SQL

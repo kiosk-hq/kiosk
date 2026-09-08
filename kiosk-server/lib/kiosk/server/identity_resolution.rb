@@ -9,7 +9,7 @@ module Kiosk
     # register/login/revoke endpoints mint, so a zero-config install works
     # end-to-end. `Kiosk.configuration.agent_idp` OVERRIDES it (custom
     # adapter fronting an external agent-identity issuer). No demo sets it:
-    # the tokens they authenticate are the ones this engine minted (T-104).
+    # the tokens they authenticate are the ones this engine minted.
     #
     # {.resolve} is the wire chain: the agent IdP first; when it yields no
     # identity (no/foreign credential — adapters return nil, they do not

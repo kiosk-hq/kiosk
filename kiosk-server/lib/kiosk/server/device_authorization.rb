@@ -36,23 +36,22 @@ module Kiosk
     # is stamped at approval (claim) or creation (link).
     #
     # `requested_role` is, on BOTH kinds, the role of the HUMAN this row
-    # belongs to — never a role a client asked for (K-072). A `:link` row
-    # carries it from creation ({LinkCode.mint} reads `Identity#role` off the
-    # minting session); a `:claim` row is born WITHOUT one and receives it at
+    # belongs to — never a role a client asked for. A `:link` row carries it
+    # from creation ({LinkCode.mint} reads `Identity#role` off the minting
+    # session); a `:claim` row is born WITHOUT one and receives it at
     # {#approve}, from the identity of whoever approves. `nil` means the
-    # provider's `user_idp` reports no role, and the binding then falls back to
-    # `registration_role`/absent (ADR-0011's no-regression clause).
+    # provider's `user_idp` reports no role, and the binding then falls back
+    # to `registration_role`/absent.
     #
-    # THE NAME IS A MISNOMER AND IS KEPT DELIBERATELY (K-1126). Nothing
-    # REQUESTS this role. Since K-072 a claim ceremony's opening request is
-    # REFUSED outright if it carries `role` or `scope`, and a `:link` row's
-    # value is read off the minting human's own session — so on both kinds the
-    # column is written BY THE OPERATOR and never by a client. Read it as
-    # `approved_role`. It keeps the spelling because ADR-0011 states its
-    # invariant under that name and because renaming it crosses seven demo
-    # `db/structure.sql` files plus `bin/check-migration-replay`: a migration
-    # wave for a word. Every site that reads or writes it says the same thing,
-    # so the identifier never has to be trusted on its own.
+    # THE NAME IS A MISNOMER AND IS KEPT DELIBERATELY. Nothing REQUESTS this
+    # role: a claim ceremony's opening request is REFUSED outright if it
+    # carries `role` or `scope`, and a `:link` row's value is read off the
+    # minting human's own session — so on both kinds the column is written BY
+    # THE OPERATOR and never by a client. Read it as `approved_role`. It keeps
+    # the spelling because renaming it crosses seven demo `db/structure.sql`
+    # files plus `bin/check-migration-replay`: a migration wave for a word.
+    # Every site that reads or writes it says the same thing, so the identifier
+    # never has to be trusted on its own.
     #
     # Lifecycle: `:pending → :approved | :denied → :consumed | :expired`.
     # Transitions are non-destructive — each returns a new instance via
@@ -82,12 +81,12 @@ module Kiosk
       # 31 read-aloud-unambiguous chars: A-Z minus I/L/O, digits 2-9 (so no
       # 0/1 either). 31^8 ≈ 8.5 × 10^11 possible codes.
       #
-      # NOT Crockford base32, and the comment said so until K-888: Crockford
-      # KEEPS 0 and 1 and drops U, which is the opposite trade on both counts
-      # — it optimises for decoding a string a human typed, while a `user_code`
-      # is read off one screen and typed into another, where 0/O and 1/I/L are
-      # the pairs that actually get confused. U is kept deliberately; dropping
-      # it would buy nothing here and cost 30^8.
+      # NOT Crockford base32: Crockford KEEPS 0 and 1 and drops U, which is
+      # the opposite trade on both counts — it optimises for decoding a string
+      # a human typed, while a `user_code` is read off one screen and typed
+      # into another, where 0/O and 1/I/L are the pairs that actually get
+      # confused. U is kept deliberately; dropping it would buy nothing here
+      # and cost 30^8.
       #
       # The count is load-bearing, which is why it is now measured rather than
       # asserted: it is the published justification for the brute-force
@@ -199,9 +198,9 @@ module Kiosk
       # Approve a pending row, stamping the approving account holder's
       # `user_id` — and, on a `:claim` row, their ROLE.
       #
-      # `role:` is where a claim ceremony's `requested_role` comes from
-      # (K-072). A `:claim` row is born role-less because the request that
-      # opens it is unauthenticated; the role is captured HERE, at the one
+      # `role:` is where a claim ceremony's `requested_role` comes from. A
+      # `:claim` row is born role-less because the request that opens it is
+      # unauthenticated; the role is captured HERE, at the one
       # moment an authenticated human is present, from `user_idp`'s
       # `Identity#role`. A `:link` row travels the other way — it is minted BY
       # the human, so {LinkCode.mint} already put their role on it via

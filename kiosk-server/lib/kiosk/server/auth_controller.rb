@@ -58,7 +58,7 @@ module Kiosk
       # Register a NEW public key (409 if already registered → use /login).
       #
       # The optional registration PoW proof rides in the `Kiosk-PoW` request
-      # HEADER (ADR-0022), not the body — the same header the wire verbs use.
+      # HEADER, not the body — the same header the wire verbs use.
       # The signed body stays pow-free so the challenge fingerprint (bound to
       # the registering public key) matches on retry.
       def register
@@ -140,13 +140,12 @@ module Kiosk
       # The response is an explicit ALLOW-LIST of the three fields
       # `protocol.md` Section 6.2 specifies, not `bind!`'s return hash rendered
       # whole. That hash also carries `fresh:` — an internal signal saying
-      # whether the key was newly registered or rebound — which was on the wire
-      # on every claim while no published surface documented it (K-855). It is
-      # withdrawn rather than specified: Section 6.3 requires that an
-      # idempotent re-bind be indistinguishable from any other rebind (K-787),
-      # so a field whose whole purpose is to distinguish binds is one an
-      # assistant would reach for to defeat that, and nothing on the wire needs
-      # it — the assistant already knows whether it had registered before.
+      # whether the key was newly registered or rebound — which is deliberately
+      # kept OFF the wire: Section 6.3 requires that an idempotent re-bind be
+      # indistinguishable from any other rebind, so a field whose whole purpose
+      # is to distinguish binds is one an assistant would reach for to defeat
+      # that, and nothing on the wire needs it — the assistant already knows
+      # whether it had registered before.
       # Listing the fields also means the next field added to `bind!`'s result
       # has to be put on the wire deliberately instead of arriving there.
       CLAIM_RESPONSE_FIELDS = %i[agent_id user_id access_token].freeze
@@ -169,24 +168,13 @@ module Kiosk
       # deactivates one of THEIR linked assistant accounts. Token verify
       # and login deny the key from here on.
       #
-      # ANSWERS `204 No Content` (K-870, Phil 2026-08-21). It used to render
-      # `{ ok: true }` — a body no published surface documented, on an endpoint
-      # whose two siblings ARE documented: `protocol.md` §6.2 spells out
-      # `/auth/link -> {link_code, expires_in}` and `/auth/claim -> 201
-      # {agent_id, user_id, access_token}`, and said nothing at all about what
-      # unlink answers. That is the defect, and it is the same one K-855 fixed
-      # by WITHDRAWING an undocumented field rather than specifying it. The
-      # withdrawal is the cheaper true answer here because nothing read the
-      # body: every caller in the tree — the e2e claim flow, philslist's and
-      # stylish's binding beats, tudu's redteam suite — reads the STATUS.
+      # ANSWERS `204 No Content`, with no body at all. `protocol.md` §6.2
+      # specifies that beside its two siblings — `/auth/link -> {link_code,
+      # expires_in}` and `/auth/claim -> 201 {agent_id, user_id,
+      # access_token}` — so the STATUS is the whole documented answer, and
+      # every caller in the tree reads exactly that: the e2e claim flow,
+      # philslist's and stylish's binding beats, tudu's redteam suite.
       #
-      # Deliberately NOT justified as "§8.2 forbids the `ok` envelope". §8.2 is
-      # scoped to VERB response shape, not to the auth ceremony, so leaning on
-      # it would put a citation into the spec that the spec does not support.
-      # The body being an `ok` flag is a characterisation; the defect is that
-      # it was undocumented.
-      #
-      # 204 is itself a wire fact, so §6.2 now says so beside the siblings.
       # `Headers.add_to` still runs: the three version-handshake headers ride
       # on every mount-path response (§3, point 6), empty body or not.
       def unlink

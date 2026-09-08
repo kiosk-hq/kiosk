@@ -29,7 +29,7 @@ module Kiosk
     # subclass otherwise. Does NOT touch the challenge store — the caller burns
     # the nonce via {AuthChallenge.consume!} only after a clean verify.
     module PopVerifier
-      # Hint on the 401 raised for an audience mismatch (K-511).
+      # Hint on the 401 raised for an audience mismatch.
       #
       # It names NO origin — not the configured issuer, not any other host.
       # The previous wording appended "(this provider is <issuer>)", which
@@ -48,7 +48,7 @@ module Kiosk
         "URL — never from a value echoed back in a response"
 
       # The claims a proof MUST carry, named ONCE so the decode below and the
-      # hint the wire publishes cannot drift apart (K-1307). The JWT gem's own
+      # hint the wire publishes cannot drift apart. The JWT gem's own
       # "Missing required claim …" wording is not published: it is that
       # library's sentence, not this protocol's, and this path is reachable
       # before any credential is presented.
@@ -92,15 +92,15 @@ module Kiosk
         raise Errors::Unauthenticated.new("proof signature invalid", hint: PROOF_SIGNATURE_HINT)
       end
 
-      # Operator-side diagnostic for an audience mismatch (K-511 half two).
+      # Operator-side diagnostic for an audience mismatch.
       #
       # The mismatch has two very different causes and only the OPERATOR can
       # tell them apart:
       #
       #   * the caller signed the wrong value (its bug — the wire hint covers it), or
       #   * `c.issuer` does not match the host this instance is actually served
-      #     on (the operator's bug — K-510: every demo defaults the issuer to
-      #     localhost, so one missing KIOSK_ISSUER rejects every real assistant).
+      #     on (the operator's bug: every demo defaults the issuer to localhost,
+      #     so one missing KIOSK_ISSUER rejects every real assistant).
       #
       # A run of these lines where the SIGNED aud is the host your users reach
       # is the second case. This goes to the operator's log and never onto the
@@ -136,7 +136,7 @@ module Kiosk
         rsa
       rescue OpenSSL::PKey::PKeyError
         # OpenSSL's error text names its own internals and is not published
-        # here (K-1307); the hint names what a usable key looks like instead.
+        # here; the hint names what a usable key looks like instead.
         raise Errors::BadRequest.new(
           "invalid public key",
           hint: "send a PEM-encoded RSA public key of at least " \

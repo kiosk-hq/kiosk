@@ -6,17 +6,16 @@ require "kiosk/server/request_validation"
 module Kiosk
   module Server
     # RESPONSE-shape validation: a verb's rendered payload checked against the
-    # `output_schema` that verb DECLARES (T-073 = A, T-068 slice 3).
+    # `output_schema` that verb DECLARES.
     #
     # == Why this exists at all
     #
-    # 0.4 retires the envelope (T-072 = C): a success body is the handler's
-    # payload verbatim, so `output_schema` is the ONLY machine-readable
-    # statement of what a call returns — the `kind` discriminator that used to
-    # carry it is gone. A descriptor that MIS-states the shape is therefore
-    # worse than one that says nothing: the assistant shapes its parse from it,
-    # the derived OpenAPI document publishes it, and neither ever meets the
-    # handler that disagrees.
+    # A success body is the handler's payload verbatim, with no envelope around
+    # it, so `output_schema` is the ONLY machine-readable statement of what a
+    # call returns. A descriptor that MIS-states the shape is therefore worse
+    # than one that says nothing: the assistant shapes its parse from it, the
+    # derived OpenAPI document publishes it, and neither ever meets the handler
+    # that disagrees.
     #
     # A declaration nothing executes drifts the day after it is written. This is
     # what executes it: with `Kiosk.configuration.validate_responses` on, EVERY
@@ -43,17 +42,17 @@ module Kiosk
     # on, which is what makes each demo's own CI task list a per-verb
     # conformance proof rather than a smoke test.
     #
-    # THE DEMOS SPELL IT `!Rails.env.production?`, NOT `true` (K-1332). They are
+    # THE DEMOS SPELL IT `!Rails.env.production?`, NOT `true`. They are
     # DEPLOYED — every one of the env templates sets `RAILS_ENV=production` — so
-    # the warning two sentences up was aimed at them and hit: the live demo
-    # subdomains an assistant is pointed at ran with the flag on, where an
-    # operator's descriptor typo answers a 500 to a caller who did nothing
-    # wrong. Nothing is lost from the proof, because the task lists that ARE the
+    # the warning two sentences up is aimed squarely at them: with the flag on,
+    # the live demo subdomains an assistant is pointed at would answer a 500 to
+    # a caller who did nothing wrong over an operator's descriptor typo.
+    # Nothing is lost from the proof, because the task lists that ARE the
     # proof run in development. And it matters that the demo initializer is the
     # artefact `onboarding.html` sends an adopting operator to copy: an example
     # is also an instruction.
     #
-    # THE INSTALL GENERATOR NOW WRITES BOTH FLAGS, AS ACTIVE LINES (K-1336).
+    # THE INSTALL GENERATOR WRITES BOTH FLAGS, AS ACTIVE LINES.
     # Its initializer template sets `validate_requests` to `true` and
     # `validate_responses` to `!Rails.env.production?` — the demos' posture,
     # arrived at for the demos' reason — each under a comment giving its own
@@ -64,14 +63,11 @@ module Kiosk
     # output check on everywhere except production, and an operator who wants
     # the default opts OUT by editing the line.
     #
-    # This paragraph has been wrong twice, in opposite directions — it once said
-    # the generated app turned the flag on when the template carried no
-    # `validate` line at all, and then said the template still carried none for
-    # three commits after K-1336 had put both in. It is BOUND now:
-    # `spec/generators/kiosk/install_generator_spec.rb` reads the two values out
-    # of the template and fails unless the sentence above states them, so the
-    # next change to what the generator writes reddens the suite instead of
-    # quietly falsifying this comment.
+    # The two values above are BOUND:
+    # `spec/generators/kiosk/install_generator_spec.rb` reads them out of the
+    # template and fails unless the sentence above states them, so the next
+    # change to what the generator writes reddens the suite instead of quietly
+    # falsifying this comment.
     #
     # `pay` and `schema` are engine verbs with no operator descriptor, so they
     # are not validated here; their shapes are fixed by the spec and asserted

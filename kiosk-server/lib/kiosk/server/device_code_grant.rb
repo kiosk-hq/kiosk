@@ -61,14 +61,14 @@ module Kiosk
       # caller (controller) has already run {PopVerifier.load_public_key}
       # so only well-formed RSA-2048+ keys reach here.
       #
-      # THERE IS NO `requested_role:` HERE, AND ITS ABSENCE IS THE CONTROL
-      # (K-072). A `:claim` row is born ROLE-LESS, always: the request that
-      # opens the ceremony is unauthenticated, so nothing it says about a role
-      # is evidence of anything. The row's `requested_role` is stamped later,
-      # by {DeviceVerification.approve}, from the APPROVING HUMAN's own
-      # `Identity#role` — ADR-0011's roles-from-IdP, the same source the link
-      # direction reads at mint. Taking the parameter away is what makes "the
-      # agent never self-selects" a property of the code path rather than a
+      # THERE IS NO `requested_role:` HERE, AND ITS ABSENCE IS THE CONTROL.
+      # A `:claim` row is born ROLE-LESS, always: the request that opens the
+      # ceremony is unauthenticated, so nothing it says about a role is
+      # evidence of anything. The row's `requested_role` is stamped later, by
+      # {DeviceVerification.approve}, from the APPROVING HUMAN's own
+      # `Identity#role` — the roles-from-IdP source the link direction also
+      # reads at mint. Having no parameter to pass is what makes "the agent
+      # never self-selects" a property of the code path rather than a
       # validation someone has to remember to run.
       #
       # @return [Hash] {device_code:, user_code:, expires_in:, interval:, da:}
@@ -183,7 +183,7 @@ module Kiosk
             return failure(:invalid_client, e.message)
           end
 
-          # Same atomic single-use claim as {LinkCode.redeem} (K-887): the
+          # Same atomic single-use claim as {LinkCode.redeem}: the
           # `:approved` branch that reached here was decided against the
           # snapshot read at the top of {.exchange}, so two concurrent polls of
           # one device_code would otherwise both mint a token. This row always

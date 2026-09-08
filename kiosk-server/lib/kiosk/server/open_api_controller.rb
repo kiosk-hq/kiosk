@@ -8,30 +8,23 @@ require "kiosk/server/verb_controller"
 module Kiosk
   module Server
     # `GET <endpoint>/openapi.json` — the DERIVED OpenAPI description of this
-    # origin's per-verb wire (T-068 slice 4, T-071 = C, ADR-0024).
+    # origin's per-verb wire.
     #
-    # PUBLIC SINCE K-804 (Phil, 2026-08-19: «K-804 открывать»), and the whole
-    # of what that decision moved is in this file:
+    # IT IS PUBLIC, and the three consequences of that are the whole of this
+    # file:
     #
-    #   * THE BEARER GATE IS GONE. Slice 4 gated it because «an anonymous read
-    #     would hand out the catalog enumeration the per-verb wire orders its
-    #     gates to withhold». Every clause of that sentence has since been
-    #     retired for the SAME information in its other dress: `GET
-    #     <endpoint>/schema` is public (T-094) and `/.well-known/api-catalog`
-    #     hyperlinks every verb unauthenticated (T-093). This document is
-    #     derived from the same in-process registry `schema` is derived from,
-    #     so gating it withheld nothing and cost an explanation — which is
-    #     precisely the inconsistency Phil objected to.
-    #   * THE TOLL WENT WITH THE GATE, for the reason `schema`'s did: a toll is
-    #     charged against an identity, and this endpoint no longer resolves
-    #     one. It was tolled as the policy verb `:schema`; nothing tolls as
-    #     `:schema` now, so that symbol left {Executor::VERBS}' predecessor
-    #     `POLICY_VERBS`, which was deleted with it.
-    #   * THE CACHE POLICY CAME IN THEIR PLACE. `public`, a strong `ETag`, a
-    #     `304` on `If-None-Match`, `max-age={Headers::SHORT_MAX_AGE}` at the
-    #     bare path and a year at `?v=<digest>` — the same treatment `schema`
-    #     gets, from the same seam ({WireController#render_public_document}),
-    #     so the two cannot drift apart again.
+    #   * NO BEARER GATE. This document is derived from the same in-process
+    #     registry `GET <endpoint>/schema` is derived from; `schema` is itself
+    #     public and `/.well-known/api-catalog` hyperlinks every verb
+    #     unauthenticated, so a gate here would withhold nothing that is not
+    #     already one anonymous GET away, and would cost an explanation.
+    #   * NO TOLL, for the reason `schema` carries none: a toll is charged
+    #     against an identity, and this endpoint resolves none.
+    #   * A CACHE POLICY IN THEIR PLACE. `public`, a strong `ETag`, a `304` on
+    #     `If-None-Match`, `max-age={Headers::SHORT_MAX_AGE}` at the bare path
+    #     and a year at `?v=<digest>` — the same treatment `schema` gets, from
+    #     the same seam ({WireController#render_public_document}), so the two
+    #     cannot drift apart.
     #
     # WHAT IT STILL INHERITS from {VerbController}/{WireController}: the RFC
     # 9457 problem-document seam, so an unexpected refusal here is shaped like

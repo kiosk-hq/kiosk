@@ -34,7 +34,7 @@ module Kiosk
     # a backend eval. The expensive backend is invoked exactly once per
     # well-formed, unexpired, on-spec, correctly-bound proof.
     #
-    # == Server-side parameter re-derivation (K-541)
+    # == Server-side parameter re-derivation
     #
     # The challenge is stateless, so `alg`/`params` travel on the wire and come
     # back from the client. The HMAC sig proves WE minted them — it does NOT
@@ -48,11 +48,12 @@ module Kiosk
     #   * if the HMAC secret ever leaks, a self-signed `{n: 8, k: 1}` challenge
     #     is still refused — the toll degrades, it does not vanish.
     #
-    # `expect:` is optional (a caller that omits it gets the pre-K-541
-    # behaviour); `kiosk-server`'s gate always passes it. The comparison uses
-    # the same canonical `k=v` rendering the sig covers, so it is insensitive to
-    # key order, Symbol-vs-String keys, and Integer-vs-String JSON typing — it
-    # rejects exactly the challenges the sig would have let through, no more.
+    # `expect:` is optional — a caller that omits it accepts any validly signed
+    # challenge, whatever parameters it names; `kiosk-server`'s gate always
+    # passes it. The comparison uses the same canonical `k=v` rendering the sig
+    # covers, so it is insensitive to key order, Symbol-vs-String keys, and
+    # Integer-vs-String JSON typing — it rejects exactly the challenges the sig
+    # would have let through, no more.
     #
     # NOTE for policy authors: `:bad_params` means "re-challenge", not "bad
     # faith". A policy whose params legitimately vary per identity will simply
@@ -104,7 +105,7 @@ module Kiosk
         # @param expect             [Hash, nil] `{alg:, params:}` the caller
         #   re-derived from its OWN live config for this request. When given,
         #   a challenge naming anything else is rejected with :bad_params even
-        #   though its sig is valid (K-541). Omit to skip the check.
+        #   though its sig is valid. Omit to skip the check.
         # @return [Symbol] :ok | :bad_sig | :expired | :bad_params | :bad_proof
         def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil)
           id       = challenge[:id]
@@ -136,7 +137,7 @@ module Kiosk
         private
 
         # Does the challenge still name the algorithm + parameters the caller's
-        # live configuration demands? (K-541 — server-side re-derivation.)
+        # live configuration demands? (The server-side re-derivation check.)
         #
         # `expect` is `{alg:, params:}` as re-derived by the caller for THIS
         # request; nil (or a nil member) means "caller did not pin this", which
@@ -185,7 +186,7 @@ module Kiosk
           # Guard the root-cause line: a nil/non-Hash params otherwise raises a
           # cryptic NoMethodError deep in the gem (a 500 at any surface that does
           # not pre-guard). Fail loud with a typed, rescuable error naming the bad
-          # value — matching Policies::Backoff's is_a?(Hash) convention (K-574).
+          # value — matching Policies::Backoff's is_a?(Hash) convention.
           unless params.is_a?(Hash)
             raise ArgumentError, "params must be a Hash (got #{params.inspect})"
           end

@@ -9,7 +9,7 @@ module Kiosk
     # DSL methods callable from any host that provides `#execute(sql_string)`.
     # In the canonical Rails case the host is `ActiveRecord::Migration`, and
     # {Kiosk::RLS::Railtie} mixes this module in for you — a Rails app writes
-    # no wiring (K-504). Any other host includes it itself; see {Kiosk::RLS}.
+    # no wiring. Any other host includes it itself; see {Kiosk::RLS}.
     #
     # The migration verbs (evolving policies) — the list enumerates itself, so
     # it carries no count above it to fall out of step with an append:

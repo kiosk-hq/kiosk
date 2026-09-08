@@ -70,7 +70,7 @@ Key properties:
 
 The client solves each challenge and re-sends the SAME request — same method,
 same path, same query string, same body — with the proof(s) in a **`Kiosk-PoW`
-request header** (ADR-0022) as raw minified JSON, one `{challenge, nonce}` entry
+request header** as raw minified JSON, one `{challenge, nonce}` entry
 per solved challenge. Protocol 0.4 makes most calls GETs (a query is
 `GET <endpoint>/<query-name>`), and a GET has no body, so the header is the ONLY
 channel a proof can travel on:

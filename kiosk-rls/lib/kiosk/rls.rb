@@ -13,7 +13,7 @@ require "kiosk/rls/emitter"
 require "kiosk/rls/dsl"
 
 # In a Rails host the gem injects the migration verbs itself, through its own
-# railtie (K-504) — the application writes no wiring. Outside Rails there is no
+# railtie — the application writes no wiring. Outside Rails there is no
 # `Rails::Railtie` to hang it on and nothing to inject into, so the require is
 # guarded and the host includes {Kiosk::RLS::DSL} where it wants it.
 require "kiosk/rls/railtie" if defined?(::Rails::Railtie)

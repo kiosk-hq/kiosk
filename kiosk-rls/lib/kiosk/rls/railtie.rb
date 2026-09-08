@@ -8,15 +8,14 @@ module Kiosk
     # host, so a migration can call `enable_rls_on :orders do … end` with no
     # wiring in the application at all.
     #
-    # WHY THIS EXISTS (K-504). Until 2026-08-21 the gem shipped no injection
-    # point, and its README taught the host to write
+    # WHY THIS EXISTS. The alternative is for every host to write
     #
     #   ActiveRecord::Migration.include(Kiosk::RLS::DSL)
     #
     # in `config/initializers/`. That is an application monkey-patching a
     # FRAMEWORK class on a gem's behalf: the host carries the line, the host
-    # gets the load-order bug when the line moves, and four demos plus the
-    # README carried four hand-copied variants of it. A railtie is the same
+    # gets the load-order bug when the line moves, and every app that installs
+    # the gem hand-copies its own variant of it. A railtie is the same
     # extension made by the party that owns it — the gem extends the framework
     # it declares a dependency on, which is what `Rails::Railtie` is for and
     # what every other DDL-verb gem does (scenic's `create_view`, fx's

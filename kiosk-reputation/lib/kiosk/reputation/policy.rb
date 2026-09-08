@@ -17,7 +17,7 @@ module Kiosk
       #   declaration vocabulary: a handler declared `kind :action` arrives
       #   here as :run. Branching on :action would match nothing and decline
       #   to toll every write in silence, so kiosk-server refuses such a
-      #   policy at configuration time rather than running it (K-1395).
+      #   policy at configuration time rather than running it.
       # @param factors  [Factors] reputation factors gathered by the host
       # @return [Hash{alg: String, params: Hash, count: Integer}] challenge spec
       #   to issue, or nil to serve without challenge. `count` (the N×PoW

@@ -9,7 +9,7 @@ module Kiosk
     #
     # It MAY also respond to:
     #   .valid_params?(params) -> Boolean — could a proof at these parameters
-    #   ever verify? Optional and duck-typed (K-843): a backend that does not
+    #   ever verify? Optional and duck-typed: a backend that does not
     #   implement it is simply unconstrained, and {valid_params?} says so by
     #   answering true.
     #
@@ -56,7 +56,7 @@ module Kiosk
         end
 
         # Would a challenge minted at `params` be answerable by the backend
-        # registered for `alg_name`? (K-843)
+        # registered for `alg_name`?
         #
         # The seam a MINTING gate asks before it issues. {Challenge.issue} is
         # deliberately algorithm-agnostic — it takes any `alg` + `params` Hash

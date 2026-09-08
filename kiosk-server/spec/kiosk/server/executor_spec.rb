@@ -707,15 +707,12 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     # K-800: THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO. `pay` is drawn on every
-    # mounted host — {Engine}'s route comment says a host with no
-    # payment_provider "answers it with the wire's own 403" — but the three
-    # mandate guards used to run first, so an empty POST at a payment-free
-    # origin came back `400 args.intent_mandate_jws required`: an instruction to
-    # sign three mandates, from an origin that could never settle them. (The
-    # code the route comment calls "the wire's own 403" is `module_not_served`
-    # at 501 since T-158; the ORDER this example is about is unchanged.) The
-    # example sends NO arguments at all, which is exactly the case the old order
-    # got wrong.
+    # mounted host, and a host with no payment_provider answers it with
+    # `module_not_served` at 501 — but the three mandate guards used to run
+    # first, so an empty POST at a payment-free origin came back `400
+    # args.intent_mandate_jws required`: an instruction to sign three mandates,
+    # from an origin that could never settle them. The example sends NO
+    # arguments at all, which is exactly the case that wrong order got wrong.
     it "answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)" do
       Kiosk.configuration.payment_provider = nil
       expect { described_class.call(kind: :pay, args: {}, identity: identity, connection: connection) }

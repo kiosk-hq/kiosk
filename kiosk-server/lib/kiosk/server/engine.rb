@@ -229,10 +229,11 @@ module Kiosk
       # at all: the condition is "the default store, in production, with PoW
       # actually switched on".
       #
-      # AND THE WARNING IS NOT THE MITIGATION — the DOCUMENTATION is. Phil
-      # accepted this control's weakness openly ("logs are not read, least of
-      # all production warnings"), so the initializer template, the demo
-      # initializers and the README carry the same WHY at greater length. The
+      # AND THE WARNING IS NOT THE MITIGATION — the DOCUMENTATION is. A log
+      # line is a weak control: logs are not read, least of all production
+      # warnings. So the initializer template, the demo initializers and the
+      # README carry the same WHY at greater length, where an operator meets
+      # it before the boot rather than after it. The
       # reason it has to be written anywhere at all is that the failure is
       # INVISIBLE BY CONSTRUCTION: a replayed proof leaves no log line, no
       # metric and no failed request, so an operator who does nothing never
@@ -339,9 +340,12 @@ module Kiosk
         # here wins over anything they write by Rails' own first-match.
         #
         # `pay` is drawn unconditionally: a host with no payment_provider
-        # answers it with the wire's own 403 ("no payment_provider
-        # configured"), and discovery already drops `pay` from the advertised
-        # capabilities.
+        # answers it with `module_not_served` (501, "this operator does not
+        # serve the payment module"), and discovery already drops `pay` from
+        # the advertised capabilities. 501 and NOT 403: whether this origin
+        # does payments at all is a fact about the ORIGIN and true of every
+        # caller, while `forbidden` means "authenticated, but this identity
+        # may not do this".
         #
         # `schema` is one of the TWO routes under this mount that resolve no
         # identity (the other is `openapi.json`, below): it answers
@@ -376,8 +380,10 @@ module Kiosk
         get "openapi.json", to: "open_api#show"
 
         # KYC attestation. Unconditional for the same reason as `pay`: with
-        # no kyc_public_key configured the verifier rejects with the wire's
-        # 403 problem document, and hosts that never advertise KYC lose nothing.
+        # no kyc_public_key configured the verifier rejects with a
+        # `module_not_served` (501) problem document, on the same
+        # fact-about-the-origin reading, and hosts that never advertise KYC
+        # lose nothing.
         post "agents/kyc", to: "kyc_attestation#create"
 
         # Claim flow (agent-initiated; auth.md "User Claimed") — the

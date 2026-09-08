@@ -28,8 +28,8 @@ pure-Ruby verifier — so read it as the order of magnitude a provider actually
 buys, and note that it moves the WRONG way with a faster solver and the right way
 with a native verifier. It is not millions, it was never millions at any tuning
 this gem has shipped (the retired 192/7 gives ~8600×), and the number matters
-because the lever IS the economic argument for a metered toll (ADR-0007: a price
-on abuse, not a hardware wall). Cuckatoo29's column says `unbenched` for the same
+because the lever IS the economic argument for a metered toll — a price on
+abuse, not a hardware wall. Cuckatoo29's column says `unbenched` for the same
 reason its verify row does: no measurement of it exists here.
 
 **And the lever is a property of the PARAMETERS, so read it beside the level an

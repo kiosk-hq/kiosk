@@ -104,7 +104,7 @@ to pass directly.
 Agent-facing guidance is **not** duplicated in this gem. The canonical skill is
 [kiosk.tech/skill.md](https://kiosk.tech/skill.md); it teaches the `402
 pow_required` retry — the same request body, unchanged, with the proof(s) in a
-`Kiosk-PoW` request header as raw JSON (ADR-0022) — and it teaches it for the
+`Kiosk-PoW` request header as raw JSON — and it teaches it for the
 shipped Equihash default, not for this legacy backend. An operator that opts
 back into Argon2id is off that path: it must tell its own assistants to run the
 `solve.py` above and echo the challenge verbatim in the `Kiosk-PoW` header.

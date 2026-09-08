@@ -54,11 +54,11 @@ Gem::Specification.new do |spec|
   # `bench/` ships because README.md links bench/README.md twice as the evidence
   # for the n=168, k=7 default; without it the shipped README has dead links.
   #
-  # Every entry is listed UNGUARDED, CHANGELOG.md included (K-634). The former
-  # `File.exist?("CHANGELOG.md") ? … : []` was a fail-open of the same shape
-  # removed from kiosk-pow-cuckoo: it was telling the truth only by accident,
-  # because the file did not exist. A file this gemspec names and cannot find
-  # must break the build, not go quiet.
+  # Every entry is listed UNGUARDED, CHANGELOG.md included: a file this gemspec
+  # names and cannot find must break the build, not go quiet. A
+  # `File.exist?("CHANGELOG.md") ? … : []` guard fails OPEN — it tells the
+  # truth only by accident, and ships a package silently missing a file the
+  # gemspec promises.
   spec.files = Dir.glob("lib/**/*") + Dir.glob("bench/**/*") +
                %w[solve.py README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]

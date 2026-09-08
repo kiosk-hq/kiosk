@@ -27,7 +27,7 @@ module Kiosk
     # hashing is lazy, so a proof that fails on structure never hashes at all
     # and one that fails on its first sibling pair stops after 2 hashes
     # (~0.3 ms). That gap is deliberate — .verify is reachable
-    # unauthenticated on `POST /auth/register` (K-540).
+    # unauthenticated on `POST /auth/register`.
     #
     # == Wire API
     #
@@ -64,7 +64,7 @@ module Kiosk
       # Exclusive upper bound on a solution index. The wire type is a u64 and
       # `pack("Q<")` truncates a larger Integer mod 2**64 instead of raising,
       # so the bound has to be stated here or `idx` and `idx + 2**64` would be
-      # two distinct indices sharing one hash (K-540 range pre-check).
+      # two distinct indices sharing one hash.
       MAX_INDEX = 1 << 64
 
       # Exclusive upper bound on `header_nonce`. Both specs call the field a
@@ -72,8 +72,9 @@ module Kiosk
       # `pow.schema.json` description), and `pack("V")` truncates a larger
       # Integer mod 2**32 exactly as `pack("Q<")` truncates mod 2**64 — so
       # without this bound `0`, `2**32` and `-(2**32)` are three spellings of
-      # ONE proof and all three verify true against the same indices (K-842,
-      # the sibling of K-540's `MAX_INDEX` and K-839's schema bound).
+      # ONE proof and all three verify true against the same indices — the same
+      # argument `MAX_INDEX` above makes for a solution index, and the one
+      # `pow.schema.json` makes for the wire.
       MAX_HEADER_NONCE = 1 << 32
 
       # Inclusive bounds on `n`, the number of hash bits a solution must cancel.
@@ -83,8 +84,7 @@ module Kiosk
       # nothing left to demand (the level shifts exceed the node's width, so
       # every check passes). Neither is reachable from the wire — parameters are
       # re-derived from live config before the backend runs — but a verifier
-      # with no answer for its own configuration is how a vacuous accept ships
-      # (K-840).
+      # with no answer for its own configuration is how a vacuous accept ships.
       MIN_N = 8
       MAX_N = 256
 
@@ -230,7 +230,7 @@ module Kiosk
         { n:, k: }
       end
 
-      # Would a challenge minted at `params` be answerable at all? (K-843)
+      # Would a challenge minted at `params` be answerable at all?
       #
       # This is the MINT-time half of {verify}'s Step 0. Step 0 gives a
       # degenerate (n, k) an answer — `false` — so a proof solved against it can
@@ -293,10 +293,10 @@ module Kiosk
         indices = nonce[:indices] || nonce["indices"]
         return false if indices.nil? || !indices.is_a?(Array)
 
-        # ── Step 0: the PARAMETERS themselves (K-840) ────────────────────────
+        # ── Step 0: the PARAMETERS themselves ────────────────────────────────
         #
         # `params` reaches here from the challenge object, which the operator's
-        # own config minted and `Challenge.verify` re-derived (K-541), so a
+        # own config minted and `Challenge.verify` re-derived, so a
         # degenerate (n, k) is a MISCONFIGURATION and not something a caller can
         # choose. That is exactly why it needs an answer rather than an
         # accident: before this block a degenerate k made `.verify` CRASH
@@ -312,7 +312,7 @@ module Kiosk
         # (168/7, 96/5, 200/9, 32/3, 24/2, 8/1, 8/2, 8/3) satisfies them, so the
         # ACCEPTED SET IS UNCHANGED. They live in {valid_params?} so the gate
         # that MINTS a challenge can ask the same question before issuing one
-        # (K-843) and the two can never disagree.
+        # and the two can never disagree.
         return false unless valid_params?(params)
 
         n, k  = coerce_params(params)
@@ -332,7 +332,7 @@ module Kiosk
         #
         # The upper bound is not decoration: `pack("Q<")` silently truncates a
         # bignum mod 2**64, so without it `idx` and `idx + 2**64` hash the same
-        # and one solution could be restated as many (K-540 range pre-check).
+        # and one solution could be restated as many.
         return false unless indices.all? { |idx| idx.is_a?(Integer) && idx >= 0 && idx < MAX_INDEX }
         return false unless indices.uniq.length == expected_len
 
@@ -346,7 +346,7 @@ module Kiosk
         # (2^k - 1 integer comparisons, no hashing), so it is hoisted ABOVE
         # every BLAKE2b. `verify` is reachable UNAUTHENTICATED on
         # `POST /auth/register`, where a check costing microseconds must never
-        # sit behind one costing milliseconds (K-540).
+        # sit behind one costing milliseconds.
         level = 0
         while level < k
           group_size = 1 << (level + 1)
@@ -370,7 +370,7 @@ module Kiosk
         # The RANGE check is the same argument {MAX_INDEX} makes one screen up:
         # `pack("V")` truncates mod 2**32 rather than raising, so without it
         # `0`, `2**32` and `-(2**32)` seed identically and one proof has
-        # infinitely many spellings on the wire (K-842). `pow.schema.json`
+        # infinitely many spellings on the wire. `pow.schema.json`
         # states the same bound, and the two must move together — bounding
         # only the schema would make it refuse what this verifier accepts.
         hn = nonce[:header_nonce] || nonce["header_nonce"] || 0
@@ -385,11 +385,11 @@ module Kiosk
 
         # ── Step 3: hash leaf by leaf, folding the Wagner tree as we go ───────
         #
-        # All 2^k leaf hashes used to be computed up front and only then
-        # checked, so a proof that was wrong in its very first sibling pair
-        # still cost the whole loop — measured 18.7 ms at n=168 k=7,
-        # INDISTINGUISHABLE from a valid proof, which is what made an
-        # unauthenticated register a CPU lever (K-540).
+        # Hashing all 2^k leaves up front and only then checking them costs the
+        # whole loop even for a proof that is wrong in its very first sibling
+        # pair — measured 18.7 ms at n=168 k=7, INDISTINGUISHABLE from a valid
+        # proof, which is what turns an unauthenticated register into a CPU
+        # lever.
         #
         # Instead, fold the tree left-to-right like a binary counter: each new
         # leaf hash is merged with the completed node to its left, and every

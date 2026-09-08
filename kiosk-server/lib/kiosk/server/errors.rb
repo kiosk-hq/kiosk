@@ -415,7 +415,7 @@ module Kiosk
         #     single catch-all URI.
         #   * `code` is an RFC 9457 EXTENSION MEMBER (§3.2) carrying the bare
         #     token. This is the branch point: an assistant reads `code` and
-        #     matches the same fifteen strings it always did. Branching on
+        #     matches the same seventeen strings {CODES} declares. Branching on
         #     `type` would mean string-surgery on a URI, so the spec forbids
         #     it and this member is why it can.
         #

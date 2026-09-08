@@ -60,6 +60,39 @@ RSpec.describe Kiosk::Server::Errors do
       expect(described_class::CODES).to eq(published)
     end
 
+    # THE PROSE COUNT IS PART OF THE CONTRACT AND NOTHING HELD IT. The file's
+    # own header tells a reader how many strings the closed vocabulary has, and
+    # it said "seventeen" twice at the top while a third sentence three hundred
+    # lines down still said "fifteen" — the count from before `verb_not_found`
+    # and `module_not_served` arrived. A reader who believes the low number
+    # writes a client that has no branch for two live codes. The words are
+    # spelled out, not digits, so this reads them as words: every English
+    # number-word in a comment in this file must be the current size.
+    it "spells the vocabulary size the same everywhere its own comments state it" do
+      words = {
+        "twelve" => 12, "thirteen" => 13, "fourteen" => 14, "fifteen" => 15,
+        "sixteen" => 16, "seventeen" => 17, "eighteen" => 18, "nineteen" => 19,
+        "twenty" => 20
+      }
+      source = File.read(File.expand_path("../../../lib/kiosk/server/errors.rb", __dir__))
+      stated = source.lines.each_with_index.flat_map { |line, i|
+        next [] unless line.lstrip.start_with?("#")
+
+        words.keys.select { line.match?(/\b#{_1}\b/) }.map { [i + 1, _1, words[_1]] }
+      }
+
+      # A vacuity guard with the polarity this assertion needs: if no comment
+      # states the count at all, the check above compares nothing and passes.
+      expect(stated).not_to be_empty,
+        "no comment in errors.rb states the vocabulary size in words any more; this example " \
+        "is holding nothing and must be re-pointed at whatever states it now"
+
+      wrong = stated.reject { _1[2] == described_class::CODES.size }
+      expect(wrong).to be_empty,
+        "errors.rb states the vocabulary size as #{wrong.map { "#{_1[1]} (line #{_1[0]})" }.join(', ')} " \
+        "while CODES declares #{described_class::CODES.size}"
+    end
+
     it "names every code in TITLES — a problem document without a title is not one" do
       expect(described_class::TITLES.keys).to match_array(described_class::CODES.keys)
       expect(described_class::TITLES.values).to all(be_a(String))

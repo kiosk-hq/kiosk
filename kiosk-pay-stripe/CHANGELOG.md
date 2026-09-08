@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- The two operator log lines that report a degraded `setup_url` now end in the
+  condition itself rather than in an internal tracker id nobody outside this
+  project can look up.
 - A failed lookup for the outstanding setup session is now logged instead of
   passing for "there is none": the adapter still degrades to minting a fresh
   session so the readiness probe keeps answering, but it says so, because the

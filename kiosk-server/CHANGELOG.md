@@ -6,6 +6,11 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Source comments, the README, the gemspec and the emitted identity-table SQL no
+  longer cite this project's private tracker or its ADRs. Every sentence that
+  explained the code is kept, restated in the present tense where it had been
+  written as history; the afterlife of 0.3's `POST /kiosk/query` and
+  `POST /kiosk/run` is gone from the engine, the controllers and the README.
 - **BREAKING: the engine no longer routes your verbs — you draw one explicit route per verb (T-183).** `mount Kiosk::Server::Engine` now draws the PROTOCOL PLANE only (`schema`, `pay`, `openapi.json`, JWKS, the `auth/*` ceremonies, the device-grant pair, `agents/kyc`, the binding pages, root discovery). The `get`/`post "<mount>/:kiosk_verb"` pair it used to draw LAST is deleted. Draw the mount first, then `get "/kiosk/<query>", to: "kiosk/server/verb#show", defaults: { kiosk_verb: "<query>" }` and `post "/kiosk/<action>", to: "kiosk/server/verb#create", …` — GET for a query, POST for an action. See the README's «Draw the routes».
 
 - **The vendored PoW schema types a proof's `nonce` relative to `challenge.alg` (K-1410).** It required the Equihash solution object of every proof, so with `validate_requests` on a valid proof from any other backend was a 400 before the gate saw it — while the protocol keeps `alg` open on purpose. Equihash keeps its exact shape; any other `alg` is left to its own backend. The 400's hint follows.

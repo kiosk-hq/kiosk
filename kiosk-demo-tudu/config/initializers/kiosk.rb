@@ -17,24 +17,20 @@
 require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate — ALWAYS ON. With no payment gate, the registration PoW
-# toll is the defense of a FREE app against spam signups — the same feature the
-# commerce demos price fresh-identity minting with, new meaning. Register is now
-# uniformly tolled on every demo (no per-demo env flag to remember): it activates
-# on code-deploy and can't be forgotten. Params follow KIOSK_POW_DIFFICULTY
-# (app/services/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
-# (~1.3 GiB per proof, and ~10s on the reference numpy solver as measured on one
-# M-series laptop core). Unset = low, so the collab/link/isolation flows and CI stay
-# fast; a deployer can set high to feel the toll. The prerequisites below MUST run
-# unconditionally, else RegistrationPow.gate raises ConfigurationError at register.
+# toll is what defends a FREE app against spam signups — the same feature the
+# commerce demos price fresh-identity minting with. There is no env flag to
+# forget. Params follow KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
+# low (default) → n=96 k=5, sub-second; high → n=168 k=7, ~1.3 GiB and ~10s on
+# the reference numpy solver. The prerequisites below MUST run unconditionally,
+# else RegistrationPow.gate raises ConfigurationError at register.
 TUDU_REGISTRATION_POW_PARAMS = PowDifficulty.params
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-# ── PoW HMAC secret ─────────────────────────────────────────────────────────
-# The HMAC key the engine signs every PoW challenge with. Required in
-# production, stable (non-secret) default in dev/test — that posture lives in
-# config/environments/*; here we only read the resolved value.
+# ── PoW HMAC secret — the key the engine signs every challenge with ─────────
+# Required in production, stable non-secret default in dev/test; posture in
+# config/environments/*.
 pow_secret = Rails.configuration.x.kiosk.pow_secret
 
 Kiosk.configure do |c|
@@ -43,11 +39,9 @@ Kiosk.configure do |c|
   c.user_id_column = :id
 
   # ── Where the wire verbs live ──────────────────────────────────────────────
-  # The four queries and six actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros
-  # (`kind` says which verb reaches each one), plain `render json:`. This line
-  # only NAMES them; the engine loads and registers them (once in production,
-  # again after every reload in development, so an edited verb needs no
+  # Ordinary Rails controllers under app/controllers/kiosk/. This line only
+  # NAMES them; the engine loads and registers them, re-running after every
+  # development reload so an edited verb needs no restart.
   # restart).
   c.handlers = %w[Kiosk::HouseholdController Kiosk::TodoListsController]
 
@@ -66,32 +60,23 @@ Kiosk.configure do |c|
   c.system_role = Rails.configuration.x.kiosk.system_role
 
   # ── Issuer origin ─────────────────────────────────────────────────────────
-  # This operator's canonical origin — advertised in /.well-known/kiosk.json,
-  # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
-  # assistant proof-of-possession. Required in production, localhost default
-  # in dev/test — the posture lives in config/environments/*.
+  # Advertised in /.well-known/kiosk.json, minted as the `iss` of every Kiosk
+  # JWT, and enforced as the `aud` of every assistant proof-of-possession.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # Validate the proof(s) parsed from the `Kiosk-PoW` request header
-  # against the normative PoW schema at the wire choke point, so a malformed
-  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
-  # re-issued 402 loop. There is no `pow` body field to validate — the header is
-  # the only channel. Needs the json_schemer gem (in the Gemfile). Absent/valid
-  # proofs unchanged.
+  # Validate the `Kiosk-PoW` header's proofs against the normative PoW schema,
+  # so a malformed proof gets a clear 400 instead of a silent re-issued 402
+  # loop. Needs the json_schemer gem.
   c.validate_requests = true
 
-  # Every query/action answer is validated against the `output_schema` that verb
-  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
-  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
-  # caller sends can trigger it — and it is what makes this demo's own CI task
-  # list a per-verb conformance proof of the descriptors rather than a smoke
-  # test.
+  # Validate every answer against the `output_schema` its verb declares: a
+  # mismatch is a loud 500 rather than a lie shipped to an assistant. It is a
+  # DEVELOPMENT/CI assertion — nothing a caller sends can trigger it — and it is
+  # what makes the demo task list a per-verb conformance proof.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
-  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
-  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
-  # the proof: every demo task list runs in development.
+  # OFF IN PRODUCTION deliberately: with it on, a descriptor typo becomes a 500
+  # for a caller who did nothing wrong, and this demo is deployed. Nothing is
+  # lost — every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
@@ -114,57 +99,45 @@ Kiosk.configure do |c|
   # `pay` drops out of `capabilities` and the discovery documents carry no
   # payments block. tudu is a collaborative todo app — it takes no money.
 
-  # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence. An assistant authenticates
-  # with the kiosk-pop JWT this very engine minted at `/kiosk/auth/register`,
-  # `/auth/login` or the binding ceremony — and the engine already ships the
-  # adapter that verifies its own tokens: `IdentityResolution.agent_idp` falls
-  # back to `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when
-  # nothing is configured.
-  # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
-  # Okta, an ID-JAG-style broker) by subclassing
+  # ── NO c.agent_idp — deliberate ──────────────────────────────────────────
+  # An assistant authenticates with the kiosk-pop JWT this engine minted, and
+  # the engine verifies its own tokens: `IdentityResolution.agent_idp` falls
+  # back to `AgentIdentityProviders::DefaultAgentIdp` when nothing is set.
+  # SET IT only to front an EXTERNAL agent-identity issuer, by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID.
+  # the `agent_id` it returns must be a UUID.
   #
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint, unlink, and the manage-assistants page. Walked by
   # `rake demo:link`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
-  # Where the engine bounces an UNAUTHENTICATED browser visitor to the
-  # manage-assistants page (this app's Devise sign-in). The engine stays
-  # IdP-neutral, so the sign-in URL is supplied here; without it the page
-  # would render a bare 401.
+  # Where the engine bounces an unauthenticated browser visitor to the
+  # manage-assistants page. The engine stays IdP-neutral, so the URL is supplied
+  # here; without it the page renders a bare 401.
   c.sign_in_path = "/users/sign_in"
 
-  # ── Headless assistant accounts ──────────────────────────────
+  # ── Headless assistant accounts ──────────────────────────────────────────
   # When an agent registers with a FRESH key and no human behind it yet, the
   # framework calls this factory to mint the backing principal. tudu returns a
-  # bare `users` row (no credentials) — a headless account. It can create lists
-  # and add todos on its own; when the human later LINKS this key (the W5 link
-  # ceremony), the rebind fires `assistant_claimed` below, migrating that
-  # headless account's lists/memberships to the human.
+  # bare `users` row with no credentials. It can create lists and add todos on
+  # its own; when the human later LINKS this key, `assistant_claimed` below
+  # migrates that headless account's lists and memberships to the human.
   c.assistant_creation = ->(_pubkey) { User.create!.id }
 
-  # ── The rebind hook — tudu's W5 completeness beat ───────────────────────
-  # Fires inside AccountBinding.rebind's transaction (see kiosk-server
-  # account_binding.rb) when a KNOWN key is re-parented to a human on link:
+  # ── The rebind hook ──────────────────────────────────────────────────────
+  # Fires inside AccountBinding.rebind's transaction when a KNOWN key is
+  # re-parented to a human on link:
   #   config.assistant_claimed&.call(agent:, previous_user_id:, user_id:)
-  # `agent` = kiosk.agents.id, `previous_user_id` = the headless account,
-  # `user_id` = the human account. tudu migrates the headless account's domain
-  # rows to the human — core never touches provider rows. A raise here rolls
-  # the whole rebind back atomically.
+  # `previous_user_id` is the headless account, `user_id` the human one. tudu
+  # migrates the headless account's domain rows across; core never touches
+  # provider rows.
   #
-  # It reads through the models, in the same `where(...).update_all` /
-  # `.delete_all` shape tudu's Operations use: no callbacks, no rows loaded,
-  # the affected count IS the answer.
-  #
-  # THE TRANSACTION IS NOT THIS HOOK'S: `AccountBinding.rebind` opened it on
-  # `ActiveRecord::Base.connection` and calls this inside it. `update_all` and
-  # `delete_all` are single statements that start no transaction of their own,
-  # and `ApplicationRecord` leases the same connection, so all three JOIN the
-  # rebind rather than nesting under it — a raise here rolls the whole rebind
-  # back atomically.
+  # THE TRANSACTION IS NOT THIS HOOK'S: `AccountBinding.rebind` opened it and
+  # calls this inside it. `update_all` and `delete_all` start no transaction of
+  # their own and `ApplicationRecord` leases the same connection, so all three
+  # JOIN the rebind — which means a raise here rolls the whole rebind back
+  # atomically.
   c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
     # BELT AND BRACES. kiosk-server does not call this hook when the holder did
     # not actually change, and that engine guard is the primary defence. This
@@ -202,28 +175,20 @@ Kiosk.configure do |c|
     _ = agent # attribution available to the hook; not needed for the migration
   end
 
-  # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
+  # ── Registration PoW gate — ALWAYS ON ────────────────────────────────────
   c.registration_pow_count  = 1
   c.registration_pow_params = TUDU_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
 
   # ── One process today. Before this origin ever runs two, read this ───────
-  # `pow_spent_store` is left at its IN-PROCESS default here, and that is
-  # correct only because each demo origin runs a SINGLE process. Two Puma
-  # workers, two dynos or two pods — or a rolling deploy where the old and the
-  # new process overlap for a minute — each keep their OWN spent-id set, so
-  # one proof is accepted once PER PROCESS and the toll above is silently
-  # discounted by however many processes are running.
-  #
-  # WHY THIS IS WRITTEN DOWN RATHER THAN DETECTED: a replayed proof is not an
-  # error. It verifies, it is accepted, the request succeeds — no exception,
-  # no metric, no log line, no failed request, nothing in any dashboard. An
-  # operator who scales from one worker to two gets NO signal at all that
-  # their origin stopped conforming (kiosk.tech protocol.md §15.2 and the
-  # §16.1 operator profile). So the remedy is stated, not inferred:
+  # `pow_spent_store` is left at its IN-PROCESS default, which is correct only
+  # because each demo origin runs a SINGLE process. Two Puma workers, two pods,
+  # or a rolling deploy where old and new overlap, each keep their OWN spent-id
+  # set: one proof is then accepted once PER PROCESS and the toll above is
+  # silently discounted. A replayed proof is not an error — it verifies, it is
+  # accepted, and nothing appears in any dashboard — so the operator gets no
+  # signal that their origin stopped conforming. The remedy:
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
-  # plus the one table it needs — see the kiosk-server README, "Multi-process
-  # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on, but a warning nobody reads is not the
-  # mitigation; this comment and the README are.
+  # plus the one table it needs; see the kiosk-server README, "Multi-process
+  # deployments".
 end

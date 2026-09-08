@@ -27,45 +27,33 @@ module SkootiUnlockSigningKey
 end
 Kiosk::Configuration.include(SkootiUnlockSigningKey)
 
-# Registration PoW gate uses Equihash (one PoW = Equihash). PoW is a metered
-# toll, tuned per provider.
-#
-# Params are chosen by KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
-#   low  (default) → n=96 k=5  — sub-second solve; CI/local stay fast.
-#   high           → n=168 k=7 — genuinely memory+CPU-intensive (~1.3 GiB per
-#                    proof, and ~10s on the reference numpy solver as measured
-#                    on one M-series laptop core) for the hosted deploy, so a
-#                    poker feels the toll first-hand.
-# Unset = low, so this demo's flows and CI register at the fast params.
+# Registration PoW gate — a metered Equihash toll, tuned per provider. Params
+# follow KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb): low (default) →
+# n=96 k=5, sub-second; high → n=168 k=7, ~1.3 GiB and ~10s on the reference
+# numpy solver, so a poker on the hosted deploy feels the toll first-hand.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 require "kiosk/user_identity_providers/devise"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 SKOOTI_REGISTRATION_POW_PARAMS = PowDifficulty.params
 
-# ── PoW HMAC secret ─────────────────────────────────────────────────────────
-# The HMAC key the engine signs every PoW challenge with. Required in
-# production, stable (non-secret) default in dev/test — that posture lives in
-# config/environments/*; here we only read the resolved value.
+# ── PoW HMAC secret — the key the engine signs every challenge with ─────────
+# Required in production, stable non-secret default in dev/test; posture in
+# config/environments/*.
 pow_secret = Rails.configuration.x.kiosk.pow_secret
 
 # ── Ed25519 unlock signing key ──────────────────────────────────────────────
-# Same shape: the PEM is resolved per environment (dev/test read the shipped
-# config/dev_unlock_key.pem, production requires KIOSK_UNLOCK_SIGNING_KEY_PEM
-# and crash-checks it at boot), and this file only parses the resolved value.
-# Never DevUnlockKey and never ENV here — the posture is the environment
-# file's to state, not an initializer's.
+# The PEM is resolved per environment — dev/test read the shipped
+# config/dev_unlock_key.pem, production requires KIOSK_UNLOCK_SIGNING_KEY_PEM —
+# and this file only parses the resolved value.
 #
-# The empty case gets a SIGNPOST, not a nil TypeError — the ProveKey.config
-# shape (kiosk-demo-prove/lib/prove_key.rb). Every environment's resolution
-# hangs off config/dev_unlock_key.pem: dev/test read it, and production keys
-# the KIOSK_UNLOCK_SIGNING_KEY_PEM requirement off its mere existence (that
-# byte-identical file may not name a demo, so the marker stands in for the
-# name). Strip that file from a deploy artifact — a plausible reaction to
-# "stop shipping a dev private key" — and production stops ASKING for the
-# variable and leaves the config nil; without the raise below, this line dies
-# with `TypeError: no implicit conversion of nil into String`, naming neither
-# the file nor the fix.
+# The empty case gets a SIGNPOST rather than a nil TypeError. Production keys
+# the KIOSK_UNLOCK_SIGNING_KEY_PEM requirement off the mere existence of
+# config/dev_unlock_key.pem, so stripping that file from a deploy artifact — a
+# plausible reaction to "stop shipping a dev private key" — makes production
+# stop ASKING for the variable and leave the config nil. Without the raise
+# below this line dies with `TypeError: no implicit conversion of nil into
+# String`, naming neither the file nor the fix.
 unlock_signing_key_pem = Rails.configuration.x.kiosk.unlock_signing_key_pem
 if unlock_signing_key_pem.to_s.strip.empty?
   raise <<~MSG
@@ -98,11 +86,9 @@ Kiosk.configure do |c|
   c.user_id_column = :id
 
   # ── Where the wire verbs live ──────────────────────────────────────────────
-  # The three queries and five actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros
-  # (`kind` says which verb reaches each one), plain `render json:`. This line
-  # only NAMES them; the engine loads and registers them (once in production,
-  # again after every reload in development, so an edited verb needs no
+  # Ordinary Rails controllers under app/controllers/kiosk/. This line only
+  # NAMES them; the engine loads and registers them, re-running after every
+  # development reload so an edited verb needs no restart.
   # restart). A verb registers when its class LOADS and nothing loads a handler
   # on its own, so an origin whose controllers are not named here serves
   # nothing at all.
@@ -121,32 +107,23 @@ Kiosk.configure do |c|
   c.system_role = Rails.configuration.x.kiosk.system_role
 
   # ── Issuer origin ─────────────────────────────────────────────────────────
-  # This operator's canonical origin — advertised in /.well-known/kiosk.json,
-  # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
-  # assistant proof-of-possession. Required in production, localhost default
-  # in dev/test — the posture lives in config/environments/*.
+  # Advertised in /.well-known/kiosk.json, minted as the `iss` of every Kiosk
+  # JWT, and enforced as the `aud` of every assistant proof-of-possession.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # Validate the proof(s) parsed from the `Kiosk-PoW` request header
-  # against the normative PoW schema at the wire choke point, so a malformed
-  # proof gets a clear 400 bad_request (with a shape hint) instead of a silent
-  # re-issued 402 loop. There is no `pow` body field to validate — the header is
-  # the only channel. Needs the json_schemer gem (in the Gemfile). Absent/valid
-  # proofs unchanged.
+  # Validate the `Kiosk-PoW` header's proofs against the normative PoW schema,
+  # so a malformed proof gets a clear 400 instead of a silent re-issued 402
+  # loop. Needs the json_schemer gem.
   c.validate_requests = true
 
-  # Every query/action answer is validated against the `output_schema` that verb
-  # declares, and a mismatch is a loud 500 rather than a lie shipped to an
-  # assistant. A DEVELOPMENT/CI assertion, not a request check — nothing a
-  # caller sends can trigger it — and it is what makes this demo's own CI task
-  # list a per-verb conformance proof of the descriptors rather than a smoke
-  # test.
+  # Validate every answer against the `output_schema` its verb declares: a
+  # mismatch is a loud 500 rather than a lie shipped to an assistant. It is a
+  # DEVELOPMENT/CI assertion — nothing a caller sends can trigger it — and it is
+  # what makes the demo task list a per-verb conformance proof.
   #
-  # OFF IN PRODUCTION, and the engine's own file is why: with it on, a
-  # descriptor typo becomes a 500 for a caller who did nothing wrong, and this
-  # demo is DEPLOYED — its env template sets RAILS_ENV=production. See
-  # kiosk-server/lib/kiosk/server/response_validation.rb. Nothing is lost from
-  # the proof: every demo task list runs in development.
+  # OFF IN PRODUCTION deliberately: with it on, a descriptor typo becomes a 500
+  # for a caller who did nothing wrong, and this demo is deployed. Nothing is
+  # lost — every demo task list runs in development.
   c.validate_responses = !Rails.env.production?
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
@@ -163,17 +140,13 @@ Kiosk.configure do |c|
   c.skill_url    = "https://kiosk.tech/skill-v0.4.12.md"
   c.skill_sha256 = "7d5be9bf841f8e05fd67b62b60d140fab584de373f8e28944298c93139f9a9ca"
 
-  # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence. An assistant authenticates
-  # with the kiosk-pop JWT this very engine minted at `/kiosk/auth/register`,
-  # `/auth/login` or the binding ceremony — and the engine already ships the
-  # adapter that verifies its own tokens: `IdentityResolution.agent_idp` falls
-  # back to `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when
-  # nothing is configured.
-  # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
-  # Okta, an ID-JAG-style broker) by subclassing
+  # ── NO c.agent_idp — deliberate ──────────────────────────────────────────
+  # An assistant authenticates with the kiosk-pop JWT this engine minted, and
+  # the engine verifies its own tokens: `IdentityResolution.agent_idp` falls
+  # back to `AgentIdentityProviders::DefaultAgentIdp` when nothing is set.
+  # SET IT only to front an EXTERNAL agent-identity issuer, by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID.
+  # the `agent_id` it returns must be a UUID.
   #
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
@@ -196,24 +169,16 @@ Kiosk.configure do |c|
   c.pow_secret              = pow_secret
 
   # ── One process today. Before this origin ever runs two, read this ───────
-  # `pow_spent_store` is left at its IN-PROCESS default here, and that is
-  # correct only because each demo origin runs a SINGLE process. Two Puma
-  # workers, two dynos or two pods — or a rolling deploy where the old and the
-  # new process overlap for a minute — each keep their OWN spent-id set, so
-  # one proof is accepted once PER PROCESS and the toll above is silently
-  # discounted by however many processes are running.
-  #
-  # WHY THIS IS WRITTEN DOWN RATHER THAN DETECTED: a replayed proof is not an
-  # error. It verifies, it is accepted, the request succeeds — no exception,
-  # no metric, no log line, no failed request, nothing in any dashboard. An
-  # operator who scales from one worker to two gets NO signal at all that
-  # their origin stopped conforming (kiosk.tech protocol.md §15.2 and the
-  # §16.1 operator profile). So the remedy is stated, not inferred:
+  # `pow_spent_store` is left at its IN-PROCESS default, which is correct only
+  # because each demo origin runs a SINGLE process. Two Puma workers, two pods,
+  # or a rolling deploy where old and new overlap, each keep their OWN spent-id
+  # set: one proof is then accepted once PER PROCESS and the toll above is
+  # silently discounted. A replayed proof is not an error — it verifies, it is
+  # accepted, and nothing appears in any dashboard — so the operator gets no
+  # signal that their origin stopped conforming. The remedy:
   #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
-  # plus the one table it needs — see the kiosk-server README, "Multi-process
-  # deployments". kiosk-server also logs a warning at boot in production when
-  # this default is in use with PoW on, but a warning nobody reads is not the
-  # mitigation; this comment and the README are.
+  # plus the one table it needs; see the kiosk-server README, "Multi-process
+  # deployments".
 
   # KYC attestation verifier — trusts the KYC broker (the shared anonymizing
   # KYC issuer). skooti hosts no issuer of its own: it configures the broker as
@@ -236,16 +201,13 @@ Kiosk.configure do |c|
 
   # ── Ed25519 rental-token signing key ──────────────────────────────────────
   # The key every offline rental token is signed with, and whose public half is
-  # baked into each lock at provisioning. Resolved per environment
-  # (config/environments/*, read as config.x.kiosk above): dev/test load the
-  # fixed keypair shipped at config/dev_unlock_key.pem — stable vectors, and
-  # the lock the flow drivers provision matches — while production REFUSES TO
-  # BOOT without KIOSK_UNLOCK_SIGNING_KEY_PEM.
+  # baked into each lock at provisioning. dev/test load the fixed keypair at
+  # config/dev_unlock_key.pem; production REFUSES TO BOOT without
+  # KIOSK_UNLOCK_SIGNING_KEY_PEM.
   #
   # config/dev_unlock_key.pem is a FIXTURE, never a production signer: it is
   # tracked in this public repo, so any clone holds its private half and could
-  # mint a token that opens a scooter. That is why production refuses to boot
-  # without a key of its own rather than falling back to the shipped one.
+  # mint a token that opens a scooter.
   c.unlock_signing_key = unlock_signing_key
 end
 

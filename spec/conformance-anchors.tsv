@@ -690,7 +690,7 @@ kiosk-demo-tudu/app/views/lists/index.html.erb	      <h2>Point your AI assistant
 kiosk-demo-tudu/app/views/lists/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
 kiosk-demo-tudu/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # enforced at the app layer (the membership EXISTS-check that
-kiosk-demo-tudu/config/initializers/kiosk.rb	  # headless account's lists/memberships to the human.
+kiosk-demo-tudu/config/initializers/kiosk.rb	  # migrates that headless account's lists and memberships to the human.
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-tudu/config/initializers/kiosk.rb	  c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
 kiosk-demo-tudu/config/initializers/kiosk.rb	  c.handlers = %w[Kiosk::HouseholdController Kiosk::TodoListsController]

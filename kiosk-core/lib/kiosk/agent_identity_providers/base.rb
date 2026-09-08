@@ -20,7 +20,7 @@ module Kiosk
     # no `user_id_type`-style knob for this one. An adapter fronting an
     # external issuer whose agent identifiers are not uuids MUST map them onto
     # local uuids (a stable mapping table, or a v5 UUID derived from the
-    # issuer + foreign id) before returning an Identity (K-830).
+    # issuer + foreign id) before returning an Identity.
     class Base
       # Verify an incoming HTTP request into a {Kiosk::Identity}.
       #

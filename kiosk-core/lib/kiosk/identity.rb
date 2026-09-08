@@ -34,7 +34,7 @@ module Kiosk
   #   later and further down: `pay` cannot settle, the account-binding
   #   ceremony cannot complete, and any RLS policy calling
   #   `kiosk.current_agent_id()` raises on the cast. Map a foreign issuer's
-  #   agent identifier onto a local uuid in the adapter (K-830).
+  #   agent identifier onto a local uuid in the adapter.
   # @!attribute [r] claims
   #   Hash of additional claims from the upstream IdP. Adapter-specific;
   #   Kiosk treats opaque except for the four canonical fields above.

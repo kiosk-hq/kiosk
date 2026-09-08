@@ -13,7 +13,7 @@ module Kiosk
     # (e.g. kiosk-pay-stripe) translates its PSP-specific errors into this
     # PSP-AGNOSTIC signal, carrying only a human-safe `message` (never raw PSP
     # internals) plus a stable `reason` symbol. The executor maps it to the
-    # `payment_failed` wire error (a clean 4xx) — see K-545.
+    # `payment_failed` wire error (a clean 4xx).
     #
     # `retryable?` splits the two cases that matter for double-charge safety:
     #   true  — the processor reached a DEFINITIVE no-charge decision (card

@@ -20,7 +20,7 @@ The foundation. Defines:
   checks only that it is present, but every `agent_id` column in the canonical
   Postgres schema and the `kiosk.current_agent_id()` helper are typed `uuid`,
   and there is no `user_id_type`-style knob for it. Map a foreign issuer's
-  agent identifier onto a local uuid inside the adapter (K-830). `user_id`
+  agent identifier onto a local uuid inside the adapter. `user_id`
   carries no such constraint — it follows `Kiosk.user_id_type`.
 - **Postgres GUC namespace constants** — `Kiosk::GUC`
 - **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, default mount path)

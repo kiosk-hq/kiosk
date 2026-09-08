@@ -36,7 +36,7 @@ module Kiosk
     # so a zero-config install verifies what it issues. Set this ONLY to front a
     # different agent-identity system (Entra Agent ID, Okta, an ID-JAG-style
     # broker) by subclassing {Kiosk::AgentIdentityProviders::Base}. No demo sets
-    # it — the tokens they authenticate are the ones the engine minted (T-104).
+    # it — the tokens they authenticate are the ones the engine minted.
     attr_accessor :agent_idp
 
     # Payment PSP adapter instance — captures AP2 cart mandates into PSP
@@ -96,8 +96,8 @@ module Kiosk
     # the canonical origin BEFORE any Kiosk verb, and hosting a second merchant
     # means a second instance. (Rails' `config.hosts` does not help here — it
     # governs which Host headers are ACCEPTED, not which origin the provider
-    # IS.) Per-host issuer resolution is the recorded future direction
-    # (K-507); what ships is the one-origin behaviour described above.
+    # IS.) Per-host issuer resolution is a possible future direction; what
+    # ships is the one-origin behaviour described above.
     attr_accessor :issuer
 
     def initialize

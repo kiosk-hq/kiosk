@@ -68,15 +68,20 @@ class Kiosk::BoardController < ApplicationController
                     # `string`, flatly: the handle is
                     # {User.public_handle}, derived from the account UUID, and
                     # an account without a UUID cannot own a row.
+                    posted_at:     { type: "string", description: "When the listing was published, ISO 8601 carrying YOUR declared zone's offset — `Kiosk-Timezone`, or this board's own clock when you declare none. It is ONE moment, so «newest first» means the same order to every reader." },
+                    timezone:      { type: "string", description: "The IANA zone `posted_at` is rendered in: the one you declared, or this board's own when you declared none." },
                     owner_handle:  { type: "string", description: "The seller's PSEUDONYM on this board — stable for one account (so two rows sharing it are the same seller), opaque, and NOT an address: it is derived from the account id and reveals no email, phone or login. There is no verb that turns it back into a person. To reach a seller, use the contact details they chose to put in `body`; a listing with none names no way to contact its seller." },
                   },
-                  required: %w[listing_id title body price_text category_slug status owner_handle],
+                  required: %w[listing_id title body price_text category_slug status posted_at
+                               timezone owner_handle],
                 }
   example_params({ category_slug: "bikes", keyword: "road" })
   example_row({
     listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
     body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
     price_text: "€300", category_slug: "bikes", status: "open",
+    posted_at: -> { BoardClock.publish(Time.current, BoardClock.default_zone) },
+    timezone: BoardClock::DEFAULT_ZONE_NAME,
     owner_handle: "seller-4f2a9c1e3b7d",
   })
   def browse_listings
@@ -105,12 +110,19 @@ class Kiosk::BoardController < ApplicationController
     # principal that can authenticate, and the id does not reach the wire either
     # — {User.public_handle} turns it into the board pseudonym first. The join
     # stays because a listing whose owner vanished should fall off the board.
+    # THE PUBLICATION TIME IS RENDERED ON THE READER's CLOCK. A classified ad
+    # is not delivered anywhere, so «when was this posted» is a question about
+    # the reader's own day; the row names the zone it came back in, and the
+    # instant is one moment however it is rendered, so «newest first» means the
+    # same order to everyone.
+    zone = BoardClock.zone
     render json: board.pluck(
       "listings.id", "listings.title", "listings.body", "listings.price_text",
-      "categories.slug", "listings.status", "users.id",
-    ).map { |id, title, body, price_text, category_slug, row_status, owner_id|
+      "categories.slug", "listings.status", "listings.created_at", "users.id",
+    ).map { |id, title, body, price_text, category_slug, row_status, created_at, owner_id|
       { listing_id: id, title: title, body: body, price_text: price_text,
         category_slug: category_slug, status: row_status,
+        posted_at: BoardClock.publish(created_at, zone), timezone: zone.name,
         owner_handle: User.public_handle(owner_id) }
     }
   end
@@ -137,18 +149,22 @@ class Kiosk::BoardController < ApplicationController
                     price_text:    { type: %w[string null], description: "FREE-FORM display text, never a cents amount; null when none was given." },
                     status:        { type: "string", description: "open | closed." },
                     category_slug: { type: "string", description: "The section it is posted in." },
+                    posted_at:     { type: "string", description: "When you published it, ISO 8601 carrying YOUR declared zone's offset — `Kiosk-Timezone`, or this board's own clock when you declare none." },
+                    timezone:      { type: "string", description: "The IANA zone `posted_at` is rendered in." },
                   },
-                  required: %w[listing_id title price_text status category_slug],
+                  required: %w[listing_id title price_text status category_slug posted_at timezone],
                 }
   def my_listings
+    zone = BoardClock.zone
     render json: Listing.owned_by_current_principal
                         .joins(:category)
                         .order(created_at: :desc, id: :asc)
                         .pluck("listings.id", "listings.title", "listings.price_text",
-                               "listings.status", "categories.slug")
-                        .map { |id, title, price_text, row_status, category_slug|
+                               "listings.status", "categories.slug", "listings.created_at")
+                        .map { |id, title, price_text, row_status, category_slug, created_at|
                           { listing_id: id, title: title, price_text: price_text,
-                            status: row_status, category_slug: category_slug }
+                            status: row_status, category_slug: category_slug,
+                            posted_at: BoardClock.publish(created_at, zone), timezone: zone.name }
                         }
   end
 end

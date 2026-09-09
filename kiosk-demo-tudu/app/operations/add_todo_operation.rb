@@ -29,7 +29,7 @@ class AddTodoOperation
           code:    "bad_request",
           message: "due_at #{due_at.to_s.inspect} names no time zone — a deadline is an INSTANT, " \
                    "so pass an ISO 8601 timestamp carrying its offset, e.g. " \
-                   "\"2026-09-08T14:00:00+03:00\". Resolve «tomorrow at two» on the clock of the " \
+                   "#{example_due_at.inspect}. Resolve «tomorrow at two» on the clock of the " \
                    "human who said it: whoever ELSE shares this list will read it on theirs, and a " \
                    "value with no offset means two different moments to the two of them.",
         )
@@ -41,7 +41,7 @@ class AddTodoOperation
         return OperationResult.refused(
           code:    "bad_request",
           message: "invalid due_at #{due_at.to_s.inspect} — pass an ISO 8601 timestamp with an " \
-                   "offset, e.g. \"2026-09-08T14:00:00+03:00\"",
+                   "offset, e.g. #{example_due_at.inspect}",
         )
       end
     end
@@ -55,5 +55,23 @@ class AddTodoOperation
     ).first["id"]
 
     OperationResult.ok({ "todo_id" => todo_id })
+  end
+
+  # THE ONE «here is a value that works» INSTANT this demo publishes, read from
+  # two places that must not disagree: the catalogue's `due_at` description and
+  # the two `due_at` refusals above.
+  #
+  # RESOLVED, NOT WRITTEN DOWN. A calendar literal in shipped code ages: it goes
+  # on saying «e.g. 2026-09-08» long after that day is gone, and an assistant
+  # copying it sends a deadline in the past. Tomorrow at 14:00, on this
+  # household's own clock, is always a plausible one.
+  #
+  # It carries an OFFSET because that is the half the sentence is about: the
+  # example must be a value this verb would ACCEPT, and a zoneless one is
+  # refused.
+  #
+  # @return [String] an ISO 8601 instant carrying an offset
+  def self.example_due_at
+    ReaderClock.default_zone.now.advance(days: 1).change(hour: 14).iso8601
   end
 end

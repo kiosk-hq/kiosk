@@ -236,7 +236,7 @@ class Kiosk::DiningRoomController < ApplicationController
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
     seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
     seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
-    seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
+    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
     deposit_eur: 10,
   })
   def availability
@@ -413,7 +413,7 @@ class Kiosk::BookingsController < ApplicationController
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
     seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
-    seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
+    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
     status: "confirmed",
   })
   def book_table
@@ -484,6 +484,6 @@ There is nothing to wire. atablefor configures no `payment_provider`, so `pay` d
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or a migration on any table you already own. The satellite gems add a parallel surface in their own `kiosk.*` schema; your tables keep their columns and your human-facing app keeps working unchanged.
 
-What it DOES touch, and this demo is honest about it because an adopter will hit it on day one: two small additions to `app/models/booking.rb`, an operator model. `owned_by_current_principal` (`:40`) is the scope every owner-scoped read goes through — one `Arel.sql` predicate over `kiosk.current_user_id()`, written once so the app-layer check and the optional RLS policy are literally the same expression — and `publish_instant` (`:52`) pins the byte-level shape of a `timestamptz` on the wire. Both are a few lines, neither changes the schema, and both are the sort of thing you would write anyway to expose a model over any API.
+What it DOES touch, and this demo is honest about it because an adopter will hit it on day one: two small additions to `app/models/booking.rb`, an operator model. `owned_by_current_principal` is the scope every owner-scoped read goes through — one `Arel.sql` predicate over `kiosk.current_user_id()`, written once so the app-layer check and the optional RLS policy are literally the same expression — and `publish_instant` pins the byte-level shape of a `timestamptz` on the wire. Both are a few lines, neither changes the schema, and both are the sort of thing you would write anyway to expose a model over any API.
 
 **What this enables:** any personal AI assistant that has discovered the `issuer` and `endpoint` via `/.well-known/kiosk.json` can complete a reservation without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned AI-assistant traffic and prices scalping at the door; the anti-bot wall stays in place for everything else.

@@ -108,7 +108,7 @@ class Kiosk::BookingsController < ApplicationController
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
     seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
-    seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
+    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
     status: "confirmed",
   })
   def book_table

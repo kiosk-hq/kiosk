@@ -595,7 +595,7 @@ kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, se
 kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify
 kiosk-demo-stylish/Gemfile	gem "kiosk-rls",
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
-kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** a shortcut here any more: this demo sets **nothing**
+kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**
 kiosk-demo-stylish/README.md	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
 kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-dept
 kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
@@ -618,7 +618,7 @@ kiosk-demo-stylish/app/views/home/index.html.erb	      <div class="sec-k">🤖 T
 kiosk-demo-stylish/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
 kiosk-demo-stylish/bin/demo	run an Action
 kiosk-demo-stylish/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-stylish/config/initializers/kiosk.rb	  # configures no payment_provider (this salon takes payment in the chair), so a
+kiosk-demo-stylish/config/initializers/kiosk.rb	  # before a cart exists. stylish configures no payment_provider (this salon
 kiosk-demo-stylish/config/initializers/kiosk.rb	  # role separation in this demo). This demo runs WITHOUT RLS — isolation
 kiosk-demo-stylish/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-stylish/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)

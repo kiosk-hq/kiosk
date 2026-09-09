@@ -149,7 +149,7 @@ class Kiosk::OrdersController < ActionController::API
                  # handler enforces (Kiosk::UuidCheck), which a bare {type:"string"} does not.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN,
-                                     description: "Optional uuid of an unpaid order to replace." },
+                                     description: "uuid of an unpaid order to replace." },
                },
                required: ["items", "delivery_slot_id", "delivery_address"]
   output_schema type: "object",
@@ -217,9 +217,9 @@ class Kiosk::OrdersController < ActionController::API
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                                      description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },
                  delivery_date:    { type: "string",
-                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. Optional; omitting books tomorrow." },
+                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. Omitting it books tomorrow." },
                  delivery_address: { type: "string",
-                                     description: "Optional new in-zone Dublin delivery address; unchanged if omitted." },
+                                     description: "New in-zone Dublin delivery address; unchanged if omitted." },
                },
                required: ["order_id", "delivery_slot_id"]
   # No price and no pay_hint, and that absence is the contract: a reschedule

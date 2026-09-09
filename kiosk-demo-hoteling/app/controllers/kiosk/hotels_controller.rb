@@ -384,10 +384,10 @@ class Kiosk::HotelsController < ActionController::API
                properties: {
                  property_id: { type: "integer", description: "`property_id` from a search_hotels row." },
                  check_in:    { type: "string", format: "date",
-                                description: "Optional first night (YYYY-MM-DD); pass with check_out to list only free room types. " \
+                                description: "First night (YYYY-MM-DD); pass with check_out to list only free room types. " \
                                              "When passed it must be today or later in the property's clock (Europe/Istanbul)." },
                  check_out:   { type: "string", format: "date",
-                                description: "Optional checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
+                                description: "Checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
                required: ["property_id"]
   # A ONE-ROW ARRAY, not a bare object. Spec §8.2: a query answers a JSON ARRAY

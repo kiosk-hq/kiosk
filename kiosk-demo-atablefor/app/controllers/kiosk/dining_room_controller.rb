@@ -60,16 +60,16 @@ class Kiosk::DiningRoomController < ApplicationController
                  # inserting a restaurant), so it cannot be an `enum` here and
                  # the handler guard is the only place the refusal can live.
                  neighborhood: { type: "string",
-                                 description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\". " \
+                                 description: "Lisbon neighbourhood filter, e.g. \"Alfama\". " \
                                               "Must be one this aggregator serves — an unserved name is " \
                                               "refused with the current ones named." },
                  # A CLOSED SET, so an `enum` and not a pattern — the
                  # refusal is then the schema layer's, uniformly, rather than an
                  # empty list an assistant cannot tell from a sold-out night.
                  time:         { type: "string", enum: Seatings::TIMES,
-                                 description: "Optional seating-time filter; one of the seatings this restaurant offers." },
+                                 description: "Seating-time filter; one of the seatings this restaurant offers." },
                  date:         { type: "string", format: "date",
-                                 description: "Optional date filter, YYYY-MM-DD. Must be among the UPCOMING seatings — the horizon rolls forward daily, so a date outside it is refused with the current ones named." },
+                                 description: "Date filter, YYYY-MM-DD. Must be among the UPCOMING seatings — the horizon rolls forward daily, so a date outside it is refused with the current ones named." },
                },
                required: ["party_size"]
   # One row per open (restaurant, table, seating). A bare array: this verb does
@@ -111,7 +111,7 @@ class Kiosk::DiningRoomController < ApplicationController
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
     seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
     seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
-    seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
+    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
     deposit_eur: 10,
   })
   def availability

@@ -44,7 +44,11 @@ class ReserveRoomOperation
     # cannot disagree about it — an assistant may name a date it never read from
     # an availability response. See {WireArguments.past_stay} for what «past»
     # means here and why today counts as bookable.
-    refusal = WireArguments.past_stay(ci)
+    #
+    # ON THIS PROPERTY'S CLOCK. The room type was already resolved AT
+    # this property above, so the property exists by the time this line runs and
+    # its zone is the one the offer was made on.
+    refusal = WireArguments.past_stay(ci, zone: WireArguments.zone_for(prop_id))
     return refusal if refusal
 
     nights      = (co - ci).to_i

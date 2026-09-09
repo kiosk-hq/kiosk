@@ -307,7 +307,8 @@ CREATE TABLE public.properties (
     neighbourhood character varying,
     stars integer DEFAULT 3 NOT NULL,
     amenities jsonb DEFAULT '[]'::jsonb NOT NULL,
-    address character varying
+    address character varying,
+    timezone character varying DEFAULT 'Europe/Istanbul'::character varying NOT NULL
 );
 
 
@@ -845,6 +846,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260910000001'),
 ('20260827000002'),
 ('20260820140001'),
 ('20260820130117'),

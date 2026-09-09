@@ -177,10 +177,16 @@ module WireArguments
   # What «past» means here:
   #
   #   * The unit is the DAY — a room-night is sold by the night.
-  #   * The clock is the PROPERTY's, not the caller's. A real IANA zone, so DST
-  #     is handled; do NOT replace it with a fixed offset. An assistant calling
-  #     from UTC-8 at 21:00 is already on hoteling's tomorrow, so reading the
-  #     RUNNER's clock would refuse a stay the hotel will sell.
+  #   * The clock is the PROPERTY's, not the caller's, and it is READ OFF THE
+  #     PROPERTY. A real IANA zone, so DST is handled; do NOT replace it with a
+  #     fixed offset. An assistant calling from UTC-8 at 21:00 is already on the
+  #     hotel's tomorrow, so reading the RUNNER's clock would refuse a stay the
+  #     hotel will sell.
+  #   * AND NOT OFF THIS ORIGIN. `properties.timezone` is the source; the
+  #     constant below is only what FILLS that column and what answers when
+  #     there is no property in hand at all (a published example). One operator
+  #     may run properties in several zones, and an answer read off
+  #     the origin is right only for as long as every property is in one city.
   #   * TODAY IS BOOKABLE: a same-day arrival is an ordinary hotel sale, and
   #     hoteling models no check-in hour, so refusing today would invent a
   #     cutoff nobody declared.
@@ -189,15 +195,33 @@ module WireArguments
   # `400 bad_request` and never `200 []` — the empty array already means SOLD
   # OUT, and only one of the two is worth retrying. No FAR end is invented: how
   # far ahead this operator sells is a decision nobody has taken.
-  ZONE_NAME = "Europe/Istanbul"
+  #
+  # A CALLER'S OWN `Kiosk-Timezone` PLAYS NO PART HERE, and that is the rule
+  # rather than an omission: `check_in` is declared `format: "date"`, a CALENDAR
+  # DAY at the property, and spec §3 point 8 rule 6 says a calendar day is never
+  # converted by anyone in either direction. Reading «the night of the 7th» in
+  # the caller's zone is how an operator sells the night of the 6th.
+  DEFAULT_ZONE_NAME = "Europe/Istanbul"
 
-  # The property-locale ActiveSupport::TimeZone (Europe/Istanbul).
-  def zone
-    @zone ||= Time.find_zone!(ZONE_NAME)
+  # The ORIGIN's default zone as an ActiveSupport::TimeZone — the value
+  # `properties.timezone` is backfilled from, and the clock a published example
+  # is dated on, where no property has been addressed yet.
+  def default_zone
+    @default_zone ||= Time.find_zone!(DEFAULT_ZONE_NAME)
   end
 
-  # "Today" in the property's locale — the floor every dated surface reads.
-  def today
+  # The clock the property with this id is sold on, or the origin default when
+  # the id addresses nothing. A caller that named a property nobody has gets a
+  # `404` from {#existing_property} either way; this exists so the floor can be
+  # computed BEFORE that lookup without inventing a zone.
+  def zone_for(property_id)
+    Property.where(id: property_id).pick(:timezone)&.then { |name| Time.find_zone!(name) } || default_zone
+  end
+
+  # "Today" on a given property's clock — the floor every dated surface reads.
+  #
+  # @param zone [ActiveSupport::TimeZone] the property's, from {#zone_for}
+  def today(zone = default_zone)
     zone.now.to_date
   end
 
@@ -218,18 +242,24 @@ module WireArguments
   end
 
   # @param check_in [Date] the first night asked for
+  # @param zone [ActiveSupport::TimeZone] THE PROPERTY's clock — the whole point
+  #   of the parameter. Two properties of one operator in two zones answer the
+  #   same `check_in` differently, and that is correct: one of them is already
+  #   on tomorrow. The refusal names the zone it judged on, so a caller is never
+  #   left guessing whose midnight decided.
   # @return [OperationResult, nil] a refusal, or nil when the stay is bookable
-  def past_stay(check_in)
-    floor = today
+  def past_stay(check_in, zone: default_zone)
+    floor = today(zone)
     return nil if check_in >= floor
 
     OperationResult.refused(
       code:    "bad_request",
-      message: "check_in #{check_in.iso8601} is in the past — hoteling sells room-nights from " \
-               "#{floor.iso8601} onwards (Europe/Istanbul)",
+      message: "check_in #{check_in.iso8601} is in the past — this hotel sells room-nights from " \
+               "#{floor.iso8601} onwards (#{zone.name})",
       hint:    "pass #{floor.iso8601} or a later check_in; today IS bookable (a same-day arrival " \
-               "is an ordinary room-night). An EMPTY availability list means the hotel is sold " \
-               "out for those nights, which is a different answer from this one.",
+               "is an ordinary room-night). The date is judged on the PROPERTY's clock, which is " \
+               "not necessarily yours. An EMPTY availability list means the hotel is sold out for " \
+               "those nights, which is a different answer from this one.",
     )
   end
 

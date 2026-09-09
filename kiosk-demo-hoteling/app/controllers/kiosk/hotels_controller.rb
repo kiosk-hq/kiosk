@@ -55,7 +55,9 @@ class Kiosk::HotelsController < ActionController::API
   description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
               "means that hotel is SOLD OUT for those nights, not that it has no rooms. There is no " \
               "availability in the past either: this hotel sells no room-night before tonight, read " \
-              "in the property's own clock (Europe/Istanbul), and tonight itself IS bookable because " \
+              "in THE PROPERTY's own clock, which `hotel_detail` publishes as `timezone` and which " \
+              "is a fact about the hotel rather than about this operator, and tonight itself IS " \
+              "bookable because " \
               "a same-day arrival is an ordinary room-night. " \
               "Rates are quoted PER NIGHT, but a cart is signed for " \
               "the WHOLE stay at the total the operator quotes, which `reserve_room` returns. Once " \
@@ -67,10 +69,12 @@ class Kiosk::HotelsController < ActionController::API
                                 description: "Property to check — the `property_id` from a properties row. " \
                                              "An id no property has is 404 not_found." },
                  check_in:    { type: "string", format: "date",
-                                description: "First night (YYYY-MM-DD). Today or later, read in the " \
-                                             "property's own clock (Europe/Istanbul) — a date before " \
-                                             "that is refused 400 naming the earliest night, never " \
-                                             "answered with an empty list." },
+                                description: "First night (YYYY-MM-DD). Today or later, read in THIS " \
+                                             "PROPERTY's own clock (`hotel_detail` publishes it as " \
+                                             "`timezone`) — a date before that is refused 400 naming " \
+                                             "the earliest night and the zone it was judged on, never " \
+                                             "answered with an empty list. A calendar day is never " \
+                                             "converted: send the day you mean the hotel to sell." },
                  check_out:   { type: "string", format: "date",
                                 description: "Checkout day (YYYY-MM-DD, exclusive) — a checkout day is " \
                                              "the next guest's check-in day." },
@@ -107,7 +111,13 @@ class Kiosk::HotelsController < ActionController::API
     # it is a named 400 rather than the `[]` that already means SOLD OUT here —
     # the two must not be confusable. `reserve_room` refuses the same class from
     # the same guard.
-    refusal = WireArguments.past_stay(dates.first)
+    #
+    # ON THIS PROPERTY'S CLOCK, not on the origin's. The lookup runs
+    # before the existence check below on purpose: an unknown id must stay a
+    # `404` rather than becoming a `400`, so {WireArguments.zone_for} answers
+    # the origin default for an id nobody has and the 404 arrives two lines
+    # later exactly as it did.
+    refusal = WireArguments.past_stay(dates.first, zone: WireArguments.zone_for(property_id))
     return render_refusal(refusal) if refusal
 
     # Spec §9.1: `property_id` ADDRESSES a property before anything is
@@ -385,7 +395,9 @@ class Kiosk::HotelsController < ActionController::API
                  property_id: { type: "integer", description: "`property_id` from a search_hotels row." },
                  check_in:    { type: "string", format: "date",
                                 description: "First night (YYYY-MM-DD); pass with check_out to list only free room types. " \
-                                             "When passed it must be today or later in the property's clock (Europe/Istanbul)." },
+                                             "When passed it must be today or later in THIS PROPERTY's own clock, which the " \
+                                             "row publishes as `timezone` — not this operator's, and not yours. A calendar " \
+                                             "day is never converted: send the day you mean the hotel to sell." },
                  check_out:   { type: "string", format: "date",
                                 description: "Checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
@@ -414,6 +426,7 @@ class Kiosk::HotelsController < ActionController::API
                     room_types_scope: { type: "string", description: "WHICH list `room_types` is: free for the given nights, or the property's full catalogue when no dates were passed. Read it before treating the list as an offer." },
                     check_in:         { type: %w[string null], description: "The first night the list was computed for, YYYY-MM-DD; null when no dates were passed." },
                     check_out:        { type: %w[string null], description: "The checkout day the list was computed for, YYYY-MM-DD; null when no dates were passed." },
+                    timezone:         { type: "string", description: "The IANA zone THIS property's calendar runs on — the clock `check_in` is a day of, and the clock a past date is judged against. It is a property of the hotel, not of this operator: another hotel in the same answer may be on a different one." },
                     room_types:       {
                       type: "array",
                       description: "The property's room types, cheapest first.",
@@ -429,7 +442,7 @@ class Kiosk::HotelsController < ActionController::API
                     },
                   },
                   required: %w[property_id name neighbourhood stars address amenities currency
-                               room_types_scope check_in check_out room_types],
+                               room_types_scope check_in check_out timezone room_types],
                 }
   # The stay is RESOLVED, not written down: a calendar literal here ages
   # into a 400, because a `check_in` before today is refused. `example_params`
@@ -449,6 +462,7 @@ class Kiosk::HotelsController < ActionController::API
     },
     check_in:  -> { WireArguments.example_check_in.iso8601 },
     check_out: -> { WireArguments.example_check_out.iso8601 },
+    timezone:  WireArguments::DEFAULT_ZONE_NAME,
     room_types: [
       { room_type_id: 7, name: "Classic",   nightly_price_cents: 15000 },
       { room_type_id: 8, name: "Bosphorus", nightly_price_cents: 25000 },
@@ -491,21 +505,30 @@ class Kiosk::HotelsController < ActionController::API
           code: "bad_request", message: "check_out must be after check_in",
         ))
       end
-      # WITH dates this verb becomes an availability statement, so a past
-      # `check_in` would publish a free-rooms list for nights nobody can book.
-      # Same guard as `availability` and `reserve_room` — one floor per origin.
-      refusal = WireArguments.past_stay(ci)
-      return render_refusal(refusal) if refusal
+      dated_check_in = ci
     end
 
     property_id, refusal = WireArguments.integer(params[:property_id], field: "property_id",
                                                                        hint: WireArguments::HINT_PROPERTY_ID)
     return render_refusal(refusal) if refusal
 
+    # THE FLOOR IS THIS PROPERTY'S, so it cannot be applied before the property
+    # is known — which is why the dates are parsed above and judged here.
+    # With dates this verb becomes an availability statement, so a past
+    # `check_in` would publish a free-rooms list for nights nobody can book.
+    # Same guard as `availability` and `reserve_room`, and one floor PER
+    # PROPERTY rather than per origin.
+    zone = WireArguments.zone_for(property_id)
+    if dated_check_in
+      refusal = WireArguments.past_stay(dated_check_in, zone: zone)
+      return render_refusal(refusal) if refusal
+    end
+
     # `pick`, not `find_by!`: the bang form's RecordNotFound would render a 404
     # carrying Rails' own message, which says nothing an assistant can act on.
     # The refusal below is the same status with this origin's sentence in it.
-    prop = Property.where(id: property_id).pick(:id, :name, :neighbourhood, :stars, :address, :amenities)
+    prop = Property.where(id: property_id)
+                   .pick(:id, :name, :neighbourhood, :stars, :address, :amenities, :timezone)
     # NO SUCH HOTEL IS 404 (spec §9.1). Not confusable with the 404 the
     # wire answers for an UNREGISTERED VERB: that one names the verb and carries
     # the registry's hint, this one names the id.
@@ -528,6 +551,11 @@ class Kiosk::HotelsController < ActionController::API
       room_types_scope: dated ? "free #{ci}..#{co}" : "catalogue (no dates given — not an availability statement)",
       check_in:         dated ? ci.to_s : nil,
       check_out:        dated ? co.to_s : nil,
+      # THE ROW SAYS WHOSE CLOCK IT IS ON (spec §3 point 8 rule 9). Read off
+      # the property, never off the origin: a second hotel in another city
+      # answers a different value here, and `check_in` is a calendar day of
+      # THIS one's calendar.
+      timezone:         prop[6],
       room_types:       rooms.order(:nightly_price_cents)
                              .pluck(:id, :name, :nightly_price_cents)
                              .map { |id, name, cents|

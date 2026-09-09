@@ -97,7 +97,8 @@ class Kiosk::ReservationsController < ActionController::API
               "quote before it charges anything, so a cart that disagrees is refused outright rather " \
               "than partly honoured. Once the charge is through, `confirm_booking` turns the hold " \
               "into a confirmed stay. There is no room-night in the past to hold: this operator " \
-              "holds nothing before tonight, read in the property's own clock (Europe/Istanbul), " \
+              "holds nothing before tonight, read in THE PROPERTY's own clock — a fact about the " \
+              "hotel and not about this operator, published as `timezone` on a hotel_detail row — " \
               "though tonight itself IS bookable."
   input_schema type: "object",
                additionalProperties: false,
@@ -109,8 +110,9 @@ class Kiosk::ReservationsController < ActionController::API
                                  description: "The room type to hold — the `room_type_id` from an " \
                                               "availability row for these same dates." },
                  check_in:     { type: "string", format: "date",
-                                 description: "First night (YYYY-MM-DD). Today or later, read in the " \
-                                              "property's own clock (Europe/Istanbul)." },
+                                 description: "First night (YYYY-MM-DD). Today or later, read in THIS " \
+                                              "PROPERTY's own clock (`hotel_detail` publishes it as " \
+                                              "`timezone`). A calendar day is never converted." },
                  check_out:    { type: "string", format: "date",
                                  description: "Checkout day (YYYY-MM-DD, exclusive) — a checkout day " \
                                               "is the next guest's check-in day, so it may equal " \

@@ -17,6 +17,21 @@ class Property < ApplicationRecord
   has_many :room_types, dependent: :destroy
   has_many :bookings, dependent: :destroy
 
+  # ── THE CLOCK THIS PROPERTY IS SOLD ON ──────────────────────────────────
+  #
+  # A room-night is a calendar day AT THE HOTEL, so «is this check-in in the
+  # past» is a question about THIS property's clock and about no other. The
+  # zone is a recorded column rather than a constant on the origin, because an
+  # operator may run properties in several zones and an answer read off the
+  # origin is right only for as long as it runs them all in one city
+  # `timezone` is `NOT NULL`, so a property always has one.
+  #
+  # `Time.find_zone!` and not a fixed offset: a real IANA zone handles DST, and
+  # an offset cannot say which side of a transition a future night falls on.
+  def zone
+    Time.find_zone!(timezone)
+  end
+
   # The cheapest nightly rate this property offers, in EUR cents.
   def self.from_price_cents
     rt = RoomType.arel_table

@@ -31,18 +31,29 @@
 #     believed.
 #
 # WHAT THIS SPEC DOES NOT REACH, stated rather than left to be discovered:
-#   • {WireArguments.existing_property} — the ONLY method in the module that
-#     touches the database (`Property.exists?`). It is not called here and it is
-#     not stubbed: section 9 MEASURES that it is the DB one by showing the bare
-#     module cannot resolve `Property` at all, which is a stronger statement
-#     than a comment saying so. Its refusal half — {property_not_found}, the
-#     sentence and the 404 — has no lookup in it and IS covered, in section 8.
-#     What stays uncovered is one `Property.exists?` call, which `demo:redteam`
-#     and `demo:book` both exercise against a real origin.
-#   • {WireArguments.zone} is asserted to be a real IANA zone, not that Istanbul
-#     observes DST — it has not since 2016. What is checkable is that the zone is
-#     resolved through tzinfo rather than being a fixed offset, and that is what
-#     section 5 asserts.
+#   • {WireArguments.existing_property} and {WireArguments.zone_for} — the TWO
+#     methods in the module that touch the database (`Property.exists?` and the
+#     `properties.timezone` lookup the per-resource clock needs). Neither is
+#     neither is stubbed: section 9 MEASURES that both are the DB ones by
+#     showing the bare module cannot resolve `Property` at all, which is a
+#     stronger statement than a comment saying so. `existing_property`'s
+#     refusal half — {property_not_found}, the sentence and the 404 — has no
+#     lookup in it and IS covered, in section 8. What stays uncovered here is
+#     the two lookups, which `demo:redteam`, `demo:book` and
+#     `spec/conformance/per_resource_clock_spec.rb` exercise against a real
+#     database.
+#   • {WireArguments.default_zone} is asserted to be a real IANA zone, not that
+#     Istanbul observes DST — it has not since 2016. What is checkable is that
+#     the zone is resolved through tzinfo rather than being a fixed offset, and
+#     that is what section 5 asserts.
+#   • WHERE A PROPERTY'S zone COMES FROM. The clock a date is
+#     judged on is `properties.timezone`, read off the property being served,
+#     and {WireArguments.zone_for} is the lookup — which touches the database,
+#     so it is the SECOND method here this file cannot reach. What IS provable
+#     without one is that {past_stay} judges on the zone it is HANDED and
+#     invents none, which section 6 asserts at two real zones. The per-resource
+#     half is `spec/conformance/per_resource_clock_spec.rb`, where two
+#     properties of one operator answer one date two ways.
 
 require "active_support"
 require "active_support/core_ext/object/blank"
@@ -110,13 +121,18 @@ def value_of(pair)   = pair.is_a?(Array) ? pair[0] : nil
 # getgrocery's Dublin clock. The original method object is captured FIRST and put
 # back from that capture — never re-typed as `zone.now.to_date`, which would be a
 # second copy of the implementation pretending to be a restore.
+# `today` takes the property's zone, so the stub takes one too
+# and IGNORES it — this helper freezes a day, not a clock. The two-zone half of
+# the rule needs two real properties and therefore a database, so it lives in
+# `spec/conformance/per_resource_clock_spec.rb`; what is provable here is that
+# {WireArguments.past_stay} judges on the zone it is HANDED and invents none.
 def at_property_date(iso)
   fixed    = Date.iso8601(iso)
   original = WireArguments.method(:today)
-  WireArguments.define_singleton_method(:today) { fixed }
+  WireArguments.define_singleton_method(:today) { |_zone = nil| fixed }
   yield fixed
 ensure
-  WireArguments.define_singleton_method(:today) { original.call }
+  WireArguments.define_singleton_method(:today) { |zone = WireArguments.default_zone| original.call(zone) }
 end
 
 MAX  = WireArguments::MAX_INT4
@@ -334,15 +350,29 @@ end
 
 # ── 5. today / zone / example_check_in / example_check_out ───────────────────
 puts "\n── the property's clock, and the examples read off it ──"
-assert(WireArguments::ZONE_NAME == "Europe/Istanbul",
-       "the floor is read in the PROPERTY's locale (#{WireArguments::ZONE_NAME}), never the caller's")
-assert(WireArguments.zone.is_a?(ActiveSupport::TimeZone),
-       "zone is an ActiveSupport::TimeZone, got #{WireArguments.zone.class}")
-assert(WireArguments.zone.tzinfo.identifier == "Europe/Istanbul",
+assert(WireArguments::DEFAULT_ZONE_NAME == "Europe/Istanbul",
+       "the ORIGIN default — what `properties.timezone` is backfilled from and what a published " \
+       "example is dated on (#{WireArguments::DEFAULT_ZONE_NAME}); it is NOT what a request is " \
+       "answered on, which is the property's own column")
+assert(WireArguments.default_zone.is_a?(ActiveSupport::TimeZone),
+       "default_zone is an ActiveSupport::TimeZone, got #{WireArguments.default_zone.class}")
+assert(WireArguments.default_zone.tzinfo.identifier == "Europe/Istanbul",
        "… resolved through tzinfo — a REAL IANA zone rather than a fixed offset, so a future " \
-       "government decision moves it and this code does not: #{WireArguments.zone.tzinfo.identifier}")
-assert(WireArguments.today == WireArguments.zone.now.to_date,
-       "today IS the property zone's date, read at call time")
+       "government decision moves it and this code does not: " \
+       "#{WireArguments.default_zone.tzinfo.identifier}")
+assert(WireArguments.today == WireArguments.default_zone.now.to_date,
+       "today with no zone IS the origin default's date, read at call time")
+
+# THE ZONE IS AN ARGUMENT, AND `today` HONOURS IT. This is the DB-free half of
+# The rule's first half: two properties of one operator can be on two calendar
+# days at one instant. The half that proves the zone is READ OFF THE PROPERTY
+# needs two rows in a table and lives in spec/conformance/per_resource_clock_spec.rb.
+ISTANBUL = Time.find_zone!("Europe/Istanbul")
+AUCKLAND = Time.find_zone!("Pacific/Auckland")
+assert(WireArguments.today(ISTANBUL) == ISTANBUL.now.to_date,
+       "today(Europe/Istanbul) reads THAT zone (#{WireArguments.today(ISTANBUL)})")
+assert(WireArguments.today(AUCKLAND) == AUCKLAND.now.to_date,
+       "today(Pacific/Auckland) reads THAT zone (#{WireArguments.today(AUCKLAND)})")
 
 at_property_date("2026-03-15") do |fixed|
   assert(WireArguments.today == fixed, "the clock is frozen for this block (#{fixed})")
@@ -357,7 +387,7 @@ at_property_date("2026-03-15") do |fixed|
          "the published example is BOOKABLE at the same instant it is published — the property " \
          "these examples exist for, asserted against the same floor the verb uses")
 end
-assert(WireArguments.today == WireArguments.zone.now.to_date,
+assert(WireArguments.today == WireArguments.default_zone.now.to_date,
        "and the real clock is back after the frozen block (#{WireArguments.today})")
 
 # ── 6. past_stay/1 — spec §9.1's FIRST branch, on the property's clock ───────
@@ -378,9 +408,9 @@ at_property_date("2026-03-15") do |fixed|
     assert_typed_400(refusal, "past_stay(#{ci})")
     next unless refusal.is_a?(OperationResult)
 
-    assert(refusal.message == "check_in #{ci.iso8601} is in the past — hoteling sells room-nights " \
+    assert(refusal.message == "check_in #{ci.iso8601} is in the past — this hotel sells room-nights " \
                               "from #{fixed.iso8601} onwards (Europe/Istanbul)",
-           "  … names the value, the floor AND the zone: #{refusal.message.inspect}")
+           "  … names the value, the floor AND the zone it judged on: #{refusal.message.inspect}")
     assert(refusal.hint.to_s.include?("today IS bookable"),
            "  … says today is bookable, so the caller does not guess: #{refusal.hint}")
     assert(refusal.hint.to_s.include?("EMPTY availability list"),
@@ -452,25 +482,29 @@ assert(OperationResult::STATUSES.key?("not_found"),
        "hoteling's own STATUSES map carries not_found — without it the line above would raise a " \
        "KeyError at the wire instead of rendering a 404")
 
-# ── 9. existing_property/1 — the ONE method this spec does not reach ─────────
+# ── 9. The TWO methods this spec does not reach ─────────────────────────────
 #
-# It is `Property.exists?(id: …)`, the module's only database call. This spec
-# does not stub it and does not boot to reach it; instead it MEASURES that it is
-# the DB one — in a process where ActiveRecord was never loaded, the constant
-# cannot resolve at all. A comment claiming "this one needs the database" would
-# age; this fails the moment someone makes it pure and forgets to say so.
-puts "\n── existing_property: named, measured, and deliberately not covered here ──"
-assert(WireArguments.respond_to?(:existing_property),
-       "the module still ships existing_property — if it is gone, this spec's exclusion note is stale")
-begin
-  WireArguments.existing_property(1)
-  assert(false, "existing_property reached a lookup without ActiveRecord — it is no longer the " \
-                "DB-touching method, so this spec's coverage note needs rewriting")
-rescue NameError => e
-  assert(e.message.include?("Property"),
-         "existing_property is the DB one, MEASURED: without a boot it cannot resolve `Property` " \
-         "(#{e.message.split("\n").first}). Its refusal half is covered in section 8; the lookup " \
-         "itself is exercised by demo:redteam and demo:book against a real origin.")
+# `Property.exists?(id: …)` behind {existing_property}, and the
+# `properties.timezone` lookup behind {zone_for}. This spec stubs neither and
+# boots for neither; instead it MEASURES that both are the DB ones — in a
+# process where ActiveRecord was never loaded, the constant cannot resolve at
+# all. A comment claiming "these need the database" would age; this fails the
+# moment someone makes one of them pure and forgets to say so.
+puts "\n── existing_property and zone_for: named, measured, deliberately not covered here ──"
+%i[existing_property zone_for].each do |name|
+  assert(WireArguments.respond_to?(name),
+         "the module still ships #{name} — if it is gone, this spec's exclusion note is stale")
+  begin
+    WireArguments.public_send(name, 1)
+    assert(false, "#{name} reached a lookup without ActiveRecord — it is no longer a DB-touching " \
+                  "method, so this spec's coverage note needs rewriting")
+  rescue NameError => e
+    assert(e.message.include?("Property"),
+           "#{name} is a DB one, MEASURED: without a boot it cannot resolve `Property` " \
+           "(#{e.message.split("\n").first}). existing_property's refusal half is covered in " \
+           "section 8; the lookups themselves are exercised by demo:redteam, demo:book and " \
+           "spec/conformance/per_resource_clock_spec.rb against a real database.")
+  end
 end
 
 # ── 10. The guards run in front of the database, not behind it ──────────────

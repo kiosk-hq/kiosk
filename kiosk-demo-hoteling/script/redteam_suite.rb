@@ -121,7 +121,7 @@ profile = Kiosk::Redteam::Profile.new(
   # ── row_id_key / result_id_key ────────────────────────────────────────────
   # Query rows (my_bookings) carry "booking_id" (the same name confirm_booking takes).
   # The reserve_room action answers its OWN object, whose "booking_id" is a
-  # top-level member — 0.4 retired the `{value: …}` wrapper.
+  # top-level member: an action's result IS that object, unwrapped.
   row_id_key:    "booking_id",
   result_id_key: "booking_id",
 
@@ -156,12 +156,12 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # ── forge_action / forge_args — ForgedUserId ─────────────────────────────
-  # B calls reserve_room with user_id: A.user_id injected. Since 0.4 the wire
-  # itself REFUSES it: `reserve_room` publishes `additionalProperties: false`
-  # and does not declare `user_id`, so the injected principal is a typed 400
-  # before the handler runs. (Through 0.3 the argument was accepted and the
-  # handler derived the owner from the GUC instead; the generic scenario accepts
-  # either — a 4xx refusal, or a 200 whose row never surfaces under A.)
+  # B calls reserve_room with user_id: A.user_id injected, and the wire itself
+  # REFUSES it: `reserve_room` publishes `additionalProperties: false` and does
+  # not declare `user_id`, so the injected principal is a typed 400 before the
+  # handler runs. The generic scenario accepts EITHER outcome — a 4xx refusal,
+  # or a 200 whose row never surfaces under A — because what it asserts is the
+  # ownership property, not one particular way of enforcing it.
   forge_action: "reserve_room",
   forge_args:   lambda { |client, principal_a, _principal_b|
     found = FIND_AVAILABLE.call(client, principal_a)

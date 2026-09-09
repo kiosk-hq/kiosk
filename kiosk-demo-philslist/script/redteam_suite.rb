@@ -120,15 +120,11 @@ BATTERY.record("CrossTenantRead",
 
 # ── ForgedUserId — Bob posts with a forged owner_id (Alice's) ────────────────
 #
-# THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what
-# it now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
-# IGNORED by the handler, and the proof was indirect: the created listing did
-# not surface in Alice's my_listings. On the 0.4 wire `input_schema` is
-# validated on every call and `post_listing` declares
-# `additionalProperties: false` — the principal is not one of its inputs — so
-# the forgery is REFUSED before the handler runs, with a typed 400 naming the
-# offending parameter. Both halves are asserted: the wire refuses it, AND
-# nothing belonging to Bob appears under Alice.
+# WHAT THIS BEAT PROVES. `input_schema` is validated on every call and
+# `post_listing` declares `additionalProperties: false` — the principal is not
+# one of its inputs — so the forgery is REFUSED before the handler runs, with a
+# typed 400 naming the offending parameter. Both halves are asserted: the wire
+# refuses it, AND nothing belonging to Bob appears under Alice.
 rc, forged = WIRE.post_json("/kiosk/post_listing",
                             { category_slug: "free",
                               title: "Forged", body: "should be Bob's", owner_id: ALICE.user_id },

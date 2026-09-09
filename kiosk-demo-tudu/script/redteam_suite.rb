@@ -141,15 +141,12 @@ BATTERY.record("CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (wan
 
 # ── ForgedUserId — outsider create_list with a forged account_id ─────────────
 #
-# THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what it
-# now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
-# IGNORED by the handler, and the proof was indirect: the created list did not
-# surface in the owner's my_lists. On the 0.4 wire `input_schema` is validated on
-# every call and `create_list` declares `additionalProperties: false` with
-# `title` as its only property — the principal is not one of its inputs — so the
-# forgery is REFUSED before the handler runs, with a typed 400 naming the
-# offending parameter. Both halves are asserted: the wire refuses it, AND the
-# outsider's LEGITIMATE list lands under the outsider and never under the owner.
+# WHAT THIS BEAT PROVES. `input_schema` is validated on every call and
+# `create_list` declares `additionalProperties: false` with `title` as its only
+# property — the principal is not one of its inputs — so the forgery is REFUSED
+# before the handler runs, with a typed 400 naming the offending parameter.
+# Both halves are asserted: the wire refuses it, AND the outsider's LEGITIMATE
+# list lands under the outsider and never under the owner.
 rc, forged = post_json("/kiosk/create_list",
                        { title: "Forged", account_id: owner[:user_id] },
                        WIRE.bearer(outsider[:token]))

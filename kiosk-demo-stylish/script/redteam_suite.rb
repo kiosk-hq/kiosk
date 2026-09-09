@@ -205,15 +205,11 @@ BATTERY.record("CrossTenantRead",
 
 # ── ForgedUserId — B books with A's user_id in the args ──────────────────────
 #
-# THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what it
-# now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
-# IGNORED by the handler, and the proof was indirect: the created appointment
-# did not surface in A's my_appointments. On the 0.4 wire `input_schema` is
-# validated on every call and `book_appointment` declares
-# `additionalProperties: false` — the principal is not one of its inputs — so
-# the forgery is REFUSED before the handler runs, with a typed 400 naming the
-# offending parameter. Both halves are asserted: the wire refuses it, AND
-# nothing belonging to B appears under A.
+# WHAT THIS BEAT PROVES. `input_schema` is validated on every call and
+# `book_appointment` declares `additionalProperties: false` — the principal is
+# not one of its inputs — so the forgery is REFUSED before the handler runs,
+# with a typed 400 naming the offending parameter. Both halves are asserted:
+# the wire refuses it, AND nothing belonging to B appears under A.
 rc, forged = WIRE.post_json(
        "/kiosk/book_appointment",
        { salon_id: salon_id, slot: FUTURE_SLOT.call(2), user_id: ALICE.user_id },

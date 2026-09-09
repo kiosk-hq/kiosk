@@ -130,12 +130,12 @@ profile = Kiosk::Redteam::Profile.new(
     # Query the catalog as B to get a valid sku for create_order; the
     # ForgedUserId scenario adds user_id: A's UUID on top of these args.
     #
-    # WHAT THAT BEAT NOW PROVES. `create_order` publishes
+    # WHAT THIS BEAT PROVES. `create_order` publishes
     # `additionalProperties: false` and does not declare `user_id` — the
-    # principal is not one of its inputs — and 0.4 validates `input_schema` on
-    # every call, so the forged argument is REFUSED (400 bad_request naming it)
-    # instead of being accepted and silently ignored. Stricter than 0.3, and the
-    # ownership half is still proved: nothing B creates ever appears under A.
+    # principal is not one of its inputs — and the wire validates `input_schema`
+    # on every call, so the forged argument is REFUSED (400 bad_request naming
+    # it) rather than accepted and silently ignored. The ownership half is
+    # proved too: nothing B creates ever appears under A.
     catalog_resp = client.query(_principal_b, name: "catalog")
     catalog = catalog_resp.body.is_a?(Array) ? catalog_resp.body : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?

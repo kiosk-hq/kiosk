@@ -692,31 +692,91 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-skooti/README.md", "bin/rails demo:setup", "bin/reset-fleet"]],
       expect: /skooti: kiosk-demo-skooti\/README\.md names `bin\/reset-fleet`, which exists neither/ },
 
-    # K-1335 is an ABSENCE rule over a corpus that holds ZERO of its subject, so
-    # its arms carry the whole weight: the break arm is the only place a real
-    # orphan is ever constructed, and the two vacuity arms are the only thing
-    # standing between "no container file in the tree" and "a detector that
-    # stopped recognising one".
+    # T-192 re-pointed this rule from an ABSENCE to a PRESENCE, so the arms
+    # changed shape with it. The subject is no longer empty — eight compose
+    # files and one image — which means a COUNT is now a real signal and the
+    # vacuity arms drain the corpus STRUCTURALLY rather than naming the files
+    # they know about. An arm that has to be edited when a ninth demo arrives
+    # is an arm that will silently stop planting what it says it plants.
+    { id: "demo-without-container-path", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "a demo ships no compose file, so the one command its README promises does not exist",
+      ops:  [[:delete, "kiosk-demo-tudu/compose.yaml"]],
+      expect: /kiosk-demo-tudu ships no compose file/ },
+    { id: "compose-runs-another-demo", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "a copied-and-half-edited compose file brings up a DIFFERENT demo under this demo's name — " \
+            "the shape that is invisible because the image carries all eight",
+      ops:  [[:edit, "kiosk-demo-tudu/compose.yaml",
+              "working_dir: /kiosk/kiosk-demo-tudu", "working_dir: /kiosk/kiosk-demo-skooti"]],
+      expect: %r{kiosk-demo-tudu/compose\.yaml: its `working_dir` is not} },
+    { id: "compose-port-drifts-from-the-task", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "a demo moves the port its own tasks serve on and the compose file keeps publishing the old one",
+      ops:  [[:edit, "kiosk-demo-stylish/lib/tasks/demo.rake",
+              'ENV.fetch("PORT", "3005")', 'ENV.fetch("PORT", "3105")']],
+      expect: %r{kiosk-demo-stylish/compose\.yaml: it does not serve on port 3105} },
+    { id: "compose-shared-half-drifts", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "one compose file's database service is edited and the seven siblings are not — the " \
+            "hand-copy drift this whole script exists for, in the newest copied file",
+      ops:  [[:edit, "kiosk-demo-philslist/compose.yaml",
+              "pg_isready -U postgres", "pg_isready -U postgres -d postgres"]],
+      expect: %r{compose\.yaml: the compose file differs from the \d+ other\(s\)} },
+    { id: "compose-port-collision", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "two demos publish the same host port, so they cannot be up at once — and comparing two " \
+            "storefronts side by side is how an operator reads the wire",
+      ops:  [[:edit, "kiosk-demo-tudu/compose.yaml",
+              '      - "3007:3007"', "      - \"3007:3007\"\n      - \"3003:3007\""]],
+      expect: /all publish host port 3003/ },
+    { id: "second-image-recipe", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "a demo grows its own Dockerfile, which is eight copies of an install list and cannot " \
+            "build anyway — the context has to be the repository",
+      ops:  [[:write, "kiosk-demo-skooti/Dockerfile", "FROM ruby:4.0.1-slim\nRUN echo hi\n"]],
+      expect: %r{kiosk-demo-skooti/Dockerfile is a SECOND container image recipe} },
+    { id: "image-ruby-drifts-from-ci", kind: :break,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "the image's Ruby stops being one this repository's CI runs, so the path an operator " \
+            "meets FIRST is the one interpreter nothing here is tested on",
+      ops:  [[:edit, "Dockerfile", /^ARG RUBY_VERSION=[0-9][0-9.]*$/, "ARG RUBY_VERSION=3.2.9"]],
+      expect: /`ARG RUBY_VERSION=3\.2\.9` names a Ruby \.github\/workflows\/ci\.yml never runs/ },
     { id: "orphan-container-ignore", kind: :break,
-      rule: "No orphaned container tooling from the `rails new` skeleton (K-1335)",
-      what: "a demo grows back the `.dockerignore` two earlier passes deleted one demo at a time",
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "a demo grows back the `.dockerignore` two earlier passes deleted one demo at a time — " \
+            "and the repository now HAS a root recipe, so an ancestor test would call it legitimate",
       ops:  [[:write, "kiosk-demo-hoteling/.dockerignore",
               "# See https://docs.docker.com/engine/reference/builder/#dockerignore-file\n/.git/\n/tmp/*\n"]],
       expect: /kiosk-demo-hoteling\/\.dockerignore is an ORPHAN/ },
     { id: "vacuity-container-detector", kind: :vacuity,
-      rule: "No orphaned container tooling from the `rails new` skeleton (K-1335)",
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
       what: "the ignore-file pattern stops matching its own subject — the zero that reads like a clean tree",
       ops:  [[:edit, "bin/check-demo-copies",
               "CONTAINER_IGNORE_RE = /\\A\\.(?:docker|container|podman)ignore\\z/",
               "CONTAINER_IGNORE_RE = /\\A\\.nothing-matches-this\\z/"]],
       expect: /the container-tooling detector reads "\.dockerignore" as neither/ },
     { id: "vacuity-container-corpus", kind: :vacuity,
-      rule: "No orphaned container tooling from the `rails new` skeleton (K-1335)",
-      what: "the file walk comes back empty by EITHER route, so every ignore file in the tree is invisible",
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "the file walk comes back empty by EITHER route, so every container file in the tree is invisible",
       ops:  [[:edit, "bin/check-demo-copies",
               "container_tracked = container_git.success? ? container_ls.split(\"\\0\").reject(&:empty?) : container_walk(ROOT)",
               "container_tracked = []"]],
       expect: /the container-tooling rule walked 0 (?:tracked|working-tree) path\(s\)/ },
+    { id: "vacuity-no-port-anywhere", kind: :vacuity,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "no demo declares a PORT default any more, so the compose-port rule compares nothing and " \
+            "reads as coverage. STRUCTURAL: the op walks every demo rake file rather than naming the " \
+            "seven that have one today, so a demo added tomorrow drains with the rest",
+      ops:  [[:each, "kiosk-demo-*/lib/tasks/demo.rake",
+              /ENV\.fetch\("PORT",\s*"\d+"\)/, 'ENV.fetch("PORT")']],
+      expect: /not ONE demo yielded a port default from its own/ },
+    { id: "vacuity-ci-postgres-unreadable", kind: :vacuity,
+      rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
+      what: "ci.yml stops declaring a Postgres service, so the database-major rule compares the " \
+            "compose files against nothing and any major at all reads as clean",
+      ops:  [[:edit, ".github/workflows/ci.yml", "image: postgres:17", "image: pg-service:17"]],
+      expect: /no `image: postgres:<major>` in \.github\/workflows\/ci\.yml/ },
   ].freeze
 
   # ── coverage, derived from this file's own banners ────────────────────────
@@ -818,13 +878,25 @@ if ARGV.include?("--self-test")
 
             saved   = {}
             trouble = nil
+            # `:each` names a GLOB rather than one path — it is how a vacuity arm
+            # drains the whole corpus without listing the files that are in it
+            # today. Expanding it here is what keeps the save/restore/verify
+            # machinery below identical for every op kind.
+            st_rels = lambda do |op|
+              case op[0]
+              when :copy then [op[2]]
+              when :each then Dir[File.join(tree, op[1])].sort.map { |f| f.delete_prefix("#{tree}/") }
+              else [op[1]]
+              end
+            end
             plant[:ops].each do |op|
-              rel = op[0] == :copy ? op[2] : op[1]
+              st_rels.call(op).each do |rel|
               saved[rel] = nil unless saved.key?(rel)
               path = File.join(tree, rel)
               # Content AND mode: the `:chmod` arm plants a mode, and a restore that
               # only rewrote bytes would leave the fixture tree permanently altered.
               saved[rel] ||= File.exist?(path) ? [File.binread(path), File.stat(path).mode & 0o7777] : nil
+              end
             end
 
             out, code = nil, nil
@@ -854,6 +926,21 @@ if ARGV.include?("--self-test")
                   trouble ||= "#{op[1]} does not exist, so there is nothing to copy" unless File.exist?(src)
                   FileUtils.mkdir_p(File.dirname(path))
                   FileUtils.copy_file(src, path, true) if File.exist?(src)
+                when :each
+                  # STRUCTURAL: every file the glob finds, none of them named here.
+                  hits = Dir[File.join(tree, op[1])].sort
+                  trouble ||= "the glob #{op[1].inspect} matches no file, so this arm plants nothing" if hits.empty?
+                  touched = 0
+                  hits.each do |f|
+                    before = File.read(f)
+                    after  = before.gsub(op[2]) { op[3] }
+                    next if after == before
+
+                    touched += 1
+                    File.write(f, after)
+                  end
+                  trouble ||= "the needle #{op[2].inspect} occurs in none of the #{hits.length} " \
+                              "file(s) #{op[1].inspect} matches" if touched.zero?
                 end
               end
               out, code = st_run.call(tree) if trouble.nil?
@@ -6324,7 +6411,7 @@ container_dirs    = container_recipes.each_with_object({}) { |rel, h| h[File.dir
 container_composes = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_COMPOSE_RE }
 container_images   = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IMAGE_RE }
 
-# ── (1) Every demo in the corpus has a container path ────────────────────────
+#   (1) Every demo in the corpus has a container path
 #
 # The demo set is `demos`, discovered at the top of this script from the
 # filesystem. Nothing here names one.
@@ -6346,7 +6433,7 @@ if container_demo_names.empty?
             "pass vacuously."
 end
 
-# ── (2) The IMAGE is shared: exactly one, at the repository root ─────────────
+#   (2) The IMAGE is shared: exactly one, at the repository root
 #
 # A per-demo Dockerfile is the drift this whole script exists to stop, and here
 # it would also be wrong on its own terms: the build context has to be the
@@ -6366,7 +6453,7 @@ if container_images.empty?
             "fails at its first step."
 end
 
-# ── (2b) The image is pinned to versions THIS repository actually runs ───────
+#   (2b) The image is pinned to versions THIS repository actually runs
 #
 # Two numbers in the Dockerfile and one in every compose file are claims about
 # an environment nobody here can test on a laptop without a container runtime,
@@ -6418,7 +6505,7 @@ if File.file?(container_dockerfile)
   end
 end
 
-# ── (3) Each compose file names ITS OWN demo, and the shared recipe ──────────
+#   (3) Each compose file names ITS OWN demo, and the shared recipe
 #
 # Read as text rather than parsed: this script may not require a YAML parser to
 # state a fact about four lines, and the shapes below are the ones an editor
@@ -6482,7 +6569,7 @@ if container_ports_derived.zero?
             "the rule — or the `ENV.fetch(\"PORT\", …)` shape it derives from changed."
 end
 
-# ── (3b) The eight compose files are ONE file modulo the demo and the port ───
+#   (3b) The eight compose files are ONE file modulo the demo and the port
 #
 # Rule (3) holds each per-demo FIELD to what that demo's own tree says. This
 # holds everything else — the database service, its healthcheck, the PG
@@ -6540,31 +6627,48 @@ container_by_port.select { |_, rels| rels.length > 1 }.each do |port, rels|
             "storefronts is how an operator reads it."
 end
 
-# ── (4) No orphaned ignore file (K-1335, unchanged) ──────────────────────────
+#   (4) An ignore file only counts where the BUILD READS IT (K-1335, T-192)
 #
-# A container IGNORE file is an instruction to a container BUILD. It is
-# meaningful exactly when a recipe that build could run sits beside it or above
-# it, and is dead configuration otherwise. This is the half of the old rule that
-# survives its re-pointing: the repository root now HAS a recipe, so the root
-# `.dockerignore` is legitimate by construction and this rule goes quiet on it —
-# what it still catches is `rails new` scaffolding reappearing inside a demo,
-# where there is no recipe and never will be.
-container_ignores.each do |rel|
-  dir  = File.dirname(rel)
-  kin  = []
-  walk = dir
-  loop do
-    kin << walk if container_dirs.key?(walk)
-    break if walk == "."
-    walk = File.dirname(walk)
+# A container IGNORE file is an instruction to a container build, and a build
+# reads exactly ONE of them: the one sitting in its context directory. That is
+# the correction this rule needed when the repository grew a recipe. The old
+# spelling asked whether a recipe existed in the ignore-file's own directory or
+# in any ancestor — which was a fair rule while the tree held no recipe at all,
+# and became VACUOUS the moment a `Dockerfile` landed at the repository root:
+# every path in this repository has the root above it, so every `.dockerignore`
+# anywhere would have read as legitimate, and K-1335's exact scaffolding could
+# have walked back into all eight demos with this rule reporting clean.
+#
+# So the legitimate set is DERIVED from what the compose files declare: each
+# one's `context:` resolved against its own directory, plus the directory of
+# every image recipe. An ignore file outside that set is dead configuration —
+# nothing will ever read it — which is what `rails new` leaves behind.
+container_contexts = {}
+container_images.each { |rel| container_contexts[File.dirname(rel)] = true }
+container_composes.each do |rel|
+  body = File.read(File.join(ROOT, rel))
+  body.scan(/^\s+context:\s*(\S+)\s*$/).flatten.each do |ctx|
+    dir = File.dirname(rel)
+    container_contexts[File.expand_path(ctx, dir == "." ? "/" : "/#{dir}").delete_prefix("/").then { |d| d.empty? ? "." : d }] = true
   end
-  next unless kin.empty?
+end
 
-  errors << "#{rel} is an ORPHAN: it tells a container build what to leave out, and there is no " \
-            "Dockerfile, Containerfile or compose file in #{dir == '.' ? 'the repository root' : dir} " \
-            "nor in any directory above it. This is K-1335's exact shape — `rails new` scaffolding " \
-            "whose recipe was deleted and whose ignore-file was not, three times in three demos. " \
-            "Delete it, or ship the recipe it is written for."
+if container_contexts.empty?
+  errors << "check-demo-copies: no build-context directory could be derived from any recipe or " \
+            "compose file, so the orphaned-ignore-file rule has an empty legitimate set and would " \
+            "call every ignore file — including a correct one — an orphan (T-192)."
+end
+
+container_ignores.each do |rel|
+  dir = File.dirname(rel)
+  next if container_contexts.key?(dir)
+
+  errors << "#{rel} is an ORPHAN: it tells a container build what to leave out, and no build in this " \
+            "repository reads it — a build reads the ignore file in its own CONTEXT directory, and " \
+            "the contexts here are #{container_contexts.keys.sort.map { |d| d == '.' ? 'the repository root' : d }.join(', ')}. " \
+            "This is K-1335's exact shape — `rails new` scaffolding whose recipe was deleted and " \
+            "whose ignore-file was not, three times in three demos. Delete it, or make the directory " \
+            "it sits in a context something actually builds from."
 end
 
 if errors.empty?
@@ -6622,7 +6726,8 @@ if errors.empty?
        "off ONE shared image (#{container_ports_derived} port(s) derived from the demos' own rake " \
        "defaults, Ruby and Postgres majors held against ci.yml) and no orphaned container tooling " \
        "in #{container_tracked.length} #{container_source} path(s) " \
-       "(#{container_ignores.length} ignore file(s), #{container_recipes.length} recipe(s); " \
+       "(#{container_ignores.length} ignore file(s) against #{container_contexts.length} derived " \
+       "build context(s), #{container_recipes.length} recipe(s); " \
        "detector proved on #{container_truth.length} constructed names), " \
        "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
        "(pattern and lexer proved against #{DEMO_ID_FIXTURES.size} fixtures this rule owns; " \

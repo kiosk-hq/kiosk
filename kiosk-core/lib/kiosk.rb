@@ -10,6 +10,7 @@ require "kiosk/guc"
 require "kiosk/configuration"
 require "kiosk/identity"
 require "kiosk/mandate"
+require "kiosk/uuid_check"
 
 require "kiosk/agent_identity_providers/base"
 require "kiosk/user_identity_providers/base"

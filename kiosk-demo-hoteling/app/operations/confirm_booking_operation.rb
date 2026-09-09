@@ -15,7 +15,7 @@ class ConfirmBookingOperation
     # raise — ActiveRecord casts an unparseable uuid to NULL, which matches no
     # row — so without this a typo would be answered as an OWNERSHIP refusal
     # (403) instead of a 400. A well-formed but foreign id still gets the 403.
-    unless UuidCheck.valid?(booking_id)
+    unless Kiosk::UuidCheck.valid?(booking_id)
       return OperationResult.refused(
         code:    "bad_request",
         message: "booking_id #{booking_id.to_s.inspect} is not a uuid — pass the `booking_id` " \

@@ -167,7 +167,7 @@ end
 # Wait for a background pay thread to reach a state, WITHOUT holding the
 # autoload interlock while we do. `rails runner` wraps the script in the
 # executor, which holds the load interlock in sharing mode for the whole run; a
-# thread that has to AUTOLOAD a constant (the cashier, {UuidCheck}, the models
+# thread that has to AUTOLOAD a constant (the cashier, {Kiosk::UuidCheck}, the models
 # it touches) needs it exclusively and would block until this loop gave up —
 # which is not the race under test, just an artefact of driving the app from a
 # script. `permit_concurrent_loads` releases the share for the duration of the

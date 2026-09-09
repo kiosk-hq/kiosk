@@ -12,7 +12,7 @@
 # a seeded database and a live Equihash toll — so proving a table about ten
 # literal values would cost all three, and would mean MUTATING a published
 # `input_schema`. The two cheaper siblings on this demo (`DeliverySlots` →
-# demo:slots_spec, `UuidCheck` → demo:cashier_spec) already have this seam; the
+# demo:slots_spec, `Kiosk::UuidCheck` → demo:cashier_spec) already have this seam; the
 # module that actually stands between the wire and the order needs it most.
 #
 # WHAT IS ASSERTED. Not "something was refused" — the TYPE and the SHAPE of each
@@ -40,9 +40,9 @@ require "active_support/core_ext/object/blank"
 require "active_support/core_ext/time"
 require "date"
 require "securerandom"
+require "kiosk/uuid_check"
 require "kiosk/operation_result"
 
-require_relative "../app/models/uuid_check"
 require_relative "../app/models/delivery_slots"
 require_relative "../app/models/dublin_zones"
 require_relative "../app/operations/operation_result"

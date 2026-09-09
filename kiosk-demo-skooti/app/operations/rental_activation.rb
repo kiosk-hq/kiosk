@@ -22,7 +22,7 @@ module RentalActivation
   # @param scooter [Scooter] the vehicle the reservation names, read server-side
   # @param reservation_id [String] the CALLER's spelling of that id, already
   #   through {WireArguments.reservation_id}. It is what gets SIGNED, and is
-  #   deliberately not re-read off `reservation.id`: {UuidCheck}'s `\h` pattern
+  #   deliberately not re-read off `reservation.id`: {Kiosk::UuidCheck}'s `\h` pattern
   #   accepts either hex case, so an uppercase id is signed as the caller wrote
   #   it and re-canonicalising here would change the bytes a provisioned lock
   #   verifies. The UPDATE below uses the ROW's id — the same row.

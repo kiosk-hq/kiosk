@@ -57,7 +57,7 @@ class Membership < ApplicationRecord
   # FIRST and answers 400, so nothing reaches here malformed, and that guard is
   # the only thing standing between a typo and a 403.
   #
-  # @param list_id [String] a canonical uuid (see UuidCheck)
+  # @param list_id [String] a canonical uuid (see Kiosk::UuidCheck)
   # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)
   # @return [Boolean]
   def self.reachable?(list_id, require_owner: false)

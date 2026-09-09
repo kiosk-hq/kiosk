@@ -8,7 +8,7 @@
 # NO (n, k) IS NAMED IN THIS COMMENT, ON PURPOSE. Naming one difficulty level's
 # literal pair makes a line that KIOSK_POW_DIFFICULTY falsifies without an edit
 # to this tree — a wrong claim reachable by an env var.
-# `app/services/pow_difficulty.rb` is where a level's numbers live; quoting
+# `Kiosk::Pow::Equihash::Difficulty` is where a level's numbers live; quoting
 # either pair back here, even in the past tense inside guillemets, also puts it
 # in the way of a grep for live claims. The register step below prints the pair
 # instead, read off the gate's own 402 — so on an origin whose register toll

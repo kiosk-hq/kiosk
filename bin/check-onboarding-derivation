@@ -167,13 +167,15 @@ GETGROCERY_STOREFRONT = "kiosk-demo-getgrocery/app/controllers/kiosk/storefront_
 GETGROCERY_ORDERS     = "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb"
 GETGROCERY_INITIALIZER = "kiosk-demo-getgrocery/config/initializers/kiosk.rb"
 # The two files that hold the Ruby CONSTANTS getgrocery writes INTO its
-# `input_schema` declarations -- `UuidCheck::JSON_SCHEMA_PATTERN` and
+# `input_schema` declarations -- `Kiosk::UuidCheck::JSON_SCHEMA_PATTERN` and
 # `WireArguments::MAX_INT4`. R14 used to count those keywords and print them
 # because the page's standalone controller can name no constant of the demo's;
 # it now RESOLVES them to the literal each one is assigned and asserts against
 # that, so a page that inlines the literal is held to it and a page that omits
 # it is red. A constant it cannot resolve is an error, never a pass (K-1354).
-GETGROCERY_UUID_CHECK     = "kiosk-demo-getgrocery/app/models/uuid_check.rb"
+# The uuid shape is no longer getgrocery's: T-189 promoted it into kiosk-core,
+# which is why one of these two paths leaves the demo tree.
+CORE_UUID_CHECK           = "kiosk-core/lib/kiosk/uuid_check.rb"
 GETGROCERY_WIRE_ARGUMENTS = "kiosk-demo-getgrocery/app/operations/wire_arguments.rb"
 # The origin's create verb, and the only file that says WHICH guard the summed
 # cart total is handed to. R15 walks it: the local the sum is bound to, the
@@ -1295,11 +1297,13 @@ def literal_assertion?(value)
 end
 
 # A Ruby constant reference as getgrocery writes one inside a declaration:
-# `UuidCheck::JSON_SCHEMA_PATTERN`, `WireArguments::MAX_INT4`. Scoped form only,
-# which is the only form these declarations use -- a bare `MAX_INT4` would be a
-# constant of the controller itself and is deliberately not recognised, so it
-# reads as UNRESOLVED rather than being guessed at.
-CONSTANT_REF = /\A[A-Z][A-Za-z0-9_]*::[A-Z][A-Z0-9_]*\z/
+# `Kiosk::UuidCheck::JSON_SCHEMA_PATTERN`, `WireArguments::MAX_INT4`. Scoped form
+# only, which is the only form these declarations use -- a bare `MAX_INT4` would
+# be a constant of the controller itself and is deliberately not recognised, so
+# it reads as UNRESOLVED rather than being guessed at. The scope may be NESTED,
+# because a constant that ships in a gem is namespaced and the declaration cites
+# it the way Ruby resolves it.
+CONSTANT_REF = /\A[A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*::[A-Z][A-Z0-9_]*\z/
 
 def constant_reference?(value)
   value.match?(CONSTANT_REF)
@@ -1311,14 +1315,26 @@ end
 # byte, so rstripping the masked line is where the CODE ends, and a `#` inside
 # the string being assigned cannot truncate it.
 def constant_literals(src)
-  scope = nil
+  # The nesting is tracked by INDENTATION rather than by matching `end`: these
+  # are conventionally-indented files, and a declaration cites a constant the
+  # way Ruby resolves it, so `module Kiosk` / `module UuidCheck` has to key
+  # `Kiosk::UuidCheck::CONST` and not only `UuidCheck::CONST`. Both spellings
+  # are emitted, so a declaration may name the full path or the innermost scope
+  # alone and this table answers either.
+  stack = []
   out   = {}
   masked(src).lines.zip(src.lines).each do |mline, oline|
-    if (m = mline.match(/\A\s*(?:class|module)\s+([A-Z][A-Za-z0-9_]*)/))
-      scope = m[1]
-    elsif scope && (m = mline.match(/\A\s*([A-Z][A-Z0-9_]*)\s*=\s*/))
+    if (m = mline.match(/\A(\s*)(?:class|module)\s+([A-Z][A-Za-z0-9_:]*)/))
+      indent = m[1].length
+      stack.pop while stack.any? && stack.last[0] >= indent
+      stack << [indent, m[2]]
+    elsif stack.any? && (m = mline.match(/\A\s*([A-Z][A-Z0-9_]*)\s*=\s*/))
       value = oline[m[0].length...mline.rstrip.length].to_s.strip.sub(/\.freeze\z/, "").strip
-      out["#{scope}::#{m[1]}"] = value unless value.empty?
+      next if value.empty?
+
+      names = stack.map(&:last)
+      out["#{names.join('::')}::#{m[1]}"] = value
+      out["#{names.last}::#{m[1]}"] = value
     end
   end
   out
@@ -1428,7 +1444,7 @@ end
 #          of those with the 500 K-1047 recorded on the origin.
 #
 # UNDER USED TO BE SCOPED TO LITERALS, AND THAT SCOPING WAS THE HOLE (K-1354).
-# getgrocery writes `pattern: UuidCheck::JSON_SCHEMA_PATTERN` and
+# getgrocery writes `pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN` and
 # `maximum: WireArguments::MAX_INT4` -- constants belonging to classes the page's
 # standalone controller does not have -- so the first writing COUNTED AND PRINTED
 # those instead of asserting on them. A rule that prints is a rule nothing holds:
@@ -1483,7 +1499,7 @@ def rule_property_keywords(page, sources)
         if literal.nil?
           bad << "#{verb}.#{prop} declares #{kw}: #{value} in #{GETGROCERY_STOREFRONT} / " \
                  "#{GETGROCERY_ORDERS} and this rule could not resolve that constant to a literal " \
-                 "in #{GETGROCERY_UUID_CHECK} or #{GETGROCERY_WIRE_ARGUMENTS}. It is not compared, " \
+                 "in #{CORE_UUID_CHECK} or #{GETGROCERY_WIRE_ARGUMENTS}. It is not compared, " \
                  "which is the state K-1354 closed -- re-point the resolution, do not drop the keyword"
           next
         end
@@ -2234,7 +2250,7 @@ def load_sources
     storefront:      repo_read(GETGROCERY_STOREFRONT),
     orders:          repo_read(GETGROCERY_ORDERS),
     getgrocery_init: repo_read(GETGROCERY_INITIALIZER),
-uuid_check:      repo_read(GETGROCERY_UUID_CHECK),
+uuid_check:      repo_read(CORE_UUID_CHECK),
 wire_arguments:  repo_read(GETGROCERY_WIRE_ARGUMENTS),
 create_order_op: repo_read(GETGROCERY_CREATE_ORDER),
 delivery_slots:  repo_read(GETGROCERY_DELIVERY_SLOTS),
@@ -2262,7 +2278,7 @@ def run_list
   puts
   puts "Derivation sources:"
   [GENERATOR_INITIALIZER, GETGROCERY_STOREFRONT, GETGROCERY_ORDERS, GETGROCERY_INITIALIZER,
-   GETGROCERY_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS, GETGROCERY_CREATE_ORDER,
+   CORE_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS, GETGROCERY_CREATE_ORDER,
    GETGROCERY_DELIVERY_SLOTS, GETGROCERY_OPERATIONS_DIR,
    GETGROCERY_APP_ROUTES, GETGROCERY_WIRE_ROUTES,
    SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
@@ -2521,7 +2537,7 @@ def fixture_keywords(assertions, consts, where)
     literal = constant_reference?(value) ? consts[value] : value
     if literal.nil?
       warn "self-test cannot build its fixture: #{where} declares #{kw}: #{value}, which resolves " \
-           "to no literal in #{GETGROCERY_UUID_CHECK} or #{GETGROCERY_WIRE_ARGUMENTS}"
+           "to no literal in #{CORE_UUID_CHECK} or #{GETGROCERY_WIRE_ARGUMENTS}"
       exit 1
     end
     ", #{kw}: #{literal}"

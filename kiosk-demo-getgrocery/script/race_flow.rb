@@ -340,7 +340,7 @@ check(unknown_error.is_a?(Kiosk::Server::Errors::Forbidden),
       "a well-formed but foreign order_id still gets the ownership rejection (got #{unknown_error.class})")
 
 # The cashier is one of THREE places a wire-supplied id reaches an `::uuid`
-# cast; the same `UuidCheck` guard covers the other two, and they are actions,
+# cast; the same `Kiosk::UuidCheck` guard covers the other two, and they are actions,
 # so drive them through the real registry here rather than trusting the shape of
 # the code. (A DB-free unit pass over the guard itself is `rake demo:cashier_spec`.)
 def action_error(name, args)

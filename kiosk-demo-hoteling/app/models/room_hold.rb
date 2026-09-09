@@ -18,7 +18,7 @@
 # model here rather than through an `INSERT` string in the app. It is named for
 # what hoteling uses the row FOR, not for the generic table, because
 # `resource_kind` is the column that says which. Promoting it into the engine is
-# a public-API decision, not a handler conversion (the UuidCheck shape).
+# a public-API decision, not a handler conversion (the Kiosk::UuidCheck shape).
 class RoomHold < ApplicationRecord
   self.table_name = "kiosk.reservations"
 

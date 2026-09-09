@@ -11,7 +11,7 @@ class RemoveMemberOperation
     # `account_id` is a SECOND wire-supplied id and {ListAccess} only covers
     # `list_id`, so it gets its own shape check.
     target = account_id.to_s
-    unless UuidCheck.valid?(target)
+    unless Kiosk::UuidCheck.valid?(target)
       return OperationResult.refused(
         code:    "bad_request",
         message: "account_id #{target.inspect} is not a uuid",
@@ -23,7 +23,7 @@ class RemoveMemberOperation
     # an `exists?` plus a `count`: at READ COMMITTED each statement takes its own
     # snapshot, so two could straddle a concurrent membership change.
     #
-    # `casecmp?` and not `==`: UuidCheck accepts either case (`\h`) and Postgres'
+    # `casecmp?` and not `==`: Kiosk::UuidCheck accepts either case (`\h`) and Postgres'
     # `uuid` compares canonically, so a byte-comparison would let an owner remove
     # herself by shouting her own id.
     owner_ids = Membership.where(list_id: list_id, role: Membership::OWNER).pluck(:account_id)

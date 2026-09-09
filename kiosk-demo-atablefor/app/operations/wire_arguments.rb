@@ -169,7 +169,7 @@ module WireArguments
     if raw.blank?
       return [nil, OperationResult.refused(code: "bad_request", message: "missing field: booking_id")]
     end
-    return [raw, nil] if UuidCheck.valid?(raw)
+    return [raw, nil] if Kiosk::UuidCheck.valid?(raw)
 
     [nil, OperationResult.refused(
       code:    "bad_request",

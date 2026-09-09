@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 # Standalone (no rails boot, no DB) unit spec for the order-reference shape
-# check — `app/models/uuid_check.rb`. Run with:
+# check — `Kiosk::UuidCheck`, which ships in kiosk-core. Run with:
 #   bundle exec rake demo:cashier_spec   (or: ruby spec/cashier_order_ref_spec.rb)
 #
-# `UuidCheck` guards the three places an agent-supplied id reaches an `::uuid`
+# `Kiosk::UuidCheck` guards the three places an agent-supplied id reaches an `::uuid`
 # cast: the cashier's cart reference (here), create_order's replace path and
 # reschedule_delivery (both in config/initializers/kiosk.rb, so they need a
 # booted app — `rake demo:race` drives those over the real DB). Before the guard
@@ -22,14 +22,14 @@
 #   • the guard is a GATE and not a formality: with a stub `Order` standing in
 #     for the persistence boundary, a canonical uuid ARRIVES there (bound as
 #     `$1` in the claim UPDATE) and a malformed one never does. That pair goes
-#     red if the UuidCheck call is deleted, where a negative-only assertion
+#     red if the Kiosk::UuidCheck call is deleted, where a negative-only assertion
 #     would stay green.
 # This is the DB-free test seam for the fix (getgrocery ships no rspec).
 
 require "securerandom"
+require "kiosk/uuid_check"
 require "kiosk/server/errors"
 
-require_relative "../app/models/uuid_check"
 require_relative "../app/services/validating_payment_provider"
 
 FAILURES = []
@@ -111,17 +111,17 @@ assert(e.is_a?(Kiosk::Server::Errors::Forbidden),
        "a cart referencing TWO orders is still a 403 forbidden, got #{e.class}")
 
 # ── The accepted shape is exactly create_order's own ─────────────────────────
-rejected = Array.new(50) { SecureRandom.uuid }.reject { |id| UuidCheck.valid?(id) }
+rejected = Array.new(50) { SecureRandom.uuid }.reject { |id| Kiosk::UuidCheck.valid?(id) }
 assert(rejected.empty?,
-       "UuidCheck accepts every SecureRandom.uuid (the shape create_order returns), " \
+       "Kiosk::UuidCheck accepts every SecureRandom.uuid (the shape create_order returns), " \
        "rejected #{rejected.inspect}")
-assert(UuidCheck.valid?("3F0C1A2E-4B5D-6E7F-8A9B-0C1D2E3F4A5B"),
-       "UuidCheck accepts an upper-case uuid")
-assert(!UuidCheck.valid?(nil) && !UuidCheck.valid?(12_345) && !UuidCheck.valid?({ "a" => 1 }),
-       "UuidCheck rejects non-String junk (nil / Integer / Hash) instead of raising")
-assert(!UuidCheck.valid?(" #{SecureRandom.uuid} ") &&
-       !UuidCheck.valid?("#{SecureRandom.uuid}\n#{SecureRandom.uuid}"),
-       "UuidCheck anchors the whole string — padded and multi-line values are rejected")
+assert(Kiosk::UuidCheck.valid?("3F0C1A2E-4B5D-6E7F-8A9B-0C1D2E3F4A5B"),
+       "Kiosk::UuidCheck accepts an upper-case uuid")
+assert(!Kiosk::UuidCheck.valid?(nil) && !Kiosk::UuidCheck.valid?(12_345) && !Kiosk::UuidCheck.valid?({ "a" => 1 }),
+       "Kiosk::UuidCheck rejects non-String junk (nil / Integer / Hash) instead of raising")
+assert(!Kiosk::UuidCheck.valid?(" #{SecureRandom.uuid} ") &&
+       !Kiosk::UuidCheck.valid?("#{SecureRandom.uuid}\n#{SecureRandom.uuid}"),
+       "Kiosk::UuidCheck anchors the whole string — padded and multi-line values are rejected")
 
 # ── The guard is a GATE: what it accepts arrives, what it refuses never does ──
 #
@@ -170,7 +170,7 @@ assert(ValidatingPaymentProvider::Order::BOUND.empty? &&
        e.is_a?(Kiosk::Server::Errors::BadRequest),
        "… and a malformed one never reaches it: the guard refuses before the claim UPDATE " \
        "binds anything (bound #{ValidatingPaymentProvider::Order::BOUND.inspect}, " \
-       "got #{e.class}) — delete the UuidCheck call and THIS assertion goes red")
+       "got #{e.class}) — delete the Kiosk::UuidCheck call and THIS assertion goes red")
 
 if FAILURES.empty?
   puts "\ncashier order-ref spec: ALL PASS"

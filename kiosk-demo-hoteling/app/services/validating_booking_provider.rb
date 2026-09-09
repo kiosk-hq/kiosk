@@ -113,7 +113,7 @@ class ValidatingBookingProvider
     # worst answer on the pay path, since an assistant cannot tell "your input
     # was wrong" from "the charge may have gone through". A 400 and not the
     # cashier's 403: this says nothing about whether any booking exists.
-    unless UuidCheck.valid?(booking_id)
+    unless Kiosk::UuidCheck.valid?(booking_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items booking_id #{booking_id.inspect} is not a uuid",
         hint: "use the `booking_id` reserve_room returned, verbatim (a canonical uuid, " \

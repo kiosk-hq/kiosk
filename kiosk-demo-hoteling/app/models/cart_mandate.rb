@@ -17,7 +17,7 @@ class CartMandate < ApplicationRecord
   # booking reference is what is asserted.
   #
   # `booking_id` is CALLER-SUPPLIED, so it is a QUOTED node the adapter escapes
-  # rather than an interpolated fragment. It has already passed {UuidCheck} by
+  # rather than an interpolated fragment. It has already passed {Kiosk::UuidCheck} by
   # the time it gets here; the quoting is what makes that a defence in depth
   # rather than the only defence.
   scope :referencing, lambda { |booking_id|

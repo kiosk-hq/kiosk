@@ -168,7 +168,7 @@ class ValidatingPaymentProvider
     # assistant cannot tell "your input was wrong" from "the charge may have gone
     # through". So reject the SHAPE up front, with a 400 rather than the cashier's
     # 403: a malformed argument says nothing about whether any order exists.
-    unless UuidCheck.valid?(order_id)
+    unless Kiosk::UuidCheck.valid?(order_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items order_id #{order_id.inspect} is not a uuid",
         hint: "use the `order_id` create_order returned, verbatim (a canonical uuid, " \

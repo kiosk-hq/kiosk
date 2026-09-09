@@ -8,7 +8,7 @@ class CompleteTodoOperation
   def self.call(todo_id:)
     # The one wire-supplied id in tudu with no other guard in front of it — see
     # {ListAccess.check} for why the shape check matters.
-    unless UuidCheck.valid?(todo_id)
+    unless Kiosk::UuidCheck.valid?(todo_id)
       return OperationResult.refused(
         code:    "bad_request",
         message: "todo_id #{todo_id.to_s.inspect} is not a uuid",

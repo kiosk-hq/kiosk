@@ -21,7 +21,7 @@ module ListAccess
   # typo would be reported as an ACCESS refusal (403) instead of a shape one
   # (400). A well-formed but foreign id still gets the 403.
   def self.check(list_id, require_owner: false)
-    unless UuidCheck.valid?(list_id)
+    unless Kiosk::UuidCheck.valid?(list_id)
       return OperationResult.refused(
         code:    "bad_request",
         message: "list_id #{list_id.to_s.inspect} is not a uuid",

@@ -17,6 +17,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- `Kiosk::UuidCheck` — canonical-uuid shape guard for identifiers that arrive on the wire, with `PATTERN` (the runtime predicate) and `JSON_SCHEMA_PATTERN` (the same shape for a verb descriptor's `input_schema`) beside each other so the declared contract and the enforced one cannot drift. An origin that lets a malformed id reach a Postgres `uuid` cast answers either a 500 leaking SQL internals or a wrong ownership refusal; both are the origin's bug reported as something else.
 - Initial skeleton.
 - Value types: `Kiosk::Identity`, `Kiosk::Mandate::IntentMandate` / `CartMandate` / `PaymentMandate`.
 - Abstract base classes: `AgentIdentityProviders::Base`, `UserIdentityProviders::Base`, `PaymentProviders::Base`.

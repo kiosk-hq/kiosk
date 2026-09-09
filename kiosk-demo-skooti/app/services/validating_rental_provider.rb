@@ -123,7 +123,7 @@ class ValidatingRentalProvider
     # cashier's 403: a malformed argument, not a refusal to serve a well-formed
     # one, and it says nothing about whether any reservation exists. The message
     # echoes only what the agent sent — no SQL, no PG error text.
-    unless UuidCheck.valid?(reservation_id)
+    unless Kiosk::UuidCheck.valid?(reservation_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items reservation_id #{reservation_id.inspect} is not a uuid",
         hint: "use the `reservation_id` reserve returned, verbatim (a canonical uuid, " \

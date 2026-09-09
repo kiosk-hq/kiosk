@@ -146,9 +146,9 @@ class Kiosk::OrdersController < ActionController::API
                  delivery_address: { type: "string",
                                      description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
                  # `pattern`/`format` so the DECLARED contract carries the shape the
-                 # handler enforces (UuidCheck), which a bare {type:"string"} does not.
+                 # handler enforces (Kiosk::UuidCheck), which a bare {type:"string"} does not.
                  order_id:         { type: "string", format: "uuid",
-                                     pattern: UuidCheck::JSON_SCHEMA_PATTERN,
+                                     pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN,
                                      description: "Optional uuid of an unpaid order to replace." },
                },
                required: ["items", "delivery_slot_id", "delivery_address"]
@@ -210,9 +210,9 @@ class Kiosk::OrdersController < ActionController::API
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # Same uuid shape as create_order's order_id — see UuidCheck.
+                 # Same uuid shape as create_order's order_id — see Kiosk::UuidCheck.
                  order_id:         { type: "string", format: "uuid",
-                                     pattern: UuidCheck::JSON_SCHEMA_PATTERN,
+                                     pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN,
                                      description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                                      description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },

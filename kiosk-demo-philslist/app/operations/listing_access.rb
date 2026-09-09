@@ -23,7 +23,7 @@ module ListingAccess
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def listing_id(raw)
-    return [raw, nil] if UuidCheck.valid?(raw)
+    return [raw, nil] if Kiosk::UuidCheck.valid?(raw)
 
     [nil, OperationResult.refused(
       code:    "bad_request",

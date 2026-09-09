@@ -25,7 +25,7 @@ module WireArguments
   # sentence names where a right one comes from.
   def reservation_id(raw)
     return [nil, missing("reservation_id")] if raw.blank?
-    return [raw, nil] if UuidCheck.valid?(raw)
+    return [raw, nil] if Kiosk::UuidCheck.valid?(raw)
 
     [nil, OperationResult.refused(
       code:    "bad_request",

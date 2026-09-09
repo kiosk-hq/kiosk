@@ -79,7 +79,7 @@ module WireArguments
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def order_id(raw, hint:)
-    return [raw, nil] if UuidCheck.valid?(raw)
+    return [raw, nil] if Kiosk::UuidCheck.valid?(raw)
 
     [nil, OperationResult.refused(
       code:    "bad_request",

@@ -173,6 +173,10 @@ profile = Kiosk::Redteam::Profile.new(
   # an invented one is refused by vulnerable code too, so a probe that names
   # only an invented role cannot fail. The scenario also derives one off the
   # wire, so a stale list here weakens the probe rather than emptying it.
+
+  # The currency this operator prices in — WrongCurrencyCart probes with one
+  # that is NOT it.
+  currency:       "eur",
   declared_roles: %w[customer],
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
@@ -276,33 +280,12 @@ profile = Kiosk::Redteam::Profile.new(
 )
 
 # ── Local scenarios: the cashier check (ValidatingRentalProvider) ─────────────
-# The generic battery proves ownership/KYC/payment gates; these three prove the
-# operator counts what lands on the counter — currency, single reservation,
+# The generic battery proves ownership/KYC/payment gates, and its
+# WrongCurrencyCart covers the unit of account; these two prove the operator
+# counts what lands on the counter — a single reservation, and the
 # total. Each uses the AGENT'S OWN reservation (no cross-ownership, no KYC
 # needed — the cashier check is monetary and runs at capture): an own-reservation
 # cart at the wrong price/currency isolates the cashier check cleanly.
-
-# A chain-consistent cart in the wrong currency must not settle: the engine
-# only enforces intent/cart/payment agreement, the OPERATOR prices in EUR.
-class WrongCurrencyCart < Kiosk::Redteam::Scenario
-  def initialize
-    super(
-      name:        "WrongCurrencyCart",
-      category:    "payment",
-      description: "A usd-denominated (chain-consistent) cart at a EUR operator must be rejected at capture",
-    )
-  end
-
-  def call(client, profile)
-    a = register_principal(client, name: "redteam-cur-a", profile:)
-    owned = profile.create_owned.call(client, a)
-    m = profile.pay_for.call(client, a, owned)
-    m[:intent] = m[:intent].merge(currency: "usd")
-    m[:cart]   = m[:cart].merge(currency: "usd")
-    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    verdict_from(resp, detail: "usd cart settled at a EUR operator (HTTP #{resp.status})")
-  end
-end
 
 # A total below the operator's quoted per-minute rental price must be caught
 # even though the mandate chain is internally consistent.
@@ -654,7 +637,7 @@ scenarios = [
   # UNAUTHENTICATED `device_authorization` request that opens the
   # account-binding ceremony.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  WrongCurrencyCart.new,                                 # cashier check — currency
+  Kiosk::Redteam::Scenarios::WrongCurrencyCart.new,                                 # cashier check — currency
   TamperedPriceCart.new,                                 # cashier check — below quote
   InflatedTotalCart.new,                                 # cashier check — total ≠ line sum
   MalformedUuidArg.new,                                  # junk uuid → typed 400, no 500

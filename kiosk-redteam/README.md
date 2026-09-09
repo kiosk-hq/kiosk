@@ -128,6 +128,7 @@ file per row:
 | `MandatePrincipalSwap` | mandate | B signing a mandate that carries A's identity is rejected |
 | `MandateReplay` | mandate | A's signed mandate JWS re-submitted under B's token is rejected |
 | `UnpaidGatedAction` | payment | the gated action without a prior settled payment is denied |
+| `WrongCurrencyCart` | payment | a chain-consistent cart denominated in a currency the operator does not price in is refused at capture |
 | `MissingKyc` | kyc | the gated action after payment but without an attestation is denied |
 | `ExpiredKyc` | kyc | an attestation whose `exp` has passed is rejected |
 | `ForgedKyc` | kyc | an attestation with a wrong issuer or a bad signature is rejected |

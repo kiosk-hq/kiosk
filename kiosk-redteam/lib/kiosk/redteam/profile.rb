@@ -38,6 +38,14 @@ module Kiosk
     #   When false, all KYC scenarios ({MissingKyc}, {ExpiredKyc}, {ForgedKyc})
     #   are skipped.
     #
+    # @!attribute currency [String, nil]
+    #   The ISO 4217 code this operator prices in, as it appears on the wire
+    #   (lower case). Read by {Scenarios::WrongCurrencyCart}, which builds a
+    #   mandate pair denominated in a DIFFERENT currency and demands a refusal;
+    #   skipped when nil. It is stated rather than guessed because a probe that
+    #   happened to name the operator's own currency would print BLOCKED for a
+    #   cart that was never foreign.
+    #
     # @!attribute per_user_query [String, nil]
     #   Name of the named query that returns the authenticated principal's own
     #   rows (e.g. "my_orders", "my_reservations").  Required by
@@ -106,6 +114,7 @@ module Kiosk
     #   nil when the provider does not use KYC.
     class Profile
       attr_reader :pow_difficulty,
+                  :currency,
                   :declared_roles,
                   :requires_kyc,
                   :per_user_query,
@@ -124,6 +133,7 @@ module Kiosk
       def initialize(
         pow_difficulty: 0,
         declared_roles: [],
+        currency: nil,
         requires_kyc: false,
         per_user_query: nil,
         row_id_key: "id",
@@ -140,6 +150,7 @@ module Kiosk
       )
         @pow_difficulty = pow_difficulty
         @declared_roles = Array(declared_roles).map(&:to_s).reject(&:empty?).uniq
+        @currency       = currency
         @requires_kyc   = requires_kyc
         @per_user_query = per_user_query
         @row_id_key     = row_id_key

@@ -75,6 +75,10 @@ profile = Kiosk::Redteam::Profile.new(
   # role through, so a battery probing only an invented role stays green over a
   # real hole. The scenario also derives one off the wire, so a stale list here
   # weakens the probe rather than emptying it.
+
+  # The currency this operator prices in — WrongCurrencyCart probes with one
+  # that is NOT it.
+  currency:       "eur",
   declared_roles: %w[customer],
   per_user_query: "my_orders",
 
@@ -201,30 +205,9 @@ profile = Kiosk::Redteam::Profile.new(
 )
 
 # ── Local scenarios: the cashier check (ValidatingPaymentProvider) ────────────
-# The generic battery proves ownership/payment gates; these three prove the
-# operator counts what lands on the counter — currency, prices, total.
-
-# A chain-consistent cart in the wrong currency must not settle: the engine
-# only enforces intent/cart/payment agreement, the OPERATOR prices in EUR.
-class WrongCurrencyCart < Kiosk::Redteam::Scenario
-  def initialize
-    super(
-      name:        "WrongCurrencyCart",
-      category:    "payment",
-      description: "A usd-denominated (chain-consistent) cart at a EUR operator must be rejected at capture",
-    )
-  end
-
-  def call(client, profile)
-    a = register_principal(client, name: "redteam-cur-a", profile:)
-    owned = profile.create_owned.call(client, a)
-    m = profile.pay_for.call(client, a, owned)
-    m[:intent] = m[:intent].merge(currency: "usd")
-    m[:cart]   = m[:cart].merge(currency: "usd")
-    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    verdict_from(resp, detail: "usd cart settled at a EUR operator (HTTP #{resp.status})")
-  end
-end
+# The generic battery proves ownership/payment gates, and its
+# WrongCurrencyCart covers the unit of account; these two prove the operator
+# counts what lands on the counter — the line prices and the total.
 
 # A tampered per-line price (with total and cap adjusted to stay
 # chain-consistent) must be caught by the catalog-mirror check.
@@ -863,7 +846,7 @@ scenarios = [
   # other door — the unauthenticated `device_authorization` request that opens
   # the account-binding ceremony.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  WrongCurrencyCart.new,
+  Kiosk::Redteam::Scenarios::WrongCurrencyCart.new,
   TamperedPriceCart.new,
   InflatedTotalCart.new,
   MalformedItemsCart.new,   # a mis-shaped `items` is a typed 400, never a 500

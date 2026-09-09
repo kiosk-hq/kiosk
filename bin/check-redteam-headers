@@ -40,25 +40,30 @@
 # redteam_suite.rb` by glob -- so an eighth demo that grows a suite is covered
 # with no edit here.
 #
-# The two harnesses are NOT the same shape (T-119) and the extractors say so.
-# THREE demos drive `Kiosk::Redteam::Scenario` subclasses through the gem's
-# `Runner` from a `scenarios = [...]` array; FOUR are flat procedural scripts
-# with a local `record(results, "Name", ...)` helper; skooti is BOTH, and runs
-# nine further beats as bare lambdas whose names exist nowhere machine-readable
-# except its own summary `puts`. So four extractors, each named, and a suite that
-# matches none of them is a LOUD failure rather than a short list quietly
-# compared to a short list:
+# THE REGISTRATION VOCABULARY IS THE GEM'S, AND THE EXTRACTORS READ THAT. Every
+# suite builds one `Kiosk::Redteam::Battery` and every beat it runs is registered
+# on it, so the battery's own receiver name is derived per file first and the
+# rules below hang off it. A suite with no battery is a LOUD failure rather than
+# a short list quietly compared to a short list, and so is a registration in a
+# form none of these four reads:
 #
-#   E1  the framework registry -- entries of the top-level `scenarios = [...]`
-#   E2  the procedural helper  -- `record(results, "Name", ...)`
-#   E3  the shared gem beat inside a procedural suite -- `record(results,
-#       <var>.name, ...)`, resolved through `<var> = ...::Name.new`
-#   E4  out-of-registry local beats -- the summary's `BLOCKED  ✓ Name` lines
+#   E1  the framework registry -- entries of the top-level `scenarios = [...]`,
+#       driven through the gem's `Runner` and `absorb`ed into the battery
+#   E2  a hand-written beat -- `<battery>.record("Name", ...)`
+#   E3  a library scenario run straight from the battery --
+#       `<battery>.scenario(...::Name.new, ...)`
+#   E4  a table of locally-built beats fed to the battery in one pass --
+#       the string keys of the hash literal `.each`ed into `<battery>.record`
+#
+# E2, E3 and E4 replaced a `record(results, ...)` trio when T-188 lifted the
+# harness into `kiosk-redteam`: the beat names had moved from a local helper's
+# arguments onto the gem's ledger, and the extractors that could no longer see
+# them retire here with the helper they were written for.
 #
 # ── THE RULES, AND WHICH KIND EACH ONE IS ────────────────────────────────────
 #
 # R1  ENUMERATION (derivation). Every suite yields a non-empty beat set through
-#     the extractors above, and every `record(results, ...)` call and every
+#     the extractors above, and every registration on its battery and every
 #     `scenarios = [...]` entry is in a form one of them reads. UNPARSEABLE IS
 #     RED: a beat this guard cannot see is a beat no rule below can protect.
 #
@@ -142,6 +147,15 @@ def suite_beats(src)
   names    = []
   problems = []
 
+  # The battery's receiver name, derived per file: every rule below is about what
+  # is registered ON it, so a suite that builds none registers nothing readable.
+  battery = src[/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*Kiosk::Redteam::Battery\.new/, 1]
+  unless battery
+    problems << "no `<name> = Kiosk::Redteam::Battery.new` — the gem's ledger is where every beat " \
+                "registers, so this guard can read no beat off this suite at all"
+  end
+  recv = battery && Regexp.escape(battery)
+
   # E1 — the framework registry.
   if (m = src.match(/^scenarios = \[\n(.*?)^\]\s*$/m))
     m[1].lines.each do |line|
@@ -156,27 +170,44 @@ def suite_beats(src)
     end
   end
 
-  # E2 + E3 — the procedural helper, literal and resolved-variable forms.
-  src.scan(/(?<!def )\brecord\(\s*results,\s*(.{0,60}?)[,\n]/m) do |(arg)|
+  return [names.uniq.sort, problems] unless recv
+
+  # E4 — a table of locally-built beats registered in one pass. The names live in
+  # the hash literal's keys; the `record` call beneath it names only the block
+  # parameter, so it is read HERE and the parameter is remembered so E2 does not
+  # report it as unresolvable.
+  table_params = []
+  src.scan(/^\{\n((?:^[ \t]*"[A-Za-z0-9]+"[ \t]*=>.*\n)+)^\}\.each\s*(?:\{|do)\s*\|(\w+),\s*\w+\|\s*
+           #{recv}\.record\(\s*\k<2>\s*,/xm) do |(rows, param)|
+    rows.scan(/"([A-Za-z0-9]+)"[ \t]*=>/) { names << Regexp.last_match(1) }
+    table_params << param
+  end
+
+  # E3 — a library scenario run straight from the battery.
+  src.scan(/#{recv}\.scenario\(\s*(?:[A-Z][A-Za-z0-9]*::)*([A-Z][A-Za-z0-9]*)\.new\b/m) do |(name)|
+    names << name
+  end
+  src.scan(/#{recv}\.scenario\(\s*([^\n,)]{0,80})/m) do |(arg)|
+    arg = arg.strip
+    next if arg.match?(/\A(?:[A-Z][A-Za-z0-9]*::)*[A-Z][A-Za-z0-9]*\.new\b/)
+
+    problems << "`#{battery}.scenario(#{arg.inspect}, ...)` does not open with a `Name.new` this guard " \
+                "can read — this beat cannot be enumerated, so no rule here protects it"
+  end
+
+  # E2 — a hand-written beat on the battery's ledger.
+  src.scan(/#{recv}\.record\(\s*(.{0,80}?)[,\n]/m) do |(arg)|
     arg = arg.strip
     if (lit = arg.match(/\A"([A-Za-z0-9]+)"\z/))
       names << lit[1]
-    elsif (var = arg.match(/\A([a-z_][a-z0-9_]*)\.name\z/))
-      assigned = src[/^#{Regexp.escape(var[1])}\s*=\s*(?:[A-Z][A-Za-z0-9]*::)*([A-Z][A-Za-z0-9]*)\.new/, 1]
-      if assigned
-        names << assigned
-      else
-        problems << "`record(results, #{arg}, ...)` names its beat through a variable this guard " \
-                    "cannot resolve to a `Name.new` assignment"
-      end
+    elsif table_params.include?(arg)
+      next # already enumerated by E4, off the hash literal that feeds this call
     else
-      problems << "`record(results, #{arg.inspect}, ...)` is neither a string literal nor a resolvable " \
-                  "`<var>.name` — this beat cannot be enumerated, so no rule here protects it"
+      problems << "`#{battery}.record(#{arg.inspect}, ...)` is neither a string literal nor the block " \
+                  "parameter of a beat table this guard can read — this beat cannot be enumerated, so " \
+                  "no rule here protects it"
     end
   end
-
-  # E4 — beats that run outside any registry and are named only by the summary.
-  src.scan(/BLOCKED\s+✓\s+([A-Z][A-Za-z0-9]*)\b/) { names << Regexp.last_match(1) }
 
   [names.uniq.sort, problems]
 end
@@ -432,17 +463,33 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
 
   # R1 — ENUMERATION. Both halves are loud by design: a registration this guard
   # cannot read is a beat no later rule protects.
-  run.call("R1 — a `record` whose beat name is an unresolvable expression", "R1") do |root|
+  run.call("R1 — a battery `record` whose beat name is an unresolvable expression", "R1") do |root|
     edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
-         'record(results, "CrossTenantRead"', "record(results, beat_name_from_somewhere")
+         'BATTERY.record("CrossTenantRead"', "BATTERY.record(beat_name_from_somewhere")
   end
   run.call("R1 — a `scenarios = [...]` entry that is not a `Name.new`", "R1") do |root|
     edit(File.join(root, "kiosk-demo-hoteling/script/redteam_suite.rb"),
          "  PastStay.new,", "  build_a_beat(:past_stay),")
   end
+  run.call("R1 — a battery `scenario` that does not open with a readable `Name.new`", "R1") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         "  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,", "  beat_from_a_factory,")
+  end
+  run.call("R1 — the suite builds no battery, so nothing registers anywhere readable", "R1") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         "BATTERY = Kiosk::Redteam::Battery.new", "BATTERY = LocalLedger.new")
+  end
   run.call("R1-vacuity — a suite from which no beat can be derived at all", "R1") do |root|
     p = File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb")
-    File.write(p, File.read(p).gsub(/(?<!def )\brecord\(\s*results,/, "noop("))
+    File.write(p, File.read(p).gsub(/BATTERY\.(record|scenario)\(/, "noop("))
+  end
+  # E4's own arm: skooti is the only suite whose beat names live in a hash
+  # literal rather than at the registration call, and it is the extractor most
+  # easily broken by a reformat that reads as tidying.
+  run.call("R1 — skooti's beat table stops being readable, taking nine beats with it", "R1") do |root|
+    p = File.join(root, "kiosk-demo-skooti/script/redteam_suite.rb")
+    File.write(p, File.read(p).sub("}.each { |name, beat| battery.record(name,",
+                                   "}.each { |name, beat| battery.record(name.to_s,"))
   end
 
   # R2 — HEADER COVERAGE, a coverage rule, plus the declaration that scopes it.

@@ -48,12 +48,12 @@ class ApplicationController < ActionController::Base
                  "browser session and a CSRF token from its own form",
         # NAME WHAT THE DOCUMENT CARRIES, NEVER A VERB LIST. A hint naming «the
         # register/login and schema/query/run/pay endpoints» would be false on
-        # both readings: protocol 0.4 deleted `POST /kiosk/query` and `POST
-        # /kiosk/run` outright (both answer the ordinary 404 an AUTHENTICATED
-        # caller gets, and 401 without a bearer, since auth precedes verb
-        # dispatch; this app's own redteam beat asserts both), and
-        # `capabilities` publishes MODULE names (schema/queries/actions/pay). A
-        # list here is a third copy of the catalog — kiosk.json deliberately
+        # both readings: `query` and `run` name no registered verb, so `POST
+        # /kiosk/query` and `POST /kiosk/run` answer the ordinary 404 an
+        # AUTHENTICATED caller gets, and 401 without a bearer, since auth
+        # precedes verb dispatch (this app's own redteam beat asserts both);
+        # and `capabilities` publishes MODULE names (schema/queries/actions/pay).
+        # A list here is a third copy of the catalog — kiosk.json deliberately
         # publishes no verb names — so it would rot the same way. The reader of
         # this body is a JSON-dialing assistant that has just hit the human
         # sign-in page: it cannot check the hint.

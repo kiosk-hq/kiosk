@@ -2,8 +2,8 @@
 
 # tudu's WRITE surface: the six verbs an assistant reaches with
 # `POST /kiosk/<action-name>` — one endpoint per verb (protocol 0.4), the most of
-# any demo. The arguments ARE the JSON body; no `name` field, no multiplexed
-# `/kiosk/run`. `kind :action` above each declaration puts it on `POST`.
+# any demo. The arguments ARE the JSON body and the verb is the path itself.
+# `kind :action` above each declaration puts it on `POST`.
 #
 # Every action below is four lines: arguments off the request, into an Operation,
 # render what it answers. The logic lives in app/operations/ because tudu's HUMAN

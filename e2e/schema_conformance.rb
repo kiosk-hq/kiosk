@@ -177,10 +177,14 @@ end
 #
 # FOUR codes and four different code paths: the auth plane's 402 (with LIVE PoW
 # challenges, which is the only thing that exercises problem.schema.json's
-# cross-file `$ref` into pow.schema.json), the identity gate's 401, the
-# registry's 404 and the router's 405. One of them would have proved the media type
-# and the flat `code`; four prove the vocabulary is not a single hard-coded
-# path.
+# cross-file `$ref` into pow.schema.json), the identity gate's 401, the declared
+# input check's 400 and the absent module's 501. One of them would have proved
+# the media type and the flat `code`; four prove the vocabulary is not a single
+# hard-coded path.
+#
+# A path this origin draws no route for is deliberately NOT among them: it
+# matches nothing, so the answer is the framework's own 404 and there is no
+# problem document to validate. That is the wire's behaviour, not a gap here.
 problems = []
 
 # A REAL public key, because the toll is not the first gate a garbage one
@@ -199,11 +203,16 @@ problems << ["GET /kiosk/salons unauthenticated (#{status})", parse(raw)]
 TOKEN = ENV.fetch("TOKEN")
 AUTH  = { "Authorization" => "Bearer #{TOKEN}" }
 
-status, raw = get("/kiosk/no_such_verb", AUTH)
-problems << ["GET /kiosk/no_such_verb (#{status})", parse(raw)]
+# `salons` declares a CLOSED empty input_schema, so an undeclared argument is
+# the wire's own 400 from RequestValidation — a document built on a different
+# path from every other one here.
+status, raw = get("/kiosk/salons?zzz=1", AUTH)
+problems << ["GET /kiosk/salons?zzz=1 — an undeclared argument (#{status})", parse(raw)]
 
-status, raw = post("/kiosk/salons", "{}", AUTH)
-problems << ["POST /kiosk/salons — a query is not a POST (#{status})", parse(raw)]
+# This origin configures no `kyc_public_key`, so the KYC attestation path is
+# PUBLISHED with no module behind it: 501 module_not_served.
+status, raw = post("/kiosk/agents/kyc", JSON.generate(kyc_jws: "not.a.jws"), AUTH)
+problems << ["POST /kiosk/agents/kyc — no KYC module here (#{status})", parse(raw)]
 
 problems.each do |label, doc|
   conforms(label, "#{B}/problem.schema.json", doc) do |broken|

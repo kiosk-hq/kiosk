@@ -676,27 +676,29 @@ r=$(action_call "$BOB_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\
 assert "bob: booked"               "$(echo "$r" | jq -r '.appointment_id | length > 0')" "true"
 bob_appt_id=$(echo "$r" | jq -r '.appointment_id')
 
-# The HTTP method carries the read/write semantics, so getting them the wrong
-# way round is a 405: the resource EXISTS and refuses this method. RFC 9110
-# §15.5.6 makes `Allow` mandatory on one, and the hint names the call to make.
-mna_headers=$(curl -sS -o /tmp/mna_body -D - "$SERVER_URL/kiosk/book_appointment" \
+# The HTTP method carries the read/write semantics, and this origin draws ONE
+# route per verb with the method its kind requires — so getting them the wrong
+# way round matches no route at all. Both directions answer the ordinary 404 any
+# undrawn path gets, with no `Allow` and no problem document, and — the half that
+# matters — the verb NEVER RUNS for the method it was not declared with. The
+# catalogue at `GET /kiosk/schema` is where a caller learns which method to use.
+mna_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/book_appointment" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/book_appointment" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-r=$(cat /tmp/mna_body)
-assert "GET at an action's path → 405"  "$status" "405"
-assert "…carrying Allow: POST"          "$(echo "$mna_headers" | grep -ic '^Allow: POST')" "1"
-assert "…as a problem document"         "$(echo "$mna_headers" | grep -ic '^Content-Type: application/problem+json')" "1"
-assert "…code method_not_allowed"       "$(echo "$r" | jq -r '.code')" "method_not_allowed"
-assert "…type names the same code"      "$(echo "$r" | jq -r '.type')" "https://kiosk.tech/problems/method_not_allowed"
-assert "…and says it is an action"      "$(echo "$r" | jq -r '.detail | test("is an action")')" "true"
+appts_before_mna=$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments")
+assert "GET at an action's path → 404"  "$status" "404"
+assert "…with no Allow on it"           "$(echo "$mna_headers" | grep -ic '^Allow:')" "0"
+assert "…and no problem document"       "$(echo "$mna_headers" | grep -ic '^Content-Type: application/problem+json')" "0"
+assert "…but still stamped by the wire" "$(echo "$mna_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
+assert "…and the write never ran"       "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments")" "$appts_before_mna"
 
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}')
-assert "POST at a query's path → 405"   "$status" "405"
+assert "POST at a query's path → 404"   "$status" "404"
 mna2=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}')
-assert "…carrying Allow: GET"           "$(echo "$mna2" | grep -ic '^Allow: GET')" "1"
+assert "…carrying no Allow either"      "$(echo "$mna2" | grep -ic '^Allow:')" "0"
 
 # ─── app-layer per-user isolation (the headline security property) ──────
 # my_appointments filters WHERE user_id = kiosk.current_user_id(), where the
@@ -720,44 +722,49 @@ assert "bob: does NOT see alice's row" "$(echo "$bob_appts" | jq -r --arg id "$a
 
 printf "\n\033[1m=== problem documents ===\033[0m\n"
 
-# ─── the T-158 split: THREE codes answer "it is not here" ───────────────
+# ─── a name nobody registered: no route, so the ordinary 404 ────────────
 #
-# One code, `not_found`, used to carry all three of these at once, and `code`
-# is the ONE field the spec tells an assistant to branch on -- so an assistant
-# told "not found" for a hotel nobody has re-read the catalogue and retried,
-# which is right for one of the three and a wasted round trip plus a wrong
-# report to the human for the other two (K-1207; Phil's decision «A»).
-# Each of the three is dialled at a BOOTED origin here, and the discriminating
-# assertion is that the three answers DIFFER -- a harness that only asserted
-# "some 404" would have passed the single-code wire this replaced.
-
-# (1) verb_not_found -- an unregistered NAME. Recovery: re-read the catalogue.
+# Every verb this origin serves has an explicit line in config/routes/kiosk.rb.
+# A name that has no line matches no route, so the answer is the one the web
+# framework composes for any unrouted path: no Kiosk problem document, no
+# `code`, no hint. An assistant reads `GET /kiosk/schema` and dials a name that
+# is in it -- it has no business at a path the catalogue never named.
+#
+# The §3.6 version headers are still stamped, because the middleware sits above
+# the router, and that is the discriminating half of these assertions: the
+# answer is Rails' own AND it is still identifiably this wire's origin.
 nf_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/frobnicate" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/frobnicate" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-assert "unknown query → 404"        "$status" "404"
-assert "served as problem+json"     "$(echo "$nf_headers" | grep -ic '^Content-Type: application/problem+json')" "1"
-assert "an error is never cached"   "$(echo "$nf_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
+assert "unknown query → 404"          "$status" "404"
+assert "…not a problem document"      "$(echo "$nf_headers" | grep -ic '^Content-Type: application/problem+json')" "0"
+assert "…still stamped by the wire"   "$(echo "$nf_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
 
 r=$(query_call "$ALICE_AGENT_TOKEN" "frobnicate")
-assert "type names the code"        "$(echo "$r" | jq -r '.type')"   "https://kiosk.tech/problems/verb_not_found"
-assert "title is the code's, not the incident's" "$(echo "$r" | jq -r '.title')" "No such verb"
-assert "status restates the HTTP status"         "$(echo "$r" | jq -r '.status')" "404"
-assert "code is the branch point"   "$(echo "$r" | jq -r '.code')"   "verb_not_found"
-assert "hint names a real query"    "$(echo "$r" | jq -r '.hint | test("salons")')" "true"
-assert "no ok field survives"       "$(echo "$r" | jq -r 'has("ok")')" "false"
+assert "…with no code to branch on"   "$(echo "$r" | grep -c 'verb_not_found')" "0"
 
-# Unknown action name → the same code, the other method.
+# Unknown action name → the same answer, the other method.
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/nope" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}')
-assert "unknown action → 404"      "$status" "404"
-act_nf=$(curl -sS -X POST "$SERVER_URL/kiosk/nope" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
-  -H "Content-Type: application/json" -d '{}')
-assert "…as verb_not_found too"    "$(echo "$act_nf" | jq -r '.code')" "verb_not_found"
+assert "unknown action → 404"         "$status" "404"
+
+# ─── the T-158 split: TWO codes an assistant can still meet here ────────
+#
+# One code, `not_found`, used to carry three situations at once, and `code` is
+# the ONE field the spec tells an assistant to branch on -- so an assistant told
+# "not found" for a hotel nobody has re-read the catalogue and retried, which is
+# right for one of them and a wasted round trip plus a wrong report to the human
+# for the others (K-1207; Phil's decision «A»). Two of the three are dialled at
+# this BOOTED origin below, and the discriminating assertion is that they DIFFER.
+#
+# The third, `verb_not_found`, is not dialable at an origin that draws one
+# explicit route per verb: an unregistered name has no route, so it is the plain
+# 404 above rather than anything the wire composed. It stays in the vocabulary
+# for an operator who draws a catch-all action of their own, and the wire's
+# answer for it is asserted in kiosk-server's own suite.
 
 # (2) not_found -- the call is REAL and an ARGUMENT addressed something absent.
 # Exercised in the BINDING block below, where `POST /kiosk/auth/login` for a key
@@ -780,7 +787,9 @@ kyc_ms_status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kio
 assert "KYC at an origin that serves no KYC → 501" "$kyc_ms_status" "501"
 assert "…code is module_not_served"  "$(echo "$kyc_ms" | jq -r '.code')" "module_not_served"
 assert "…and NOT forbidden"          "$(echo "$kyc_ms" | jq -r '.code == "forbidden"')" "false"
-assert "…type names it"              "$(echo "$kyc_ms" | jq -r '.type')" "https://kiosk.tech/problems/module_not_served"
+assert "…type names the code"        "$(echo "$kyc_ms" | jq -r '.type')" "https://kiosk.tech/problems/module_not_served"
+assert "…title is the code's, not the incident's" "$(echo "$kyc_ms" | jq -r '.title')" "Module not served"
+assert "…status restates the HTTP status"         "$(echo "$kyc_ms" | jq -r '.status')" "501"
 assert "…detail names the module"    "$(echo "$kyc_ms" | jq -r '.detail | test("KYC")')" "true"
 assert "…and is itself an RFC 9457 document" \
   "$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/agents/kyc" \
@@ -788,23 +797,21 @@ assert "…and is itself an RFC 9457 document" \
       -H "Content-Type: application/json" -d '{"kyc_jws":"not.a.jws"}' \
     | grep -ic '^Content-Type: application/problem+json')" "1"
 
-# TWO OF THE THREE, HERE AND NOW: an unregistered NAME and an unserved MODULE
-# must not answer alike. The third leg -- the addressed-thing-absent
-# `not_found` -- joins them at the binding block below, where the same
-# three-way comparison is made across all three samples.
-KIOSK_T158_VERB_CODE=$(echo "$r"      | jq -r .code)
+# ONE HALF HERE: the unserved MODULE. Its partner -- the addressed-thing-absent
+# `not_found` -- joins it at the binding block below, where the two samples are
+# compared against each other.
 KIOSK_T158_MODULE_CODE=$(echo "$kyc_ms" | jq -r .code)
-assert "an unregistered NAME and an unserved MODULE answer differently" \
-  "$([ "$KIOSK_T158_VERB_CODE" != "$KIOSK_T158_MODULE_CODE" ] && echo yes || echo no)" "yes"
 
-# Missing Authorization → Unauthenticated, http 401. Note this holds for a
-# name that does NOT exist too: the wire authenticates before it will say
-# whether a verb is registered, so an unauthenticated probe cannot enumerate
-# the catalog one path at a time.
+# Missing Authorization → Unauthenticated, http 401 — on a path this origin
+# actually draws. A name it does NOT draw is a routing miss, decided before any
+# Kiosk code runs, so it answers 404 with or without a credential. That is not a
+# disclosure: `GET /kiosk/schema` is public and publishes the whole catalogue to
+# anyone who asks, which is why the 401-first order here is ordinary gate order
+# and never was an anti-enumeration defence (§4.2).
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons")
 assert "no auth → 401"             "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/frobnicate")
-assert "no auth on an unknown name → 401 (no enumeration)" "$status" "401"
+assert "no auth on an unknown name → 404 (no route, no gate)" "$status" "404"
 
 # An unrecognised credential resolves to no identity → 401.
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
@@ -818,27 +825,19 @@ status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer agent:u-$ALICE:a-$ALICE_AGENT:r-owner")
 assert "forged self-asserted bearer → 401" "$status" "401"
 
-# A path that cannot be a verb name never reaches the wire at all — the route
-# constraint leaves it a plain routing 404.
+# A path that cannot be a verb name is the same plain routing 404 — nothing
+# under the mount distinguishes it from a well-formed name nobody drew.
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/Salons")
 assert "a non-verb-shaped path → 404" "$status" "404"
 
 # ─── the 0.3 wire is GONE (T-074 = A) ───────────────────────────────────
 #
-# A hard cut: no dedicated route, no tombstone, no 404 hint payload naming the retired
-# endpoints, no second conformance surface. `POST /kiosk/query` now reaches the
-# PER-VERB controller as a verb literally named `query`, which nobody
-# registered — so it answers the ordinary `verb_not_found`, exactly as any other
-# unregistered name does. That is the assertion: not that the old endpoint is
-# special-cased, but that it is not special at all.
-#
-# WITH a bearer, that is. `resolve_identity!` runs BEFORE the registry lookup,
-# so an unauthenticated caller never reaches the 404 and is answered `401
-# unauthenticated` — which is the SAME answer any unregistered name gives it,
-# and therefore the same assertion one level earlier. Every retired-wire probe
-# in the tree dialled authenticated, so the prose around them stated the 404
-# flatly and was wrong for the anonymous case (K-1094); both are probed here
-# now.
+# A hard cut: no dedicated route, no tombstone, no 404 hint payload naming the
+# retired endpoints, no second conformance surface. Nothing draws `/kiosk/query`
+# or `/kiosk/run`, so they are the ordinary routing 404 any undrawn path gets.
+# That is the assertion: not that the old endpoint is special-cased, but that it
+# is not special at all — with a bearer or without one, since a routing miss is
+# decided before any credential is read.
 
 printf "\n\033[1m=== the 0.3 wire is gone ===\033[0m\n"
 
@@ -850,15 +849,11 @@ for retired in query run; do
            -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
   assert "POST /kiosk/$retired → 404"        "$code" "404"
-  assert "…as an ordinary verb_not_found"    "$(echo "$body" | jq -r '.code')" "verb_not_found"
-  assert "…with no 0.3 envelope residue"     "$(echo "$body" | jq -r 'has("ok") or has("error")')" "false"
+  assert "…with no 0.3 envelope residue"     "$(echo "$body" | grep -c '\"ok\"')" "0"
 
-  anon_body=$(curl -sS -X POST "$SERVER_URL/kiosk/$retired" \
-           -H "Content-Type: application/json" -d '{"name":"salons"}')
   anon_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$retired" \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
-  assert "POST /kiosk/$retired unauthenticated → 401" "$anon_code" "401"
-  assert "…as unauthenticated, not verb_not_found"    "$(echo "$anon_body" | jq -r '.code')" "unauthenticated"
+  assert "POST /kiosk/$retired unauthenticated → 404 too" "$anon_code" "404"
 done
 
 # `schema` answers the payload VERBATIM now — it moved off the envelope with
@@ -867,17 +862,19 @@ old_schema=$(curl -sS "$SERVER_URL/kiosk/schema")
 assert "GET /kiosk/schema is unenveloped"  "$(echo "$old_schema" | jq -r 'has("ok") or has("kind") or has("value")')" "false"
 assert "…the catalog is the body itself"   "$(echo "$old_schema" | jq -r '.queries | length > 0')" "true"
 
-# A GET at an action's path is 405 with `Allow`, never a silent 404 — the
-# resource EXISTS, and an assistant that read 404 would give up on a verb it
-# could have called correctly.
+# A GET at an action's path draws no route here — this origin draws `POST
+# /kiosk/book_appointment` and nothing else at that path — so it is the same
+# ordinary 404 any undrawn path gets, with no `Allow`. The catalogue is what
+# tells an assistant which method a verb takes: `book_appointment` is published
+# as an action, and an assistant that read the schema dials POST.
 mna_code=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/book_appointment" \
              -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 mna_allow=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/book_appointment" \
               -H "Authorization: Bearer $ALICE_AGENT_TOKEN" | tr -d '\r' | awk 'tolower($1)=="allow:"{print $2}')
-mna_body=$(curl -sS "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-assert "GET an action → 405"               "$mna_code" "405"
-assert "…carrying Allow: POST"             "$mna_allow" "POST"
-assert "…coded method_not_allowed"         "$(echo "$mna_body" | jq -r '.code')" "method_not_allowed"
+assert "GET an action → 404"               "$mna_code" "404"
+assert "…with no Allow header"             "$mna_allow" ""
+assert "…and the catalogue says it is an action" \
+  "$(echo "$old_schema" | jq -r '.actions | map(.name) | index("book_appointment") != null')" "true"
 
 # T-095 / K-801: the catalog's `verbs` is GONE. It rendered
 # `Array(config.capabilities)` — the same call `/.well-known/kiosk.json` makes
@@ -955,21 +952,23 @@ assert "binding: unlink → 204 (no body)"      "$(echo "$bind_out" | jq -r '.un
 assert "binding: held token dies at unlink"   "$(echo "$bind_out" | jq -r '.held_token_after_unlink')"        "401"
 assert "binding: same-second token dies too"  "$(echo "$bind_out" | jq -r '.same_second_token_after_unlink')" "401"
 assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.login_after_unlink')"                   "404"
-# T-158, LEG 2 OF 3. The key was real, the proof was real, and the thing the
-# call ADDRESSED is gone -- spec §9.1 rule 2. So the code is `not_found`, and
-# it is specifically NOT `verb_not_found`: `auth/login` is a verb this origin
-# very much has.
+# T-158's OTHER LIVE LEG. The key was real, the proof was real, and the thing
+# the call ADDRESSED is gone -- spec §9.1 rule 2. So the code is `not_found`,
+# and it is specifically NOT `module_not_served`: this origin serves the auth
+# module, and `auth/login` is a verb it very much has.
 assert "binding: …and the code is not_found"  "$(echo "$bind_out" | jq -r '.login_after_unlink_code')"              "not_found"
 assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.login_after_unlink_type')"              "https://kiosk.tech/problems/not_found"
 
-# THE DISCRIMINATOR, and the point of the whole T-158 split. Three situations
-# that used to share one code, dialled at this booted origin, must answer with
-# THREE DIFFERENT codes. A harness that only asserted "some 404" would have
-# passed the single-code wire this replaced; this line would not have.
-assert "the three 'it is not here' answers are three DIFFERENT codes" \
-  "$(printf '%s\n%s\n%s\n' "$KIOSK_T158_VERB_CODE" \
+# THE DISCRIMINATOR, and the point of the T-158 split. Two situations that used
+# to share one code, dialled at this booted origin, must answer with TWO
+# DIFFERENT codes. A harness that only asserted "some refusal" would have passed
+# the single-code wire this replaced; this line would not have. (The third
+# situation, an unregistered verb NAME, is not dialable at an origin that draws
+# one explicit route per verb -- it is the plain routing 404 asserted far above.)
+assert "the two 'it is not here' answers are two DIFFERENT codes" \
+  "$(printf '%s\n%s\n' \
       "$(echo "$bind_out" | jq -r '.login_after_unlink_code')" \
-      "$KIOSK_T158_MODULE_CODE" | sort -u | wc -l | tr -d ' ')" "3"
+      "$KIOSK_T158_MODULE_CODE" | sort -u | wc -l | tr -d ' ')" "2"
 
 # ─── register-PoW golden path (402 pow_required → solve Equihash → 201) ──────
 #
@@ -1127,15 +1126,16 @@ assert "audit: …and nothing was booked for the missing salon" \
 assert "audit: the sink saw exactly that one more invocation" \
   "$(( $(event_count '.action == "book_appointment"') - before_fail ))" "1"
 
-# 7. A REFUSAL THAT NEVER REACHED AN ACTION EMITS NOTHING. A 405 at an action's
-#    path, a 401 with no token and a 404 for an unregistered name all answer
-#    before anything is invoked — so this is an action trail, not a request log.
+# 7. A REFUSAL THAT NEVER REACHED AN ACTION EMITS NOTHING. A GET at an action's
+#    path (a routing miss), a 401 with no token and a 404 for an unregistered
+#    name all answer before anything is invoked — so this is an action trail,
+#    not a request log.
 before_refusals=$(events 'length')
 curl -sS -o /dev/null "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN"
 curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/book_appointment" -H "Content-Type: application/json" -d '{}'
 curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/no_such_action" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}'
-assert "audit: a 405, a 401 and a 404 emit nothing" \
+assert "audit: a routing miss, a 401 and a 404 emit nothing" \
   "$(( $(events 'length') - before_refusals ))" "0"
 
 # 8. `pay` emits nothing — it is not an Action and it already writes the AP2

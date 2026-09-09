@@ -32,12 +32,12 @@
 # (Kiosk::Server::HandlerMixin::RESERVED_NAMES), which is where an operator
 # actually meets the rule; the ordering is the backstop.
 #
-# A name nobody registered — and a verb called with the other method — is
-# answered by the wire's own 404/405 problem document, from a refusal route
-# kiosk-server appends AFTER this file. It can never stand in for a line missing
-# here: it refuses, it never serves. `bin/check-verb-routes` derives the list
-# below from this app's own handler controllers and fails on a verb with no
-# route, a route with no verb, or a method that disagrees with the kind.
+# A path under the mount that no line here draws — a name nobody registered, or
+# a verb dialed with the other method — matches nothing, so it is the ordinary
+# 404 Rails answers at any unrouted path. Nothing stands in for a line missing
+# here, which is why `bin/check-verb-routes` derives the list below from this
+# app's own handler controllers and fails on a verb with no route, a route with
+# no verb, or a method that disagrees with the kind.
 
 mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 

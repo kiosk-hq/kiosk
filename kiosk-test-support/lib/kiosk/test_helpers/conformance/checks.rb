@@ -98,7 +98,9 @@ module Kiosk
               :executes, subject: verb.name,
               message: "#{verb} did not execute: #{describe_error(e)}. " \
                        "Arguments were #{arguments.inspect}#{params_provenance(verb, params)}.",
-              details: { verb: verb.name, kind: verb.kind, error: e.class.name, params: arguments },
+              details: { verb: verb.name, kind: verb.kind, error: e.class.name, params: arguments,
+                         error_code: (e.code if e.respond_to?(:code)),
+                         error_status: (e.http_status if e.respond_to?(:http_status)) },
             )
           end
 
@@ -225,17 +227,18 @@ module Kiosk
           mine      = executes(origin, verb.name, params: arguments, as: as)
           return mine if mine.failed?
 
-          theirs = executes(origin, verb.name, params: arguments, as: and_not)
-          return theirs if theirs.failed?
+          theirs  = executes(origin, verb.name, params: arguments, as: and_not)
+          refused = refusal_status(theirs)
+          return theirs if theirs.failed? && refused.nil?
 
           own   = rows_of(mine.details[:answer])
-          other = rows_of(theirs.details[:answer])
+          other = refused ? [] : rows_of(theirs.details[:answer])
 
           if own.empty?
             return Conformance.fail(
               :principal_scope, subject: verb.name,
-              message: "#{verb} answered #{as.inspect} with nothing, so there is nothing for " \
-                       "#{and_not.inspect} to be scoped out of. Seed a row that belongs to the " \
+              message: "#{verb} answered #{principal_label(as)} with nothing, so there is nothing for " \
+                       "#{principal_label(and_not)} to be scoped out of. Seed a row that belongs to the " \
                        "first principal — a scoping assertion with no positive control passes " \
                        "on a verb that answers everybody with nothing.",
               details: { verb: verb.name, reach: verb.reach, own: own, other: other },
@@ -246,15 +249,20 @@ module Kiosk
           if leaked.empty?
             Conformance.pass(
               :principal_scope, subject: verb.name,
-              message: "#{verb} answered #{as.inspect} with #{own.length} row(s), none of which " \
-                       "reached #{and_not.inspect} (declared reach: #{verb.reach})",
-              details: { verb: verb.name, reach: verb.reach, own: own, other: other },
+              message: refused ?
+                         "#{verb} answered #{principal_label(as)} with #{own.length} row(s) and REFUSED " \
+                         "#{principal_label(and_not)} outright (#{refused}), which is the strongest " \
+                         "spelling of reach: :#{verb.reach}" :
+                         "#{verb} answered #{principal_label(as)} with #{own.length} row(s), none of " \
+                         "which reached #{principal_label(and_not)} (declared reach: #{verb.reach})",
+              details: { verb: verb.name, reach: verb.reach, own: own, other: other,
+                         refused: refused },
             )
           else
             Conformance.fail(
               :principal_scope, subject: verb.name,
               message: "#{verb} is declared `reach: :#{verb.reach}` but leaked #{leaked.length} " \
-                       "row(s) belonging to #{as.inspect} into #{and_not.inspect}'s answer: " \
+                       "row(s) belonging to #{principal_label(as)} into #{principal_label(and_not)}'s answer: " \
                        "#{leaked.first(3).inspect}. Scope the handler to the calling principal.",
               details: { verb: verb.name, reach: verb.reach, leaked: leaked },
             )
@@ -278,6 +286,42 @@ module Kiosk
                      "Declared: #{known.empty? ? "(none at all)" : known.join(", ")}.",
             details: { asked: wanted, known: known },
           )
+        end
+
+        # The wire codes that mean «that is not yours», as a REFUSAL rather than
+        # as a broken call.
+        #
+        # A verb may scope by narrowing its answer or by refusing outright, and
+        # refusing is the STRONGER of the two — an origin that answers 404 to a
+        # row it will not show does not even confirm that the row exists. So a
+        # 403 or a 404 to the second principal is this check passing, not
+        # failing. Nothing wider is accepted: a 400 means the arguments were
+        # wrong, which is a defect in the test rather than scoping, and a 500 is
+        # a defect in the handler; both must stay red.
+        #
+        # Read by STATUS and not by class, so this stays framework-agnostic and
+        # holds for any origin whose refusals answer the wire's own codes.
+        SCOPING_REFUSALS = [403, 404].freeze
+
+        # The refusal an `executes` outcome carries, as «403 forbidden», or nil
+        # when it did not fail or did not fail by refusing.
+        def refusal_status(outcome)
+          return nil unless outcome.failed?
+
+          status = outcome.details[:error_status]
+          return nil unless SCOPING_REFUSALS.include?(status)
+
+          [status, outcome.details[:error_code]].compact.join(" ")
+        end
+
+        # How a principal is NAMED in a failure sentence.
+        #
+        # `inspect` on an ActiveRecord row prints every column, which buries the
+        # sentence that matters under a fixture — measured on a real demo, where
+        # a two-row leak rendered behind two full `#<User …>` dumps. A principal
+        # is identified by its id; anything without one is inspected as before.
+        def principal_label(subject)
+          subject.respond_to?(:id) ? "#{subject.class}(#{subject.id})" : subject.inspect
         end
 
         def arguments_for(verb, params)
@@ -305,9 +349,21 @@ module Kiosk
 
           endpoint = "#{found[:controller]}##{found[:action]}"
           if endpoint != verb.endpoint
-            problems << "#{verb}: #{verb.http_method} #{path} reaches #{endpoint}, not " \
-                        "#{verb.endpoint} — a route drawn straight at a handler bypasses " \
-                        "authentication, the gate and the declared-input check"
+            # The engine appends a single-segment REFUSAL pair below the
+            # operator's own routes, so a verb nobody drew is caught by that
+            # rather than by nothing at all — and `recognize_path` then answers
+            # a route instead of raising. It is still «declared and never
+            # routed», and it is the commonest spelling of it, so it gets its
+            # own sentence rather than the generic wrong-endpoint one.
+            problems << if endpoint.include?("verb_refusal")
+                          "#{verb}: nothing you drew answers #{verb.http_method} #{path} — " \
+                          "the engine's own refusal route caught it, so every caller gets a " \
+                          "404 for a verb this origin publishes"
+                        else
+                          "#{verb}: #{verb.http_method} #{path} reaches #{endpoint}, not " \
+                          "#{verb.endpoint} — a route drawn straight at a handler bypasses " \
+                          "authentication, the gate and the declared-input check"
+                        end
           end
 
           routed_name = found[:kiosk_verb].to_s

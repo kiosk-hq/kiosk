@@ -186,7 +186,14 @@ module Kiosk
 
       # `lease_connection`, not `connection`: the latter is soft-deprecated in
       # Rails 8.1 and RAISES under `permanent_connection_checkout = :disallowed`.
-      def resolved_connection = @connection ||= ::ActiveRecord::Base.lease_connection
+      #
+      # Resolved on EVERY call rather than memoised, which is the opposite of
+      # what {TestExecutor} does and for the opposite reason: that object holds
+      # one connection across many `as_user` blocks that each open a
+      # transaction on it, while each call here is independent and an origin
+      # built once in a test helper would otherwise pin whichever connection
+      # the first example happened to be on.
+      def resolved_connection = @connection || ::ActiveRecord::Base.lease_connection
 
       def resolve_role(subject, explicit)
         return explicit.to_s if explicit

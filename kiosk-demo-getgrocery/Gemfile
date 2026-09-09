@@ -28,3 +28,11 @@ gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end
+
+group :test do
+  # The conformance checks this app runs against itself — that its routes
+  # resolve, that a verb executes, that a query answers the shape it declared,
+  # and that data access is scoped to the calling principal. `test/` wires the
+  # Minitest adapter; the RSpec adapter ships in the same gem and needs no other.
+  gem "kiosk-test-support", path: "../kiosk-test-support"
+end

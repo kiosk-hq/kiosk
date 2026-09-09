@@ -113,6 +113,21 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       expect(described_class.routes(null_origin.new(verbs: verbs, routes: table))).to be_ok
     end
 
+    it "FAILS with its own sentence when the engine's REFUSAL route caught the verb" do
+      # The commonest spelling of «declared and never routed»: the engine
+      # appends a single-segment refusal pair below the operator's routes, so a
+      # verb nobody drew resolves to THAT rather than to nothing.
+      verbs = [catalog_verb]
+      table = { ["GET", "/kiosk/catalog"] => { controller: "kiosk/server/verb_refusal",
+                                               action: "show", kiosk_verb: "catalog" } }
+
+      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include("nothing you drew answers GET /kiosk/catalog")
+      expect(outcome.message).to include("404 for a verb this origin publishes")
+    end
+
     it "FAILS when a route reaches the handler controller directly" do
       verbs = [catalog_verb]
       table = { ["GET", "/kiosk/catalog"] => { controller: "kiosk/storefront", action: "catalog",
@@ -307,6 +322,63 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       expect(outcome).to be_failed
       expect(outcome.message).to include("reach: :published")
       expect(outcome.message).to include("asserts the opposite of the descriptor")
+    end
+
+    it "PASSES when the second principal is REFUSED outright" do
+      # Refusing is the stronger spelling of scoping: an origin that answers 404
+      # to a row it will not show does not even confirm the row exists. This is
+      # the shape a real demo hit — getgrocery's `kyc_status` answers
+      # `not_found` to a principal polling somebody else's request id.
+      refusal = Class.new(StandardError) do
+        def code = "not_found"
+        def http_status = 404
+      end.new("no such verification request for this principal")
+
+      origin = null_origin.new(
+        verbs:   [my_orders_verb],
+        answers: { ["my_orders", :alice] => [{ "order_id" => "a1" }],
+                   ["my_orders", :bob]   => refusal },
+      )
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_ok
+      expect(outcome.message).to include("REFUSED :bob outright (404 not_found)")
+    end
+
+    it "still FAILS when the second principal's call breaks rather than refuses" do
+      # A 500 is a defect in the handler and a 400 is a defect in the test's own
+      # arguments. Neither is scoping, and reading either as a pass is how this
+      # check would go green on a verb nobody can call.
+      broken = Class.new(StandardError) do
+        def code = "action_failed"
+        def http_status = 500
+      end.new("undefined method for nil")
+
+      origin = null_origin.new(
+        verbs:   [my_orders_verb],
+        answers: { ["my_orders", :alice] => [{ "order_id" => "a1" }],
+                   ["my_orders", :bob]   => broken },
+      )
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include("did not execute")
+    end
+
+    it "FAILS when the FIRST principal is refused their own rows" do
+      refusal = Class.new(StandardError) do
+        def code = "forbidden"
+        def http_status = 403
+      end.new("not yours")
+
+      origin = null_origin.new(
+        verbs:   [my_orders_verb],
+        answers: { ["my_orders", :alice] => refusal, ["my_orders", :bob] => [] },
+      )
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include("did not execute")
     end
 
     it "treats an action's single object as one row" do

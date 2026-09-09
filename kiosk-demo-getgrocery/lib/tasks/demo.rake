@@ -18,6 +18,10 @@
 #   rake demo:wire_args_spec DB-free unit spec for the whole WireArguments shape
 #                        guard — the module that decides whether a hostile wire
 #                        argument is a typed 400 or a booked order
+#   rake demo:conformance the four properties the protocol makes normative of
+#                        this origin — routes resolve, a verb executes, a query
+#                        answers its declared shape, data access is scoped to
+#                        the principal — asserted with `bin/rails test`
 #   rake demo:race       pay-path regression: concurrency + typed 4xx
 #                        + stuck-`paying` self-heal
 #   rake demo:reconcile  resolve orders stuck in `paying` from local evidence
@@ -139,6 +143,37 @@ namespace :demo do
     spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
     puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
     sh "ruby #{spec}"
+  end
+
+  # ── The conformance suite, and why it is `bin/rails test` ──────────────────
+  #
+  # THE FOUR PROPERTIES THE PROTOCOL MAKES NORMATIVE OF AN ORIGIN: its routes
+  # resolve, a verb executes, a query answers the shape it declared, and data
+  # access is scoped to the authenticated principal. An operator is asked to
+  # conform to a document, so they have to be able to run its claims — the
+  # assertions live in `kiosk-test-support` and `test/` is four assertion names
+  # around this demo's own fixtures.
+  #
+  # It is the ORDINARY Rails test runner on purpose. An adopting operator opens
+  # a demo to find out what testing a Kiosk integration looks like, and what
+  # they should find is the command they already type. This demo is the
+  # Minitest worked example; kiosk-demo-hoteling is the RSpec one, off the same
+  # gem and the same four checks.
+  #
+  # It runs in RAILS_ENV=test against its OWN database, so it neither reads nor
+  # disturbs the seeded development data every other task in this file shares —
+  # the fixtures are created per example and rolled back. Same recipe
+  # kiosk-demo-prove's `demo:test` uses.
+  #
+  # No server, no Postgres beyond that database, no PoW and no bearer: the
+  # calls reach the registered handler through a GUC-scoped session. The WIRE
+  # in front of those handlers is what demo:shop, demo:isolation and
+  # demo:redteam drive.
+  desc "Conformance: routes resolve, verbs execute, queries answer their declared shape, data is principal-scoped."
+  task :conformance do
+    puts "\n── Kiosk conformance (bin/rails test, RAILS_ENV=test) ──"
+    sh "RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load"
+    sh "bundle exec rails test"
   end
 
   desc "Boot the server, run script/getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."

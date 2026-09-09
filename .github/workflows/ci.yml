@@ -241,6 +241,23 @@ jobs:
             #     (item[:qty] || 1).to_s.to_i`, `slot = raw.to_s.to_i`) and drop
             #     the K-1047 `qty > MAX_INT4` arm — 25 assertions go red and the
             #     task exits 1.
+            # THEN demo:conformance (T-193) — the four properties the protocol
+            # makes normative of an origin, asserted through `bin/rails test`:
+            # every declared verb is routed with the method its kind requires,
+            # the read surface executes as an authenticated principal, three
+            # queries answer the shape their own output_schema declares, and
+            # `my_orders`/`kyc_status` hand one principal nothing belonging to
+            # another. It is this fleet's MINITEST worked example of the
+            # kiosk-test-support conformance surface (hoteling is the RSpec
+            # one), and it is the only task here that runs in RAILS_ENV=test
+            # against its own database, so its position is free of the reseeding
+            # order that governs everything below. It needs Postgres but no
+            # server, no PoW and no Stripe, ~3 s.
+            # Watched fail, both proven by plant-and-restore: delete the
+            # `get "/kiosk/delivery_slots"` line from config/routes/kiosk.rb and
+            # the route assertion names the verb the engine's refusal route
+            # caught; replace `Order.owned_by_current_principal` with
+            # `Order.all` and the scoping assertion names the leaked rows.
             # LAST — demo:race, the pay path's ONLY permanent regression net:
             # the K-544 double-charge/order-swap races, K-578 stuck-`paying`
             # reconciliation, and the K-579 malformed-uuid 400 over the real
@@ -301,7 +318,7 @@ jobs:
             # immediately ahead of demo:race for the reason below.
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
-            tasks: demo:slots_spec demo:cashier_spec demo:wire_args_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
+            tasks: demo:slots_spec demo:cashier_spec demo:wire_args_spec demo:conformance demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
             ungated:
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it

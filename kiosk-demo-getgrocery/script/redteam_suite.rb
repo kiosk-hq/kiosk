@@ -377,14 +377,18 @@ end
 # stops holding, e.g. if a descriptor widened the type or dropped
 # `additionalProperties: false`.
 #
-# `delivery_date` AND `delivery_address` ARE DIFFERENT, and they are why this
-# beat is not merely a schema test: both are declared as a bare
-# `type: "string"`, because neither domain is expressible in JSON Schema — the
-# delivery horizon rolls forward every midnight and the served zone is a list of
-# Dublin districts. Every string reaches getgrocery's OWN guards, so
-# `delivery_date: "nope"` is refused by {WireArguments.delivery_date} and an
-# out-of-zone address by {WireArguments.served_district}, and nothing but those
-# guards stands behind either.
+# `delivery_address` IS DIFFERENT, and it is why this beat is not merely a
+# schema test: it is declared a bare `type: "string"`, because its domain is not
+# expressible in JSON Schema — the served zone is a list of Dublin districts
+# an operator edits. Every string reaches getgrocery's OWN guard, so an
+# out-of-zone address is refused by {WireArguments.served_district} and nothing
+# but that guard stands behind it.
+#
+# `delivery_date` declares `format: "date"`, so the wire refuses every spelling
+# but `YYYY-MM-DD` before the handler runs. Two things it still cannot say are
+# {WireArguments.delivery_date}'s: that a well-shaped value names a real DAY
+# (`2026-02-30` does not), and that the day has not already gone — the delivery
+# horizon rolls forward every midnight, which no declaration can track.
 class HostileArgShapes < Kiosk::Redteam::Scenario
   ADDRESS = "2 Redteam Row, Dublin 2"
 
@@ -513,13 +517,14 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     # ── the two bare strings, where getgrocery's OWN guards are the only
     # thing standing (see the header) ───────────────────────────────────────
-    # NOT probed: `"[2026-09-01]"` and `"20260101"`. getgrocery's guard uses
-    # `Date.parse` and NOT hoteling's stricter `Date.iso8601` deliberately —
-    # `wire_arguments.rb` records that this verb pair has always scanned a date
-    # out of a loose string, so accepting them is PUBLISHED behaviour and a
-    # probe demanding a 400 would be asserting against the demo's own contract.
-    # Measured, not assumed: `"[2026-09-01]"` answers 200 today.
-    ["nope", "2026-13-45", "0000-01-01", "true"].each do |v|
+    # A date on this wire is `YYYY-MM-DD` and nothing else, so the spellings a
+    # loose reader would take are probed here beside the junk: the one-element
+    # array `"[2026-09-01]"`, the basic-ISO `"20260101"`, and `"09/01/2026"`,
+    # which is day-first to some senders and month-first to others — the value
+    # the rule was decided on, and the one an accepting origin answers without
+    # telling anybody which reading it took.
+    ["nope", "2026-13-45", "0000-01-01", "true",
+     "[2026-09-01]", "20260101", "09/01/2026"].each do |v|
       refused "create_order delivery_date=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items, delivery_slot_id: 1,
                             delivery_address: ADDRESS, delivery_date: v),

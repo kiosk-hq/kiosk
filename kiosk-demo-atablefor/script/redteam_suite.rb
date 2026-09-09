@@ -39,8 +39,8 @@
 #   BookOutsideOfferedHorizon — book_table on a well-formed date OUTSIDE the
 #     rolling horizon availability offers is a typed 400 NAMING the bookable
 #     dates, never a confirmed booking for a seating that was never offered;
-#     and the BASIC-form `YYYYMMDD` spelling Date.iso8601 would have accepted
-#     is refused by the declared `format: "date"` before the handler
+#     and the BASIC-form `YYYYMMDD` spelling, which is not the one any
+#     availability row hands out, is refused by BOTH layers
 #   HostileArgShapes — boolean/array/object/junk values on book_table's
 #     party_size, restaurant_id, restaurant_table_id, date and time, on
 #     availability's party_size (including the two bracket spellings) and on
@@ -427,9 +427,10 @@ BATTERY.record("InvalidFilterIsNotAnEmptyList",
 # `2026-08-21` — never gets that far: `book_table` declares `format: "date"`
 # and 0.4 validates `input_schema` on every call, so the wire refuses the
 # spelling the descriptor does not advertise before any Ruby runs. It is worth
-# probing anyway: `Date.iso8601` ACCEPTS the basic form, so the handler alone
-# would have parsed it, and this beat is what says the two layers together
-# leave no way in.
+# probing anyway, because it is what says the wire layer really is there: the
+# handler behind it refuses the same spelling ({WireArguments.iso_date}), so a
+# green probe here has to be attributed to a layer rather than assumed, and the
+# two together leave no way in.
 #
 # Both are asserted as a TYPED 400 naming what was wrong — a 500 or a silent
 # success fails either one — and the horizon probe additionally has to name the

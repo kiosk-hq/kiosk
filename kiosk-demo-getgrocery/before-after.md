@@ -571,7 +571,7 @@ class Kiosk::OrdersController < ActionController::API
                    },
                  },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6 },
-                 delivery_date:    { type: "string" },
+                 delivery_date:    { type: "string", format: "date" },
                  delivery_address: { type: "string" },
                  # `pattern`/`format` so the DECLARED contract carries the shape the
                  # handler enforces (Kiosk::UuidCheck), which a bare {type:"string"} does not.
@@ -630,7 +630,7 @@ class Kiosk::OrdersController < ActionController::API
                  order_id:         { type: "string", format: "uuid",
                                      pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6 },
-                 delivery_date:    { type: "string" },
+                 delivery_date:    { type: "string", format: "date" },
                  delivery_address: { type: "string" },
                },
                required: ["order_id", "delivery_slot_id"]

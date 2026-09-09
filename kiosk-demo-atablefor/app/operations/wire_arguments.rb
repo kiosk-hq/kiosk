@@ -120,6 +120,29 @@ module WireArguments
     values.empty? ? "none" : values.join(", ")
   end
 
+  # ── A DATE ON THE WIRE IS `YYYY-MM-DD`, AND NOTHING ELSE ──────────────────
+  #
+  # `book_table` publishes `format: "date"`, so the wire refuses every other
+  # spelling before {BookTableOperation} is reached. This is the layer BEHIND
+  # that one, and it may not be looser than the layer in front of it: a bare
+  # `Date.iso8601` would take a basic `20260821`, a datetime, an ISO week date
+  # and an ordinal date, none of which any `availability` row hands out. The ISO
+  # parse still runs behind the pattern, because it is what refuses `2026-02-30`
+  # — a well-shaped value that is not a day.
+  ISO_DATE = /\A\d{4}-\d{2}-\d{2}\z/
+
+  # @return [Date, nil] the day, or nil when the value is not that one spelling
+  def iso_date(raw)
+    value = raw.to_s
+    return nil unless ISO_DATE.match?(value)
+
+    begin
+      Date.iso8601(value)
+    rescue ArgumentError, TypeError
+      nil
+    end
+  end
+
   # A seating DATE inside the rolling upcoming horizon. The valid values are
   # NAMED in the refusal, so an assistant recovers without a second fetch.
   #

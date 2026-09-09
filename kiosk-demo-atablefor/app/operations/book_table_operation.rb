@@ -40,12 +40,17 @@ class BookTableOperation
 
     # The seating instant, from the SAME helper availability used: a seating
     # that is past, at an hour nobody seats at, or beyond the horizon is refused.
-    parsed_date =
-      begin
-        Date.iso8601(date)
-      rescue ArgumentError
-        return bad_request("invalid date: #{date} — use the YYYY-MM-DD from an availability row")
-      end
+    # `Date.iso8601` BEHIND an anchored YYYY-MM-DD pattern rather than instead
+    # of it: ISO 8601 is a FAMILY — a basic `20260821`, a datetime, an ISO week
+    # date and an ordinal date all parse through it — where `format: "date"` on
+    # the descriptor and the refusal below name ONE spelling. The declared
+    # format refuses the rest at the wire; a handler guard that accepts more
+    # than the layer in front of it is not a second layer at all. The ISO parse
+    # still runs, because it is what refuses `2026-02-30`.
+    parsed_date = WireArguments.iso_date(date)
+    if parsed_date.nil?
+      return bad_request("invalid date: #{date} — use the YYYY-MM-DD from an availability row")
+    end
     unless Seatings::TIMES.include?(time)
       return bad_request("unknown seating time: #{time} — use \"19:00\" | \"20:00\" | \"21:00\"")
     end

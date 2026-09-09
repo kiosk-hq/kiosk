@@ -185,17 +185,14 @@ class Kiosk::StorefrontController < ActionController::API
       return render_slots(soonest, district)
     end
 
-    # {WireArguments.parse_date} and not `Date.parse`: the loose forms this
-    # origin accepts include PARTIAL ones ("Tue", "sep", "1st"), and `Date.parse`
-    # completes those from the SERVER PROCESS's today. Every other date question
-    # on this surface is answered off `DeliverySlots.now`, so the parse is too —
-    # otherwise the day this verb offers and the day `create_order` books could
-    # come from two different clocks.
-    date = begin
-      WireArguments.parse_date(params[:date].to_s)
-    rescue ArgumentError, TypeError
+    # The declared `format: "date"` has already refused every other spelling
+    # before this method was reached. What a JSON Schema cannot say is that the
+    # string names a real calendar DAY — `2026-02-30` has the shape and is not
+    # one — so the semantic half stays {WireArguments.iso_date}'s.
+    date = WireArguments.iso_date(params[:date])
+    if date.nil?
       return render_refusal(OperationResult.refused(
-        code: "bad_request", message: "invalid date: #{params[:date]}",
+        code: "bad_request", message: "invalid date: #{params[:date]} — use YYYY-MM-DD",
       ))
     end
 

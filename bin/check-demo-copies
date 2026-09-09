@@ -3796,6 +3796,30 @@ FRAGMENTS = {
            "`MAX_TOTAL_CENTS` it used to carry under its own name; holding the three in lockstep " \
            "is what stops the next demo inventing a fourth spelling of int4.",
   },
+  "app/operations/wire_arguments.rb#ISO_DATE" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery hoteling],
+    why:   "The anchored `YYYY-MM-DD` a date argument must be spelled as, and the only spelling any "\
+           "of the three accepts (ADR-0029, K-1406). It is one RULE rather than three coincidences: "\
+           "Phil's ruling is that a date on this wire is ISO 8601 and nothing else, so a copy that "\
+           "widened on its own would not be a local relaxation, it would be one origin answering a "\
+           "different protocol than the two beside it and than the specification. That is exactly "\
+           "the one-sided edit this rule exists for, and it is the edit somebody makes to be "\
+           "helpful. skooti takes no wire date at all, which is why it is not here.",
+  },
+  "app/operations/wire_arguments.rb#iso_date" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery hoteling],
+    why:   "The parse behind {ISO_DATE} (ADR-0029, K-1406). `Date.iso8601` runs BEHIND the pattern "\
+           "and not instead of it, because ISO 8601 is a FAMILY -- a basic `20260901`, a datetime, "\
+           "an ISO week date and an ordinal date all parse through it -- while what the pattern "\
+           "still cannot answer is whether a well-shaped value names a real day (`2026-02-30`). "\
+           "Both halves are load-bearing, and a copy that kept one of them would pass a casual "\
+           "read: dropping the pattern re-admits four spellings nobody advertises, dropping the "\
+           "parse admits a February 30th. The three demos word their REFUSALS differently and are "\
+           "meant to -- each names the row an assistant gets a right value from -- so the sentence "\
+           "is deliberately not in here.",
+  },
   "app/operations/wire_arguments.rb#missing" => {
     rule:  :code,
     ships: %w[getgrocery hoteling skooti],

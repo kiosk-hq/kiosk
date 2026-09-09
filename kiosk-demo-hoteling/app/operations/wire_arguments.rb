@@ -93,44 +93,49 @@ module WireArguments
     )]
   end
 
+  # ── A DATE ON THE WIRE IS `YYYY-MM-DD`, AND NOTHING ELSE ──────────────────
+  #
+  # `Date.parse` is not an option here and never was: it SCANS for a date rather
+  # than validating a format, so `"2026-09-01'; --"` and `["2026-09-01"]` parse,
+  # and a refusal becomes a booking.
+  #
+  # AND `Date.iso8601` ON ITS OWN IS NOT THE FORMAT THE REFUSAL NAMES. ISO 8601
+  # is a family, and MEASURED, every one of these parses to 2026-09-01:
+  # `"20260901"` (basic), `"2026-09-01T10:00:00Z"` (datetime), `"2026-W36-2"`
+  # (week date) and `"2026-244"` (ordinal date) — five spellings where the
+  # refusal names one, on the descriptor-less `ReserveRoomOperation` path where
+  # no JSON Schema narrows the input first. Two of the four are worse than
+  # merely undocumented: the datetime silently DISCARDS a time an assistant may
+  # have meant as the check-in hour, and a week or ordinal date resolves to a
+  # day no human reading the booking would recognise. So the pattern narrows to
+  # the published spelling and the ISO parse runs BEHIND it, because it is what
+  # refuses `"2026-02-30"` and `"2026-13-01"` — a well-shaped date that is not a
+  # day.
+  ISO_DATE = /\A\d{4}-\d{2}-\d{2}\z/
+
+  # @return [Date, nil] the day, or nil when the value is not that one spelling
+  def iso_date(raw)
+    value = raw.to_s
+    return nil unless ISO_DATE.match?(value)
+
+    begin
+      Date.iso8601(value)
+    rescue ArgumentError, TypeError
+      nil
+    end
+  end
+
   # The check-in/check-out pair a stay is quoted for: BOTH required, both
-  # YYYY-MM-DD.
+  # YYYY-MM-DD. This is the demo's ONE date guard — what these verbs PUBLISH is
+  # `format: "date"`, which is this spelling and nothing else.
   #
   # @return [Array(Array(Date, Date), nil), Array(nil, OperationResult)]
-  #
-  # `Date.iso8601`, not `Date.parse`: `Date.parse` SCANS for a date rather than
-  # validating a format, so it accepts `"2026-09-01'; --"` and `["2026-09-01"]`
-  # and would turn a refusal into a booking. This is the demo's ONE date guard —
-  # what these verbs PUBLISH is `format: "date"`, which is this spelling and
-  # nothing else.
-  #
-  # AND `Date.iso8601` IS NOT THE FORMAT THE REFUSAL NAMES. ISO 8601 is a family,
-  # and MEASURED, every one of these parses to 2026-09-01: `"20260901"` (basic),
-  # `"2026-09-01T10:00:00Z"` (datetime), `"2026-W36-2"` (week date) and
-  # `"2026-244"` (ordinal date) — five spellings where the sentence below names
-  # one, on the descriptor-less `ReserveRoomOperation` path where no JSON Schema
-  # narrows the input first. Two of the four extra spellings are worse than
-  # merely undocumented: `"2026-09-01T10:00:00Z"` silently DISCARDS a time an
-  # assistant may have meant as the check-in hour, and a week or ordinal date
-  # resolves to a day no human reading the booking would recognise. So the
-  # format check narrows to the published spelling, and `Date.iso8601` still
-  # runs behind it, because it is what refuses `"2026-02-30"` and `"2026-13-01"`
-  # — a well-shaped date that is not a day.
-  STAY_DATE = /\A\d{4}-\d{2}-\d{2}\z/
-
   def stay_dates(check_in, check_out)
     return [nil, missing("check_in")]  if check_in.blank?
     return [nil, missing("check_out")] if check_out.blank?
 
-    dates =
-      if [check_in, check_out].all? { STAY_DATE.match?(_1.to_s) }
-        begin
-          [Date.iso8601(check_in.to_s), Date.iso8601(check_out.to_s)]
-        rescue ArgumentError, TypeError
-          nil
-        end
-      end
-    return [dates, nil] unless dates.nil?
+    dates = [iso_date(check_in), iso_date(check_out)]
+    return [dates, nil] if dates.none?(&:nil?)
 
     [nil, OperationResult.refused(
       code:    "bad_request",

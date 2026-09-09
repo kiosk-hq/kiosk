@@ -275,7 +275,8 @@ end
 # `Date.iso8601` still runs behind the format check: it is what refuses a
 # well-shaped date that is not a DAY (`"2026-02-30"`, `"2026-13-01"`).
 ["2026-09-01'; --", ["2026-09-01"], "2026-9-1", "2026-02-30", "2026-13-01", 42, "tomorrow",
- "01/09/2026", "20260901", "2026-09-01T10:00:00Z", "2026-W36-2", "2026-244"].each do |bad|
+ "01/09/2026", "09/01/2026", "2026/09/01", "1st", "20260901", "2026-09-01T10:00:00Z",
+ "2026-W36-2", "2026-244"].each do |bad|
   pair    = guard("stay_dates(#{bad.inspect})") { WireArguments.stay_dates(bad, "2026-09-04") }
   refusal = refusal_of(pair)
   assert_typed_400(refusal, "stay_dates(#{bad.inspect}, ok)")
@@ -312,6 +313,24 @@ pair = guard("stay_dates(reversed)") { WireArguments.stay_dates("2026-09-04", "2
 assert(refusal_of(pair).nil? && value_of(pair) == [Date.new(2026, 9, 4), Date.new(2026, 9, 1)],
        "a reversed pair PARSES here — the night count is the caller's question, not this " \
        "guard's, got #{value_of(pair).inspect}")
+
+# ── 4a. iso_date/1 — the unit BOTH halves of the guard above are built on ────
+#
+# The pattern and the parse each answer half, and a copy keeping only one would
+# pass a casual read: without the pattern the four ISO-family spellings come
+# back, without the parse a `2026-02-30` does. Held byte-identical with
+# atablefor's and getgrocery's copies (bin/check-demo-copies), because a date on
+# this wire is `YYYY-MM-DD` across the fleet and not per origin.
+puts "\n── iso_date: the one spelling, and a well-shaped non-day is still nil ──"
+assert(WireArguments.iso_date("2026-09-01") == Date.new(2026, 9, 1),
+       "iso_date(\"2026-09-01\") → 2026-09-01")
+assert(WireArguments.iso_date("2028-02-29") == Date.new(2028, 2, 29),
+       "iso_date(\"2028-02-29\") → 2028-02-29: a leap day IS a day")
+["20260901", "2026-09-01T10:00:00Z", "2026-W36-2", "2026-244", "2026-9-1", "09/01/2026",
+ "2026-02-30", "2026-13-01", "x2026-09-01x", nil, 42, ["2026-09-01"]].each do |bad|
+  assert(WireArguments.iso_date(bad).nil?,
+         "iso_date(#{bad.inspect}) → nil: wrong shape, or the right shape and not a day")
+end
 
 # ── 5. today / zone / example_check_in / example_check_out ───────────────────
 puts "\n── the property's clock, and the examples read off it ──"

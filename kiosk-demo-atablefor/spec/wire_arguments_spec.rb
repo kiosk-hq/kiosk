@@ -282,6 +282,39 @@ assert(WireArguments.seating_date("2026-09-01", [])[1].message ==
        "an empty roster says «currently none», not «currently »: " \
        "#{WireArguments.seating_date("2026-09-01", [])[1].message.inspect}")
 
+# ── 5a. iso_date/1 — one spelling of a day, and nothing else ─────────────────
+#
+# `book_table` publishes `format: "date"`, so the wire refuses every other
+# spelling before {BookTableOperation} runs. This is the layer behind it, and
+# what it must NOT be is looser than the layer in front of it: `Date.iso8601`
+# alone is a FAMILY and would take four spellings no `availability` row hands
+# out. The parse still runs behind the pattern — it is what answers a value that
+# has the shape and is not a day. Held byte-identical with getgrocery's and
+# hoteling's copies (bin/check-demo-copies).
+puts "\n── iso_date: the one spelling, and a well-shaped non-day is still nil ──"
+assert(WireArguments.iso_date("2026-09-01") == Date.new(2026, 9, 1),
+       "iso_date(\"2026-09-01\") → 2026-09-01")
+assert(WireArguments.iso_date("2028-02-29") == Date.new(2028, 2, 29),
+       "iso_date(\"2028-02-29\") → 2028-02-29: a leap day IS a day")
+
+{ "20260901"             => "the BASIC ISO form, no separators",
+  "2026-09-01T19:00:00Z" => "an ISO datetime; it carries an hour `time` already owns",
+  "2026-W36-2"           => "an ISO week date",
+  "2026-244"             => "an ISO ordinal date",
+  "2026-9-1"             => "unpadded; no availability row is written this way",
+  "09/01/2026"           => "the ambiguous slash form — day-first or month-first, and nobody is told",
+  "1st"                  => "a partial value a scanner would complete from a clock",
+  "2026-02-30"           => "the right shape, and not a day",
+  "2026-13-01"           => "the right shape, and not a month",
+  "x2026-09-01x"         => "a date with junk glued to both ends",
+}.each do |raw, why|
+  assert(WireArguments.iso_date(raw).nil?, "iso_date(#{raw.inspect}) → nil — #{why}")
+end
+
+[nil, 42, [], false, { "a" => 1 }].each do |bad|
+  assert(WireArguments.iso_date(bad).nil?, "iso_date(#{bad.inspect}) → nil — a hostile SHAPE, not a string")
+end
+
 # ── 6. neighborhood/2 — a DB-derived set, held at arm's length ───────────────
 #
 # An operator adds a neighbourhood by inserting a restaurant, so no static `enum`

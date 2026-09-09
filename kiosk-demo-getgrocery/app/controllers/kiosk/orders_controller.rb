@@ -141,7 +141,11 @@ class Kiosk::OrdersController < ActionController::API
                  },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                                      description: "The `delivery_slot_id` from a delivery_slots row (1..6)." },
-                 delivery_date:    { type: "string",
+                 # `format: "date"` because the handler is exactly that strict:
+                 # a date on this wire is YYYY-MM-DD and nothing else, so the
+                 # DECLARED contract says so too and the wire refuses the rest
+                 # before any Ruby runs.
+                 delivery_date:    { type: "string", format: "date",
                                      description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. Optional; omitting books tomorrow." },
                  delivery_address: { type: "string",
                                      description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
@@ -216,7 +220,8 @@ class Kiosk::OrdersController < ActionController::API
                                      description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                                      description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },
-                 delivery_date:    { type: "string",
+                 # Same declaration as create_order's, for the same reason.
+                 delivery_date:    { type: "string", format: "date",
                                      description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. Omitting it books tomorrow." },
                  delivery_address: { type: "string",
                                      description: "New in-zone Dublin delivery address; unchanged if omitted." },

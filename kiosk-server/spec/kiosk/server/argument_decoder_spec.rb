@@ -224,11 +224,42 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
       end
     end
 
+    # Spec section 8.1 rule 9: a date is `YYYY-MM-DD` and nothing else, on both
+    # channels. The battery is the SPELLINGS a date library takes, not a sample
+    # of junk -- every one of them parses somewhere, and each is named so a
+    # future loosening of this check reddens with the reason attached.
     it "refuses a malformed date where format: date is declared" do
       declared = schema(date: { type: "string", format: "date" })
-      ["2026-13-01", "19-08-2026", "2026-8-1", "tomorrow"].each do |spelling|
-        expect(refusal("date=#{spelling}", declared).message).to include("date")
+      {
+        "2026-13-01"           => "the right shape, and not a month",
+        "2026-02-30"           => "the right shape, and not a day",
+        "19-08-2026"           => "day-first",
+        "2026-8-1"             => "unpadded",
+        "tomorrow"             => "a word",
+        "20260819"             => "ISO 8601 basic -- the family is not the format",
+        "2026-W34-3"           => "an ISO week date",
+        "2026-231"             => "an ISO ordinal date",
+        "2026-08-19T14:00:00Z" => "a timestamp; a calendar day has nowhere to put an hour",
+        "09/01/2026"           => "the ambiguous slash form: eight months apart between readers",
+        "12/09/2026"           => "and the other reading of it",
+        "19-Aug-2026"          => "a month name",
+        "Tue"                  => "a partial value only a clock could finish",
+        "1st"                  => "and another",
+        "x2026-08-19x"         => "a real date with junk glued to both ends",
+      }.each do |spelling, why|
+        message = refusal("date=#{spelling}", declared).message
+        expect(message).to include("date"), "#{spelling.inspect} (#{why}) was not refused by name"
       end
+    end
+
+    it "names YYYY-MM-DD in the refusal, because that is what the caller has to send" do
+      declared = schema(date: { type: "string", format: "date" })
+      expect(refusal("date=09/01/2026", declared).hint).to include("YYYY-MM-DD")
+    end
+
+    it "takes the one spelling, leap day included" do
+      declared = schema(date: { type: "string", format: "date" })
+      expect(decode("date=2028-02-29", declared)).to eq(date: "2028-02-29")
     end
 
     it "refuses a malformed timestamp where format: date-time is declared" do

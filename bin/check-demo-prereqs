@@ -639,12 +639,28 @@ if ARGV.include?("--self-test")
     { id:   "vacuity-no-second-drop-anywhere", kind: :vacuity,
       what: "every drop outside `demo:setup` disappears, so the attribution rule covers nothing " \
             "and reads as coverage",
-      op:   ->(t) { ra = File.join(t, "kiosk-demo-getgrocery/lib/tasks/demo.rake")
-                    File.write(ra, File.read(ra).sub(/^(  task :rls do\n)/) { "#{$1}" }
-                                       .sub("    sh \"bundle exec rails db:drop db:create db:schema:load db:seed\"\n\n    # ── Step 2",
-                                            "    # ── Step 2"))
-                    rp = File.join(t, "kiosk-demo-prove/lib/tasks/demo.rake")
-                    File.write(rp, File.read(rp).sub("    sh \"RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load\"\n", "")) },
+      # STRUCTURAL, and it was a HAND-KEPT LIST until it rotted (T-193). The op
+      # used to name the two second drops it knew about — getgrocery's
+      # `demo:rls` and prove's `demo:test` — by their exact source lines. The
+      # moment two demos grew a `demo:conformance` that drops the TEST database,
+      # the plant stopped draining the corpus: `extra-drops` stayed positive,
+      # the vacuity message never fired, and this arm read GREEN where it should
+      # have read VAC. An arm that has to be edited every time the tree grows a
+      # task is an arm that will silently stop planting what it says it plants.
+      # So the op now walks every demo rake file the way the guard's own
+      # ownership walk does — track the enclosing `task`, neutralise every
+      # `db:drop db:create` that is NOT inside `:setup` — and it needs no edit
+      # when the next second drop arrives.
+      op:   ->(t) { Dir[File.join(t, "kiosk-demo-*/lib/tasks/demo.rake")].each do |f|
+                      owner = nil
+                      rewritten = File.read(f).lines.map do |line|
+                        owner = Regexp.last_match(1) if line =~ /^\s*task\s+:?([a-z_]+)/
+                        next line unless owner != "setup" && line.include?("db:drop db:create")
+
+                        line.gsub("db:drop db:create", "db:create")
+                      end
+                      File.write(f, rewritten.join)
+                    end },
       expect: %r{not ONE task anywhere owns a `db:drop db:create` other than} },
     { id:   "vacuity-cross-demo-reach-stops-matching", kind: :vacuity,
       what: "the required script stops running a `db:drop`, so the cross-demo rule silently " \

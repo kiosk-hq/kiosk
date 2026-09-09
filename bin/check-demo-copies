@@ -6732,8 +6732,10 @@ if errors.empty?
        "detector proved on #{container_truth.length} constructed names), " \
        "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
        "(pattern and lexer proved against #{DEMO_ID_FIXTURES.size} fixtures this rule owns; " \
-       "comments and prose are held, in the demos and in the gems alike, by " \
-       "bin/check-shipped-archaeology)"
+       "bin/check-shipped-archaeology carries the SAME four bans — ledger id, ADR " \
+       "reference, Cyrillic, maintainer name — into comments and prose, in the demos and " \
+       "in the gems alike. Neither guard READS a sentence: narration of a retired wire " \
+       "element or a retired implementation is held by nothing here)"
   exit 0
 end
 

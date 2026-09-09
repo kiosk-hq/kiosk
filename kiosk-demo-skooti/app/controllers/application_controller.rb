@@ -19,12 +19,11 @@ class ApplicationController < ActionController::Base
   # error envelope» — a phrase that names the wire CONTRACT, and is false twice
   # over. The wire answers FLAT RFC 9457 problem documents served as
   # `application/problem+json`, whose top-level `code` is the branch point;
-  # `{ok:false, error:{…}}` is the 0.3 shape, deleted along with the endpoints
-  # that served it. What is rendered below is a COURTESY to a caller that dialed
-  # the wrong door — a human sign-in page is not a wire verb — rather than a
-  # contract anything parses, and its `error.code` is non-wire for the same
-  # reason: this endpoint must not borrow a code from the spec's closed error
-  # table. kiosk-server's own signposts render the same shape and record the
+  # the `{ok:false, error:{…}}` envelope rendered below is not a wire shape at
+  # all. It is a COURTESY to a caller that dialed the wrong door — a human
+  # sign-in page is not a wire verb — rather than a contract anything parses,
+  # and its `error.code` is non-wire for the same reason: this endpoint must
+  # not borrow a code from the spec's closed error table. kiosk-server's own signposts render the same shape and record the
   # same choice (assistants_controller.rb, device_verify_controller.rb); a demo
   # is read AS the reference implementation, so it has to say so rather than
   # leave a reader to infer a contract from a courtesy.

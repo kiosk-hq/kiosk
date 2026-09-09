@@ -207,9 +207,7 @@ abort "A reschedule_delivery failed (#{rc}): #{JSON.generate(resched_a)}" unless
 # is REFUSED before the handler runs: `create_order` publishes
 # `additionalProperties: false` and does not declare `user_id` — the principal is
 # not one of its inputs — so the declared input contract answers a typed 400
-# naming the parameter. (Through 0.3 the argument was accepted and silently
-# ignored; refusing it is the stricter answer and the one the published contract
-# requires.)
+# naming the parameter, which is what the published contract requires.
 forged_rc, forged_resp = post_json(
   "#{SERVER}/kiosk/create_order",
   {

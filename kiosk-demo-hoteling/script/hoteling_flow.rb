@@ -76,7 +76,7 @@ rc_props, props_resp = query_json(
 abort "query properties failed (#{rc_props}): #{JSON.generate(props_resp)}" unless rc_props == 200
 
 # A non-paginating query answers a BARE ARRAY — the rows, with nothing around
-# them (0.4 retired the `{rows: …}` envelope).
+# them.
 props = Array(props_resp)
 abort "properties returned empty rows" if props.empty?
 target_property = props.first

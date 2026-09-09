@@ -83,8 +83,8 @@ STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
-# `GET <endpoint>/schema` answers `{verbs, queries, actions}` DIRECTLY — the
-# 0.3 `{ok, kind, value}` envelope was retired at the cutover.
+# `GET <endpoint>/schema` answers `{verbs, queries, actions}` DIRECTLY, with no
+# envelope around it.
 schema_value = schema_body || {}
 
 puts JSON.generate({

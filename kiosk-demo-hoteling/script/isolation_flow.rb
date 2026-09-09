@@ -31,9 +31,7 @@
 #         bad_request naming user_id. `reserve_room` publishes
 #         `additionalProperties: false` and does not declare `user_id`, so on
 #         the 0.4 wire the declared input contract refuses the forgery BEFORE
-#         the handler runs. (Through 0.3 the argument was accepted and silently
-#         ignored; refusing it is the stricter answer and the one the published
-#         contract requires.)
+#         the handler runs, which is what the published contract requires.
 #     3b: B's LEGITIMATE booking has DB user_id = B — the property the refusal
 #         alone does not prove, because ownership comes from
 #         kiosk.current_user_id() and never from an argument. Verified by DB
@@ -123,7 +121,7 @@ rc_props_a, props_resp_a = query_json(
 abort "A query properties failed (#{rc_props_a}): #{JSON.generate(props_resp_a)}" unless rc_props_a == 200
 
 # A non-paginating query answers a BARE ARRAY — the rows, with nothing around
-# them (0.4 retired the `{rows: …}` envelope).
+# them.
 all_props_a = Array(props_resp_a)
 abort "No properties returned" if all_props_a.empty?
 prop_a = all_props_a.first
@@ -226,9 +224,8 @@ STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — G
 #       REFUSED before the handler runs: `reserve_room` publishes
 #       `additionalProperties: false` and does not declare `user_id` — the
 #       principal is not one of its inputs — so the declared input contract
-#       answers a typed 400 naming the parameter. Through 0.3 the argument was
-#       accepted and silently ignored; refusing it is the stricter answer and
-#       the one the published contract requires.
+#       answers a typed 400 naming the parameter, which is what the published
+#       contract requires.
 #   3b  B then reserves LEGITIMATELY, and the rake task reads the row back:
 #       the INSERT takes the owner from kiosk.current_user_id() (B's UUID), not
 #       from anything the caller sent. The refusal alone cannot show this —

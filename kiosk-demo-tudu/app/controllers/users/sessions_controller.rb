@@ -14,11 +14,11 @@ module Users
   #
   # NOT «the Kiosk error envelope»: that phrase names the wire CONTRACT, and the
   # wire's contract is a FLAT RFC 9457 problem document served as
-  # `application/problem+json` — the `{ok:false, error:{…}}` shape below is
-  # 0.3's, deleted along with the endpoints that served it. `/users/sign_out` is
-  # a browser page, not a wire verb, so this body is a COURTESY to a caller that
-  # dialed the wrong door rather than a contract anything parses, and its
-  # `error.code` is deliberately non-wire. kiosk-server's own wrong-door
+  # `application/problem+json` — the `{ok:false, error:{…}}` shape below is not
+  # a wire shape at all. `/users/sign_out` is a browser page, not a wire verb,
+  # so this body is a COURTESY to a caller that dialed the wrong door rather
+  # than a contract anything parses, and its `error.code` is deliberately
+  # non-wire. kiosk-server's own wrong-door
   # signposts render the same shape and record the same choice.
   #
   # Everything else is Devise's behaviour untouched: browsers (navigational

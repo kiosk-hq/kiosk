@@ -138,10 +138,9 @@ b_booking_ids_before = my_booking_ids(SERVER, b[:token], "B (before)")
 # this is REFUSED before the handler runs: `book_table` publishes
 # `additionalProperties: false` and does not declare `user_id` — the principal
 # is not one of its inputs — so the declared input contract answers a typed 400
-# naming the parameter. (Through 0.3 the argument was accepted and silently
-# ignored; refusing it is the stricter answer and the one the published
-# contract requires.) The refusal writes nothing, so no seating is consumed and
-# the legitimate booking below can take the very slot this attempt named.
+# naming the parameter, which is what the published contract requires. The
+# refusal writes nothing, so no seating is consumed and the legitimate booking
+# below can take the very slot this attempt named.
 slot_b = find_open_slot(SERVER, b[:token], 2,
                         exclude: [[slot_a["restaurant_table_id"], slot_a["seating_at"]]])
 forged_rc, forged_resp = book_slot(SERVER, b[:token], slot_b, 2,

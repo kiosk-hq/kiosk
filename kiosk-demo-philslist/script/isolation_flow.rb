@@ -183,9 +183,7 @@ STDERR.puts "  B close Alice's listing → #{close_rc}"
 # REFUSED before the handler runs: `post_listing` publishes
 # `additionalProperties: false` and does not declare `owner_id` — the principal
 # is not one of its inputs — so the declared input contract answers a typed 400
-# naming the parameter. (Through 0.3 the argument was accepted and silently
-# ignored; refusing it is the stricter answer and the one the published
-# contract requires.)
+# naming the parameter, which is what the published contract requires.
 forged_rc, forged = post_json("/kiosk/post_listing",
                               { category_slug: "electronics",
                                 title: "Forged owner test", body: "should belong to Bob",

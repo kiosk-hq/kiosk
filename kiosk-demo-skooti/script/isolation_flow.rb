@@ -26,9 +26,8 @@
 #         → 400 bad_request naming user_id. `reserve` publishes
 #           `additionalProperties: false` and does not declare user_id — the
 #           principal is not one of its inputs — so the declared input contract
-#           refuses the forgery before the handler runs. (Through 0.3 the wire
-#           ACCEPTED the argument and the handler ignored it; refusing it is the
-#           stricter answer and the one the published contract requires.)
+#           refuses the forgery before the handler runs, which is what the
+#           published contract requires.
 #     3b: B then reserves LEGITIMATELY. → That reservation's DB user_id is B
 #         (the server writes kiosk.current_user_id()), which is the property the
 #         beat is really about and which the refusal alone does not prove.
@@ -49,9 +48,9 @@ require "uri"
 require "jwt"
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-# Valid attestations are now minted with the SHARED KYC broker key
-# (ProveTestIssuer, signing with the ProveKey skooti trusts) — the self-hosted
-# StubKyc retired when issuance moved to the broker.
+# Valid attestations are minted with the SHARED KYC broker key
+# (ProveTestIssuer, signing with the ProveKey skooti trusts), which is the only
+# issuer skooti accepts.
 require_relative "prove_test_issuer"
 
 SERVER = ENV.fetch("SERVER_URL")

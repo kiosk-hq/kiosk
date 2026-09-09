@@ -114,9 +114,8 @@ results[:mallory_list_members] = rc
 # On the 0.4 wire this is REFUSED before the handler runs: `create_list`
 # publishes `additionalProperties: false` and declares only `title` — the
 # principal is not one of its inputs — so the declared input contract answers a
-# typed 400 naming the parameter. (Through 0.3 the argument was accepted and
-# silently ignored; refusing it is the stricter answer and the one the published
-# contract requires.)
+# typed 400 naming the parameter, which is what the published contract
+# requires.
 forged_rc, forged = post_json("/kiosk/create_list",
                               { title: "Forged owner test", account_id: owner[:user_id] },
                               bearer(mallory[:token]))

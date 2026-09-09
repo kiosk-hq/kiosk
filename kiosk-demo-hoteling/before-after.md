@@ -240,8 +240,7 @@ wildcard, and a verb declared one way and routed the other is a routing error
 you can see. **The mount comes FIRST**, so Rails' own first-match protects
 `schema`, `pay` and the auth plane from an operator verb that happens to share a
 name; `kiosk-server` also refuses such a declaration at boot, which is where you
-would actually meet it. And there is no `/kiosk/query` and no `/kiosk/run`,
-because protocol 0.4 deleted the multiplexed pair outright.
+would actually meet it.
 
 **3. Declare the read verbs in a controller**
 
@@ -541,8 +540,8 @@ end
 This line is load-bearing. The wire reaches a handler through the registry and
 nothing else in the app references these classes, so in development — where
 Rails does not eager-load `app/` — an origin that names none of them serves no
-verbs at all. There is no second way in: `Kiosk::Server::Queries.register`, the block API
-the 0.3 series shipped, was removed in 0.4 and now raises NoMethodError.
+verbs at all. There is no second way in: the registry is the only route from
+the wire to a handler.
 
 **6. Wire a payment-provider adapter**
 

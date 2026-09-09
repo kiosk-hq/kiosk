@@ -85,8 +85,7 @@ e2e/assistant.sh	$public_doc is really being read (control token)
 e2e/assistant.sh	$public_doc names no verb ($verb_name) — pointer, not copy
 e2e/assistant.sh	?v=<digest> is immutable for a year
 e2e/assistant.sh	GET /kiosk/schema is unenveloped
-e2e/assistant.sh	GET an action → 405
-e2e/assistant.sh	GET at an action's path → 405
+e2e/assistant.sh	GET at an action's path → 404
 e2e/assistant.sh	If-None-Match on the digest → 304
 e2e/assistant.sh	KYC at an origin that serves no KYC → 501
 e2e/assistant.sh	Kiosk-API-Version is MAJOR.MINOR.PATCH
@@ -94,8 +93,9 @@ e2e/assistant.sh	Kiosk-API-Version present
 e2e/assistant.sh	Kiosk-Min-Client is a version, and it is advertised
 e2e/assistant.sh	Kiosk-Min-Client present
 e2e/assistant.sh	Kiosk-Server-Version present
+e2e/assistant.sh	POST /kiosk/$retired unauthenticated → 404 too
 e2e/assistant.sh	POST /kiosk/$retired → 404
-e2e/assistant.sh	POST at a query's path → 405
+e2e/assistant.sh	POST at a query's path → 404
 e2e/assistant.sh	Vary names both request headers
 e2e/assistant.sh	X-Total-Count is not dressed up as a standard
 e2e/assistant.sh	a COMPLETE answer carries X-Total-Count
@@ -113,7 +113,6 @@ e2e/assistant.sh	all three version headers on all 19 mount routes
 e2e/assistant.sh	an action declares no pagination headers
 e2e/assistant.sh	an ancient client is SERVED, not refused — the floor is advisory
 e2e/assistant.sh	an unhandled 500 UNDER the mount is a 500
-e2e/assistant.sh	an unregistered NAME and an unserved MODULE answer differently
 e2e/assistant.sh	api-catalog advertises it as a service-desc
 e2e/assistant.sh	api-catalog hyperlinks $verb_name, unauthenticated
 e2e/assistant.sh	api-catalog → 200
@@ -147,7 +146,6 @@ e2e/assistant.sh	binding: …and the code is not_found
 e2e/assistant.sh	binding: …type names it
 e2e/assistant.sh	bob: 1 appointment exists
 e2e/assistant.sh	bob: does NOT see alice's row
-e2e/assistant.sh	code is the branch point
 e2e/assistant.sh	db: 1 cart_mandate
 e2e/assistant.sh	db: 1 intent_mandate
 e2e/assistant.sh	db: 1 payment_mandate
@@ -168,9 +166,7 @@ e2e/assistant.sh	kiosk.endpoint correct
 e2e/assistant.sh	kiosk.schema_url is digest-versioned
 e2e/assistant.sh	kiosk.version present
 e2e/assistant.sh	limit and cursor are injected into a query
-e2e/assistant.sh	no auth on an unknown name → 401 (no enumeration)
 e2e/assistant.sh	no auth → 401
-e2e/assistant.sh	no ok field survives
 e2e/assistant.sh	one path per verb the canonical catalog publishes
 e2e/assistant.sh	pay: http 200
 e2e/assistant.sh	pay: psp_reference present
@@ -188,21 +184,22 @@ e2e/assistant.sh	register-pow: the expected (n,k) was READ from the initializer
 e2e/assistant.sh	reserved limit/cursor accepted → 200
 e2e/assistant.sh	salon name is Combette
 e2e/assistant.sh	schema publishes {queries, actions} and nothing else
-e2e/assistant.sh	served as problem+json
 e2e/assistant.sh	status restates the HTTP status
 e2e/assistant.sh	the OPERATOR's own 200 outside the mount carries none
 e2e/assistant.sh	the body is a bare array
 e2e/assistant.sh	the body is the action's object
 e2e/assistant.sh	the descriptor's description travels verbatim
 e2e/assistant.sh	the reserved parameters are form/explode:true
-e2e/assistant.sh	the three 'it is not here' answers are three DIFFERENT codes
+e2e/assistant.sh	the two 'it is not here' answers are two DIFFERENT codes
 e2e/assistant.sh	title is the code's, not the incident's
 e2e/assistant.sh	type names the code
+e2e/assistant.sh	unknown query → 404
 e2e/assistant.sh	…a query is advertised GET
 e2e/assistant.sh	…a stale ?v= still answers the CURRENT catalogue, short-lived
 e2e/assistant.sh	…an action is advertised POST
 e2e/assistant.sh	…and NO Link header, because there is no next page
 e2e/assistant.sh	…and NOT forbidden
+e2e/assistant.sh	…and is itself an RFC 9457 document
 e2e/assistant.sh	…and kiosk.json itself expires quickly
 e2e/assistant.sh	…and links the catalog at its versioned url
 e2e/assistant.sh	…and neither does the operator's own 500 — same exception path
@@ -210,17 +207,21 @@ e2e/assistant.sh	…and never a 402: the toll went with the gate
 e2e/assistant.sh	…and the boot digest IS the ETag
 e2e/assistant.sh	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	…and the route loop actually ran
-e2e/assistant.sh	…as an ordinary verb_not_found
-e2e/assistant.sh	…as verb_not_found too
+e2e/assistant.sh	…and the write never ran
 e2e/assistant.sh	…by \$ref into components.headers
 e2e/assistant.sh	…code is module_not_served
-e2e/assistant.sh	…coded method_not_allowed
 e2e/assistant.sh	…detail names the module
+e2e/assistant.sh	…not a problem document
 e2e/assistant.sh	…public, one minute at the bare path
+e2e/assistant.sh	…status restates the HTTP status
 e2e/assistant.sh	…the catalog is the body itself
+e2e/assistant.sh	…title is the code's, not the incident's
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	…while the same request with a bad token is still 401
+e2e/assistant.sh	…with no 0.3 envelope residue
+e2e/assistant.sh	…with no Allow on it
+e2e/assistant.sh	…with no code to branch on
 e2e/fixtures/auth_wire_capture.rb	THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT (T-152).
 e2e/fixtures/bookings_controller.rb	      "WHERE user_id = kiosk.current_user_id() " \
 e2e/fixtures/bookings_controller.rb	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
@@ -1043,7 +1044,6 @@ kiosk-server/lib/kiosk/server/engine.rb	        post "auth/register",  to: "auth
 kiosk-server/lib/kiosk/server/engine.rb	        post "auth/revoke",    to: "auth#revoke"
 kiosk-server/lib/kiosk/server/engine.rb	        post "pay",    to: "wire#pay"
 kiosk-server/lib/kiosk/server/engine.rb	      initializer "kiosk-server.root_discovery_routes" do |app|
-kiosk-server/lib/kiosk/server/engine.rb	      initializer "kiosk-server.verb_refusal_route" do |app|
 kiosk-server/lib/kiosk/server/engine.rb	      routes do
 kiosk-server/lib/kiosk/server/engine.rb	#   mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/lib/kiosk/server/engine.rb	get  "oauth/device/verify",        to: "device_verify#show"
@@ -1273,10 +1273,10 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 applicat
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a routing 404 UNDER the mount carries all three
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an explicit line reaches the VERB wire, not the refusal beside it
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an explicit line reaches the VERB wire
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an unhandled 500 UNDER the mount carries all three
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb 405 + Allow (§8.1)
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves a path that cannot be a verb name a routing 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers a name nobody registered the same ordinary 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb an ordinary routing 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	stamps every path UNDER the mount — success and refusal alike
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	the HOST's own route outside the mount carries none — on a 200

@@ -12,10 +12,10 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   single-currency. Wire-level currency negotiation is deliberately
   post-release.
 - **Uniform request validation.** Most of this layer shipped in 0.4 and what
-  is left is narrow. SHIPPED: the opt-in `c.validate_requests` flag (on in the
-  demos) validates the proof(s) parsed from the `Kiosk-PoW` request header
-  against the normative PoW JSON Schema, so a malformed proof returns a clear
-  `400 bad_request` with a shape hint instead of a silent re-issued `402` loop
+  is left is narrow. SHIPPED: the `c.validate_requests` flag (defaults TRUE;
+  set on explicitly in every operator demo) validates the proof(s) parsed
+  from the `Kiosk-PoW` request header against the normative PoW JSON Schema, so
+  a malformed proof returns a clear `400 bad_request` with a shape hint instead of a silent re-issued `402` loop
   (closed K-479); per-verb `input_schema` validation of a request's coerced
   arguments, which is **unconditional** rather than flag-gated, because
   `input_schema` is required on every 0.4 verb and a flag would leave the typed
@@ -25,8 +25,11 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   RESPONSE bytes against the published JSON Schemas
   (`e2e/schema_conformance.rb`, run by `e2e/run.sh`); and a sync-check that the
   vendored schema copies match the normative `kiosk.tech/spec/schemas/`
-  originals (`bin/check-spec-schemas`). STILL OPEN: JSON Schemas for the auth
-  plane, which has none, and a structured field-path `detail` on a validation
+  originals (`bin/check-spec-schemas`); and the auth plane's own JSON Schemas —
+  `spec/schemas/auth.schema.json` publishes the challenge, the possession
+  proof, the credential request, the registration answer, the token and its
+  claims, vendored here as `e2e/schemas/auth.schema.json`. STILL OPEN: a
+  structured field-path `detail` on a validation
   problem document, so a caller can locate the offending argument without
   parsing prose.
 - **More human-login adapters.** A Devise adapter ships as the worked

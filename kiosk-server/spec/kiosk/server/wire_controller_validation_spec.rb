@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-# Opt-in PoW-SHAPE validation (UNIFORM-VALIDATION slice-1, closes K-479;
-# re-pointed to the Kiosk-PoW header by ADR-0022).
+# PoW-SHAPE validation (closes K-479; re-pointed to the Kiosk-PoW header by
+# ADR-0022).
 #
-# When `config.validate_requests` is true, the proof(s) parsed from the
-# `Kiosk-PoW` request header are validated against the vendored normative PoW
-# schema BEFORE PowGate.gate consumes them. The motivating failure: an agent
+# When `config.validate_requests` is true — which is its default — the proof(s)
+# parsed from the `Kiosk-PoW` request header are validated against the vendored
+# normative PoW schema BEFORE PowGate.gate consumes them. The motivating failure: an agent
 # submitted a `{solutions:[…]}` shape (not the schema shape
 # `{challenge:,nonce:}`); PowGate.extract_proofs returned [] and the gate
 # re-issued a fresh 402 on every retry — an infinite loop with no diagnostic.

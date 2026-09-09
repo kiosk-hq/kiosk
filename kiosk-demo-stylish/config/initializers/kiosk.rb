@@ -127,9 +127,9 @@ Kiosk.configure do |c|
   #    payment_provider one ──────────────────────────────────────────────────
   # `config.spending_cap` is read at exactly one site — `Executor#verb_pay`'s
   # mandate chain — and the provider check runs FIRST, so a `pay` here is
-  # `403 no payment_provider configured` before a cart exists. stylish
-  # configures no payment_provider (this salon takes payment in the chair), so a
-  # seam set here could never be consulted.
+  # `501 module_not_served` («this operator does not serve the payment module»)
+  # before a cart exists. stylish configures no payment_provider (this salon
+  # takes payment in the chair), so a seam set here could never be consulted.
   # What stylish DOES demonstrate is the governance surface above the cap — the
   # manage-assistants page writes `agents.spending_cap_cents`, which
   # `demo:binding` asserts end to end — and that is deliberate: a human sets the

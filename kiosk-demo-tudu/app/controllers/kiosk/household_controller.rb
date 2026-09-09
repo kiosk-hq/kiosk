@@ -110,7 +110,11 @@ class Kiosk::HouseholdController < ApplicationController
   kind :query
   reach :consented
   description "Return the todos on a list the caller is a member of, each with " \
-              "its completion state and the agent that added it. Forbidden (403) " \
+              "its completion state, the agent that added it, and its deadline if it " \
+              "has one. A deadline is stored as one absolute moment and RENDERED IN " \
+              "YOUR OWN ZONE — declare it in the `Kiosk-Timezone` header — so a list " \
+              "shared with somebody in another city reads correctly for both of you; " \
+              "each row names the zone it came back in. Forbidden (403) " \
               "if the caller is not a member of the list."
   input_schema type: "object",
                additionalProperties: false,
@@ -129,8 +133,11 @@ class Kiosk::HouseholdController < ApplicationController
                     title:               { type: "string", description: "The todo text." },
                     done:                { type: "boolean", description: "Whether it has been completed." },
                     created_by_agent_id: { type: %w[string null], description: "The assistant that added it (attribution), or null when a human did." },
+                    due_at:              { type: %w[string null], description: "The deadline as an ISO 8601 instant carrying YOUR declared zone's offset, or null when the todo has none. It is ONE moment: a second reader of this same list sees the same moment on their own clock." },
+                    due_label:           { type: %w[string null], description: "The deadline said out loud, IN THE ZONE IT NAMES — e.g. \"Tue 8 Sep, 14:00 (Europe/Istanbul)\" — or null. This is the line to read back to your human; `due_at` carries the offset, and nobody says an offset out loud." },
+                    timezone:            { type: "string", description: "The IANA zone these rows are rendered in: the one you declared in `Kiosk-Timezone`, or this household's own when you declared none." },
                   },
-                  required: %w[todo_id title done created_by_agent_id],
+                  required: %w[todo_id title done created_by_agent_id due_at due_label timezone],
                 }
   # Gate, then {Todo.rows_on} — the projection tudu's `/lists/:id` page renders
   # too: both doors run the same gate and then the same projection.

@@ -23,11 +23,24 @@ class Todo < ApplicationRecord
   # lives on the model at all and why the strings are not cosmetic.
   #
   # @return [Array<Hash>]
+  # AND IT IS RENDERED PER READER, which is the one thing on this projection
+  # that is not a plain column read. `due_at` is stored as an absolute instant
+  # because a shared list has TWO readers and no single wall-clock string is
+  # correct for both; the wall clock comes out of {ReaderClock}, on the zone
+  # THIS request declared, and `timezone` says which one that was. The web
+  # page reaches this method too and declares none, so it renders on the
+  # household's own clock — the declared fallback, not an accident.
+  #
+  # @return [Array<Hash>]
   def self.rows_on(list_id)
+    zone = ReaderClock.zone
     where(list_id: list_id).order(:created_at, :id)
-      .pluck(:id, :title, :done, :created_by_agent_id)
-      .map { |id, title, done, agent_id|
-        { "todo_id" => id, "title" => title, "done" => done, "created_by_agent_id" => agent_id }
+      .pluck(:id, :title, :done, :created_by_agent_id, :due_at)
+      .map { |id, title, done, agent_id, due_at|
+        { "todo_id" => id, "title" => title, "done" => done, "created_by_agent_id" => agent_id,
+          "due_at" => ReaderClock.publish(due_at, zone),
+          "due_label" => ReaderClock.label(due_at, zone),
+          "timezone" => zone.name }
       }
   end
 end

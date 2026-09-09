@@ -191,6 +191,27 @@ namespace :demo do
     check.call("Bob's todo attributed to Bob's agent",                 r["bob_todo_attributed"])
     check.call("list_members shows an owner AND a member",              r["has_owner"] && r["has_member"] && r["member_count"] == 2)
 
+    # ── ONE INSTANT, TWO READERS, TWO CLOCKS ────────────────────────────────
+    #
+    # The case a shared list is the only demo in the fleet that can show: the
+    # same deadline read by two members who declare different zones. The MOMENT
+    # must be identical and the WALL CLOCK must not, or the value is a local
+    # time pretending to be an instant. Each row names the zone it came back in,
+    # so neither reader has to guess.
+    puts "\n── The deadline is one moment, read on each member's own clock ──"
+    check.call("Alice reads it in her declared zone (#{r["alice_due_zone"]})",
+               r["alice_due_zone"] == "Europe/Istanbul")
+    check.call("Bob reads the SAME todo in his (#{r["bob_due_zone"]})",
+               r["bob_due_zone"] == "America/New_York")
+    check.call("the two rows name DIFFERENT zones",                     r["due_zones_differ"])
+    check.call("…and their human-readable labels differ with them",     r["due_labels_differ"])
+    check.call("…while the instant is the SAME moment for both",        r["due_same_instant"])
+    check.call("the label NAMES the zone it is written in",             r["due_label_names_zone"])
+    check.call("a caller that declares no zone gets the household's, stated in the row",
+               r["no_header_zone"].to_s.include?("/"))
+    check.call("a zoneless due_at is REFUSED 400, never completed on somebody's clock",
+               r["zoneless_due_status"] == 400 && r["zoneless_due_code"] == "bad_request")
+
     if failures.empty?
       puts "\n  All collaboration assertions passed — membership-based sharing + attribution hold."
     else

@@ -8,6 +8,13 @@
     <% @todos.each do |t| %>
       <li>
         <span class="<%= 'done' if t['done'] %>"><%= t["title"] %></span>
+        <%# The deadline with the clock it is written on NAMED beside it. This
+            page declares no `Kiosk-Timezone`, so the projection renders it on
+            the household's own clock -- the declared fallback -- and the label
+            says which one that was, exactly as the wire row does. %>
+        <% if t["due_label"] %>
+          <span class="role">due <%= t["due_label"] %></span>
+        <% end %>
         <% if t["created_by_agent_id"] %>
           <span class="role">added by assistant <%= t["created_by_agent_id"] %></span>
         <% end %>

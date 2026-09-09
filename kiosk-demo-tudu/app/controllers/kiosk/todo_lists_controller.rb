@@ -66,6 +66,15 @@ class Kiosk::TodoListsController < ApplicationController
                  list_id: { type: "string", format: "uuid",
                             description: "The list to add to — a `list_id` from my_lists, verbatim." },
                  title:   { type: "string", minLength: 1, description: "The todo text." },
+                 due_at:  { type: "string", format: "date-time",
+                            description: "OPTIONAL deadline, RFC 3339, and the OFFSET IS REQUIRED " \
+                                         "(\"2026-09-08T14:00:00+03:00\"): a deadline is an INSTANT, " \
+                                         "so a value without one is refused rather than completed on " \
+                                         "anybody's clock. Resolve «tomorrow at two» YOURSELF, on the " \
+                                         "clock of the human who said it — whoever else shares this " \
+                                         "list reads it on theirs, and `list_todos` renders it in the " \
+                                         "zone each caller declares in `Kiosk-Timezone`. Omit it for a " \
+                                         "todo with no deadline." },
                },
                required: ["list_id", "title"]
   output_schema type: "object",
@@ -78,6 +87,7 @@ class Kiosk::TodoListsController < ApplicationController
   def add_todo
     render_operation AddTodoOperation.call(
       agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],
+      due_at: params[:due_at],
     )
   end
 

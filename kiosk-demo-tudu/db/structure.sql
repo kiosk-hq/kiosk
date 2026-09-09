@@ -321,7 +321,8 @@ CREATE TABLE public.todos (
     done boolean DEFAULT false NOT NULL,
     created_by_agent_id character varying,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    due_at timestamp with time zone
 );
 
 
@@ -800,6 +801,7 @@ ALTER TABLE ONLY public.memberships
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260910000001'),
 ('20260827000002'),
 ('20260827000001'),
 ('20260820130117'),

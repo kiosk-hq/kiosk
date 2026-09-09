@@ -99,6 +99,21 @@ creates "Hike" and mints an invite; Bob's AI assistant accepts it and joins as a
 member; both add todos. Asserts both AI assistants see the shared list, each todo is
 attributed to the AI assistant that added it, and the list has an owner + a member.
 
+**And the deadline is the sharpest clock case this fleet has.** «Tomorrow at
+two» is said by one person and read by another: share the list and the second
+reader is in another city, so there is no single wall-clock string correct for
+both. So `todos.due_at` is a `timestamptz` holding one absolute MOMENT, an
+assistant resolves «tomorrow at two» on the clock of the human who said it
+before it reaches the wire, and every read renders it in the zone the CALLER
+declares in the `Kiosk-Timezone` header — with `timezone` on the row saying
+which. The task asserts exactly that: Alice reads it in `Europe/Istanbul`, Bob
+reads the same todo in `America/New_York`, the two labels differ, and the
+instant does not. A caller that declares nothing gets this household's own
+clock, stated in the row rather than assumed. And a `due_at` carrying no offset
+is refused `400`: it is the one value that would mean two different moments to
+two readers with nothing on the wire to say so, and completing it here would
+pick one of them silently.
+
 ### W5 rebind + list transfer (`rake demo:link`)
 
 An assistant registers **headless** and creates the "Hike" list; Alice signs in

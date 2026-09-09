@@ -170,6 +170,31 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
       expect(errors.first).to include("/0/price_cents")
     end
 
+    it "checks ARGUMENTS with the REQUEST validator, so a reserved name is exempt" do
+      # `limit` and `cursor` are wire-reserved and always accepted, so a verb
+      # whose closed input_schema does not declare `limit` still takes one — and
+      # a conformance check that validated against the bare schema would reject
+      # an example the wire accepts. Measured on a real demo whose
+      # `example_params` publishes exactly that.
+      closed = { type: "object", additionalProperties: false,
+                 properties: { neighbourhood: { type: "string" } }, required: [] }
+
+      expect(origin.schema_errors({ neighbourhood: "Beşiktaş", limit: 20 },
+                                  schema: closed, verb: "search_hotels", kind: :query,
+                                  slot: "input_schema")).to eq([])
+    end
+
+    it "still reports an argument the input_schema really rejects" do
+      closed = { type: "object", additionalProperties: false,
+                 properties: { neighbourhood: { type: "string" } }, required: [] }
+
+      errors = origin.schema_errors({ neighbourhood: 5 }, schema: closed, verb: "search_hotels",
+                                    kind: :query, slot: "input_schema")
+
+      expect(errors.length).to eq(1)
+      expect(errors.first).to start_with("input_schema:")
+    end
+
     it "is empty when the payload satisfies the declaration" do
       expect(origin.schema_errors([], schema: { type: "array" }, verb: "catalog",
                                   kind: :query, slot: "output_schema")).to eq([])

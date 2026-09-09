@@ -8,6 +8,10 @@
 #                        the gate every verb opens with, and the only executable
 #                        coverage of it that needs no origin, no database and no
 #                        Equihash toll
+#   rake demo:conformance the four properties the protocol makes normative of
+#                        this origin — routes resolve, a verb executes, a query
+#                        answers its declared shape, data access is scoped to
+#                        the principal — asserted with `bundle exec rspec`
 #   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
 #                        booking chain), asserts happy path + negative gate, then runs
 #                        script/pay_window.rb in-process (capture-anchored paid state)
@@ -77,6 +81,39 @@ namespace :demo do
     spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
     puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
     sh "ruby #{spec}"
+  end
+
+  # ── The conformance suite, and why it is `rspec` here ──────────────────────
+  #
+  # THE FOUR PROPERTIES THE PROTOCOL MAKES NORMATIVE OF AN ORIGIN: its routes
+  # resolve, a verb executes, a query answers the shape it declared, and data
+  # access is scoped to the authenticated principal. An operator is asked to
+  # conform to a document, so they have to be able to run its claims — the
+  # assertions live in `kiosk-test-support` and `spec/conformance/` is four
+  # matcher names around this demo's own fixtures.
+  #
+  # This demo is the RSPEC worked example; kiosk-demo-getgrocery is the Minitest
+  # one, off the same gem and the same checks, and the two render the same
+  # failure sentence. An adopting operator copies whichever matches the
+  # framework they already run.
+  #
+  # `.rspec` sets `--default-path spec/conformance` and that is load-bearing:
+  # `spec/wire_arguments_spec.rb` beside it is a standalone assertion script,
+  # not an RSpec file, so a bare run over the whole of `spec/` would load it,
+  # define zero examples and exit 0 having asserted nothing.
+  #
+  # It runs in RAILS_ENV=test against its OWN database, so it neither reads nor
+  # disturbs the seeded development data every other task in this file shares —
+  # the fixtures are created per example and rolled back.
+  #
+  # No server, no PoW and no bearer: the calls reach the registered handler
+  # through a GUC-scoped session. The WIRE in front of those handlers is what
+  # demo:book, demo:search, demo:isolation and demo:redteam drive.
+  desc "Conformance: routes resolve, verbs execute, queries answer their declared shape, data is principal-scoped."
+  task :conformance do
+    puts "\n── Kiosk conformance (rspec, RAILS_ENV=test) ──"
+    sh "RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load"
+    sh "bundle exec rspec"
   end
 
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."

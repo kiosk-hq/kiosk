@@ -132,14 +132,29 @@ module Kiosk
         unwrap(answer)
       end
 
-      # Schema failures as a list of strings, from the engine's OWN validator.
+      # Schema failures as a list of strings, from the engine's OWN validators —
+      # and it is TWO validators, because the wire uses two.
       #
-      # {ResponseValidation.validate_payload!} raises one error naming the verb
-      # and the failing pointers; that message is what a running server with
-      # `validate_responses` on puts in front of an operator, so it is what this
-      # puts in front of them too.
+      # Arguments go through {RequestValidation.validate_arguments!}, which is
+      # what the per-verb wire runs unconditionally before a handler sees an
+      # argument. That is not the same check as validating them against the raw
+      # schema: `limit` and `cursor` are RESERVED wire names a caller may always
+      # send, so the wire exempts them when the verb's own `input_schema` does
+      # not declare them. A conformance check that validated arguments against
+      # the bare schema would reject an example the wire accepts — which it did,
+      # on a real demo whose `example_params` publishes the `limit` its closed
+      # `input_schema` deliberately leaves out.
+      #
+      # Answers go through {ResponseValidation.validate_payload!}, whose message
+      # is what a running server with `validate_responses` on puts in front of
+      # an operator.
       def schema_errors(payload, schema:, verb:, kind:, slot:)
-        ResponseValidation.validate_payload!(payload, output_schema: schema, verb: verb, kind: kind)
+        if slot.to_s == "input_schema"
+          RequestValidation.validate_arguments!(payload, input_schema: schema, verb: verb)
+        else
+          ResponseValidation.validate_payload!(payload, output_schema: schema, verb: verb,
+                                               kind: kind)
+        end
         []
       rescue Errors::Base => e
         ["#{slot}: #{e.message}"]

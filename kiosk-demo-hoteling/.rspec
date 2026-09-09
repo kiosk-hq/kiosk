@@ -1,0 +1,3 @@
+--default-path spec/conformance
+--require spec_helper
+--format documentation

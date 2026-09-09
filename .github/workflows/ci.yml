@@ -379,6 +379,22 @@ jobs:
             # Watched fail: restore the pre-guard coercion (`Integer(raw.to_s
             # .strip, 10)` → `raw.to_s.to_i`) and drop the `max:` arm — 15
             # assertions go red and the task exits 1.
+            # demo:conformance (T-193) goes SECOND, right after the DB-free
+            # unit spec: the four properties the protocol makes normative of an
+            # origin, asserted through `bundle exec rspec`. This demo is the
+            # fleet's RSPEC worked example of the kiosk-test-support conformance
+            # surface — getgrocery is the Minitest one — and `.rspec` sets
+            # `--default-path spec/conformance` so a bare run cannot load the
+            # standalone assertion script beside it, define zero examples and
+            # exit 0. It is the only task in this job that runs in
+            # RAILS_ENV=test against its own database, so its position is free
+            # of the reseeding order that governs everything below. Postgres,
+            # no server, no PoW, no PSP, ~3 s.
+            # Watched fail, proven by plant-and-restore with the sha checked
+            # back: replace `Booking.owned_by_current_principal` with
+            # `Booking.all` and the scoping example names the leaked rows —
+            # where demo:isolation needs a booted origin, a seeded database and
+            # a solved Equihash toll to reach the same property.
             # demo:spending_cap is the ONLY thing in the fleet that exercises
             # `config.spending_cap` at all (T-154). The seam was configured
             # NOWHERE until this task — `Executor#enforce_spending_cap!` returns
@@ -397,7 +413,7 @@ jobs:
             # same assertion goes red with the cap-arithmetic control beside it.
             # It goes with demo:search and demo:browse at the end: `task
             # spending_cap: :setup` reseeds.
-            tasks: demo:wire_args_spec demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse demo:spending_cap
+            tasks: demo:wire_args_spec demo:conformance demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse demo:spending_cap
             # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
             # single Kiosk-PoW header, which is the multi-proof half of the
             # retry that getgrocery's flat one-proof toll never reaches.

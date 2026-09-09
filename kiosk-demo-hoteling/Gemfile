@@ -35,3 +35,13 @@ group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end
+
+group :test do
+  # The conformance checks this app runs against itself — that its routes
+  # resolve, that a verb executes, that a query answers the shape it declared,
+  # and that data access is scoped to the calling principal. This demo is the
+  # RSpec worked example of that surface; kiosk-demo-getgrocery is the Minitest
+  # one, off the same gem and the same checks.
+  gem "kiosk-test-support", path: "../kiosk-test-support"
+  gem "rspec-rails", "~> 7.0"
+end

@@ -84,6 +84,10 @@ this list and the code that needs it disagree.
 > `PGHOST` is exported, and then it is whatever host that names: the drop
 > follows it, and takes that server's `kiosk_hoteling_development` instead.
 >
+> **`demo:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
+> `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
+> is `kiosk_hoteling_test` — the `test:` database, not `kiosk_hoteling_development`.
+>
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
 <!-- PREREQS:END -->
 
@@ -91,6 +95,7 @@ From this directory:
 
 ```
 bin/rails demo:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
+bin/rails demo:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
 bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
 bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
@@ -108,7 +113,20 @@ starts — nothing you left in the database survives a run, and that is what mak
 each of them repeatable. `demo:wire_args_spec` is outside that sentence entirely:
 it boots nothing, opens no connection and declares no prerequisite — it is a bare
 `ruby spec/wire_arguments_spec.rb` over pure functions, which is the whole reason
-it exists. `demo:book` was the one exception, and it was not
+it exists. `demo:conformance` is outside it for a different reason: it runs in
+`RAILS_ENV=test` against `kiosk_hoteling_test`, which it drops and rebuilds
+itself, so it neither reads nor disturbs the development data the tasks above
+share.
+
+**Two test directories, and they are different things.** `spec/conformance/` is
+an ordinary RSpec suite — the CONFORMANCE suite, written with the matchers
+`kiosk-test-support` ships, and the file to copy when you are adding a Kiosk wire
+to an app of your own. `kiosk-demo-getgrocery` is the same surface written in
+Minitest, and the two report the same failure sentence. `spec/wire_arguments_spec.rb`
+beside it is NOT an RSpec file: it is a standalone assertion script with its own
+`assert` and its own exit block. That is why `.rspec` sets `--default-path
+spec/conformance` — a bare `bundle exec rspec` over the whole of `spec/` would
+load the script, define no examples from it, and exit 0 having asserted nothing. `demo:book` was the one exception, and it was not
 repeatable: the driver always picks the same property for the same three nights
 and books it twice (happy path, then the payment-gate negative), so one pass took
 that property's whole inventory — the negative's unpaid hold is never released,
@@ -129,6 +147,7 @@ assertions cannot go ungated and unexplained.
 | Task | Runs in CI | Why not |
 |---|---|---|
 | `demo:wire_args_spec` | yes |  |
+| `demo:conformance` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:book` | yes |  |
 | `demo:spending_cap` | yes |  |

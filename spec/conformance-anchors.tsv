@@ -341,7 +341,7 @@ kiosk-demo-atablefor/script/pow_flow.rb	abort "expected bad_proof_count >= 1 for
 kiosk-demo-atablefor/script/pow_flow.rb	rc_challenge, resp_challenge = availability_once
 kiosk-demo-atablefor/script/pow_flow.rb	rc_served, resp_served = availability_once(proofs)
 kiosk-demo-atablefor/script/pow_flow.rb	rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad_nonce }])
-kiosk-demo-atablefor/script/redteam_suite.rb	record(results, "WholeValuedFloatBody",
+kiosk-demo-atablefor/script/redteam_suite.rb	BATTERY.record("WholeValuedFloatBody",
 kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected no challenge (n2=nil) after 2 bookings — principal must be proven. Got n2=#{n2}"
 kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected proof count to drop after a booking: n1=#{n1} not < n0=#{n0}" unless n1 < n0
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
@@ -423,18 +423,15 @@ kiosk-demo-getgrocery/script/getgrocery_flow.rb	missing_ids     = (1..6).to_a - 
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	no card-setup step here. This runs with KIOSK_TEST_AUTOCARD=1
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	pay: psp_reference expected 'pi_…' (real Stripe)
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	unless missing_ids.empty?
-kiosk-demo-getgrocery/script/redteam_suite.rb	      name:        "WrongCurrencyCart",
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Applicable — must be BLOCKED
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (no KYC)
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
 kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
-kiosk-demo-getgrocery/script/redteam_suite.rb	  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
 kiosk-demo-getgrocery/script/redteam_suite.rb	# KYC here). The membership is `scenarios = [` further down, which is the single
 kiosk-demo-getgrocery/script/redteam_suite.rb	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
-kiosk-demo-getgrocery/script/redteam_suite.rb	class WrongCurrencyCart < Kiosk::Redteam::Scenario
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
 kiosk-demo-hoteling/README.md	Hotel booking demo operator for Kiosk.
@@ -515,7 +512,7 @@ kiosk-demo-philslist/lib/tasks/demo.rake	task schema: :setup do
 kiosk-demo-philslist/script/binding_flow.rb	results[:a2_edit] = rc
 kiosk-demo-philslist/script/binding_flow.rb	results[:a2_sees_listing] = rc == 200 && Array(mine2).any? { |r| r["listing_id"] == listing_id }
 kiosk-demo-philslist/script/binding_flow.rb	results[:unlink_same_second] = (jwt_claims(token1_fresh)["iat"] == Time.now.to_i) if token1_fresh
-kiosk-demo-philslist/script/redteam_suite.rb	record(results, "NoSellerPiiOnTheOpenBoard",
+kiosk-demo-philslist/script/redteam_suite.rb	BATTERY.record("NoSellerPiiOnTheOpenBoard",
 kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the wire: every
 kiosk-demo-prove/README.md	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
 kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
@@ -660,10 +657,10 @@ kiosk-demo-stylish/script/redteam_suite.rb	#   OwnerLinkIgnoresForgedClaimBody �
 kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantCannotSelfSelectRole ──────────────────────────────────────────
 kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 kiosk-demo-stylish/script/redteam_suite.rb	# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
-kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantCannotSelfSelectRole",
-kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRebindCannotEscalate",
-kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRoleComesFromTheApprover",
-kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantVerifyPageNamesTheAccess",
+kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantCannotSelfSelectRole",
+kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRebindCannotEscalate",
+kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRoleComesFromTheApprover",
+kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
@@ -708,9 +705,9 @@ kiosk-demo-tudu/lib/tasks/demo.rake	task collab: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	task demo: ["demo:setup", "demo:collab"]
 kiosk-demo-tudu/lib/tasks/demo.rake	task schema: :setup do
 kiosk-demo-tudu/script/redteam_suite.rb	#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
-kiosk-demo-tudu/script/redteam_suite.rb	record(results, "ChosenNameNeverTheAddress",
-kiosk-demo-tudu/script/redteam_suite.rb	record(results, "NoLoginAddressOnTheRoster",
-kiosk-demo-tudu/script/redteam_suite.rb	record(results, "PreLinkTokenAfterLink", rc == 401,
+kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("ChosenNameNeverTheAddress",
+kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("NoLoginAddressOnTheRoster",
+kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("PreLinkTokenAfterLink", rc == 401,
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 kiosk-pay-stripe/README.md	that, the `test_payment_method` (default `pm_card_visa`) — no SetupIntent,
@@ -849,7 +846,10 @@ kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk
 kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 kiosk-redteam/README.md	finds a real breach fails loudly: `Runner#all_blocked?` answers false and the
+kiosk-redteam/lib/kiosk/redteam/battery.rb	#{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked.
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
+kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	            name:        "WrongCurrencyCart",
+kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
 kiosk-reputation/README.md	      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
 kiosk-reputation/README.md	  is the shipped default; `argon2id` is legacy.
 kiosk-reputation/README.md	  unproven_count_bonus:       1,    # extra proofs for principals with 0 purchases

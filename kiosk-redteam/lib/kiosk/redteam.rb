@@ -5,10 +5,12 @@ require "kiosk/redteam/principal"
 require "kiosk/redteam/response"
 require "kiosk/redteam/verdict"
 require "kiosk/redteam/leak_scan"
+require "kiosk/redteam/wire"
 require "kiosk/redteam/client"
 require "kiosk/redteam/scenario"
 require "kiosk/redteam/runner"
 require "kiosk/redteam/profile"
+require "kiosk/redteam/battery"
 
 # Scenario library
 require "kiosk/redteam/scenarios/cross_tenant_read"

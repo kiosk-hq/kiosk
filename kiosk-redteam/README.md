@@ -134,9 +134,61 @@ file per row:
 
 Beside them the gem ships `Client` (register + PoW payment, kyc, query / run /
 pay with RS256 mandate signing, and the OAuth device-authorization request),
-`Profile`, `Scenario`, `Verdict`, `Response`, `Principal`, `Runner` and
-`LeakScan` — the shared oracle that decides whether a refusal leaked the
-runtime's own vocabulary, discounting needles the probe itself supplied.
+`Profile`, `Scenario`, `Verdict`, `Response`, `Principal`, `Runner`, `Wire`,
+`Battery` and `LeakScan` — the shared oracle that decides whether a refusal
+leaked the runtime's own vocabulary, discounting needles the probe itself
+supplied.
+
+## Your own beats, in the same battery
+
+No provider's battery is all library. The scenarios above are the attacks every
+Kiosk origin has to survive; the interesting half is always the attacks on
+*your* verbs — your enum filters, your price arithmetic, your ownership joins.
+Two classes carry that half, and they are the reason a hand-written beat and a
+library scenario can sit in one run.
+
+`Wire` is the raw wire: an arbitrary method at an arbitrary path with arbitrary
+headers, which is what an attack on the REQUEST rather than on the principal
+needs — a forged or absent `Authorization`, a verb nobody registered, the wrong
+method at a real verb's path, an assertion on `Allow:` rather than on a body. A
+body that is not JSON reads as `{}` and a connection error reads as status `0`,
+so a hostile answer is asserted on instead of crashing the run; the bytes stay
+available on `raw_body` for a `LeakScan`.
+
+`Battery` is one ledger, one printed vocabulary and one exit status for the
+whole run — hand-written beats and library scenarios together:
+
+```ruby
+wire    = Kiosk::Redteam::Wire.new(base_url: SERVER)
+client  = Kiosk::Redteam::Client.new(base_url: SERVER)
+battery = Kiosk::Redteam::Battery.new
+
+# your own beat, against your own verb
+status, rows = wire.get_json("/kiosk/my_listings", {}, wire.bearer(bob.token))
+battery.record("CrossTenantRead", status == 200 && !ids(rows).include?(alice_row),
+               "Bob's rows #{ids(rows).inspect} exclude Alice's #{alice_row}")
+
+# a library scenario, in the same ledger
+battery.scenario(Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
+                 client:, profile:, on_skip: :breach)
+
+# a whole Runner battery, in the same ledger
+battery.absorb(runner.run(scenarios))
+
+exit battery.report!(expected_skips: %w[MissingKyc ExpiredKyc])
+```
+
+`report!` prints the summary, returns the process exit status and never lets a
+run that proved nothing read as green: **0** when at least one attack ran and
+every attack that ran was blocked, **1** on a breach or on a battery with no
+proofs at all, **2** when the set of skips is not `expected_skips` — a profile
+key that silently went `nil` disables a gate scenario, and that must not pass
+as a clean run.
+
+Pass `on_skip: :breach` for a scenario whose surface this origin definitely
+has: there, "could not test" is a defect of the harness rather than a property
+of the provider, and a quiet third state is how a beat that stopped running
+goes unnoticed.
 
 ### Writing your own
 

@@ -1451,7 +1451,9 @@ namespace :demo do
                                     DECLARED value as well as an invented one,
                                     and the role-less request still opens it
 
-    Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
+    Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH and
+    on a battery that proved nothing; exits 2 when a beat could not be exercised
+    and was not expected to skip.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.
   DESC
   task redteam: :setup do

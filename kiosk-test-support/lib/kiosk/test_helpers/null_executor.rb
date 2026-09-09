@@ -14,21 +14,28 @@ module Kiosk
     #     rolls back. `identity` is a `Kiosk::Identity` or `nil`
     #     (anonymous). Implementations MAY choose to nest the call; the
     #     NullExecutor simply pushes onto a stack.
-    #   - `query(sql)` — executes SQL under the current identity, returns rows.
+    #   - `query(sql)` — executes raw SQL under the current identity, returns
+    #     rows. It is SQL and not a verb name: `run_query` below is the verb.
+    #   - `run_query(name, args)` — invokes a named Query verb and returns its
+    #     rows. Without it half of every origin's wire — every `kind :query`
+    #     declaration — has no test seam at all, because a query verb is not
+    #     reachable through `query` (which takes SQL) or `run_action` (which
+    #     resolves against the Action registry).
     #   - `run_action(name, args)` / `pay_action(name, args)` — invokes
     #     a named Action / pay-Action; returns whatever the Action would.
     #   - `seed(table, attrs, count:)` — bulk-insert factory; runs as
     #     `system_role`, so it can populate tables under RLS.
     #
-    # Pre-load deterministic results with `enqueue_query`, `enqueue_action`,
-    # `enqueue_pay_action`, `enqueue_seed`. If no queued result, returns `[]`
-    # for queries and `nil` for actions / seeds.
+    # Pre-load deterministic results with `enqueue_query`, `enqueue_run_query`,
+    # `enqueue_action`, `enqueue_pay_action`, `enqueue_seed`. If no queued
+    # result, returns `[]` for either flavour of query and `nil` for actions /
+    # seeds.
     #
     # Pre-load deterministic errors with `enqueue_error(:rls_denied)` /
     # `:quota_exceeded` — the next matching call raises.
     class NullExecutor
-      # One recorded call. The journey DSL stamps `kind` (:query, :run_action,
-      # :pay_action, :seed) plus the relevant `args`; `identity` is whatever
+      # One recorded call. The journey DSL stamps `kind` (:query, :run_query,
+      # :run_action, :pay_action, :seed) plus the relevant `args`; `identity` is whatever
       # `with_identity` is currently scoping. `identity` is `nil` for
       # `as_anonymous` / unscoped calls.
       Call = Data.define(:kind, :args, :identity)
@@ -58,6 +65,11 @@ module Kiosk
         next_result_or_raise(:query)
       end
 
+      def run_query(name, args)
+        record(:run_query, { name: name, args: args })
+        next_result_or_raise(:run_query)
+      end
+
       def run_action(name, args)
         record(:run_action, { name: name, args: args })
         next_result_or_raise(:run_action)
@@ -77,6 +89,7 @@ module Kiosk
 
       # Queue a result for the next call of `kind`.
       def enqueue_query(result)       = @queues[:query]       << result
+      def enqueue_run_query(result)   = @queues[:run_query]   << result
       def enqueue_action(result)      = @queues[:run_action]  << result
       def enqueue_pay_action(result)  = @queues[:pay_action]  << result
       def enqueue_seed(result)        = @queues[:seed]        << result
@@ -109,7 +122,7 @@ module Kiosk
       end
 
       def default_for(kind)
-        kind == :query ? [] : nil
+        %i[query run_query].include?(kind) ? [] : nil
       end
 
       def resolve_error(err)

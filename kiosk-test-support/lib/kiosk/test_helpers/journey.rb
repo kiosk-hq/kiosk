@@ -70,8 +70,22 @@ module Kiosk
 
       # Execute a SQL string under the current identity. Returns rows
       # (executor-dependent shape; typically an Array of Hashes).
+      #
+      # This takes SQL, not a verb name. To call a declared query verb — the
+      # `kind :query` half of an origin's wire — use {#run_query}.
       def query(sql)
         TestHelpers.require_executor!.query(sql)
+      end
+
+      # Invoke a Query verb by name with keyword args, under the current
+      # identity. Returns the rows the verb answers.
+      #
+      # It is the read-side twin of {#run_action}, and the two together are the
+      # whole of an origin's verb surface: `kind :query` puts a declaration in
+      # the Query registry, `kind :action` in the Action registry, and nothing
+      # else reaches either.
+      def run_query(name, **args)
+        TestHelpers.require_executor!.run_query(name, args)
       end
 
       # Invoke an Action by name with keyword args. Returns whatever the

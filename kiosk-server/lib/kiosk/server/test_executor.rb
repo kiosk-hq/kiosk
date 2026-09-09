@@ -13,6 +13,8 @@
 require "date"
 require "active_record"
 require "kiosk/server/current_request"
+require "kiosk/server/queries"
+require "kiosk/server/result"
 require "kiosk/test_helpers/errors"
 
 module Kiosk
@@ -28,7 +30,7 @@ module Kiosk
     # back** — tests stay hermetic across runs even when they INSERT
     # data inside the scope. The block's return value is preserved.
     #
-    # `query` / `run_action` execute inside the active scope and surface
+    # `query` / `run_query` / `run_action` execute inside the active scope and surface
     # Postgres RLS denials as {Kiosk::TestHelpers::Errors::RLSDenied} so
     # the `be_rls_denied` / `assert_rls_denied` matchers can catch them.
     #
@@ -152,6 +154,29 @@ module Kiosk
         require_scope!
         rescue_rls_denials do
           normalize_rows(connection.execute(sql))
+        end
+      end
+
+      # Invoke a Query verb by name within the active scope. Returns the rows
+      # the verb answers.
+      #
+      # The read-side twin of {#run_action}, and the two together are the whole
+      # of an origin's verb surface. Without it a `kind :query` declaration is
+      # reachable through nothing: {#query} takes SQL, and {#run_action}
+      # resolves against the Action registry, so half of every origin's wire had
+      # no test seam at all.
+      #
+      # A paginated query answers a {Page}; its rows are what a caller receives
+      # (the cursor and total travel as response headers), so its rows are what
+      # comes back here.
+      def run_query(name, args)
+        require_scope!
+        query_handler = Kiosk::Server::Queries.fetch(name)
+        rescue_rls_denials do
+          answer = Kiosk::Server::CurrentRequest.with(identity: current_identity) do
+            query_handler.call(args)
+          end
+          answer.is_a?(Kiosk::Server::Page) ? answer.rows : answer
         end
       end
 

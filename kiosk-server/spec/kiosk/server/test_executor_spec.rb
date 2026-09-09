@@ -196,6 +196,47 @@ RSpec.describe Kiosk::Server::TestExecutor do
     end
   end
 
+  describe "#run_query" do
+    # The read-side twin of #run_action. Before it existed, a `kind :query`
+    # declaration was reachable through nothing at all — `query` takes SQL and
+    # `run_action` resolves against the Action registry — so half of every
+    # origin's wire had no seam in this DSL.
+    it "raises NoScopeError outside scope" do
+      expect { executor.run_query(:foo, {}) }.to raise_error(described_class::NoScopeError)
+    end
+
+    it "fetches the query from the registry and calls it with args" do
+      declare_query("menu") { render json: [{ item: params[:only] }] }
+      result = executor.with_identity(identity) { executor.run_query(:menu, only: "soup") }
+      expect(result).to eq([{ "item" => "soup" }])
+    end
+
+    it "makes the scope's identity visible to the handler" do
+      declare_query("mine") { render json: [{ user: kiosk_identity.user_id }] }
+      result = executor.with_identity(identity) { executor.run_query(:mine, {}) }
+      expect(result).to eq([{ "user" => identity.user_id }])
+    end
+
+    it "answers a paginated query with its rows — what a caller receives" do
+      declare_query("paged") { render_kiosk_page([{ id: 1 }], next_cursor: "opaque") }
+      result = executor.with_identity(identity) { executor.run_query(:paged, {}) }
+      expect(result).to eq([{ "id" => 1 }])
+    end
+
+    it "raises Errors::VerbNotFound for an unregistered query" do
+      expect {
+        executor.with_identity(identity) { executor.run_query(:missing, {}) }
+      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+    end
+
+    it "does not resolve an ACTION name — the two registries stay separate" do
+      declare_action("order")
+      expect {
+        executor.with_identity(identity) { executor.run_query(:order, {}) }
+      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+    end
+  end
+
   describe "#pay_action" do
     it "raises NotImplementedError — pay is not exercised through the journey DSL" do
       expect {

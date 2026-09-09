@@ -19,6 +19,7 @@ RSpec.configure do |config|
   config.before(:each) do
     Kiosk.reset!
     Kiosk::TestHelpers.reset!
+    Kiosk::TestHelpers::Conformance.reset!
   end
 end
 

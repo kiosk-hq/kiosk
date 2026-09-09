@@ -13,6 +13,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- `Kiosk::TestHelpers::Conformance` — four checks an origin runs against itself for the four properties the protocol makes normative of it: that its routes resolve, that a verb executes, that a query answers the shape it declared, and that data access is scoped to the authenticated principal. Inert until an origin is wired (`Conformance.origin=`); `kiosk-server` ships the real one.
+- Two adapters, loaded by explicit require so this gem still depends on no test framework: `kiosk/test_helpers/conformance/minitest` (`assert_kiosk_verbs_routed`, `assert_kiosk_verb_executes`, `assert_kiosk_answer_matches_declared_schema`, `assert_kiosk_scoped_to_principal`) and `kiosk/test_helpers/conformance/rspec` (`have_a_route_for_every_verb`, `execute_as_a_kiosk_verb`, `answer_its_declared_schema`, `be_scoped_to_principal`). Both render the same failure sentence.
+- `Kiosk::TestHelpers::Conformance::NullOrigin` — the zero-dependency reference implementation of the origin contract, for unit-shaped tests with no Rails and no database.
+- `Journey#run_query(name, **args)` and a matching `run_query` on the executor contract. `query` takes SQL; without this, a declared `kind :query` verb was reachable through nothing.
+- `Errors::OriginNotConfigured` and `Errors::SchemaValidatorMissing`, both carrying wiring instructions.
+
 - Initial skeleton.
 - `Kiosk::TestHelpers::Journey` module — the journey-test DSL: `as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_action`, `pay_action`, `kiosk_seed`.
 - Pluggable executor contract — `Kiosk::TestHelpers.executor=` accepts any object responding to `with_identity(identity, &block)`, `query(sql)`, `run_action(name, args)`, `pay_action(name, args)`, `seed(table, attrs, count:)`. Default is unset; raises `Kiosk::TestHelpers::Errors::ExecutorNotConfigured` until wired.

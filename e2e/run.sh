@@ -262,11 +262,6 @@ YML
 log "stage fixtures + run kiosk:install generator"
 
 FIXTURES="$KIOSK_OSS/e2e/fixtures"
-# The register-PoW flows shell out to the bundled Equihash solver. Export the
-# path so equihash_register.rb finds it (fixtures run from $FIXTURES, not $APP).
-export SOLVE_PY="$KIOSK_OSS/kiosk-pow-equihash/solve.py"
-[ -f "$SOLVE_PY" ] || fail "solver missing at $SOLVE_PY"
-
 # 1) Users migration (must precede kiosk:install — kiosk-server's identity
 # tables FK to users(id)). Rails creates db/migrate/ lazily, so mkdir
 # first.
@@ -485,7 +480,6 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 log "bind two assistants to the seeded humans (register -> link -> claim)"
 bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                KIOSK_ISSUER="$KIOSK_ISSUER" HUMAN_PASSWORD="e2e-demo-password" \
-               SOLVE_PY="$SOLVE_PY" \
                bundle exec ruby "$FIXTURES/bind_assistants.rb" ) \
   || fail "the binding ceremony did not produce two assistants"
 export ALICE_AGENT=$(echo "$bind_json" | jq -r '.alice_agent')
@@ -514,7 +508,6 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        BOB_AGENT_TOKEN="$BOB_AGENT_TOKEN" \
        AUDIT_EVENTS="$AUDIT_EVENTS" \
        AUDIT_EVENTS_REDACTED="$AUDIT_EVENTS_REDACTED" \
-       SOLVE_PY="$SOLVE_PY" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
@@ -544,7 +537,6 @@ auth_capture_out=$( SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                       KIOSK_ISSUER="$KIOSK_ISSUER" \
                       HUMAN_EMAIL="alice@example.com" \
                       HUMAN_PASSWORD="e2e-demo-password" \
-                      SOLVE_PY="$SOLVE_PY" \
                       AUTH_CAPTURE="$AUTH_CAPTURE" \
                       bundle exec ruby "$FIXTURES/auth_wire_capture.rb" ) \
   || fail "the §5/§6 ceremonies did not complete"

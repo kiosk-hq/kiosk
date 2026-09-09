@@ -14,7 +14,7 @@
 # stdout for assistant.sh to assert on; non-zero exit on any HTTP failure.
 #
 # Usage (invoked by assistant.sh — needs a running server + numpy on PATH):
-#   SERVER_URL=… KIOSK_ISSUER=… SOLVE_PY=…/solve.py bundle exec ruby register_pow_flow.rb
+#   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby register_pow_flow.rb
 require "jwt"; require "json"; require "net/http"; require "uri"; require "openssl"; require "securerandom"; require "base64"
 
 SERVER = ENV.fetch("SERVER_URL")

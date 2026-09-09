@@ -45,7 +45,7 @@
 #
 # Usage (invoked by e2e/run.sh from the generated app dir):
 #
-#   SERVER_URL=… KIOSK_ISSUER=… HUMAN_EMAIL=… HUMAN_PASSWORD=… SOLVE_PY=… \
+#   SERVER_URL=… KIOSK_ISSUER=… HUMAN_EMAIL=… HUMAN_PASSWORD=… \
 #     AUTH_CAPTURE=/tmp/auth-capture.json bundle exec ruby auth_wire_capture.rb
 #
 # Prints ONE JSON line of counters for the log; aborts on any unexpected status.

@@ -144,7 +144,11 @@ REQUIREMENTS = [
   },
   {
     id:   "python3-numpy",
-    file: "script/equihash_register.rb", must: /python3/,
+    # The trigger is the demo LOADING the gem's solver, not the word `python3`:
+    # T-189 moved the `Open3.capture2("python3", …)` line into
+    # kiosk-pow-equihash, so the demo no longer spells the interpreter it still
+    # needs. What it does spell is the require, and that is the dependency.
+    file: "script/equihash_register.rb", must: %r{kiosk/pow/equihash/solver},
     line: ->(_) { "- **python3 with numpy** — check with `python3 -c \"import numpy\"`. Registering " \
                   "an assistant pays an Equihash toll, and every task that registers one solves it " \
                   "with the bundled `solve.py`; without numpy the solver exits " \

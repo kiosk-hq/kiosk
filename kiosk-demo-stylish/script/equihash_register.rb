@@ -14,23 +14,19 @@
 # autoload path. In lib/ it would be loaded by `rails server` and then have to
 # be hand-excluded again from `config.autoload_lib(ignore: …)`.
 #
-# Requires: json, jwt, net/http, uri, openssl, open3, securerandom (the caller
-# already requires most of these) plus the kiosk-pow-equihash gem, which owns
-# the solver's location.
+# Requires: json, jwt, net/http, uri, openssl, securerandom (the caller already
+# requires most of these) plus the kiosk-pow-equihash gem, which owns the
+# solver.
 
-require "open3"
-require "kiosk/pow/equihash"
+require "kiosk/pow/equihash/solver"
 
-# Solve one Equihash challenge with the shipped solver → proof nonce hash.
-# The solver path comes from Kiosk::Pow::Equihash.solver_path — the gem's
-# documented accessor for solve.py inside its own package — instead of a
-# checkout-relative constant here: one owner for the location.
+# Solve one Equihash challenge with the solver kiosk-pow-equihash ships.
+# The gem owns both solve.py and its location, so a driver names neither; a
+# solver failure comes back as its own message rather than a backtrace.
 def equihash_solve(challenge)
-  out, status = Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, JSON.generate(challenge))
-  abort "solve.py exited non-zero: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
+  Kiosk::Pow::Equihash.solve(challenge)
+rescue Kiosk::Pow::Equihash::SolverError => e
+  abort e.message
 end
 
 # Register a fresh agent through the Equihash-gated /auth/register.

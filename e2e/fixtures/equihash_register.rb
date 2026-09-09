@@ -13,27 +13,21 @@
 # sending the proof(s) in the Kiosk-PoW request header as raw JSON (ADR-0022).
 # Same mechanism the demos use (kiosk-demo-skooti/script/equihash_register.rb).
 #
-# Requires: json, jwt, openssl, securerandom, uri, open3 (callers already
-# require most of these). Callers supply get_json/post_json lambdas so the
-# helper stays transport-agnostic.
+# Requires: json, jwt, openssl, securerandom, uri (callers already require most
+# of these). Callers supply get_json/post_json lambdas so the helper stays
+# transport-agnostic.
 #
-# The solver is located via SOLVE_PY (set by run.sh/assistant.sh to
-# $KIOSK_OSS/kiosk-pow-equihash/solve.py) — it is NOT copied into the app.
+# The generated app bundles kiosk-pow-equihash, and that gem owns solve.py and
+# knows where it is inside its own package — so nothing here, and nothing in
+# run.sh, has to carry a path to it.
 
-require "open3"
+require "kiosk/pow/equihash/solver"
 
-E2E_SOLVE_PY = ENV.fetch("SOLVE_PY") do
-  # Fallback for direct invocation from a sibling checkout layout.
-  File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
-end
-
-# Solve one Equihash challenge with the shipped solver → proof nonce.
+# Solve one Equihash challenge with the solver kiosk-pow-equihash ships.
 def equihash_solve(challenge)
-  out, status = Open3.capture2("python3", E2E_SOLVE_PY, JSON.generate(challenge))
-  abort "solve.py exited non-zero: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
+  Kiosk::Pow::Equihash.solve(challenge)
+rescue Kiosk::Pow::Equihash::SolverError => e
+  abort e.message
 end
 
 # Register a fresh agent through the Equihash-gated /auth/register.

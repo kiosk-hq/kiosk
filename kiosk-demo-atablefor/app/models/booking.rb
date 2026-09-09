@@ -59,11 +59,14 @@ class Booking < ApplicationRecord
   # seating, the `book_table` confirmation answers it, `my_bookings` reads it
   # back — so the three answer one booking in one spelling. Two offsets under
   # output schemas that describe the field identically would be one instant in
-  # two spellings. The restaurant's clock decides here, the
-  # same {Seatings.zone}
-  # that decides which seatings exist at all: the table is in Lisbon, and that
-  # is where the service happens.
-  def self.publish_instant(time)
-    time&.in_time_zone(Seatings.zone)&.iso8601
+  # two spellings.
+  #
+  # AND IT IS THE RESTAURANT'S CLOCK, handed in, not this aggregator's. The
+  # table is where the table is, and an aggregator may list places in more than
+  # one city; the caller of this method knows which restaurant a row is about
+  # and so passes its zone. The default is the origin's, for the one caller that
+  # has no restaurant in hand: a published example.
+  def self.publish_instant(time, zone = Seatings.default_zone)
+    time&.in_time_zone(zone)&.iso8601
   end
 end

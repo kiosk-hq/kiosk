@@ -54,7 +54,19 @@ class BookTableOperation
     unless Seatings::TIMES.include?(time)
       return bad_request("unknown seating time: #{time} — use \"19:00\" | \"20:00\" | \"21:00\"")
     end
-    if Seatings.past?(parsed_date, time)
+
+    # ── THE CLOCK IS THIS RESTAURANT'S ───────────────────────────────────────
+    #
+    # A table is served where the table is, so «has this seating started» and
+    # «is this date still on the horizon» are questions about the RESTAURANT's
+    # calendar, not about this aggregator's and not about the caller's. An
+    # unknown `restaurant_id` falls back to the origin default and is refused as
+    # «no such table» a few lines below, so the lookup here changes no answer for
+    # a restaurant nobody has.
+    zone = Restaurant.where(id: restaurant_id).pick(:timezone)
+                     &.then { |name| Time.find_zone!(name) } || Seatings.default_zone
+
+    if Seatings.past?(parsed_date, time, zone)
       return bad_request(
         "seating #{date} #{time} has already started — call availability again for the still-bookable seatings",
       )
@@ -62,11 +74,12 @@ class BookTableOperation
 
     # NOT PAST IS NOT THE SAME AS OFFERED: `availability` publishes a
     # ROLLING horizon, so a well-formed future date outside it must be refused
-    # too — by the SAME helper `availability` filters its own `date` with.
-    _in_horizon, refusal = WireArguments.seating_date(date, Seatings.upcoming)
+    # too — by the SAME helper `availability` filters its own `date` with, on
+    # the SAME restaurant's clock.
+    _in_horizon, refusal = WireArguments.seating_date(date, Seatings.upcoming(zone: zone))
     return refusal if refusal
 
-    seating_at = Seatings.seating_at(parsed_date, time)
+    seating_at = Seatings.seating_at(parsed_date, time, zone)
 
     # This `transaction` JOINS the one Kiosk::Server::SessionContext already
     # opened around the whole wire request (the GUCs are SET LOCAL in it), so a
@@ -121,8 +134,9 @@ class BookTableOperation
         # The zone-bearing rendering of the same wall clock, from the
         # SAME helper `availability` and `my_bookings` label their rows with, so
         # the three surfaces cannot spell one seating three ways.
-        seating_label:       Seatings.label(time),
-        seating_at:          Booking.publish_instant(seating_at),
+        seating_label:       Seatings.label(time, zone),
+        seating_at:          Booking.publish_instant(seating_at, zone),
+        timezone:            zone.name,
         status:              booking["status"],
       })
     end

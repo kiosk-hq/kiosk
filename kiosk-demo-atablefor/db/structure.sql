@@ -320,7 +320,8 @@ CREATE TABLE public.restaurants (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     neighborhood character varying,
-    cuisine character varying
+    cuisine character varying,
+    timezone character varying DEFAULT 'Europe/Lisbon'::character varying NOT NULL
 );
 
 
@@ -811,6 +812,7 @@ ALTER TABLE ONLY public.restaurant_tables
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260910000001'),
 ('20260827000002'),
 ('20260820130117'),
 ('20260820130116'),

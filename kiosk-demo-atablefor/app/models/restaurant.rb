@@ -4,6 +4,19 @@ class Restaurant < ApplicationRecord
   has_many :restaurant_tables, dependent: :restrict_with_exception
   has_many :bookings,          dependent: :restrict_with_exception
 
+  # ── THE CLOCK THIS RESTAURANT'S TABLES ARE SOLD ON ──────────────────────
+  #
+  # A table is served where the table is, so a seating's wall clock is the
+  # RESTAURANT's — a recorded column, not a constant on this aggregator, which
+  # may list places in more than one city. `timezone` is `NOT NULL`, so a
+  # restaurant always has one.
+  #
+  # `Time.find_zone!` and not a fixed offset: a real IANA zone handles DST, and
+  # an offset cannot say which side of a transition a future evening falls on.
+  def zone
+    Time.find_zone!(timezone)
+  end
+
   # The neighbourhoods this aggregator actually serves — the DB-derived closed
   # set `availability`'s `neighborhood` filter is checked against (spec §9.1).
   # It lives here rather than in the guard because it is a fact about the

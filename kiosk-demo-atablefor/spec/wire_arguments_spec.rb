@@ -414,7 +414,59 @@ end
   assert(leaks.empty?, "  … leaks no SQL/PG internals (found #{leaks.inspect})")
 end
 
-# ── 8. The guards run in front of the database, not behind it ──────────────
+# ── 8. A SEATING IS SERVED WHERE THE TABLE IS, so the roster is per-zone ────
+#
+# atablefor is an AGGREGATOR: one origin, many restaurants, and a restaurant is
+# free to be in a different city. So every {Seatings} method takes the zone it is
+# to work in, and that zone is `restaurants.timezone` — read off the RESTAURANT,
+# never off this origin. `Europe/Lisbon` survives only as the ORIGIN DEFAULT:
+# what backfills that column, and what dates a published example where no
+# restaurant has been addressed yet.
+#
+# What is provable WITHOUT a database is that the helpers honour the zone they
+# are handed and invent none. That the zone is READ OFF THE RESTAURANT needs
+# rows in a table, and is exercised by demo:book and demo:redteam against a
+# booted origin.
+puts "\n── the roster, the label and the instant all follow the zone they are given ──"
+assert(Seatings::DEFAULT_ZONE_NAME == "Europe/Lisbon",
+       "the ORIGIN default is #{Seatings::DEFAULT_ZONE_NAME} — what fills restaurants.timezone, " \
+       "NOT what a request is answered on")
+assert(Seatings.default_zone.tzinfo.identifier == "Europe/Lisbon",
+       "… resolved through tzinfo, a REAL IANA zone rather than a fixed offset, so DST moves it " \
+       "and this code does not: #{Seatings.default_zone.tzinfo.identifier}")
+
+LISBON = Time.find_zone!("Europe/Lisbon")
+SYDNEY = Time.find_zone!("Australia/Sydney")
+# 21:30 UTC on the 14th is 22:30 on the 14th in Lisbon and 07:30 on the
+# FIFTEENTH in Sydney. One instant, one operator, two calendar days — which is
+# the whole of why the roster cannot be computed once for the origin.
+MOMENT = Time.utc(2026, 6, 14, 21, 30, 0)
+
+assert(Seatings.seating_at(Date.new(2026, 6, 15), "20:00", LISBON) !=
+       Seatings.seating_at(Date.new(2026, 6, 15), "20:00", SYDNEY),
+       "20:00 on one date is a DIFFERENT instant in two zones — the wall clock is the " \
+       "restaurant's, so the instant it names is too")
+assert(Seatings.label("20:00", SYDNEY) == "20:00 (Australia/Sydney)",
+       "the human-readable label names the zone it was handed: #{Seatings.label("20:00", SYDNEY)}")
+assert(Seatings.label("20:00") == "20:00 (Europe/Lisbon)",
+       "… and falls back to the ORIGIN default when nobody named one: #{Seatings.label("20:00")}")
+
+lisbon_roster = Seatings.upcoming(zone: LISBON, at: MOMENT.in_time_zone(LISBON))
+sydney_roster = Seatings.upcoming(zone: SYDNEY, at: MOMENT.in_time_zone(SYDNEY))
+assert(lisbon_roster.first&.first == Date.new(2026, 6, 15),
+       "at that instant a Lisbon restaurant has rolled to the 15th (#{lisbon_roster.first.inspect})")
+assert(sydney_roster.first&.first == Date.new(2026, 6, 15),
+       "and a Sydney one is offering the 15th too, but they are DIFFERENT days on the two " \
+       "calendars (#{sydney_roster.first.inspect})")
+assert(lisbon_roster != sydney_roster,
+       "the two rosters DIFFER at one instant — a single origin-wide roster cannot be right " \
+       "for both, which is the defect this rule closes")
+assert(Seatings.past?(Date.new(2026, 6, 14), "21:00", SYDNEY, at: MOMENT.in_time_zone(SYDNEY)),
+       "the 14th's late seating is already over for the Sydney restaurant")
+assert(!Seatings.past?(Date.new(2026, 6, 15), "19:00", LISBON, at: MOMENT.in_time_zone(LISBON)),
+       "… while the 15th's early seating is still ahead for the Lisbon one")
+
+# ── 9. The guards run in front of the database, not behind it ──────────────
 #
 # Every assertion above ran with ActiveRecord never loaded, which is only
 # possible if these checks PRECEDE the connection.

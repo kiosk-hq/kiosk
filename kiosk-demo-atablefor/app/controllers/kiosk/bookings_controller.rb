@@ -73,7 +73,8 @@ class Kiosk::BookingsController < ApplicationController
   # the assistant meant by it — and a booking confirmation is the artefact a
   # human keeps. So the same zone-bearing rendering `availability` and
   # `my_bookings` publish is on this row too, from the same {Seatings.label}:
-  # one label, one spelling, three surfaces.
+  # one label, one spelling, three surfaces — and `timezone` names the clock,
+  # which is the RESTAURANT's rather than this aggregator's.
   output_schema type: "object",
                 description: "The confirmed booking.",
                 additionalProperties: false,
@@ -82,19 +83,21 @@ class Kiosk::BookingsController < ApplicationController
                   restaurant_id:       { type: "integer", description: "The restaurant booked." },
                   restaurant_table_id: { type: "integer", description: "The table held." },
                   party_size:          { type: "integer", description: "Guests the booking holds the table for." },
-                  date:                { type: "string", description: "The seating date, YYYY-MM-DD, #{Seatings::ZONE_NAME}." },
-                  time:                { type: "string", description: "The seating time, HH:MM (24-hour), #{Seatings::ZONE_NAME} — " \
-                                                                      "the table is there, so that is the clock. `seating_at` is the " \
-                                                                      "same instant with its resolved offset; `seating_label` is this " \
-                                                                      "time with the zone written beside it." },
+                  date:                { type: "string", description: "The seating date, YYYY-MM-DD, on the restaurant's own clock — the row publishes it as `timezone`." },
+                  time:                { type: "string", description: "The seating time, HH:MM (24-hour) on THE RESTAURANT's own clock, " \
+                                                                      "published as `timezone` — the table is there, so that is the " \
+                                                                      "clock. `seating_at` is the same instant with its resolved " \
+                                                                      "offset; `seating_label` is this time with the zone written " \
+                                                                      "beside it." },
                   seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                      "e.g. \"20:00 (#{Seatings::ZONE_NAME})\". This is the line to " \
-                                                                      "read back to the human: `time` alone is a bare wall clock." },
-                  seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying the RESTAURANT's offset — every verb of this demo publishes this field on that one clock." },
+                                                                      "e.g. \"20:00 (#{Seatings::DEFAULT_ZONE_NAME})\". This is the line " \
+                                                                      "to read back to the human: `time` alone is a bare wall clock." },
+                  seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying THIS RESTAURANT's offset — every verb of this demo publishes this field on the clock of the restaurant the row is about." },
+                  timezone:            { type: "string", description: "The IANA zone this row is rendered in — a property of the RESTAURANT, not of this aggregator." },
                   status:              { type: "string", description: "confirmed." },
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
-                             date time seating_label seating_at status]
+                             date time seating_label seating_at timezone status]
   # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
   # ages into a 400 the day that seating passes, so `example_params` and
   # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
@@ -107,8 +110,9 @@ class Kiosk::BookingsController < ApplicationController
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
-    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::DEFAULT_ZONE_NAME})",
     seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
+    timezone: Seatings::DEFAULT_ZONE_NAME,
     status: "confirmed",
   })
   def book_table

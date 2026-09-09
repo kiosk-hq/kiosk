@@ -221,10 +221,12 @@ class Kiosk::DiningRoomController < ApplicationController
                     seating_time:        { type: "string" },
                     seating_label:       { type: "string" },
                     seating_at:          { type: "string" },
+                    timezone:            { type: "string" },
                     deposit_eur:         { type: "integer" },
                   },
                   required: %w[restaurant neighborhood cuisine restaurant_id restaurant_table_id
-                               table_label capacity seating_date seating_time seating_label seating_at deposit_eur],
+                               table_label capacity seating_date seating_time seating_label seating_at
+                               timezone deposit_eur],
                 }
   example_params({ party_size: 2, neighborhood: "Alfama" })
   # The seating is RESOLVED, not written down: this row is what an
@@ -235,8 +237,9 @@ class Kiosk::DiningRoomController < ApplicationController
     cuisine: "Portuguese tavern", restaurant_id: 1,
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
     seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
-    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::DEFAULT_ZONE_NAME})",
     seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
+    timezone: Seatings::DEFAULT_ZONE_NAME,
     deposit_eur: 10,
   })
   def availability
@@ -280,8 +283,10 @@ class Kiosk::DiningRoomController < ApplicationController
   # no arguments" is a published fact rather than an absence to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # A bare array, seating-time ordered. `seating_date`/`seating_time` are the
-  # LOCAL (Europe/Lisbon) spelling of the same instant `seating_at` carries, so
-  # all three are always present rather than one being derivable.
+  # spelling of the same instant `seating_at` carries, read on THE RESTAURANT's
+  # own clock, so all three are always present rather than one being derivable
+  # — and `timezone` says which clock, per row, because two bookings in one
+  # answer may be at restaurants in two cities.
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
@@ -298,9 +303,11 @@ class Kiosk::DiningRoomController < ApplicationController
                     seating_time:        { type: "string" },
                     seating_label:       { type: "string" },
                     seating_at:          { type: "string" },
+                    timezone:            { type: "string" },
                   },
                   required: %w[booking_id restaurant_id restaurant neighborhood restaurant_table_id
-                               table_label party_size status seating_date seating_time seating_label seating_at],
+                               table_label party_size status seating_date seating_time seating_label
+                               seating_at timezone],
                 }
   def my_bookings
     render json: Booking.owned_by_current_principal
@@ -309,13 +316,16 @@ class Kiosk::DiningRoomController < ApplicationController
                         .pluck("bookings.id", "bookings.restaurant_id", "restaurants.name",
                                "restaurants.neighborhood", "bookings.restaurant_table_id",
                                "restaurant_tables.label", "bookings.party_size", "bookings.status",
-                               "bookings.seating_at")
+                               "bookings.seating_at", "restaurants.timezone")
                         .map { |id, restaurant_id, restaurant, neighborhood,
-                                 table_id, table_label, party_size, status, seating_at|
-                          # The seating's LOCAL date and time, from the same
-                          # `Seatings.zone` that decides which seatings exist
-                          # at all, so the two cannot drift.
-                          local = seating_at.in_time_zone(Seatings.zone)
+                                 table_id, table_label, party_size, status, seating_at, timezone|
+                          # The seating's LOCAL date and time, read on THE
+                          # RESTAURANT's own clock — the same zone that decides
+                          # which seatings exist there at all, so the two cannot
+                          # drift, and a second restaurant in this same answer
+                          # is read on a different one.
+                          zone  = Time.find_zone!(timezone)
+                          local = seating_at.in_time_zone(zone)
                           { booking_id:          id,
                             restaurant_id:       restaurant_id,
                             restaurant:          restaurant,
@@ -326,8 +336,9 @@ class Kiosk::DiningRoomController < ApplicationController
                             status:              status,
                             seating_date:        local.strftime("%Y-%m-%d"),
                             seating_time:        local.strftime("%H:%M"),
-                            seating_label:       Seatings.label(local.strftime("%H:%M")),
-                            seating_at:          Booking.publish_instant(seating_at) }
+                            seating_label:       Seatings.label(local.strftime("%H:%M"), zone),
+                            seating_at:          Booking.publish_instant(seating_at, zone),
+                            timezone:            timezone }
                         }
   end
 end
@@ -396,10 +407,11 @@ class Kiosk::BookingsController < ApplicationController
                   time:                { type: "string" },
                   seating_label:       { type: "string" },
                   seating_at:          { type: "string" },
+                  timezone:            { type: "string" },
                   status:              { type: "string" },
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
-                             date time seating_label seating_at status]
+                             date time seating_label seating_at timezone status]
   # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
   # ages into a 400 the day that seating passes, so `example_params` and
   # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
@@ -412,8 +424,9 @@ class Kiosk::BookingsController < ApplicationController
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
-    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::ZONE_NAME})",
+    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::DEFAULT_ZONE_NAME})",
     seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
+    timezone: Seatings::DEFAULT_ZONE_NAME,
     status: "confirmed",
   })
   def book_table

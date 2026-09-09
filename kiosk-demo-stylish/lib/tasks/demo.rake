@@ -715,7 +715,9 @@ namespace :demo do
 
     stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;
-    exits 1 on any BREACH. A BREACH = a real hole — fix the app, not the scenario.
+    exits 1 on any BREACH and on a battery that proved nothing; exits 2 when a
+    beat could not be exercised and was not expected to skip. A BREACH = a real
+    hole — fix the app, not the scenario.
   DESC
   task redteam: :setup do
     require "net/http"

@@ -80,7 +80,9 @@
 #   OWNER_EMAIL=owner@combette.example DEMO_PASSWORD=… \
 #   bundle exec ruby script/redteam_suite.rb
 #
-# Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH.
+# Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH, and on a
+# battery that produced no proofs at all; exits 2 when a beat could not be
+# exercised and was not expected to skip.
 # A BREACH = a real hole in stylish — fix the app, not the scenario.
 
 require "date"
@@ -93,10 +95,10 @@ require "openssl"
 require "securerandom"
 require "base64"
 
-# The shared harness. Required HERE rather than beside the one framework beat
-# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
-# assertion in this file now asks — is needed from the first hostile-input beat
-# onwards.
+# The shared harness: the wire this battery attacks over, the ledger it files
+# its verdicts into, the leak oracle its hostile-input beats ask, and the one
+# library beat further down. Everything in this file that is not about stylish
+# is the gem's.
 require "kiosk/redteam"
 
 require_relative "bound_assistant"
@@ -147,27 +149,10 @@ end
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.
-def post_json(path, body, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def get_json(path, headers = {}, params = {})
-  uri = URI("#{SERVER}#{path}")
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def bearer(token)
-  { "Authorization" => "Bearer #{token}" }
-end
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 def pop_proof(key, pem)
-  _rc, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+  _rc, ch = WIRE.get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
   JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 end
 
@@ -181,16 +166,14 @@ def link_as_owner(extra_claim_body = {})
 
   key = OpenSSL::PKey::RSA.generate(2048)
   pem = key.public_key.to_pem
-  post_json("/kiosk/auth/claim",
-            { code: link.fetch("link_code"), public_key: pem, signed: pop_proof(key, pem) }.merge(extra_claim_body))
+  WIRE.post_json("/kiosk/auth/claim",
+                 { code: link.fetch("link_code"), public_key: pem, signed: pop_proof(key, pem) }.merge(extra_claim_body))
 end
 
-results  = []
-def record(results, name, blocked, detail)
-  results << { name: name, blocked: blocked, detail: detail }
-  tag = blocked ? "BLOCKED" : "BREACH "
-  puts "  #{tag}  #{name} — #{detail}"
-end
+# One ledger for every beat below — the hand-written ones about stylish's own
+# verbs and the library one about the ceremony every origin serves — printed in
+# one vocabulary and answered by one exit status.
+BATTERY = Kiosk::Redteam::Battery.new
 
 # ── Fixture: two customer principals, EARNED through the shipped ceremony ─────
 ALICE = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: DEMO_PASSWORD)
@@ -199,25 +182,25 @@ abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no bound
   if ALICE.user_id == BOB.user_id
 
 # ── Fixture: A books an appointment (target for cross-tenant probes) ──────────
-rc, salons = get_json("/kiosk/salons", ALICE.bearer)
+rc, salons = WIRE.get_json("/kiosk/salons", {}, ALICE.bearer)
 abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run rake demo:setup" unless rc == 200
 salon_id = Array(salons).first&.fetch("salon_id")
 abort "no salons seeded — run rake demo:setup" unless salon_id
 
-rc, appt_a = post_json(
-  "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: FUTURE_SLOT.call(1) },
-  ALICE.bearer,
-)
+rc, appt_a = WIRE.post_json(
+       "/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(1) },
+       ALICE.bearer,
+     )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a)}" unless rc == 200
 appt_id_a = appt_a["appointment_id"]
 
 # ── CrossTenantRead — B must not see A's appointment ─────────────────────────
-rc, b_appts = get_json("/kiosk/my_appointments", BOB.bearer)
+rc, b_appts = WIRE.get_json("/kiosk/my_appointments", {}, BOB.bearer)
 b_ids = Array(b_appts).map { |r| r["id"] }
-record(results, "CrossTenantRead",
-       rc == 200 && !b_ids.include?(appt_id_a),
-       "B's my_appointments #{b_ids.inspect} excludes A's #{appt_id_a}")
+BATTERY.record("CrossTenantRead",
+               rc == 200 && !b_ids.include?(appt_id_a),
+               "B's my_appointments #{b_ids.inspect} excludes A's #{appt_id_a}")
 
 # ── ForgedUserId — B books with A's user_id in the args ──────────────────────
 #
@@ -230,43 +213,43 @@ record(results, "CrossTenantRead",
 # the forgery is REFUSED before the handler runs, with a typed 400 naming the
 # offending parameter. Both halves are asserted: the wire refuses it, AND
 # nothing belonging to B appears under A.
-rc, forged = post_json(
-  "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: FUTURE_SLOT.call(2), user_id: ALICE.user_id },
-  BOB.bearer,
-)
+rc, forged = WIRE.post_json(
+       "/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(2), user_id: ALICE.user_id },
+       BOB.bearer,
+     )
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("user_id")
 
 # And the principal really does come from the token, not from anything the
 # caller sent: B's LEGITIMATE booking lands under B and never under A.
-rc_b, bobs = post_json(
-  "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: FUTURE_SLOT.call(2, 10) },
-  BOB.bearer,
-)
+rc_b, bobs = WIRE.post_json(
+       "/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(2, 10) },
+       BOB.bearer,
+     )
 appt_id_bob = bobs["appointment_id"]
-rc_a, a_appts = get_json("/kiosk/my_appointments", ALICE.bearer)
+rc_a, a_appts = WIRE.get_json("/kiosk/my_appointments", {}, ALICE.bearer)
 a_ids = Array(a_appts).map { |r| r["id"] }
-record(results, "ForgedUserId",
-       refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(appt_id_bob),
-       "forged user_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming user_id); " \
-       "A's list #{a_ids.inspect} excludes B's #{appt_id_bob.inspect}")
+BATTERY.record("ForgedUserId",
+               refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(appt_id_bob),
+               "forged user_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming user_id); " \
+               "A's list #{a_ids.inspect} excludes B's #{appt_id_bob.inspect}")
 
 # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
-rc, _ = get_json("/kiosk/salons")
-record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
+rc, _ = WIRE.get_json("/kiosk/salons")
+BATTERY.record("MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
 
 # ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
-rc, _ = get_json("/kiosk/salons", bearer("not-a-real-token"))
-record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
+rc, _ = WIRE.get_json("/kiosk/salons", {}, WIRE.bearer("not-a-real-token"))
+BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
-rc, _ = get_json("/kiosk/frobnicate", ALICE.bearer)
-record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
+rc, _ = WIRE.get_json("/kiosk/frobnicate", {}, ALICE.bearer)
+BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 
 # ── UnknownAction — unregistered action name → 404 ───────────────────────────
-rc, _ = post_json("/kiosk/nope", {}, ALICE.bearer)
-record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+rc, _ = WIRE.post_json("/kiosk/nope", {}, ALICE.bearer)
+BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
 # The 0.3 endpoints were a hard cut. `POST /kiosk/query` now reaches the per-verb
@@ -285,30 +268,27 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # NAMES nobody registered, and the vocabulary reserves `not_found` for an
 # argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
-  rc_r, body_r = post_json("/kiosk/#{name}", { name: "salons" }, ALICE.bearer)
+  rc_r, body_r = WIRE.post_json("/kiosk/#{name}", { name: "salons" }, ALICE.bearer)
   [rc_r == 404 && body_r["code"] == "verb_not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
 end
 retired_anon = %w[query run].map do |name|
-  rc_a, body_a = post_json("/kiosk/#{name}", { name: "salons" })
+  rc_a, body_a = WIRE.post_json("/kiosk/#{name}", { name: "salons" })
   [rc_a == 401 && body_a["code"] == "unauthenticated", "#{name}(anon)→#{rc_a}/#{body_a['code'].inspect}"]
 end
-record(results, "RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
-       "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
-       "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
+BATTERY.record("RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
+               "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
+               "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
 # The resource EXISTS; answering 404 would be a lie about it, and a caller that
 # read 404 as "this operator cannot do that" would give up on a verb it could
 # have called correctly.
-uri405 = URI("#{SERVER}/kiosk/book_appointment")
-res405 = Net::HTTP.new(uri405.host, uri405.port)
-                  .request(Net::HTTP::Get.new(uri405, ALICE.bearer))
-body405 = (JSON.parse(res405.body) rescue {})
-record(results, "MethodMismatch",
-       res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
-         res405["allow"].to_s.upcase.include?("POST"),
-       "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
-       "(want 405/\"method_not_allowed\"/POST)")
+res405 = WIRE.request(:get, "/kiosk/book_appointment", headers: ALICE.bearer)
+BATTERY.record("MethodMismatch",
+               res405.status == 405 && res405.body["code"] == "method_not_allowed" &&
+                 res405["allow"].to_s.upcase.include?("POST"),
+               "GET an action → #{res405.status}/#{res405.body['code'].inspect} " \
+               "Allow=#{res405['allow'].inspect} (want 405/\"method_not_allowed\"/POST)")
 
 # ── roles-from-IdP escalation beats (Path A) ──────────────────────────
 # A customer's agent must NOT be able to obtain owner-scope. Owner scope is
@@ -336,16 +316,16 @@ cust_role = nil
 if rc_cl == 201
   ck = OpenSSL::PKey::RSA.generate(2048)
   cpem = ck.public_key.to_pem
-  _rc, cclaimed = post_json("/kiosk/auth/claim",
-                            { code: link_cl.fetch("link_code"), public_key: cpem,
-                              signed: pop_proof(ck, cpem) })
+  _rc, cclaimed = WIRE.post_json("/kiosk/auth/claim",
+                                 { code: link_cl.fetch("link_code"), public_key: cpem,
+                                   signed: pop_proof(ck, cpem) })
   cseg = cclaimed["access_token"].to_s.split(".")[1].to_s
   cust_role = (JSON.parse(Base64.urlsafe_decode64(cseg + "=" * ((4 - cseg.length % 4) % 4)))["role"] rescue nil)
 end
-record(results, "CustomerLinkCannotCarryOwnerRole",
-       rc_cl == 201 && cust_role == "customer",
-       "customer link mint → #{rc_cl}, bound token role #{cust_role.inspect} " \
-       "(want 201 + \"customer\"; the role is read off the human, never chosen)")
+BATTERY.record("CustomerLinkCannotCarryOwnerRole",
+               rc_cl == 201 && cust_role == "customer",
+               "customer link mint → #{rc_cl}, bound token role #{cust_role.inspect} " \
+               "(want 201 + \"customer\"; the role is read off the human, never chosen)")
 
 # OwnerLinkIgnoresForgedClaimBody — link a genuine OWNER while smuggling a wider
 # role into the claim body. The bound token must carry `owner` from the IdP, not
@@ -354,9 +334,9 @@ rc, claimed = link_as_owner(role: "superuser", allowed_roles: ["superuser"], req
 owner_token = claimed["access_token"].to_s
 seg = owner_token.split(".")[1].to_s
 role_claim = (JSON.parse(Base64.urlsafe_decode64(seg + "=" * ((4 - seg.length % 4) % 4)))["role"] rescue nil)
-record(results, "OwnerLinkIgnoresForgedClaimBody",
-       rc == 201 && role_claim == "owner",
-       "owner link with forged claim body → token role #{role_claim.inspect} (want \"owner\", body ignored)")
+BATTERY.record("OwnerLinkIgnoresForgedClaimBody",
+               rc == 201 && role_claim == "owner",
+               "owner link with forged claim body → token role #{role_claim.inspect} (want \"owner\", body ignored)")
 
 # CustomerCalendarStaysOwnScoped — a plain customer (Alice) calls salon_calendar
 # with her own customer-role token; she must see ONLY her own bookings and NO
@@ -368,22 +348,22 @@ record(results, "OwnerLinkIgnoresForgedClaimBody",
 # an own row by that test. Book a SECOND customer's (Bob's) appointment here,
 # then assert Alice's calendar EXCLUDES that specific booking id — the only
 # thing that actually demonstrates scoping.
-rc_b3, appt_b3 = post_json(
-  "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: FUTURE_SLOT.call(3) },
-  BOB.bearer,
-)
+rc_b3, appt_b3 = WIRE.post_json(
+       "/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(3) },
+       BOB.bearer,
+     )
 appt_id_b3 = appt_b3["appointment_id"]
 
-rc, cal = get_json("/kiosk/salon_calendar", ALICE.bearer)
+rc, cal = WIRE.get_json("/kiosk/salon_calendar", {}, ALICE.bearer)
 rows = Array(cal)
 own_ids     = rows.reject { |r| r["summary"] }.map { |r| r["id"] }
 own_only    = !own_ids.include?(appt_id_b3)
 no_forecast = rows.none? { |r| r["summary"] == "forecast" }
-record(results, "CustomerCalendarStaysOwnScoped",
-       rc == 200 && rc_b3 == 200 && own_only && no_forecast,
-       "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
-       "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
+BATTERY.record("CustomerCalendarStaysOwnScoped",
+               rc == 200 && rc_b3 == 200 && own_only && no_forecast,
+               "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
+               "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
 
 # ── the CLAIM ceremony's roles-from-IdP beats ────────────────────────────────
 #
@@ -479,11 +459,11 @@ rc_ctrl, da_ctrl = oauth_post("/kiosk/oauth/device_authorization",
                               { "client_id" => "redteam-selfselect",
                                 "public_key" => control_key.public_key.to_pem })
 control_ok = rc_ctrl == 200 && da_ctrl["user_code"].to_s.match?(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
-record(results, "DeviceGrantCannotSelfSelectRole",
-       self_selection.all? { |ok, _| ok } && control_ok,
-       "#{self_selection.map(&:last).join('; ')}; CONTROL role-less request → #{rc_ctrl} " \
-       "user_code=#{da_ctrl['user_code'].inspect} (want every role/scope 400/invalid_request, " \
-       "and the role-less ceremony still opening)")
+BATTERY.record("DeviceGrantCannotSelfSelectRole",
+               self_selection.all? { |ok, _| ok } && control_ok,
+               "#{self_selection.map(&:last).join('; ')}; CONTROL role-less request → #{rc_ctrl} " \
+               "user_code=#{da_ctrl['user_code'].inspect} (want every role/scope 400/invalid_request, " \
+               "and the role-less ceremony still opening)")
 
 # ── DeviceGrantRoleComesFromTheApprover ──────────────────────────────────────
 # Both halves in one beat, because either alone is misreadable: a customer's
@@ -495,7 +475,7 @@ cust_key  = OpenSSL::PKey::RSA.generate(2048)
 cust_pem  = cust_key.public_key.to_pem
 _rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust_key, cust_pem)
 cust_claim_role = token_role(cust_token)["role"]
-rc_cust_cal, cust_cal = get_json("/kiosk/salon_calendar", bearer(cust_token))
+rc_cust_cal, cust_cal = WIRE.get_json("/kiosk/salon_calendar", {}, WIRE.bearer(cust_token))
 cust_rows      = Array(cust_cal)
 cust_own_only  = cust_rows.none? { |r| r["id"] == appt_id_b3 }
 cust_noforecast = cust_rows.none? { |r| r["summary"] == "forecast" }
@@ -504,22 +484,22 @@ own_key  = OpenSSL::PKey::RSA.generate(2048)
 own_pem  = own_key.public_key.to_pem
 _rc_o, rc_own_poll, own_claim_token, own_page = claim_ceremony(owner_session, own_key, own_pem)
 own_claim_role = token_role(own_claim_token)["role"]
-rc_own_cal, own_cal = get_json("/kiosk/salon_calendar", bearer(own_claim_token))
+rc_own_cal, own_cal = WIRE.get_json("/kiosk/salon_calendar", {}, WIRE.bearer(own_claim_token))
 own_rows        = Array(own_cal)
 own_sees_others = own_rows.any? { |r| r["id"] == appt_id_b3 }
 own_forecast    = own_rows.any? { |r| r["summary"] == "forecast" }
 
-record(results, "DeviceGrantRoleComesFromTheApprover",
-       rc_cust_poll == 200 && cust_claim_role == "customer" &&
-         rc_cust_cal == 200 && cust_own_only && cust_noforecast &&
-         rc_own_poll == 200 && own_claim_role == "owner" &&
-         rc_own_cal == 200 && own_sees_others && own_forecast,
-       "customer-approved claim → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
-       "calendar #{rc_cust_cal} own_only=#{cust_own_only} forecast_hidden=#{cust_noforecast}; " \
-       "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
-       "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \
-       "forecast=#{own_forecast} (want customer/own-scoped and owner/whole-book — the role is the " \
-       "approver's, never the caller's)")
+BATTERY.record("DeviceGrantRoleComesFromTheApprover",
+               rc_cust_poll == 200 && cust_claim_role == "customer" &&
+                 rc_cust_cal == 200 && cust_own_only && cust_noforecast &&
+                 rc_own_poll == 200 && own_claim_role == "owner" &&
+                 rc_own_cal == 200 && own_sees_others && own_forecast,
+               "customer-approved claim → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
+               "calendar #{rc_cust_cal} own_only=#{cust_own_only} forecast_hidden=#{cust_noforecast}; " \
+               "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
+               "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \
+               "forecast=#{own_forecast} (want customer/own-scoped and owner/whole-book — the role is the " \
+               "approver's, never the caller's)")
 
 # ── DeviceGrantVerifyPageNamesTheAccess ──────────────────────────────────────
 # The consent half. An approval given without seeing what it grants is not
@@ -532,11 +512,11 @@ cust_page_names  = cust_page.to_s.include?("Access you are handing it") &&
 own_page_names   = own_page.to_s.include?("Access you are handing it") &&
                    own_page.to_s.include?("<code>owner</code>")
 pages_differ     = !cust_page.to_s.include?("<code>owner</code>")
-record(results, "DeviceGrantVerifyPageNamesTheAccess",
-       cust_page_names && own_page_names && pages_differ,
-       "customer's verify page names `customer`: #{cust_page_names}; owner's names `owner`: " \
-       "#{own_page_names}; the customer's page does NOT say owner: #{pages_differ} " \
-       "(want all three — the field is the approver's real role, not a constant)")
+BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
+               cust_page_names && own_page_names && pages_differ,
+               "customer's verify page names `customer`: #{cust_page_names}; owner's names `owner`: " \
+               "#{own_page_names}; the customer's page does NOT say owner: #{pages_differ} " \
+               "(want all three — the field is the approver's real role, not a constant)")
 
 # ── DeviceGrantRebindCannotEscalate ──────────────────────────────────────────
 # A fix that only guarded FIRST binding would leave the same escalation one
@@ -551,19 +531,19 @@ _rc_r, rc_rebind_poll, rebind_token, = claim_ceremony(customer_session, cust_key
 rebind_claims = token_role(rebind_token)
 rebind_role   = rebind_claims["role"]
 rebind_stable = rebind_claims["agent_id"] == token_role(cust_token)["agent_id"]
-rc_rebind_cal, rebind_cal = get_json("/kiosk/salon_calendar", bearer(rebind_token))
+rc_rebind_cal, rebind_cal = WIRE.get_json("/kiosk/salon_calendar", {}, WIRE.bearer(rebind_token))
 rebind_rows      = Array(rebind_cal)
 rebind_own_only  = rebind_rows.none? { |r| r["id"] == appt_id_b3 }
 rebind_noforecast = rebind_rows.none? { |r| r["summary"] == "forecast" }
-record(results, "DeviceGrantRebindCannotEscalate",
-       rc_rebind_refused == 400 && rebind_refused_body["error"] == "invalid_request" &&
-         rc_rebind_poll == 200 && rebind_role == "customer" && rebind_stable &&
-         rc_rebind_cal == 200 && rebind_own_only && rebind_noforecast,
-       "known key re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
-       "#{rebind_refused_body['error'].inspect}; the honest re-run → poll #{rc_rebind_poll}, " \
-       "role #{rebind_role.inspect}, agent_id stable=#{rebind_stable}, calendar #{rc_rebind_cal} " \
-       "own_only=#{rebind_own_only} forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
-       "the approver's role, not one ceremony later\'s escalation)")
+BATTERY.record("DeviceGrantRebindCannotEscalate",
+               rc_rebind_refused == 400 && rebind_refused_body["error"] == "invalid_request" &&
+                 rc_rebind_poll == 200 && rebind_role == "customer" && rebind_stable &&
+                 rc_rebind_cal == 200 && rebind_own_only && rebind_noforecast,
+               "known key re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
+               "#{rebind_refused_body['error'].inspect}; the honest re-run → poll #{rc_rebind_poll}, " \
+               "role #{rebind_role.inspect}, agent_id stable=#{rebind_stable}, calendar #{rc_rebind_cal} " \
+               "own_only=#{rebind_own_only} forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
+               "the approver's role, not one ceremony later\'s escalation)")
 
 # ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
@@ -592,21 +572,21 @@ record(results, "DeviceGrantRebindCannotEscalate",
 #     wanted — the whole book, with the forecast row — so the 401 is about the
 #     bearer and not about the endpoint being shut;
 #   • it is reached through the real ceremony, which is the only door left.
-forged_owner_bearer = bearer("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner")
-rc_forged_cal, = get_json("/kiosk/salon_calendar", forged_owner_bearer)
-rc_forged_book, = post_json("/kiosk/book_appointment",
-                            { salon_id: salon_id, slot: FUTURE_SLOT.call(5) },
-                            forged_owner_bearer)
-rc_owner_cal, owner_cal = get_json("/kiosk/salon_calendar", bearer(owner_token))
+forged_owner_bearer = WIRE.bearer("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner")
+rc_forged_cal, = WIRE.get_json("/kiosk/salon_calendar", {}, forged_owner_bearer)
+rc_forged_book, = WIRE.post_json("/kiosk/book_appointment",
+                                 { salon_id: salon_id, slot: FUTURE_SLOT.call(5) },
+                                 forged_owner_bearer)
+rc_owner_cal, owner_cal = WIRE.get_json("/kiosk/salon_calendar", {}, WIRE.bearer(owner_token))
 owner_sees_forecast = Array(owner_cal).any? { |r| r["summary"] == "forecast" }
-record(results, "SelfAssertedTokenForgery",
-       rc_forged_cal == 401 && rc_forged_book == 401 &&
-         rc_owner_cal == 200 && owner_sees_forecast,
-       "self-asserted `agent:u-#{OWNER_ID}:a-…:r-owner` → salon_calendar #{rc_forged_cal}, " \
-       "book_appointment #{rc_forged_book} (want 401/401: it resolves to NO identity, in THIS " \
-       "environment — no env gate involved); CONTROL the owner's GENUINELY-BOUND token → " \
-       "salon_calendar #{rc_owner_cal}, forecast_visible=#{owner_sees_forecast} (want 200/true, so " \
-       "the refusal is about the bearer and not a closed endpoint)")
+BATTERY.record("SelfAssertedTokenForgery",
+               rc_forged_cal == 401 && rc_forged_book == 401 &&
+                 rc_owner_cal == 200 && owner_sees_forecast,
+               "self-asserted `agent:u-#{OWNER_ID}:a-…:r-owner` → salon_calendar #{rc_forged_cal}, " \
+               "book_appointment #{rc_forged_book} (want 401/401: it resolves to NO identity, in THIS " \
+               "environment — no env gate involved); CONTROL the owner's GENUINELY-BOUND token → " \
+               "salon_calendar #{rc_owner_cal}, forecast_visible=#{owner_sees_forecast} (want 200/true, so " \
+               "the refusal is about the bearer and not a closed endpoint)")
 
 # ── SelfAssertedStaffSessionForgery — OVER THE LIVE WIRE ─────────────────────
 # The HUMAN sibling of the agent-stub forgery above, and it changed shape when
@@ -625,7 +605,7 @@ record(results, "SelfAssertedTokenForgery",
 # NOTHING (401 at /kiosk/auth/link), and the positive control is the real thing:
 # the owner's own Devise session mints a link on that very endpoint.
 self_asserted_staff_forgery = lambda do
-  rc_forged, = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => OWNER_ID })
+  rc_forged, = WIRE.post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => OWNER_ID })
   rc_real, _link = owner_session.post_json("/kiosk/auth/link", {}, { session: true })
 
   blocked = rc_forged == 401 && rc_real == 201
@@ -640,9 +620,9 @@ self_asserted_staff_forgery = lambda do
       "unexpected: the owner's REAL Devise session was refused too (HTTP #{rc_real}) — the 401 " \
         "above proves nothing"
     end
-  record(results, "SelfAssertedStaffSessionForgery", blocked, detail)
+  BATTERY.record("SelfAssertedStaffSessionForgery", blocked, detail)
 rescue StandardError => e
-  record(results, "SelfAssertedStaffSessionForgery", false, "beat error: #{e.class}: #{e.message}")
+  BATTERY.record("SelfAssertedStaffSessionForgery", false, "beat error: #{e.class}: #{e.message}")
 end
 self_asserted_staff_forgery.call
 
@@ -697,7 +677,7 @@ bad_failures = []
 BAD_INPUTS.each do |label, args|
   body = args.dup
   body[:salon_id] = salon_id if body[:salon_id] == :seeded
-  rc, resp = post_json("/kiosk/book_appointment", body, ALICE.bearer)
+  rc, resp = WIRE.post_json("/kiosk/book_appointment", body, ALICE.bearer)
   code = resp.is_a?(Hash) ? resp["code"] : nil
   # THE SCAN IS TOLD WHAT THIS PROBE SENT. `salon_id` is a bare
   # `{type: "integer"}` and `slot` a bare `{type: "string"}` — the bookable
@@ -721,22 +701,22 @@ end
 # that simply refused every booking. A bare salon booking (no service_id at all)
 # is legitimate and the descriptor promises it; a full booking must still
 # capture the service price the forecast is summed from.
-rc_bare, bare = post_json("/kiosk/book_appointment",
-  { salon_id: salon_id, slot: FUTURE_SLOT.call(3) }, ALICE.bearer)
+rc_bare, bare = WIRE.post_json("/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(3) }, ALICE.bearer)
 bad_failures << "CONTROL bare salon booking → HTTP #{rc_bare} #{JSON.generate(bare)[0, 160]}" unless rc_bare == 200
 
-rc_menu, menu = get_json("/kiosk/service_menu", ALICE.bearer)
+rc_menu, menu = WIRE.get_json("/kiosk/service_menu", {}, ALICE.bearer)
 service = Array(menu).find { |r| r["price_cents"].to_i.positive? }
-rc_full, full = post_json("/kiosk/book_appointment",
-  { salon_id: salon_id, slot: FUTURE_SLOT.call(4),
-    service_id: service && service["service_id"] }, ALICE.bearer)
+rc_full, full = WIRE.post_json("/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(4),
+         service_id: service && service["service_id"] }, ALICE.bearer)
 unless rc_menu == 200 && rc_full == 200 && full["price_cents"].to_i == service["price_cents"].to_i
   bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full["price_cents"].inspect} " \
                   "(want #{service && service["price_cents"].inspect})"
 end
 
-record(results, "UntypedBookingInput", bad_failures.empty?,
-       bad_failures.empty? ? "#{BAD_INPUTS.size} bad-input shapes → typed 400 bad_request, no PG internals; bare + priced bookings still succeed" : bad_failures.join(" | "))
+BATTERY.record("UntypedBookingInput", bad_failures.empty?,
+               bad_failures.empty? ? "#{BAD_INPUTS.size} bad-input shapes → typed 400 bad_request, no PG internals; bare + priced bookings still succeed" : bad_failures.join(" | "))
 
 # ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
@@ -756,27 +736,19 @@ record(results, "UntypedBookingInput", bad_failures.empty?,
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
-device_grant_verdict = device_grant_beat.call(
-  Kiosk::Redteam::Client.new(base_url: SERVER),
-  Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer owner]),
+# `on_skip: :breach` on purpose: this origin declares two roles, so "could not
+# test" is a failure of the harness rather than a property of the provider, and
+# a silent third state is what let the last one hide.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
+  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer owner]),
+  on_skip: :breach,
 )
-# A SKIP is recorded as a breach here on purpose: this origin declares a role,
-# so "could not test" is a failure of the harness rather than a property of the
-# provider, and a silent third state is what let the last one hide.
-record(results, device_grant_beat.name, device_grant_verdict.blocked,
-       device_grant_verdict.skipped ? "SKIPPED, which this origin must never do — " \
-                                      "#{device_grant_verdict.detail}"
-                                    : device_grant_verdict.detail)
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
-breaches = results.reject { |r| r[:blocked] }
-puts JSON.generate(scenarios: results.size, blocked: results.count { |r| r[:blocked] }, breaches: breaches.map { |r| r[:name] })
-
-if breaches.empty?
-  puts "\n  redteam: all #{results.size} scenarios BLOCKED."
-  exit 0
-else
-  puts "\n  redteam: #{breaches.size} BREACH(es): #{breaches.map { |r| r[:name] }.join(', ')}"
-  exit 1
-end
+# The gem answers it: 0 only when at least one attack ran and every attack that
+# ran was blocked, 1 on a breach or on a battery that proved nothing, 2 when a
+# beat skipped that this origin was not expected to skip. stylish expects no
+# skips at all — every beat above is about a surface it has.
+exit BATTERY.report!

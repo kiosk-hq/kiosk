@@ -2,10 +2,14 @@
 
 # ── The salon's clock — the one place stylish says which zone it means ───────
 # stylish renders its service AT THE SALON: a chair, at an address, at an hour.
-# So every wall-clock question this demo answers is answered on the salon's
-# clock, and that clock is named here once — the same shape atablefor's
-# `Seatings` and hoteling's `WireArguments` already use for their own service
-# places.
+# So every wall-clock question this demo answers is answered on THAT SALON's
+# clock — `salons.timezone`, a recorded column, read off the salon being booked
+# and never off the origin. One operator may run salons in more than one city,
+# and the answer read off the origin is right only for as long as it does not.
+#
+# `Europe/Paris` survives here as the ORIGIN DEFAULT: what backfills that
+# column, and what dates a published example where no salon has been addressed
+# yet. It is not what a request is answered on.
 #
 # WHY IT EXISTS. Stdlib `Time.iso8601` binds a string carrying NO offset to
 # whatever zone the SERVER PROCESS happens to run in. Measured, the same
@@ -18,15 +22,40 @@
 # ZONE: a real IANA zone, so CET (UTC+1, winter) and CEST (UTC+2, summer) are
 # both handled across DST. Do NOT replace it with a fixed offset.
 module SalonClock
-  # The salon's locale. Combette on Park keeps one chair-side clock, and this
-  # is it; a per-salon column is a different demo from this one.
-  ZONE_NAME = "Europe/Paris"
+  # The ORIGIN's default locale — what `salons.timezone` is backfilled from,
+  # and the clock a published example is dated on.
+  DEFAULT_ZONE_NAME = "Europe/Paris"
+
+  # An RFC 3339 timestamp ENDS in its offset: `Z`, or `±HH:MM` (`±HHMM` and
+  # `±HH` are the other legal spellings). This is what tells a value that
+  # declares its instant from one that only looks like it does.
+  OFFSET_SUFFIX = /(?:[Zz]|[+-]\d{2}(?::?\d{2})?)\z/
 
   module_function
 
-  # The salon-locale ActiveSupport::TimeZone (Europe/Paris).
-  def zone
-    @zone ||= Time.find_zone!(ZONE_NAME)
+  # The ORIGIN default as an ActiveSupport::TimeZone (Europe/Paris).
+  def default_zone
+    @default_zone ||= Time.find_zone!(DEFAULT_ZONE_NAME)
+  end
+
+  # The clock the salon with this id books on, or the origin default when the
+  # id addresses nothing — a caller that named a salon nobody has is refused by
+  # name before this matters.
+  def zone_for(salon_id)
+    Salon.where(id: salon_id).pick(:timezone)&.then { |name| Time.find_zone!(name) } || default_zone
+  end
+
+  # Is this wire value an INSTANT — an RFC 3339 timestamp carrying its offset?
+  #
+  # A `date-time` field takes RFC 3339, and RFC 3339 REQUIRES the offset, so a
+  # value without one is not a value of the declared type at all. It is refused
+  # rather than completed from any clock: one declared type admits one
+  # spelling, exactly as for a calendar date. Completing it at the salon was
+  # the previous behaviour and it is wrong for the caller that DID declare its
+  # own clock — an appointment booked an hour off is unrecoverable, a refusal
+  # naming its remedy is not.
+  def zoneless?(raw)
+    !OFFSET_SUFFIX.match?(raw.to_s)
   end
 
   # A wire `slot` as an instant, parsed in TWO steps that do two different jobs.
@@ -39,15 +68,15 @@ module SalonClock
   #      (measured — "12345" resolves to 2012-12-10, "2026-09-14" to midnight),
   #      and a malformed slot that becomes a plausible appointment is worse than
   #      one that is refused by name.
-  #   2. `zone.iso8601` computes the VALUE, in a zone this file names. A string
-  #      WITH an offset is an absolute instant and resolves identically from
-  #      every clock; one WITHOUT is read AT THE SALON, because that is where
-  #      the chair is — never in the server process's zone.
+  #   2. `zone.iso8601` computes the VALUE. The value carries its own offset by
+  #      then — {.zoneless?} is what the caller refuses on — so this resolves
+  #      one absolute instant, and the zone decides only how it is READ BACK.
   #
   # @param raw [Object] the wire value, whatever arrived
-  # @return [ActiveSupport::TimeWithZone] the instant, in the salon's zone
+  # @param zone [ActiveSupport::TimeZone] the SALON's, from {.zone_for}
+  # @return [ActiveSupport::TimeWithZone] the instant, on that salon's clock
   # @raise [ArgumentError, TypeError] on anything that is not an ISO 8601 instant
-  def parse_slot(raw)
+  def parse_slot(raw, zone = default_zone)
     str = raw.to_s
     Time.iso8601(str)
     zone.iso8601(str)
@@ -57,7 +86,8 @@ module SalonClock
   #
   # EVERY verb that answers with an appointment instant goes through here —
   # `book_appointment`'s confirmation and its refusals, `my_appointments`,
-  # `salon_calendar` — so the demo cannot spell one instant two ways.
+  # `salon_calendar` — so the demo cannot spell one instant two ways for one
+  # salon.
   # {BookAppointmentOperation.example_slot} computes its example on the salon's
   # clock so that the example and the response agree; this method is what makes
   # the response side of that true. Rendered off the record instead, a value
@@ -68,7 +98,10 @@ module SalonClock
   # encoder's `time_precision`, so the published BYTES would be set by the app's
   # configuration rather than by this file. `.iso8601` on a zone-resolved value
   # is the same bytes here, in CI and on a box in another zone.
-  def publish(time)
+  #
+  # The zone is the SALON's, handed in: two appointments in one answer may be at
+  # salons in two cities, and each row is rendered where its own chair is.
+  def publish(time, zone = default_zone)
     time&.in_time_zone(zone)&.iso8601
   end
 end

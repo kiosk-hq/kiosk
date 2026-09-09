@@ -134,23 +134,28 @@ class Kiosk::FrontDeskController < ApplicationController
                   properties: {
                     id:       { type: "string", description: "uuid — the appointment. book_appointment calls the same value `appointment_id`." },
                     salon_id: { type: "integer", description: "The salon booked." },
-                    slot:     { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
+                    slot:     { type: "string", description: "Appointment time, ISO 8601 carrying THIS SALON's offset — every verb of this demo publishes this field on the clock of the salon the row is about." },
+                    timezone: { type: "string", description: "The IANA zone this row is rendered in — a property of the SALON, not of this operator: another salon in the same answer may be on a different one." },
                   },
-                  required: %w[id salon_id slot],
+                  required: %w[id salon_id slot timezone],
                 }
   def my_appointments
     render json: Appointment.owned_by_current_principal
+                            .joins(:salon)
                             .order(:id)
-                            .pluck(:id, :salon_id, :slot)
-                            .map { |id, salon_id, slot|
-                              # On the SALON's clock, through the one writer
+                            .pluck("appointments.id", "appointments.salon_id",
+                                   "appointments.slot", "salons.timezone")
+                            .map { |id, salon_id, slot, timezone|
+                              # On THAT SALON's clock, through the one writer
                               # every verb of this demo publishes an instant
                               # with — see {SalonClock.publish}. Rendered
                               # straight off the pluck it would follow
                               # `Time.zone` instead, and this verb and
                               # `book_appointment` would answer the same
                               # booking in two spellings.
-                              { id: id, salon_id: salon_id, slot: SalonClock.publish(slot) }
+                              { id: id, salon_id: salon_id,
+                                slot: SalonClock.publish(slot, Time.find_zone!(timezone)),
+                                timezone: timezone }
                             }
   end
 
@@ -200,7 +205,8 @@ class Kiosk::FrontDeskController < ApplicationController
                       properties: {
                         id:          { type: "string", description: "uuid — the appointment." },
                         salon_id:    { type: "integer", description: "The salon booked." },
-                        slot:        { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
+                        slot:        { type: "string", description: "Appointment time, ISO 8601 carrying THIS SALON's offset — every verb of this demo publishes this field on the clock of the salon the row is about." },
+                        timezone:    { type: "string", description: "The IANA zone this row is rendered in — a property of the SALON, not of this operator." },
                         service_id:  { type: %w[integer null], description: "The booked service, or null for a bare salon booking." },
                         service:     { type: %w[string null], description: "The booked service's name, or null." },
                         price_cents: { type: %w[integer null], description: "EUR cents CAPTURED on the booking, or null when no service was booked." },
@@ -208,7 +214,7 @@ class Kiosk::FrontDeskController < ApplicationController
                         currency:    { type: "string", description: "EUR." },
                         price_eur:   { type: "string", description: "The captured price rendered for a human; \"€0\" when none was captured." },
                       },
-                      required: %w[id salon_id slot service_id service price_cents kind currency price_eur] },
+                      required: %w[id salon_id slot timezone service_id service price_cents kind currency price_eur] },
                     { type: "object", additionalProperties: false,
                       description: "The owner-only forecast trailer, appended after the bookings.",
                       properties: {
@@ -228,13 +234,19 @@ class Kiosk::FrontDeskController < ApplicationController
 
     # `left_joins` because a bare salon booking carries no service: the row must
     # still appear, with a null service and a null captured price.
-    appt_rows = book.left_joins(:service)
+    appt_rows = book.left_joins(:service).joins(:salon)
                     .order(:slot)
                     .pluck("appointments.id", "appointments.salon_id", "appointments.slot",
+                           "salons.timezone",
                            "appointments.service_id", "services.name", "appointments.price_cents")
-                    .map { |id, salon_id, slot, service_id, service, price_cents|
-                      # Same one writer as my_appointments — {SalonClock.publish}.
-                      { id: id, salon_id: salon_id, slot: SalonClock.publish(slot), service_id: service_id,
+                    .map { |id, salon_id, slot, timezone, service_id, service, price_cents|
+                      # Same one writer as my_appointments — {SalonClock.publish}
+                      # — and on the SALON's own clock, so an owner reading a
+                      # book that spans two cities reads each row where its
+                      # chair is.
+                      { id: id, salon_id: salon_id,
+                        slot: SalonClock.publish(slot, Time.find_zone!(timezone)),
+                        timezone: timezone, service_id: service_id,
                         service: service, price_cents: price_cents,
                         kind: "booking", currency: "EUR",
                         price_eur: Service.format_eur(price_cents) }

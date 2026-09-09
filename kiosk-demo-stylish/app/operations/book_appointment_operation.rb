@@ -36,8 +36,32 @@ class BookAppointmentOperation
     if slot.blank?
       return refused("missing field: slot — an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
+
+    # ── THE CLOCK IS THIS SALON'S ────────────────────────────────────────────
+    #
+    # The salon has already been established to exist, two guards up, so this
+    # reads the zone of the chair actually being booked rather than one constant
+    # for the whole origin. It decides how the instant is READ BACK — in a
+    # refusal, in the confirmation, and in every later listing of this row.
+    zone = SalonClock.zone_for(salon_id)
+
+    # A `date-time` argument is an RFC 3339 timestamp and RFC 3339 REQUIRES the
+    # offset, so a value without one is not of the declared type at all. It is
+    # refused rather than completed on ANY clock: completing it at the salon
+    # ignores the caller that told us its own, and completing it at the caller's
+    # would need a header this verb does not read. An appointment booked an hour
+    # off is unrecoverable; a refusal naming its remedy is not.
+    if SalonClock.zoneless?(slot)
+      return refused(
+        "slot #{slot.inspect} names no time zone — an appointment is an INSTANT, so pass an " \
+        "ISO 8601 timestamp carrying its offset, e.g. #{example_slot.inspect}. This salon's own " \
+        "clock is #{zone.name}; sending \"…T14:00:00\" would leave two readings of one booking " \
+        "and nothing to say which one you meant.",
+      )
+    end
+
     slot_at = begin
-      SalonClock.parse_slot(slot)
+      SalonClock.parse_slot(slot, zone)
     rescue ArgumentError, TypeError
       return refused("invalid slot #{slot.inspect} — pass an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
@@ -47,19 +71,18 @@ class BookAppointmentOperation
     # parses perfectly and would book a real appointment a century ago.
     #
     # This verb takes an INSTANT rather than a date, so its floor is an instant:
-    # at or before NOW has passed, later today has not. A timestamp WITH an
-    # offset compares exactly from any caller's clock; one WITHOUT is read AT
-    # THE SALON, which is where the chair is and which is what {SalonClock}
-    # names — never in whatever zone the server process happens to run in.
-    # The refusal echoes back the instant it understood, so a caller that meant
-    # another one can see which clock it got. No read-side counterpart,
-    # deliberately: `availability` publishes the service MENU, not a calendar, so
-    # there are no dated rows to filter and this is the only place the floor can
-    # live.
+    # at or before NOW has passed, later today has not. An instant carries its
+    # own offset — the guard above refuses one that does not — so the comparison
+    # is exact from any caller's clock and needs no zone at all. What the zone
+    # decides is how the refusal READS BACK: on THIS SALON's clock, so a caller
+    # that meant another hour can see which one it got. No read-side
+    # counterpart, deliberately: `availability` publishes the service MENU, not
+    # a calendar, so there are no dated rows to filter and this is the only
+    # place the floor can live.
     if slot_at <= Time.current
       return refused(
-        "slot #{SalonClock.publish(slot_at)} has already passed — book a time in the future " \
-        "(now is #{SalonClock.publish(Time.current)}); this salon does not record appointments in the past",
+        "slot #{SalonClock.publish(slot_at, zone)} has already passed — book a time in the future " \
+        "(now is #{SalonClock.publish(Time.current, zone)}); this salon does not record appointments in the past",
       )
     end
 
@@ -93,7 +116,8 @@ class BookAppointmentOperation
     value = {
       appointment_id: appointment.id,
       salon_id:       appointment.salon_id,
-      slot:           SalonClock.publish(appointment.slot),
+      slot:           SalonClock.publish(appointment.slot, zone),
+      timezone:       zone.name,
     }
     if service
       value.merge!(
@@ -113,11 +137,13 @@ class BookAppointmentOperation
   # name an instant this guard would ACCEPT. A week out at 14:00 on the salon's
   # own clock — ahead of now from any caller's clock, on a round wall-clock hour.
   #
-  # The zone is the salon's, not UTC, because this is the «copy this» value: an
+  # The zone is a salon's, not UTC, because this is the «copy this» value: an
   # operator copying it should carry away the RULE and not just the shape, and
   # the rule is that the salon's clock is the one that decides ({SalonClock}).
-  # Rendered in the salon's zone the example is the same kind of value the verb
-  # answers WITH, so the example and the response agree.
+  # Rendered on a salon's clock the example is the same kind of value the verb
+  # answers WITH, so the example and the response agree. It is the ORIGIN
+  # DEFAULT here because a published example addresses no salon: the descriptor
+  # is one document for every salon this origin books.
   #
   # AND THE SENTENCE ABOVE IS TRUE OF THE CLOCK AS WELL AS THE INSTANT, which
   # takes work on the response side: an `ActiveSupport::TimeWithZone` rendered
@@ -130,7 +156,7 @@ class BookAppointmentOperation
   # @return [String] an ISO 8601 instant carrying the salon's own offset,
   #   always later than now
   def self.example_slot
-    SalonClock.zone.now.advance(days: 7).change(hour: 14).iso8601
+    SalonClock.default_zone.now.advance(days: 7).change(hour: 14).iso8601
   end
 
   # Every refusal this verb can make is a `bad_request` — see

@@ -34,9 +34,12 @@ class Kiosk::AppointmentsController < ApplicationController
                  salon_id:   { type: "integer",
                                description: "Salon id from the salons query." },
                  slot:       { type: "string", format: "date-time",
-                               description: "Appointment time, ISO 8601 timestamp. Must be LATER THAN NOW — " \
-                                            "an instant that has passed is refused 400. Carry an offset " \
-                                            "(\"…Z\", \"…+02:00\"); without one it is read in the salon's own clock." },
+                               description: "Appointment time, RFC 3339 timestamp, and the OFFSET IS REQUIRED " \
+                                            "(\"…Z\", \"…+02:00\"): an appointment is an instant, so a value " \
+                                            "without one is refused 400 rather than completed on anybody's " \
+                                            "clock. Must also be LATER THAN NOW — an instant that has passed " \
+                                            "is refused 400. The answer names the salon's own zone as " \
+                                            "`timezone`, which is where the chair is." },
                  service_id: { type: "integer",
                                description: "Service id from availability/service_menu; its EUR price is captured." },
                },
@@ -49,21 +52,23 @@ class Kiosk::AppointmentsController < ApplicationController
       properties: {
         appointment_id: { type: "string", description: "uuid — the booking. my_appointments calls the same value `id`." },
         salon_id:       { type: "integer", description: "The salon booked." },
-        slot:           { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
+        slot:           { type: "string", description: "Appointment time, ISO 8601 carrying THIS SALON's offset — every verb of this demo publishes this field on the clock of the salon the row is about." },
+        timezone:       { type: "string", description: "The IANA zone this row is rendered in — a property of the SALON, not of this operator." },
         service:        { type: "string", description: "The booked service's name, captured at booking time." },
         currency:       { type: "string", description: "EUR." },
         price_cents:    { type: "integer", description: "EUR cents captured on the booking." },
         price_eur:      { type: "string", description: "The same price rendered for a human, e.g. \"€90\"." },
       },
-      required: %w[appointment_id salon_id slot service currency price_cents price_eur] },
+      required: %w[appointment_id salon_id slot timezone service currency price_cents price_eur] },
     { type: "object", additionalProperties: false,
       description: "A bare salon booking — no service_id was passed, so nothing was priced.",
       properties: {
         appointment_id: { type: "string", description: "uuid — the booking." },
         salon_id:       { type: "integer", description: "The salon booked." },
-        slot:           { type: "string", description: "Appointment time, ISO 8601 carrying the SALON's offset — every verb of this demo publishes this field on that one clock." },
+        slot:           { type: "string", description: "Appointment time, ISO 8601 carrying THIS SALON's offset — every verb of this demo publishes this field on the clock of the salon the row is about." },
+        timezone:       { type: "string", description: "The IANA zone this row is rendered in — a property of the SALON, not of this operator." },
       },
-      required: %w[appointment_id salon_id slot] },
+      required: %w[appointment_id salon_id slot timezone] },
   ]
   # The slot is RESOLVED, not written down: a past slot is refused, so a
   # literal would age into "copy this and get a 400". `example_params` takes a
@@ -78,7 +83,8 @@ class Kiosk::AppointmentsController < ApplicationController
   # seven origins.
   example_row({
     appointment_id: "6b1f0c5a-9d3e-4f27-8a10-2c7e4b9d5f83", salon_id: 1,
-    slot: -> { BookAppointmentOperation.example_slot }, service: "Colour",
+    slot: -> { BookAppointmentOperation.example_slot },
+    timezone: SalonClock::DEFAULT_ZONE_NAME, service: "Colour",
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment

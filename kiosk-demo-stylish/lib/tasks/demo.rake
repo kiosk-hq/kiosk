@@ -92,12 +92,12 @@ namespace :demo do
   desc "DB-free unit spec for the salon-clock slot parse, run under two TZ values."
   task :clock_spec do
     spec = File.expand_path("../../spec/salon_clock_spec.rb", __dir__)
-    # TWO INVOCATIONS, NOT ONE, AND THE TZ VALUES ARE THE POINT. The defect this
-    # spec exists for — a zoneless `slot` read in the SERVER PROCESS's zone —
+    # TWO INVOCATIONS, NOT ONE, AND THE TZ VALUES ARE THE POINT. The class this
+    # spec exists for — an instant resolved against the SERVER PROCESS's zone —
     # cannot be seen from inside a single run: on the machine that wrote the
     # code the process zone and the intended zone were the same and everything
     # passed. Etc/GMT-11 and Etc/GMT+2 are the two clocks thirteen hours apart
-    # that the measurement used, and they sit on either side of the salon's own.
+    # that the measurement used, and they sit on either side of the origin's own.
     puts "\n── salon-clock slot parse (no boot, no DB), under two process zones ──"
     %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
   end

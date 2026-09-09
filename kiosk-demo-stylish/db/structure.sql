@@ -283,7 +283,8 @@ CREATE TABLE public.salons (
     id bigint NOT NULL,
     name character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    timezone character varying DEFAULT 'Europe/Paris'::character varying NOT NULL
 );
 
 
@@ -777,6 +778,7 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260910000001'),
 ('20260907000001'),
 ('20260827000002'),
 ('20260820130117'),

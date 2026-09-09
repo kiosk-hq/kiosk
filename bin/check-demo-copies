@@ -3578,16 +3578,17 @@ end
 # method quietly shared by the fleet — the K-792 promotion signal — has to show
 # up.
 #
-# LEFT ALONE, and this is where the largest single group is:
-# `script/redteam_suite.rb` shares 25 names across seven copies and only 6 have
-# identical bodies. Its `get_json` — and `script/isolation_flow.rb`'s — has SIX
-# distinct bodies over seven demos; `script/schema_flow.rb`'s has three. That is
-# T-119's finding (the two redteam harnesses are a rewrite apart), and nineteen
-# `:per_demo` fragments would freeze the split into this manifest. The 6
-# identical units in that file ARE worth holding and cannot be reached without
-# declaring the other 19, because discovery is all-or-nothing per path — so the
-# honest order is T-119 first, after which the path becomes cheap. Same reading
-# for `script/isolation_flow.rb` (8/4) and `script/schema_flow.rb` (3/2).
+# LEFT ALONE: `script/isolation_flow.rb` (8 shared names over seven copies, 4
+# identical) and `script/schema_flow.rb` (3/2). Their `get_json` has six and
+# three distinct bodies respectively — the same helper written once per demo,
+# which is what makes a driver unportable between two of them.
+#
+# `script/redteam_suite.rb` USED TO LEAD THIS PARAGRAPH with 25 shared names and
+# a six-bodied `get_json` of its own. It no longer does: its HTTP driver, result
+# ledger, printed vocabulary and exit contract are `Kiosk::Redteam::Wire` and
+# `Kiosk::Redteam::Battery`, so `def bearer` and `def record` occur zero times
+# across those seven files and `def get_json` once. It stays out of
+# FRAGMENT_PATHS for a narrower reason now, stated in FRAGMENT_EXCLUDED below.
 #
 # THE PATH THE HANDLE COULD NOT REACH, AND WHAT IT COST (T-146).
 # `app/models/cart_mandate.rb` has three copies and, until 2026-08-31, ZERO
@@ -3637,16 +3638,25 @@ FRAGMENT_PATHS = %w[
 # on a blank reason. An undeclared exclusion is the thing this rule is about.
 FRAGMENT_EXCLUDED = {
   "script/redteam_suite.rb" =>
-    "THE LARGEST GROUP IN THE CORPUS AND DELIBERATELY OUT UNTIL T-119 LANDS. 25 unit names shared " \
-    "across seven copies, only 6 with identical bodies: `get_json` alone has SIX distinct bodies " \
-    "over the seven demos, which IS T-119's finding — the two red-team harnesses are a rewrite " \
-    "apart. Discovery is all-or-nothing per path, so taking it would mean declaring the other 19 " \
-    "as settled `:per_demo` variants, freezing the split into this manifest and turning T-119's " \
-    "convergence into a red build demanding a dozen re-declarations. The 6 identical units are " \
-    "worth holding; the honest order is T-119 first, after which this path becomes cheap.",
+    "THE HARNESS IS NO LONGER IN THESE FILES, SO THE REASON THIS PATH IS OUT HAS CHANGED — and " \
+    "the old one is recorded here because it was this manifest's largest single entry. It read " \
+    "«25 unit names shared across seven copies, `get_json` alone has SIX distinct bodies», which " \
+    "was the two-harness split: the same helper written six ways, so a beat could not be moved " \
+    "between two suites without a rewrite. That is gone. MEASURED at head with `command grep -c` " \
+    "over these seven files: `def bearer` and `def record` occur ZERO times, `def get_json` and " \
+    "`def post_json` once each — tudu's two-line delegators onto its Devise session, which needs " \
+    "the human's cookie jar. The HTTP driver, the result ledger, the printed vocabulary and the " \
+    "exit contract are `Kiosk::Redteam::Wire` and `Kiosk::Redteam::Battery`, held by that gem's " \
+    "own suite rather than by a copy comparison. WHAT KEEPS THE PATH OUT NOW is narrower and " \
+    "durable: what these files still share by NAME is the `Scenario` subclass vocabulary — " \
+    "`initialize`, `call`, `refused`, `check`, `pay_with_ref` — over beats that attack different " \
+    "verbs, so the bodies genuinely differ and always will. Discovery is all-or-nothing per " \
+    "path, so taking it would mean declaring twenty settled `:per_demo` variants to hold a " \
+    "handful of units, which is a manifest nobody reads for a guarantee the gem already gives.",
   "script/isolation_flow.rb" =>
-    "Same argument as redteam_suite.rb, one size down: 8 shared names over seven copies, 4 " \
-    "identical, and its `get_json` carries the same six-body split T-119 exists to remove.",
+    "Same argument as redteam_suite.rb USED to be, and this one is still live: 8 shared names " \
+    "over seven copies, 4 identical, and its `get_json` still carries the six-body split the " \
+    "red-team files have now shed.",
   "script/schema_flow.rb" =>
     "Same argument again, smallest of the three: 3 shared names over seven copies, 2 identical, " \
     "`get_json` with three distinct bodies. THE OTHER HALF OF THIS PATH IS NO LONGER UNHELD, and " \

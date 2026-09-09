@@ -5,8 +5,8 @@
 #
 # WHY THIS EXISTS. The eight demos are eight standalone Rails apps, so shared
 # application code is not shared at all — it is HAND-COPIED.
-# `app/services/pow_difficulty.rb` ships in seven demos,
-# `app/models/uuid_check.rb` in six, and nine
+# `script/equihash_register.rb` ships in seven demos,
+# `app/operations/wire_arguments.rb` in three, and nine
 # db/migrate files in up to seven. Nothing checked that the copies still agree.
 #
 # They drift, and the drift is invisible, and it need not be a comment:
@@ -114,8 +114,7 @@
 # declaration is for sets somebody has deliberately reasoned about.
 #
 # `except:` is the escape hatch for one copy that legitimately differs from its
-# siblings (getgrocery's uuid_check declares an extra JSON-Schema constant;
-# stylish's stub_user_idp is a DB-backed staff IdP). It is a demo => reason map,
+# siblings (stylish's stub_user_idp is a DB-backed staff IdP). It is a demo => reason map,
 # the same shape as `ungated:` in ci.yml's demos matrix, and it is checked too:
 # an exception for a demo that no longer ships the file, or whose copy has since
 # converged on its siblings, is an error rather than a comfortable lie.
@@ -142,10 +141,11 @@
 # are declared in MIGRATION_PAIRS below and compared across all their copies,
 # and an undeclared one fails the build, same as an undeclared path.
 #
-# WHAT THIS IS NOT. It is not an argument that copying is right. Promoting
-# UuidCheck into a shipped gem is a public-API decision (K-607) and this check
-# does not pre-empt it — it only makes the interim
-# state honest, and it is what should be deleted the day the extraction lands.
+# WHAT THIS IS NOT. It is not an argument that copying is right. Every entry
+# below is an interim state made honest, and an entry is DELETED the day its
+# extraction lands rather than kept as a memorial — which is what happened to
+# `app/models/uuid_check.rb` and `app/services/pow_difficulty.rb` under T-189,
+# each of them promoted into the gem that owns the contract.
 #
 # MAGIC COMMENTS ARE THE ONE COMMENT `:code` STILL COMPARES (K-628). Ripper drops
 # every comment, magic ones included, so until this was added a copy that lost
@@ -411,10 +411,10 @@ if ARGV.include?("--self-test")
       expect: /db\/migrate\/\*_add_devise_columns_to_users\.rb: declared :code — the copies must agree/ },
 
     { id: "autoload-once-line-gone", kind: :break,
-      rule: "The app/services autoload-once declaration (K-502)",
+      rule: "The app/services autoload-once declaration (K-502, re-anchored by T-189)",
       what: "the autoload_once_paths line K-502 made load-bearing is dropped from one demo",
       ops:  [[:edit, "kiosk-demo-skooti/config/application.rb", /^.*autoload_once_paths.*\n/, ""]],
-      expect: /skooti: ships app\/services\/pow_difficulty\.rb but config\/application\.rb does not put app\/services/ },
+      expect: /skooti: config\/initializers\/kiosk\.rb names .* from app\/services but config\/application\.rb does not put app\/services/ },
 
     { id: "operation-result-regrows", kind: :break,
       rule: "What is LEFT in a per-demo operation_result.rb (K-792)",
@@ -623,15 +623,15 @@ if ARGV.include?("--self-test")
     { id: "comment-cites-dead-path", kind: :break,
       rule: "A comment in a compared file may not cite something that is not there",
       what: "a header keeps pointing at a file that moved — and `:code` compares modulo comments",
-      ops:  [[:edit, "kiosk-demo-tudu/app/models/uuid_check.rb", "# frozen_string_literal: true\n",
+      ops:  [[:edit, "kiosk-demo-tudu/script/equihash_register.rb", "# frozen_string_literal: true\n",
               "# frozen_string_literal: true\n\n# The accounting half lives in app/services/uuid_ledger.rb.\n"]],
-      expect: /tudu: app\/models\/uuid_check\.rb — a comment cites the source path `app\/services\/uuid_ledger\.rb`/ },
+      expect: /tudu: script\/equihash_register\.rb — a comment cites the source path `app\/services\/uuid_ledger\.rb`/ },
     { id: "comment-cites-dead-constant", kind: :break,
       rule: "A comment in a compared file may not cite something that is not there",
       what: "a `{Constant}` reference a rename never reached — K-1264's shape",
-      ops:  [[:edit, "kiosk-demo-tudu/app/models/uuid_check.rb", "# frozen_string_literal: true\n",
+      ops:  [[:edit, "kiosk-demo-tudu/script/equihash_register.rb", "# frozen_string_literal: true\n",
               "# frozen_string_literal: true\n\n# Callers go through {WireUuidGuard} first.\n"]],
-      expect: /tudu: app\/models\/uuid_check\.rb — a comment references `\{WireUuidGuard\}`/ },
+      expect: /tudu: script\/equihash_register\.rb — a comment references `\{WireUuidGuard\}`/ },
 
     { id: "framework-claim-dropped", kind: :break,
       rule: "Cross-demo PROSE about the FRAMEWORK (K-1069)",
@@ -1152,11 +1152,6 @@ COPIES = {
   # ── Shared demo helpers, hand-copied into every demo's app/ (K-502) ────────
   # They used to live under lib/ and be loaded by hand from the initializer;
   # the paths moved, the copy-not-symlink arrangement did not.
-  "app/services/pow_difficulty.rb" => {
-    rule: :identical,
-    why:  "The KIOSK_POW_DIFFICULTY -> Equihash (n, k) map. A demo whose copy drifts advertises " \
-          "a toll it does not charge.",
-  },
   "app/services/bad_proof_counter.rb" => {
     rule: :identical,
     why:  "The K-498 PER-IDENTITY bad-proof tally (sqlite, keyed by agent credential id) behind " \
@@ -1235,19 +1230,6 @@ COPIES = {
     rule: :code,
     why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \
           "retry). Each copy's header names its own demo and port; the handshake must not vary.",
-  },
-  "app/models/uuid_check.rb" => {
-    rule:   :code,
-    except: {
-      "getgrocery" => "adds JSON_SCHEMA_PATTERN — the same shape written for JSON Schema, which " \
-                      "only getgrocery needs today because only getgrocery declares an " \
-                      "`input_schema` for an id param (T-050). PATTERN and valid? are identical " \
-                      "to the five compared copies; drop this exception when another demo " \
-                      "declares one, or when the module is promoted (K-607).",
-    },
-    why:  "Shape guard for uuids that arrive from the wire, so a malformed literal is a typed 400 " \
-          "instead of a PG::InvalidTextRepresentation 500 that leaks SQL. Each copy's prose names " \
-          "the verbs THAT demo casts; the guard itself must be one thing.",
   },
   "app/services/stub_psp.rb" => {
     rule: :code,
@@ -2623,37 +2605,66 @@ MIGRATION_PAIRS.each do |base, entry|
   end
 end
 
-# ── The app/services autoload-once declaration (K-502) ───────────────────────
+# ── The app/services autoload-once declaration (K-502, re-anchored by T-189) ─
 #
-# Every operator demo names an app/services constant from
-# `config/initializers/kiosk.rb` — `PowDifficulty` in all seven, and the
-# adapters, brokers and stub PSPs beside it in four of them. Rails sets the
+# A demo that names an `app/services` constant from
+# `config/initializers/kiosk.rb` — an adapter, a broker, a stub PSP — can only
+# do so because app/services is in `config.autoload_once_paths`. Rails sets the
 # RELOADABLE autoloader up in its `finisher`, AFTER config/initializers have
-# run, so the initializer can only name those constants because app/services is
-# in `config.autoload_once_paths`, whose loader `bootstrap` sets up first. Drop
-# that one line and the demo aborts at boot with `NameError: uninitialized
-# constant`.
+# run, so a constant in a normal autoload path is simply not resolvable from an
+# initializer; the once loader is set up in `bootstrap`, first. Drop that one
+# line and the demo aborts at boot with `NameError: uninitialized constant`.
 #
 # `config/application.rb` is :per_demo — the module name IS the demo name — so
 # nothing above compares this line, and it is the deletable-and-silently-fatal
 # kind: no static reader of the initializer would notice. Honest scope: this
 # asserts the declaration is PRESENT, not that a boot succeeds; each demo's own
 # CI job boots the app.
+#
+# THE SUBJECT IS DERIVED, NOT NAMED. This rule used to hang off
+# `app/services/pow_difficulty.rb`, which shipped in all seven demos and made
+# the answer "all seven" a constant. T-189 promoted that module into
+# kiosk-pow-equihash, so three demos now have an EMPTY app/services and the
+# once-path there would be a config line loading nothing. So the demo set is
+# read from the tree — which constants app/services actually defines, and
+# whether the initializer names one — and the rule is TWO-SIDED: a demo that
+# needs the line must have it, and a demo that does not must not carry it. The
+# second half is what a hand-named subject could never have caught.
 AUTOLOAD_ONCE_PATTERN = /autoload_once_paths\s*<<\s*Rails\.root\.join\("app\/services"\)/
-autoload_once_demos = (dups["app/services/pow_difficulty.rb"] || {}).keys
 
-autoload_once_demos.each do |demo|
-  path = File.join(ROOT, demo, "config/application.rb")
-  unless File.exist?(path)
-    errors << "#{short.(demo)}: ships app/services/pow_difficulty.rb but config/application.rb does not exist"
-    next
+autoload_once_checked = 0
+demos.each do |dir|
+  demo     = File.basename(dir)
+  app_path = File.join(dir, "config/application.rb")
+  init     = File.join(dir, "config/initializers/kiosk.rb")
+  next unless File.exist?(app_path) && File.exist?(init)
+
+  # Zeitwerk's own inflection: one constant per file, camelised from the name.
+  service_constants = Dir[File.join(dir, "app/services/*.rb")]
+                      .map { |f| File.basename(f, ".rb").split("_").map(&:capitalize).join }
+  initializer = File.read(init)
+  named = service_constants.select { |c| initializer.match?(/(?<![A-Za-z0-9_:])#{Regexp.escape(c)}\b/) }
+  declared = File.read(app_path).match?(AUTOLOAD_ONCE_PATTERN)
+  autoload_once_checked += 1
+
+  if named.any? && !declared
+    errors << "#{short.(demo)}: config/initializers/kiosk.rb names #{named.sort.join(', ')} from " \
+              "app/services but config/application.rb does not put app/services in " \
+              "config.autoload_once_paths — the reloadable autoloader is set up AFTER " \
+              "config/initializers run, so that reference would abort the boot with NameError (K-502)"
+  elsif named.empty? && declared
+    errors << "#{short.(demo)}: config/application.rb puts app/services in " \
+              "config.autoload_once_paths, but config/initializers/kiosk.rb names no constant " \
+              "defined there#{service_constants.empty? ? ' and the directory is empty' : ''} — the " \
+              "once-path is a config line loading nothing, and a non-reloadable path is not free " \
+              "(T-189)"
   end
-  next if File.read(path).match?(AUTOLOAD_ONCE_PATTERN)
+end
 
-  errors << "#{short.(demo)}: ships app/services/pow_difficulty.rb but config/application.rb does not " \
-            "put app/services in config.autoload_once_paths — the reloadable autoloader is set up " \
-            "AFTER config/initializers run, so the initializer's PowDifficulty reference would abort " \
-            "the boot with NameError (K-502)"
+if autoload_once_checked.zero?
+  errors << "check-demo-copies: the K-502 autoload-once rule read NO demo — it resolves " \
+            "config/application.rb and config/initializers/kiosk.rb per demo, and a rule with " \
+            "nothing to read passes everything."
 end
 
 # ── What is LEFT in a per-demo operation_result.rb (K-792) ───────────────────
@@ -2966,8 +2977,9 @@ end
 # ── A deploy/env template may not cite a path that is not there (K-1093) ─────
 #
 # Six templates told an operator the PoW difficulty knob was «wired via
-# `lib/pow_difficulty.rb`». No demo has ever had a file at that path: it is
-# `app/services/pow_difficulty.rb` in all seven, and `deploy/README.md` — the
+# `lib/pow_difficulty.rb`». No demo has ever had a file at that path: it was
+# `app/services/pow_difficulty.rb` in all seven until T-189 promoted the module
+# into kiosk-pow-equihash, and `deploy/README.md` — the
 # runbook shipped in the same directory — said so correctly the whole time. So
 # the two disagreed about a path, and the templates are the file an operator
 # actually opens while editing values. The stale bootsnap caches still on disk
@@ -2978,7 +2990,8 @@ end
 # rather than a fix.
 #
 # `skooti.env.example` is the shape to PREFER and needs no rule at all — it
-# names the constant (`registration_pow_params = PowDifficulty.params`), and a
+# names the constant (`registration_pow_params =
+# Kiosk::Pow::Equihash::Difficulty.params`), and a
 # constant does not rot when a file moves. But a template that DOES cite a path
 # must cite one that exists in the demo it configures, which is derived from the
 # template's own filename rather than listed here. Only cites containing a `/`
@@ -3458,9 +3471,10 @@ end
 #     boundary buys a versioned public API, a CHANGELOG entry and a release for
 #     each future word of a refusal message — while the copies stop being
 #     readable next to the guard that calls them, which is most of their value.
-#     This file's own header already says the promotion of UuidCheck is a
-#     public-API decision (K-607) that it must not pre-empt; the same restraint
-#     applies twice as hard one level down.
+#     The promotions this file has seen went the other way round: `UuidCheck`
+#     and `PowDifficulty` moved into a gem because each has a contract two
+#     parties read. A four-line predicate has one caller and no contract, and
+#     the restraint applies twice as hard one level down.
 #   * DECLARING the set as a known duplicate with a reason buys detection of a
 #     THIRD copy and nothing else — the one-sided edit, which is the entire
 #     class this script exists for, stays exactly as undetectable as it was.
@@ -5450,8 +5464,8 @@ end
 #
 # THE ANSWER IS NOT «COMPARE THE COMMENTS TOO», and it is worth saying why
 # before saying what it is. Comparing them would delete the reason `:code`
-# exists: `app/models/uuid_check.rb`'s header explains that demo's own wire
-# argument, and six identical explanations would each be wrong in five demos.
+# exists: `script/schema_flow.rb`'s header explains that demo's own catalogue,
+# and seven identical explanations would each be wrong in six demos.
 # Nor is it thirteen more bespoke arms in K-1021's shape — one derivation per
 # sentence does not generalise, and the fourteenth header would be unguarded
 # again.
@@ -6310,7 +6324,7 @@ if errors.empty?
        "#{tpl_checked} install-generator templates byte-matched against their copies in all " \
        "#{operator_demos.size} operator demos (no exceptions available), " \
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
-       "app/services autoload-once declared in #{autoload_once_demos.size} demos, " \
+       "app/services autoload-once resolved both ways in #{autoload_once_checked} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
        "no env resolution and no Rails-framework patching in the initializers of " \
        "#{initializer_demos} operator demos nor in the #{e2e_initializers} e2e harness " \

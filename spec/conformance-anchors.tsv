@@ -298,9 +298,6 @@ kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
-kiosk-demo-atablefor/app/services/pow_difficulty.rb	"high" => { n: 168, k: 7 }.freeze,
-kiosk-demo-atablefor/app/services/pow_difficulty.rb	"low"  => { n: 96,  k: 5 }.freeze,
-kiosk-demo-atablefor/app/services/pow_difficulty.rb	LEVELS = {
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
 kiosk-demo-atablefor/app/views/home/index.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
@@ -564,7 +561,6 @@ kiosk-demo-skooti/app/operations/request_kyc_operation.rb	REQUESTED_CLAIMS = %w[
 kiosk-demo-skooti/app/operations/reserve_operation.rb	        status:     Reservation::RESERVED,
 kiosk-demo-skooti/app/operations/start_rental_operation.rb	#   1b. the reserved vehicle is licence-FREE — a needs_licence motorcycle is
 kiosk-demo-skooti/app/operations/start_rental_operation.rb	#   2.  the principal has a settled payment for THIS reservation
-kiosk-demo-skooti/app/services/pow_difficulty.rb	    "low"  => { n: 96,  k: 5 }.freeze,
 kiosk-demo-skooti/app/services/rental_token_issuer.rb	# Ed25519 offline rental-token authority for the skooti demo — a scooter-rental
 kiosk-demo-skooti/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
@@ -818,6 +814,10 @@ kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_K = 7
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_N = 168
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      def self.params(n: 168, k: 7)
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	    # The solver finds 2^k nonces whose BLAKE2b-256(seed ‖ nonce) outputs
+kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	          "low"  => { n: 96, k: 5 }.freeze,
+kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	"high" => { n: DEFAULT_N, k: DEFAULT_K }.freeze,
+kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	"low"  => { n: 96, k: 5 }.freeze,
+kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	LEVELS = {
 kiosk-pow-equihash/solve.py	        "ERROR: this solver requires numpy.\n"
 kiosk-pow-equihash/solve.py	BUCKET_CAP = 32
 kiosk-pow-equihash/solve.py	Equihash PoW solver for Kiosk (default n=168, k=7).

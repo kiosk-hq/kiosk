@@ -255,7 +255,7 @@ jobs:
             # type. Each was watched pass AND watched fail (weaken the atomic
             # claim → 6 captures under 6 racing pays; drop `paying` from
             # create_order's exclusion list → the €1.49 order becomes €1299
-            # while the PSP is charged €1.49; widen UuidCheck::PATTERN → the
+            # while the PSP is charged €1.49; widen Kiosk::UuidCheck::PATTERN → the
             # malformed id resurfaces as ActiveRecord::StatementInvalid).
             #
             # What is NOT wired, and why, is in the `ungated:` map below — one

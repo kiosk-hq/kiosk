@@ -23,7 +23,7 @@ module Kiosk
     #   GET  <endpoint>/schema   the catalog     — PUBLIC
     #   POST <endpoint>/pay      settle an AP2 cart
     #
-    # The two no longer share a request path. `schema` resolves no identity,
+    # The two share no request path. `schema` resolves no identity,
     # pays no toll and never reaches the {Executor}; it writes {SchemaDocument}
     # straight out under a public cache policy. Everything below the `pay`
     # action — parse, resolve, toll, execute, render — is the wire the rest of
@@ -200,12 +200,10 @@ module Kiosk
         # It binds a challenge to the exact call — the HTTP method, the verb
         # name as it appears in the path, and the canonical JSON of the
         # arguments — so a proof solved for `GET /catalog?city=Lisbon` is
-        # spendable on nothing else. 0.3's formula could not say this: with
-        # every read multiplexed through one POST, the method was a constant
-        # and the verb name had to be smuggled back INTO the arguments to
-        # reach the digest at all. Widening it is the cutover's, because
-        # reproducing the old digest byte for byte was what let one proof be
-        # spent on either wire while both were served, and only one is now.
+        # spendable on nothing else. The method and the path-borne verb name
+        # are both IN the digest precisely because this wire is one endpoint
+        # per verb: a formula that hashed the arguments alone would let a proof
+        # solved for one verb be spent on another.
         toll!(identity: identity, command: command, name: name, body: args)
 
         # Carry the resolved identity and the wire request down to the handler
@@ -213,7 +211,8 @@ module Kiosk
         # Kiosk::Handler`) is dispatched as a Rails sub-request built from these:
         # the identity lands in `env["kiosk.identity"]` (readable as
         # `kiosk_identity`), and the caller's headers/address are seeded from
-        # this env. Block handlers registered the old way ignore both.
+        # this env. A handler declared directly as a callable, rather than
+        # through the mixin, ignores both.
         #
         # `handler_headers` is the only thing that travels the other way:
         # {HandlerDispatch} writes the handler's own `Cache-Control` into it,
@@ -260,8 +259,9 @@ module Kiosk
         # the caller's rescue.
         pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
 
-        # Opt-in request-shape validation, and only when the flag is on AND a
-        # proof was actually submitted: validate each parsed proof against the
+        # Request-shape validation — `config.validate_requests` DEFAULTS TRUE
+        # (see the accessor for why) and this runs only when a proof was
+        # actually submitted: validate each parsed proof against the
         # vendored normative schema so a MALFORMED proof (e.g.
         # `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises a clear
         # 400 with a shape hint — instead of PowGate silently ignoring it and
@@ -298,7 +298,7 @@ module Kiosk
       #   X-Total-Count: 97
       #
       # `Link` is RFC 8288 (Web Linking) and is the reason a paginating query
-      # no longer needs a body shape of its own. `X-Total-Count` is NOT a
+      # needs no body shape of its own. `X-Total-Count` is NOT a
       # standard — no RFC defines it — it is a de-facto convention adopted here
       # because it is widely used and immediately understood; the spec says so
       # in those words rather than citing an RFC that does not exist.
@@ -306,9 +306,8 @@ module Kiosk
       # WHEN EACH IS EMITTED, and both rules are about not stating something
       # untrue:
       #
-      #   * `Link` — only on a TRUNCATED page. Its absence is what "this is the
-      #     last page" means, which is the same signal an absent `next` field
-      #     used to carry.
+      #   * `Link` — only on a TRUNCATED page. Its ABSENCE is what "this is the
+      #     last page" means; there is no positive last-page signal to emit.
       #   * `X-Total-Count` — the number of rows MATCHING the query, across all
       #     pages. On a COMPLETE array answer that is the array's own length and
       #     the wire fills it in for every query, paginating or not. On a

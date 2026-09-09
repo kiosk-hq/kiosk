@@ -63,8 +63,8 @@ module Kiosk
       # `payment_method` is OPTIONAL: in the SetupIntent model the assistant
       # authorises the charge but never presents a card — the provider's PSP
       # resolves the principal's on-file card.  Adapters that do require an
-      # explicit PM (StubPsp, early tests) still send one; the field is simply
-      # no longer rejected when absent.
+      # explicit PM (StubPsp, early tests) still send one; an absent field is
+      # accepted rather than rejected.
       def verify_payment(raw_jws:, identity:, cart:)
         payload = decode_and_check(raw_jws, identity)
         # `amount_cents` is a REQUIRED payment field (spec AP2 table). ABSENT
@@ -403,9 +403,10 @@ module Kiosk
 
       # Every mandate MUST carry these claims (spec, AP2 mandate section).
       # Presence is enforced at decode time; `iss`/`user_id`/`agent_id` are
-      # additionally value-checked below. `id` and `iat` are presence-only:
-      # without this list a mandate missing `id` or `iat` decoded and passed
-      # silently (only `exp` was previously required).
+      # additionally value-checked below. `id` and `iat` are presence-only, and
+      # the list must name them: without it a mandate missing `id` or `iat`
+      # decodes and passes silently, because the JWT library requires only
+      # `exp`.
       REQUIRED_CLAIMS = %w[id user_id agent_id iss iat exp].freeze
 
       # Decode + verify the JWS and run the checks shared by every mandate

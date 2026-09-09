@@ -104,8 +104,9 @@ module Kiosk
         #
         # JWT timestamps are second-resolution and {RevocationStore} compares
         # `iat < watermark`, so "revoke everything for this agent" and "mint a
-        # token for this agent" collide inside one wall-clock second. Both
-        # resolutions of that collision used to be wrong somewhere:
+        # token for this agent" collide inside one wall-clock second. NEITHER
+        # of the two obvious resolutions of that collision is correct on its
+        # own:
         #
         #   * a watermark of `Time.now.to_i` leaves every token minted in that
         #     second verifying — which is the aperture §6.3's MUST forbids on
@@ -129,7 +130,7 @@ module Kiosk
         # keeps its replacement alive exactly as before.
         #
         # STORE CONTRACT: an operator-supplied `revocation_store` that does not
-        # implement `watermark_for` keeps the old behaviour rather than
+        # implement `watermark_for` mints at the unclamped instant rather than
         # crashing at token issuance — the reader is part of the documented
         # interface (see {RevocationStore}), and a store missing it re-opens
         # this one-second aperture for its own deployment.

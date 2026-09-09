@@ -60,9 +60,9 @@ module Kiosk
         # connection or they are not in the same transaction.
         conn = ::ActiveRecord::Base.lease_connection
 
-        # A known public key is NOT re-registered — that would be a second way to
-        # mint an identity for an existing key (and the old idempotent re-issue
-        # blurred register vs. login). Existing keys refresh their token through
+        # A known public key is NOT re-registered — that would be a second way
+        # to mint an identity for an existing key, and it would blur register
+        # against login. Existing keys refresh their token through
         # POST /auth/login instead.
         #
         # The key is CALLER-SUPPLIED — it is the request body — so it travels as

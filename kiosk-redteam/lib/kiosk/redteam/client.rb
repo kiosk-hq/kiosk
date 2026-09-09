@@ -276,12 +276,12 @@ module Kiosk
       # register_raw (it was for a rejected registration) but captured by
       # register! to build the Principal.
       #
-      # Registration is now a proof-of-possession handshake: fetch a single-use
+      # Registration is a proof-of-possession handshake: fetch a single-use
       # challenge, sign it (origin-bound via `aud`), then POST the signature.
-      # `name`/`role` are no longer sent on the wire (the server pins the role),
-      # and `pow_difficulty` is never read — PoW is driven off the server's 402
-      # challenges below. These kwargs are kept inert so existing
-      # callers/scenarios don't have to change.
+      # The body carries the public key and the signature and nothing else —
+      # the server pins the role — so `name`, `role` and `pow_difficulty` are
+      # INERT kwargs that this method accepts and never puts on the wire; PoW
+      # is driven off the server's 402 challenges below.
       def build_register(name:, role:, pow_difficulty:, pow:, wire_role: nil)
         key = OpenSSL::PKey::RSA.generate(2048)
         pem = key.public_key.to_pem

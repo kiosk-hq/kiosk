@@ -111,9 +111,10 @@ module Kiosk
       # `200` is `private, no-store`; an operator MAY relax it to `private,
       # max-age=N` for a genuinely identity-independent payload" — and on the
       # 0.4 per-verb wire the only code an operator writes is a handler, so a
-      # seam that dropped every sub-response header made that published
-      # permission unreachable by anybody. It read
-      # `status, _headers, body = …` and that underscore WAS the bug.
+      # seam that dropped every sub-response header would make that published
+      # permission unreachable by anybody, so this destructures the
+      # sub-response's headers and reads `Cache-Control` out of them — DO NOT
+      # discard that slot (`status, _headers, body = …`).
       #
       # WHY THE LIST IS ONE ENTRY AND NOT "EVERYTHING THE HANDLER SET".
       # The sub-request is BUILT here, not received: {#build_env} copies the

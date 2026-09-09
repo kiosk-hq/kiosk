@@ -96,7 +96,8 @@ module Kiosk
           # This scenario knows which gate must fire: ownership, checked at use
           # time. A 402 here means the payment gate answered — but B DID pay, so
           # that is a different bug, not this one; a 403 kyc_required means the
-          # KYC gate answered. Both used to score BLOCKED.
+          # KYC gate answered. NEITHER counts as blocked — this scenario is
+          # about the OWNERSHIP gate and nothing else.
           verdict_from(
             resp,
             expect:      403,

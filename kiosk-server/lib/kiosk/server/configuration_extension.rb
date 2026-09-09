@@ -221,9 +221,9 @@ module Kiosk
       # registrant's public key — and USES its RETURN VALUE as the principal
       # (`agents.user_id`). The provider creates its OWN record (satisfying its
       # OWN model validations) and returns that record's id. Because the id
-      # comes from the provider's own row, this works for bigint AND uuid PKs;
-      # the old framework-generated-uuid contract forced a uuid principal and
-      # 500'd on bigint apps. Returning nil raises a ConfigurationError.
+      # comes from the provider's own row, this works for bigint AND uuid PKs —
+      # which is why the framework never generates the principal id itself.
+      # Returning nil raises a ConfigurationError.
       #
       # When unset, registration falls back to `user_model.constantize.create!`
       # (the greenfield default — works only for models without required
@@ -533,12 +533,13 @@ module Kiosk
       # At registration the agent must ALSO solve the Equihash PoW
       # (`registration_pow_count` proofs) inside this same window before it can
       # POST /auth/register. The PoW solve window is `pow_ttl * count` (see
-      # PowGate#issue_challenges). The old flat 120s default was SHORTER than a
-      # single-proof PoW window (pow_ttl = 300s), so a legitimate slow solver's
-      # auth nonce expired mid-solve — and the burned PoW proofs were already
-      # spent. The default now DERIVES from the PoW window so it always exceeds
-      # it (with 60s headroom), and scales when a provider raises `pow_ttl` or
-      # `registration_pow_count`. Set explicitly to override.
+      # PowGate#issue_challenges). SO THE DEFAULT DERIVES FROM THE PoW WINDOW
+      # rather than being a flat number, and always exceeds it (with 60s
+      # headroom), scaling when a provider raises `pow_ttl` or
+      # `registration_pow_count`. A flat default shorter than a single-proof
+      # window (pow_ttl = 300s) expires a legitimate slow solver's auth nonce
+      # mid-solve — with the burned PoW proofs already spent. Set explicitly to
+      # override, but keep it above `pow_ttl * registration_pow_count`.
       attr_writer :auth_challenge_ttl
       def auth_challenge_ttl
         @auth_challenge_ttl ||= pow_ttl * [registration_pow_count.to_i, 1].max + 60

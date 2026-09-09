@@ -45,8 +45,9 @@ module Kiosk
           # principal is not the signer, so the pay is refused 403
           # forbidden/rls_denied. A 402 would mean the payment instrument was
           # declined before the mandates were ever verified — the swap
-          # unexamined — and a 401 would mean B's own token was rejected. Both
-          # used to score BLOCKED.
+          # unexamined — and a 401 would mean B's own token was rejected.
+          # NEITHER counts as blocked: pinning the status is what keeps this
+          # scenario about the swap.
           verdict_from(
             resp,
             expect:      403,

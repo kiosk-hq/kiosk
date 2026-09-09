@@ -73,12 +73,12 @@ module Kiosk
     # would leak on a forged offset is a handler with no scoping, and an HMAC
     # would hide that rather than fix it.
     #
-    # AND THE DECODE IS NO LONGER LENIENT. A malformed cursor used to become
-    # `default` — silently page one — so an assistant that mangled the token was
-    # answered with plausible rows and no way to notice. An ABSENT cursor is
-    # still `default`, because absence legitimately means «first page»; anything
-    # present that is not a non-negative decimal integer is a typed 400 naming
-    # the parameter, which is what every other bad argument on this wire gets.
+    # AND THE DECODE IS NOT LENIENT. An ABSENT cursor is `default`, because
+    # absence legitimately means «first page»; anything PRESENT that is not a
+    # non-negative decimal integer is a typed 400 naming the parameter, which
+    # is what every other bad argument on this wire gets and what the spec
+    # requires — silently serving page one «reads to an AI assistant as a valid
+    # answer to a request it did not make».
     #
     # AN OFFSET CURSOR IS INDEPENDENT OF WHERE THE CURSOR TRAVELS, which is
     # why this helper is unaffected by the two page facts being headers. The
@@ -160,11 +160,10 @@ module Kiosk
       # already says "success" and `output_schema` says what the shape is.
       #
       # A PAGINATING QUERY ANSWERS THE SAME BARE ARRAY AS EVERY OTHER QUERY.
-      # It used to answer `{"rows": …, "next": …}`, which was the one body
-      # shape on this wire that existed to carry a piece of TRANSPORT
-      # metadata; adopting RFC 8288 (Web Linking) moved that metadata to where
-      # HTTP already keeps it — the `Link` response header, `rel="next"` — and
-      # took the second query shape with it (spec §8.2/§8.4).
+      # There is exactly ONE query body shape on this wire, because the
+      # transport metadata a page needs lives where HTTP already keeps it —
+      # RFC 8288 (Web Linking), the `Link` response header, `rel="next"`. DO
+      # NOT wrap a page in a body of its own (spec §8.2/§8.4).
       def to_payload = payload
     end
   end

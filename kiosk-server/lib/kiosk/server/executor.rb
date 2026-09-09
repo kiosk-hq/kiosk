@@ -718,9 +718,9 @@ module Kiosk
         binds  = [agent_id, MandateVerifier.canonical_currency(currency)]
         # The window is a STATEMENT SHAPE, not a value: with no window there is
         # no predicate at all, so that stays a branch on the SQL text. The
-        # number of days is a third BIND (`make_interval(days => $3)` rather
-        # than the old `#{window_days.to_i} * INTERVAL '1 day'`), which is what
-        # lets the last `connection.quote` in this file go.
+        # number of days is a third BIND — `make_interval(days => $3)`, never
+        # interpolated into the SQL text — which is what lets this file hold no
+        # `connection.quote` at all.
         window = ""
         if window_days
           binds << window_days.to_i

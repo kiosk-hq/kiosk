@@ -99,11 +99,11 @@ module Kiosk
         [SET_GUC_SQL, [name.to_s, value.to_s]]
       end
 
-      # Quote a `SET LOCAL ROLE` identifier. GUC NAMES no longer need this —
-      # `set_config` takes the name as a bound string, and Postgres folds it
-      # exactly as it folds an unquoted identifier, so the reserved-keyword
-      # collision that forced segment-by-segment quoting (`current_role`) is
-      # gone with the `SET` statement that had it.
+      # Quote a `SET LOCAL ROLE` identifier — the ONLY place this is needed.
+      # GUC NAMES do not go through it: `set_config` takes the name as a bound
+      # string and Postgres folds it exactly as it folds an unquoted
+      # identifier, so a reserved-keyword name (`current_role`) needs no
+      # segment-by-segment quoting.
       def quote_ident(name)
         name.to_s.split(".").map { |part| %("#{part.gsub('"', '""')}") }.join(".")
       end

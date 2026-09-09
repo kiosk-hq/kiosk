@@ -66,8 +66,8 @@ module Kiosk
           # is no longer in a usable state for this principal, which all three
           # consuming demos render as 403 forbidden. A 402 here would mean the
           # payment gate answered — but A paid, and the first use succeeded —
-          # and a 401 would mean A's token died mid-scenario. Both used to score
-          # BLOCKED. A provider that models re-use as 409 `conflict` instead
+          # and a 401 would mean A's token died mid-scenario. NEITHER counts as
+          # blocked. A provider that models re-use as 409 `conflict` instead
           # would have to widen this deliberately; note that 409 does not count
           # as blocked today either, so nothing silently changed for it.
           second_resp = client.run(a, name: profile.gated_action, **gated_args)

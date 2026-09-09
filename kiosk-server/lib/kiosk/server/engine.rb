@@ -80,16 +80,16 @@ module Kiosk
       # Auto-injects HeadersMiddleware into the host app's stack, OUTSIDE the
       # exception renderers.
       #
-      # It used to be `app.middleware.use`, which APPENDS — the innermost
-      # middleware, directly above the router. That put every response Rails
-      # composes FROM AN EXCEPTION outside it, and §3.6 makes the three
-      # version headers mandatory on "every response served under the
-      # operator's mount path … on success and on error alike". MEASURED on a
-      # booted demo: `POST /kiosk/agents/kyc` on an app that does not draw
-      # that route answered a 404 with none of the three, while the same
-      # origin's `POST /kiosk/auth/login` 400 carried all three — because a
-      # routing 404 never returns THROUGH the appended middleware, it is
-      # manufactured above it. An unhandled 500 has the same shape. Those are
+      # NOT `app.middleware.use`, which APPENDS — the innermost middleware,
+      # directly above the router. That puts every response Rails composes
+      # FROM AN EXCEPTION outside the stamp, and §3.6 makes the three version
+      # headers mandatory on "every response served under the operator's
+      # mount path … on success and on error alike". MEASURED on a booted demo
+      # with the middleware appended: `POST /kiosk/agents/kyc` on an app that
+      # does not draw that route answered a 404 with none of the three, while
+      # the same origin's `POST /kiosk/auth/login` 400 carried all three —
+      # because a routing 404 never returns THROUGH an appended middleware, it
+      # is manufactured above it. An unhandled 500 has the same shape. Those are
       # precisely the responses a mis-versioned client is most likely to get:
       # the handshake exists so a client can decide whether it can speak to
       # this origin at all, and a 404 for a path its version expects to exist

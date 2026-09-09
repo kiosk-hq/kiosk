@@ -43,9 +43,10 @@ module Kiosk
       # Parse the request body as a JSON object. Mirrors
       # WireController/AuthController#parse_body!: an empty body, malformed
       # JSON, or a non-object (scalar/array) body is a 400 BadRequest, never
-      # a 500 — previously the bare JSON.parse ran outside the Errors::Base
-      # rescue, so JSON::ParserError / TypeError (body[:kyc_jws] on an Array)
-      # leaked as an unhandled 500.
+      # a 500. That is why this runs INSIDE the Errors::Base rescue and raises
+      # its own typed error: a bare JSON.parse outside it leaks
+      # JSON::ParserError — or TypeError, from `body[:kyc_jws]` on an Array —
+      # as an unhandled 500.
       def parse_body!
         raw = request.raw_post
         raise Errors::BadRequest, "request body must be a JSON object" if raw.nil? || raw.empty?

@@ -35,7 +35,8 @@ module Kiosk
     # `PG::InvalidTextRepresentation: invalid input syntax for type uuid`,
     # leaving no `invalid input syntax` to find: a real breach reading CLEAN.
     # That is a false NEGATIVE, the one direction a security oracle may never
-    # move in — the pre-fix defect only ever produced false POSITIVES.
+    # move in — whereas a scan that discounts nothing errs only towards false
+    # POSITIVES.
     #
     # So the scan is POSITIONAL instead. Every occurrence of every spelling the
     # probe's own value can take in the serialized body is recorded as a SPAN,
@@ -58,9 +59,9 @@ module Kiosk
     # == Failing loud, not quiet
     #
     # `supplied:` is declared per call, by the beat that knows what it put on
-    # the wire. A beat that FORGETS it degrades to the pre-fix oracle exactly:
-    # a possible false BREACH, never a missed leak. The safe direction is the
-    # default, which is why this is a keyword with a default rather than a
+    # the wire. A beat that FORGETS it degrades to the undiscounted oracle
+    # exactly: a possible false BREACH, never a missed leak. The safe direction
+    # is the default, which is why this is a keyword with a default rather than a
     # channel threaded implicitly through {Response}.
     module LeakScan
       # @!attribute leak   [String, nil] first needle the app itself produced
@@ -71,7 +72,7 @@ module Kiosk
         def leak? = !leak.nil?
 
         # Human-readable tail for a beat's failure/detail line. Empty when
-        # nothing was discounted, so unaffected beats print exactly as before.
+        # nothing was discounted, so an unaffected beat's line is unchanged.
         def note
           return "" if echoed.empty?
 
@@ -90,7 +91,7 @@ module Kiosk
       # @param supplied [Object] what the probe itself put on the wire for this
       #   call — normally the arguments Hash (`{ booking_id: junk }`), which is
       #   walked recursively so every leaf value and every container spelling is
-      #   covered. `nil` means "declared nothing", which is the pre-fix oracle.
+      #   covered. `nil` means "declared nothing", which discounts nothing.
       # @return [Result]
       def scan(body, needles, supplied: nil)
         raw    = body.is_a?(String) ? body : JSON.generate(body)

@@ -27,7 +27,9 @@ module Kiosk
     # What each of those verifies COSTS is bounded too: the Equihash verifier
     # checks cheapest-first and hashes lazily, so a garbage proof stops at the
     # first tree node that does not cancel — 0.30 ms measured at n=168 k=7,
-    # against ~18 ms for a real proof, where both used to cost the same.
+    # against ~18 ms for a real proof. A verifier that hashed eagerly would
+    # charge the full ~18 ms for garbage, which is the asymmetry an attacker
+    # wants.
     #
     # Both bound the cost PER REQUEST, neither bounds the request RATE — a
     # caller who keeps taking fresh 402s keeps buying verifies, and at

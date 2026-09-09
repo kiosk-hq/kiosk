@@ -63,9 +63,10 @@ module Kiosk
           # is not isolation: a 404 means the query name never resolved, a 402
           # means a toll fired before any policy ran, a 5xx is a crash — and the
           # gem's own invariant is that a crash can never count as a block
-          # (see Kiosk::Redteam.blocked?). Each of the three used to score
-          # BLOCKED here, because the empty `rows_from` of an error envelope is
-          # indistinguishable from a correctly isolated empty result.
+          # (see Kiosk::Redteam.blocked?). NONE of the three counts as blocked,
+          # and the status must be pinned to keep it that way: the empty
+          # `rows_from` of an error envelope is indistinguishable from a
+          # correctly isolated empty result.
           unless resp.status == 200
             return Verdict.new(
               blocked: false,

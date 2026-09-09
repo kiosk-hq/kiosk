@@ -55,12 +55,12 @@ module Kiosk
     #                    collide with a controller method).
     #
     # ── `reach` — WHOSE ROWS A VERB MAY TOUCH ────────────────────────────
-    # Spec §7.2 used to say, unconditionally, that every read is scoped to the
-    # authenticated `user_id` and that another `user_id`'s rows are never
-    # readable. Three shipped demos contradicted it BY DESIGN — philslist's open
-    # board, tudu's shared lists, stylish's owner calendar — and all three are
-    # legitimate: data separation is the operator's business logic, and Kiosk's
-    # job is to SUPPLY the means (an identity resolved before dispatch, the four
+    # Spec §7.2's DEFAULT is absolute: every read is scoped to the authenticated
+    # `user_id` and another `user_id`'s rows are never readable. But a
+    # legitimate operator domain can need wider reach — philslist's open board,
+    # tudu's shared lists, stylish's owner calendar are three shipped examples —
+    # because data separation is the operator's business logic, and Kiosk's job
+    # is to SUPPLY the means (an identity resolved before dispatch, the four
     # GUCs, a principal that is never a wire input), not to dictate the model.
     #
     # So the default is unchanged and stays absolute, and any DEPARTURE from it

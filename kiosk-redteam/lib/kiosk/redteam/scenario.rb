@@ -18,10 +18,7 @@ module Kiosk
     # skip Verdict (blocked: false, skipped: true, detail: "SKIP — …") — a
     # distinct third state, NOT a pass: it does not count towards the blocked
     # count, and the demo's expected-applicable assertion catches a skip that
-    # was not meant to happen.  (This paragraph described the pre-fix
-    # `blocked: true` skip long after {#skip_verdict} stopped returning one —
-    # see the gem CHANGELOG's "a skipped scenario reports a real skipped
-    # state instead of a pass".)
+    # was not meant to happen.
     #
     # @abstract Override {#call} in subclasses.
     class Scenario

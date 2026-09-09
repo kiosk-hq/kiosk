@@ -1,0 +1,38 @@
+# What the container build does NOT need out of this repository.
+#
+# The build context is this whole repository, because every demo's Gemfile
+# resolves the kiosk gems through `path: "../kiosk-<gem>"`. That makes the
+# context large, and everything below is either regenerated inside the image,
+# machine-local, or has no bearing on a build.
+#
+# This file is an instruction to the build beside it: `Dockerfile` in this same
+# directory. `bin/check-demo-copies` fails on a container ignore-file with no
+# recipe at or above it, which is what three separate waves left behind here
+# before the recipe existed.
+
+# Version control and CI.
+.git
+.gitignore
+.github
+
+# Machine-local toolchain pins and bundler state (the image installs its own).
+.bundle
+.gems
+.mise.toml
+mise.toml
+.ruby-version
+vendor/bundle
+
+# Regenerated inside the container, or output of a run on somebody's laptop.
+**/tmp
+**/log
+**/storage
+**/coverage
+**/node_modules
+**/*.gem
+**/.DS_Store
+
+# The container recipes themselves: changing a compose file must not invalidate
+# the image layers, because none of them is read at build time.
+**/compose.yaml
+.dockerignore

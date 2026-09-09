@@ -1,0 +1,62 @@
+# Containerised kiosk-demo-stylish: `docker compose up` in this directory, and nothing else.
+#
+# It brings up a Postgres that belongs to THIS compose project, sets the demo
+# up against it, and serves the demo on http://localhost:3005.
+#
+# The setup step is destructive and stays destructive here: it runs
+# `db:drop db:create db:schema:load db:seed`, so `kiosk_stylish_development` is dropped
+# and recreated on every `up`. What changes is WHERE — that database lives on
+# the `pgdata` volume this file declares, so the drop cannot reach a Postgres
+# on your machine, and nothing here needs a login permitted to `CREATE ROLE`:
+# the container's Postgres superuser has it.
+#
+# To run one of this demo's own tasks instead of the server:
+#
+#     docker compose run --rm app bin/rails <task>
+#
+# with any task from the list in README.md.
+#
+# The image is shared by every demo in this repository and is built from the
+# Dockerfile one directory up. It has to be: this demo's Gemfile resolves the
+# kiosk gems through `path: "../kiosk-<gem>"`, so the build context is the
+# repository rather than this directory — and one image carrying all of them
+# is also what lets the tasks that boot a sibling demo work.
+name: kiosk-demo-stylish
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    working_dir: /kiosk/kiosk-demo-stylish
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # The demo talks to the database in the service beside it. These are
+      # written out rather than passed through from your shell on purpose: an
+      # exported PGHOST does not reach in here and move the drop onto a server
+      # of yours.
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PORT: "3005"
+    ports:
+      # The port this demo's README tells an operator to open.
+      - "3005:3005"
+
+volumes:
+  pgdata:

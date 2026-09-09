@@ -385,7 +385,7 @@ end
 # ── 7. priceable_total/2 — a stay nobody can price is a 400, not a 500 ───────
 #
 # `bookings.total_cents` is a 4-byte integer, so a well-formed ISO check_in far
-# enough back used to price a stay past it and the INSERT raised
+# enough back prices a stay past it; unguarded, the INSERT raises
 # ActiveModel::RangeError — HTTP 500 for an argument a client got wrong.
 # THE BOUND IS THE COLUMN'S: it invents no booking horizon.
 puts "\n── priceable_total: the ceiling is the column's, and the refusal is recoverable ──"

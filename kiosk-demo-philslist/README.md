@@ -268,11 +268,10 @@ The demo bakes in shortcuts production operators replace:
   verb so neither side hands the other an address; that is designed and
   deliberately not built here, because a half-built inbox would be a worse demo
   than an honestly-stated absence.
-- **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here any
-  more: this demo sets nothing, so the engine's own `DefaultAgentIdp` verifies
-  the kiosk-pop JWTs it minted, in every environment. The bespoke
-  `agent:u-…:a-…:r-…` fallback shape — which a dev-only parser turned into an
-  identity at any role it asked for — is deleted. Swap this seam only to front
+- **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here: this
+  demo sets nothing, so the engine's own `DefaultAgentIdp` verifies the
+  kiosk-pop JWTs it minted, in every environment, and nothing accepts a
+  self-asserted bearer. Swap this seam only to front
   an EXTERNAL agent-identity issuer (Entra Agent ID, Okta, an ID-JAG-style
   broker), by subclassing `Kiosk::AgentIdentityProviders::Base`; its one hard
   constraint is that the `agent_id` you return must be a **UUID**.

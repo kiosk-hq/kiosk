@@ -68,11 +68,11 @@
 # THE TWO CUSTOMER PRINCIPALS ARE EARNED, NOT ASSERTED. Alice and Bob
 # are bound through the shipped ceremony — Equihash-tolled `/auth/register` →
 # the human's real Devise sign-in → `/auth/link` → `/auth/claim`
-# (script/bound_assistant.rb) — because the dev-only parser that used to turn a
-# written-down `agent:u-…:a-…:r-…` string into an identity at any role is
-# deleted. That is also what promotes the SelfAssertedTokenForgery beat below
-# from an in-process probe under a stubbed production config into an ordinary
-# over-the-wire attack in the SAME environment this suite drives.
+# (script/bound_assistant.rb) — because nothing turns a written-down
+# `agent:u-…:a-…:r-…` string into an identity: the ceremony is the only way to
+# hold a principal here. That is also why the SelfAssertedTokenForgery beat
+# below is an ordinary over-the-wire attack in the SAME environment this suite
+# drives.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
@@ -504,10 +504,10 @@ BATTERY.record("DeviceGrantRoleComesFromTheApprover",
 
 # ── DeviceGrantVerifyPageNamesTheAccess ──────────────────────────────────────
 # The consent half. An approval given without seeing what it grants is not
-# consent to anything in particular, and this page used to show a fingerprint
-# and a timestamp only — measured, while a `role=owner` ceremony was pending on
-# it. Asserted on BOTH humans' pages and required to DIFFER, so a constant
-# string cannot satisfy it.
+# consent to anything in particular, so the verify page must NAME the access it
+# is handing over — a key fingerprint and a timestamp are not it. Asserted on
+# BOTH humans' pages and required to DIFFER, so a constant string cannot
+# satisfy it.
 cust_page_names  = cust_page.to_s.include?("Access you are handing it") &&
                    cust_page.to_s.include?("<code>customer</code>")
 own_page_names   = own_page.to_s.include?("Access you are handing it") &&
@@ -520,11 +520,11 @@ BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
                "(want all three — the field is the approver's real role, not a constant)")
 
 # ── DeviceGrantRebindCannotEscalate ──────────────────────────────────────────
-# A fix that only guarded FIRST binding would leave the same escalation one
-# ceremony later: a known key re-running the claim ceremony takes the rebind
-# branch, whose `allowed_roles` REMAP is what the self-selected role used to
-# drive (measured at head: a key bound `customer` came back `owner`, same
-# agent_id). So the same key that is now bound at `customer` runs it again.
+# Guarding FIRST binding alone would leave the same escalation one ceremony
+# later: a known key re-running the claim ceremony takes the REBIND branch,
+# whose `allowed_roles` REMAP is a second place a self-selected role could
+# reach. So the same key that is bound at `customer` runs the ceremony again,
+# and what it comes back with must still be the approver's role.
 rc_rebind_refused, rebind_refused_body =
   oauth_post("/kiosk/oauth/device_authorization",
              { "client_id" => "redteam-rebind", "public_key" => cust_pem, "role" => "owner" })
@@ -548,31 +548,25 @@ BATTERY.record("DeviceGrantRebindCannotEscalate",
 
 # ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
-# THE BEAT CHANGED SHAPE, AND THE CHANGE IS THE POINT. stylish used to compose a
-# hand-copied agent-IdP that parsed a self-asserted, UNSIGNED
-# `agent:u-<user>:a-<agent>:r-<role>` bearer straight into an authenticated
-# identity — at whatever role the string named, including `owner`. It was live
-# in development on purpose (every driver in this repo, including this suite,
-# held itself a principal that way), so the block could only ever be
-# demonstrated IN-PROCESS against a stubbed production Rails.env, and an env
-# gate was the whole defence.
-#
-# There is no such parser any more, in any environment: `c.agent_idp` is unset,
-# so the engine's own DefaultAgentIdp verifies the kiosk-pop JWTs it minted and
-# nothing else. So this is now an ordinary over-the-wire probe in the SAME
-# environment this suite drives, which is a strictly stronger claim than the one
-# an env gate could support.
+# NOTHING ANYWHERE PARSES A SELF-ASSERTED BEARER. An UNSIGNED
+# `agent:u-<user>:a-<agent>:r-<role>` string names a real account and any role
+# it likes, `owner` included, and it resolves to NO identity: `c.agent_idp` is
+# unset, so the engine's own DefaultAgentIdp verifies the kiosk-pop JWTs it
+# minted and nothing else — in every environment, with no env gate holding the
+# line. So this is an ordinary over-the-wire probe in the SAME environment this
+# suite drives, which is a strictly stronger claim than one an env gate could
+# support.
 #
 # The forged string is deliberately maximal: it names the seeded SALON OWNER's
 # real account and `r-owner` — a role stylish genuinely configures and genuinely
-# gates on, so this is the exact escalation the parser used to grant. It is
-# aimed at `salon_calendar`, the verb that escalation was worth having.
+# gates on, so it asks for the largest escalation on offer. It is aimed at
+# `salon_calendar`, the verb that escalation would be worth having.
 #
 # TWO positive controls, because a refusal on its own proves nothing here:
 #   • the OWNER's genuinely-bound token reaches the very scope the forgery
 #     wanted — the whole book, with the forecast row — so the 401 is about the
 #     bearer and not about the endpoint being shut;
-#   • it is reached through the real ceremony, which is the only door left.
+#   • it is reached through the real ceremony, which is the only door there is.
 forged_owner_bearer = WIRE.bearer("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner")
 rc_forged_cal, = WIRE.get_json("/kiosk/salon_calendar", {}, forged_owner_bearer)
 rc_forged_book, = WIRE.post_json("/kiosk/book_appointment",
@@ -590,18 +584,13 @@ BATTERY.record("SelfAssertedTokenForgery",
                "the refusal is about the bearer and not a closed endpoint)")
 
 # ── SelfAssertedStaffSessionForgery — OVER THE LIVE WIRE ─────────────────────
-# The HUMAN sibling of the agent-stub forgery above, and it changed shape when
-# the stub it attacked was deleted.
+# The HUMAN sibling of the agent-bearer forgery above. A self-asserted
+# `X-Staff-Session: <user_id>` header is the shape a salon SSO/Okta stand-in
+# would take, and on a wire that honoured it that header would SELF-GRANT a
+# staff role.
 #
-# stylish used to map a self-asserted `X-Staff-Session: <user_id>` header to a
-# role-carrying HUMAN identity — the salon's SSO/Okta stand-in — so on the wire
-# that header SELF-GRANTED a staff role. It was live in development on purpose
-# (demo:roles walked it), which is why the block could only be shown IN-PROCESS
-# against a stubbed production Rails.env.
-#
-# There is no such arm any more, in any environment: `c.user_idp` is the Devise
-# adapter alone, and nothing reads that header. So the beat is now what it
-# should always have been — an over-the-wire probe in the SAME environment this
+# Nothing reads it, in any environment: `c.user_idp` is the Devise adapter
+# alone. So this is an over-the-wire probe in the SAME environment this
 # suite drives. A forged `X-Staff-Session` naming the seeded owner must buy
 # NOTHING (401 at /kiosk/auth/link), and the positive control is the real thing:
 # the owner's own Devise session mints a link on that very endpoint.
@@ -613,7 +602,7 @@ self_asserted_staff_forgery = lambda do
   detail =
     if blocked
       "forged `X-Staff-Session` naming the owner → 401 at /kiosk/auth/link in the SAME env this " \
-        "suite drives (the role-carrying stand-in is deleted; nothing reads the header); the " \
+        "suite drives (nothing anywhere reads the header); the " \
         "owner's REAL Devise session still mints (201), so the refusal is not vacuous"
     elsif rc_forged != 401
       "REGRESSION: forged X-Staff-Session was accepted at /kiosk/auth/link (HTTP #{rc_forged})"

@@ -207,7 +207,7 @@ assert_typed_400(refusal, "items([])")
 assert(refusal.is_a?(OperationResult) && refusal.message == "items must be a non-empty array",
        "  … an EMPTY cart is its own sentence: #{refusal&.message.inspect}")
 
-# AN ELEMENT THAT IS NOT AN OBJECT — `["bread"]` used to reach `it[:sku]`.
+# AN ELEMENT THAT IS NOT AN OBJECT — refused before `it[:sku]` is reached.
 ["bread", 2, nil, [], true].each do |bad|
   refusal = refusal_of(guard("items([#{bad.inspect}])") { WireArguments.items([bad]) })
   assert_typed_400(refusal, "items([#{bad.inspect}])")

@@ -48,11 +48,10 @@
 # THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED. Alice and Bob are bound
 # through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
 # real Devise sign-in → `/auth/link` → `/auth/claim` (script/bound_assistant.rb) —
-# because the dev-only parser that used to turn a written-down
-# `agent:u-…:a-…:r-…` string into an identity at any role is deleted. That is
-# also what promotes the SelfAssertedTokenForgery beat below from an in-process
-# probe under a stubbed production config into an ordinary over-the-wire attack
-# in the SAME environment this suite drives.
+# because nothing turns a written-down `agent:u-…:a-…:r-…` string into an
+# identity: the ceremony is the only way to hold a principal here. That is also
+# why the SelfAssertedTokenForgery beat below is an ordinary over-the-wire
+# attack in the SAME environment this suite drives.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3006 KIOSK_ISSUER=http://127.0.0.1:3006 \
@@ -200,19 +199,11 @@ BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
-# THE BEAT CHANGED SHAPE, AND THE CHANGE IS THE POINT. philslist used to compose
-# a hand-copied agent-IdP that parsed a self-asserted, UNSIGNED
-# `agent:u-<user>:a-<agent>:r-<role>` bearer straight into an authenticated
-# identity — at whatever role the string named. It was live in development on
-# purpose (every driver in this repo, including this suite, held itself a
-# principal that way), so the block could only ever be demonstrated IN-PROCESS
-# against a stubbed production Rails.env, and an env gate was the whole defence.
-#
-# There is no such parser any more, in any environment: `c.agent_idp` is unset,
-# so the engine's own DefaultAgentIdp verifies the kiosk-pop JWTs it minted and
-# nothing else. So this is now an ordinary over-the-wire probe in the SAME
-# environment this suite drives, which is a strictly stronger claim than the one
-# an env gate could support.
+# NOTHING ANYWHERE PARSES A SELF-ASSERTED BEARER. `c.agent_idp` is unset, so the
+# engine's own DefaultAgentIdp verifies the kiosk-pop JWTs it minted and nothing
+# else — in every environment, with no env gate holding the line. So this beat
+# is an ordinary over-the-wire probe in the SAME environment this suite drives,
+# which is a strictly stronger claim than one an env gate could support.
 #
 # The forged string is deliberately maximal: it names a REAL account (Alice's,
 # read off her genuinely-bound token, so nothing about it is stale), a

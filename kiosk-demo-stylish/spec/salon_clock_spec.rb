@@ -5,8 +5,8 @@
 #   bundle exec rake demo:clock_spec   (or: ruby spec/salon_clock_spec.rb)
 #
 # THE BUG IT WOULD HAVE CAUGHT, and why the rake task runs this file TWICE.
-# The parse used to be stdlib `Time.iso8601`, which binds a string carrying no
-# offset to the SERVER PROCESS's zone. The defect is therefore invisible in any
+# Stdlib `Time.iso8601` binds a string carrying no offset to the SERVER
+# PROCESS's zone. The defect that follows is invisible in any
 # single run: on the machine that wrote the code the process zone and the zone
 # the author meant were the same, and every assertion passed. It only shows when
 # the SAME input is parsed under two different `TZ` values and the two answers

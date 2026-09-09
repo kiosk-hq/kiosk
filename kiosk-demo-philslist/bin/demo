@@ -99,10 +99,8 @@ say "✓ Alice's assistant holds a kiosk-pop JWT this provider minted"
 
 # Bob is NOT bound here, on purpose. This walkthrough is a single account's tour
 # — browse → post → edit → close — and the cross-owner board it browses comes
-# from the seeds, not from a second live principal. (A `BOB_TOKEN` used to be
-# declared at the top of this file and never read; a written-down string costs
-# nothing, a ceremony costs a real Equihash toll, so the dead one is gone rather
-# than promoted.) Bob's side of the boundary is asserted where it belongs:
+# from the seeds, not from a second live principal. Bob's side of the boundary
+# is asserted where it belongs:
 # `rake demo:isolation` and `rake demo:redteam`, which bind him for real.
 
 # ─── discovery: prove there is NO payment ─────────────────────────────

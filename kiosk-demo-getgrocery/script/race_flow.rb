@@ -306,10 +306,11 @@ check(order_row(order2)["status"] == "paid", "order O2 settled to `paid`")
 
 puts "\n== a malformed order_id is a typed 4xx, never a 500 =="
 
-# The cart's {"order_id": …} entry lands in an `::uuid` cast. A malformed one
-# used to reach Postgres, raise InvalidTextRepresentation and escape as a raw
-# 500 — the worst answer on a pay path, since an assistant cannot tell a
-# rejected input from "the charge may have gone through".
+# The cart's {"order_id": …} entry lands in an `::uuid` cast. Unguarded, a
+# malformed one reaches Postgres, raises InvalidTextRepresentation and escapes
+# as a raw 500 — the worst answer on a pay path, since an assistant cannot tell
+# a rejected input from "the charge may have gone through". So it is a typed
+# 4xx here.
 bad_psp = CountingPsp.new
 vpp3    = ValidatingPaymentProvider.new(bad_psp, currency: "eur")
 

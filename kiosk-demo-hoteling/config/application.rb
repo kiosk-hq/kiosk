@@ -36,8 +36,8 @@ module KioskDemoHoteling
     # behind them. Rails sets the RELOADABLE autoloader up in its
     # `finisher`, i.e. AFTER config/initializers have run, so a constant in a
     # normal autoload path is simply not resolvable from an initializer; that,
-    # not "lib/ is not autoloaded", is what the hand-written
-    # `require Rails.root.join("lib/...")` lines used to buy.
+    # not "lib/ is not autoloaded", is what a hand-written
+    # `require Rails.root.join("lib/...")` line buys.
     # `autoload_once_paths` is Rails' own answer: the once autoloader is set up
     # in `bootstrap`, BEFORE initializers, "so that engines and applications
     # are able to autoload from these paths during initialization". It also

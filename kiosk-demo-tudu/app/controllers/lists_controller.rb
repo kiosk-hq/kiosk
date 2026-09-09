@@ -134,12 +134,11 @@ class ListsController < ApplicationController
   # owner's DISPLAY NAME (the "shared by" attribution). Newest shared list first,
   # so a freshly created+shared list floats to the top when a viewer refreshes.
   #
-  # It used to select `owner_u.email` and mask the local part in the view
-  # (`al•••`), which is how the page and the wire came to disagree about how
-  # much of an address a reader may see — and masking is itself a disclosure (two
-  # characters plus the confirmation that the address holds an account here).
-  # Both surfaces now read the SAME value through {User.public_name}, so there is
-  # one answer to "what is this person called" and no address on either.
+  # NO ACCOUNT ADDRESS REACHES THIS PAGE, masked or otherwise — masking is
+  # itself a disclosure (two characters plus the confirmation that the address
+  # holds an account here). This page and the wire read the SAME value through
+  # {User.public_name}, so there is one answer to "what is this person called"
+  # and no address on either.
   def housemate_board
     conn = ActiveRecord::Base.connection
     rows = conn.exec_query(<<~SQL, "housemate_board", [HOUSEMATE_ID]).to_a

@@ -86,8 +86,8 @@ ATABLEFOR_POW_MODE = begin
   elsif legacy.length > 1
     raise <<~MSG
       More than one legacy PoW flag is set: #{legacy.join(", ")}.
-      They each select a DIFFERENT :query PoW policy and are mutually exclusive —
-      setting several used to silently run only the last. Select exactly
+      They each select a DIFFERENT :query PoW policy and are mutually exclusive.
+      Select exactly
       one policy with KIOSK_POW_MODE=reputation|demo|backoff|off and remove the
       legacy KIOSK_POW_DEMO / KIOSK_POW_REPUTATION_DEMO / KIOSK_POW_BACKOFF_DEMO flags.
     MSG

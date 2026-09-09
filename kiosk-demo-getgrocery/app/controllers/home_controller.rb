@@ -9,14 +9,13 @@ class HomeController < ApplicationController
     # is enough — no JS polling). These read getgrocery's OWN tables. Catalog =
     # in-stock products (out-of-stock is hidden from the catalog query).
     #
-    # THE DELIVERY COUNTER READS THE CONSTANT, NOT A LITERAL, AND THAT IS THE
-    # WHOLE OF ITS HISTORY. It used to count `status: "scheduled"` — a value the
-    # verb that wrote it stopped writing when `schedule_delivery` became
-    # `reschedule_delivery` and moved to `rescheduled`. Nothing broke and nothing
-    # went to zero: this origin is reseeded additively, so the rows the retired
-    # verb left behind kept the number alive at a frozen 2 while every delivery
-    # the current wire moves was invisible to it. A stat presented as live
-    # activity that no current request can change is worse than no stat.
+    # THE DELIVERY COUNTER READS THE CONSTANT, NOT A LITERAL. A status literal
+    # written here is a value only this line believes in: this origin is
+    # reseeded additively, so a counter naming a status the current wire no
+    # longer writes keeps reading a frozen number off old rows while every
+    # delivery the wire actually moves stays invisible to it, and a stat
+    # presented as live activity that no current request can change is worse
+    # than no stat.
     # {Order::ALREADY_SCHEDULED} is the same predicate the admin badge and the
     # one-reschedule-per-order rule already use, so a third spelling of "this
     # delivery has been booked" cannot drift away from the other two.

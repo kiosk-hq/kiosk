@@ -336,7 +336,7 @@ BATTERY.record("PreLinkTokenAfterLink", rc == 401,
 # non-vacuous:
 #   1. NO account address anywhere in the response — the RAW BODY is searched
 #      for Alice's seeded address and for `@` at all, not just the field that
-#      used to hold it. A leak that moved to another key, or into a debug
+#      would carry it. A leak that moved to another key, or into a debug
 #      field, is the same leak.
 #   2. Every row carries a non-empty `display_name`. A handler that dropped the
 #      field entirely would fail here, so the beat cannot be passed by

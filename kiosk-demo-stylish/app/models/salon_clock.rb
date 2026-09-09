@@ -7,14 +7,13 @@
 # `Seatings` and hoteling's `WireArguments` already use for their own service
 # places.
 #
-# WHY IT EXISTS. `book_appointment` used to read its `slot` with stdlib
-# `Time.iso8601`, which binds a string carrying NO offset to whatever zone the
-# SERVER PROCESS happens to run in. Measured, the same "2026-09-14T14:00:00" is
-# `+11:00` under `TZ=Etc/GMT-11` and `-02:00` under `TZ=Etc/GMT+2` — thirteen
-# hours apart, from one environment variable nobody sets deliberately — while
-# the comment beside it claimed the value was read "in the app's own zone (UTC
-# here)". An operator deploying to a box in another zone booked the wrong hour,
-# and nothing in the response said which hour it had understood.
+# WHY IT EXISTS. Stdlib `Time.iso8601` binds a string carrying NO offset to
+# whatever zone the SERVER PROCESS happens to run in. Measured, the same
+# "2026-09-14T14:00:00" is `+11:00` under `TZ=Etc/GMT-11` and `-02:00` under
+# `TZ=Etc/GMT+2` — thirteen hours apart, from one environment variable nobody
+# sets deliberately. Read that way, an operator deploying to a box in another
+# zone books the wrong hour, and nothing in the response says which hour it
+# understood. So `book_appointment` reads its `slot` through here instead.
 #
 # ZONE: a real IANA zone, so CET (UTC+1, winter) and CEST (UTC+2, summer) are
 # both handled across DST. Do NOT replace it with a fixed offset.

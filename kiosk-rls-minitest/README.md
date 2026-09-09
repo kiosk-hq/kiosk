@@ -16,7 +16,7 @@ Wires the framework-agnostic journey-test DSL (`kiosk-test-support`) into Minite
 
 ```ruby
 group :test do
-  gem "kiosk-rls-minitest"
+  gem "kiosk-rls-minitest", github: "kiosk-hq/kiosk"
 end
 ```
 

@@ -1306,6 +1306,38 @@ jobs:
       - name: Every registered verb has its explicit route, with the right method
         run: ./bin/check-verb-routes
 
+  # These gems are not on RubyGems, so every install snippet in every gem README
+  # says its `gem` lines carry `github: "kiosk-hq/kiosk"` — the only thing that
+  # makes a copied line resolve today. That sentence was false on twelve of
+  # fifteen lines when it was written and on five more after the wave that
+  # repaired it, including in kiosk-rls-rspec/README.md, where the promise sat
+  # three lines above the one bare line it described. Nothing held it: the
+  # qualifier's removal was planted against five other guards here and every one
+  # stayed green. Nothing inside this monorepo CAN notice — every consumer here
+  # resolves these gems with `path:` — so the only observer is an adopter
+  # pasting the snippet, and there is not one of those in CI. Stdlib Ruby only:
+  # no bundle, no services, no database.
+  readme-gem-lines:
+    name: an install snippet resolves, or it is not a snippet (bin/check-readme-gem-lines)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every rule, and non-vacuous here
+        run: ./bin/check-readme-gem-lines --self-test
+
+      - name: Every `gem "kiosk-*"` line in a shipped README resolves
+        run: ./bin/check-readme-gem-lines
+
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. The solver-path constant in equihash_register.rb (then at lib/, now

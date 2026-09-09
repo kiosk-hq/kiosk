@@ -40,8 +40,8 @@ for the DSL and for the role posture (`app_role`, `system_role`,
 
 ```ruby
 group :test do
-  gem "kiosk-rls-rspec"     # if you use RSpec
-  # gem "kiosk-rls-minitest" # if you use Minitest
+  gem "kiosk-rls-rspec", github: "kiosk-hq/kiosk"     # if you use RSpec
+  # gem "kiosk-rls-minitest", github: "kiosk-hq/kiosk" # if you use Minitest
 end
 ```
 

@@ -1,0 +1,206 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-readme-gem-lines -- an install snippet in a shipped README resolves, or
+# it is not a snippet (K-1427).
+#
+# WHY THIS EXISTS. These gems are not on RubyGems. Every gem README therefore
+# carries a banner over its install block saying that every `gem` line below
+# carries `github: "kiosk-hq/kiosk"`, which is the only thing that makes a
+# copied line resolvable today. That sentence WAS FALSE ON TWELVE OF FIFTEEN
+# LINES when it was written, and it stayed false on five more after the wave
+# that repaired it -- including in `kiosk-rls-rspec/README.md`, where the
+# banner sat three lines above the single bare `gem "kiosk-rls-rspec"` it
+# describes. Nothing held either half: the qualifier's removal was planted on
+# five other guards in this repository and every one of them stayed green.
+#
+# The failure is silent for us and loud for the reader. `bundle install` on a
+# copied bare line ends in "Could not find gem 'kiosk-rls-rspec'" -- an
+# adopter's first contact with this project, on the one snippet whose entire
+# job is to be pasted. Nothing inside this monorepo can notice, because every
+# consumer here resolves these gems with `path:`.
+#
+# WHAT IT CHECKS, over `git ls-files` in the repository it lives in -- what
+# ships is what git carries:
+#
+#   GEM      Every line in a tracked README.md that declares a dependency on a
+#            gem of this project -- `gem "kiosk-…"`, whether live or commented
+#            out inside the snippet -- must carry the source qualifier
+#            `github: "kiosk-hq/kiosk"`. A commented line is in scope because a
+#            reader uncomments it: that is what it is there for.
+#
+#   BANNER   A README whose install banner PROMISES the qualifier must have at
+#            least one such line. A promise about a block that is not there is
+#            the same defect from the other end.
+#
+#   VACUITY  The GEM pattern must match at least one live line somewhere in
+#            this repository. A rule whose subject has vanished is a rule that
+#            reads as coverage and holds nothing -- the failure this workspace
+#            has measured repeatedly -- so a clean tree with no matches at all
+#            is RED, not green.
+#
+# The qualifier is deliberately spelled ONE way. `github:` with any other
+# repository, a `git:`/`branch:` pair, or a `path:` is refused: an install
+# snippet in a published README may only point at the published repository.
+#
+#   bin/check-readme-gem-lines               # check this repository
+#   bin/check-readme-gem-lines --self-test   # prove it is red on a plant
+
+require "open3"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+
+# A dependency line on one of THIS project's gems, live or commented out.
+GEM_LINE  = /^\s*(?:#\s*)?gem\s+"(kiosk[a-z0-9_-]*)"/
+QUALIFIER = 'github: "kiosk-hq/kiosk"'
+# The banner sentence that promises it. Matched on its distinctive clause
+# rather than in full, so re-wording the rest of the sentence does not silently
+# switch the BANNER arm off.
+BANNER    = /every `gem` line below carries `github: "kiosk-hq\/kiosk"`/
+
+def tracked_readmes(root)
+  out, status = Open3.capture2("git", "-C", root, "ls-files", "-z", "*README.md", "README.md")
+  raise "git ls-files failed in #{root}" unless status.success?
+
+  out.split("\0").reject(&:empty?).uniq.sort
+end
+
+# @return [Array(Array<String>, Integer, Integer)] failures, gem lines seen,
+#   banners seen
+def scan(root)
+  failures  = []
+  gem_lines = 0
+  banners   = 0
+
+  tracked_readmes(root).each do |rel|
+    abs = File.join(root, rel)
+    next unless File.file?(abs)
+
+    body      = File.read(abs, encoding: "UTF-8")
+    has_banner = body.match?(BANNER)
+    banners   += 1 if has_banner
+    in_block   = false
+
+    body.each_line.with_index(1) do |line, no|
+      next unless line.match?(GEM_LINE)
+
+      gem_lines += 1
+      in_block   = true
+      next if line.include?(QUALIFIER)
+
+      failures << "GEM  #{rel}:#{no}  `gem \"#{line[GEM_LINE, 1]}\"` carries no " \
+                  "#{QUALIFIER} -- a reader who copies it gets an unresolvable Gemfile"
+    end
+
+    next unless has_banner && !in_block
+
+    failures << "BANNER  #{rel}  promises that every `gem` line below carries " \
+                "#{QUALIFIER}, and there is no such line in the file"
+  end
+
+  [failures, gem_lines, banners]
+end
+
+def run_check(root: ROOT, quiet: false)
+  failures, gem_lines, banners = scan(root)
+
+  if gem_lines.zero?
+    warn "check-readme-gem-lines: VACUOUS -- no `gem \"kiosk-*\"` line in any tracked " \
+         "README of #{root}. Either the install snippets are gone or the pattern stopped " \
+         "matching them; a rule with no subject holds nothing."
+    return 1
+  end
+
+  unless failures.empty?
+    warn "check-readme-gem-lines: FAIL"
+    failures.each { |f| warn "  #{f}" }
+    return 1
+  end
+
+  unless quiet
+    puts "check-readme-gem-lines OK -- #{gem_lines} `gem \"kiosk-*\"` line(s) across the " \
+         "tracked READMEs all carry #{QUALIFIER}; #{banners} install banner(s) promise it " \
+         "and each has a block."
+  end
+  0
+end
+
+# ── self-test ────────────────────────────────────────────────────────────────
+
+def fixture_repo(dir)
+  system("git", "-C", dir, "init", "--quiet", exception: true)
+  system("git", "-C", dir, "config", "user.email", "self-test@example.invalid", exception: true)
+  system("git", "-C", dir, "config", "user.name", "self test", exception: true)
+end
+
+def write_readme(dir, rel, body)
+  path = File.join(dir, rel)
+  FileUtils.mkdir_p(File.dirname(path))
+  File.write(path, body)
+  system("git", "-C", dir, "add", rel, exception: true)
+end
+
+BANNER_LINE = "> **Not on RubyGems yet** -- so every `gem` line below carries " \
+              "`github: \"kiosk-hq/kiosk\"`, which is what makes it copy-pasteable today.\n"
+
+CLEAN_README = "# demo\n\n#{BANNER_LINE}\n```ruby\ngem \"kiosk-server\", github: \"kiosk-hq/kiosk\"\n" \
+               "# gem \"kiosk-pow\", github: \"kiosk-hq/kiosk\"\n```\n"
+
+def run_self_test
+  require "fileutils"
+  cases = [
+    ["a clean fixture is green", CLEAN_README, 0],
+    ["a bare live gem line is red",
+     "# demo\n\n#{BANNER_LINE}\n```ruby\ngem \"kiosk-server\"\n```\n", 1],
+    ["a bare COMMENTED gem line is red",
+     "# demo\n\n#{BANNER_LINE}\n```ruby\ngem \"kiosk-server\", github: \"kiosk-hq/kiosk\"\n" \
+     "# gem \"kiosk-pow\"\n```\n", 1],
+    ["another repository in the qualifier is red",
+     "# demo\n\n#{BANNER_LINE}\n```ruby\ngem \"kiosk-server\", github: \"someone-else/kiosk\"\n```\n", 1],
+    ["a path: source is red",
+     "# demo\n\n#{BANNER_LINE}\n```ruby\ngem \"kiosk-server\", path: \"../kiosk-server\"\n```\n", 1],
+    ["a banner with no block at all is red",
+     "# demo\n\n#{BANNER_LINE}\nNothing to install here.\n", 1],
+    ["a README with no gem line and no banner is VACUOUS, not green",
+     "# demo\n\nProse only.\n", 1],
+  ]
+
+  failures = []
+  cases.each do |(name, body, want)|
+    Dir.mktmpdir("check-readme-gem-lines-selftest") do |dir|
+      fixture_repo(dir)
+      write_readme(dir, "kiosk-server/README.md", body)
+      got = run_check(root: dir, quiet: true)
+      failures << "#{name}: expected exit #{want}, got #{got}" unless got == want
+    end
+  end
+
+  # And the live tree must be green, or the arms above prove nothing about it.
+  live = run_check(quiet: true)
+  failures << "the live repository is not green (exit #{live})" unless live.zero?
+
+  if failures.empty?
+    puts "check-readme-gem-lines --self-test: OK -- #{cases.size} planted arm(s) behaved, " \
+         "and the live tree is green."
+    return 0
+  end
+
+  warn "check-readme-gem-lines --self-test: FAIL"
+  failures.each { |f| warn "  #{f}" }
+  1
+end
+
+# ── entry point ──────────────────────────────────────────────────────────────
+
+require "fileutils"
+
+exit(
+  case ARGV[0]
+  when nil          then run_check
+  when "--self-test" then run_self_test
+  else
+    warn "usage: check-readme-gem-lines [--self-test]"
+    2
+  end,
+)

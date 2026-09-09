@@ -16,7 +16,7 @@ Wires the framework-agnostic journey-test DSL (`kiosk-test-support`) into RSpec.
 
 ```ruby
 group :test do
-  gem "kiosk-rls-rspec"
+  gem "kiosk-rls-rspec", github: "kiosk-hq/kiosk"
 end
 ```
 

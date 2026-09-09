@@ -416,7 +416,7 @@ end
 ```ruby
 gem "kiosk-reputation",   github: "kiosk-hq/kiosk"
 gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"   # default backend
-# gem "kiosk-pow"         # legacy Argon2id backend, if you specifically want it
+# gem "kiosk-pow",        github: "kiosk-hq/kiosk"   # legacy Argon2id backend, if you specifically want it
 ```
 
 ```ruby

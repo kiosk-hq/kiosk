@@ -12,9 +12,9 @@ You normally don't install this gem directly — install one of the harnesses:
 
 ```ruby
 group :test do
-  gem "kiosk-rls-rspec"       # RSpec
+  gem "kiosk-rls-rspec", github: "kiosk-hq/kiosk"       # RSpec
   # or
-  gem "kiosk-rls-minitest"    # Minitest
+  gem "kiosk-rls-minitest", github: "kiosk-hq/kiosk"    # Minitest
 end
 ```
 

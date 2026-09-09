@@ -38,9 +38,9 @@ and verification numbers above give ~40× at **n=96, k=5** (~0.2 s solve ÷
 ~4.6 ms verify) — an order of magnitude below the default's ~530×, because a
 lighter `n` cuts the solve far faster than a smaller `k` cuts the verify. That
 is not trivia here: `low` IS n=96 k=5, it is what
-<!-- count: 7 ¦ from: git ls-files 'kiosk-demo-*/app/services/pow_difficulty.rb' | wc -l -->
+<!-- count: 7 ¦ from: git grep -l 'Kiosk::Pow::Equihash::Difficulty' -- 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l -->
 all but one of the seven hosted demos ship and what `e2e/` is hardcoded at
-(`kiosk-demo-*/app/services/pow_difficulty.rb`), so the toll a first-time poker
+(each demo's initializer reads `Difficulty.params`), so the toll a first-time poker
 meets buys ~40×, not ~530×. Both levers are derived from this README's own
 numbers by `spec/readme_lever_spec.rb`, which fails if either operand moves
 without its lever.

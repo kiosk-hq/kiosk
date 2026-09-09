@@ -35,8 +35,8 @@ ceiling; 192/7 (the old default) is ~155 s and ~5.4 GiB — unusable on a laptop
 
 The grid above is a k=7 sweep, because its job was to pick the gem's default.
 It is not the level most deployed origins run. `KIOSK_POW_DIFFICULTY=low` maps
-to **n=96, k=5** (`kiosk-demo-*/app/services/pow_difficulty.rb`), all but one of
-<!-- count: 7 ¦ from: git ls-files 'kiosk-demo-*/app/services/pow_difficulty.rb' | wc -l -->
+to **n=96, k=5** (`Kiosk::Pow::Equihash::Difficulty`), all but one of
+<!-- count: 7 ¦ from: git grep -l 'Kiosk::Pow::Equihash::Difficulty' -- 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l -->
 the seven hosted demos ship `low`, and `e2e/` is hardcoded there — so 96/5 is
 the toll a first-time poker meets, and until now it appeared in no measured grid
 at all. Same machine, same tool, same 5 samples:

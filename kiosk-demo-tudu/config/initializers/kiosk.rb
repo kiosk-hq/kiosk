@@ -19,12 +19,12 @@ require "kiosk/user_identity_providers/devise"
 # Registration PoW gate — ALWAYS ON. With no payment gate, the registration PoW
 # toll is what defends a FREE app against spam signups — the same feature the
 # commerce demos price fresh-identity minting with. There is no env flag to
-# forget. Params follow KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
+# forget. Params follow KIOSK_POW_DIFFICULTY (Kiosk::Pow::Equihash::Difficulty):
 # low (default) → n=96 k=5, sub-second; high → n=168 k=7, ~1.3 GiB and ~10s on
 # the reference numpy solver. The prerequisites below MUST run unconditionally,
 # else RegistrationPow.gate raises ConfigurationError at register.
-TUDU_REGISTRATION_POW_PARAMS = PowDifficulty.params
 require "kiosk/pow/equihash"
+TUDU_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
@@ -86,8 +86,8 @@ Kiosk.configure do |c|
   # here so an agent/reader sees the toll BEFORE it dials register (only shown
   # at high; tudu ships low so it is normally absent).
   c.owner  = { name: "tudu (Kiosk demo)", support: "demo@kiosk.tech" }
-  if (notice = PowDifficulty.pow_notice)
-    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  if (notice = Kiosk::Pow::Equihash::Difficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: Kiosk::Pow::Equihash::Difficulty.level, pow_notice: notice)
   end
   # Pin the universal skill (immutable versioned file on kiosk.tech), like the
   # sibling demos — the skill-pin guard validates this against the real file.

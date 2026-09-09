@@ -99,6 +99,12 @@ module Kiosk
       #
       #   Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, payload)
       #
+      # {Kiosk::Pow::Equihash.solve} in `equihash/solver.rb` is that line
+      # written once, with the error handling; require it when you want it.
+      # It is a SEPARATE file on purpose — a provider loads this verifier on an
+      # unauthenticated register, and nothing it loads there should be able to
+      # spawn a process at all.
+      #
       # This method only names the file; RUNNING it needs python3 + numpy
       # (see README, "Solver (Python + numpy)").
       #
@@ -442,3 +448,10 @@ module Kiosk
     end
   end
 end
+
+# The operator-facing difficulty knob. Required last: it reads DEFAULT_N and
+# DEFAULT_K off the module above so the heavy level cannot drift from the
+# shipped default. It is ENV-only, so loading it costs a provider nothing.
+#
+# `equihash/solver.rb` is deliberately NOT required here — see solver_path.
+require_relative "equihash/difficulty"

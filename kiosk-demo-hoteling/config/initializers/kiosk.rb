@@ -24,9 +24,10 @@ require "kiosk/user_identity_providers/devise"
 #
 # The rate is tracked per agent IN-PROCESS — demo only; a real provider needs a
 # shared counter or sliding window. Params follow KIOSK_POW_DIFFICULTY
-# (app/services/pow_difficulty.rb): low (default) → n=96 k=5, sub-second;
+# (Kiosk::Pow::Equihash::Difficulty): low (default) → n=96 k=5, sub-second;
 # high → n=168 k=7, ~1.3 GiB and ~10s on the reference numpy solver.
-EQUIHASH_BROWSE_PARAMS = PowDifficulty.params
+require "kiosk/pow/equihash"
+EQUIHASH_BROWSE_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
 HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier
 HOTELING_MAX_PROOFS    = 5
@@ -40,8 +41,7 @@ HOTELING_WRITE_PROOFS  = 1    # flat toll on an action (`:run`) — a hold, not 
 # forget. The require + Backends.register below run UNCONDITIONALLY (both
 # idempotent) so the gate works regardless of KIOSK_POW_BROWSE_DEMO — else
 # RegistrationPow.gate raises ConfigurationError at register.
-HOTELING_REGISTRATION_POW_PARAMS = PowDifficulty.params
-require "kiosk/pow/equihash"
+HOTELING_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
@@ -139,8 +139,8 @@ Kiosk.configure do |c|
   # "beware: intensive PoW" notice appears only when KIOSK_POW_DIFFICULTY=high
   # (hoteling ships low, so normally absent).
   c.owner  = { name: "hoteling", support: "demo@kiosk.tech" }
-  if (notice = PowDifficulty.pow_notice)
-    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  if (notice = Kiosk::Pow::Equihash::Difficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: Kiosk::Pow::Equihash::Difficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.4.12.md"

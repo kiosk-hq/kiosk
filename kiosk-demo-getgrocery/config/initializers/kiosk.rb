@@ -29,10 +29,11 @@ require "kiosk/user_identity_providers/devise"
 #
 # A grocery provider can toll the `catalog` query to price anonymous browsing —
 # a metered toll, not a wall. run/pay are never gated. Params follow
-# KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb): low (default) →
+# KIOSK_POW_DIFFICULTY (Kiosk::Pow::Equihash::Difficulty): low (default) →
 # n=96 k=5, sub-second; high → n=168 k=7, ~1.3 GiB and ~10s on the reference
 # numpy solver.
-EQUIHASH_DEMO_PARAMS = PowDifficulty.params
+require "kiosk/pow/equihash"
+EQUIHASH_DEMO_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 
 # ── Registration PoW gate — ALWAYS ON ───────────────────────────────────────
 #
@@ -41,8 +42,7 @@ EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 # the catalog-toll gate above, and there is no env flag to forget. The require +
 # Backends.register below run UNCONDITIONALLY (both idempotent) so the gate works
 # regardless of KIOSK_POW_DEMO — else RegistrationPow.gate raises at register.
-GETGROCERY_REGISTRATION_POW_PARAMS = PowDifficulty.params
-require "kiosk/pow/equihash"
+GETGROCERY_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
@@ -137,8 +137,8 @@ Kiosk.configure do |c|
   # "beware: intensive PoW" notice appears only when KIOSK_POW_DIFFICULTY=high
   # (getgrocery ships low, so normally absent).
   c.owner  = { name: "GetGrocery", support: "demo@kiosk.tech" }
-  if (notice = PowDifficulty.pow_notice)
-    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  if (notice = Kiosk::Pow::Equihash::Difficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: Kiosk::Pow::Equihash::Difficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.4.12.md"

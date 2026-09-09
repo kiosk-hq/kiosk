@@ -314,18 +314,17 @@ namespace :demo do
     # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
     #
     # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
-    # this repo, and it runs at `PowDifficulty`'s `low` default while the
+    # this repo, and it runs at `Kiosk::Pow::Equihash::Difficulty`'s `low` default while the
     # shipped kiosk-pow-equihash default — and the hosted deploy — are n=168
     # k=7, so a reader watching this task must be told which of the two they
     # are seeing.
     #
     # So: the ambient `KIOSK_POW_DIFFICULTY` is FORWARDED to the server this
-    # task spawns, and the pair is read off {PowDifficulty} — the same module
+    # task spawns, and the pair is read off {Kiosk::Pow::Equihash::Difficulty} — the same module
     # the initializer reads — rather than typed here, then printed at boot and
     # beside the verdict.
-    require File.expand_path("../../app/services/pow_difficulty.rb", __dir__)
-    pow_level  = PowDifficulty.level
-    pow_params = PowDifficulty.params
+    pow_level  = Kiosk::Pow::Equihash::Difficulty.level
+    pow_params = Kiosk::Pow::Equihash::Difficulty.params
 
     require "resolv"
 
@@ -355,8 +354,8 @@ namespace :demo do
 
     puts "\n── Starting atablefor (PoW demo) on #{server_url} ──"
     puts "  toll: Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
-         "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == PowDifficulty::DEFAULT ? ", the default" : ""})"
-    if PowDifficulty.high?
+         "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == Kiosk::Pow::Equihash::Difficulty::DEFAULT ? ", the default" : ""})"
+    if Kiosk::Pow::Equihash::Difficulty.high?
       puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
            "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
            "GiB is its table, not a floor these params impose on every solver. " \
@@ -442,7 +441,7 @@ namespace :demo do
     served_params = result["challenge_params"].is_a?(Hash) ? result["challenge_params"] : {}
     if served_params["n"].to_i == pow_params[:n] && served_params["k"].to_i == pow_params[:k]
       puts "  ✓  toll served at the level asked for: n=#{served_params["n"]} k=#{served_params["k"]}" \
-           "#{PowDifficulty.high? ? " — the SHIPPED parameters" : " (toy; KIOSK_POW_DIFFICULTY=high for n=168 k=7)"}"
+           "#{Kiosk::Pow::Equihash::Difficulty.high? ? " — the SHIPPED parameters" : " (toy; KIOSK_POW_DIFFICULTY=high for n=168 k=7)"}"
     else
       failures << "the wire served n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}, " \
                   "but KIOSK_POW_DIFFICULTY=#{pow_level} asks for n=#{pow_params[:n]} k=#{pow_params[:k]}"
@@ -512,7 +511,7 @@ namespace :demo do
     if failures.empty?
       puts "\n  All PoW assertions passed at Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
            "(KIOSK_POW_DIFFICULTY=#{pow_level})."
-      unless PowDifficulty.high?
+      unless Kiosk::Pow::Equihash::Difficulty.high?
         puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow` " \
              "runs the same flow at the shipped n=168 k=7."
       end

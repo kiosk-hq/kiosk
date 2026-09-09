@@ -28,14 +28,14 @@ end
 Kiosk::Configuration.include(SkootiUnlockSigningKey)
 
 # Registration PoW gate — a metered Equihash toll, tuned per provider. Params
-# follow KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb): low (default) →
+# follow KIOSK_POW_DIFFICULTY (Kiosk::Pow::Equihash::Difficulty): low (default) →
 # n=96 k=5, sub-second; high → n=168 k=7, ~1.3 GiB and ~10s on the reference
 # numpy solver, so a poker on the hosted deploy feels the toll first-hand.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 require "kiosk/user_identity_providers/devise"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-SKOOTI_REGISTRATION_POW_PARAMS = PowDifficulty.params
+SKOOTI_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 
 # ── PoW HMAC secret — the key the engine signs every challenge with ─────────
 # Required in production, stable non-secret default in dev/test; posture in
@@ -133,8 +133,8 @@ Kiosk.configure do |c|
   # here so an agent/reader sees the toll BEFORE it dials register (the 402
   # challenge params say the same, this is the up-front discovery signal).
   c.owner  = { name: "skooti", support: "demo@kiosk.tech" }
-  if (notice = PowDifficulty.pow_notice)
-    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  if (notice = Kiosk::Pow::Equihash::Difficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: Kiosk::Pow::Equihash::Difficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.4.12.md"

@@ -23,7 +23,7 @@ require "kiosk/user_identity_providers/devise"
 # that mass-claim prime-time 2-tops to resell. PoW prices that at the door —
 # a metered toll per query, tuned per provider, not a hardware wall.
 #
-# KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb) picks the params; both
+# KIOSK_POW_DIFFICULTY (Kiosk::Pow::Equihash::Difficulty) picks the params; both
 # the :query toll and the reputation gate inherit the level. Unset = low.
 #   low  (default) → n=96 k=5  — sub-second on the reference solver; CI stays fast.
 #   high           → n=168 k=7 — ~1.3 GiB and ~10s on the reference numpy solver
@@ -32,7 +32,8 @@ require "kiosk/user_identity_providers/devise"
 #                    memory-optimised solver trades it for time.
 # The hosted atablefor deploy pins high (deploy/env/atablefor.env.example) so a
 # scalper feels the real toll; see the "beware" banner on the demo root page.
-EQUIHASH_DEMO_PARAMS = PowDifficulty.params
+require "kiosk/pow/equihash"
+EQUIHASH_DEMO_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 
 # ── Registration PoW gate — ALWAYS ON ───────────────────────────────────────
 #
@@ -44,8 +45,7 @@ EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 # The require + Backends.register below must run UNCONDITIONALLY, outside any
 # mode branch, or RegistrationPow.gate raises ConfigurationError at register.
 # Both are idempotent.
-ATABLEFOR_REGISTRATION_POW_PARAMS = PowDifficulty.params
-require "kiosk/pow/equihash"
+ATABLEFOR_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
@@ -189,8 +189,8 @@ Kiosk.configure do |c|
   # KIOSK_POW_DIFFICULTY=high it also carries a "beware: intensive PoW" notice,
   # so a reader sees the toll before the 402 does.
   c.owner  = { name: "atablefor", support: "demo@kiosk.tech" }
-  if (notice = PowDifficulty.pow_notice)
-    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  if (notice = Kiosk::Pow::Equihash::Difficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: Kiosk::Pow::Equihash::Difficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.4.12.md"

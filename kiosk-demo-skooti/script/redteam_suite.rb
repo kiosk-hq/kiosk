@@ -3,7 +3,7 @@
 # skooti redteam battery
 #
 # Exercises the full skooti chain: Equihash PoW (params from KIOSK_POW_DIFFICULTY,
-# resolved in app/services/pow_difficulty.rb; the run header prints the live pair
+# resolved in Kiosk::Pow::Equihash::Difficulty; the run header prints the live pair
 # rather than this comment naming one) → reserve → pay →
 # start_rental (ownership/licence-free-vehicle/payment gates; licence-free
 # scooters are NOT KYC-gated).  Headline scenarios:
@@ -96,10 +96,10 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require_relative "prove_test_issuer"
 require_relative "../app/services/prove_trust"
 # The Equihash params printed in the run header below are READ from the same
-# plain module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`,
-# config/initializers/kiosk.rb:45), never typed. Loadable outside a Rails boot for
-# exactly the reason ProveTrust is: it is ENV-only, with no Rails dependency.
-require_relative "../app/services/pow_difficulty"
+# module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`,
+# config/initializers/kiosk.rb:45), never typed. It ships in kiosk-pow-equihash
+# and is ENV-only, so it loads outside a Rails boot exactly as ProveTrust does.
+require "kiosk/pow/equihash"
 
 BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")
 ISSUER     = ENV.fetch("KIOSK_ISSUER", BASE_URL)
@@ -359,7 +359,7 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
 end
 
 # A malformed reservation_id must come back as a TYPED 400, never a 500.
-# Three surfaces, one guard (UuidCheck): start_rental's and
+# Three surfaces, one guard (Kiosk::UuidCheck): start_rental's and
 # rent_motorcycle's `reservation_id` args, and the `{"reservation_id":…}`
 # reference inside a signed cart mandate that the cashier prices at capture.
 # Without the guard Postgres raises InvalidTextRepresentation on the `::uuid`
@@ -375,7 +375,7 @@ end
 #
 # The arg-shaped probes are refused by the declared contract — `reservation_id`
 # declares `format: "uuid"` and `input_schema` is validated on every call —
-# rather than by UuidCheck inside the handler. Same status, same code, same
+# rather than by Kiosk::UuidCheck inside the handler. Same status, same code, same
 # no-leak property; the guard behind it still stands for anything that reaches
 # it (the signed-cart probe below, which no input_schema covers).
 #
@@ -489,7 +489,7 @@ end
 #
 # Postgres does free shape-checking on wire arguments and ActiveRecord does not
 # — and skooti is the demo where that measures NEGATIVE: its only cast argument,
-# `reservation_id`, is uuid-guarded by {UuidCheck} (which {MalformedUuidArg}
+# `reservation_id`, is uuid-guarded by {Kiosk::UuidCheck} (which {MalformedUuidArg}
 # stands for), and its other two wire strings — `scooter_code`, `request_id` —
 # are quoted values with no Postgres cast at all. That negative is why this beat
 # is SHORT and why it exists anyway: "we reasoned there is no exposure here" is
@@ -675,7 +675,7 @@ puts "  base_url:              #{BASE_URL}"
 # something the run already holds, so a flipped constructor argument or a changed
 # env leaves the header announcing one world while the battery attacks another.
 # What each half reads:
-#   • n / k — `PowDifficulty.params`, the SAME plain module the server initializer
+#   • n / k — `Kiosk::Pow::Equihash::Difficulty.params`, the SAME plain module the server initializer
 #     reads into `c.registration_pow_params` (config/initializers/kiosk.rb:45), so
 #     KIOSK_POW_DIFFICULTY=high moves the /register gate and this line together
 #     instead of leaving the line claiming one level's pair against a server
@@ -688,7 +688,7 @@ puts "  base_url:              #{BASE_URL}"
 #   • pow_difficulty / requires_kyc — the `profile` object itself, i.e. the values
 #     every generic scenario reads to decide whether it is applicable
 #     (RegistrationWithoutPow skips on 0; the KYC trio skips on false).
-pow_params = PowDifficulty.params
+pow_params = Kiosk::Pow::Equihash::Difficulty.params
 puts "  register gate:         Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
      "(profile pow_difficulty: #{profile.pow_difficulty} → RegistrationWithoutPow " \
      "#{profile.pow_difficulty > 0 ? %(applicable) : %(SKIPPED)})"

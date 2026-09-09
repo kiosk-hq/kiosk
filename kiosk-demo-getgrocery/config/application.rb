@@ -32,8 +32,8 @@ module KioskDemoGetgrocery
     config.autoload_lib(ignore: %w[assets tasks])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to
-    # `Kiosk.configure` at boot — the IdP adapters and the PoW-difficulty
-    # policy. Rails sets the RELOADABLE autoloader up in its
+    # `Kiosk.configure` at boot — the provider adapters and the demo stubs
+    # behind them. Rails sets the RELOADABLE autoloader up in its
     # `finisher`, i.e. AFTER config/initializers have run, so a constant in a
     # normal autoload path is simply not resolvable from an initializer; that,
     # not "lib/ is not autoloaded", is what the hand-written

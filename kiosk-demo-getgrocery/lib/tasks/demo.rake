@@ -1060,7 +1060,7 @@ namespace :demo do
     # describe it in prose. Since 0.4 the declaration is also ENFORCED:
     # `input_schema` is validated on every call, unconditionally, so the pattern
     # asserted below is what refuses a malformed order_id at the wire.
-    # `UuidCheck` in the handler remains the floor for the values the pattern
+    # `Kiosk::UuidCheck` in the handler remains the floor for the values the pattern
     # admits — demo:race pins that side, in-process. Asserted by BEHAVIOUR, not
     # by string equality: the published pattern must accept the ids create_order
     # hands out and reject the junk that would otherwise reach a `::uuid` cast.
@@ -1461,15 +1461,14 @@ namespace :demo do
     # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
     #
     # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
-    # this repo, and it runs at `PowDifficulty`'s `low` default while the
+    # this repo, and it runs at `Kiosk::Pow::Equihash::Difficulty`'s `low` default while the
     # shipped kiosk-pow-equihash default is n=168 k=7, so a reader watching
     # this task must be told which of the two they are seeing. The ambient
     # `KIOSK_POW_DIFFICULTY` is FORWARDED to the server this task spawns, and
-    # the pair is read off {PowDifficulty} — the same module the initializer
+    # the pair is read off {Kiosk::Pow::Equihash::Difficulty} — the same module the initializer
     # reads — rather than typed here.
-    require File.expand_path("../../app/services/pow_difficulty.rb", __dir__)
-    pow_level  = PowDifficulty.level
-    pow_params = PowDifficulty.params
+    pow_level  = Kiosk::Pow::Equihash::Difficulty.level
+    pow_params = Kiosk::Pow::Equihash::Difficulty.params
 
     # The catalog-toll flow never pays; default a dummy Stripe test key so the
     # initializer boots (setup + server) without a real key or stripe-mock.
@@ -1541,8 +1540,8 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url} (catalog PoW active)"
       puts "  toll: Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
-           "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == PowDifficulty::DEFAULT ? ", the default" : ""})"
-      if PowDifficulty.high?
+           "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == Kiosk::Pow::Equihash::Difficulty::DEFAULT ? ", the default" : ""})"
+      if Kiosk::Pow::Equihash::Difficulty.high?
         puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
              "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
              "GiB is its table, not a floor these params impose on every solver. " \
@@ -1606,7 +1605,7 @@ namespace :demo do
     if failures.empty?
       puts "\n  All catalog PoW assertions PASSED at Equihash n=#{pow_params[:n]} " \
            "k=#{pow_params[:k]} (KIOSK_POW_DIFFICULTY=#{pow_level})."
-      unless PowDifficulty.high?
+      unless Kiosk::Pow::Equihash::Difficulty.high?
         puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow` " \
              "runs the same flow at the shipped n=168 k=7."
       end

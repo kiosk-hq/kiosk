@@ -57,18 +57,18 @@
 #   ALICE_EMAIL=alice@example.com BOB_EMAIL=bob@example.com \
 #   DEMO_PASSWORD=… bundle exec ruby script/redteam_suite.rb
 #
-# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH.
+# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
+# on a battery that produced no proofs at all; exits 2 when a beat could not be
+# exercised and was not expected to skip.
 # A BREACH = a real hole in philslist — fix the app, not the scenario.
 
 require "json"
-require "net/http"
 require "securerandom"
-require "uri"
 
-# The shared harness. Required HERE rather than beside the one framework beat
-# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
-# assertion in this file now asks — is needed from the first hostile-input beat
-# onwards.
+# The shared harness: the wire this battery attacks over, the ledger it files
+# its verdicts into, the leak oracle its hostile-input beats ask, and the one
+# library beat further down. Everything in this file that is not about
+# philslist is the gem's.
 require "kiosk/redteam"
 
 require_relative "bound_assistant"
@@ -87,30 +87,12 @@ PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.
-def post_json(path, body, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
-def get_json(path, params = {}, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  req = Net::HTTP::Get.new(uri, headers)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def bearer(token) = { "Authorization" => "Bearer #{token}" }
-
-results = []
-def record(results, name, blocked, detail)
-  results << { name: name, blocked: blocked, detail: detail }
-  tag = blocked ? "BLOCKED" : "BREACH "
-  puts "  #{tag}  #{name} — #{detail}"
-end
+# One ledger for every beat below — the hand-written ones about philslist's own
+# verbs and the library one about the ceremony every origin serves — printed in
+# one vocabulary and answered by one exit status.
+BATTERY = Kiosk::Redteam::Battery.new
 
 # ── Fixture: two principals, each EARNED through the shipped ceremony ─────────
 ALICE = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: PASSWORD)
@@ -119,20 +101,20 @@ abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no bound
   if ALICE.user_id == BOB.user_id
 
 # ── Fixture: Alice posts a listing (target for cross-owner probes) ────────────
-rc, alice_post = post_json("/kiosk/post_listing",
-                           { category_slug: "furniture",
-                             title: "Redteam target", body: "Alice's listing" },
-                           ALICE.bearer)
+rc, alice_post = WIRE.post_json("/kiosk/post_listing",
+                                { category_slug: "furniture",
+                                  title: "Redteam target", body: "Alice's listing" },
+                                ALICE.bearer)
 abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)} — run rake demo:setup" unless rc == 200
 alice_listing_id = alice_post["listing_id"]
 abort "no listing_id from A's post: #{JSON.generate(alice_post)}" unless alice_listing_id
 
 # ── CrossTenantRead — Bob must not see Alice's listing in my_listings ─────────
-rc, b_mine = get_json("/kiosk/my_listings", {}, BOB.bearer)
+rc, b_mine = WIRE.get_json("/kiosk/my_listings", {}, BOB.bearer)
 b_ids = Array(b_mine).map { |r| r["listing_id"] }
-record(results, "CrossTenantRead",
-       rc == 200 && !b_ids.include?(alice_listing_id),
-       "Bob's my_listings #{b_ids.inspect} excludes Alice's #{alice_listing_id}")
+BATTERY.record("CrossTenantRead",
+               rc == 200 && !b_ids.include?(alice_listing_id),
+               "Bob's my_listings #{b_ids.inspect} excludes Alice's #{alice_listing_id}")
 
 # ── ForgedUserId — Bob posts with a forged owner_id (Alice's) ────────────────
 #
@@ -145,36 +127,36 @@ record(results, "CrossTenantRead",
 # the forgery is REFUSED before the handler runs, with a typed 400 naming the
 # offending parameter. Both halves are asserted: the wire refuses it, AND
 # nothing belonging to Bob appears under Alice.
-rc, forged = post_json("/kiosk/post_listing",
-                       { category_slug: "free",
-                         title: "Forged", body: "should be Bob's", owner_id: ALICE.user_id },
-                       BOB.bearer)
+rc, forged = WIRE.post_json("/kiosk/post_listing",
+                            { category_slug: "free",
+                              title: "Forged", body: "should be Bob's", owner_id: ALICE.user_id },
+                            BOB.bearer)
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("owner_id")
 
 # And the principal really does come from the token, not from anything the
 # caller sent: Bob's LEGITIMATE listing lands under Bob and never under Alice.
-rc_b, bobs = post_json("/kiosk/post_listing",
-                       { category_slug: "free", title: "Bob's own", body: "belongs to Bob" },
-                       BOB.bearer)
+rc_b, bobs = WIRE.post_json("/kiosk/post_listing",
+                            { category_slug: "free", title: "Bob's own", body: "belongs to Bob" },
+                            BOB.bearer)
 bob_id = bobs["listing_id"]
-rc_a, a_mine = get_json("/kiosk/my_listings", {}, ALICE.bearer)
+rc_a, a_mine = WIRE.get_json("/kiosk/my_listings", {}, ALICE.bearer)
 a_ids = Array(a_mine).map { |r| r["listing_id"] }
-record(results, "ForgedUserId",
-       refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(bob_id),
-       "forged owner_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming owner_id); " \
-       "Alice's list #{a_ids.inspect} excludes Bob's #{bob_id.inspect}")
+BATTERY.record("ForgedUserId",
+               refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(bob_id),
+               "forged owner_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming owner_id); " \
+               "Alice's list #{a_ids.inspect} excludes Bob's #{bob_id.inspect}")
 
 # ── CrossOwnerEdit — Bob edits Alice's listing → 403 ─────────────────────────
-rc, _ = post_json("/kiosk/edit_listing",
-                  { listing_id: alice_listing_id, price_text: "€1" },
-                  BOB.bearer)
-record(results, "CrossOwnerEdit", rc == 403, "Bob edit Alice's listing → #{rc} (want 403)")
+rc, _ = WIRE.post_json("/kiosk/edit_listing",
+                       { listing_id: alice_listing_id, price_text: "€1" },
+                       BOB.bearer)
+BATTERY.record("CrossOwnerEdit", rc == 403, "Bob edit Alice's listing → #{rc} (want 403)")
 
 # ── CrossOwnerClose — Bob closes Alice's listing → 403 ───────────────────────
-rc, _ = post_json("/kiosk/close_listing",
-                  { listing_id: alice_listing_id },
-                  BOB.bearer)
-record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
+rc, _ = WIRE.post_json("/kiosk/close_listing",
+                       { listing_id: alice_listing_id },
+                       BOB.bearer)
+BATTERY.record("CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk listing_id must be a typed 400, never a 500 ────
 # edit_listing and close_listing cast their listing_id `::uuid`. Without the
@@ -199,24 +181,24 @@ SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 uuid_probes = %w[edit_listing close_listing].flat_map do |verb|
   MALFORMED_IDS.map do |junk|
     args     = { listing_id: junk }
-    rc, body = post_json("/kiosk/#{verb}", args, ALICE.bearer)
+    rc, body = WIRE.post_json("/kiosk/#{verb}", args, ALICE.bearer)
     scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
     ok = rc == 400 && body["code"] == "bad_request" && !scan.leak?
     [ok, "#{verb}(#{junk.inspect})→#{rc}/#{body['code'].inspect}" \
          "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
-record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
-       "malformed listing_id → #{uuid_probes.map(&:last).join(', ')} " \
-       "(want 400/\"bad_request\" and no SQL internals)")
+BATTERY.record("MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
+               "malformed listing_id → #{uuid_probes.map(&:last).join(', ')} " \
+               "(want 400/\"bad_request\" and no SQL internals)")
 
 # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
-rc, _ = get_json("/kiosk/browse_listings")
-record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
+rc, _ = WIRE.get_json("/kiosk/browse_listings")
+BATTERY.record("MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
 
 # ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
-rc, _ = get_json("/kiosk/browse_listings", {}, bearer("not-a-real-token"))
-record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
+rc, _ = WIRE.get_json("/kiosk/browse_listings", {}, WIRE.bearer("not-a-real-token"))
+BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
 #
@@ -243,30 +225,30 @@ record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 # The positive control is what keeps this honest. A suite where every bearer
 # 401s would pass a refusal-only assertion, so the same verbs are called with
 # Alice's REAL bound token and must be ANSWERED.
-forged_bearer = bearer("agent:u-#{ALICE.user_id}:a-#{SecureRandom.uuid}:r-owner")
-rc_forged_read, = get_json("/kiosk/my_listings", {}, forged_bearer)
-rc_forged_write, = post_json("/kiosk/post_listing",
-                             { category_slug: "free", title: "Self-asserted", body: "must never exist" },
-                             forged_bearer)
-rc_real_read,  = get_json("/kiosk/my_listings", {}, ALICE.bearer)
-rc_real_write, = post_json("/kiosk/post_listing",
-                           { category_slug: "free", title: "Really Alice's", body: "bound token" },
-                           ALICE.bearer)
-record(results, "SelfAssertedTokenForgery",
-       rc_forged_read == 401 && rc_forged_write == 401 &&
-         rc_real_read == 200 && rc_real_write == 200,
-       "self-asserted `agent:u-…:a-…:r-owner` naming a real account → read #{rc_forged_read}, " \
-       "write #{rc_forged_write} (want 401/401: it resolves to NO identity, in THIS environment — " \
-       "no env gate involved); CONTROL Alice's genuinely-bound token → read #{rc_real_read}, " \
-       "write #{rc_real_write} (want 200/200, so the refusal is not vacuous)")
+forged_bearer = WIRE.bearer("agent:u-#{ALICE.user_id}:a-#{SecureRandom.uuid}:r-owner")
+rc_forged_read, = WIRE.get_json("/kiosk/my_listings", {}, forged_bearer)
+rc_forged_write, = WIRE.post_json("/kiosk/post_listing",
+                                  { category_slug: "free", title: "Self-asserted", body: "must never exist" },
+                                  forged_bearer)
+rc_real_read,  = WIRE.get_json("/kiosk/my_listings", {}, ALICE.bearer)
+rc_real_write, = WIRE.post_json("/kiosk/post_listing",
+                                { category_slug: "free", title: "Really Alice's", body: "bound token" },
+                                ALICE.bearer)
+BATTERY.record("SelfAssertedTokenForgery",
+               rc_forged_read == 401 && rc_forged_write == 401 &&
+                 rc_real_read == 200 && rc_real_write == 200,
+               "self-asserted `agent:u-…:a-…:r-owner` naming a real account → read #{rc_forged_read}, " \
+               "write #{rc_forged_write} (want 401/401: it resolves to NO identity, in THIS environment — " \
+               "no env gate involved); CONTROL Alice's genuinely-bound token → read #{rc_real_read}, " \
+               "write #{rc_real_write} (want 200/200, so the refusal is not vacuous)")
 
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
-rc, _ = get_json("/kiosk/frobnicate", {}, ALICE.bearer)
-record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
+rc, _ = WIRE.get_json("/kiosk/frobnicate", {}, ALICE.bearer)
+BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 
 # ── UnknownAction — unregistered action name → 404 ───────────────────────────
-rc, _ = post_json("/kiosk/nope", {}, ALICE.bearer)
-record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+rc, _ = WIRE.post_json("/kiosk/nope", {}, ALICE.bearer)
+BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
 # The 0.3 endpoints were a hard cut. `POST /kiosk/query` now reaches the per-verb
@@ -285,30 +267,27 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # NAMES nobody registered, and the vocabulary reserves `not_found` for an
 # argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
-  rc, body = post_json("/kiosk/#{name}", { name: "browse_listings" }, ALICE.bearer)
+  rc, body = WIRE.post_json("/kiosk/#{name}", { name: "browse_listings" }, ALICE.bearer)
   [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
 end
 retired_anon = %w[query run].map do |name|
-  rc, body = post_json("/kiosk/#{name}", { name: "browse_listings" })
+  rc, body = WIRE.post_json("/kiosk/#{name}", { name: "browse_listings" })
   [rc == 401 && body["code"] == "unauthenticated", "#{name}(anon)→#{rc}/#{body['code'].inspect}"]
 end
-record(results, "RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
-       "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
-       "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
+BATTERY.record("RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
+               "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
+               "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
 # The resource EXISTS; answering 404 would be a lie about it, and a caller that
 # read 404 as "this operator cannot do that" would give up on a verb it could
 # have called correctly.
-uri405 = URI("#{SERVER}/kiosk/post_listing")
-res405 = Net::HTTP.new(uri405.host, uri405.port)
-              .request(Net::HTTP::Get.new(uri405, ALICE.bearer))
-body405 = (JSON.parse(res405.body) rescue {})
-record(results, "MethodMismatch",
-       res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
-         res405["allow"].to_s.upcase.include?("POST"),
-       "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
-       "(want 405/\"method_not_allowed\"/POST)")
+res405 = WIRE.request(:get, "/kiosk/post_listing", headers: ALICE.bearer)
+BATTERY.record("MethodMismatch",
+               res405.status == 405 && res405.body["code"] == "method_not_allowed" &&
+                 res405["allow"].to_s.upcase.include?("POST"),
+               "GET an action → #{res405.status}/#{res405.body['code'].inspect} " \
+               "Allow=#{res405['allow'].inspect} (want 405/\"method_not_allowed\"/POST)")
 
 # ── OutOfEnumFilterIsNotSilentlyReinterpreted ────────────────────────────────
 #
@@ -331,17 +310,17 @@ record(results, "MethodMismatch",
 #
 # The positive control is what keeps it honest: a real section must still be
 # ANSWERED (200), or a handler that refused everything would pass.
-rc_bad, bad_status = get_json("/kiosk/browse_listings", { category_slug: "no-such-section" }, ALICE.bearer)
+rc_bad, bad_status = WIRE.get_json("/kiosk/browse_listings", { category_slug: "no-such-section" }, ALICE.bearer)
 detail_bad = bad_status.is_a?(Hash) ? bad_status["detail"].to_s : ""
-rc_ctl, ctl_rows = get_json("/kiosk/browse_listings", { category_slug: "bikes" }, ALICE.bearer)
-record(results, "OutOfEnumFilterIsNotSilentlyReinterpreted",
-       rc_bad == 400 && bad_status["code"] == "bad_request" &&
-         detail_bad.include?("bikes") && detail_bad.include?("housing") &&
-         rc_ctl == 200 && ctl_rows.is_a?(Array),
-       "category_slug=no-such-section → #{rc_bad}/#{bad_status['code'].inspect} " \
-       "detail=#{detail_bad[0, 160].inspect}; " \
-       "CONTROL category_slug=bikes → #{rc_ctl}/#{ctl_rows.is_a?(Array) ? "array" : ctl_rows.class} " \
-       "(want 400 bad_request naming the LIVE categories, and an ANSWERED control)")
+rc_ctl, ctl_rows = WIRE.get_json("/kiosk/browse_listings", { category_slug: "bikes" }, ALICE.bearer)
+BATTERY.record("OutOfEnumFilterIsNotSilentlyReinterpreted",
+               rc_bad == 400 && bad_status["code"] == "bad_request" &&
+                 detail_bad.include?("bikes") && detail_bad.include?("housing") &&
+                 rc_ctl == 200 && ctl_rows.is_a?(Array),
+               "category_slug=no-such-section → #{rc_bad}/#{bad_status['code'].inspect} " \
+               "detail=#{detail_bad[0, 160].inspect}; " \
+               "CONTROL category_slug=bikes → #{rc_ctl}/#{ctl_rows.is_a?(Array) ? "array" : ctl_rows.class} " \
+               "(want 400 bad_request naming the LIVE categories, and an ANSWERED control)")
 
 # ── LikeMetacharactersAreEscaped ─────────────────────────────────────────────
 #
@@ -356,14 +335,14 @@ record(results, "OutOfEnumFilterIsNotSilentlyReinterpreted",
 #
 # The control is a keyword that DOES match, so a handler that returned nothing
 # for everything could not pass.
-_, wild_rows = get_json("/kiosk/browse_listings", { keyword: "b_ke" }, ALICE.bearer)
-rc_lit, lit_rows = get_json("/kiosk/browse_listings", { keyword: "bike" }, ALICE.bearer)
-record(results, "LikeMetacharactersAreEscaped",
-       wild_rows.is_a?(Array) && wild_rows.empty? &&
-         rc_lit == 200 && lit_rows.is_a?(Array) && !lit_rows.empty?,
-       "keyword=b_ke → #{wild_rows.is_a?(Array) ? "#{wild_rows.length} rows" : wild_rows.class}; " \
-       "CONTROL keyword=bike → #{rc_lit}/#{lit_rows.is_a?(Array) ? "#{lit_rows.length} rows" : lit_rows.class} " \
-       "(want 0 rows for the escaped wildcard and a non-empty control)")
+_, wild_rows = WIRE.get_json("/kiosk/browse_listings", { keyword: "b_ke" }, ALICE.bearer)
+rc_lit, lit_rows = WIRE.get_json("/kiosk/browse_listings", { keyword: "bike" }, ALICE.bearer)
+BATTERY.record("LikeMetacharactersAreEscaped",
+               wild_rows.is_a?(Array) && wild_rows.empty? &&
+                 rc_lit == 200 && lit_rows.is_a?(Array) && !lit_rows.empty?,
+               "keyword=b_ke → #{wild_rows.is_a?(Array) ? "#{wild_rows.length} rows" : wild_rows.class}; " \
+               "CONTROL keyword=bike → #{rc_lit}/#{lit_rows.is_a?(Array) ? "#{lit_rows.length} rows" : lit_rows.class} " \
+               "(want 0 rows for the escaped wildcard and a non-empty control)")
 
 # ── NoSellerPiiOnTheOpenBoard ────────────────────────────────────────────────
 #
@@ -392,7 +371,7 @@ record(results, "LikeMetacharactersAreEscaped",
 #      differs from it. That pins the accepted tradeoff (a buyer can tell two
 #      listings are one seller) so a later switch to a per-listing or
 #      per-request value is caught rather than silently shipped.
-rc_board, board_rows = get_json("/kiosk/browse_listings", {}, BOB.bearer)
+rc_board, board_rows = WIRE.get_json("/kiosk/browse_listings", {}, BOB.bearer)
 raw_board = JSON.generate(board_rows)
 rows          = board_rows.is_a?(Array) ? board_rows : []
 handles       = rows.map { |r| r["owner_handle"] }
@@ -405,14 +384,14 @@ well_formed   = !handles.empty? && handles.all? { |h| h.is_a?(String) && h.match
 # (>= 2 rows), and Bob's must not be that handle.
 per_seller    = !alice_handle.nil? && !bob_handle.nil? &&
                 alice_handle != bob_handle && alice_rows >= 2
-record(results, "NoSellerPiiOnTheOpenBoard",
-       rc_board == 200 && no_addresses && well_formed && per_seller,
-       "browse_listings as BOB → #{rc_board}, #{rows.length} rows, " \
-       "#{handles.uniq.length} distinct handles #{handles.uniq.first(3).inspect}; " \
-       "account addresses in body: #{no_addresses ? 'none' : 'FOUND'}; " \
-       "alice=#{alice_handle.inspect} on #{alice_rows} rows, bob=#{bob_handle.inspect} " \
-       "(want 200, no account address anywhere, every handle an opaque " \
-       "`seller-<12 hex>`, and ONE handle covering >= 2 of Alice's rows and not Bob's)")
+BATTERY.record("NoSellerPiiOnTheOpenBoard",
+               rc_board == 200 && no_addresses && well_formed && per_seller,
+               "browse_listings as BOB → #{rc_board}, #{rows.length} rows, " \
+               "#{handles.uniq.length} distinct handles #{handles.uniq.first(3).inspect}; " \
+               "account addresses in body: #{no_addresses ? 'none' : 'FOUND'}; " \
+               "alice=#{alice_handle.inspect} on #{alice_rows} rows, bob=#{bob_handle.inspect} " \
+               "(want 200, no account address anywhere, every handle an opaque " \
+               "`seller-<12 hex>`, and ONE handle covering >= 2 of Alice's rows and not Bob's)")
 
 # ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
@@ -432,27 +411,19 @@ record(results, "NoSellerPiiOnTheOpenBoard",
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
-device_grant_verdict = device_grant_beat.call(
-  Kiosk::Redteam::Client.new(base_url: SERVER),
-  Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
+# `on_skip: :breach` on purpose: this origin declares a role, so "could not
+# test" is a failure of the harness rather than a property of the provider, and
+# a silent third state is what let the last one hide.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
+  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
+  on_skip: :breach,
 )
-# A SKIP is recorded as a breach here on purpose: this origin declares a role,
-# so "could not test" is a failure of the harness rather than a property of the
-# provider, and a silent third state is what let the last one hide.
-record(results, device_grant_beat.name, device_grant_verdict.blocked,
-       device_grant_verdict.skipped ? "SKIPPED, which this origin must never do — " \
-                                      "#{device_grant_verdict.detail}"
-                                    : device_grant_verdict.detail)
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
-breaches = results.reject { |r| r[:blocked] }
-puts JSON.generate(scenarios: results.size, blocked: results.count { |r| r[:blocked] }, breaches: breaches.map { |r| r[:name] })
-
-if breaches.empty?
-  puts "\n  redteam: all #{results.size} scenarios BLOCKED."
-  exit 0
-else
-  puts "\n  redteam: #{breaches.size} BREACH(es): #{breaches.map { |r| r[:name] }.join(', ')}"
-  exit 1
-end
+# The gem answers it: 0 only when at least one attack ran and every attack that
+# ran was blocked, 1 on a breach or on a battery that proved nothing, 2 when a
+# beat skipped that this origin was not expected to skip. philslist expects no
+# skips at all — every beat above is about a surface it has.
+exit BATTERY.report!

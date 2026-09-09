@@ -40,9 +40,10 @@ module Kiosk
       # block returns. It is here rather than on {Result} for the same reason
       # `identity` and `env` are: the registry contract is a plain
       # `callable.call(args)` and there is no room in it for either direction.
-      def with(identity: nil, env: nil, handler_headers: nil)
+      def with(identity: nil, env: nil, handler_headers: nil, timezone: nil)
         previous = Thread.current[KEY]
-        Thread.current[KEY] = { identity: identity, env: env, handler_headers: handler_headers }
+        Thread.current[KEY] = { identity: identity, env: env, handler_headers: handler_headers,
+                                timezone: timezone }
         yield
       ensure
         Thread.current[KEY] = previous
@@ -59,6 +60,18 @@ module Kiosk
       #   headers written into, or nil when nobody is collecting (a direct
       #   {Executor} call, an RLS journey test).
       def handler_headers = current[:handler_headers]
+
+      # THE CALLER'S OWN CLOCK, already parsed and validated by
+      # {CallerTimezone} — the zone a bare `YYYY-MM-DD` ARGUMENT is read in.
+      #
+      # `nil` means the caller declared none, which is the common case and is
+      # not an error: the operator then reads the argument on the clock of the
+      # place the service happens and SAYS SO in the row. It never decides how
+      # an answer is RENDERED — that zone belongs to the serviced resource,
+      # which is operator data this gem knows nothing about.
+      #
+      # @return [ActiveSupport::TimeZone, nil]
+      def timezone = current[:timezone]
 
       def current = Thread.current[KEY] || EMPTY
     end

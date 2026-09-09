@@ -42,7 +42,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
   # One per-verb request. `action` is :show for a GET, :create for a POST;
   # `kiosk_verb` is the path segment the router would have captured.
-  def call_verb(method, name, query: nil, body: nil, auth: true, accept: nil)
+  def call_verb(method, name, query: nil, body: nil, auth: true, accept: nil, timezone: nil)
     path   = "/kiosk/#{name}#{query ? "?#{query}" : ""}"
     action = method == :get ? :show : :create
     opts   = { method: method.to_s.upcase }
@@ -54,6 +54,7 @@ RSpec.describe Kiosk::Server::VerbController do
     # Rack::MockRequest sends no `Accept` by default; a real assistant does,
     # and it is the input Rails' `_set_vary_header` keys off (K-823).
     opts["HTTP_ACCEPT"] = accept if accept
+    opts["HTTP_KIOSK_TIMEZONE"] = timezone if timezone
 
     env = Rack::MockRequest.env_for(path, **opts)
     env["action_dispatch.request.path_parameters"] =
@@ -100,8 +101,50 @@ RSpec.describe Kiosk::Server::VerbController do
 
     it "carries the cache policy every wire response must carry" do
       call_verb(:get, "salons")
-      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW, Kiosk-Timezone")
       expect(last_headers["Cache-Control"]).to eq("private, no-store")
+    end
+
+    # ── THE CALLER'S DECLARED CLOCK REACHES THE HANDLER ──────────────────
+    #
+    # Spec §3 point 8. It exists so an operator can read a bare `YYYY-MM-DD`
+    # ARGUMENT in the calendar the caller meant it in. It never decides how an
+    # answer is RENDERED — that zone is the serviced RESOURCE's, and the engine
+    # holds none of an operator's data.
+    it "hands the handler the caller's declared timezone" do
+      declare_query("clock") { render json: [{ zone: Kiosk::Server::CurrentRequest.timezone&.name }] }
+
+      _, body = call_verb(:get, "clock", timezone: "Australia/Sydney")
+      expect(body).to eq([{ zone: "Australia/Sydney" }])
+    end
+
+    it "hands the handler nil when the caller declared none — silence is not an error" do
+      declare_query("clock") { render json: [{ zone: Kiosk::Server::CurrentRequest.timezone&.name }] }
+
+      status, body = call_verb(:get, "clock")
+      expect(status).to eq(200)
+      expect(body).to eq([{ zone: nil }])
+    end
+
+    # §9.1's first branch: a value outside its declared domain is refused BY
+    # NAME. A silent fallback would answer in a clock nobody chose and tell
+    # nobody it had — a wrong answer shaped exactly like a right one.
+    it "refuses a UTC offset in Kiosk-Timezone with a 400 naming the header" do
+      declare_query("clock") { render json: [] }
+
+      status, body = call_verb(:get, "clock", timezone: "+03:00")
+      expect(status).to eq(400)
+      expect(body[:code]).to    eq("bad_request")
+      expect(body[:detail]).to  include("Kiosk-Timezone")
+      expect(body[:hint]).to    include("Area/Location")
+    end
+
+    it "refuses a zone name nobody has, and never falls back" do
+      declare_query("clock") { render json: [{ reached: true }] }
+
+      status, body = call_verb(:get, "clock", timezone: "Mars/Olympus")
+      expect(status).to eq(400)
+      expect(body[:code]).to eq("bad_request")
     end
 
     it "answers 401 before it will say whether the verb exists" do
@@ -238,7 +281,7 @@ RSpec.describe Kiosk::Server::VerbController do
       end
       call_verb(:get, "listings")
       expect(last_headers["Cache-Control"]).to eq("private, no-store")
-      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW, Kiosk-Timezone")
     end
   end
 
@@ -397,7 +440,7 @@ RSpec.describe Kiosk::Server::VerbController do
       end
       call_verb(:get, "salons", accept: "application/json")
       expect(seen).to eq("Accept")
-      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW, Kiosk-Timezone")
     end
   end
 

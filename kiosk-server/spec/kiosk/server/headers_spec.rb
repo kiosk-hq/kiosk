@@ -60,17 +60,17 @@ RSpec.describe Kiosk::Server::Headers do
   describe ".add_cache_policy" do
     it "varies on the two request headers that change the answer" do
       headers = described_class.add_cache_policy({}, status: 200)
-      expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+      expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW, Kiosk-Timezone")
     end
 
     it "ADDS to a Vary the operator already set rather than replacing it" do
       headers = described_class.add_cache_policy({ "Vary" => "Accept-Language" }, status: 200)
-      expect(headers["Vary"]).to eq("Accept-Language, Authorization, Kiosk-PoW")
+      expect(headers["Vary"]).to eq("Accept-Language, Authorization, Kiosk-PoW, Kiosk-Timezone")
     end
 
     it "does not duplicate a token already present, whatever its case" do
       headers = described_class.add_cache_policy({ "Vary" => "authorization" }, status: 200)
-      expect(headers["Vary"]).to eq("authorization, Kiosk-PoW")
+      expect(headers["Vary"]).to eq("authorization, Kiosk-PoW, Kiosk-Timezone")
     end
 
     it "defaults a 200 to private, no-store" do

@@ -7,6 +7,7 @@ require "action_controller"
 require "action_dispatch/http/parameters"
 require "cgi"
 require "json"
+require "kiosk/server/caller_timezone"
 require "kiosk/server/current_request"
 require "kiosk/server/executor"
 require "kiosk/server/errors"
@@ -221,9 +222,22 @@ module Kiosk
         # response BEFORE {#render_result}, which is what puts it in front of
         # {Headers.add_cache_policy} — the seam that keeps an operator's own
         # policy and refuses a shared-cache one.
+        # THE CALLER'S OWN CLOCK, read once and handed down. It is parsed HERE
+        # rather than in each handler so that a value this wire cannot read is
+        # ONE refusal, worded once, rather than seven demos' worth of guesses —
+        # and so that an operator who never looks at it still cannot serve a
+        # request carrying a zone nobody validated. A caller that declared none
+        # gets `nil`, which is not an error: the operator answers on the clock
+        # of the place the service happens and says which one that was.
+        #
+        # It is read AFTER the toll on purpose: an unpaid caller learns it owes
+        # a proof before it learns its header is misspelt, so the 402 challenge
+        # is not withheld over a field that does not enter the fingerprint.
         handler_headers = {}
+        timezone = CallerTimezone.from_env(request.env)
         result = CurrentRequest.with(identity: identity, env: request.env,
-                                     handler_headers: handler_headers) do
+                                     handler_headers: handler_headers,
+                                     timezone: timezone) do
           Executor.call(
             kind:       command,
             args:       args,

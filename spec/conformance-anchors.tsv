@@ -96,7 +96,7 @@ e2e/assistant.sh	Kiosk-Server-Version present
 e2e/assistant.sh	POST /kiosk/$retired unauthenticated → 404 too
 e2e/assistant.sh	POST /kiosk/$retired → 404
 e2e/assistant.sh	POST at a query's path → 404
-e2e/assistant.sh	Vary names both request headers
+e2e/assistant.sh	Vary names all three request headers
 e2e/assistant.sh	X-Total-Count is not dressed up as a standard
 e2e/assistant.sh	a COMPLETE answer carries X-Total-Count
 e2e/assistant.sh	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does

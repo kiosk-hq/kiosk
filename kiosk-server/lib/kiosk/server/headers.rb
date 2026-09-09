@@ -31,14 +31,20 @@ module Kiosk
         add_to({}, server_version: server_version)
       end
 
-      # The `Vary` a wire response MUST carry (spec §3.7.1). Two request
-      # headers change the answer and neither is in the URL: `Authorization`
-      # (every wire response is identity-scoped) and `Kiosk-PoW` (a tolled 200
-      # and its 402 differ ONLY by this header). Without the second, a private
-      # cache keyed on the URL serves a paid 200 to an unpaid retry — defeating
-      # the toll — or a stale 402 to a paid one, which is an infinite retry
-      # loop.
-      WIRE_VARY = %w[Authorization Kiosk-PoW].freeze
+      # The `Vary` a wire response MUST carry (spec §3.7.1). THREE request
+      # headers change the answer and none of them is in the URL:
+      # `Authorization` (every wire response is identity-scoped), `Kiosk-PoW`
+      # (a tolled 200 and its 402 differ ONLY by this header) and
+      # `Kiosk-Timezone` (a bare `YYYY-MM-DD` argument is read in the caller's
+      # declared calendar, so two callers on two clocks can send the same URL
+      # and mean two different days).
+      #
+      # Without the second, a private cache keyed on the URL serves a paid 200
+      # to an unpaid retry — defeating the toll — or a stale 402 to a paid one,
+      # which is an infinite retry loop. Without the third, one assistant's
+      # cache hands a delivery window computed for Sydney's tomorrow to the same
+      # human's call from Lisbon.
+      WIRE_VARY = %w[Authorization Kiosk-PoW Kiosk-Timezone].freeze
 
       # Cache policy for ONE wire response. Applied at the render seam, not in
       # {HeadersMiddleware}: the middleware covers every path under the mount,

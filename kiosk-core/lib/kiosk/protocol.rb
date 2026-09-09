@@ -23,6 +23,15 @@ module Kiosk
     HEADER_API_VERSION    = "Kiosk-API-Version"
     HEADER_MIN_CLIENT     = "Kiosk-Min-Client"
 
+    # HTTP REQUEST header names a caller may send.
+    #
+    # `Kiosk-Timezone` carries the CALLER's own clock as an IANA
+    # `Area/Location` identifier (or the literal `UTC`), so an operator can
+    # read a bare `YYYY-MM-DD` argument in the calendar the caller meant it in.
+    # It is a fact about the caller, not about the verb, which is why it is a
+    # header and not an argument in every time-bearing `input_schema`.
+    HEADER_TIMEZONE = "Kiosk-Timezone"
+
     # Default URL prefix at which kiosk-server mounts its endpoints.
     # Provider may mount elsewhere; this is the suggested default and what
     # the well-known document advertises out-of-the-box.

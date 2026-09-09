@@ -559,11 +559,13 @@ assert "salon name is Combette"      "$(echo "$r" | jq -r '.[0].name')"         
 
 # Spec §3.7.1 — the cache policy is response shape, so it is asserted here
 # with the body. Without `Kiosk-PoW` in Vary a private cache keyed on the URL
-# would serve a paid 200 to an unpaid retry.
+# would serve a paid 200 to an unpaid retry; without `Kiosk-Timezone` it would
+# serve an answer computed for one caller's calendar day to a caller on another
+# clock that sent the identical URL.
 cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-assert "Vary names both request headers" \
-  "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW')" "1"
+assert "Vary names all three request headers" \
+  "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW, Kiosk-Timezone')" "1"
 
 # §3.7.4 (matrix SPEC-016), ON A BOOTED ORIGIN — "an operator MAY relax a 200
 # to `private, max-age=N` for a payload that is genuinely identity-independent

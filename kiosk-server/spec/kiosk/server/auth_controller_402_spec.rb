@@ -72,6 +72,6 @@ RSpec.describe "AuthController 402 WWW-Authenticate" do
     # a 402 carries a challenge that is single-use and request-bound: caching
     # one either defeats the toll or loops the retry forever.
     expect(headers["Cache-Control"]).to eq("no-store")
-    expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+    expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW, Kiosk-Timezone")
   end
 end

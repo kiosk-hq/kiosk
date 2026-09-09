@@ -1133,38 +1133,12 @@ runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
 results = runner.run(scenarios)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
-
-blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
-skipped_results = results.select { |r| r[:verdict].skipped }
-breach_results  = runner.breaches
-
-puts "\n── Summary ──"
-blocked_results.each { |r| puts "  BLOCKED  ✓ #{r[:scenario].name}" }
-skipped_results.each do |r|
-  reason = r[:verdict].detail.delete_prefix("SKIP — ")
-  puts "  SKIPPED  — #{r[:scenario].name} (#{reason})"
-end
-breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
-
-puts ""
-if breach_results.empty?
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
-else
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size} BREACH"
-end
-
-# ── Expected-applicable check ─────────────────────────────────────────────────
-
-actual_skip_names = skipped_results.map { |r| r[:scenario].name }.sort
-expected_sorted   = EXPECTED_SKIP_NAMES.sort
-
-if actual_skip_names != expected_sorted
-  puts ""
-  puts "  EXPECTED-APPLICABLE ASSERTION FAILED:"
-  puts "    Expected skips: #{expected_sorted.inspect}"
-  puts "    Actual skips:   #{actual_skip_names.inspect}"
-  puts "  A profile key may have been set to nil, disabling a gate scenario."
-  exit 2
-end
-
-exit 1 if breach_results.any?
+#
+# The gem prints it and the gem answers the exit status: 0 only when at least
+# one attack ran and every attack that ran was blocked, 1 on a breach or on a
+# battery that proved nothing, 2 when the skips are not the ones named above —
+# a profile key that has silently gone nil disables a gate scenario, and that
+# must not read as a clean run.
+battery = Kiosk::Redteam::Battery.new
+battery.absorb(results)
+exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)

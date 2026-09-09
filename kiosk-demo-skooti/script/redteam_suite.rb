@@ -1290,98 +1290,29 @@ end
 self_asserted_user_beat = self_asserted_user_bearer_forgery.call
 
 # ── Summary ───────────────────────────────────────────────────────────────────
+#
+# ONE ledger for both halves. The registered scenarios come out of the gem's
+# library through the Runner; the nine beats above are skooti's own, about its
+# motorcycle licence gate, its KYC broker and its unlock token. They were
+# counted, printed and exited on separately, which is how a total and a header
+# come to disagree; the gem holds both in one ledger and answers once.
+battery = Kiosk::Redteam::Battery.new
+battery.absorb(results)
+{
+  "MotorcycleForgedKyc"           => mc_beat,
+  "MotorcycleViaStartRental"      => mc_verbswap_beat,
+  "IssuedKycJwsTheft"             => theft_beat,
+  "CrossOperatorClaimReplay"      => xop_beat,
+  "ForgedCallbackNoSig"           => fcb_beat,
+  "RetiredWire"                   => retired_wire_beat,
+  "MethodMismatch"                => method_mismatch_beat,
+  "SelfAssertedTokenForgery"      => self_asserted_beat,
+  "SelfAssertedUserBearerForgery" => self_asserted_user_beat,
+}.each { |name, beat| battery.record(name, beat[:blocked], beat[:detail]) }
 
-blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
-skipped_results = results.select { |r| r[:verdict].skipped }
-breach_results  = runner.breaches
-
-puts "\n── Summary ──"
-blocked_results.each { |r| puts "  BLOCKED  ✓ #{r[:scenario].name}" }
-skipped_results.each do |r|
-  reason = r[:verdict].detail.delete_prefix("SKIP — ")
-  puts "  SKIPPED  — #{r[:scenario].name} (#{reason})"
-end
-breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
-
-# ── skooti-local beat verdicts ────────────────────────────────────────
-if mc_beat[:blocked]
-  puts "  BLOCKED  ✓ MotorcycleForgedKyc — #{mc_beat[:detail]}"
-else
-  puts "  BREACH   ✗ MotorcycleForgedKyc — #{mc_beat[:detail]}"
-end
-if mc_verbswap_beat[:blocked]
-  puts "  BLOCKED  ✓ MotorcycleViaStartRental — #{mc_verbswap_beat[:detail]}"
-else
-  puts "  BREACH   ✗ MotorcycleViaStartRental — #{mc_verbswap_beat[:detail]}"
-end
-if theft_beat[:blocked]
-  puts "  BLOCKED  ✓ IssuedKycJwsTheft — #{theft_beat[:detail]}"
-else
-  puts "  BREACH   ✗ IssuedKycJwsTheft — #{theft_beat[:detail]}"
-end
-if xop_beat[:blocked]
-  puts "  BLOCKED  ✓ CrossOperatorClaimReplay — #{xop_beat[:detail]}"
-else
-  puts "  BREACH   ✗ CrossOperatorClaimReplay — #{xop_beat[:detail]}"
-end
-if fcb_beat[:blocked]
-  puts "  BLOCKED  ✓ ForgedCallbackNoSig — #{fcb_beat[:detail]}"
-else
-  puts "  BREACH   ✗ ForgedCallbackNoSig — #{fcb_beat[:detail]}"
-end
-if retired_wire_beat[:blocked]
-  puts "  BLOCKED  ✓ RetiredWire — #{retired_wire_beat[:detail]}"
-else
-  puts "  BREACH   ✗ RetiredWire — #{retired_wire_beat[:detail]}"
-end
-if method_mismatch_beat[:blocked]
-  puts "  BLOCKED  ✓ MethodMismatch — #{method_mismatch_beat[:detail]}"
-else
-  puts "  BREACH   ✗ MethodMismatch — #{method_mismatch_beat[:detail]}"
-end
-if self_asserted_beat[:blocked]
-  puts "  BLOCKED  ✓ SelfAssertedTokenForgery — #{self_asserted_beat[:detail]}"
-else
-  puts "  BREACH   ✗ SelfAssertedTokenForgery — #{self_asserted_beat[:detail]}"
-end
-if self_asserted_user_beat[:blocked]
-  puts "  BLOCKED  ✓ SelfAssertedUserBearerForgery — #{self_asserted_user_beat[:detail]}"
-else
-  puts "  BREACH   ✗ SelfAssertedUserBearerForgery — #{self_asserted_user_beat[:detail]}"
-end
-
-all_beats = [mc_beat, mc_verbswap_beat, theft_beat, xop_beat, fcb_beat,
-             retired_wire_beat, method_mismatch_beat,
-             self_asserted_beat, self_asserted_user_beat]
-local_beats_blocked = all_beats.count { |b| b[:blocked] }
-blocked_count = blocked_results.size + local_beats_blocked
-beat_breach   = all_beats.count { |b| !b[:blocked] }
-
-puts ""
-# Print the decomposition, so this total and the header's `registered
-# scenarios` are readable as parts of one sum instead of two numbers that disagree.
-# Both halves are the live counts computed immediately above; nothing here is typed.
-if breach_results.empty? && skipped_results.empty? && beat_breach.zero?
-  puts "  #{blocked_count} BLOCKED (#{blocked_results.size} registered + " \
-       "#{local_beats_blocked} skooti-local), 0 SKIPPED, 0 BREACH — all attacks blocked."
-else
-  puts "  #{blocked_count} BLOCKED (#{blocked_results.size} registered + " \
-       "#{local_beats_blocked} skooti-local), #{skipped_results.size} SKIPPED, " \
-       "#{breach_results.size + beat_breach} BREACH"
-end
-
-# ── Expected-applicable check ─────────────────────────────────────────────────
-
-actual_skip_names = skipped_results.map { |r| r[:scenario].name }.sort
-expected_sorted   = EXPECTED_SKIP_NAMES.sort
-
-if actual_skip_names != expected_sorted
-  puts ""
-  puts "  EXPECTED-APPLICABLE ASSERTION FAILED:"
-  puts "    Expected skips: #{expected_sorted.inspect}"
-  puts "    Actual skips:   #{actual_skip_names.inspect}"
-  puts "  A profile key may have been set to nil, disabling a gate scenario."
-  exit 2
-end
-
-exit 1 if breach_results.any? || beat_breach.positive?
+# The gem answers the exit status: 0 only when at least one attack ran and every
+# attack that ran was blocked, 1 on a breach or on a battery that proved nothing,
+# 2 when the skips are not the ones EXPECTED_SKIP_NAMES declares — a profile key
+# that has silently gone nil disables a gate scenario, and that must not read as
+# a clean run.
+exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)

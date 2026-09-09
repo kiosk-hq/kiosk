@@ -246,8 +246,8 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 
   # ── THE OPERATOR'S OWN VERBS, drawn by hand below the mount (T-183) ─────
   #
-  # Phil, 2026-09-07: «Я НЕ СОГЛАСЕН с тем что у нас должна быть какая-то магия
-  # с роутами… Вручную для каждого в routes.» So the engine draws the PROTOCOL
+  # NO ROUTE MAGIC: a verb reaches the wire because a line in `routes.rb` says
+  # so, one per verb, written by hand. The engine draws the PROTOCOL
   # PLANE and the operator draws one explicit route per verb underneath it. This
   # scenario is that arrangement, through a booted app and the whole Rack stack,
   # answering four questions the routing layer cannot be asked any other way.

@@ -77,10 +77,9 @@ RSpec.describe "handler registration in a booted app" do
     # ── THE BOOT DIGEST (T-094) ─────────────────────────────────────────
     #
     # The catalog `GET <mount>/schema` serves is derived ONCE, by the engine,
-    # in `after_initialize`, and served from memory afterwards. Phil asked for
-    # the check to run in tests as well as in production («И на тестах чтобы
-    # тоже»), and this is the only place in the suite that boots a real app —
-    # so this is where it runs.
+    # in `after_initialize`, and served from memory afterwards. The check runs
+    # under test as well as in production, and this is the only place in the
+    # suite that boots a real app — so this is where it runs.
     it "derives the digest AT BOOT, not on the first request that asks" do
       expect(probe("development")["derived_at_boot"]).to be(true)
       expect(probe("development")["schema_digest"]).to match(/\A[0-9a-f]{32}\z/)

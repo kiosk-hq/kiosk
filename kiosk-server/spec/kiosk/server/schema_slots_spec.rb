@@ -156,7 +156,7 @@ RSpec.describe Kiosk::Server::SchemaSlots do
     end
   end
 
-  # ── THE RACE (Phil: «Стоит обратить внимание на возможный race condition») ──
+  # ── THE RACE ───────────────────────────────────────────────────────────────
   #
   # The shipped demos run WEB_CONCURRENCY=1, but Puma is multi-threaded, so
   # concurrent first reads of one descriptor are an ordinary event. This block

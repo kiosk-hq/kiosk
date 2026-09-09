@@ -51,8 +51,8 @@ RSpec.describe Kiosk::Server::OpenApiController do
   # `private, no-store` + `Vary: Authorization, Kiosk-PoW`. The reason given
   # for the gate — that an anonymous read hands out the catalog enumeration —
   # had been retired for `GET <endpoint>/schema` (T-094) and for
-  # `/.well-known/api-catalog` (T-093) on the same day. Phil: «K-804
-  # открывать».
+  # `/.well-known/api-catalog` (T-093) on the same day, so this document is
+  # open too.
   it "answers the derived document to a caller with NO credential" do
     status, body, = get_document
 

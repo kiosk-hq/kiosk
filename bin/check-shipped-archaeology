@@ -75,7 +75,11 @@
 #     named here so the boundary is a decision rather than an accident.
 #   * `spec/`, `test/` — developer surfaces, absent from every `spec.files`,
 #     and the constitution REQUIRES an inline TODO/FIXME to carry a ledger id,
-#     which is a rule these directories have to be able to obey.
+#     which is a rule these directories have to be able to obey. So R1, R2 and
+#     R4 do not reach them. R3 DOES: a gem's `spec/` is not shipped but it IS
+#     published, and a Russian sentence is unreadable to a stranger who clones
+#     this repository whether or not it travels in the .gem. `test/` stays out
+#     entirely — no gem here has one, so a rule over it would cover nothing.
 #   * `Gemfile`, `Rakefile`, `.rubocop.yml` and the rest of a gem's root —
 #     build and dev tooling, not packaged, never read by an adopter.
 #   * `kiosk-demo-*/bin/` — generator binstubs, and Phil's exemption again.
@@ -155,7 +159,7 @@ RULES = [
     none: "no ledger id" },
   { id: "R2", re: ADR_RE,        scopes: %i[gem demo], what: "an ADR reference",
     none: "no ADR reference" },
-  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo], what: "Cyrillic prose",
+  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec], what: "Cyrillic prose",
     none: "no Cyrillic" },
   { id: "R4", re: MAINTAINER_RE, scopes: %i[gem],      what: "the maintainer named in prose",
     none: "no maintainer named in prose" }
@@ -193,6 +197,24 @@ def shipped_files(gem_dir)
    Dir.glob(File.join(gem_dir, "app", "**", "*")) +
    [File.join(gem_dir, "README.md"), File.join(gem_dir, "#{name}.gemspec")])
     .select { |p| File.file?(p) }
+    .sort
+end
+
+# The gems' own spec/ directories. These do NOT ship — every gemspec globs
+# `lib/**/*`, so nothing here reaches a `gem install` — but the repository is
+# public, and a stranger who clones it reads them. Only R3 applies: a ledger id
+# or an ADR reference is a note between maintainers on a developer surface and
+# stays (that is T-186's declared exemption), while a Russian sentence is simply
+# unreadable to most of the people this repository is published for.
+def spec_dirs
+  (Dir.glob(File.join(REPO, "kiosk-*")) - Dir.glob(File.join(REPO, "kiosk-demo-*")))
+    .select { |d| File.directory?(File.join(d, "spec")) }
+    .sort
+end
+
+def spec_files(gem_dir)
+  Dir.glob(File.join(gem_dir, "spec", "**", "*"))
+    .select { |p| File.file?(p) && DEMO_EXTS.include?(File.extname(p)) }
     .sort
 end
 
@@ -301,7 +323,10 @@ SCOPES = {
          per: "lib/**, app/**, README.md, <gem>.gemspec" },
   demo: { label: "a demo", dirs: -> { demo_dirs }, files: ->(d) { demo_files(d) },
           per: "app/**, lib/**, script/**, config/**, db/** (text extensions), " \
-               "Rakefile, config.ru, README.md, before-after.md" }
+               "Rakefile, config.ru, README.md, before-after.md" },
+  spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
+          files: ->(d) { spec_files(d) },
+          per: "spec/** (text extensions) — R3 only" }
 }.freeze
 
 def run_check
@@ -316,7 +341,7 @@ def run_check
     [name, files]
   end
   puts "  exempt         : bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption); " \
-       "spec/, test/ (developer surfaces);"
+       "spec/, test/ for R1/R2/R4 (developer surfaces; R3 DOES reach spec/);"
   puts "                   Gemfile/Gemfile.lock/mise.toml and the rest of a directory root " \
        "(not packaged, not browsed);"
   puts "                   a demo's public/, log/, tmp/, storage/ and its non-text config " \

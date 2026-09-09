@@ -596,9 +596,9 @@ RSpec.describe Kiosk::Server::WellKnown do
     # This example is the same two fixture verbs as before — deliberately
     # named to sound like secrets — with the expectation turned around. Until
     # 2026-08-19 the catalog was required NOT to contain them, because it is
-    # unauthenticated and the catalogue was behind a Bearer token. Phil
-    # answered the premise: «на статичных GET endpoint'ах — пожалуйста…
-    # Пускай долбятся в них сколько хотят без аутентификации». The names are
+    # unauthenticated and the catalogue was behind a Bearer token. That
+    # premise is rejected: a static GET endpoint may be hammered anonymously
+    # as hard as anyone likes, and that is acceptable. The names are
     # not secret, and this document is a render of in-process state, so it
     # caches behind a CDN and anonymous enumeration costs the origin nothing.
     #

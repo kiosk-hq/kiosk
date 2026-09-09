@@ -113,9 +113,9 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
     # ── THE GEM VERSION, which is the reason nothing is pre-generated ───
     #
-    # Phil's own objection to emitting a file at deploy time, verbatim: «не
-    # только изменение состава queries/actions может повлиять на файл, но и
-    # обновление версии kiosk-server (patch, например)». A digest over the
+      # A file emitted at deploy time goes stale on more than a registry change:
+    # a kiosk-server PATCH bump can move the rendered document too. A digest
+    # over the
     # registry alone would be unchanged across a PATCH bump that changed the
     # renderer — and every cache in the world would keep the old answer.
     it "moves when kiosk-server's own version moves, with the registry untouched" do
@@ -168,8 +168,8 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
   # ── A DATA-DERIVED SLOT (K-922) ────────────────────────────────────────────
   #
-  # Phil: «каталог должен обновляться динамически, без деплоя. Было бы глупо
-  # деплоить … для того чтобы опубликовалось новое объявление.» A slot declared
+  # The catalogue updates dynamically, without a deploy: publishing a new
+  # listing must never require one. A slot declared
   # `enum: -> { Category.pluck(:slug) }` makes the catalogue a function of the
   # operator's ROWS, and the boot memo is keyed on the verb NAMES — which do
   # not move when a category is added. Without the epoch in {cache_key} the

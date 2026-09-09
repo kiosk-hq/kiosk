@@ -86,8 +86,9 @@ end
 
 Rails.application.initialize!
 
-# THE BOOT DIGEST CHECK, IN A TEST (T-094 obligation 5, «И на тестах чтобы
-# тоже»). Read BEFORE anything asks for the digest: `derived?` is true only
+# THE BOOT DIGEST CHECK, IN A TEST (T-094 obligation 5 — the check runs under
+# test as well as in production). Read BEFORE anything asks for the digest:
+# `derived?` is true only
 # because the engine's `after_initialize` hook derived it, so this is the one
 # reading that distinguishes "computed at boot" from "computed by whoever
 # asked first". Everything after this line would make it true.

@@ -133,7 +133,8 @@ RSpec.describe "DiscoveryController" do
       end
     end
 
-    # «А Vary зачем? Это паблик, общедоступная инфа.» — Phil, 2026-08-19.
+    # NO Vary ON A PUBLIC DOCUMENT. These six are public and identical for
+    # every caller, so there is nothing for a cache to vary on.
     # None of these six reads a request header, so none of them varies. Rails
     # disagrees unless stopped: `_set_vary_header` stamps `Vary: Accept` on
     # any render negotiated from a non-blank `Accept`, which is what a real

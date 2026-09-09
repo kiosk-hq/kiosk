@@ -304,7 +304,7 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
 end
 
 # A malformed booking_id must come back as a TYPED 400, never a 500.
-# Two surfaces, one guard (UuidCheck): confirm_booking's `booking_id` arg, and the
+# Two surfaces, one guard (Kiosk::UuidCheck): confirm_booking's `booking_id` arg, and the
 # `{"booking_id":…}` reference inside a signed cart mandate that the cashier
 # prices at capture. Without the guard, Postgres raises InvalidTextRepresentation
 # on the `::uuid` cast — not a Kiosk error, so it escapes as a raw 500 with the
@@ -319,7 +319,7 @@ end
 #
 # Since 0.4 the ARG-shaped probes are refused one layer EARLIER — `booking_id`
 # declares `format: "uuid"` and `input_schema` is validated on every call — so
-# that half now comes from the declared contract rather than from UuidCheck
+# that half now comes from the declared contract rather than from Kiosk::UuidCheck
 # inside the handler. Same status, same code, same no-leak property; the guard
 # behind it still stands for what reaches it, which is the signed-cart probe
 # below that no input_schema covers.

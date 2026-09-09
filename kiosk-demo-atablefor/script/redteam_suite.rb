@@ -210,7 +210,7 @@ rc, _ = post_json("/kiosk/cancel_booking",
 record(results, "CrossOwnerCancel", rc == 403, "Bea cancel Diego's booking → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk booking_id must be a typed 400, never a 500 ────
-# cancel_booking casts its booking_id `::uuid`, and without the UuidCheck guard
+# cancel_booking casts its booking_id `::uuid`, and without the Kiosk::UuidCheck guard
 # a malformed value makes Postgres raise InvalidTextRepresentation — not a
 # Kiosk error, so it escapes as a raw 500 carrying the PG message. Three
 # properties are asserted, not one: the status is
@@ -550,7 +550,7 @@ record(results, "BookOutsideOfferedHorizon",
 #     .seating_date}, {WireArguments.seating_time}) read through `to_s`, so they
 #     cannot raise but they cannot refuse a shape either.
 #   * `booking_id` — the declared `format: "uuid"` answers first;
-#     {WireArguments.booking_id}'s `blank?`/`UuidCheck` behind it reads every
+#     {WireArguments.booking_id}'s `blank?`/`Kiosk::UuidCheck` behind it reads every
 #     shape without raising, so this half is two layers for the STRINGS
 #     MalformedUuidArg sends and the schema's alone for the container shapes here.
 #

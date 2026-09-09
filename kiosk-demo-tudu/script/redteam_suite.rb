@@ -162,7 +162,7 @@ record(results, "ForgedUserId",
 # tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
 # KioskMembershipGate choke point every membership-gated verb opens with),
 # complete_todo's `todo_id`, and remove_member's `account_id`. Without the
-# UuidCheck guards a malformed value makes Postgres raise
+# Kiosk::UuidCheck guards a malformed value makes Postgres raise
 # InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500
 # carrying the PG message. Three properties are asserted, not one: the status is
 # 400 (a client mistake reported as such), the problem document's top-level

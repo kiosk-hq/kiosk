@@ -370,7 +370,7 @@ end
 #
 # Postgres does free shape-checking on wire arguments and ActiveRecord does not,
 # and getgrocery has both classes of the consequence. `order_id` interpolated
-# into a `::uuid` cast is class one, held by {UuidCheck}. `delivery_slot_id` /
+# into a `::uuid` cast is class one, held by {Kiosk::UuidCheck}. `delivery_slot_id` /
 # `qty` read with a bare `.to_i` — which `true`, `false`, an Array and an object
 # all answer with NoMethodError — is class two: a `500 action_failed` for an
 # argument the published `input_schema` already declares an integer, held by

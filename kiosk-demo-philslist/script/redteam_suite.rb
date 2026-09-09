@@ -178,7 +178,7 @@ record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{r
 
 # ── MalformedUuidArg — a junk listing_id must be a typed 400, never a 500 ────
 # edit_listing and close_listing cast their listing_id `::uuid`. Without the
-# UuidCheck guard a malformed value makes Postgres raise
+# Kiosk::UuidCheck guard a malformed value makes Postgres raise
 # InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500
 # carrying the PG message. Three properties are asserted, not one: the status is
 # 400 (a client mistake reported as such), the problem document's top-level

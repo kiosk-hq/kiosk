@@ -152,21 +152,43 @@ catches gross fakes; it is not proof the address exists. The real defense is the
 instructs assistants to obtain such real-world details from the human and never
 invent a placeholder.
 
-## Delivery-slot times and the past-slot filter (operator locale = Dublin)
+## Delivery-slot times: whose clock, in each direction
 
-Slot wall-clock times are the **operator's local time**: getgrocery delivers in
-Dublin, so a slot labelled `08:00–10:00 (Europe/Dublin)` means 08:00 in Dublin,
-and each `delivery_slots` row's `slot_at` carries the real offset (`+01:00` in
-summer IST, `+00:00` in winter GMT). The real IANA zone is used — not a fixed
-offset — so DST is handled automatically (`app/models/delivery_slots.rb`).
+A delivery happens **at the door**, so a window's wall clock belongs to the
+**delivery address** — the served district it routed to, whose IANA zone is
+declared in `DublinZones::ZONES`, one entry per district getgrocery delivers
+to. Every one of them is in Dublin today, so a slot labelled `08:00–10:00
+(Europe/Dublin)` means 08:00 in Dublin and each `delivery_slots` row's
+`slot_at` carries the real offset (`+01:00` in summer IST, `+00:00` in winter
+GMT). What matters is that it is a **map**: an operator does not answer from
+one zone configured on the origin, because an operator may serve places in more
+than one, and a depot opened elsewhere is one new row rather than an edit to a
+verb. `Europe/Dublin` survives in `DeliverySlots` only as the default that
+dates a published example, which addresses no district. The real IANA zone is
+used — not a fixed offset — so DST is handled automatically
+(`app/models/delivery_slots.rb`).
 
-**The `label` names its zone, and that is the point of it.** `slot_at` has
+**A `date` YOU send is read in YOUR calendar.** Declare it in the
+`Kiosk-Timezone` request header, as an IANA name, and `delivery_slots` reads a
+day you name on your human's calendar rather than on the shop's. Declare
+nothing and it is read at the delivery address, which is what this shop did
+before the header existed. A calendar day is an INTERVAL, so a day you are
+still IN is never "in the past" even when the shop has already rolled over —
+that is the 23:05 case the rule exists for — and the rows then come back on the
+**shop's** calendar, which is how you learn that your tonight became its
+tomorrow. A day you have entirely finished IS past, and is a `400` naming the
+earliest day the shop can serve. `create_order`'s `delivery_date` is the other
+case and its descriptor says so: it ECHOES a row, so it is read on the clock
+that row was published on, or handing back the day you were offered would book
+a different one.
+
+**The row names its zone, and that is the point of it.** `slot_at` has
 always been unambiguous, but nobody says an offset out loud: the field a human
 is actually read out is `label`, and a bare `08:00–10:00` is a wall clock with
-no clock named — a customer three hours away hears their own 08:00. The row
-also carries `district` (the served postal district, `D02`), which is a ROUTING
-key and not a time zone — `zone` would mean something else in a row that also
-publishes a delivery window.
+no clock named — a customer three hours away hears their own 08:00. So the row
+carries `timezone` beside the label. It also carries `district` (the served
+postal district, `D02`), which is a ROUTING key and not a time zone — one word
+for both was unreadable three lines apart.
 
 **Every verb that publishes this window publishes it the same way.**
 `delivery_slots` offers a window, `create_order` books it,

@@ -1846,13 +1846,22 @@ def derived_window_guards(sources)
   # THE DAY EXPRESSION: the chain the guard module applies to the clock. One
   # spelling across the whole guard module or this says so — two would leave no
   # single fact to hold the page to, exactly as two Rails floors leave none.
+  #
+  # THE CLOCK READER MAY TAKE AN ARGUMENT, and since the per-resource clock rule
+  # it does: «now» is a question about a PLACE, so `now(zone)` is the origin
+  # asking it about the address it is answering for. The argument list is
+  # skipped rather than compared — what this rule holds is that the page reads
+  # the SAME chain off the SAME reader, not that it names the same zone
+  # variable, which is a local name and none of this rule's business.
+  clock_call = "#{Regexp.escape(slot_mod)}\\.#{Regexp.escape(clock)}(?:\\([^()\\n]*\\))?"
   suffixes = masked(sources[:wire_arguments])
-             .scan(/#{Regexp.escape(slot_mod)}\.#{Regexp.escape(clock)}((?:\.[a-z_][A-Za-z0-9_]*)+)/)
+             .scan(/#{clock_call}((?:\.[a-z_][A-Za-z0-9_]*)+)/)
              .flatten.uniq
   return [nil, nil, "#{guard_mod} never reads #{slot_mod}.#{clock}, so there is no day expression " \
                     "to hold the page to"] if suffixes.size != 1
 
-  day = "#{slot_mod}.#{clock}#{suffixes.first}"
+  day    = "#{slot_mod}.#{clock}#{suffixes.first}"
+  day_re = "#{clock_call}#{Regexp.escape(suffixes.first)}(?![A-Za-z0-9_])"
 
   # WHICH VERB TAKES WHICH FACT. A guard that reads the day expression is a DAY
   # refusal; one that reaches the predicate is a WINDOW refusal. A guard that
@@ -1867,7 +1876,7 @@ def derived_window_guards(sources)
       next if body.nil?
 
       mb = masked(body)
-      seen << :day    if mb.include?(day)
+      seen << :day    if mb.match?(/#{day_re}/)
       seen << :window if mb.match?(/#{Regexp.escape(slot_mod)}\.#{Regexp.escape(pred)}(?![A-Za-z0-9_])/)
     end
     facts[verb] = seen.uniq unless seen.empty?
@@ -1875,7 +1884,8 @@ def derived_window_guards(sources)
   return [nil, nil, "no verb of #{GETGROCERY_STOREFRONT} / #{GETGROCERY_ORDERS} reaches a #{guard_mod} " \
                     "guard that refuses a stale day or a stale window"] if facts.empty?
 
-  [{ facts: facts, day: day, window: "#{slot_mod}.#{window}", clock: "#{slot_mod}.#{clock}" },
+  [{ facts: facts, day: day, day_re: day_re, window: "#{slot_mod}.#{window}",
+     clock: "#{slot_mod}.#{clock}" },
    "#{GETGROCERY_ORDERS} -> app/operations -> #{guard_mod} -> #{slot_mod}.#{pred} " \
    "(day #{day}, window #{slot_mod}.#{window} vs #{slot_mod}.#{clock})"]
 end
@@ -1920,7 +1930,7 @@ def rule_past_window(page, sources)
                     "origin (#{chain[:facts].keys.sort.join(", ")})")
   end
 
-  day_re    = "#{Regexp.escape(chain[:day])}(?![A-Za-z0-9_])"
+  day_re    = chain[:day_re]
   window_re = "#{Regexp.escape(chain[:window])}\\([^()\\n]*\\)"
   clock_re  = "#{Regexp.escape(chain[:clock])}(?![.A-Za-z0-9_])"
 

@@ -29,9 +29,9 @@
 # That sentence explains the module's NAME and nothing else. The VALUE this
 # module resolves an address to is spelled `district` everywhere it is named —
 # the `Result` member, {.extract_district}, {WireArguments.served_district} and
-# the wire field `delivery_slots` publishes — because `DeliverySlots.zone` in
-# this same demo is an `ActiveSupport::TimeZone`, and one word for a routing key
-# and a clock is unreadable three lines apart. The area sense ("in-zone",
+# the wire field `delivery_slots` publishes — because the row's `timezone` in
+# this same demo is the CLOCK the window is written in, and one word for a
+# routing key and a clock is unreadable three lines apart. The area sense ("in-zone",
 # "out-of-zone") keeps the word: an address is inside or outside the served
 # area, which is not a value anything reads off a row.
 module DublinZones
@@ -42,6 +42,25 @@ module DublinZones
     D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 D16 D17 D20
   ].freeze
 
+  # ── THE CLOCK OF EACH DISTRICT THIS SHOP DELIVERS TO ────────────────────
+  #
+  # A delivery happens AT THE DOOR, so the wall clock a window is offered on
+  # belongs to the delivery ADDRESS — the district it routed to — and not to
+  # this operator. Every district getgrocery serves today is in Dublin, so the
+  # map has one value; what matters is that it is a map, declared per served
+  # district, rather than one constant for the origin. A shop that opened a
+  # depot in another country would add a row here and every window it offered
+  # there would be right without touching a verb.
+  #
+  # DECLARED, NEVER INFERRED. The zone is not derived from the district string,
+  # from a postcode range or from anything else about the address: a guess
+  # nobody wrote down is one nobody can check from the other side of the wire.
+  # A district absent from this map has no clock and is not deliverable, which
+  # {SERVED} already prevents — the two lists are held equal below.
+  ZONES = %w[
+    D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 D16 D17 D20
+  ].to_h { |district| [district, "Europe/Dublin"] }.freeze
+
   # A parsed, validated result. `ok:` true only when a served district was
   # found. `district` is the canonical `D0N` routing key (nil when not resolvable).
   Result = Struct.new(:ok, :district, :reason, keyword_init: true) do
@@ -49,6 +68,13 @@ module DublinZones
   end
 
   module_function
+
+  # The IANA zone a delivery to this district is timed on, or nil for one this
+  # shop does not serve. The caller has always established the district is
+  # served before it asks.
+  def zone_name_for(district)
+    ZONES[district]
+  end
 
   # Parse a free-text delivery address (or a bare district/postcode string) and
   # decide whether it names a SERVED Dublin district.

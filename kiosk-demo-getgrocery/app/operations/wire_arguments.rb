@@ -133,7 +133,16 @@ module WireArguments
   # @param past_message [Proc] the refusal sentence for a past date; the two
   #   verbs word it differently and neither's wording is the other's to pick.
   # @return [Array(Date, nil), Array(nil, OperationResult)]
-  def delivery_date(raw, default:, past_message:)
+  # AND IT IS READ AS PUBLISHED, NOT IN THE CALLER'S CALENDAR. This argument
+  # ECHOES a value the operator itself put in a `delivery_slots` row, where a
+  # bare `YYYY-MM-DD` is the day AT THE DELIVERY ADDRESS. Re-reading it in the
+  # caller's own zone would break the round trip: the caller would hand back the
+  # day it was offered and be booked onto a different one. An argument the
+  # caller INVENTS — `delivery_slots`' own `date` — is the other case, and is
+  # read in the caller's calendar by {#caller_day}.
+  #
+  # @param zone [ActiveSupport::TimeZone] the DELIVERY ADDRESS's clock
+  def delivery_date(raw, default:, past_message:, zone: DeliverySlots.default_zone)
     return [default, nil] if raw.blank?
 
     date = iso_date(raw)
@@ -143,14 +152,58 @@ module WireArguments
         message: "invalid delivery_date: #{raw} — use YYYY-MM-DD from the delivery_slots row you chose",
       )]
     end
-    # ONE CLOCK FOR THE WHOLE ORIGIN. `DeliverySlots.now` and not
+    # ONE CLOCK PER DELIVERY ADDRESS. `DeliverySlots.now(zone)` and not
     # `Date.today`, which reads the SERVER process's zone: this and {#past_date}
     # answer the same «is this day already gone?», and around midnight a
-    # server-zone answer differs from the Europe/Dublin one — so `delivery_slots`
+    # server-zone answer differs from the address's — so `delivery_slots`
     # could refuse a day `create_order` still accepts.
-    return [date, nil] unless date < DeliverySlots.now.to_date
+    return [date, nil] unless date < DeliverySlots.now(zone).to_date
 
     [nil, OperationResult.refused(code: "bad_request", message: past_message.call(date))]
+  end
+
+  # ── THE CALLER'S OWN DAY, MAPPED ONTO THE SHOP'S CALENDAR ────────────────
+  #
+  # `delivery_slots`' `date` is a day the CALLER names — «tonight», «Friday» —
+  # so it is read in the caller's calendar, which the caller states in
+  # `Kiosk-Timezone`. Silence means the address's own clock, which is
+  # byte-identical to what this shop did before the header existed.
+  #
+  # THE SHAPE OF THE ANSWER, and it is what makes both of the midnight
+  # scenarios come out right. A calendar day is an INTERVAL, not an instant:
+  #
+  #   * If the caller's day has ENTIRELY ENDED by now at the address, it is
+  #     genuinely past — a `400` naming the earliest day this shop delivers on.
+  #   * Otherwise the caller is asking about a day that is still current or
+  #     still ahead FOR THEM, so the shop answers from the day its own calendar
+  #     is on when that day BEGINS — floored at the soonest day it can actually
+  #     serve. At 23:05 on the 6th two hours west of a shop already five minutes
+  #     into the 7th, «today» comes back as the shop's 7th with the date on
+  #     every row, rather than as a refusal for a day the customer is still in.
+  #
+  # With no header the caller's zone IS the address's, the interval is the
+  # shop's own day, and «has it ended» is exactly `date < today` — the previous
+  # behaviour, now declared rather than assumed.
+  #
+  # @param date [Date] the day the caller named, already shape-checked
+  # @param zone [ActiveSupport::TimeZone] the DELIVERY ADDRESS's clock
+  # @param caller_zone [ActiveSupport::TimeZone, nil] what the caller declared
+  # @param soonest [Date] the earliest day this shop can serve, on `zone`
+  # @return [Array(Date, nil), Array(nil, OperationResult)]
+  def caller_day(date, zone:, caller_zone:, soonest:)
+    from  = caller_zone || zone
+    start = from.local(date.year, date.month, date.day, 0, 0, 0)
+    # `.advance(days: 1)` and not `+ 86_400`: this is the next midnight on the
+    # CALLER's own calendar, and across a DST transition that interval is 23 or
+    # 25 hours rather than 24.
+    ends  = start.advance(days: 1)
+
+    if ends <= DeliverySlots.now(zone)
+      return [nil, past_date(date, zone)]
+    end
+
+    at_shop = start.in_time_zone(zone).to_date
+    [at_shop < soonest ? soonest : at_shop, nil]
   end
 
   # ── A DATE ON THE WIRE IS `YYYY-MM-DD`, AND NOTHING ELSE ──────────────────
@@ -192,13 +245,13 @@ module WireArguments
   # Whole past DAYS are caught above; this is a past TIME-OF-DAY today.
   #
   # @return [OperationResult, nil] a refusal, or nil when the window is bookable
-  def past_slot(date, slot_id, tail)
-    return nil unless DeliverySlots.past?(date, slot_id)
+  def past_slot(date, slot_id, tail, zone = DeliverySlots.default_zone)
+    return nil unless DeliverySlots.past?(date, slot_id, zone)
 
     OperationResult.refused(
       code:    "bad_request",
       message: "delivery slot #{slot_id} on #{date} has already started " \
-               "(#{DeliverySlots.slot_at(date, slot_id).iso8601}) — #{tail}",
+               "(#{DeliverySlots.slot_at(date, slot_id, zone).iso8601}) — #{tail}",
     )
   end
 
@@ -208,20 +261,24 @@ module WireArguments
   # `400 bad_request` naming what is acceptable, never an empty list — `200 []`
   # for a past date is byte-identical to the honest empty answer for TODAY once
   # the last window has begun. A guard rather than an `enum` because the domain
-  # ("today or later, Europe/Dublin") rolls forward every midnight. TODAY is not
-  # refused: the boundary is deliberately the DAY and not the window.
+  # ("today or later, at the delivery address") rolls forward every midnight.
+  # TODAY is not refused: the boundary is deliberately the DAY and not the
+  # window. A day the CALLER is still in is not past either — {#caller_day} is
+  # what decides that, and this is the sentence it answers with.
   #
   # @return [OperationResult, nil] a refusal, or nil when the date is bookable
-  def past_date(date)
-    today = DeliverySlots.now.to_date
+  def past_date(date, zone = DeliverySlots.default_zone)
+    today = DeliverySlots.now(zone).to_date
     return nil if date >= today
 
     OperationResult.refused(
       code:    "bad_request",
-      message: "date #{date.iso8601} is in the past — getgrocery delivers from #{today.iso8601} " \
-               "onwards (Europe/Dublin)",
+      message: "date #{date.iso8601} is in the past — getgrocery delivers to this address from " \
+               "#{today.iso8601} onwards (#{zone.name})",
       hint:    "pass #{today.iso8601} or a later date; an EMPTY list means that day's windows " \
-               "have all begun, which is a different answer from this one.",
+               "have all begun, which is a different answer from this one. The day is read in " \
+               "YOUR calendar when you declare Kiosk-Timezone, and in the delivery address's " \
+               "when you do not.",
     )
   end
 
@@ -234,7 +291,7 @@ module WireArguments
   #   routing key the address resolved to, or a refusal naming what is needed.
   #   `delivery_slots` publishes that key as the row's `district`; the order
   #   verbs only need one to exist. THE METHOD IS NAMED FOR WHAT IT RETURNS: a
-  #   routing key, never the clock `DeliverySlots.zone` names.
+  #   routing key, never the clock `DeliverySlots.zone_for` reads off it.
   def served_district(address)
     result = DublinZones.check(address)
     return [result.district, nil] if result.ok?

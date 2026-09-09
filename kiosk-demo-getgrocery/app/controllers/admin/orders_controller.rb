@@ -69,6 +69,11 @@ module Admin
                                 .group_by(&:first)
 
       orders.map do |id, status, total_cents, slot_at, address, created_at, settled_currency|
+        # The clock this ORDER's times are said out loud on: the delivery
+        # address's, resolved through the same routing that chose its district
+        # when it was placed. Two orders on one screen may be on two clocks, and
+        # each label names its own.
+        order_zone = DeliverySlots.zone_for(DublinZones.extract_district(address))
         { "id"               => id,
           "short_id"         => id.to_s[0, 8],
           "status"           => status,
@@ -79,13 +84,15 @@ module Admin
           # `config.time_zone` — so a view that re-parsed
           # it would print 07:00 where the customer was told
           # «08:00–10:00 (Europe/Dublin)». {DeliverySlots.label} is the single
-          # writer for that string and {DeliverySlots.zone} for the day beside
-          # it, so the shop's own staff and the assistant read ONE answer about
-          # ONE window. The raw instant stays in the row for anything that needs
-          # the value rather than the sentence.
+          # writer for that string and {DeliverySlots.zone_for} for the day
+          # beside it, so the shop's own staff and the assistant read ONE answer
+          # about ONE window. The clock is the DELIVERY ADDRESS's, resolved from
+          # the order's own address through the same routing that chose the
+          # district when it was placed. The raw instant stays in the row for
+          # anything that needs the value rather than the sentence.
           "slot_at"          => slot_at,
-          "slot_window"      => slot_at && "#{slot_at.in_time_zone(DeliverySlots.zone).strftime('%a %-d %b')}, " \
-                                           "#{DeliverySlots.label(slot_at)}",
+          "slot_window"      => slot_at && "#{slot_at.in_time_zone(order_zone).strftime('%a %-d %b')}, " \
+                                           "#{DeliverySlots.label(slot_at, order_zone)}",
           "created_at"       => created_at,
           # AND THE ORDER'S OWN TIMESTAMP IS ON THE SAME CLOCK. A Dublin
           # delivery window beside an «Ordered» time on the server's clock, with
@@ -96,8 +103,8 @@ module Admin
           # through the SAME zone and NAMES it, exactly as {DeliverySlots.label}
           # names it for the window. One screen, one clock, both of them said out
           # loud.
-          "created_label"    => created_at && "#{created_at.in_time_zone(DeliverySlots.zone).strftime('%-d %b %Y at %H:%M')} " \
-                                              "(#{DeliverySlots::ZONE_NAME})",
+          "created_label"    => created_at && "#{created_at.in_time_zone(order_zone).strftime('%-d %b %Y at %H:%M')} " \
+                                              "(#{order_zone.name})",
           "settled_currency" => settled_currency,
           "items"            => (items_by_order[id] || []).map { |_order_id, qty, name, price_cents|
             { "qty" => qty, "product_name" => name, "price_cents" => price_cents }

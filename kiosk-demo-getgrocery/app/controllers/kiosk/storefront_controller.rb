@@ -111,14 +111,18 @@ class Kiosk::StorefrontController < ActionController::API
                additionalProperties: false,
                properties: {
                  date:             { type: "string", format: "date",
-                                     description: "OPTIONAL. Delivery date, YYYY-MM-DD. OMIT IT for " \
-                                                  "the soonest day this shop can deliver -- you " \
-                                                  "cannot compute that yourself, because the day " \
-                                                  "rolls over in the shop's own locale and not in " \
-                                                  "yours. Send one only when your human named a " \
-                                                  "day. TODAY or later; an earlier date is refused " \
-                                                  "with the earliest bookable one named. Every row " \
-                                                  "carries the date it is for." },
+                                     description: "OPTIONAL. Delivery date, YYYY-MM-DD, read in YOUR " \
+                                                  "OWN calendar -- declare it in the `Kiosk-Timezone` " \
+                                                  "request header and \"today\" means your human's " \
+                                                  "today, not the shop's. Declare none and it is read " \
+                                                  "at the delivery address. OMIT the field entirely " \
+                                                  "for the soonest day this shop can deliver. A day " \
+                                                  "that has entirely ENDED for you is refused with the " \
+                                                  "earliest bookable one named; a day you are still in " \
+                                                  "is answered even when the shop has already rolled " \
+                                                  "over, and the row then carries the SHOP's date, " \
+                                                  "which is how you learn that. Every row carries the " \
+                                                  "date it is for and the zone it is written in." },
                  delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
                },
                required: ["delivery_address"]
@@ -134,35 +138,36 @@ class Kiosk::StorefrontController < ActionController::API
                     date:             { type: "string", description: "YYYY-MM-DD — pass to create_order as `delivery_date` so the booking lands on the day you saw." },
                     slot_at:          { type: "string", description: "The window's start instant, ISO 8601 with offset." },
                     label:            { type: "string", description: "The window rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                    "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\". The wall clock " \
+                                                                    "e.g. \"08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})\". The wall clock " \
                                                                     "is the delivery address's, not the caller's; `slot_at` carries " \
                                                                     "the same instant with its resolved offset." },
+                    timezone:         { type: "string", description: "The IANA zone this row is rendered in — a property of the DELIVERY ADDRESS, not of this shop. `date` is a day on this calendar." },
                     district:         { type: "string", description: "The served Dublin postal district the address routed to (e.g. \"D02\") — a ROUTING key, not a time zone." },
                   },
-                  required: %w[delivery_slot_id date slot_at label district],
+                  required: %w[delivery_slot_id date slot_at label timezone district],
                 }
   # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
   # example that ages into a 400, since a date before today is REFUSED. These are
   # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
-  # {DeliverySlots.example_date} — tomorrow in the operator's own clock.
+  # {DeliverySlots.example_date} — tomorrow on the ORIGIN's own clock, because a
+  # descriptor is one document for every district this shop delivers to and
+  # addresses none of them.
   example_params({ date:             -> { DeliverySlots.example_date.iso8601 },
                    delivery_address: "42 Camden Street, Dublin 2" })
   example_row({ delivery_slot_id: 1,
                 date:    -> { DeliverySlots.example_date.iso8601 },
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
-                label: "08:00–10:00 (#{DeliverySlots::ZONE_NAME})", district: "D02" })
+                label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
+                timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots
-    # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
-    # you can deliver". The caller cannot compute this operator's today: it
-    # delivers in Europe/Dublin, and between 23:00 and 00:00 UTC an assistant's
-    # own date is a different day. Requiring the field made that gap the
-    # CALLER's problem and there was no way for the caller to solve it -- it
-    # would have to trust a timezone named in a description string, carry tzdata,
-    # and still race the boundary. The operator knows its own date; so it uses it.
-    #
-    # A date that IS sent is still validated exactly as before, past dates
-    # included, because "deliver on Friday" is a different request from "deliver
-    # as soon as you can" and only the caller knows which one it is making.
+    # `date` IS OPTIONAL, AND OMITTING IT IS STILL THE CORRECT CALL FOR "the
+    # soonest you can deliver" -- but the reason has improved. It used to be
+    # that the caller COULD NOT compute this shop's today and had no way to say
+    # which day it meant; with `Kiosk-Timezone` it can say, in its own calendar,
+    # and the shop maps it. So the field stays optional for a better reason:
+    # OMIT IT WHEN YOUR HUMAN NAMED NO DAY. "Deliver on Friday" is a different
+    # request from "deliver as soon as you can", and only the caller knows which
+    # one it is making.
 
     # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.
@@ -179,9 +184,20 @@ class Kiosk::StorefrontController < ActionController::API
     #
     # Only one step is needed: every window of a future day is still bookable,
     # so the day after today always has slots. A loop would suggest otherwise.
+    # ── THE CLOCK, ON BOTH SIDES ─────────────────────────────────────────
+    #
+    # OUT: the window is offered at the DELIVERY ADDRESS, so its zone comes off
+    # the district the address routed to.
+    # IN: a `date` the caller NAMES is a day on the CALLER's calendar, which the
+    # caller states in `Kiosk-Timezone`. Silence means the address's own clock,
+    # which is byte-identical to what this shop did before the header existed.
+    zone        = DeliverySlots.zone_for(district)
+    caller_zone = Kiosk::Server::CurrentRequest.timezone
+
+    soonest = DeliverySlots.now(zone).to_date
+    soonest += 1 if DeliverySlots.bookable_ids(soonest, zone).empty?
+
     unless params.key?(:date)
-      soonest = DeliverySlots.now.to_date
-      soonest += 1 if DeliverySlots.bookable_ids(soonest).empty?
       return render_slots(soonest, district)
     end
 
@@ -196,16 +212,21 @@ class Kiosk::StorefrontController < ActionController::API
       ))
     end
 
-    # Spec §9.1: a date BEFORE today is outside this verb's domain and is
-    # refused by name, because `200 []` for it is indistinguishable from the
-    # honest empty case immediately below.
-    refusal = WireArguments.past_date(date)
+    # THE CALLER'S DAY, ON THE SHOP'S CALENDAR. A calendar day is an INTERVAL,
+    # so a day the caller is STILL IN is not past even when the shop has already
+    # rolled over — that is the midnight case this rule exists for, and refusing
+    # it was the defect. A day that has entirely ended for the caller IS past,
+    # and spec §9.1 makes that a named `400` rather than the `200 []` that is
+    # indistinguishable from the honest empty case below.
+    date, refusal = WireArguments.caller_day(date, zone: zone, caller_zone: caller_zone,
+                                                   soonest: soonest)
     return render_refusal(refusal) if refusal
 
-    # PAST-SLOT FILTER: for TODAY, drop any slot whose start has already passed
-    # in the operator's locale; future dates keep all slots. An assistant should
-    # not see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is
-    # what create_order books.
+    # PAST-SLOT FILTER: for TODAY at the address, drop any slot whose start has
+    # already passed there; future dates keep all slots. An assistant should not
+    # see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is what
+    # create_order books — and it is the SHOP's day, which is how a caller
+    # learns that its «tonight» landed on the shop's tomorrow.
     render_slots(date, district)
   end
 
@@ -242,7 +263,7 @@ class Kiosk::StorefrontController < ActionController::API
                                                                         "`create_order` and `reschedule_delivery` gave you for this window, so " \
                                                                         "the four verbs spell one instant one way." },
                     slot_label:    { type: %w[string null], description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                        "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\" — or null when no window " \
+                                                                        "e.g. \"08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})\" — or null when no window " \
                                                                         "is booked. The wall clock is the delivery address's, not the caller's; " \
                                                                         "`slot_at` carries the same instant with its resolved offset." },
                     address:       { type: %w[string null], description: "The delivery address on the order, or null." },
@@ -279,13 +300,15 @@ class Kiosk::StorefrontController < ActionController::API
                           # TimeWithZone whose `as_json` follows `Time.zone` and
                           # the encoder's `time_precision`, so the published
                           # bytes would be the app's configuration talking.
-                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone)&.iso8601,
+                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone_for(DublinZones.extract_district(address)))&.iso8601,
                           # The window said out loud, zone named.
                           # `slot_at` carries the offset; nobody speaks an
                           # offset. This is the verb §11.6 sends an assistant to
                           # after a lost `pay`, so it is the row most likely to
                           # be read back TO a human.
-                          "slot_label"    => slot_at && DeliverySlots.label(slot_at),
+                          "slot_label"    => slot_at && DeliverySlots.label(
+                            slot_at, DeliverySlots.zone_for(DublinZones.extract_district(address))
+                          ),
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }
@@ -368,13 +391,18 @@ class Kiosk::StorefrontController < ActionController::API
   # The row says `district`, and so does every name behind it
   # (`DublinZones::Result#district`, {DublinZones.extract_district},
   # {WireArguments.served_district}): the published field is a POSTAL DISTRICT —
-  # `D02`, a routing key — while `DeliverySlots.zone` in this same demo is an
-  # `ActiveSupport::TimeZone`. A row carrying a delivery window is exactly where
-  # a reader expects `zone` to mean the clock the window is written in, so only
-  # the IANA accessor keeps that name — the one thing it can honestly mean.
+  # `D02`, a routing key — while the row's `timezone` is the CLOCK the window is
+  # written in. Two different facts about one address, and one word for both was
+  # unreadable three lines apart.
+  #
+  # THE CLOCK COMES OFF THE DISTRICT, not off this origin: a delivery happens at
+  # the door, so the zone is a property of the address being served
+  # ({DublinZones::ZONES}). Every served district is in Dublin today, so no
+  # response byte moves; what moved is where the answer is read from.
   def render_slots(date, district)
-    render json: DeliverySlots.bookable_ids(date).map { |slot_id|
-      slot_time = DeliverySlots.slot_at(date, slot_id)
+    zone = DeliverySlots.zone_for(district)
+    render json: DeliverySlots.bookable_ids(date, zone).map { |slot_id|
+      slot_time = DeliverySlots.slot_at(date, slot_id, zone)
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
@@ -388,7 +416,12 @@ class Kiosk::StorefrontController < ActionController::API
         # Built by {DeliverySlots.label} rather than here, because `my_orders`
         # publishes the same window for the same booking and two writers of one
         # string are two answers waiting to disagree.
-        "label"    => DeliverySlots.label(slot_time),
+        "label"    => DeliverySlots.label(slot_time, zone),
+        # THE ROW SAYS WHOSE CLOCK IT IS ON, read off the DELIVERY ADDRESS —
+        # this district's declared zone, never one constant for the origin. A
+        # shop delivering to a district in another country answers a different
+        # value here on the same call.
+        "timezone" => zone.name,
         "district" => district }
     }
   end

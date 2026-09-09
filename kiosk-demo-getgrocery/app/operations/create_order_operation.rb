@@ -38,8 +38,12 @@ class CreateOrderOperation
     return WireArguments.missing("delivery_slot_id — delivery is part of the order") if delivery_slot_id.nil?
     return WireArguments.missing("delivery_address — delivery is part of the order") if delivery_address.blank?
 
-    _district, refusal = WireArguments.served_district(delivery_address)
+    district, refusal = WireArguments.served_district(delivery_address)
     return refusal if refusal
+
+    # THE CLOCK IS THE DELIVERY ADDRESS's — the door is where the service
+    # happens — read off the district it just routed to and not off this origin.
+    zone = DeliverySlots.zone_for(district)
 
     slot_id, refusal = WireArguments.delivery_slot_id(delivery_slot_id)
     return refusal if refusal
@@ -49,15 +53,17 @@ class CreateOrderOperation
     # the field — but a caller that saw a slot for a day SHOULD pass that day.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
-      default:      DeliverySlots.now.to_date + 1,
+      default:      DeliverySlots.now(zone).to_date + 1,
       past_message: ->(d) { "delivery_date is in the past: #{d} — choose a current/future delivery slot" },
+      zone:         zone,
     )
     return refusal if refusal
 
-    slot_at = DeliverySlots.slot_at(date, slot_id)
+    slot_at = DeliverySlots.slot_at(date, slot_id, zone)
     refusal = WireArguments.past_slot(
       date, slot_id,
       "choose a later slot; call delivery_slots again for the still-bookable windows",
+      zone,
     )
     return refusal if refusal
 
@@ -201,7 +207,8 @@ class CreateOrderOperation
         # an assistant reading the confirmation back to a human speaks the
         # window in the delivery zone rather than in an offset nobody says out
         # loud.
-        slot_label:  DeliverySlots.label(slot_at),
+        slot_label:  DeliverySlots.label(slot_at, zone),
+        timezone:    zone.name,
         pay_hint:    "pay in EUR with a cart mandate whose line_items mirror this order: " \
                      "one {\"order_id\": \"#{new_order_id}\"} entry plus one " \
                      "{\"sku\", \"qty\", \"price_cents\"} entry per item at catalog prices — " \

@@ -374,32 +374,33 @@ class Kiosk::StorefrontController < ActionController::API
                     date:             { type: "string" },
                     slot_at:          { type: "string" },
                     label:            { type: "string" },
+                    timezone:         { type: "string" },
                     district:         { type: "string" },
                   },
-                  required: %w[delivery_slot_id date slot_at label district],
+                  required: %w[delivery_slot_id date slot_at label timezone district],
                 }
   # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
   # example that ages into a 400, since a date before today is REFUSED. These are
   # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
-  # {DeliverySlots.example_date} — tomorrow in the operator's own clock.
+  # {DeliverySlots.example_date} — tomorrow on the ORIGIN's own clock, because a
+  # descriptor is one document for every district this shop delivers to and
+  # addresses none of them.
   example_params({ date:             -> { DeliverySlots.example_date.iso8601 },
                    delivery_address: "42 Camden Street, Dublin 2" })
   example_row({ delivery_slot_id: 1,
                 date:    -> { DeliverySlots.example_date.iso8601 },
                 slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
-                label: "08:00–10:00 (#{DeliverySlots::ZONE_NAME})", district: "D02" })
+                label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
+                timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots
-    # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the soonest
-    # you can deliver". The caller cannot compute this operator's today: it
-    # delivers in Europe/Dublin, and between 23:00 and 00:00 UTC an assistant's
-    # own date is a different day. Requiring the field made that gap the
-    # CALLER's problem and there was no way for the caller to solve it -- it
-    # would have to trust a timezone named in a description string, carry tzdata,
-    # and still race the boundary. The operator knows its own date; so it uses it.
-    #
-    # A date that IS sent is still validated exactly as before, past dates
-    # included, because "deliver on Friday" is a different request from "deliver
-    # as soon as you can" and only the caller knows which one it is making.
+    # `date` IS OPTIONAL, AND OMITTING IT IS STILL THE CORRECT CALL FOR "the
+    # soonest you can deliver" -- but the reason has improved. It used to be
+    # that the caller COULD NOT compute this shop's today and had no way to say
+    # which day it meant; with `Kiosk-Timezone` it can say, in its own calendar,
+    # and the shop maps it. So the field stays optional for a better reason:
+    # OMIT IT WHEN YOUR HUMAN NAMED NO DAY. "Deliver on Friday" is a different
+    # request from "deliver as soon as you can", and only the caller knows which
+    # one it is making.
 
     # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.
@@ -416,16 +417,18 @@ class Kiosk::StorefrontController < ActionController::API
     # empty case below. The method then ends with the lines below, which ARE the
     # shipped ones.
 
-    # PAST-SLOT FILTER: for TODAY, drop any slot whose start has already passed
-    # in the operator's locale; future dates keep all slots. An assistant should
-    # not see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is
-    # what create_order books.
-    render json: DeliverySlots.bookable_ids(date).map { |slot_id|
-      slot_time = DeliverySlots.slot_at(date, slot_id)
+    # PAST-SLOT FILTER: for TODAY at the address, drop any slot whose start has
+    # already passed there; future dates keep all slots. An assistant should not
+    # see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is what
+    # create_order books — and it is the SHOP's day, which is how a caller
+    # learns that its «tonight» landed on the shop's tomorrow.
+    zone = DeliverySlots.zone_for(district)
+    render json: DeliverySlots.bookable_ids(date, zone).map { |slot_id|
+      slot_time = DeliverySlots.slot_at(date, slot_id, zone)
       { "delivery_slot_id" => slot_id,
         "date"     => date.iso8601,
         "slot_at"  => slot_time.iso8601,
-        "label"    => DeliverySlots.label(slot_time),
+        "label"    => DeliverySlots.label(slot_time, zone),
         "district" => district }
     }
   end
@@ -487,13 +490,15 @@ class Kiosk::StorefrontController < ActionController::API
                           # TimeWithZone whose `as_json` follows `Time.zone` and
                           # the encoder's `time_precision`, so the published
                           # bytes would be the app's configuration talking.
-                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone)&.iso8601,
+                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone_for(DublinZones.extract_district(address)))&.iso8601,
                           # The window said out loud, zone named.
                           # `slot_at` carries the offset; nobody speaks an
                           # offset. This is the verb §11.6 sends an assistant to
                           # after a lost `pay`, so it is the row most likely to
                           # be read back TO a human.
-                          "slot_label"    => slot_at && DeliverySlots.label(slot_at),
+                          "slot_label"    => slot_at && DeliverySlots.label(
+                            slot_at, DeliverySlots.zone_for(DublinZones.extract_district(address))
+                          ),
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }
@@ -590,7 +595,7 @@ class Kiosk::OrdersController < ActionController::API
                   slot_label:  { type: "string" },
                   pay_hint:    { type: "string" },
                 },
-                required: %w[order_id total_cents total_eur currency slot_at slot_label pay_hint]
+                required: %w[order_id total_cents total_eur currency slot_at slot_label timezone pay_hint]
   # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
   # publish a `delivery_date` the operation refuses as past. `slot_at` derives
   # from the SAME day and the slot id beside it, so they cannot drift apart.
@@ -643,13 +648,14 @@ class Kiosk::OrdersController < ActionController::API
                   rescheduled_at: { type: "string" },
                   rescheduled_label: { type: "string" },
                 },
-                required: %w[order_id rescheduled_at rescheduled_label]
+                required: %w[order_id rescheduled_at rescheduled_label timezone]
   # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
                 rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
-                rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) } })
+                rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
+                timezone: DeliverySlots::DEFAULT_ZONE_NAME })
   def reschedule_delivery
     render_operation RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],

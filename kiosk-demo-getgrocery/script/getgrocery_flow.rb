@@ -117,27 +117,37 @@ abort "out-of-zone delivery_slots expected 400 bad_request, got #{rc_bad} #{bad_
 STDERR.puts "  delivery_slots (district-less address): http=#{rc_bad} code=#{bad_code} (rejected, as expected)"
 
 rc_slots = nil
-# NO DATE IS SENT, and that is the whole point. This client cannot know what
-# day it is at the shop -- getgrocery delivers in Europe/Dublin, so between
-# 23:00 and 00:00 UTC its today and ours are different dates. Omitting `date`
-# asks for the soonest day it can deliver and is correct at every hour.
+# THE CALLER DECLARES ITS OWN CLOCK, on every call, and it is this driver's
+# `Kiosk-Timezone`. That is what lets a date this client sends mean the day its
+# HUMAN meant: at 23:05 two hours west of a shop already five minutes into
+# tomorrow, "today" is still today for the customer, and the shop answers with
+# the soonest day it can actually deliver rather than refusing.
 #
-# Sending Date.today and RETRYING when the operator refuses it as past would
-# work and would still be wrong: a retry is a second round trip to learn
-# something the operator can be asked properly the first time, and a reference
-# driver is what an assistant copies.
+# A REAL ASSISTANT TAKES THIS FROM THE HUMAN IT ACTS FOR, never from the
+# machine it runs on -- the same rule that already governs the delivery
+# address. This driver has no human, so it declares the process zone and says
+# so here rather than pretending otherwise.
+CALLER_TZ = (ENV["TZ"] || Time.now.zone).to_s
+# A real IANA name is required. `Time.now.zone` answers an ABBREVIATION ("IST",
+# "CEST") when TZ is unset, which is not an Area/Location identifier, so this
+# driver falls back to UTC rather than sending a value the wire refuses.
+CALLER_TZ_HEADER = CALLER_TZ.include?("/") ? CALLER_TZ : "UTC"
+
 query_slots = lambda do |date_str|
   args = { delivery_address: delivery_address }
   args[:date] = date_str if date_str
   rc_slots, resp = get_json(
     "#{SERVER}/kiosk/delivery_slots",
-    { "Authorization" => "Bearer #{token}" },
+    { "Authorization" => "Bearer #{token}", "Kiosk-Timezone" => CALLER_TZ_HEADER },
     args,
   )
   abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(resp)}" unless rc_slots == 200
   Array(resp)
 end
 
+# OMITTING `date` IS STILL THE RIGHT CALL FOR "the soonest you can deliver" --
+# the human named no day, so the client names none either. What has changed is
+# the REASON: it is no longer that the client cannot say which day it means.
 slots = query_slots.call(nil)
 # The rows carry the day the operator picked -- that is how a caller that
 # omitted the date learns which day it got, and create_order must book that
@@ -146,6 +156,27 @@ slots = query_slots.call(nil)
 # defect in the operator rather than a case for the client to handle.
 abort "delivery_slots returned empty" if slots.empty?
 abort "delivery_slots rows must carry the resolved district" unless slots.all? { |s| s["district"].to_s.start_with?("D") }
+# EVERY ROW SAYS WHICH CLOCK IT IS WRITTEN ON, and that clock is the DELIVERY
+# ADDRESS's -- not this shop's and not the caller's. Without it "08:00-10:00" is
+# a wall clock a customer three hours away reads as their own 08:00.
+abort "delivery_slots rows must name the zone they are rendered in" \
+  unless slots.all? { |s| s["timezone"].to_s.include?("/") }
+abort "the row's label must name the same zone the row does" \
+  unless slots.all? { |s| s["label"].to_s.include?(s["timezone"].to_s) }
+
+# ── THE CALLER'S OWN DAY, SENT AND UNDERSTOOD ──────────────────────────────
+#
+# The other half of the same rule, and the path a client takes when its human
+# DID name a day: send this client's own today, in its own calendar, and the
+# shop maps it onto its own. It is answered at every hour and from every clock
+# -- the day the caller is in is never "in the past", even when the shop has
+# already rolled over -- and the rows come back on the SHOP's calendar, which
+# is how the caller learns that its tonight became the shop's tomorrow.
+todays_slots = query_slots.call(Date.today.iso8601)
+abort "delivery_slots refused the caller's own today" if todays_slots.empty?
+STDERR.puts "  delivery_slots (date=#{Date.today.iso8601} in #{CALLER_TZ_HEADER}): " \
+            "#{todays_slots.length} window(s), first on #{todays_slots.first["date"]} " \
+            "(#{todays_slots.first["timezone"]})"
 slot          = slots.first
 slot_id       = slot.fetch("delivery_slot_id")
 slot_date     = slot.fetch("date")     # the day the assistant sees for this slot

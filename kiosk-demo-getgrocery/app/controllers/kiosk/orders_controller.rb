@@ -146,7 +146,7 @@ class Kiosk::OrdersController < ActionController::API
                  # DECLARED contract says so too and the wire refuses the rest
                  # before any Ruby runs.
                  delivery_date:    { type: "string", format: "date",
-                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. Optional; omitting books tomorrow." },
+                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way the day you were offered is the day you get. Optional; omitting books tomorrow at the address." },
                  delivery_address: { type: "string",
                                      description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
                  # `pattern`/`format` so the DECLARED contract carries the shape the
@@ -166,12 +166,13 @@ class Kiosk::OrdersController < ActionController::API
                   currency:    { type: "string", description: "eur — the currency the cart must be signed in." },
                   slot_at:     { type: "string", description: "The booked delivery window's start instant, ISO 8601 with offset." },
                   slot_label:  { type: "string", description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
-                                                              "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\". The wall clock " \
+                                                              "e.g. \"08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})\". The wall clock " \
                                                               "is the delivery address's, not the caller's; `slot_at` carries " \
                                                               "the same instant with its resolved offset." },
+                  timezone:    { type: "string", description: "The IANA zone this window is written in — a property of the DELIVERY ADDRESS, not of this shop." },
                   pay_hint:    { type: "string", description: "The mandate this order expects, in words." },
                 },
-                required: %w[order_id total_cents total_eur currency slot_at slot_label pay_hint]
+                required: %w[order_id total_cents total_eur currency slot_at slot_label timezone pay_hint]
   # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
   # publish a `delivery_date` the operation refuses as past. `slot_at` derives
   # from the SAME day and the slot id beside it, so they cannot drift apart.
@@ -186,6 +187,7 @@ class Kiosk::OrdersController < ActionController::API
     total_eur: "€12.87", currency: "eur",
     slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
     slot_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
+    timezone: DeliverySlots::DEFAULT_ZONE_NAME,
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
@@ -222,7 +224,7 @@ class Kiosk::OrdersController < ActionController::API
                                      description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },
                  # Same declaration as create_order's, for the same reason.
                  delivery_date:    { type: "string", format: "date",
-                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. Omitting it books tomorrow." },
+                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar. Omitting it books tomorrow at the address." },
                  delivery_address: { type: "string",
                                      description: "New in-zone Dublin delivery address; unchanged if omitted." },
                },
@@ -236,16 +238,18 @@ class Kiosk::OrdersController < ActionController::API
                   order_id:       { type: "string", description: "The order that moved, echoed." },
                   rescheduled_at: { type: "string", description: "The NEW delivery window's start instant, ISO 8601 with offset." },
                   rescheduled_label: { type: "string", description: "The NEW window rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                    "e.g. \"08:00–10:00 (#{DeliverySlots::ZONE_NAME})\" — from the same " \
+                                                                    "e.g. \"08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})\" — from the same " \
                                                                     "writer as `delivery_slots`, `create_order` and `my_orders`." },
+                  timezone:       { type: "string", description: "The IANA zone the new window is written in — a property of the DELIVERY ADDRESS the order lands at." },
                 },
-                required: %w[order_id rescheduled_at rescheduled_label]
+                required: %w[order_id rescheduled_at rescheduled_label timezone]
   # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
                 rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
-                rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) } })
+                rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
+                timezone: DeliverySlots::DEFAULT_ZONE_NAME })
   def reschedule_delivery
     render_operation RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],

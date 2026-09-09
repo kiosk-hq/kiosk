@@ -86,10 +86,12 @@ def refusal_of(pair) = pair.is_a?(Array) ? pair[1] : pair
 def value_of(pair)   = pair.is_a?(Array) ? pair[0] : nil
 
 # Freeze "now" to a fixed Dublin instant, the way spec/delivery_slots_spec.rb
-# does — {WireArguments} reads the ORIGIN's clock and never Date.today.
+# does — {WireArguments} reads a DELIVERY ADDRESS's clock and never Date.today.
+# The stub takes the zone argument and IGNORES it: it freezes an instant, and
+# what the assertions vary is the zone each call is HANDED.
 def at_dublin(iso)
-  fixed = DeliverySlots.zone.parse(iso)
-  DeliverySlots.define_singleton_method(:now) { fixed }
+  fixed = DeliverySlots.default_zone.parse(iso)
+  DeliverySlots.define_singleton_method(:now) { |_zone = nil| fixed }
   yield fixed
 ensure
   DeliverySlots.singleton_class.send(:remove_method, :now)
@@ -549,7 +551,7 @@ at_dublin("2026-08-07T11:00:00") do
   assert_typed_400(refusal, "past_date(#{today - 1})")
   if refusal.is_a?(OperationResult)
     assert(refusal.message.include?(today.iso8601) && refusal.message.include?("Europe/Dublin"),
-           "  … names the floor and the zone: #{refusal.message}")
+           "  … names the floor and the zone it judged on: #{refusal.message}")
     assert(refusal.hint.to_s.include?("EMPTY list"),
            "  … and says why this is not the empty-list answer: #{refusal.hint}")
   end
@@ -567,6 +569,65 @@ at_dublin("2026-08-07T11:00:00") do
     assert(guard("past_slot(#{slot})") { WireArguments.past_slot(today, slot, "tail") }.nil?,
            "past_slot(today, #{slot}) → nil at 11:00 Dublin (that window has not begun)")
   end
+end
+
+# ── 7b. caller_day/1 — THE CALLER'S OWN DAY, ON THE SHOP'S CALENDAR ─────────
+#
+# `delivery_slots`' `date` is a day the CALLER names, so it is read in the
+# caller's calendar, which the caller states in `Kiosk-Timezone`. THE TWO
+# MIDNIGHT SCENARIOS ARE THE ACCEPTANCE TEST, and they are what this section
+# runs: a customer ordering at 23:05 must not be told its own today is «in the
+# past» because the shop is five minutes into tomorrow.
+#
+# A calendar day is an INTERVAL. It is past only when it has ENTIRELY ended at
+# the address; while the caller is still in it, the shop answers from the
+# soonest day it can serve and the row carries THAT date, which is how the
+# caller learns its «tonight» became the shop's tomorrow.
+puts "\n── caller_day: a day the caller is still in is not past ──"
+DUBLIN     = DeliverySlots.default_zone
+BEHIND     = Time.find_zone!("Etc/GMT+2")    # UTC-2: a caller two hours west
+AHEAD      = Time.find_zone!("Etc/GMT-11")   # UTC+11: a caller a day ahead
+
+# 00:05 on the 7th in Dublin. The scenario, exactly as it was written down.
+at_dublin("2026-09-07T00:05:00") do
+  soonest = Date.new(2026, 9, 7)
+
+  # (1) The caller is two hours WEST: for them it is 23:05 on the SIXTH, and
+  # their 6th does not end for another three hours. Answered, on the shop's 7th.
+  pair = WireArguments.caller_day(Date.new(2026, 9, 6), zone: DUBLIN, caller_zone: BEHIND,
+                                                        soonest: soonest)
+  assert(refusal_of(pair).nil?, "the caller's own today is NOT refused as past: #{refusal_of(pair)&.message}")
+  assert(value_of(pair) == soonest,
+         "…it is answered on the shop's soonest day (#{soonest}), which the row then carries, " \
+         "got #{value_of(pair)}")
+
+  # (2) The mirror: a caller ELEVEN hours east, already on the 7th, whose 7th
+  # began on the shop's 6th at 13:00.
+  pair = WireArguments.caller_day(Date.new(2026, 9, 7), zone: DUBLIN, caller_zone: AHEAD,
+                                                        soonest: soonest)
+  assert(refusal_of(pair).nil?, "…and neither is a day-ahead caller's today")
+  assert(value_of(pair) == soonest, "…answered on the shop's #{soonest}, got #{value_of(pair)}")
+
+  # A day that has ENTIRELY ended for the caller IS past, on any clock.
+  refusal = refusal_of(WireArguments.caller_day(Date.new(2026, 9, 1), zone: DUBLIN,
+                                                caller_zone: BEHIND, soonest: soonest))
+  assert_typed_400(refusal, "caller_day(2026-09-01)")
+
+  # A FUTURE day is not floored: it is the shop's calendar day containing the
+  # start of the caller's.
+  pair = WireArguments.caller_day(Date.new(2026, 9, 20), zone: DUBLIN, caller_zone: BEHIND,
+                                                         soonest: soonest)
+  assert(value_of(pair) == Date.new(2026, 9, 20),
+         "a future day maps to the shop's own #{Date.new(2026, 9, 20)}, got #{value_of(pair)}")
+
+  # NO HEADER ⇒ THE ADDRESS'S OWN CLOCK, and that is byte-identical to what this
+  # shop did before the header existed: `date < today` and nothing else.
+  assert(refusal_of(WireArguments.caller_day(Date.new(2026, 9, 7), zone: DUBLIN, caller_zone: nil,
+                                             soonest: soonest)).nil?,
+         "with no declared zone, the shop's today is accepted")
+  assert(refusal_of(WireArguments.caller_day(Date.new(2026, 9, 6), zone: DUBLIN, caller_zone: nil,
+                                             soonest: soonest)).is_a?(OperationResult),
+         "…and the shop's yesterday is refused — the previous behaviour, now declared")
 end
 
 # ── 8. served_district/1 and missing_address/0 — ADDRESS-UPFRONT ────────────

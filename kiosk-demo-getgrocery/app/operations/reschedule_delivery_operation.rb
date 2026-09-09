@@ -19,10 +19,19 @@ class RescheduleDeliveryOperation
 
     # ADDRESS-UPFRONT: a NEW address must also be an in-zone Dublin one.
     # Omitted → the order keeps the address it has.
+    district = nil
     if delivery_address.present?
-      _district, refusal = WireArguments.served_district(delivery_address)
+      district, refusal = WireArguments.served_district(delivery_address)
       return refusal if refusal
     end
+
+    # THE CLOCK IS THE DELIVERY ADDRESS's. A move that names a NEW address is
+    # timed at the new door; one that does not keeps the order's own, which is
+    # resolved from the stored address inside the transaction below, where the
+    # row is read. Until then the origin default stands in — every district this
+    # shop serves is on it, and the value is re-read before anything is
+    # published.
+    zone = district ? DeliverySlots.zone_for(district) : DeliverySlots.default_zone
 
     slot_id, refusal = WireArguments.delivery_slot_id(delivery_slot_id)
     return refusal if refusal
@@ -32,14 +41,16 @@ class RescheduleDeliveryOperation
     # assistant saw is the day+time this books.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
-      default:      DeliverySlots.now.to_date + 1,
+      default:      DeliverySlots.now(zone).to_date + 1,
       past_message: ->(d) { "delivery_date is in the past: #{d}" },
+      zone:         zone,
     )
     return refusal if refusal
 
     refusal = WireArguments.past_slot(
       date, slot_id,
       "choose a later slot; call delivery_slots again for the still-bookable windows",
+      zone,
     )
     return refusal if refusal
 
@@ -97,7 +108,11 @@ class RescheduleDeliveryOperation
       end
 
       row_id, current_address = order
-      slot_at = DeliverySlots.slot_at(date, slot_id)
+      # The address this move lands at — the new one when given, the order's own
+      # otherwise — and therefore the clock the window is written on.
+      landing_address = delivery_address.to_s.presence || current_address
+      zone    = DeliverySlots.zone_for(DublinZones.extract_district(landing_address))
+      slot_at = DeliverySlots.slot_at(date, slot_id, zone)
 
       Order.owned_by_current_principal
            .where(id: row_id)
@@ -106,7 +121,7 @@ class RescheduleDeliveryOperation
              slot_at:    slot_at,
              # `to_s.presence` and not `presence`: the TEXT the value renders as
              # is what decides "was a new address given", and what gets stored.
-             address:    delivery_address.to_s.presence || current_address,
+             address:    landing_address,
              updated_at: Time.current,
            )
 
@@ -116,7 +131,8 @@ class RescheduleDeliveryOperation
       # is the one an assistant reads back an hour wrong.
       OperationResult.ok({ order_id:         order_id,
                            rescheduled_at:   slot_at.iso8601,
-                           rescheduled_label: DeliverySlots.label(slot_at) })
+                           rescheduled_label: DeliverySlots.label(slot_at, zone),
+                           timezone:          zone.name })
     end
   end
 end

@@ -24,14 +24,14 @@
 #   DoubleBookedRoom   — a room-night already held cannot be reserved again by
 #                        anyone, on the same or overlapping dates → 409
 #
-# And two beats that are only expressible after the 0.4 cutover:
-#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
-#                        404 / verb_not_found an AUTHENTICATED caller gets, and
+# And two beats about the shape of the wire itself:
+#   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
+#                        POST /kiosk/run name no registered verb, so they are
+#                        404 / verb_not_found to an AUTHENTICATED caller and
 #                        401 / unauthenticated without a bearer (auth precedes
-#                        verb dispatch; both are probed): the multiplexed pair
-#                        was DELETED, so there is no privileged endpoint left,
-#                        no compatibility payload, and no second conformance
-#                        surface to attack.
+#                        verb dispatch; both are probed): no privileged
+#                        endpoint hides behind a generic-sounding word, and
+#                        there is no second conformance surface to attack.
 #   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
 #                        with `Allow: POST`, never a silent 404 an assistant
 #                        would read as "this operator cannot do that".
@@ -537,8 +537,8 @@ module RawWire
   #
   # A NIL principal is the ANONYMOUS probe and is a different question,
   # not a degenerate case of the same one: the wire resolves the caller BEFORE it
-  # looks the verb up, so what an unauthenticated request gets at a retired path
-  # is 401, never the 404 an authenticated one gets.
+  # looks the verb up, so what an unauthenticated request gets at a path naming
+  # no registered verb is 401, never the 404 an authenticated one gets.
   # @return [Array(Net::HTTPResponse, Hash)] the response and its parsed body
   def raw(principal, method, path, body = nil)
     uri     = URI("#{BASE_URL}#{path}")
@@ -829,12 +829,12 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 end
 
-# The 0.3 multiplexed pair was DELETED, not tombstoned. `POST
-# /kiosk/query` now reaches the per-verb controller as a verb literally named
-# "query", which nobody registered, so it answers the ordinary 404 an
-# AUTHENTICATED caller gets — no privileged endpoint left, no compatibility
-# payload keeping the 0.3 argument channel alive, and no second conformance
-# surface to attack.
+# `POST /kiosk/query` and `POST /kiosk/run` reach the per-verb controller as
+# verbs literally named "query" and "run", which nobody registered, so they
+# answer the ordinary 404 an AUTHENTICATED caller gets — no privileged endpoint
+# hiding behind a generic-sounding word, and no second conformance surface to
+# attack. Those two names are what a caller hunting for a multiplexed endpoint
+# tries first, which is why the beat dials them rather than a nonsense word.
 #
 # BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
 # `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
@@ -843,24 +843,24 @@ end
 # A beat that dialled only WITH a bearer would let prose say the 404 flatly while
 # nothing tested the anonymous case.
 #
-# A deprecation shim here is exactly what an attacker would reach for, because
-# it takes the verb name from the BODY, where no route constraint and no
+# A multiplexer here is exactly what an attacker would reach for, because it
+# takes the verb name from the BODY, where no route constraint and no
 # input_schema can see it.
-class RetiredWire < Kiosk::Redteam::Scenario
+class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   include RawWire
 
   def initialize
     super(
-      name:        "RetiredWire",
+      name:        "UnregisteredVerbIsOrdinaryRefusal",
       category:    "wire",
-      description: "The retired 0.3 endpoints POST /kiosk/query and POST /kiosk/run must be the " \
-                   "ordinary 404 an authenticated caller gets — and 401 without a bearer — never a " \
-                   "compatibility surface",
+      description: "POST /kiosk/query and POST /kiosk/run name no registered verb, so they must " \
+                   "be the ordinary 404 an authenticated caller gets — and 401 without a bearer " \
+                   "— never a privileged surface",
     )
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-retired-wire", profile:)
+    a = register_principal(client, name: "redteam-unregistered-verb", profile:)
 
     probes = %w[query run].flat_map do |name|
       [[a, 404, "verb_not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
@@ -876,7 +876,7 @@ class RetiredWire < Kiosk::Redteam::Scenario
       blocked: probes.all? { |ok, _| ok },
       skipped: false,
       status:  404,
-      detail:  probes.all? { |ok, _| ok } ? "" : "a retired 0.3 endpoint answers the wrong " \
+      detail:  probes.all? { |ok, _| ok } ? "" : "an unregistered verb name answers the wrong " \
                                                  "thing: " \
                                                  "#{probes.reject { |ok, _| ok }.map(&:last).join(", ")}",
     )
@@ -1072,7 +1072,7 @@ scenarios = [
   MalformedUuidArg.new,                                   # junk uuid → typed 400, no 500
   HostileArgShapes.new,                                   # boolean/array/object/date shapes → typed 400
   DoubleBookedRoom.new,                                   # one room-night, one booking
-  RetiredWire.new,                                        # the 0.3 pair is 404, not a shim
+  UnregisteredVerbIsOrdinaryRefusal.new,                  # a path naming no verb → 404, not a shim
   MethodMismatch.new,                                     # 0.4 — wrong method is 405 + Allow, not 404
   PastStay.new,                                           # no availability in the past, no booking into it
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)

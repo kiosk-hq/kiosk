@@ -1419,7 +1419,10 @@ namespace :demo do
                                     NO identity → 401, unconditionally
       BLOCKED  UnknownQuery       — unregistered query name → 404
       BLOCKED  UnknownAction      — unregistered action name → 404
-      BLOCKED  RetiredWire        — the deleted 0.3 POST /kiosk/{query,run} → 404
+      BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
+                                    POST /kiosk/run name no registered verb:
+                                    404 verb_not_found with a bearer, 401
+                                    unauthenticated without
       BLOCKED  MethodMismatch     — GET at an action's path → 405 + Allow: POST
       BLOCKED  InvalidFilterIsNotAnEmptyList — an availability filter naming a
                                     seating that does not exist is a typed 400

@@ -812,9 +812,10 @@ namespace :demo do
                                        one past PostgreSQL `integer` → typed 400,
                                        never a 500 and never a wrong answer served as 200
       BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
-      BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are the ordinary 404
-                                       an authenticated caller gets, 401 without a bearer
-                                       (the 0.3 pair was DELETED, not shimmed)
+      BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and /kiosk/run name
+                                       no registered verb: the ordinary 404 an authenticated
+                                       caller gets, 401 without a bearer, and no privileged
+                                       endpoint behind a generic-sounding word
       BLOCKED  MethodMismatch        — a GET at an action's path is 405 method_not_allowed
                                        with Allow:, never a silent 404
       BLOCKED  PastStay              — a check_in before today is a typed 400 on BOTH

@@ -25,9 +25,11 @@
 #                       cleartext parser to fall back to
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
-#   RetiredWire       — the deleted 0.3 `POST /kiosk/{query,run}` answer the
-#                       ordinary 404 an authenticated caller gets, and 401
-#                       without a bearer; no privileged endpoint left to attack
+#   UnregisteredVerbIsOrdinaryRefusal — `POST /kiosk/query` and
+#                       `POST /kiosk/run` name no registered verb, so they
+#                       answer the ordinary 404 an authenticated caller gets,
+#                       and 401 without a bearer; no privileged endpoint hides
+#                       behind a generic-sounding word
 #   MethodMismatch    — a GET at an action's path is 405 + `Allow: POST`, never
 #                       a silent 404
 #   InvalidFilterIsNotAnEmptyList — an availability filter naming a seating
@@ -291,12 +293,14 @@ BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 rc, _ = WIRE.post_json("/kiosk/nope", {}, WIRE.bearer(TOKEN_A))
 BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
-# ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
-# The 0.3 multiplexed pair was a hard cut: `POST /kiosk/query` reaches the
-# per-verb controller as a verb literally named "query", which nobody
-# registered, so it answers the ordinary 404 an AUTHENTICATED caller gets — no
-# privileged endpoint, no compatibility payload, no second conformance surface
-# to attack.
+# ── UnregisteredVerbIsOrdinaryRefusal — a path naming no verb is refused ─────
+# `POST /kiosk/query` and `POST /kiosk/run` reach the per-verb controller as
+# verbs literally named "query" and "run", which nobody registered, so they
+# answer the ordinary 404 an AUTHENTICATED caller gets — no privileged
+# endpoint behind a generic-sounding word, and no second conformance surface
+# to attack. Those two names are what a caller hunting for a multiplexed
+# endpoint tries first, which is why the beat dials them rather than a
+# nonsense word.
 #
 # BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
 # `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
@@ -307,16 +311,17 @@ BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)"
 # The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
 # NAMES nobody registered, and the vocabulary reserves `not_found` for an
 # argument that ADDRESSED something absent.
-retired = %w[query run].map do |name|
+unregistered = %w[query run].map do |name|
   rc, body = WIRE.post_json("/kiosk/#{name}", { name: "availability", party_size: 2 }, WIRE.bearer(TOKEN_A))
   [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
 end
-retired_anon = %w[query run].map do |name|
+unregistered_anon = %w[query run].map do |name|
   rc, body = WIRE.post_json("/kiosk/#{name}", { name: "availability", party_size: 2 })
   [rc == 401 && body["code"] == "unauthenticated", "#{name}(anon)→#{rc}/#{body['code'].inspect}"]
 end
-BATTERY.record("RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
-               "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
+BATTERY.record("UnregisteredVerbIsOrdinaryRefusal",
+               (unregistered + unregistered_anon).all? { |ok, _| ok },
+               "unregistered verb names #{(unregistered + unregistered_anon).map(&:last).join(', ')} " \
                "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────

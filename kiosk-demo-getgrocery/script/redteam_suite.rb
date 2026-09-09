@@ -20,14 +20,14 @@
 # and a fourth (MalformedItemsCart) attacks the input shape create_order takes.
 #
 # THE 0.4 WIRE. A query is `GET /kiosk/<query-name>` with its arguments in the
-# query string, an action is `POST /kiosk/<action-name>` with its arguments as
-# the JSON body, and `POST /kiosk/{query,run}` no longer exist. A success body
-# IS the result (a bare array from a non-paginating query, the action's own
-# object from an action, the settlement object from `pay`), and an error is an
-# RFC 9457 problem document whose branch point is the TOP-LEVEL `code`. Two of
-# the scenarios below are only expressible after that cut — RetiredWire and
-# MethodMismatch — and both are here because a wire surface that quietly
-# survives a deletion, or lies about a resource that exists, is an attack
+# query string and an action is `POST /kiosk/<action-name>` with its arguments
+# as the JSON body. A success body IS the result (a bare array from a
+# non-paginating query, the action's own object from an action, the settlement
+# object from `pay`), and an error is an RFC 9457 problem document whose branch
+# point is the TOP-LEVEL `code`. Two of the scenarios below are about the shape
+# of that wire rather than about this shop — UnregisteredVerbIsOrdinaryRefusal
+# and MethodMismatch — and both are here because a path that answers more than
+# the ordinary refusal, or lies about a resource that exists, is an attack
 # surface.
 #
 # THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
@@ -570,19 +570,21 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 end
 
-# ── The cut itself: two scenarios only expressible after 0.4 ─────────────────
+# ── The wire's own shape: two scenarios about paths, not about this shop ─────
 #
 # Both dial raw paths, so they use Net::HTTP directly rather than the Client's
 # verb helpers — the Client speaks REGISTERED verbs, and what is under test here
 # is what happens at a path that is not one.
 
-# A retired endpoint that still answers is a second conformance surface, and a
-# second conformance surface is somewhere an attacker looks for the gate the
-# first one has. The 0.3 cutover was a HARD CUT: `POST /kiosk/query` and
-# `POST /kiosk/run` now reach the per-verb controller as verbs literally named
-# "query" and "run", which nobody registered, so they answer the ordinary 404 an
-# AUTHENTICATED caller gets — no privileged endpoint left, no compatibility
-# payload, no tombstone naming a replacement an attacker could probe.
+# A path that answers more than the ordinary refusal is a second conformance
+# surface, and a second conformance surface is somewhere an attacker looks for
+# the gate the first one has. `POST /kiosk/query` and `POST /kiosk/run` reach
+# the per-verb controller as verbs literally named "query" and "run", which
+# nobody registered, so they answer the ordinary 404 an AUTHENTICATED caller
+# gets — no privileged endpoint hiding behind a generic-sounding word, and
+# nothing naming a replacement an attacker could probe. Those two names are
+# what a caller hunting for a multiplexed endpoint tries first, which is why
+# the beat dials them rather than a nonsense word.
 #
 # BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
 # `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
@@ -590,22 +592,22 @@ end
 # it is answered 401 `unauthenticated`, exactly as it would be at any other name.
 # A beat that dialled only WITH a bearer would let prose say the 404 flatly while
 # nothing tested the anonymous case.
-class RetiredWire < Kiosk::Redteam::Scenario
-  RETIRED = %w[query run].freeze
+class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
+  UNREGISTERED = %w[query run].freeze
 
   def initialize
     super(
-      name:        "RetiredWire",
+      name:        "UnregisteredVerbIsOrdinaryRefusal",
       category:    "surface",
-      description: "The deleted 0.3 multiplexed endpoints are GONE — the ordinary 404 an " \
-                   "authenticated caller gets, 401 without a bearer, not a tombstone",
+      description: "POST /kiosk/query and POST /kiosk/run name no registered verb — the " \
+                   "ordinary 404 an authenticated caller gets, 401 without a bearer",
     )
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-retired-a", profile:)
+    a = register_principal(client, name: "redteam-unregistered-a", profile:)
 
-    results = RETIRED.flat_map do |name|
+    results = UNREGISTERED.flat_map do |name|
       [[a.token, 404, "verb_not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
         .map do |token, want_status, want_code, tag|
         uri     = URI("#{BASE_URL}/kiosk/#{name}")
@@ -626,7 +628,7 @@ class RetiredWire < Kiosk::Redteam::Scenario
       skipped: false,
       status:  404,
       detail:  results.all? { |ok, _| ok } ? "" :
-                 "a retired 0.3 endpoint answers the wrong thing: " \
+                 "an unregistered verb name answers the wrong thing: " \
                  "#{results.reject { |ok, _| ok }.map(&:last).join(", ")}",
     )
   end
@@ -851,7 +853,7 @@ scenarios = [
   InflatedTotalCart.new,
   MalformedItemsCart.new,   # a mis-shaped `items` is a typed 400, never a 500
   HostileArgShapes.new,     # boolean/array/object/junk shapes on the other args → typed 400
-  RetiredWire.new,          # the 0.3 pair is deleted, not tombstoned
+  UnregisteredVerbIsOrdinaryRefusal.new, # a path naming no verb → the ordinary refusal
   MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
   PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
   KycBrokerUnwired.new,     # no broker configured is a typed 501, never a Ruby exception in a 500

@@ -2942,8 +2942,9 @@ end
 # `/.well-known/kiosk.json` «for the register/login and schema/query/run/pay
 # endpoints», which is false on both available readings: protocol 0.4 deleted
 # `POST /kiosk/query` and `POST /kiosk/run` outright (T-074 = A — each demo's
-# `routes.rb` says so and five ship a `RetiredWire` redteam beat asserting the
-# plain 404), and `capabilities` has published MODULE names
+# `routes.rb` says so, and all seven red-team batteries assert that a path
+# naming no registered verb answers the plain 404), and `capabilities` has
+# published MODULE names
 # (schema/queries/actions/pay) since T-095. The `:code` rule held all seven
 # identical — identically wrong — and `CHANGELOG.md`'s T-068 slice 7 had already
 # corrected the same string on the human pages and left this one behind, which is

@@ -163,7 +163,9 @@ Asserts every attack is BLOCKED (0 BREACH) — every scenario the suite runs, in
 its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 `CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
 `MissingAuth` (401), `GarbageToken` (401), `SelfAssertedTokenForgery` (401),
-`UnknownQuery` (404), `UnknownAction` (404), `RetiredWire` (404),
+`UnknownQuery` (404), `UnknownAction` (404),
+`UnregisteredVerbIsOrdinaryRefusal` (`/kiosk/query` and `/kiosk/run` name no
+registered verb: 404 to an authenticated caller, 401 without a bearer),
 `MethodMismatch` (405 + `Allow: POST`),
 `OutOfEnumFilterIsNotSilentlyReinterpreted` (400 naming the live categories)
 `LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,

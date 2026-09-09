@@ -52,13 +52,13 @@
 #                        Devise session is answered
 #
 # And two beats about the shape of the wire itself:
-#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
-#                        404 / verb_not_found an AUTHENTICATED caller gets, and
+#   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
+#                        POST /kiosk/run name no registered verb, so they are
+#                        404 / verb_not_found to an AUTHENTICATED caller and
 #                        401 / unauthenticated without a bearer (auth precedes
-#                        verb dispatch; both are probed): the multiplexed pair
-#                        was DELETED, so there is no privileged endpoint left,
-#                        no compatibility payload, and no second conformance
-#                        surface to attack.
+#                        verb dispatch; both are probed): no privileged
+#                        endpoint hides behind a generic-sounding word, and
+#                        there is no second conformance surface to attack.
 #   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
 #                        with `Allow: POST`, never a silent 404 an assistant
 #                        would read as "this operator cannot do that".
@@ -465,7 +465,8 @@ end
 # 12 generic + 3 local cashier-check beats + the malformed-uuid beat; skooti's
 # full surface makes all generic scenarios applicable (0 skips expected). Nine
 # further skooti-local beats run after the runner, below — seven of them, plus
-# the two wire-shape beats (RetiredWire, MethodMismatch).
+# the two wire-shape beats (UnregisteredVerbIsOrdinaryRefusal,
+# MethodMismatch).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 # THE STANDING HOSTILE-SHAPE BEAT.
@@ -1079,8 +1080,8 @@ wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 #
 # `bearer: false` is the ANONYMOUS probe and asks a different question,
 # not a weaker version of the same one: the wire resolves the caller BEFORE it
-# looks the verb up, so an unauthenticated request at a retired path is answered
-# 401 and never reaches the registry lookup that produces the 404.
+# looks the verb up, so an unauthenticated request at an unregistered path is
+# answered 401 and never reaches the registry lookup that produces the 404.
 raw_wire = lambda do |method, path, body = nil, bearer: true|
   uri     = URI("#{BASE_URL}#{path}")
   headers = { "Content-Type" => "application/json" }
@@ -1091,12 +1092,13 @@ raw_wire = lambda do |method, path, body = nil, bearer: true|
   [res, (JSON.parse(res.body) rescue {})]
 end
 
-# RetiredWire — `POST /kiosk/query` and `POST /kiosk/run` are DELETED, not
-# tombstoned. They now reach the per-verb controller as verbs literally named
-# "query" and "run", which nobody registered, so they answer the ordinary 404 an
-# AUTHENTICATED caller gets: no privileged endpoint left, no compatibility
-# payload that would keep the 0.3 argument channel alive, and no second
-# conformance surface to attack.
+# UnregisteredVerbIsOrdinaryRefusal — `POST /kiosk/query` and `POST /kiosk/run`
+# reach the per-verb controller as verbs literally named "query" and "run",
+# which nobody registered, so they answer the ordinary 404 an AUTHENTICATED
+# caller gets: no privileged endpoint hiding behind a generic-sounding word, and
+# no second conformance surface to attack. Those two names are what a caller
+# hunting for a multiplexed endpoint tries first, which is why the beat dials
+# them rather than a nonsense word.
 #
 # BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
 # `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
@@ -1108,9 +1110,9 @@ end
 # NAMES nobody registered, and the vocabulary reserves `not_found` for an
 # argument that ADDRESSED something absent.
 #
-# A deprecation shim here would be exactly that second surface — and it is the
-# one an attacker would reach for, because it takes the verb name from the BODY.
-retired_wire = lambda do
+# A multiplexer here would be exactly that second surface — and it is the one
+# an attacker would reach for, because it takes the verb name from the BODY.
+unregistered_verb = lambda do
   probes = %w[query run].flat_map do |name|
     [[true, 404, "verb_not_found", ""], [false, 401, "unauthenticated", " (anon)"]]
       .map do |bearer, want_status, want_code, tag|
@@ -1124,17 +1126,17 @@ retired_wire = lambda do
 
   if probes.all? { |ok, _| ok }
     { blocked: true,
-      detail:  "the 0.3 multiplexed pair is gone: #{probes.map(&:last).join(", ")} " \
+      detail:  "unregistered verb names #{probes.map(&:last).join(", ")} " \
                "(an ordinary verb_not_found to an authenticated caller, 401 to anyone else, " \
-               "with no compatibility payload)" }
+               "and no privileged surface either way)" }
   else
     { blocked: false,
-      detail:  "a retired 0.3 endpoint answers the wrong thing: " \
+      detail:  "an unregistered verb name answers the wrong thing: " \
                "#{probes.reject { |ok, _| ok }.map(&:last).join(", ")}" }
   end
 end
 
-retired_wire_beat = retired_wire.call
+unregistered_verb_beat = unregistered_verb.call
 
 # MethodMismatch — a GET at an action's path is 405 with `Allow: POST`, never a
 # silent 404. The resource EXISTS; answering 404 would be a lie about it, and an
@@ -1282,15 +1284,15 @@ self_asserted_user_beat = self_asserted_user_bearer_forgery.call
 battery = Kiosk::Redteam::Battery.new
 battery.absorb(results)
 {
-  "MotorcycleForgedKyc"           => mc_beat,
-  "MotorcycleViaStartRental"      => mc_verbswap_beat,
-  "IssuedKycJwsTheft"             => theft_beat,
-  "CrossOperatorClaimReplay"      => xop_beat,
-  "ForgedCallbackNoSig"           => fcb_beat,
-  "RetiredWire"                   => retired_wire_beat,
-  "MethodMismatch"                => method_mismatch_beat,
-  "SelfAssertedTokenForgery"      => self_asserted_beat,
-  "SelfAssertedUserBearerForgery" => self_asserted_user_beat,
+  "MotorcycleForgedKyc"               => mc_beat,
+  "MotorcycleViaStartRental"          => mc_verbswap_beat,
+  "IssuedKycJwsTheft"                 => theft_beat,
+  "CrossOperatorClaimReplay"          => xop_beat,
+  "ForgedCallbackNoSig"               => fcb_beat,
+  "UnregisteredVerbIsOrdinaryRefusal" => unregistered_verb_beat,
+  "MethodMismatch"                    => method_mismatch_beat,
+  "SelfAssertedTokenForgery"          => self_asserted_beat,
+  "SelfAssertedUserBearerForgery"     => self_asserted_user_beat,
 }.each { |name, beat| battery.record(name, beat[:blocked], beat[:detail]) }
 
 # The gem answers the exit status: 0 only when at least one attack ran and every

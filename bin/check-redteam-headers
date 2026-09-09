@@ -10,7 +10,7 @@
 # headers disagreed with the scenarios beneath them -- stylish's naming a beat
 # that did not exist and omitting three that did. Both were fixed by hand
 # (0e5087a, 59bdac7, 5e4151f), and the class came back TWICE more: philslist's
-# `RetiredWire`/`MethodMismatch` arrived with the per-verb cutover and the header
+# two wire-shape beats arrived with the per-verb cutover and the header
 # was never updated (K-901), and the 2026-08-26 wave found a `verified` K-710
 # carrying a verification sentence that had itself gone false. Every one of those
 # repairs was a hand-kept list corrected by hand, and every gate stayed green

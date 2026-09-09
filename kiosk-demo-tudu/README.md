@@ -124,9 +124,10 @@ read → 403.
 Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 (the forged `account_id` is refused `400`, not accepted-and-ignored),
 `MalformedUuidArg` (400, no SQL internals), `MissingAuth` (401), `GarbageToken`
-(401), `UnknownQuery` (404), `UnknownAction` (404), `RetiredWire` (404 to an
-authenticated caller, `401 unauthenticated` without a bearer, since auth
-precedes verb dispatch), `MethodMismatch` (a `GET` at an
+(401), `UnknownQuery` (404), `UnknownAction` (404),
+`UnregisteredVerbIsOrdinaryRefusal` (`/kiosk/query` and `/kiosk/run` name no
+registered verb: 404 to an authenticated caller, `401 unauthenticated` without
+a bearer, since auth precedes verb dispatch), `MethodMismatch` (a `GET` at an
 action's path is `405` + `Allow: POST`, never a silent 404), plus tudu beats —
 `InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (404),
 `PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound

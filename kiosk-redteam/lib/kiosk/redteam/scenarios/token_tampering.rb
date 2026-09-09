@@ -15,6 +15,14 @@ module Kiosk
       #
       # BLOCKED iff the tampered-token call returns 401 (or another blocked
       # status / domain error code).
+      #
+      # THE PROBE MUST DIAL A VERB THIS ORIGIN ACTUALLY ROUTES. An origin draws
+      # one explicit route per registered verb and nothing else, so a made-up
+      # name matches no route at all: the answer is the web framework's own 404,
+      # decided before any credential is read, which would read as "the tampered
+      # token was refused" while proving nothing whatever about the token. The
+      # profile's `per_user_query` is its declaration of a verb this origin
+      # really serves, and a profile that declares none cannot run this beat.
       class TokenTampering < Scenario
         def initialize
           super(
@@ -25,6 +33,17 @@ module Kiosk
         end
 
         def call(client, profile)
+          verb = profile.per_user_query
+          if verb.nil?
+            return Verdict.new(
+              blocked: false, skipped: true, status: 0,
+              detail:  "this profile declares no `per_user_query`, so there is no verb this " \
+                       "origin is known to route — and a name it does not route answers a " \
+                       "routing 404 before the credential is read, which would score a block " \
+                       "the token check never made. Declare `per_user_query:` to run this beat.",
+            )
+          end
+
           b = register_principal(client, name: "redteam-tt-b", profile:)
 
           tampered = tamper_token(b.token)
@@ -39,8 +58,8 @@ module Kiosk
             rsa_key:  b.rsa_key,
           )
 
-          # Try to query — any verb will exercise the auth middleware.
-          resp = client.query(tampered_principal, name: "ping")
+          # Try to query — any ROUTED verb will exercise the auth middleware.
+          resp = client.query(tampered_principal, name: verb)
 
           # 401 and nothing else. A signature that no longer matches its payload
           # is an AUTHENTICATION failure — the request has no identity — so a

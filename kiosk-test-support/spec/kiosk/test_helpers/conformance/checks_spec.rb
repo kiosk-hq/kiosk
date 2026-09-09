@@ -101,33 +101,6 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       expect(outcome.message).to include("also reaches the verb wire on POST")
     end
 
-    it "PASSES when the other method reaches the wire's refusal controller" do
-      # The engine draws a catch-all refusal pair after the operator's routes,
-      # so the wrong method resolving to `verb_refusal` is CORRECT — it is how
-      # a 405 gets answered — and must not read as a double route.
-      verbs = [catalog_verb]
-      table = null_origin.routes_for("/kiosk", verbs)
-      table[["POST", "/kiosk/catalog"]] = { controller: "kiosk/server/verb_refusal",
-                                            action: "create", kiosk_verb: "catalog" }
-
-      expect(described_class.routes(null_origin.new(verbs: verbs, routes: table))).to be_ok
-    end
-
-    it "FAILS with its own sentence when the engine's REFUSAL route caught the verb" do
-      # The commonest spelling of «declared and never routed»: the engine
-      # appends a single-segment refusal pair below the operator's routes, so a
-      # verb nobody drew resolves to THAT rather than to nothing.
-      verbs = [catalog_verb]
-      table = { ["GET", "/kiosk/catalog"] => { controller: "kiosk/server/verb_refusal",
-                                               action: "show", kiosk_verb: "catalog" } }
-
-      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
-
-      expect(outcome).to be_failed
-      expect(outcome.message).to include("nothing you drew answers GET /kiosk/catalog")
-      expect(outcome.message).to include("404 for a verb this origin publishes")
-    end
-
     it "FAILS when a route reaches the handler controller directly" do
       verbs = [catalog_verb]
       table = { ["GET", "/kiosk/catalog"] => { controller: "kiosk/storefront", action: "catalog",

@@ -11,7 +11,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
-  let(:profile) { Kiosk::Redteam::Profile.new }
+  # The probe dials the profile's own `per_user_query`, because that is the one
+  # verb a profile declares this origin actually ROUTES — a name it does not
+  # route answers a routing 404 before the credential is read.
+  let(:profile) { Kiosk::Redteam::Profile.new(per_user_query: "ping") }
 
   # Issue a real RS256 JWT so tamper_token has a valid payload to mutate.
   let(:signing_key) { OpenSSL::PKey::RSA.generate(2048) }
@@ -19,6 +22,19 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
     now = Time.now.to_i
     JWT.encode({ sub: "user-b", role: "customer", exp: now + 3600, iat: now },
                signing_key, "RS256")
+  end
+
+  describe "#call — a profile that declares no routed verb" do
+    it "SKIPS rather than scoring a routing 404 as a refused token" do
+      # An origin routes one explicit line per registered verb and nothing else,
+      # so a name it does not route answers a 404 decided before the credential
+      # is read. Scoring that a block would certify an auth check that never ran.
+      verdict = scenario.call(client, Kiosk::Redteam::Profile.new)
+
+      expect(verdict.skipped).to be(true)
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("per_user_query")
+    end
   end
 
   describe "#call — non-vacuity" do
@@ -33,7 +49,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
             headers: { "Content-Type" => "application/json" },
           )
         # Server accepts any bearer token (broken auth middleware).
-        # The scenario probes with `client.query(name: "ping")` — GET /kiosk/ping.
+        # The scenario probes with the profile's `per_user_query` — GET /kiosk/ping.
         stub_query("ping", rows: [])
 
         verdict = scenario.call(client, profile)

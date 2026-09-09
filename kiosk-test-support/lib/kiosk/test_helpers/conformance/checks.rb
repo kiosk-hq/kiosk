@@ -37,10 +37,9 @@ module Kiosk
         # controller under the name it was declared by, and the METHOD follows
         # the KIND: GET for a query, POST for an action.
         #
-        # Since the engine stopped drawing a constrained catch-all pair for the
-        # operator, a verb declared and never routed is a 404 to every caller
-        # and is invisible to the origin's own tests unless one happens to call
-        # that verb. This is the check that makes it visible.
+        # A verb declared and never routed is a 404 to every caller, and it is
+        # invisible to the origin's own tests unless one happens to call that
+        # verb. This is the check that makes it visible.
         #
         # It asks the ROUTER, not a file: a verb declared by metaprogramming is
         # in the registry and in the route table, and both are what this reads.
@@ -349,21 +348,9 @@ module Kiosk
 
           endpoint = "#{found[:controller]}##{found[:action]}"
           if endpoint != verb.endpoint
-            # The engine appends a single-segment REFUSAL pair below the
-            # operator's own routes, so a verb nobody drew is caught by that
-            # rather than by nothing at all — and `recognize_path` then answers
-            # a route instead of raising. It is still «declared and never
-            # routed», and it is the commonest spelling of it, so it gets its
-            # own sentence rather than the generic wrong-endpoint one.
-            problems << if endpoint.include?("verb_refusal")
-                          "#{verb}: nothing you drew answers #{verb.http_method} #{path} — " \
-                          "the engine's own refusal route caught it, so every caller gets a " \
-                          "404 for a verb this origin publishes"
-                        else
-                          "#{verb}: #{verb.http_method} #{path} reaches #{endpoint}, not " \
-                          "#{verb.endpoint} — a route drawn straight at a handler bypasses " \
-                          "authentication, the gate and the declared-input check"
-                        end
+            problems << "#{verb}: #{verb.http_method} #{path} reaches #{endpoint}, not " \
+                        "#{verb.endpoint} — a route drawn straight at a handler bypasses " \
+                        "authentication, the gate and the declared-input check"
           end
 
           routed_name = found[:kiosk_verb].to_s

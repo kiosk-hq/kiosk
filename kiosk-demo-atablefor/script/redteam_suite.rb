@@ -235,89 +235,89 @@ end
 
 cancel_probes = uuid_guard_verdict("/kiosk/cancel_booking", ->(junk) { { booking_id: junk } })
 BATTERY.record("MalformedUuidArg", cancel_probes.all? { |ok, _| ok },
-       "cancel_booking with a malformed booking_id → #{cancel_probes.map(&:last).join(', ')} " \
-       "(want 400/\"bad_request\" and no SQL internals)")
+               "cancel_booking with a malformed booking_id → #{cancel_probes.map(&:last).join(', ')} " \
+               "(want 400/\"bad_request\" and no SQL internals)")
 
 # ── RegisterWithoutPoP — register with no proof-of-possession → not 201 ──────
 require "openssl"
 throwaway_pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
 rc, _ = WIRE.post_json("/kiosk/auth/register", { public_key: throwaway_pem })
-     BATTERY.record("RegisterWithoutPoP", rc != 201, "register with no signed PoP → #{rc} (want != 201)")
-             
-             # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
-             rc, _ = WIRE.get_json("/kiosk/availability", { party_size: 2 })
-                  BATTERY.record("MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
-                          
-                          # ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
-                          rc, _ = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer("not-a-real-token"))
-                                    BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
-                                            
-                                            # ── SelfAssertedTokenForgery ─────────────────────────────────────────────────
-                                            # Agent auth is the engine's own kiosk-pop verifier, which has no cleartext
-                                            # branch to fall back to in any environment, so an `agent:u-…:a-…:r-…` string
-                                            # is not a credential in any environment either. The assertion is therefore
-                                            # unconditional and lands over the LIVE WIRE, in the same environment as every
-                                            # other beat here: a self-asserted bearer resolves to NO identity. There is no
-                                            # `Rails.env` anywhere in it.
-                                            #
-                                            # The first probe is the STRONGEST form of the attack rather than the easiest —
-                                            # it names a real account and a real agent (the ones the ceremony above just
-                                            # minted for Diego) and escalates the role to `owner`, so nothing in the string
-                                            # is invented except the claim that it is a credential. The second is the
-                                            # wholly-made-up one. The earned token is the positive control on the same
-                                            # verb, so a 401 above is the forgery being refused and not the surface being
-                                            # down.
-                                            self_asserted = [
+BATTERY.record("RegisterWithoutPoP", rc != 201, "register with no signed PoP → #{rc} (want != 201)")
+
+# ── MissingAuth — no Authorization header → 401 ──────────────────────────────
+rc, _ = WIRE.get_json("/kiosk/availability", { party_size: 2 })
+BATTERY.record("MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
+
+# ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
+rc, _ = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer("not-a-real-token"))
+BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
+
+# ── SelfAssertedTokenForgery ─────────────────────────────────────────────────
+# Agent auth is the engine's own kiosk-pop verifier, which has no cleartext
+# branch to fall back to in any environment, so an `agent:u-…:a-…:r-…` string
+# is not a credential in any environment either. The assertion is therefore
+# unconditional and lands over the LIVE WIRE, in the same environment as every
+# other beat here: a self-asserted bearer resolves to NO identity. There is no
+# `Rails.env` anywhere in it.
+#
+# The first probe is the STRONGEST form of the attack rather than the easiest —
+# it names a real account and a real agent (the ones the ceremony above just
+# minted for Diego) and escalates the role to `owner`, so nothing in the string
+# is invented except the claim that it is a credential. The second is the
+# wholly-made-up one. The earned token is the positive control on the same
+# verb, so a 401 above is the forgery being refused and not the surface being
+# down.
+self_asserted = [
   ["real account + real agent, role escalated to owner",
    "agent:u-#{DIEGO_UUID}:a-#{DIEGO.agent_id}:r-owner"],
   ["wholly invented ids",
    "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"],
 ].map do |label, token|
   code, = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(token))
-            [code == 401, "#{label} → #{code}"]
-          end
-          rc_auth_ctl, = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
-                    BATTERY.record("SelfAssertedTokenForgery",
-       self_asserted.all? { |ok, _| ok } && rc_auth_ctl == 200,
-       "self-asserted `agent:u-…:r-owner` bearer: #{self_asserted.map(&:last).join(', ')} " \
-       "(want 401 each, unconditionally — this IS a development server); " \
-       "CONTROL the earned token → #{rc_auth_ctl} (want 200)")
+  [code == 401, "#{label} → #{code}"]
+end
+rc_auth_ctl, = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
+BATTERY.record("SelfAssertedTokenForgery",
+               self_asserted.all? { |ok, _| ok } && rc_auth_ctl == 200,
+               "self-asserted `agent:u-…:r-owner` bearer: #{self_asserted.map(&:last).join(', ')} " \
+               "(want 401 each, unconditionally — this IS a development server); " \
+               "CONTROL the earned token → #{rc_auth_ctl} (want 200)")
 
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
 rc, _ = WIRE.get_json("/kiosk/frobnicate", {}, WIRE.bearer(TOKEN_A))
-          BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
-                  
-                  # ── UnknownAction — unregistered action name → 404 ───────────────────────────
-                  rc, _ = WIRE.post_json("/kiosk/nope", {}, WIRE.bearer(TOKEN_A))
-                            BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
-                                    
-                                    # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
-                                    # The 0.3 multiplexed pair was a hard cut: `POST /kiosk/query` reaches the
-                                    # per-verb controller as a verb literally named "query", which nobody
-                                    # registered, so it answers the ordinary 404 an AUTHENTICATED caller gets — no
-                                    # privileged endpoint, no compatibility payload, no second conformance surface
-                                    # to attack.
-                                    #
-                                    # BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
-                                    # `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
-                                    # a caller with no bearer never reaches the registry lookup that produces the
-                                    # 404 — it is answered 401 `unauthenticated`, exactly as it would be at any
-                                    # other name.
-                                    #
-                                    # The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
-                                    # NAMES nobody registered, and the vocabulary reserves `not_found` for an
-                                    # argument that ADDRESSED something absent.
-                                    retired = %w[query run].map do |name|
-                                      rc, body = WIRE.post_json("/kiosk/#{name}", { name: "availability", party_size: 2 }, WIRE.bearer(TOKEN_A))
-                                                [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
-                                              end
-                                              retired_anon = %w[query run].map do |name|
-                                                rc, body = WIRE.post_json("/kiosk/#{name}", { name: "availability", party_size: 2 })
-                                                     [rc == 401 && body["code"] == "unauthenticated", "#{name}(anon)→#{rc}/#{body['code'].inspect}"]
-                                                   end
-                                                   BATTERY.record("RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
-       "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
-       "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
+BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
+
+# ── UnknownAction — unregistered action name → 404 ───────────────────────────
+rc, _ = WIRE.post_json("/kiosk/nope", {}, WIRE.bearer(TOKEN_A))
+BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+
+# ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
+# The 0.3 multiplexed pair was a hard cut: `POST /kiosk/query` reaches the
+# per-verb controller as a verb literally named "query", which nobody
+# registered, so it answers the ordinary 404 an AUTHENTICATED caller gets — no
+# privileged endpoint, no compatibility payload, no second conformance surface
+# to attack.
+#
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
+# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
+# a caller with no bearer never reaches the registry lookup that produces the
+# 404 — it is answered 401 `unauthenticated`, exactly as it would be at any
+# other name.
+#
+# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
+# NAMES nobody registered, and the vocabulary reserves `not_found` for an
+# argument that ADDRESSED something absent.
+retired = %w[query run].map do |name|
+  rc, body = WIRE.post_json("/kiosk/#{name}", { name: "availability", party_size: 2 }, WIRE.bearer(TOKEN_A))
+  [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
+end
+retired_anon = %w[query run].map do |name|
+  rc, body = WIRE.post_json("/kiosk/#{name}", { name: "availability", party_size: 2 })
+  [rc == 401 && body["code"] == "unauthenticated", "#{name}(anon)→#{rc}/#{body['code'].inspect}"]
+end
+BATTERY.record("RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
+               "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
+               "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
 # The resource EXISTS; answering 404 would be a lie about it, and a caller that
@@ -393,19 +393,19 @@ invalid_filter_probes = [
    { party_size: 2, time: "18:00", date: FAR_FUTURE }, %w[19:00 20:00 21:00]],
 ].map do |label, args, named|
   rc, resp = WIRE.get_json("/kiosk/availability", args, WIRE.bearer(TOKEN_A))
-            code   = resp.is_a?(Hash) ? resp["code"] : nil
-            detail = resp.is_a?(Hash) ? resp["detail"].to_s : ""
-            names  = named.all? { |value| detail.include?(value) }
-            ok = rc == 400 && code == "bad_request" && names
-            [ok, "#{label} → #{rc}/#{code.inspect}#{ok ? " naming #{named.join(", ")}" : "/#{JSON.generate(resp)[0, 160]}"}"]
-          end
-          rc_ctl, ctl = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
-                    control_ok = rc_ctl == 200 && Array(ctl).any?
-                    BATTERY.record("InvalidFilterIsNotAnEmptyList",
-       invalid_filter_probes.all? { |ok, _| ok } && control_ok,
-       "#{invalid_filter_probes.map(&:last).join(', ')}; CONTROL unfiltered → " \
-       "#{rc_ctl}/#{(rc_ctl == 200 ? Array(ctl).size : 0)} rows " \
-       "(want 400 bad_request naming the valid values for each filter, and a non-empty control)")
+  code   = resp.is_a?(Hash) ? resp["code"] : nil
+  detail = resp.is_a?(Hash) ? resp["detail"].to_s : ""
+  names  = named.all? { |value| detail.include?(value) }
+  ok = rc == 400 && code == "bad_request" && names
+  [ok, "#{label} → #{rc}/#{code.inspect}#{ok ? " naming #{named.join(", ")}" : "/#{JSON.generate(resp)[0, 160]}"}"]
+end
+rc_ctl, ctl = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
+control_ok = rc_ctl == 200 && Array(ctl).any?
+BATTERY.record("InvalidFilterIsNotAnEmptyList",
+               invalid_filter_probes.all? { |ok, _| ok } && control_ok,
+               "#{invalid_filter_probes.map(&:last).join(', ')}; CONTROL unfiltered → " \
+               "#{rc_ctl}/#{(rc_ctl == 200 ? Array(ctl).size : 0)} rows " \
+               "(want 400 bad_request naming the valid values for each filter, and a non-empty control)")
 
 # ── BookOutsideOfferedHorizon ────────────────────────────────────────────────
 #
@@ -455,10 +455,10 @@ end
 rc_horizon_ctl, horizon_ctl = book_slot(TOKEN_A, horizon_slot)
 horizon_control_ok = rc_horizon_ctl == 200 && !horizon_ctl["booking_id"].to_s.empty?
 BATTERY.record("BookOutsideOfferedHorizon",
-       horizon_probes.all? { |ok, _| ok } && horizon_control_ok,
-       "#{horizon_probes.map(&:last).join(', ')}; CONTROL same row at its published date → " \
-       "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
-       "(want 400 bad_request naming the horizon for each, and a confirmed control)")
+               horizon_probes.all? { |ok, _| ok } && horizon_control_ok,
+               "#{horizon_probes.map(&:last).join(', ')}; CONTROL same row at its published date → " \
+               "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
+               "(want 400 bad_request naming the horizon for each, and a confirmed control)")
 
 # ── HostileArgShapes ─────────────────────────────────────────────────────────
 #
@@ -600,73 +600,73 @@ NONSTRING.each do |v|
     shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body, supplied: { arg => v })
   end
   rc, body = WIRE.post_json("/kiosk/cancel_booking", { booking_id: v }, WIRE.bearer(TOKEN_A))
-            shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body, supplied: { booking_id: v })
-          end
-          QUERY_JUNK.each do |v|
-            rc, body = WIRE.get_json("/kiosk/availability", { party_size: v }, WIRE.bearer(TOKEN_A))
-                      shape_probes << shape_verdict("availability party_size=#{v.inspect}", rc, body, supplied: { party_size: v })
-                    end
-                    # The bracket spellings, which URI.encode_www_form cannot produce: they are
-                    # written into the path so Rack's own parser folds them into an Array and a Hash.
-                    ["party_size%5B%5D=2", "party_size%5Bx%5D=2"].each do |bracket|
-                      rc, body = WIRE.get_json("/kiosk/availability?#{bracket}", {}, WIRE.bearer(TOKEN_A))
-                                shape_probes << shape_verdict("availability #{bracket}", rc, body, supplied: bracket)
-                              end
-                              
-                              # ── MAGNITUDE, not type — the axis INT_SHAPES does not have ──────────────────
-                              #
-                              # Every value in INT_SHAPES varies an argument's TYPE, and none of them is an
-                              # integer too LARGE for the column behind it.
-                              #
-                              # MEASURED on a booted origin without the declared bound: `party_size:
-                              # 2_147_483_648` passes `{type: "integer", minimum: 1}` (no ceiling), passes
-                              # {WireArguments.party_size} (a whole number >= 1), and reaches
-                              # `RestaurantTable.where(capacity.gteq(party_size))` — `capacity` is a
-                              # PostgreSQL `integer` — where ActiveRecord raises `ActiveModel::RangeError`
-                              # CASTING the comparison, on BOTH surfaces that take a party: `book_table`
-                              # (`book_table_operation.rb`) and `availability`
-                              # (`dining_room_controller.rb`), and both answer HTTP 500. `party_size`
-                              # declares the column's own width as its `maximum`, and the shared guard
-                              # mirrors it, so both are a typed 400 from the schema layer.
-                              #
-                              # THE TWO IDENTIFIERS ARE DELIBERATELY NOT PROBED HERE, AND THAT IS MEASURED
-                              # RATHER THAN ASSUMED: `restaurant_id` and `restaurant_table_id` reach
-                              # ActiveRecord as EQUALITY predicates (`where(id: …, restaurant_id: …)`), and an
-                              # out-of-range value there answers ZERO ROWS instead of raising — so a huge id
-                              # is already the ordinary "no such table" 400 this suite's other beats cover.
-                              # Only the `gteq` COMPARISON casts, and `party_size` is the only wire argument
-                              # that reaches one.
-                              BEYOND_INT4 = 2_147_483_648 # one past PostgreSQL `integer`
-                              rc, body = book_slot(TOKEN_A, shape_slot, party_size: BEYOND_INT4)
-                              shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
-                              rc, body = WIRE.get_json("/kiosk/availability", { party_size: BEYOND_INT4 }, WIRE.bearer(TOKEN_A))
-                                        shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
-                                        
-                                        # ── NEGATIVE CONTROL FOR THE ORACLE ITSELF ──────────────────────────────────
-                                        #
-                                        # Every probe above asserts something about atablefor. This one asserts
-                                        # something about the ASSERTION: that a needle reaching the wire ONLY because
-                                        # the probe put it there is not reported as a breach. Without it the fix above
-                                        # is untested, and a later "simplification" back to
-                                        # `SHAPE_LEAKS.find { |n| raw.include?(n) }` would pass every other probe in
-                                        # this file.
-                                        #
-                                        # `neighborhood` is the right argument and the choice is measured, not
-                                        # convenient: it is declared a bare `{type: "string"}` because the served set is
-                                        # DB-derived, so json_schemer cannot refuse it and the value reaches
-                                        # {WireArguments.neighborhood}, whose refusal NAMES it back. The two arguments
-                                        # whose refusals also echo — `party_size` and the two identifiers — are answered
-                                        # by the descriptor first, and json_schemer's message names the POINTER rather
-                                        # than the value, so a needle sent there never reaches the body at all and the
-                                        # control would be vacuous.
-                                        #
-                                        # WATCHED FAIL, run and restored: drop `supplied:` from this one call and this
-                                        # probe alone goes red, reporting `LEAK PG::` — the false BREACH, on a demo with
-                                        # no hole in it, under the header line that tells the reader to fix the app.
-                                        ECHO_CONTROL = "PG::22P02 invalid input syntax"
-                                        rc_echo, body_echo = WIRE.get_json("/kiosk/availability",
-                              { party_size: 2, neighborhood: ECHO_CONTROL }, WIRE.bearer(TOKEN_A))
-     ok_echo, detail_echo = shape_verdict(
+  shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body, supplied: { booking_id: v })
+end
+QUERY_JUNK.each do |v|
+  rc, body = WIRE.get_json("/kiosk/availability", { party_size: v }, WIRE.bearer(TOKEN_A))
+  shape_probes << shape_verdict("availability party_size=#{v.inspect}", rc, body, supplied: { party_size: v })
+end
+# The bracket spellings, which URI.encode_www_form cannot produce: they are
+# written into the path so Rack's own parser folds them into an Array and a Hash.
+["party_size%5B%5D=2", "party_size%5Bx%5D=2"].each do |bracket|
+  rc, body = WIRE.get_json("/kiosk/availability?#{bracket}", {}, WIRE.bearer(TOKEN_A))
+  shape_probes << shape_verdict("availability #{bracket}", rc, body, supplied: bracket)
+end
+
+# ── MAGNITUDE, not type — the axis INT_SHAPES does not have ──────────────────
+#
+# Every value in INT_SHAPES varies an argument's TYPE, and none of them is an
+# integer too LARGE for the column behind it.
+#
+# MEASURED on a booted origin without the declared bound: `party_size:
+# 2_147_483_648` passes `{type: "integer", minimum: 1}` (no ceiling), passes
+# {WireArguments.party_size} (a whole number >= 1), and reaches
+# `RestaurantTable.where(capacity.gteq(party_size))` — `capacity` is a
+# PostgreSQL `integer` — where ActiveRecord raises `ActiveModel::RangeError`
+# CASTING the comparison, on BOTH surfaces that take a party: `book_table`
+# (`book_table_operation.rb`) and `availability`
+# (`dining_room_controller.rb`), and both answer HTTP 500. `party_size`
+# declares the column's own width as its `maximum`, and the shared guard
+# mirrors it, so both are a typed 400 from the schema layer.
+#
+# THE TWO IDENTIFIERS ARE DELIBERATELY NOT PROBED HERE, AND THAT IS MEASURED
+# RATHER THAN ASSUMED: `restaurant_id` and `restaurant_table_id` reach
+# ActiveRecord as EQUALITY predicates (`where(id: …, restaurant_id: …)`), and an
+# out-of-range value there answers ZERO ROWS instead of raising — so a huge id
+# is already the ordinary "no such table" 400 this suite's other beats cover.
+# Only the `gteq` COMPARISON casts, and `party_size` is the only wire argument
+# that reaches one.
+BEYOND_INT4 = 2_147_483_648 # one past PostgreSQL `integer`
+rc, body = book_slot(TOKEN_A, shape_slot, party_size: BEYOND_INT4)
+shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
+rc, body = WIRE.get_json("/kiosk/availability", { party_size: BEYOND_INT4 }, WIRE.bearer(TOKEN_A))
+shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
+
+# ── NEGATIVE CONTROL FOR THE ORACLE ITSELF ──────────────────────────────────
+#
+# Every probe above asserts something about atablefor. This one asserts
+# something about the ASSERTION: that a needle reaching the wire ONLY because
+# the probe put it there is not reported as a breach. Without it the fix above
+# is untested, and a later "simplification" back to
+# `SHAPE_LEAKS.find { |n| raw.include?(n) }` would pass every other probe in
+# this file.
+#
+# `neighborhood` is the right argument and the choice is measured, not
+# convenient: it is declared a bare `{type: "string"}` because the served set is
+# DB-derived, so json_schemer cannot refuse it and the value reaches
+# {WireArguments.neighborhood}, whose refusal NAMES it back. The two arguments
+# whose refusals also echo — `party_size` and the two identifiers — are answered
+# by the descriptor first, and json_schemer's message names the POINTER rather
+# than the value, so a needle sent there never reaches the body at all and the
+# control would be vacuous.
+#
+# WATCHED FAIL, run and restored: drop `supplied:` from this one call and this
+# probe alone goes red, reporting `LEAK PG::` — the false BREACH, on a demo with
+# no hole in it, under the header line that tells the reader to fix the app.
+ECHO_CONTROL = "PG::22P02 invalid input syntax"
+rc_echo, body_echo = WIRE.get_json("/kiosk/availability",
+                                   { party_size: 2, neighborhood: ECHO_CONTROL }, WIRE.bearer(TOKEN_A))
+ok_echo, detail_echo = shape_verdict(
   "availability neighborhood=<a value spelling three SHAPE_LEAKS> (oracle control)",
   rc_echo, body_echo, supplied: { party_size: 2, neighborhood: ECHO_CONTROL }
 )
@@ -686,17 +686,17 @@ shape_probes << [ok_echo, detail_echo]
 # published values, and the booking it makes cancels.
 rc_shape_book, shape_book = book_slot(TOKEN_A, shape_slot)
 rc_shape_cancel, = WIRE.post_json("/kiosk/cancel_booking",
-                             { booking_id: shape_book["booking_id"] }, WIRE.bearer(TOKEN_A))
-     rc_shape_avail, shape_avail = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
-               shape_control_ok = rc_shape_book == 200 && !shape_book["booking_id"].to_s.empty? &&
-                                  rc_shape_cancel == 200 && rc_shape_avail == 200 && Array(shape_avail).any?
-               BATTERY.record("HostileArgShapes",
-       shape_probes.all? { |ok, _| ok } && shape_control_ok,
-       "#{shape_probes.size} probes: #{shape_probes.reject { |ok, _| ok }.map(&:last).join(', ')}" \
-       "#{shape_probes.all? { |ok, _| ok } ? 'all 400/"bad_request", no leak' : ''}; " \
-       "CONTROLS book→#{rc_shape_book} cancel→#{rc_shape_cancel} availability→#{rc_shape_avail}/" \
-       "#{rc_shape_avail == 200 ? Array(shape_avail).size : 0} rows " \
-       "(want a typed 400 for every probe, never a 5xx and never a 200, and three live controls)")
+                                  { booking_id: shape_book["booking_id"] }, WIRE.bearer(TOKEN_A))
+rc_shape_avail, shape_avail = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
+shape_control_ok = rc_shape_book == 200 && !shape_book["booking_id"].to_s.empty? &&
+                   rc_shape_cancel == 200 && rc_shape_avail == 200 && Array(shape_avail).any?
+BATTERY.record("HostileArgShapes",
+               shape_probes.all? { |ok, _| ok } && shape_control_ok,
+               "#{shape_probes.size} probes: #{shape_probes.reject { |ok, _| ok }.map(&:last).join(', ')}" \
+               "#{shape_probes.all? { |ok, _| ok } ? 'all 400/"bad_request", no leak' : ''}; " \
+               "CONTROLS book→#{rc_shape_book} cancel→#{rc_shape_cancel} availability→#{rc_shape_avail}/" \
+               "#{rc_shape_avail == 200 ? Array(shape_avail).size : 0} rows " \
+               "(want a typed 400 for every probe, never a 5xx and never a 200, and three live controls)")
 
 # ── WholeValuedFloatBody — the OTHER half of the published asymmetry ─────────
 #
@@ -730,21 +730,21 @@ rc_shape_cancel, = WIRE.post_json("/kiosk/cancel_booking",
 # answering 400 «party_size must be a whole number >= 1 — got 2.0».
 float_body_json = JSON.generate({ party_size: 2.0 })
 rc_fq, body_fq  = WIRE.get_json("/kiosk/availability", { party_size: "2.0" }, WIRE.bearer(TOKEN_A))
-          float_slot      = open_slot
-          rc_fb, body_fb  = book_slot(TOKEN_A, float_slot, party_size: 2.0)
-          query_half_ok   = rc_fq == 400 && body_fq["code"] == "bad_request"
-          body_half_ok    = rc_fb == 200 && body_fb["party_size"] == 2 &&
-                            !body_fb["booking_id"].to_s.empty?
-          sent_a_float    = float_body_json.include?('"party_size":2.0')
-          WIRE.post_json("/kiosk/cancel_booking", { booking_id: body_fb["booking_id"] }, WIRE.bearer(TOKEN_A)) if body_half_ok
-                    BATTERY.record("WholeValuedFloatBody",
-       query_half_ok && body_half_ok && sent_a_float,
-       "query ?party_size=2.0 → #{rc_fq}/#{body_fq['code'].inspect}; " \
-       "body {\"party_size\": 2.0} → #{rc_fb}/party_size=#{body_fb['party_size'].inspect} " \
-       "booking_id=#{body_fb['booking_id'].inspect}" \
-       "#{sent_a_float ? '' : ' [PROBE VACUOUS: the request body did not carry a JSON float]'} " \
-       "(want 400 on the query half and a party of TWO on the body half — " \
-       "spec Section 8.1 item 8, and it is INTENTIONAL that they differ)")
+float_slot      = open_slot
+rc_fb, body_fb  = book_slot(TOKEN_A, float_slot, party_size: 2.0)
+query_half_ok   = rc_fq == 400 && body_fq["code"] == "bad_request"
+body_half_ok    = rc_fb == 200 && body_fb["party_size"] == 2 &&
+                  !body_fb["booking_id"].to_s.empty?
+sent_a_float    = float_body_json.include?('"party_size":2.0')
+WIRE.post_json("/kiosk/cancel_booking", { booking_id: body_fb["booking_id"] }, WIRE.bearer(TOKEN_A)) if body_half_ok
+BATTERY.record("WholeValuedFloatBody",
+               query_half_ok && body_half_ok && sent_a_float,
+               "query ?party_size=2.0 → #{rc_fq}/#{body_fq['code'].inspect}; " \
+               "body {\"party_size\": 2.0} → #{rc_fb}/party_size=#{body_fb['party_size'].inspect} " \
+               "booking_id=#{body_fb['booking_id'].inspect}" \
+               "#{sent_a_float ? '' : ' [PROBE VACUOUS: the request body did not carry a JSON float]'} " \
+               "(want 400 on the query half and a party of TWO on the body half — " \
+               "spec Section 8.1 item 8, and it is INTENTIONAL that they differ)")
 
 # ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #

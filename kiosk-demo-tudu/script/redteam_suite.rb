@@ -45,7 +45,9 @@
 #   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
 #   bundle exec ruby script/redteam_suite.rb
 #
-# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH.
+# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
+# on a battery that produced no proofs at all; exits 2 when a beat could not be
+# exercised and was not expected to skip.
 
 require "json"
 require "jwt"
@@ -54,10 +56,10 @@ require "uri"
 require "openssl"
 require "securerandom"
 
-# The shared harness. Required HERE rather than beside the one framework beat
-# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
-# assertion in this file now asks — is needed from the first hostile-input beat
-# onwards.
+# The shared harness: the wire the beats that need no cookie jar attack over,
+# the ledger this battery files its verdicts into, the leak oracle its
+# hostile-input beats ask, and the one library beat further down. Everything in
+# this file that is not about tudu is the gem's.
 require "kiosk/redteam"
 
 SERVER   = ENV.fetch("SERVER_URL")
@@ -74,6 +76,11 @@ PASSWORD = ENV.fetch("HOLDER_PASSWORD")
 # drift. These wrappers keep this driver's call sites unchanged.
 require_relative "devise_session"
 
+# tudu's battery drives BOTH channels, so it holds both drivers. WIRE is the
+# plain wire — an agent's Bearer call, and the header that carries it. SESSION
+# is the human's browser, cookie jar and all, because four beats here attack
+# the account-binding ceremony, which only a signed-in human can open.
+WIRE    = Kiosk::Redteam::Wire.new(base_url: SERVER)
 SESSION = DeviseSession.new(SERVER)
 
 def request(req) = SESSION.request(req)
@@ -86,7 +93,6 @@ def csrf_token(html) = SESSION.csrf_token(html)
 def post_json(path, body, headers = {}) = SESSION.post_json(path, body, headers)
 def get_json(path, params = {}, headers = {}) = SESSION.get_json(path, params, headers)
 
-def bearer(token) = { "Authorization" => "Bearer #{token}" }
 def csrf_token(html) = html[/name="authenticity_token" value="([^"]+)"/, 1]
 
 def pop_proof(key, pem)
@@ -111,27 +117,26 @@ def register_agent(_label)
     token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
 end
 
-results = []
-def record(results, name, blocked, detail)
-  results << { name: name, blocked: blocked, detail: detail }
-  puts "  #{blocked ? 'BLOCKED' : 'BREACH '}  #{name} — #{detail}"
-end
+# One ledger for every beat below — the hand-written ones about tudu's own
+# verbs and the library one about the ceremony every origin serves — printed in
+# one vocabulary and answered by one exit status.
+BATTERY = Kiosk::Redteam::Battery.new
 
 # ── Fixtures: an owner with a private list; a member; an outsider ────────────
 owner    = register_agent("owner")
 member   = register_agent("member")
 outsider = register_agent("outsider")
 
-rc, created = post_json("/kiosk/create_list", { title: "Redteam target" }, bearer(owner[:token]))
+rc, created = post_json("/kiosk/create_list", { title: "Redteam target" }, WIRE.bearer(owner[:token]))
 abort "owner create_list failed (#{rc}) — run rake demo:setup" unless rc == 200
 list_id = created["list_id"]
-rc, inv = post_json("/kiosk/invite", { list_id: list_id }, bearer(owner[:token]))
+rc, inv = post_json("/kiosk/invite", { list_id: list_id }, WIRE.bearer(owner[:token]))
 invite_code = inv["code"]
-post_json("/kiosk/accept_invite", { code: invite_code }, bearer(member[:token]))
+post_json("/kiosk/accept_invite", { code: invite_code }, WIRE.bearer(member[:token]))
 
 # ── CrossTenantRead — outsider list_todos on the private list → 403 ──────────
-rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(outsider[:token]))
-record(results, "CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (want 403)")
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(outsider[:token]))
+BATTERY.record("CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (want 403)")
 
 # ── ForgedUserId — outsider create_list with a forged account_id ─────────────
 #
@@ -146,17 +151,17 @@ record(results, "CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (wa
 # outsider's LEGITIMATE list lands under the outsider and never under the owner.
 rc, forged = post_json("/kiosk/create_list",
                        { title: "Forged", account_id: owner[:user_id] },
-                       bearer(outsider[:token]))
+                       WIRE.bearer(outsider[:token]))
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("account_id")
 
-rc_x, outsiders = post_json("/kiosk/create_list", { title: "Outsider's own" }, bearer(outsider[:token]))
+rc_x, outsiders = post_json("/kiosk/create_list", { title: "Outsider's own" }, WIRE.bearer(outsider[:token]))
 outsider_list = outsiders["list_id"]
-rc_o, o_lists = get_json("/kiosk/my_lists", {}, bearer(owner[:token]))
+rc_o, o_lists = get_json("/kiosk/my_lists", {}, WIRE.bearer(owner[:token]))
 o_ids = Array(o_lists).map { |r| r["list_id"] }
-record(results, "ForgedUserId",
-       refused && rc_x == 200 && rc_o == 200 && !o_ids.include?(outsider_list),
-       "forged account_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming account_id); " \
-       "owner's lists #{o_ids.inspect} exclude the outsider's #{outsider_list.inspect}")
+BATTERY.record("ForgedUserId",
+               refused && rc_x == 200 && rc_o == 200 && !o_ids.include?(outsider_list),
+               "forged account_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming account_id); " \
+               "owner's lists #{o_ids.inspect} exclude the outsider's #{outsider_list.inspect}")
 
 # ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
 # tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
@@ -175,11 +180,11 @@ SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 uuid_probes = MALFORMED_IDS.flat_map do |junk|
   [
     # list_id via the membership guard — a QUERY, so the junk rides the query string.
-    [-> { get_json("/kiosk/list_todos", { list_id: junk }, bearer(owner[:token])) },     "list_todos"],
+    [-> { get_json("/kiosk/list_todos", { list_id: junk }, WIRE.bearer(owner[:token])) },     "list_todos"],
     # todo_id — no other guard in front of the cast.
-    [-> { post_json("/kiosk/complete_todo", { todo_id: junk }, bearer(owner[:token])) }, "complete_todo"],
+    [-> { post_json("/kiosk/complete_todo", { todo_id: junk }, WIRE.bearer(owner[:token])) }, "complete_todo"],
     # account_id — the second id, on a verb whose FIRST id is well-formed.
-    [-> { post_json("/kiosk/remove_member", { list_id: list_id, account_id: junk }, bearer(owner[:token])) },
+    [-> { post_json("/kiosk/remove_member", { list_id: list_id, account_id: junk }, WIRE.bearer(owner[:token])) },
      "remove_member"],
   ].map do |probe, verb|
     rc, resp = probe.call
@@ -197,21 +202,21 @@ uuid_probes = MALFORMED_IDS.flat_map do |junk|
          "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
-record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
-       "malformed list_id/todo_id/account_id → #{uuid_probes.map(&:last).join(', ')} " \
-       "(want 400/\"bad_request\" and no SQL internals)")
+BATTERY.record("MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
+               "malformed list_id/todo_id/account_id → #{uuid_probes.map(&:last).join(', ')} " \
+               "(want 400/\"bad_request\" and no SQL internals)")
 
 # ── MissingAuth / GarbageToken → 401 ────────────────────────────────────────
 rc, = get_json("/kiosk/my_lists")
-record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
-rc, = get_json("/kiosk/my_lists", {}, bearer("not-a-real-token"))
-record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
+BATTERY.record("MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
+rc, = get_json("/kiosk/my_lists", {}, WIRE.bearer("not-a-real-token"))
+BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── UnknownQuery / UnknownAction → 404 ──────────────────────────────────────
-rc, = get_json("/kiosk/frobnicate", {}, bearer(owner[:token]))
-record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
-rc, = post_json("/kiosk/nope", {}, bearer(owner[:token]))
-record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+rc, = get_json("/kiosk/frobnicate", {}, WIRE.bearer(owner[:token]))
+BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
+rc, = post_json("/kiosk/nope", {}, WIRE.bearer(owner[:token]))
+BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
 # The 0.3 endpoints were a hard cut. `POST /kiosk/query` now reaches the per-verb
@@ -230,37 +235,36 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # NAMES nobody registered, and the vocabulary reserves `not_found` for an
 # argument that ADDRESSED something absent.
 retired = %w[query run].map do |name|
-  rc, body = post_json("/kiosk/#{name}", { name: "my_lists" }, bearer(owner[:token]))
+  rc, body = post_json("/kiosk/#{name}", { name: "my_lists" }, WIRE.bearer(owner[:token]))
   [rc == 404 && body["code"] == "verb_not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
 end
 retired_anon = %w[query run].map do |name|
   rc, body = post_json("/kiosk/#{name}", { name: "my_lists" })
   [rc == 401 && body["code"] == "unauthenticated", "#{name}(anon)→#{rc}/#{body['code'].inspect}"]
 end
-record(results, "RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
-       "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
-       "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
+BATTERY.record("RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
+               "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
+               "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
 # The resource EXISTS; answering 404 would be a lie about it, and a caller that
 # read 404 as "this operator cannot do that" would give up on a verb it could
 # have called correctly.
-res405 = request(Net::HTTP::Get.new(URI("#{SERVER}/kiosk/create_list"), bearer(owner[:token])))
-body405 = (JSON.parse(res405.body) rescue {})
-record(results, "MethodMismatch",
-       res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
-         res405["allow"].to_s.upcase.include?("POST"),
-       "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
-       "(want 405/\"method_not_allowed\"/POST)")
+res405 = WIRE.request(:get, "/kiosk/create_list", headers: WIRE.bearer(owner[:token]))
+BATTERY.record("MethodMismatch",
+               res405.status == 405 && res405.body["code"] == "method_not_allowed" &&
+                 res405["allow"].to_s.upcase.include?("POST"),
+               "GET an action → #{res405.status}/#{res405.body['code'].inspect} " \
+               "Allow=#{res405['allow'].inspect} (want 405/\"method_not_allowed\"/POST)")
 
 # ── InviteCodeReplay — the member's used code, replayed by outsider → 403 ────
-rc, = post_json("/kiosk/accept_invite", { code: invite_code }, bearer(outsider[:token]))
-record(results, "InviteCodeReplay", rc == 403, "replay of used invite code → #{rc} (want 403)")
+rc, = post_json("/kiosk/accept_invite", { code: invite_code }, WIRE.bearer(outsider[:token]))
+BATTERY.record("InviteCodeReplay", rc == 403, "replay of used invite code → #{rc} (want 403)")
 
 # ── RevokedMemberAccess — remove the member, its next read is blocked → 403 ─
-post_json("/kiosk/remove_member", { list_id: list_id, account_id: member[:user_id] }, bearer(owner[:token]))
-rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
-record(results, "RevokedMemberAccess", rc == 403, "removed member's next read → #{rc} (want 403)")
+post_json("/kiosk/remove_member", { list_id: list_id, account_id: member[:user_id] }, WIRE.bearer(owner[:token]))
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(member[:token]))
+BATTERY.record("RevokedMemberAccess", rc == 403, "removed member's next read → #{rc} (want 403)")
 
 # ── Session-channel scenarios: Alice signs in for unlink + link ─────────────
 begin
@@ -284,28 +288,28 @@ revoked_agent_id = claimed["agent_id"]
 rc_prelogin, = post_json("/kiosk/auth/login", { public_key: rpem, signed: pop_proof(rk, rpem) })
 rc_unlink, = post_json("/kiosk/auth/unlink", { agent_id: revoked_agent_id }, { session: true })
 rc, = post_json("/kiosk/auth/login", { public_key: rpem, signed: pop_proof(rk, rpem) })
-record(results, "RevokedAgentKey",
-       rc_link == 201 && rc_claim == 201 && !revoked_agent_id.nil? &&
-       rc_prelogin == 200 && rc_unlink == 204 && rc == 404,
-       "link=#{rc_link} claim=#{rc_claim} agent_id=#{revoked_agent_id.inspect} " \
-       "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 204) " \
-       "post-revoke login=#{rc} (want 404)")
+BATTERY.record("RevokedAgentKey",
+               rc_link == 201 && rc_claim == 201 && !revoked_agent_id.nil? &&
+               rc_prelogin == 200 && rc_unlink == 204 && rc == 404,
+               "link=#{rc_link} claim=#{rc_claim} agent_id=#{revoked_agent_id.inspect} " \
+               "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 204) " \
+               "post-revoke login=#{rc} (want 404)")
 
 # PreLinkTokenAfterLink — an agent registers headless, creates a list, then
 # rebinds to Alice (assistant_claimed migrates the list). A rebind is a
 # principal change, so — like unlink — it watermark-revokes the key's pre-link
 # tokens. The PRE-LINK token no longer authenticates at all → 401.
 pl = register_agent("prelink")
-rc, plc = post_json("/kiosk/create_list", { title: "Pre-link list" }, bearer(pl[:token]))
+rc, plc = post_json("/kiosk/create_list", { title: "Pre-link list" }, WIRE.bearer(pl[:token]))
 pl_list = plc["list_id"]
 rc, link2 = post_json("/kiosk/auth/link", {}, { session: true })
 # Cross a second boundary so the pre-link token (minted at register above) is
 # unambiguously older than the rebind watermark — JWT iat is second-resolution.
 sleep 1.1
 rc, = post_json("/kiosk/auth/claim", { code: link2["link_code"], public_key: pl[:pem], signed: pop_proof(pl[:key], pl[:pem]) })
-rc, = get_json("/kiosk/list_todos", { list_id: pl_list }, bearer(pl[:token]))
-record(results, "PreLinkTokenAfterLink", rc == 401,
-       "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
+rc, = get_json("/kiosk/list_todos", { list_id: pl_list }, WIRE.bearer(pl[:token]))
+BATTERY.record("PreLinkTokenAfterLink", rc == 401,
+               "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 
 # ── NoLoginAddressOnTheRoster ────────────────────────────────────────────────
 #
@@ -353,7 +357,7 @@ pii_rc_claim, = post_json("/kiosk/auth/claim",
                           { code: pii_link["link_code"], public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
 pii_rc_login, pii_login = post_json("/kiosk/auth/login",
                                     { public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
-pii_bearer = bearer(pii_login["access_token"].to_s)
+pii_bearer = WIRE.bearer(pii_login["access_token"].to_s)
 
 rc_mine, mine = get_json("/kiosk/my_lists", {}, pii_bearer)
 household = Array(mine).find { |r| r["title"] == "Flat 3B" }
@@ -381,27 +385,27 @@ recognisable = (roster_names & %w[Alice Bob]).sort == %w[Alice Bob]
 # the original member — a one-row roster would prove the pseudonym's SHAPE
 # without proving it is per-account, and per-account is half of what makes it a
 # name rather than a constant.
-_, rejoin = post_json("/kiosk/invite", { list_id: list_id }, bearer(owner[:token]))
-post_json("/kiosk/accept_invite", { code: rejoin["code"] }, bearer(outsider[:token]))
-rc_headless, headless = get_json("/kiosk/list_members", { list_id: list_id }, bearer(owner[:token]))
+_, rejoin = post_json("/kiosk/invite", { list_id: list_id }, WIRE.bearer(owner[:token]))
+post_json("/kiosk/accept_invite", { code: rejoin["code"] }, WIRE.bearer(outsider[:token]))
+rc_headless, headless = get_json("/kiosk/list_members", { list_id: list_id }, WIRE.bearer(owner[:token]))
 headless_names = (headless.is_a?(Array) ? headless : []).map { |r| r["display_name"] }
 opaque_ok = headless_names.length >= 2 &&
             headless_names.all? { |n| n.to_s.match?(/\Amember-[0-9a-f]{12}\z/) } &&
             headless_names.uniq.length == headless_names.length
 
-record(results, "NoLoginAddressOnTheRoster",
-       pii_rc_link == 201 && pii_rc_claim == 201 && pii_rc_login == 200 &&
-       rc_mine == 200 && rc_roster == 200 && rc_who == 200 && rc_headless == 200 &&
-       no_addresses && named && recognisable && opaque_ok,
-       "link=#{pii_rc_link} claim=#{pii_rc_claim} login=#{pii_rc_login}; " \
-       "list_members on the seeded household as Alice's assistant → #{rc_roster}, " \
-       "#{roster_rows.length} rows named #{roster_names.inspect}; whoami → #{rc_who} " \
-       "#{who_rows.first&.fetch('display_name', nil).inspect}; account addresses in " \
-       "roster+whoami body: #{no_addresses ? 'none' : 'FOUND'}; headless roster → " \
-       "#{rc_headless} #{headless_names.inspect} " \
-       "(want no address anywhere, every row a non-empty display_name, the seeded " \
-       "household reading as Alice+Bob, and each headless account an opaque " \
-       "`member-<12 hex>`)")
+BATTERY.record("NoLoginAddressOnTheRoster",
+               pii_rc_link == 201 && pii_rc_claim == 201 && pii_rc_login == 200 &&
+               rc_mine == 200 && rc_roster == 200 && rc_who == 200 && rc_headless == 200 &&
+               no_addresses && named && recognisable && opaque_ok,
+               "link=#{pii_rc_link} claim=#{pii_rc_claim} login=#{pii_rc_login}; " \
+               "list_members on the seeded household as Alice's assistant → #{rc_roster}, " \
+               "#{roster_rows.length} rows named #{roster_names.inspect}; whoami → #{rc_who} " \
+               "#{who_rows.first&.fetch('display_name', nil).inspect}; account addresses in " \
+               "roster+whoami body: #{no_addresses ? 'none' : 'FOUND'}; headless roster → " \
+               "#{rc_headless} #{headless_names.inspect} " \
+               "(want no address anywhere, every row a non-empty display_name, the seeded " \
+               "household reading as Alice+Bob, and each headless account an opaque " \
+               "`member-<12 hex>`)")
 
 # ── ChosenNameNeverTheAddress ────────────────────────────────────────────────
 #
@@ -444,14 +448,14 @@ create_res   = signup.post_form("/lists",
 list_page    = signup.get_html(create_res["location"].to_s)
 members_html = list_page.body.to_s[%r{<h2>Members</h2>.*?</ul>}m].to_s
 
-record(results, "ChosenNameNeverTheAddress",
-       signup_form.code.to_i == 200 && [302, 303].include?(signup_res.code.to_i) &&
-       [302, 303].include?(create_res.code.to_i) && list_page.code.to_i == 200 &&
-       members_html.include?(chosen_name) && !members_html.include?("@"),
-       "sign-up form → #{signup_form.code}, sign-up → #{signup_res.code}, " \
-       "create list → #{create_res.code}, list page → #{list_page.code}; members block " \
-       "#{members_html.gsub(/\s+/, ' ').strip.inspect} " \
-       "(want the chosen name #{chosen_name.inspect} there and no address in it)")
+BATTERY.record("ChosenNameNeverTheAddress",
+               signup_form.code.to_i == 200 && [302, 303].include?(signup_res.code.to_i) &&
+               [302, 303].include?(create_res.code.to_i) && list_page.code.to_i == 200 &&
+               members_html.include?(chosen_name) && !members_html.include?("@"),
+               "sign-up form → #{signup_form.code}, sign-up → #{signup_res.code}, " \
+               "create list → #{create_res.code}, list page → #{list_page.code}; members block " \
+               "#{members_html.gsub(/\s+/, ' ').strip.inspect} " \
+               "(want the chosen name #{chosen_name.inspect} there and no address in it)")
 
 # ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #
@@ -471,27 +475,19 @@ record(results, "ChosenNameNeverTheAddress",
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
-device_grant_verdict = device_grant_beat.call(
-  Kiosk::Redteam::Client.new(base_url: SERVER),
-  Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
+# `on_skip: :breach` on purpose: this origin declares a role, so "could not
+# test" is a failure of the harness rather than a property of the provider, and
+# a silent third state is what let the last one hide.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
+  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
+  on_skip: :breach,
 )
-# A SKIP is recorded as a breach here on purpose: this origin declares a role,
-# so "could not test" is a failure of the harness rather than a property of the
-# provider, and a silent third state is what let the last one hide.
-record(results, device_grant_beat.name, device_grant_verdict.blocked,
-       device_grant_verdict.skipped ? "SKIPPED, which this origin must never do — " \
-                                      "#{device_grant_verdict.detail}"
-                                    : device_grant_verdict.detail)
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
-breaches = results.reject { |r| r[:blocked] }
-puts JSON.generate(scenarios: results.size, blocked: results.count { |r| r[:blocked] }, breaches: breaches.map { |r| r[:name] })
-
-if breaches.empty?
-  puts "\n  redteam: all #{results.size} scenarios BLOCKED."
-  exit 0
-else
-  puts "\n  redteam: #{breaches.size} BREACH(es): #{breaches.map { |r| r[:name] }.join(', ')}"
-  exit 1
-end
+# The gem answers it: 0 only when at least one attack ran and every attack that
+# ran was blocked, 1 on a breach or on a battery that proved nothing, 2 when a
+# beat skipped that this origin was not expected to skip. tudu expects no skips
+# at all — every beat above is about a surface it has.
+exit BATTERY.report!

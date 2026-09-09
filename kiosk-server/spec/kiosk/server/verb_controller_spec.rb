@@ -585,20 +585,20 @@ RSpec.describe Kiosk::Server::VerbController do
       # The two RESERVED endpoints are still literally drawn…
       expect(paths).to include("/schema(.:format)", "/pay(.:format)")
       # …and the multiplexed pair is not drawn at all: not as a route, not as
-      # a tombstone. Since T-183 nothing in this table can match those paths
-      # either — the engine's own set carries no dynamic segment at all, and an
-      # unregistered name is answered by {VerbRefusalController} through the
-      # tail pair the engine appends to the HOST's route set.
+      # a tombstone. Nothing in this table can match those paths either — the
+      # engine's own set carries no dynamic segment at all, so on a booted host
+      # they match no route and answer the framework's ordinary 404.
       expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
       expect(paths.grep(/kiosk_verb/)).to be_empty
     end
 
     it "answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one" do
-      # The sharpest statement of the cut. The path still resolves, but it
-      # resolves through the SAME constrained per-verb pair every other name
-      # goes through, and answers the ordinary `verb_not_found` problem document
-      # naming what IS registered. There is no privileged 0.3 endpoint left
-      # here — `query` is now just a name an operator has not used.
+      # The sharpest statement of the cut, at the CONTROLLER rather than at the
+      # router: hand this controller the name `query` and it answers what it
+      # answers for any name nobody registered, naming what IS registered.
+      # There is no privileged 0.3 endpoint left here — `query` is now just a
+      # name an operator has not used. (On a booted origin no route hands it
+      # that name at all; engine_mount_spec.rb measures the 404 that follows.)
       status, body, headers = call_verb(:post, "query", body: JSON.generate(name: "salons"))
 
       expect(status).to eq(404)

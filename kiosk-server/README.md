@@ -280,11 +280,14 @@ everything the engine draws wins over anything you write below it and no verb of
 yours can shadow `schema`, `pay` or the auth plane. (You could not declare such
 a verb anyway — `Kiosk::Handler` refuses a reserved name at boot.)
 
-A path under the mount that names no verb you drew — and a verb called with the
-other method — is answered by the wire's own `404 verb_not_found` / `405` +
-`Allow`, from a refusal route the engine appends AFTER your routes. It refuses;
-it never serves. So a verb you declared and forgot to route fails loudly with
-the missing line in the message, rather than working by accident.
+A path under the mount that names no route — including a verb called with the
+other method — matches nothing, so it is the ordinary 404 Rails answers at any
+unrouted path: no `code`, no `hint`. The mount-path middleware still stamps the
+version headers on it. If you want the wire's own `404 verb_not_found` there,
+draw a catch-all action of your own at the end of your file; the engine does not
+draw one, because an assistant reads `GET <mount>/schema` before it dials.
+Declared-but-unrouted is the bug class this trade opens, and
+`bin/check-verb-routes` is what holds your routes to your declarations.
 
 Hand-drawing the protocol routes yourself instead of mounting remains possible —
 for a partial surface, or mid-migration. Hand-drawn lines win over the engine's

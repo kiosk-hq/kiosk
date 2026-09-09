@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **`Kiosk::Server::VerbRefusalController` and the tail route that reached it are removed.** A mounted engine draws the protocol plane and nothing else; the operator draws one explicit route per verb. A path under the mount that no line draws — an unknown name, or a verb dialed with the method its kind does not take — matches nothing, so it is the ordinary 404 your web framework answers at any unrouted path, with no `code` and no `hint`. The mount-path middleware still stamps the version headers on it. Draw a catch-all action of your own at the end of your routes file if you want the wire's own `404 verb_not_found` there; nothing requires one, because an assistant reads `GET <mount>/schema` before it dials.
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - A payment-free or KYC-free origin answers `POST /kiosk/pay` and
   `POST /kiosk/agents/kyc` with `module_not_served` (501). The behaviour is

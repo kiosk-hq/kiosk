@@ -29,11 +29,10 @@ RSpec.describe "Kiosk::Server::Engine routes" do
   end
 
   it "draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)" do
-    # Not tombstoned, not 404-with-a-hint — absent from the table. Since T-183
-    # both names reach {VerbRefusalController} through the tail pair the engine
-    # appends to the HOST, and answer the ordinary `verb_not_found` any
-    # unregistered name gets; engine_mount_spec.rb asserts that end to end,
-    # through a booted app, which is the only place the appended route exists.
+    # Not tombstoned, not 404-with-a-hint — absent from the table. Nothing under
+    # the mount matches either name, here or on a booted host: the engine draws
+    # the protocol plane and nothing else, so both are the ordinary routing 404
+    # any unrouted path gets. engine_mount_spec.rb asserts that end to end.
     routes = Kiosk::Server::Engine.routes
     routes.finalize!
     paths = routes.routes.map { |route| route.path.spec.to_s }

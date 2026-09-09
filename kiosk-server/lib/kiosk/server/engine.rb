@@ -292,42 +292,6 @@ module Kiosk
         end
       end
 
-      # THE WIRE'S OWN 404/405 FOR A PATH UNDER THE MOUNT THAT NAMES NO VERB
-      # THIS ORIGIN DRAWS. Appended to the HOST's route set for the one
-      # property `routes` below cannot give it: it has to come AFTER the
-      # operator's own explicit per-verb lines, and `routes.append` is the only
-      # place that is true — the block runs when the host's set is FINALIZED.
-      #
-      # Drawn inside the engine's own table it would be worse than useless: a
-      # mounted route set that matches answers instead of passing, so a tail
-      # route there would swallow every verb path before the operator's lines
-      # were ever consulted, and the explicit routes would be dead.
-      #
-      # IT NEVER SERVES A VERB. {VerbRefusalController} can only REFUSE — 405
-      # for a name registered as the other kind, 404 `verb_not_found` (with the
-      # registry's hint) for a name registered as neither, and a raise for a
-      # name registered as THIS kind, which is a misconfigured origin rather
-      # than a call to serve. Spec Section 8.1 and Section 9 make both of those
-      # statuses MANDATORY of an operator, and an unregistered name has no
-      # explicit route by construction, so without this the answer would be
-      # Rails' own HTML 404 with no `code` for an assistant to branch on.
-      #
-      # The constraint is {VerbController::NAME_SEGMENT}, the same expression
-      # spec Section 8.1 gives for a verb name, so a path that could never BE a
-      # verb (`/kiosk/Foo`, `/kiosk/nope/nope`) stays a routing 404 and keeps
-      # carrying the Section 3.6 headers through the middleware.
-      initializer "kiosk-server.verb_refusal_route" do |app|
-        app.routes.append do
-          next unless Kiosk::Server::Engine.mounted_in?(app.routes)
-
-          mount_path = Kiosk.configuration.mount_path
-          get  "#{mount_path}/:kiosk_verb", to: "kiosk/server/verb_refusal#show",
-               constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
-          post "#{mount_path}/:kiosk_verb", to: "kiosk/server/verb_refusal#create",
-               constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
-        end
-      end
-
       # Everything mount-prefixed. `isolate_namespace` scopes the drawer to
       # the kiosk/server controller namespace, so "wire#schema" resolves to
       # Kiosk::Server::WireController#schema.
@@ -427,7 +391,15 @@ module Kiosk
         #
         # WHAT THIS COSTS, stated rather than implied: a verb added in
         # development is not served until the routes file gains a line — which
-        # is a routes-file edit, and Rails does reload those.
+        # is a routes-file edit, and Rails does reload those. And a path under
+        # the mount that no line reaches matches NOTHING, so the answer is the
+        # host framework's ordinary 404 — Rails' HTML page, with no `code` and
+        # no `hint`, exactly as at any other unrouted path. The mount-path
+        # middleware still stamps the Section 3.6 version headers on it. An
+        # operator who wants the wire's own `404 verb_not_found` there may draw
+        # a catch-all ACTION of their own; nothing here requires one, because
+        # an assistant reads `GET <endpoint>/schema` and has no business
+        # dialing a name that is not in it.
         # WHAT IT BUYS: `rails routes` lists the origin's actual wire, and the
         # method a verb answers to is a fact you can read instead of a fact the
         # dispatcher decides.

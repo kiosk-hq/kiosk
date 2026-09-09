@@ -18,9 +18,8 @@ module Kiosk
     # so `curl -H "Authorization: Bearer …" https://…/kiosk/catalog` is the
     # whole invocation, and the HTTP method carries the read/write semantics:
     # queries are GET, actions are POST. This is the ONLY way to reach an
-    # operator verb — a path that names no registered verb reaches
-    # {VerbRefusalController} and answers `404 verb_not_found`, an ordinary
-    # problem document whose `hint` names the verbs this origin does register.
+    # operator verb — a path that names no route matches nothing, so it is the
+    # host framework's ordinary 404, with no `code` and no `hint`.
     #
     # ── Where the routes come from ───────────────────────────────────────
     #
@@ -45,7 +44,7 @@ module Kiosk
     #     `reference/bin/check-verb-routes` is the check — it derives the
     #     expected list from each origin's own handler controllers and fails on
     #     a missing route, an extra route, or a method that disagrees with the
-    #     kind. At runtime {VerbRefusalController} refuses rather than serves.
+    #     kind. At runtime an unrouted verb is a 404 like any other path.
     #   * the reserved plane wins by first-match, because the operator
     #     draws `mount Kiosk::Server::Engine` FIRST and their verbs after it —
     #     and, more strongly, {HandlerMixin::RESERVED_NAMES} refuses such a
@@ -59,6 +58,9 @@ module Kiosk
     #   1. identity            401  IdentityResolution
     #   2. the verb exists     404  the registry (`verb_not_found` + name-hint)
     #      …or wrong method    405  the OTHER registry, carrying `Allow:`
+    #      (both are reached only when a ROUTE hands this controller a name the
+    #      registry disagrees with — an origin whose routes and declarations
+    #      have drifted. A name with no route at all never gets here.)
     #   3. the arguments       400  ArgumentDecoder + the declared input_schema
     #   4. the toll            402  PowGate, via WireController#execute_wire
     #

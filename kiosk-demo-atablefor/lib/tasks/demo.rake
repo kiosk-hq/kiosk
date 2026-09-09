@@ -1420,10 +1420,11 @@ namespace :demo do
       BLOCKED  UnknownQuery       — unregistered query name → 404
       BLOCKED  UnknownAction      — unregistered action name → 404
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
-                                    POST /kiosk/run name no registered verb:
-                                    404 verb_not_found with a bearer, 401
-                                    unauthenticated without
-      BLOCKED  MethodMismatch     — GET at an action's path → 405 + Allow: POST
+                                    POST /kiosk/run name no registered verb and
+                                    no route: the ordinary 404 any undrawn path
+                                    gets, bearer or not
+      BLOCKED  MethodMismatch     — GET at an action's path draws no route → the
+                                    same plain 404, and the write never runs
       BLOCKED  InvalidFilterIsNotAnEmptyList — an availability filter naming a
                                     seating that does not exist is a typed 400
                                     NAMING the valid values, never 200 []

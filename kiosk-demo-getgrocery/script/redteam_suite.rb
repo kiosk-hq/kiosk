@@ -27,7 +27,7 @@
 # point is the TOP-LEVEL `code`. Two of the scenarios below are about the shape
 # of that wire rather than about this shop — UnregisteredVerbIsOrdinaryRefusal
 # and MethodMismatch — and both are here because a path that answers more than
-# the ordinary refusal, or lies about a resource that exists, is an attack
+# the ordinary refusal, or serves a write to the wrong method, is an attack
 # surface.
 #
 # THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
@@ -583,20 +583,17 @@ end
 
 # A path that answers more than the ordinary refusal is a second conformance
 # surface, and a second conformance surface is somewhere an attacker looks for
-# the gate the first one has. `POST /kiosk/query` and `POST /kiosk/run` reach
-# the per-verb controller as verbs literally named "query" and "run", which
-# nobody registered, so they answer the ordinary 404 an AUTHENTICATED caller
+# the gate the first one has. `POST /kiosk/query` and `POST /kiosk/run` name no
+# verb this shop registers, so no line in config/routes/kiosk.rb draws them and
+# nothing under the mount matches: they answer the ordinary 404 any undrawn path
 # gets — no privileged endpoint hiding behind a generic-sounding word, and
 # nothing naming a replacement an attacker could probe. Those two names are
 # what a caller hunting for a multiplexed endpoint tries first, which is why
 # the beat dials them rather than a nonsense word.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
-# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
-# caller with no bearer never reaches the registry lookup that produces the 404 —
-# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
-# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
-# nothing tested the anonymous case.
+# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
+# miss is decided before any credential is read, so a bearer buys nothing here
+# and neither caller gets a problem document to read anything out of.
 class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   UNREGISTERED = %w[query run].freeze
 
@@ -604,8 +601,8 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
     super(
       name:        "UnregisteredVerbIsOrdinaryRefusal",
       category:    "surface",
-      description: "POST /kiosk/query and POST /kiosk/run name no registered verb — the " \
-                   "ordinary 404 an authenticated caller gets, 401 without a bearer",
+      description: "POST /kiosk/query and POST /kiosk/run name no registered verb and no " \
+                   "route — the ordinary 404 any undrawn path gets, bearer or not",
     )
   end
 
@@ -613,8 +610,7 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
     a = register_principal(client, name: "redteam-unregistered-a", profile:)
 
     results = UNREGISTERED.flat_map do |name|
-      [[a.token, 404, "verb_not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
-        .map do |token, want_status, want_code, tag|
+      [[a.token, ""], [nil, " (anon)"]].map do |token, tag|
         uri     = URI("#{BASE_URL}/kiosk/#{name}")
         headers = { "Content-Type" => "application/json" }
         headers["Authorization"] = "Bearer #{token}" if token
@@ -622,9 +618,9 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
         req.body = JSON.generate(name: "catalog")
         res  = Net::HTTP.new(uri.host, uri.port).request(req)
         body = (JSON.parse(res.body) rescue {})
-        [res.code.to_i == want_status && body["code"] == want_code,
+        [res.code.to_i == 404 && body["code"].nil?,
          "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
-         "(want #{want_status}/#{want_code.inspect})"]
+         "(want 404 with no problem-document code)"]
       end
     end
 
@@ -639,18 +635,19 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   end
 end
 
-# A GET at an ACTION's path must be 405 with `Allow: POST`, never a silent 404.
-# It matters that this is not a 404: the resource EXISTS, and an assistant that
-# read 404 would conclude "this operator cannot do that" and abandon a verb it
-# could have called correctly — a denial of service the operator inflicted on
-# itself. RFC 9110 §15.5.6 already has the status; 0.4 added the matching
-# `method_not_allowed` code so an assistant can branch on it.
+# A GET at an ACTION's path draws no route here — this shop draws `POST
+# /kiosk/create_order` and nothing else at that path — so it is the same
+# ordinary 404 any undrawn path gets. What the beat is FOR is the security half:
+# the wrong method must never reach the action, and must never carry an `Allow`
+# an attacker could read as a map of the surface. The catalogue at
+# `GET /kiosk/schema` is where a caller learns which method a verb takes.
 class MethodMismatch < Kiosk::Redteam::Scenario
   def initialize
     super(
       name:        "MethodMismatch",
       category:    "surface",
-      description: "A GET at an action's path is 405 + Allow: POST, never a silent 404",
+      description: "A GET at an action's path draws no route: a plain 404, and the write " \
+                   "never runs",
     )
   end
 
@@ -660,9 +657,8 @@ class MethodMismatch < Kiosk::Redteam::Scenario
     res = Net::HTTP.new(uri.host, uri.port)
                    .request(Net::HTTP::Get.new(uri, "Authorization" => "Bearer #{a.token}"))
     body    = (JSON.parse(res.body) rescue {})
-    allow   = res["allow"].to_s
-    blocked = res.code.to_i == 405 && body["code"] == "method_not_allowed" &&
-              allow.upcase.include?("POST")
+    allow   = res["allow"]
+    blocked = res.code.to_i == 404 && allow.nil? && body["code"].nil?
 
     Kiosk::Redteam::Verdict.new(
       blocked: blocked,
@@ -670,7 +666,7 @@ class MethodMismatch < Kiosk::Redteam::Scenario
       status:  res.code.to_i,
       detail:  blocked ? "" :
                  "GET /kiosk/create_order → #{res.code}/#{body["code"].inspect} " \
-                 "Allow=#{allow.inspect} (want 405/\"method_not_allowed\"/POST)",
+                 "Allow=#{allow.inspect} (want a plain 404, no Allow, no code)",
     )
   end
 end
@@ -859,7 +855,7 @@ scenarios = [
   MalformedItemsCart.new,   # a mis-shaped `items` is a typed 400, never a 500
   HostileArgShapes.new,     # boolean/array/object/junk shapes on the other args → typed 400
   UnregisteredVerbIsOrdinaryRefusal.new, # a path naming no verb → the ordinary refusal
-  MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
+  MethodMismatch.new,       # a GET at an action draws no route → a plain 404, no write
   PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
   KycBrokerUnwired.new,     # no broker configured is a typed 501, never a Ruby exception in a 500
   # register PoW is ON — a missing/bad register proof must be rejected (runs

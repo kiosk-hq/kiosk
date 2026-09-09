@@ -126,9 +126,10 @@ Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 `MalformedUuidArg` (400, no SQL internals), `MissingAuth` (401), `GarbageToken`
 (401), `UnknownQuery` (404), `UnknownAction` (404),
 `UnregisteredVerbIsOrdinaryRefusal` (`/kiosk/query` and `/kiosk/run` name no
-registered verb: 404 to an authenticated caller, `401 unauthenticated` without
-a bearer, since auth precedes verb dispatch), `MethodMismatch` (a `GET` at an
-action's path is `405` + `Allow: POST`, never a silent 404), plus tudu beats —
+registered verb and no route draws them: the ordinary 404 any undrawn path
+gets, bearer or not, since a routing miss precedes the credential),
+`MethodMismatch` (a `GET` at an action's path draws no route either, so it is
+the same plain 404 and the write never runs), plus tudu beats —
 `InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (404),
 `PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
 to Alice reads the seeded household's roster: display names only, and no

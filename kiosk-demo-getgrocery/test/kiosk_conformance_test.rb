@@ -44,11 +44,10 @@ class KioskConformanceTest < ActiveSupport::TestCase
 
   # ── 1. THE ROUTES RESOLVE ───────────────────────────────────────────────
   #
-  # Since the engine stopped drawing a catch-all pair for the operator, every
-  # verb needs a line in `config/routes/kiosk.rb`, and a verb declared without
-  # one is a 404 to every caller that this app's own flow tasks would only
-  # notice if one of them happened to call it. This asks the router about all
-  # eight at once.
+  # Every verb needs a line in `config/routes/kiosk.rb`, and a verb declared
+  # without one is a 404 to every caller — something this app's own flow tasks
+  # would notice only if one of them happened to call it. This asks the router
+  # about all eight at once.
   #
   # Watched fail: delete the `get "/kiosk/delivery_slots"` line and this goes
   # red naming the verb, the method and the path — where `demo:shop` would keep

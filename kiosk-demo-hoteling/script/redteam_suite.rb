@@ -26,15 +26,15 @@
 #
 # And two beats about the shape of the wire itself:
 #   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
-#                        POST /kiosk/run name no registered verb, so they are
-#                        404 / verb_not_found to an AUTHENTICATED caller and
-#                        401 / unauthenticated without a bearer (auth precedes
-#                        verb dispatch; both are probed): no privileged
-#                        endpoint hides behind a generic-sounding word, and
-#                        there is no second conformance surface to attack.
-#   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
-#                        with `Allow: POST`, never a silent 404 an assistant
-#                        would read as "this operator cannot do that".
+#                        POST /kiosk/run name no registered verb and no route
+#                        draws them, so both are the ordinary 404 any undrawn
+#                        path gets, bearer or not (a routing miss precedes the
+#                        credential; both are probed): no privileged endpoint
+#                        hides behind a generic-sounding word, and there is no
+#                        second conformance surface to attack.
+#   MethodMismatch     — the wrong method at a registered verb's path draws no
+#                        route either, so it is the same plain 404 with no
+#                        `Allow`, and the verb never runs.
 #
 # THE 0.4 WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
 # arguments in the query string, an action is `POST <endpoint>/<action-name>`
@@ -829,19 +829,17 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 end
 
-# `POST /kiosk/query` and `POST /kiosk/run` reach the per-verb controller as
-# verbs literally named "query" and "run", which nobody registered, so they
-# answer the ordinary 404 an AUTHENTICATED caller gets — no privileged endpoint
-# hiding behind a generic-sounding word, and no second conformance surface to
-# attack. Those two names are what a caller hunting for a multiplexed endpoint
-# tries first, which is why the beat dials them rather than a nonsense word.
+# `POST /kiosk/query` and `POST /kiosk/run` name no verb this hotel registers,
+# so no line in config/routes/kiosk.rb draws them and nothing under the mount
+# matches: they answer the ordinary 404 any undrawn path gets — no privileged
+# endpoint hiding behind a generic-sounding word, and no second conformance
+# surface to attack. Those two names are what a caller hunting for a
+# multiplexed endpoint tries first, which is why the beat dials them rather
+# than a nonsense word.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
-# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
-# caller with no bearer never reaches the registry lookup that produces the 404 —
-# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
-# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
-# nothing tested the anonymous case.
+# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
+# miss is decided before any credential is read, so a bearer buys nothing here
+# and neither caller gets a problem document to read anything out of.
 #
 # A multiplexer here is exactly what an attacker would reach for, because it
 # takes the verb name from the BODY, where no route constraint and no
@@ -853,9 +851,9 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
     super(
       name:        "UnregisteredVerbIsOrdinaryRefusal",
       category:    "wire",
-      description: "POST /kiosk/query and POST /kiosk/run name no registered verb, so they must " \
-                   "be the ordinary 404 an authenticated caller gets — and 401 without a bearer " \
-                   "— never a privileged surface",
+      description: "POST /kiosk/query and POST /kiosk/run name no registered verb and no " \
+                   "route, so both must be the ordinary 404 any undrawn path gets — bearer " \
+                   "or not — never a privileged surface",
     )
   end
 
@@ -863,12 +861,11 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
     a = register_principal(client, name: "redteam-unregistered-verb", profile:)
 
     probes = %w[query run].flat_map do |name|
-      [[a, 404, "verb_not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
-        .map do |principal, want_status, want_code, tag|
+      [[a, ""], [nil, " (anon)"]].map do |principal, tag|
         res, body = raw(principal, :post, "/kiosk/#{name}", { name: "properties" })
-        [res.code.to_i == want_status && body["code"] == want_code,
+        [res.code.to_i == 404 && body["code"].nil?,
          "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
-         "(want #{want_status}/#{want_code.inspect})"]
+         "(want 404 with no problem-document code)"]
       end
     end
 
@@ -883,12 +880,13 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   end
 end
 
-# A GET at an action's path is 405 with `Allow: POST`, never a silent 404. The
-# resource EXISTS; answering 404 would be a lie about it, and an assistant that
-# read that 404 as "this operator cannot do that" would abandon a verb it could
-# have called correctly. Probed in BOTH directions, because the fork is
-# symmetric: a GET at the action `reserve_room`, and a POST at the query
-# `my_bookings`.
+# The wrong HTTP method at a registered verb's path draws no route: this hotel
+# draws `POST /kiosk/reserve_room` and `GET /kiosk/my_bookings` and nothing else
+# at either path, so the other method is the same plain 404 an undrawn path
+# gets. What the beat is FOR is the security half — the verb must never RUN for
+# the method it was not declared with, and no `Allow` may hand an attacker a map
+# of the surface. Probed in BOTH directions, because the fork is symmetric: a
+# GET at the action `reserve_room`, and a POST at the query `my_bookings`.
 class MethodMismatch < Kiosk::Redteam::Scenario
   include RawWire
 
@@ -896,7 +894,8 @@ class MethodMismatch < Kiosk::Redteam::Scenario
     super(
       name:        "MethodMismatch",
       category:    "wire",
-      description: "The wrong HTTP method on a registered verb must be 405 method_not_allowed with Allow:, never a silent 404",
+      description: "The wrong HTTP method on a registered verb draws no route: a plain 404 " \
+                   "with no Allow, and the verb never runs",
     )
   end
 
@@ -904,23 +903,21 @@ class MethodMismatch < Kiosk::Redteam::Scenario
     a = register_principal(client, name: "redteam-method-mismatch", profile:)
 
     probes = [
-      [:get,  "/kiosk/reserve_room", "POST", nil],
-      [:post, "/kiosk/my_bookings",  "GET",  {}],
-    ].map do |method, path, wanted, body|
+      [:get,  "/kiosk/reserve_room", nil],
+      [:post, "/kiosk/my_bookings",  {}],
+    ].map do |method, path, body|
       res, doc = raw(a, method, path, body)
-      ok = res.code.to_i == 405 && doc["code"] == "method_not_allowed" &&
-           res["allow"].to_s.upcase.include?(wanted)
+      ok = res.code.to_i == 404 && res["allow"].nil? && doc["code"].nil?
       [ok, "#{method.to_s.upcase} #{path} → #{res.code}/#{doc["code"].inspect} " \
-           "Allow=#{res["allow"].inspect} (want 405/method_not_allowed/#{wanted})"]
+           "Allow=#{res["allow"].inspect} (want a plain 404, no Allow, no code)"]
     end
 
     Kiosk::Redteam::Verdict.new(
       blocked: probes.all? { |ok, _| ok },
       skipped: false,
-      status:  405,
-      detail:  probes.all? { |ok, _| ok } ? "" : "a method mismatch is not answered " \
-                                                 "405/method_not_allowed with Allow: " \
-                                                 "#{probes.map(&:last).join("; ")}",
+      status:  404,
+      detail:  probes.all? { |ok, _| ok } ? "" : "a method mismatch is not answered as a plain " \
+                                                 "404: #{probes.map(&:last).join("; ")}",
     )
   end
 end
@@ -1073,7 +1070,7 @@ scenarios = [
   HostileArgShapes.new,                                   # boolean/array/object/date shapes → typed 400
   DoubleBookedRoom.new,                                   # one room-night, one booking
   UnregisteredVerbIsOrdinaryRefusal.new,                  # a path naming no verb → 404, not a shim
-  MethodMismatch.new,                                     # 0.4 — wrong method is 405 + Allow, not 404
+  MethodMismatch.new,                                     # wrong method draws no route → plain 404
   PastStay.new,                                           # no availability in the past, no booking into it
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)

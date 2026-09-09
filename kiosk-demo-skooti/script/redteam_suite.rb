@@ -53,15 +53,15 @@
 #
 # And two beats about the shape of the wire itself:
 #   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
-#                        POST /kiosk/run name no registered verb, so they are
-#                        404 / verb_not_found to an AUTHENTICATED caller and
-#                        401 / unauthenticated without a bearer (auth precedes
-#                        verb dispatch; both are probed): no privileged
-#                        endpoint hides behind a generic-sounding word, and
-#                        there is no second conformance surface to attack.
-#   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
-#                        with `Allow: POST`, never a silent 404 an assistant
-#                        would read as "this operator cannot do that".
+#                        POST /kiosk/run name no registered verb and no route
+#                        draws them, so both are the ordinary 404 any undrawn
+#                        path gets, bearer or not (a routing miss precedes the
+#                        credential; both are probed): no privileged endpoint
+#                        hides behind a generic-sounding word, and there is no
+#                        second conformance surface to attack.
+#   MethodMismatch     — the wrong method at a registered verb's path draws no
+#                        route either, so it is the same plain 404 with no
+#                        `Allow`, and the verb never runs.
 #
 # THE 0.4 WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
 # arguments in the query string, an action is `POST <endpoint>/<action-name>`
@@ -1093,41 +1093,34 @@ raw_wire = lambda do |method, path, body = nil, bearer: true|
 end
 
 # UnregisteredVerbIsOrdinaryRefusal — `POST /kiosk/query` and `POST /kiosk/run`
-# reach the per-verb controller as verbs literally named "query" and "run",
-# which nobody registered, so they answer the ordinary 404 an AUTHENTICATED
-# caller gets: no privileged endpoint hiding behind a generic-sounding word, and
-# no second conformance surface to attack. Those two names are what a caller
-# hunting for a multiplexed endpoint tries first, which is why the beat dials
-# them rather than a nonsense word.
+# name no verb this origin registers, so no line in config/routes/kiosk.rb draws
+# them and nothing under the mount matches: they answer the ordinary 404 any
+# undrawn path gets — no privileged endpoint hiding behind a generic-sounding
+# word, and no second conformance surface to attack. Those two names are what a
+# caller hunting for a multiplexed endpoint tries first, which is why the beat
+# dials them rather than a nonsense word.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
-# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so
-# a caller with no bearer never reaches the registry lookup that produces the
-# 404 — it is answered 401 `unauthenticated`, exactly as it would be at any
-# other name.
-#
-# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
-# NAMES nobody registered, and the vocabulary reserves `not_found` for an
-# argument that ADDRESSED something absent.
+# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
+# miss is decided before any credential is read, so a bearer buys nothing here
+# and neither caller gets a problem document to read anything out of.
 #
 # A multiplexer here would be exactly that second surface — and it is the one
 # an attacker would reach for, because it takes the verb name from the BODY.
 unregistered_verb = lambda do
   probes = %w[query run].flat_map do |name|
-    [[true, 404, "verb_not_found", ""], [false, 401, "unauthenticated", " (anon)"]]
-      .map do |bearer, want_status, want_code, tag|
+    [[true, ""], [false, " (anon)"]].map do |bearer, tag|
       res, body = raw_wire.call(:post, "/kiosk/#{name}", { name: "scooters_available" },
                                 bearer: bearer)
-      [res.code.to_i == want_status && body["code"] == want_code,
+      [res.code.to_i == 404 && body["code"].nil?,
        "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
-       "(want #{want_status}/#{want_code.inspect})"]
+       "(want 404 with no problem-document code)"]
     end
   end
 
   if probes.all? { |ok, _| ok }
     { blocked: true,
       detail:  "unregistered verb names #{probes.map(&:last).join(", ")} " \
-               "(an ordinary verb_not_found to an authenticated caller, 401 to anyone else, " \
+               "(the ordinary 404 any undrawn path gets, bearer or not, " \
                "and no privileged surface either way)" }
   else
     { blocked: false,
@@ -1138,31 +1131,32 @@ end
 
 unregistered_verb_beat = unregistered_verb.call
 
-# MethodMismatch — a GET at an action's path is 405 with `Allow: POST`, never a
-# silent 404. The resource EXISTS; answering 404 would be a lie about it, and an
-# assistant that read the 404 as "this operator cannot do that" would abandon a
-# verb it could have called correctly. Probed in BOTH directions, because the
-# fork is symmetric and only one half is interesting to get right by accident:
-# a GET at the action `reserve`, and a POST at the query `my_reservations`.
+# MethodMismatch — the wrong HTTP method at a registered verb's path draws no
+# route: this origin draws `POST /kiosk/reserve` and `GET /kiosk/my_reservations`
+# and nothing else at either path, so the other method is the same plain 404 an
+# undrawn path gets. What the beat is FOR is the security half — the verb must
+# never RUN for the method it was not declared with, and no `Allow` may hand an
+# attacker a map of the surface. Probed in BOTH directions, because the fork is
+# symmetric and only one half is interesting to get right by accident: a GET at
+# the action `reserve`, and a POST at the query `my_reservations`.
 method_mismatch = lambda do
   probes = [
-    [:get,  "/kiosk/reserve",         "POST", nil],
-    [:post, "/kiosk/my_reservations", "GET",  {}],
-  ].map do |method, path, wanted, body|
+    [:get,  "/kiosk/reserve",         nil],
+    [:post, "/kiosk/my_reservations", {}],
+  ].map do |method, path, body|
     res, doc = raw_wire.call(method, path, body)
-    ok = res.code.to_i == 405 && doc["code"] == "method_not_allowed" &&
-         res["allow"].to_s.upcase.include?(wanted)
+    ok = res.code.to_i == 404 && res["allow"].nil? && doc["code"].nil?
     [ok, "#{method.to_s.upcase} #{path} → #{res.code}/#{doc["code"].inspect} " \
-         "Allow=#{res["allow"].inspect} (want 405/method_not_allowed/#{wanted})"]
+         "Allow=#{res["allow"].inspect} (want a plain 404, no Allow, no code)"]
   end
 
   if probes.all? { |ok, _| ok }
     { blocked: true,
-      detail:  "the wrong method on a real verb is a 405 that names the right one: " \
+      detail:  "the wrong method on a real verb draws no route and never runs it: " \
                "#{probes.map(&:last).join("; ")}" }
   else
     { blocked: false,
-      detail:  "a method mismatch is not answered 405/method_not_allowed with Allow: " \
+      detail:  "a method mismatch is not answered as a plain 404: " \
                "#{probes.map(&:last).join("; ")}" }
   end
 end

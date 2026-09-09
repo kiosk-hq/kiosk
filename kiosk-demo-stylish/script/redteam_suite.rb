@@ -18,11 +18,11 @@
 #   UnknownQuery       — an unregistered query name → 404
 #   UnknownAction      — an unregistered action name → 404
 #   UnregisteredVerbIsOrdinaryRefusal — `POST /kiosk/query` and
-#     `POST /kiosk/run` name no registered verb, so they answer the ordinary
-#     404 an authenticated caller gets, and 401 without a bearer: no
+#     `POST /kiosk/run` name no registered verb and no route draws them, so they
+#     answer the ordinary 404 any undrawn path gets, bearer or not: no
 #     privileged endpoint hides behind a generic-sounding word
-#   MethodMismatch     — a GET at an action's path → 405 method_not_allowed with
-#     `Allow: POST`, never a silent 404
+#   MethodMismatch     — a GET at an action's path draws no route, so it is the
+#     same ordinary 404 and never serves the write
 #   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real
 #     and mints an assistant link; the link is legitimate but the role it
 #     carries is `customer`, because the role is read off the human's own
@@ -249,47 +249,38 @@ rc, _ = WIRE.post_json("/kiosk/nope", {}, ALICE.bearer)
 BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── UnregisteredVerbIsOrdinaryRefusal — a path naming no verb is refused ─────
-# `POST /kiosk/query` and `POST /kiosk/run` reach the per-verb controller as
-# verbs literally named "query" and "run", which nobody registered, so they
-# answer the ordinary 404 an AUTHENTICATED caller gets — no privileged
-# endpoint behind a generic-sounding word, and no second conformance surface
-# to attack. Those two names are what a caller hunting for a multiplexed
-# endpoint tries first, which is why the beat dials them rather than a
-# nonsense word.
+# `POST /kiosk/query` and `POST /kiosk/run` name no verb this origin registers,
+# so no line in config/routes/kiosk.rb draws them and nothing under the mount
+# matches: the answer is the ordinary 404 any undrawn path gets — no privileged
+# endpoint behind a generic-sounding word, and no second conformance surface to
+# attack. Those two names are what a caller hunting for a multiplexed endpoint
+# tries first, which is why the beat dials them rather than a nonsense word.
 #
-# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above.
-# `VerbController#serve` resolves the identity BEFORE it looks the verb up, so a
-# caller with no bearer never reaches the registry lookup that produces the 404 —
-# it is answered 401 `unauthenticated`, exactly as it would be at any other name.
-# A beat that dialled only WITH a bearer would let prose say the 404 flatly while
-# nothing tested the anonymous case.
-#
-# The 404's code is `verb_not_found`, not `not_found`: `query` and `run` are
-# NAMES nobody registered, and the vocabulary reserves `not_found` for an
-# argument that ADDRESSED something absent.
-unregistered = %w[query run].map do |name|
-  rc_r, body_r = WIRE.post_json("/kiosk/#{name}", { name: "salons" }, ALICE.bearer)
-  [rc_r == 404 && body_r["code"] == "verb_not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
-end
-unregistered_anon = %w[query run].map do |name|
-  rc_a, body_a = WIRE.post_json("/kiosk/#{name}", { name: "salons" })
-  [rc_a == 401 && body_a["code"] == "unauthenticated", "#{name}(anon)→#{rc_a}/#{body_a['code'].inspect}"]
+# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
+# miss is decided before any credential is read, so a bearer buys nothing here:
+# the anonymous caller and the authenticated one get the same 404, and neither
+# gets a Kiosk problem document to read anything out of.
+unregistered = %w[query run].flat_map do |name|
+  authed = WIRE.request(:post, "/kiosk/#{name}", body: { name: "salons" }, headers: ALICE.bearer)
+  anon   = WIRE.request(:post, "/kiosk/#{name}", body: { name: "salons" })
+  [[authed.status == 404 && authed.body["code"].nil?, "#{name}→#{authed.status}"],
+   [anon.status   == 404 && anon.body["code"].nil?,   "#{name}(anon)→#{anon.status}"]]
 end
 BATTERY.record("UnregisteredVerbIsOrdinaryRefusal",
-               (unregistered + unregistered_anon).all? { |ok, _| ok },
-               "unregistered verb names #{(unregistered + unregistered_anon).map(&:last).join(', ')} " \
-               "(want 404/\"verb_not_found\" with a bearer, 401/\"unauthenticated\" without)")
+               unregistered.all? { |ok, _| ok },
+               "unregistered verb names #{unregistered.map(&:last).join(', ')} " \
+               "(want a plain 404 with no problem-document code, bearer or not)")
 
-# ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
-# The resource EXISTS; answering 404 would be a lie about it, and a caller that
-# read 404 as "this operator cannot do that" would give up on a verb it could
-# have called correctly.
-res405 = WIRE.request(:get, "/kiosk/book_appointment", headers: ALICE.bearer)
+# ── MethodMismatch — a GET at an action's path does not serve the write ──────
+# This origin draws `POST /kiosk/book_appointment` and nothing else at that path, so a
+# GET matches no route and is the same ordinary 404 an undrawn path gets. What
+# the beat is FOR is the security half: the wrong method must never reach the
+# action. The catalogue is where a caller learns which method a verb takes.
+res404 = WIRE.request(:get, "/kiosk/book_appointment", headers: ALICE.bearer)
 BATTERY.record("MethodMismatch",
-               res405.status == 405 && res405.body["code"] == "method_not_allowed" &&
-                 res405["allow"].to_s.upcase.include?("POST"),
-               "GET an action → #{res405.status}/#{res405.body['code'].inspect} " \
-               "Allow=#{res405['allow'].inspect} (want 405/\"method_not_allowed\"/POST)")
+               res404.status == 404 && res404["allow"].nil? && res404.body["code"].nil?,
+               "GET an action → #{res404.status} Allow=#{res404['allow'].inspect} " \
+               "(want a plain 404, no Allow, no problem-document code)")
 
 # ── roles-from-IdP escalation beats (Path A) ──────────────────────────
 # A customer's agent must NOT be able to obtain owner-scope. Owner scope is

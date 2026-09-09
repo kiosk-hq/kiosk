@@ -841,14 +841,13 @@ namespace :demo do
       BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
                                        absent) is rejected; kyc_status stays pending
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and POST /kiosk/run
-                                       name no registered verb: the ordinary 404
-                                       verb_not_found an authenticated caller gets, and 401
-                                       unauthenticated without a bearer, with no privileged
-                                       endpoint and no second conformance surface behind
-                                       either name
+                                       name no registered verb and no route draws them: the
+                                       ordinary 404 any undrawn path gets, bearer or not,
+                                       with no privileged endpoint and no second conformance
+                                       surface behind either name
       BLOCKED  MethodMismatch        — a GET at an action's path (and a POST at a
-                                       query's) is 405 method_not_allowed with Allow,
-                                       never a silent 404
+                                       query's) draws no route, so it is the same plain
+                                       404 with no Allow, and the verb never runs
       BLOCKED  SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner`
                                        bearer resolves to NO identity (401), while the
                                        genuinely-bound token is still answered

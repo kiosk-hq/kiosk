@@ -1253,14 +1253,14 @@ namespace :demo do
                                         delivery_date, delivery_address and order_id →
                                         typed 400, never a 500
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and POST /kiosk/run
-                                        name no registered verb, so they answer the ordinary
-                                        404 verb_not_found an AUTHENTICATED caller gets, and
-                                        401 unauthenticated without a bearer (auth precedes
-                                        verb dispatch); no privileged endpoint hides behind a
+                                        name no registered verb and no route draws them, so
+                                        both answer the ordinary 404 any undrawn path gets,
+                                        bearer or not (a routing miss precedes the
+                                        credential); no privileged endpoint hides behind a
                                         generic-sounding word
-      BLOCKED  MethodMismatch         — a GET at an action's path answers 405
-                                        method_not_allowed with Allow: POST, never a silent
-                                        404 an assistant would read as "cannot do that"
+      BLOCKED  MethodMismatch         — a GET at an action's path draws no route, so it is
+                                        the same plain 404 with no Allow, and the write
+                                        never runs
       BLOCKED  PastDeliveryDate       — a delivery date in the past is a named 400,
                                         never an ambiguous 200 []
       BLOCKED  KycBrokerUnwired       — with no KYC broker configured (which is how THIS

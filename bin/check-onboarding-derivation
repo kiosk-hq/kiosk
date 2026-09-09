@@ -2814,16 +2814,22 @@ def run_self_test
                         page.sub("whole_number(params[:#{int}])", "params[:#{int}].to_i"), sources, "INTEGER_COERCION")
   arms << plant_arm("a calendar literal frozen into example_params",
                         page.sub("example_params({", 'example_params({ planted: "2026-08-12",'), sources, "FROZEN_DATE")
-  # The page silently switched to the OTHER origin's date spelling. Faithful in
-  # both directions: this is the drift K-1406 was filed about, and it is also
-  # what a well-meant edit toward strictness would look like.
+  # The page silently switched to a date spelling getgrocery does not use.
   # Through DATE_CONSTRUCTOR and not a literal `"Date.parse("`, for the reason the
   # fixture's own copy of that literal gave (K-1411): the page names more than one
   # constructor and moved the one this needle was aimed at, so the plant became a
   # NO-OP the day the origin's spelling changed.
+  #
+  # AND THE NEEDLE IS DERIVED FOR THE SAME REASON THE HAYSTACK IS. It used to be
+  # the typed literal `Date.iso8601` -- the OTHER origin's spelling on the day it
+  # was written -- and the day getgrocery converged on that spelling the plant
+  # became a no-op again, one line below the paragraph explaining why a typed
+  # needle goes stale. What this arm has to swap to is whichever spelling the
+  # origin is NOT on, so it is read off the same derivation the rule uses.
+  other_ctor = (%w[parse iso8601 strptime] - f[:date_ctors]).first
   arms << plant_arm("the page parses dates with a constructor getgrocery does not use",
                         planted.call("date constructor swapped on the page",
-                                     page, page.gsub(DATE_CONSTRUCTOR, "Date.iso8601")),
+                                     page, page.gsub(DATE_CONSTRUCTOR, "Date.#{other_ctor}")),
                         sources, "DATE_PARSER")
   arms << plant_arm("getgrocery's own #{divergent} un-named",
                         page.gsub(divergent, "the read controller"), sources, "GETGROCERY_HANDLERS")

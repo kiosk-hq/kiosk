@@ -5487,15 +5487,23 @@ end
 #
 #   * A SOURCE PATH named in a comment must exist. Same shape and the same
 #     regex family as the K-1093 rule for deploy/env templates, which already
-#     does this for a different corpus. MEASURED at head: 208 citations over the
-#     corpus below, all resolving.
+#     does this for a different corpus.
 #   * A `{Constant}` or `{Constant.member}` reference must resolve. This is the
-#     repository's own YARD-ish notation and it is used heavily — MEASURED, 147
-#     citations of 56 distinct names, from `{UuidCheck}` and `{WireArguments}`
-#     to `{Order::SETTLED_CART_REFERENCES_THIS_ROW}` and
+#     repository's own YARD-ish notation and it is used heavily —
+#     `{Kiosk::UuidCheck}` and `{WireArguments}` through
+#     `{Order::SETTLED_CART_REFERENCES_THIS_ROW}` and
 #     `{Reservation.owned_by_current_principal}`. A rename that reaches the code
 #     and not the six comments pointing at it is exactly the drift this file
 #     exists for, one notation over.
+#
+#     BOTH COUNTS ARE PRINTED BY THE RUN, NOT FROZEN HERE, and that is a repair
+#     rather than a style: this paragraph used to state «208 citations» and «147
+#     citations of 56 distinct names» as MEASURED facts and offered `{UuidCheck}`
+#     as its first example. T-189 promoted that module to `Kiosk::UuidCheck`, so
+#     the example named a constant that occurs nowhere in the corpus, and both
+#     numbers had drifted with the tree. The green line reports the live pair
+#     every time this script runs; a number written down here is a claim nothing
+#     rechecks.
 #
 # THE CORPUS IS EVERY `.rb` THE MANIFEST DECLARES, IN EVERY DEMO THAT SHIPS IT,
 # PLUS `e2e/fixtures/` — not just the `:code` paths T-117 named. Restricting it

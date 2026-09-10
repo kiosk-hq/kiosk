@@ -34,7 +34,7 @@ require "openssl"
 require "securerandom"
 require "base64"
 
-require_relative "devise_session"
+require "kiosk/user_identity_providers/devise_session"
 
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
@@ -46,7 +46,7 @@ PASSWORD = ENV.fetch("HUMAN_PASSWORD")
 # the approving human is a Devise/Warden session like every other demo's — not
 # a self-asserted `user:u-<uuid>` bearer — and this driver holds it the way a
 # browser does. The agent's calls below never touch it.
-HUMAN_SESSION = DeviseSession.new(SERVER)
+HUMAN_SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its

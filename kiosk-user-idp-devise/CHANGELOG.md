@@ -10,6 +10,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- `Kiosk::UserIdentityProviders::DeviseSession` (`require "kiosk/user_identity_providers/devise_session"`) — the CLIENT end of this adapter. `Devise` reads the Warden user off an incoming request; this drives the shipped Devise form to create the session that read finds: GET `/users/sign_in` for the cookie and the CSRF token, POST the credentials, keep the Set-Cookie. `session: true` is the only knob, and it is opt-in per request so an agent's Bearer call never carries the human's cookies.
+
 - Initial skeleton — `Kiosk::UserIdentityProviders::Devise` extending `Kiosk::UserIdentityProviders::Base`.
 - `#verify(request)` reads the signed-in user from the request's Warden proxy (`request.env["warden"].user` — the shipped wire, where kiosk-server's `IdentityResolution.resolve` passes an `ActionDispatch::Request`) and returns a `Kiosk::Identity` with `actor: "human"`. Returns `nil` when no user is signed in — which covers unauthenticated, locked, and unconfirmed users uniformly since Devise's `active_for_authentication?` already gates the Warden user.
 - Also accepts a controller-shaped object exposing `#current_user`, and a bare Rack `env` Hash carrying `env["warden"]`, for hosts that pass either directly.

@@ -11,7 +11,7 @@ require "jwt"; require "json"; require "net/http"; require "uri"; require "opens
 # cookie-jar-and-CSRF helper is the demos' single copy — reached here rather
 # than duplicated into e2e/fixtures, because an eighth copy of a mechanism is
 # how the seventh one drifts.
-require_relative "../../kiosk-demo-stylish/script/devise_session"
+require "kiosk/user_identity_providers/devise_session"
 
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
@@ -20,7 +20,7 @@ EMAIL    = ENV.fetch("HUMAN_EMAIL")
 PASSWORD = ENV.fetch("HUMAN_PASSWORD")
 
 # Alice's browser, signed in once and held for every human-side call below.
-HUMAN_SESSION = DeviseSession.new(SERVER)
+HUMAN_SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 def post_json(url, body, headers = {})
   uri = URI(url)

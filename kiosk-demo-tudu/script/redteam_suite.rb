@@ -71,18 +71,19 @@ PASSWORD = ENV.fetch("HOLDER_PASSWORD")
 
 # ── the human's browser session, and the wire helpers built on it ──────────
 #
-# ONE mechanism, shared: script/devise_session.rb holds the cookie jar, the CSRF
-# read and the sign-in POST for every demo, and bin/check-demo-copies keeps the
-# copies byte-identical. Five hand-copied jars would be five things free to
-# drift. These wrappers keep this driver's call sites unchanged.
-require_relative "devise_session"
+# ONE mechanism, shared: kiosk-user-idp-devise ships the cookie jar, the CSRF
+# read and the sign-in POST as Kiosk::UserIdentityProviders::DeviseSession,
+# the client end of the adapter this origin authenticates its humans with.
+# Five hand-copied jars would be five things free to drift. These wrappers
+# keep this driver's call sites unchanged.
+require "kiosk/user_identity_providers/devise_session"
 
 # tudu's battery drives BOTH channels, so it holds both drivers. WIRE is the
 # plain wire — an agent's Bearer call, and the header that carries it. SESSION
 # is the human's browser, cookie jar and all, because four beats here attack
 # the account-binding ceremony, which only a signed-in human can open.
 WIRE    = Kiosk::Redteam::Wire.new(base_url: SERVER)
-SESSION = DeviseSession.new(SERVER)
+SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 def request(req) = SESSION.request(req)
 def get_html(path) = SESSION.get_html(path)
@@ -263,7 +264,7 @@ BATTERY.record("RevokedMemberAccess", rc == 403, "removed member's next read →
 # ── Session-channel scenarios: Alice signs in for unlink + link ─────────────
 begin
   SESSION.sign_in!(email: EMAIL, password: PASSWORD)
-rescue DeviseSession::SignInError => e
+rescue Kiosk::UserIdentityProviders::DeviseSession::SignInError => e
   abort "#{e.message} — RevokedAgentKey needs a live Devise session"
 end
 
@@ -420,7 +421,7 @@ BATTERY.record("NoLoginAddressOnTheRoster",
 # own owner and no disclosure at all. The assertion is scoped to the Members
 # block — the one place a page names OTHER people — which is the same
 # distinction Section 7.2 draws.
-signup       = DeviseSession.new(SERVER)
+signup       = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 chosen_name  = "Cassie Housemate"
 signup_email = "cassie-#{SecureRandom.hex(4)}@example.com"
 signup_form  = signup.get_html("/users/sign_up")

@@ -7,13 +7,13 @@ require "openssl"
 require "securerandom"
 require "uri"
 
-require_relative "devise_session"
+require "kiosk/user_identity_providers/devise_session"
 require_relative "equihash_register"
 
 # The ONE way a demo driver obtains an AGENT principal bound to a seeded human.
 #
-# This is the agent-side twin of script/devise_session.rb, and it exists for the
-# same reason. A driver cannot hand itself a principal by writing one down: a
+# This is the agent-side twin of Kiosk::UserIdentityProviders::DeviseSession,
+# and it exists for the same reason. A driver cannot hand itself a principal by writing one down: a
 # self-asserted `agent:u-<uuid>:a-<uuid>:r-customer` string resolves to NO
 # identity, in every environment. Agent auth runs through the engine's own
 # kiosk-pop JWTs, the ones `/kiosk/auth/register` and `/kiosk/auth/claim` mint,
@@ -71,17 +71,18 @@ end
 # @param issuer [String] issuer origin for the possession proof's `aud` claim
 # @param email [String] a SEEDED human's Devise email
 # @param password [String] that human's password (db/seeds.rb)
-# @param session [DeviseSession, nil] reuse an existing human session; a fresh
-#   one is signed in when omitted. Two assistants for the SAME human should
+# @param session [Kiosk::UserIdentityProviders::DeviseSession, nil] reuse an
+#   existing human session; a fresh one is signed in when omitted. Two assistants for the SAME human should
 #   share one session — two humans must never share one.
 # @return [BoundAssistant]
 def bind_assistant(server:, issuer:, email:, password:, session: nil)
   fresh_session = session.nil?
-  session ||= DeviseSession.new(server)
+  session ||= Kiosk::UserIdentityProviders::DeviseSession.new(server)
 
   # 1. Headless registration. These calls carry no cookies (no `session: true`)
   #    — an assistant's handshake is its own, and the jar is opt-in per request.
-  #    The register handshake speaks full URLs; DeviseSession speaks paths.
+  #    The register handshake speaks full URLs; the Devise session speaks
+  #    paths.
   get_url  = ->(url) { session.get_json(url.delete_prefix(server)) }
   post_url = ->(url, body, headers = {}) { session.post_json(url.delete_prefix(server), body, headers) }
   key, = equihash_register(server: server, issuer: issuer, get_json: get_url, post_json: post_url)

@@ -38,11 +38,23 @@
 #
 #   1. PIN FORM. Every tracked file that declares `gem "json"` must spell it
 #      exactly `gem "json", "< 3.0"`, and the comment block directly above it
-#      must name K-1384 and state a REMOVAL CONDITION. That is the workspace
-#      rule -- whatever you pin, write down what must be true for it to come
-#      off -- made mechanical. Vacuity arm: at least one such declaration must
-#      exist, so the day the pins are deleted without deleting this script, the
-#      script says so instead of passing on an empty set.
+#      must state a REMOVAL CONDITION. That is the workspace rule -- whatever
+#      you pin, write down what must be true for it to come off -- made
+#      mechanical. Vacuity arm: at least one such declaration must exist, so
+#      the day the pins are deleted without deleting this script, the script
+#      says so instead of passing on an empty set.
+#
+#      THE LEDGER ID IS REQUIRED ON A MAINTAINER SURFACE AND FORBIDDEN ON A
+#      PUBLISHED ONE, and this arm asserts BOTH directions rather than carving
+#      one out. A demo's `Gemfile` is build tooling no adopter reads, so the id
+#      belongs there: it is how somebody finds out why the constraint exists.
+#      `e2e/` is the harness this repository points adopters at, and
+#      `bin/check-shipped-archaeology` bans a ledger id across the whole of it
+#      -- a stranger cannot open the ledger, so the citation is noise to the
+#      only reader who meets it. There the REMOVAL CONDITION carries the whole
+#      reason, which is the half a reader can act on anyway. Two guards, one
+#      rule each, and this one goes RED rather than letting the pair
+#      contradict each other in silence.
 #
 #   2. REMOVAL CONDITION. The resolved activesupport's
 #      `lib/active_support/json/decoding.rb` must still carry the POSITIONAL
@@ -84,6 +96,11 @@ PIN_SPELLING = 'gem "json", "< 3.0"'
 PIN_DECL     = /^\s*gem\s+["']json["']\s*(?:,|$)/
 ROW_ID       = "K-1384"
 REMOVAL_MARK = "REMOVAL CONDITION"
+
+# Where a ledger id is FORBIDDEN rather than required -- the surfaces
+# bin/check-shipped-archaeology holds. Repo-relative, so it reads the same in a
+# fixture repo as in this one.
+NO_ARCHAEOLOGY_RE = %r{\Ae2e/}
 
 POSITIONAL_CALL = "::JSON.parse(json, options)"
 SPLAT_CALL      = "::JSON.parse(json, **options)"
@@ -138,7 +155,13 @@ def check_pin_form(root)
                     "stated reason and no removal condition is a pin nobody removes (#{ROW_ID})"
         next
       end
-      unless comment.include?(ROW_ID)
+      if rel.match?(NO_ARCHAEOLOGY_RE)
+        if comment.include?(ROW_ID)
+          failures << "#{rel}:#{i + 1}: the json pin's comment names #{ROW_ID}, and this file is one " \
+                      "bin/check-shipped-archaeology holds -- an adopter reading the harness cannot " \
+                      "open that ledger. State the removal condition and drop the id"
+        end
+      elsif !comment.include?(ROW_ID)
         failures << "#{rel}:#{i + 1}: the json pin's comment does not name #{ROW_ID}, so a reader " \
                     "cannot find what it is for"
       end
@@ -318,6 +341,20 @@ def self_test
   dir = fixture_repo("Gemfile" => "# a pin.\n# REMOVAL CONDITION: someday.\ngem \"json\", \"< 3.0\"\n")
   _n, f = check_pin_form(dir)
   check.call("arm1: a comment that does not name the row fails", f.any? { |m| m.include?("does not name") })
+  FileUtils.remove_entry(dir)
+
+  # …and the OTHER direction, on a surface the no-archaeology rule holds.
+  dir = fixture_repo("e2e/run.sh" => "#{GOOD_COMMENT}gem \"json\", \"< 3.0\"\n")
+  _n, f = check_pin_form(dir)
+  check.call("arm1: naming the row INSIDE e2e/ fails -- an adopter cannot open the ledger",
+             f.any? { |m| m.include?("cannot open that ledger") })
+  FileUtils.remove_entry(dir)
+
+  dir = fixture_repo("e2e/run.sh" => "# json 3.0.0 dropped the positional options argument.\n" \
+                                     "# REMOVAL CONDITION: a released activesupport with the splat.\n" \
+                                     "gem \"json\", \"< 3.0\"\n")
+  found, f = check_pin_form(dir)
+  check.call("arm1: …and the same pin WITHOUT the row, in e2e/, passes", found == 1 && f.empty?)
   FileUtils.remove_entry(dir)
 
   dir = fixture_repo("Gemfile" => "# K-1384 -- because.\ngem \"json\", \"< 3.0\"\n")

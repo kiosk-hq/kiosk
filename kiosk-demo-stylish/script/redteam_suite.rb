@@ -103,7 +103,7 @@ require "base64"
 require "kiosk/redteam"
 
 require_relative "bound_assistant"
-require_relative "devise_session"
+require "kiosk/user_identity_providers/devise_session"
 
 # ── Every slot this suite books is COMPUTED, never written down ──────────────
 #
@@ -142,7 +142,7 @@ DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
 
 # The owner's browser session, signed in once and reused by the beats below.
 def owner_session
-  @owner_session ||= DeviseSession.new(SERVER)
+  @owner_session ||= Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
                                   .sign_in!(email: OWNER_EMAIL, password: DEMO_PASSWORD)
 end
 
@@ -301,7 +301,7 @@ BATTERY.record("MethodMismatch",
 # only staff rows — asserting that the mint is REJECTED would be wrong. The
 # honest claim is "a customer gets a CUSTOMER link", which is a stronger
 # statement about where the role comes from than any refusal would be.
-customer_session = DeviseSession.new(SERVER)
+customer_session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
                                 .sign_in!(email: ALICE_EMAIL, password: DEMO_PASSWORD)
 rc_cl, link_cl = customer_session.post_json("/kiosk/auth/link", {}, { session: true })
 cust_role = nil

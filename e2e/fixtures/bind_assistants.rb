@@ -10,7 +10,8 @@
 # assistant"; the point is that the origin issued both tokens.
 #
 # The ceremony helper is the demos' single copy, reached rather than duplicated
-# for the reason claim_flow.rb states about DeviseSession: an eighth copy of a
+# for the reason claim_flow.rb states about the shipped Devise session: an
+# eighth copy of a
 # mechanism is how the seventh one drifts.
 #
 # Prints ONE JSON line: {alice_agent, alice_token, bob_agent, bob_token}.

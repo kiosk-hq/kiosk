@@ -41,7 +41,7 @@ require "openssl"
 require "securerandom"
 require "base64"
 
-require_relative "devise_session"
+require "kiosk/user_identity_providers/devise_session"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -108,9 +108,10 @@ end
 # Kiosk::UserIdentityProviders::Devise off the User model's #kiosk_role,
 # exactly as a hosted-demo operator experiences it.
 #
-# One DeviseSession per call, so each principal is an independent browser.
+# One Kiosk::UserIdentityProviders::DeviseSession per call, so each
+# principal is an independent browser.
 def link_assistant_via_devise(email, password, label)
-  session = DeviseSession.new(SERVER).sign_in!(email: email, password: password)
+  session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER).sign_in!(email: email, password: password)
   rc, link = session.post_json("/kiosk/auth/link", {}, { session: true })
   abort "#{label}: link mint failed (#{rc}): #{JSON.generate(link)}" unless rc == 201
 

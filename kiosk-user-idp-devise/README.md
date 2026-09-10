@@ -34,6 +34,21 @@ Kiosk.configure do |c|
 end
 ```
 
+## Driving the sign-in from a script
+
+An origin wired to this adapter has no stub user-IdP, so anything that needs the HUMAN half of a ceremony — approving an assistant on the device-verify page, minting a link code, unlinking — has to hold a real browser session. `DeviseSession` is that session, and it is the client end of the same contract the adapter above serves:
+
+```ruby
+require "kiosk/user_identity_providers/devise_session"
+
+session = Kiosk::UserIdentityProviders::DeviseSession.new(ENV.fetch("SERVER_URL"))
+session.sign_in!(email: "alice@example.com", password: "…")
+
+rc, link = session.post_json("/kiosk/auth/link", {}, { session: true })
+```
+
+Nothing in it is a test double — it drives the shipped Devise routes over real HTTP exactly as a browser does. `session: true` is the only knob: it marks the calls that are the HUMAN's, so an agent's own Bearer calls never carry the human's cookie jar.
+
 ## Role resolution
 
 Each Kiosk token carries exactly one active role. For a Devise-authenticated human:

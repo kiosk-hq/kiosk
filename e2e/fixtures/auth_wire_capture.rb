@@ -25,7 +25,8 @@
 #                              problem document
 #
 # THE HUMAN IS REAL. The link, unlink and approval legs authenticate through
-# the shipped Devise form over `DeviseSession` — the same object the demos use
+# the shipped Devise form over `Kiosk::UserIdentityProviders::DeviseSession`
+# — the same object the demos use
 # — because those three are the session channel and there is no stub session
 # to assert instead.
 #
@@ -57,7 +58,7 @@ require "openssl"
 require "securerandom"
 require "uri"
 
-require_relative "../../kiosk-demo-stylish/script/devise_session"
+require "kiosk/user_identity_providers/devise_session"
 require_relative "equihash_register"
 
 SERVER   = ENV.fetch("SERVER_URL")
@@ -161,7 +162,7 @@ abort "revoke failed (#{rc}): #{JSON.generate(revoked)}" unless rc == 200
 cap["token_revoke"] = revoked
 
 # ── Section 6.2 — the human's link code, redeemed by the agent's key ────────
-session = DeviseSession.new(SERVER)
+session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 session.sign_in!(email: EMAIL, password: PASSWORD)
 
 rc, link = session.post_json("/kiosk/auth/link", {}, { session: true })
@@ -224,7 +225,8 @@ cap["device_token_response"] = granted
 # before the harness moves on, so nothing it left behind can be mistaken for
 # one of the two principals the suite asserts about.
 #
-# Dialled through `DeviseSession#request` rather than `#post_json`, because the
+# Dialled through `Kiosk::UserIdentityProviders::DeviseSession#request`
+# rather than `#post_json`, because the
 # assertion is about the RESPONSE and not only its status: §6.2 says 204 and
 # «no body at all», so the body's LENGTH is part of what has to be captured,
 # and the JSON wrapper hands back a parsed Hash that cannot tell an empty body

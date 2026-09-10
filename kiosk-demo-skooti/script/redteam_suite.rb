@@ -1234,17 +1234,17 @@ self_asserted_beat = self_asserted_token_forgery.call
 # no human at all — POST /kiosk/auth/link answers 401 — and the positive control
 # is the real thing: the seeded rider signs in at /users/sign_in and the SAME
 # endpoint answers her.
-require_relative "devise_session"
+require "kiosk/user_identity_providers/devise_session"
 
 self_asserted_user_bearer_forgery = lambda do
-  anon = DeviseSession.new(BASE_URL)
+  anon = Kiosk::UserIdentityProviders::DeviseSession.new(BASE_URL)
   rc_forged, = anon.post_json(
     "/kiosk/auth/link", {}, { "Authorization" => "user:u-#{SecureRandom.uuid}" }
   )
 
   # Positive control: the honest channel still works, so a 401 above is the
   # forgery being refused rather than the surface being broken.
-  rider = DeviseSession.new(BASE_URL)
+  rider = Kiosk::UserIdentityProviders::DeviseSession.new(BASE_URL)
                        .sign_in!(email: "ada@example.com", password: "skooti-demo-password")
   rc_real, = rider.post_json("/kiosk/auth/link", {}, { session: true })
 

@@ -524,10 +524,9 @@ module Kiosk
       end
 
       # The verb EXISTS at this path but not for this method — `GET` at an
-      # action's name, `POST` at a query's. New in 0.4 and meaningless before
-      # it: under the 0.3 name-dispatch wire a query and an action were the
-      # same POST endpoint distinguished by a body field, so getting them the
-      # wrong way round could only ever be "unknown query".
+      # action's name, `POST` at a query's. The method is what separates the
+      # two kinds at one path, so getting it the wrong way round is its own
+      # refusal rather than an unknown name.
       #
       # `allow` is REQUIRED — RFC 9110 §15.5.6 makes the `Allow` header
       # mandatory on a 405, and a caller who has to remember it eventually
@@ -658,7 +657,7 @@ module Kiosk
 
         # Embed the challenges in the answer — a top-level extension member of
         # the problem document, which is the only error shape any endpoint has
-        # served since the cutover — so the client can solve them without a
+        # served — so the client can solve them without a
         # second round-trip.
         def extensions = { challenges: challenges }
       end

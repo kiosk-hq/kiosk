@@ -119,8 +119,8 @@ module Kiosk
     # The {Executor}'s internal carrier for a successful call, serialised by
     # {WireController#render_result}. Errors travel as {Errors::Base#to_problem}.
     #
-    # It is INTERNAL, and since the 0.4 cutover that is the whole of what it
-    # is: nothing it holds reaches the wire as a field. `kind` distinguishes
+    # It is INTERNAL, and that is the whole of what it is: nothing it holds
+    # reaches the wire as a field. `kind` distinguishes
     # the payload shape for the Executor's own bookkeeping —
     #
     #   :rows   — a query's rows (Array<Hash>, or whatever the handler rendered)

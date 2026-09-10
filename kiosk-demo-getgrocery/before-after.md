@@ -70,11 +70,11 @@ literal the current rake task prints, which is what makes this note checkable
 rather than a promise.
 
 The SECOND is the delivery-slot row, which two later changes moved. The slot
-row's published field used to be named `zone` while `DeliverySlots.zone` in the
-same demo is an IANA time zone — one word for a postal district and for a clock
-— so the wire field became `district`; and the row's `label`, a bare
-`08:00–10:00` that a customer in another zone reads as their own morning, grew
-the zone it is written in. The driver's own summary line carries both, so where
+row's published field is `district`: `zone` collided with `DeliverySlots.zone`,
+which in the same demo is an IANA time zone — one word for a postal district
+and for a clock. And the row's `label`, a bare `08:00–10:00` that a customer in
+another zone reads as their own morning, now carries the zone it is written
+in. The driver's own summary line carries both, so where
 the recording printed `08:00–10:00 zone=D02` this document reads `08:00–10:00
 (Europe/Dublin) district=D02`. The run was not repeated for that either.
 
@@ -393,14 +393,13 @@ class Kiosk::StorefrontController < ActionController::API
                 label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots
-    # `date` IS OPTIONAL, AND OMITTING IT IS STILL THE CORRECT CALL FOR "the
-    # soonest you can deliver" -- but the reason has improved. It used to be
-    # that the caller COULD NOT compute this shop's today and had no way to say
-    # which day it meant; with `Kiosk-Timezone` it can say, in its own calendar,
-    # and the shop maps it. So the field stays optional for a better reason:
-    # OMIT IT WHEN YOUR HUMAN NAMED NO DAY. "Deliver on Friday" is a different
-    # request from "deliver as soon as you can", and only the caller knows which
-    # one it is making.
+    # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the
+    # soonest you can deliver" -- for a reason worth stating, because it is
+    # not that the caller has no way to be specific. With `Kiosk-Timezone` a
+    # caller CAN name a day in its own calendar and the shop maps it, so the
+    # field is optional by choice: OMIT IT WHEN YOUR HUMAN NAMED NO DAY.
+    # "Deliver on Friday" is a different request from "deliver as soon as you
+    # can", and only the caller knows which one it is making.
 
     # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.

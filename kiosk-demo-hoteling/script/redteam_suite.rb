@@ -526,7 +526,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
   end
 end
 
-# ── The shape of the wire itself — two beats the cutover made expressible ─────
+# ── The shape of the wire itself — two beats about the ROUTER, not a handler ──
 #
 # Both dial paths and methods the redteam Client will not construct (it only
 # ever builds a legal per-verb call), so they issue one raw request each. They
@@ -1042,8 +1042,8 @@ end
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
 # The generic Kiosk::Redteam battery plus hoteling's own beats (3 cashier-check
-# + 2 input-shape + 1 date + 1 inventory + the 2 wire-shape beats the 0.4
-# cutover made expressible, per the header above). The 3 KYC variants are the
+# + 2 input-shape + 1 date + 1 inventory + the 2 wire-shape beats, per the
+# header above). The 3 KYC variants are the
 # only expected skips — RegistrationWithoutPow runs, because register PoW is ON.
 # NO TOTALS ARE WRITTEN DOWN HERE: the run prints `scenarios.size` and the skip
 # count below, and a total written here is a total that rots.

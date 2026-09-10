@@ -8,7 +8,8 @@ module Kiosk
     # reserved `GET <endpoint>/schema` and `POST <endpoint>/pay`. Changes more
     # slowly than the server version itself.
     #
-    # 0.4 is a BREAKING minor: a 0.3 client cannot speak it.
+    # 0.4 is a BREAKING minor: a client built for an earlier one cannot
+    # speak it.
     # `bin/check-version-parity` binds every gemspec version, every inter-gem
     # constraint and every pinned skill_url to this constant's MAJOR.MINOR.
     API_VERSION = "0.4.0"

@@ -104,8 +104,8 @@ module Kiosk
 
         Kiosk.configuration.revocation_store&.revoke_all(identity.agent_id, at: Time.now.to_i)
         # kiosk-pop endpoints mint their own tokens via the bundled
-        # DefaultAgentIdp by design; adapter-supplied issuance
-        # is the 0.2 seam.
+        # DefaultAgentIdp by design; adapter-supplied issuance is a seam
+        # this endpoint does not route through.
         token = AgentIdentityProviders::DefaultAgentIdp.new.issue(
           agent_id: identity.agent_id, role: identity.role,
         )
@@ -233,9 +233,6 @@ module Kiosk
 
       # The auth plane answers the SAME RFC 9457 problem document the wire
       # does (spec §9: "the auth endpoints answer the same problem documents").
-      # It moved here at the 0.4 cutover with `schema` and `pay`, in one wave —
-      # not earlier, because every demo's auth flow reads a code off a 402 or a
-      # 409 and half the fleet would have gone red mid-build.
       #
       # The `/oauth/*` pair is the one deliberate exception on this wire and
       # lives in its own controllers: RFC 8628 defines its own error object,

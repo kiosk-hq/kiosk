@@ -26,12 +26,11 @@ module Kiosk
     #
     # == Where it runs, and why there rather than at the wire
     #
-    # {Executor}, on the {Result} — NOT in a controller. Both wires reach the
-    # Executor (`POST <endpoint>/{query,run}` until the cutover, and the 0.4
-    # per-verb endpoints), and the payload it validates is {Result#to_payload},
-    # which is the 0.4 answer shape whichever wire asked for it. So one hook
-    # covers both, and it keeps covering the survivor after the cutover deletes
-    # the other.
+    # {Executor}, on the {Result} — NOT in a controller. Every per-verb
+    # endpoint reaches the Executor whatever its kind, and the payload it
+    # validates is {Result#to_payload}, the one answer shape they all produce.
+    # So a single hook covers the whole wire, and a verb added tomorrow is
+    # covered the moment it dispatches.
     #
     # == The flag, and what it is FOR
     #

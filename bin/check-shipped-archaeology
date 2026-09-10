@@ -134,6 +134,90 @@
 #       DEMO-EXEMPT because `kiosk-demo-philslist` is an app called Phil's List
 #       and the word is its subject matter, not an attribution. No other scope
 #       has a reason like that.
+#   R5  no RETIRED WIRE VERSION named in prose — in the gems, the demos and the
+#       harness. See the section below; the pattern is DERIVED from
+#       `Kiosk::Protocol::API_VERSION` rather than typed here.
+#   R6  no sentence NARRATING A PAST STATE — `formerly`, `previously`,
+#       `historically`, `until recently`, `used to be`, `before the fix`,
+#       `cutover`, `has since been — in the same three scopes. See below.
+#
+# ── R5 AND R6: A PUBLIC ARTEFACT DESCRIBES WHAT IS (T-195, K-1460) ──────────
+#
+# Phil, 2026-09-07, on finding two demo READMEs explaining that the retired
+# `POST /kiosk/query` and `POST /kiosk/run` «are the ordinary 404 an
+# authenticated caller gets»: «Введи правило это убирать сразу. Этому не место
+# в публичных артефактах кроме очень кратко changelog'а.» The afterlife of a
+# removed wire version, verb, endpoint, envelope or configuration key is ONE
+# SHORT CHANGELOG LINE and nothing else — not a README paragraph, not a comment
+# explaining what it used to do. A reader arriving today has no memory to
+# correct, and being told about a version of us they never met, ahead of the
+# one they did, is the page failing at its only job.
+#
+# WHY THIS IS A GUARD AND NOT A CONVENTION. The class was found NINE times in
+# four days — K-1398, K-1409, K-1449, K-1431, K-1458, K-1459, K-1461, K-1463,
+# K-1476 — each time in a file set the previous fix had not declared, and each
+# fix drained its own set and stopped. A watched fail settled why: a deleted
+# narration sentence was planted back into a shipped demo file and ALL FIVE
+# guards that own that file exited 0. Nothing read a sentence. These two rules
+# are the first thing that does.
+#
+#   R5 — A RETIRED WIRE VERSION, DERIVED RATHER THAN LISTED. The current wire
+#   is `Kiosk::Protocol::API_VERSION`, read out of kiosk-core at run time. Every
+#   MAJOR.MINOR strictly below it is a wire no reader of this repository can
+#   meet, so naming one in a shipped file is narration by construction. The ban
+#   WIDENS ON ITS OWN: the day API_VERSION becomes 0.5.0, `0.4` joins it and
+#   nothing here is edited. That is the whole reason it is derived — a typed
+#   list of retired versions is a list somebody has to remember to extend, which
+#   is the failure this repository has recorded about hand-kept inventories more
+#   than once.
+#
+#   R5 IS PROSE-ONLY, and that is not a softening. `sleep 0.2` and
+#   `spec.add_development_dependency "base64", "~> 0.2"` are NUMBERS, not
+#   sentences; a version token inside code is a value the code uses, and a rule
+#   that cannot tell them apart would be switched off within the day. So a hit
+#   classified :code is skipped — Ripper decides that for a Ruby file, a leading
+#   `#` for a shell file, and everything else is read as prose. Three further
+#   shapes are excluded by the pattern itself, each with a self-test arm: a
+#   token carrying a UNIT is a duration or a size (`~0.3 ms`, `~0.2 s`,
+#   `44 MiB`), a token preceded by a digit or a dot is part of a longer number
+#   (`127.0.0.1`), and a token followed by one is a three-component version
+#   (`0.1.0`, `skill-v0.4.12.md`) rather than a wire.
+#
+#   R6 — A CONSTRUCTION THAT NARRATES A PAST STATE. This one is a LEXICAL
+#   PROXY and is written down as such: it matches a phrase, not a meaning, and
+#   the marker set is small on purpose. Every marker in it was chosen because
+#   it has no reading in which a live sentence needs it — a caveat a reader can
+#   still meet can always be stated in the present, and stating it in the
+#   present is what the rule is for.
+#
+#   WHAT R6 DELIBERATELY DOES NOT CARRY, because it would fire on live prose:
+#   `no longer` (measured live in three harness sentences — «a key the origin no
+#   longer knows» is the state of the flow at that line, not its history), and
+#   `used to`, which is ALSO the ordinary passive «employed in order to» — of
+#   the four occurrences in the gems when this rule was written, all four were
+#   that passive («an RSA key used to sign mandates»). Nothing lexical separates
+#   «the engine used to read `role`» from «a key used to sign mandates», so the
+#   marker is absent rather than present-and-noisy. THAT IS A REAL HOLE and it
+#   is named here rather than left for someone to discover: a sentence spelling
+#   its archaeology «X used to Y» passes this guard.
+#
+# ── WHAT R5 AND R6 MUST NOT REDDEN ON, AND WHY EACH IS SAFE ────────────────
+#
+#   * `CHANGELOG.md` — the sanctioned afterlife, in this repository and in each
+#     gem. It is outside every scope glob above; a self-test arm asserts that
+#     rather than trusting it.
+#   * the repository journal — the same file.
+#   * a live caveat a reader can still meet, and a maintainer rule addressed to
+#     a future editor. The 21 `kiosk-demo-*/public/*.html` signpost pages are
+#     the standing example (upheld deliberately on K-1459) and are outside the
+#     demo scope, which reads `app lib script config db` and four root files;
+#     an arm asserts no `public/` path reaches it.
+#   * a schema this repository VENDORS from kiosk.tech. `bin/check-spec-schemas`
+#     holds eight files byte-equal to what that repository publishes, so a
+#     sentence in one is not repairable from this side — scrubbing it here
+#     would make the mirror stop mirroring. Their bodies are masked, in BOTH
+#     homes, and a vacuity arm re-reads that guard's own manifest and fails if
+#     it ever mirrors a path this mask does not cover.
 #
 # Both rules read every file as lines, so `.md`, `.json`, `.erb` and `.tt` are
 # covered as well as Ruby. For a RUBY file the hit is additionally CLASSIFIED
@@ -176,6 +260,48 @@ ADR_RE       = /\bADR-\d{4}\b/
 CYRILLIC_RE  = /[Ѐ-ӿ]/
 MAINTAINER_RE = /\bPhil\b/
 
+# The wire this repository speaks TODAY, read out of the tree. Anything strictly
+# below it is a wire nobody reading this has used.
+WIRE_VERSION_FILE = File.join(REPO, "kiosk-core", "lib", "kiosk", "protocol.rb")
+
+def current_wire
+  src = File.read(WIRE_VERSION_FILE, encoding: "UTF-8")
+  m = src.match(/^\s*API_VERSION\s*=\s*"(\d+)\.(\d+)/)
+  raise "check-shipped-archaeology: no API_VERSION in #{WIRE_VERSION_FILE}" if m.nil?
+
+  [m[1].to_i, m[2].to_i]
+end
+
+# Every MAJOR.MINOR below the current one, as regex alternatives. A lower MAJOR
+# is banned at every minor (`\d+`); the current major only below the current
+# minor. Derived, so a wire bump widens the ban with no edit here.
+def retired_wire_alternatives
+  major, minor = current_wire
+  alts = (0...major).map { |m| "#{m}\\.\\d+" }
+  alts << "#{major}\\.(?:#{(0...minor).to_a.join('|')})" if minor.positive?
+  alts
+end
+
+# A quantity is not a version: `~0.3 ms`, `~0.2 s`, `44 MiB`. A longer number is
+# not one either, on the left (`127.0.0.1`) or on the right (`0.1.0`,
+# `skill-v0.4.12.md`).
+WIRE_UNIT = "ms|s|sec|secs|seconds?|min|mins|h|hr|hrs|%|[KMG]i?B|kB"
+
+def retired_wire_re
+  alts = retired_wire_alternatives
+  return nil if alts.empty?
+
+  Regexp.new("(?<![\\d.])(?:#{alts.join('|')})(?![.\\d])(?!\\s*(?:#{WIRE_UNIT})\\b)")
+end
+
+RETIRED_WIRE_RE = retired_wire_re
+
+# A construction that announces a past state. A LEXICAL PROXY — see the header
+# for what is deliberately absent from it and why.
+PAST_NARRATION_RE =
+  /\b(?:formerly|previously(?!-)|historically|until\s+recently|used\s+to\s+be|
+       before\s+the\s+fix|cutover|has\s+since\s+been)\b/ix
+
 # `scopes` is which published surface each rule speaks for. R4 reaches every
 # scope but the demos, for the reason given in the header: one demo is NAMED
 # after the maintainer.
@@ -187,7 +313,11 @@ RULES = [
   { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec e2e], what: "Cyrillic prose",
     none: "no Cyrillic" },
   { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e], what: "the maintainer named in prose",
-    none: "no maintainer named in prose" }
+    none: "no maintainer named in prose" },
+  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e], what: "a retired wire version",
+    none: "no retired wire version", prose_only: true },
+  { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e],
+    what: "a sentence narrating a past state", none: "no narration of a past state" }
 ].freeze
 
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
@@ -272,8 +402,19 @@ end
 
 # A vendored mirror is read for its local `$comment` and nothing else — see
 # the header. Masking the other lines rather than skipping the file keeps the
-# reported line number honest.
-VENDORED_MIRROR_RE = %r{/e2e/schemas/[^/]+\.schema\.json\z}
+# reported line number honest. BOTH homes: `bin/check-spec-schemas` mirrors
+# seven schemas into `e2e/schemas` and one into `kiosk-server/lib`, and a
+# self-test arm re-reads THAT script's manifest and fails if it ever mirrors a
+# path this pattern does not cover — so the two homes are a pattern here and a
+# derivation there, rather than a list nobody re-checks.
+VENDORED_MIRROR_RE = %r{/(?:e2e|kiosk-server/lib/kiosk/server)/schemas/[^/]+\.schema\.json\z}
+
+# The paths `bin/check-spec-schemas` holds byte-equal to what kiosk.tech
+# publishes. Read out of that script rather than restated, for the vacuity arm.
+def mirrored_paths
+  src = File.read(File.join(REPO, "bin", "check-spec-schemas"), encoding: "UTF-8")
+  src.scan(/File\.join\(REPO,\s*"([^"]+\.schema\.json)"\)/).flatten.uniq
+end
 
 def rule_source(path)
   src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
@@ -300,6 +441,13 @@ def ruby_file?(path)
   path.end_with?(".rb", ".rake", ".ru", ".gemspec") || File.basename(path) == "Rakefile"
 end
 
+# Shell has no lexer here and does not need one: R5's only question of a `.sh`
+# line is whether the number it carries is a sentence or an argument, and a
+# leading `#` answers that. A trailing comment after code is read as code,
+# which is the conservative direction — it can only SKIP a hit, never invent
+# one, and R5 is the only prose-only rule.
+def shell_file?(path) = File.extname(path) == ".sh"
+
 # ── the scan ────────────────────────────────────────────────────────────────
 
 Hit = Struct.new(:path, :line, :rule, :where, :text)
@@ -311,7 +459,11 @@ def scan(path, rules = RULES)
   src = rule_source(path)
   return [[], true] unless rules.any? { |r| src.match?(r[:re]) }
 
-  code_lines  = {}
+  # PER RULE, not per line: two rules can both match a line while only one of
+  # them matches a code TOKEN on it, and a shared flag would report the other
+  # as :code. That mattered the moment R5 arrived, because R5 is the one rule
+  # that ACTS on the classification.
+  code_lines  = Hash.new { |h, k| h[k] = {} }
   token_lines = {}
   lexed = true
   if ruby_file?(path)
@@ -327,9 +479,8 @@ def scan(path, rules = RULES)
       tokens.each do |(pos, type, tok, _state)|
         token_lines[pos[0]] = true
         next if type == :on_comment
-        next unless rules.any? { |r| tok.to_s.match?(r[:re]) }
 
-        code_lines[pos[0]] = true
+        rules.each { |r| code_lines[r[:id]][pos[0]] = true if tok.to_s.match?(r[:re]) }
       end
     end
   end
@@ -348,10 +499,14 @@ def scan(path, rules = RULES)
       lexed = false if ruby_file?(path) && !token_lines[lineno]
 
       where =
-        if !ruby_file?(path) then :text
-        elsif code_lines[lineno] then :code
-        else :comment
+        if ruby_file?(path) then (code_lines[rule[:id]][lineno] ? :code : :comment)
+        elsif shell_file?(path) then (line.match?(/^\s*#/) ? :comment : :code)
+        else :text
         end
+      # A version token inside code is a NUMBER the code uses — `sleep 0.2`, a
+      # dependency constraint. R5 is about sentences; see the header.
+      next if rule[:prose_only] && where == :code
+
       hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, where, line.strip[0, 100])
     end
   end
@@ -375,7 +530,11 @@ REMEDY = {
   "R3" => "this repository publishes in English. Say the same thing in English, as a statement " \
           "about the code rather than as a quotation",
   "R4" => "naming a maintainer asks a stranger to trust a person instead of reading a property. " \
-          "State the property"
+          "State the property",
+  "R5" => "no reader of this repository has met that wire. Say what the wire does NOW; the removed " \
+          "one gets one changelog line and nothing else",
+  "R6" => "a reader arriving today has no memory to correct. State the property in the present; if " \
+          "it is a caveat they can still meet, say what they will meet"
 }.freeze
 
 SCOPES = {
@@ -413,9 +572,12 @@ def run_check
        "that marker to cite a row);"
   puts "                   e2e/.gems (the installed bundle) and e2e/tmp (the generated app); " \
        "the BODY of a vendored"
-  puts "                   e2e/schemas mirror, whose bytes bin/check-spec-schemas holds equal " \
-       "to kiosk.tech's;"
-  puts "                   `spec.authors` for R4 only"
+  puts "                   schema mirror in EITHER home, whose bytes bin/check-spec-schemas " \
+       "holds equal to kiosk.tech's;"
+  puts "                   `spec.authors` for R4 only; and, for R5 only, a version token that " \
+       "is CODE rather than prose"
+  puts "                   (a float literal, a dependency constraint) — R5 and R6 do not " \
+       "reach spec/ at all"
   puts
 
   if scoped.any? { |_, files| files.empty? }
@@ -513,7 +675,19 @@ def self_test
       ["R3 Cyrillic in a Markdown README",
        "README.md", "Убери из демок всю археологию.\n", :text],
       ["R4 the maintainer named in a Ruby comment",
-       "l.rb", "# Phil accepted this control's weakness openly.\ndef f = 1\n", :comment]
+       "l.rb", "# Phil accepted this control's weakness openly.\ndef f = 1\n", :comment],
+      ["R5 a retired wire version in a Ruby comment",
+       "p.rb", "# Through 0.3 every read was one POST endpoint.\ndef f = 1\n", :comment],
+      ["R5 a retired wire version in a Markdown narrative",
+       "README.md", "The 0.3 name-dispatch endpoints are gone.\n", :text],
+      ["R5 a retired wire version in a shell comment",
+       "q.sh", "#!/usr/bin/env bash\n# the 0.3 envelope carried an `ok` wrapper.\n", :comment],
+      ["R6 a past state narrated in a Ruby comment",
+       "r.rb", "# It moved here at the cutover, in one wave.\ndef f = 1\n", :comment],
+      ["R6 a past state narrated in a Markdown narrative",
+       "README.md", "The published field was formerly named `zone`.\n", :text],
+      ["R6 `used to be` in a Ruby comment",
+       "s.rb", "# It used to be that the caller could not say which day.\ndef f = 1\n", :comment]
     ].each do |name, basename, body, expected_where|
       _, path = plant.call(name, basename, body)
       hits, lexed = scan(path)
@@ -583,6 +757,55 @@ def self_test
                mirror_hits.any? { |h| h.line == 2 })
     check.call("…and one in the mirror's BODY is NOT — it is kiosk.tech's to remove",
                mirror_hits.none? { |h| h.line == 3 })
+
+    # ── R5 IS PROSE-ONLY: a version token inside CODE is a number ───────────
+    _, sleeper = plant.call("sleep", "sleep.rb", "def f\n  sleep 0.2\n  sleep 0.3\nend\n")
+    check.call("R5 does NOT flag a float literal in Ruby code (`sleep 0.2`)",
+               scan(sleeper).first.none? { |h| h.rule[:id] == "R5" })
+
+    _, dep = plant.call("dep", "d.gemspec", %(  spec.add_development_dependency "base64", "~> 0.2"\n))
+    check.call("R5 does NOT flag a gemspec dependency constraint (`~> 0.2`)",
+               scan(dep).first.none? { |h| h.rule[:id] == "R5" })
+
+    _, shcode = plant.call("shcode", "t.sh", "#!/usr/bin/env bash\nsleep 0.2\n")
+    check.call("R5 does NOT flag a float literal on a shell CODE line",
+               scan(shcode).first.none? { |h| h.rule[:id] == "R5" })
+
+    _, numbers = plant.call("numbers", "n2.rb", <<~RUBY)
+      # frozen_string_literal: true
+
+      # The origin answers on 127.0.0.1 and verification costs ~0.3 ms against a
+      # ~0.2 s solve in ~44 MiB. The gem is 0.1.0 and the cut is skill-v0.4.12.md;
+      # the wire this speaks is 0.4 and the header says so.
+      def f = 1
+    RUBY
+    check.call("R5 does NOT flag an IP, a timing, a size, a 3-part version, a cut or the " \
+               "CURRENT wire", scan(numbers).first.none? { |h| h.rule[:id] == "R5" })
+
+    # ── R6's declared boundaries, both of them measured ────────────────────
+    _, hyphen = plant.call("hyphen", "u.rb", "# Release a previously-claimed id (compensating op).\ndef f = 1\n")
+    check.call("R6 does NOT flag `previously-claimed` — a claim earlier in THIS run, not our past",
+               scan(hyphen).first.none? { |h| h.rule[:id] == "R6" })
+
+    _, passive = plant.call("passive", "v.rb", <<~RUBY)
+      # frozen_string_literal: true
+
+      # @!attribute rsa_key [OpenSSL::PKey::RSA] the key used to sign mandates,
+      # for a caller the origin no longer knows about.
+      def f = 1
+    RUBY
+    check.call("R6 does NOT flag the passive `used to` or the live `no longer` — the two " \
+               "constructions the header declares ABSENT",
+               scan(passive).first.none? { |h| h.rule[:id] == "R6" })
+
+    # ── R5/R6 reach the demo and harness scopes, and NOT spec/ ─────────────
+    _, cut = plant.call("cutover", "w.rb", "# Retired at the 0.3 cutover, in one wave.\ndef f = 1\n")
+    %i[gem demo e2e].each do |scope|
+      check.call("R5 and R6 both reach the #{scope} scope",
+                 %w[R5 R6].all? { |id| scan(cut, rules_for(scope)).first.any? { |h| h.rule[:id] == id } })
+    end
+    check.call("…and NEITHER reaches a gem's spec/ (a developer surface, like R1 and R2)",
+               scan(cut, rules_for(:spec)).first.none? { |h| %w[R5 R6].include?(h.rule[:id]) })
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.
@@ -675,6 +898,40 @@ def self_test
              e2e_paths.none? { |p| p.include?("/.gems/") || p.include?("/e2e/tmp/") })
   check.call("a gem is NOT in the e2e scope",
              e2e_paths.none? { |p| p.include?("/kiosk-server/") })
+
+  # ── VACUITY: R5's ban is DERIVED, so prove the derivation, not a list ────
+  #
+  # A hand-listed vacuity arm names what it already knows and is blind to what
+  # the corpus grows into. These three questions are about the MECHANISM: they
+  # are the same questions whatever the wire version is, and they keep being
+  # the right ones after it moves.
+  major, minor = current_wire
+  check.call("the wire version is READ from kiosk-core (found #{major}.#{minor})",
+             major.is_a?(Integer) && minor.is_a?(Integer))
+  check.call("the retired set is non-empty — a ban over nothing is a green nothing",
+             !retired_wire_alternatives.empty?)
+  check.call("the CURRENT wire (#{major}.#{minor}) is NOT banned",
+             !"speaks #{major}.#{minor} today".match?(RETIRED_WIRE_RE))
+  prev = minor.positive? ? "#{major}.#{minor - 1}" : "#{major - 1}.0"
+  check.call("the wire immediately before it (#{prev}) IS banned — the ban follows the " \
+             "constant, so a bump widens it with no edit here",
+             "the #{prev} wire is gone".match?(RETIRED_WIRE_RE))
+
+  # ── VACUITY: the mirror mask covers every file another guard freezes ─────
+  mirrors = mirrored_paths
+  check.call("bin/check-spec-schemas names the mirrors it holds (#{mirrors.size})", !mirrors.empty?)
+  uncovered = mirrors.reject { |rel| File.join(REPO, rel).match?(VENDORED_MIRROR_RE) }
+  check.call("every path it mirrors is masked here — scrubbing one would make the mirror " \
+             "stop mirroring#{uncovered.empty? ? '' : " (uncovered: #{uncovered.join(', ')})"}",
+             uncovered.empty?)
+
+  # ── VACUITY: the two sanctioned afterlives are OUTSIDE every scope ───────
+  all_scoped = SCOPES.values.flat_map { |s| s[:dirs].call.flat_map { |d| s[:files].call(d) } }
+  check.call("the repository journal is in NO scope — CHANGELOG.md is the sanctioned afterlife",
+             all_scoped.none? { |p| File.basename(p) == "CHANGELOG.md" })
+  check.call("a demo's public/ signpost pages are in NO scope — a maintainer rule addressed " \
+             "to a future editor is not archaeology",
+             all_scoped.none? { |p| p.include?("/public/") })
 
   corpus = vacuity_corpus
   check.call("the vacuity corpus is non-empty", !corpus.empty?)

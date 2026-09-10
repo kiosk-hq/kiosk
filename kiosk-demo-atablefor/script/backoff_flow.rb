@@ -123,8 +123,8 @@ proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 # in the request — the method, path and query string stay identical so the
 # challenge fingerprint matches.
 rc_solved, resp_solved = availability_once(proofs)
-# A non-paginating query answers a BARE JSON ARRAY; the `{rows: […]}` envelope
-# was retired at the cutover.
+# A non-paginating query answers a BARE JSON ARRAY — there is no
+# `{rows: […]}` envelope to unwrap.
 rows = rc_solved == 200 ? Array(resp_solved) : []
 unless rc_solved == 200
   abort "expected HTTP 200 after solve, got #{rc_solved}: #{JSON.generate(resp_solved)}"

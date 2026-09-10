@@ -66,14 +66,12 @@ module Kiosk
       # body, so all three are identical at issue time (no proof) and verify
       # time (proof in the header) — the fingerprint matches on retry.
       #
-      # WHY METHOD AND VERB, AND NOT 0.3's `command`. Through 0.3 every read
-      # was `POST <endpoint>/query` and every write `POST <endpoint>/run`, so
-      # the method was a constant and the verb name lived INSIDE the arguments
-      # — the digest could only reach it because the wire smuggled it back in
-      # there. On the per-verb wire the name is a path segment and the method
-      # carries the read/write fork, so both belong in the digest directly and
-      # a proof solved for `GET /catalog?city=Lisbon` is spendable on nothing
-      # else — not on `POST /catalog`, not on another verb with the same args.
+      # WHY METHOD AND VERB. On this wire the verb name is a PATH SEGMENT and
+      # the method carries the read/write fork, so both are properties of the
+      # request itself rather than of its body — which is what lets the digest
+      # reach them directly. A proof solved for `GET /catalog?city=Lisbon` is
+      # therefore spendable on nothing else: not on `POST /catalog`, not on
+      # another verb with the same arguments.
       #
       # @param method [String] the HTTP request method ("GET", "POST", …)
       # @param verb   [String, Symbol] the wire verb name (the path segment)

@@ -8,7 +8,7 @@ require "kiosk/server/schema_document"
 module Kiosk
   module Server
     # Discovery generator — one model over {Kiosk::Configuration} + the
-    # request's base URL, six renderers, no drift (0.2 standards alignment):
+    # request's base URL, six renderers, no drift:
     #
     #   .build / .build_json          — the bespoke `/.well-known/kiosk.json`
     #                                   (a DERIVED ALIAS, byte-stable)
@@ -331,7 +331,7 @@ module Kiosk
           items << verb_item(endpoint, name, "POST")
         end
         # The remaining modules are plain catalogued APIs, one link each —
-        # which since the cutover means `pay` and nothing else (see
+        # which means `pay` and nothing else (see
         # MODULE_ENDPOINTS).
         MODULE_ENDPOINTS.each do |mod, path|
           items << { href: "#{endpoint}/#{path}", rel: "item" } if modules.include?(mod)

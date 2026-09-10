@@ -80,13 +80,13 @@ module Kiosk
       # while its human is still at the hosted page, so this call must not mint a
       # session per poll. It reuses the `mode:setup` Checkout Session already
       # OUTSTANDING for this customer when there is one, and only creates a new
-      # session when there is not. Observed live before the fix: FIVE sessions
-      # for ONE card setup at a ~4 s poll cadence — the assistant held a
-      # different url after every poll, and relaying the newest one mid-flow
-      # drops the human off the page they are filling in.
+      # session when there is not. Minting one per poll is not a theoretical
+      # cost: at a ~4 s cadence a single card setup draws FIVE sessions, the
+      # assistant holds a different url after every poll, and relaying the
+      # newest one mid-flow drops the human off the page they are filling in.
       #
-      # The wire shape is unchanged (still a hosted Checkout URL); only the
-      # url's stability is.
+      # The wire shape is a hosted Checkout URL either way; what this buys is
+      # the url's stability.
       #
       # @param user_id [String] synthetic principal identifier
       # @return [String] hosted Stripe Checkout URL

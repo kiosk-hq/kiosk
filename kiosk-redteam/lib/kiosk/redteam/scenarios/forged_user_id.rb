@@ -157,7 +157,7 @@ module Kiosk
         end
 
         # An action answers its own object, VERBATIM (spec §8.2) — there is no
-        # `value` wrapper to unwrap since the 0.4 cutover retired the envelope.
+        # `value` wrapper to unwrap.
         # The `value` shape is still read, because "verbatim" means an operator
         # is free to render a `value` key of their own, and reading only the
         # bare shape would break such a provider for no reason; but the bare

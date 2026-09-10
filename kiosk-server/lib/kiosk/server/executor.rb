@@ -25,7 +25,7 @@ module Kiosk
       # paths — and what THIS dispatcher serves. ONE list: the set the toll and
       # the policy classify by is the same set this dispatcher routes.
       #
-      # Since the 0.4 cutover none of these three is a URL: `query` and `run`
+      # None of these three is a URL: `query` and `run`
       # are how a per-verb GET and a per-verb POST are classified for the toll
       # and the session, and `pay` is both a classification and a reserved path
       # segment. They stay symbols rather than becoming path names because
@@ -48,7 +48,7 @@ module Kiosk
       # @param name [String, nil] the query/action wire name. Always supplied
       #   on the wire — it is a PATH SEGMENT, not a body field — which is why a
       #   verb is free to declare an argument literally called `name` (none
-      #   does; 0.3's wire could never have allowed one). Only `pay` ignores
+      #   does). Only `pay` ignores
       #   it: its name is its kind.
       def self.call(kind:, args:, identity:, connection:, name: nil)
         new(connection: connection, identity: identity).call(kind: kind, args: args, name: name)
@@ -98,7 +98,7 @@ module Kiosk
       #
       # WHY HERE AND NOWHERE ELSE. This is the one place that sees every action
       # invocation exactly once. `POST <endpoint>/<action-name>` is the only
-      # route to an action since the 0.4 cutover, and it reaches
+      # route to an action, and it reaches
       # {WireController#execute_wire} → `Executor.call(kind: :run)`; a direct
       # `Executor.call` (an RLS journey, an operator's own script) arrives at
       # the same line. Putting it in {#verb_run} instead would put it INSIDE

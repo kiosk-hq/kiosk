@@ -135,7 +135,7 @@ module Kiosk
       end
 
       # RFC 9457 problem document, like every other error on this wire
-      # (spec §9). Moved here with the auth plane at the 0.4 cutover.
+      # (spec §9).
       def render_error(err)
         Kiosk::Server::Headers.add_to(response.headers)
         Kiosk::Server::Headers.add_cache_policy(

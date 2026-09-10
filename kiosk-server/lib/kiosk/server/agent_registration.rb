@@ -21,7 +21,7 @@ module Kiosk
 
         # The role is pinned server-side when configured — the agent never
         # sends one (that would be a privilege-selection primitive). OPTIONAL
-        # (roles are hook-or-absent in 0.1): when unset, the agent
+        # — a role is pinned here or the agent has none: when unset, the agent
         # row gets NO role — an EMPTY `allowed_roles`, see the INSERT below —
         # and the provider may instead assign roles inside its
         # `assistant_creation` hook. A CONFIGURED role that is not among

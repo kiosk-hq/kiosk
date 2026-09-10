@@ -190,8 +190,8 @@ end
 # ── Step 4: re-POST with correct proof(s) → expect 200 served ──────────────
 
 rc_served, resp_served = availability_once(proofs)
-# A non-paginating query answers a BARE JSON ARRAY; the `{rows: […]}` envelope
-# was retired at the cutover.
+# A non-paginating query answers a BARE JSON ARRAY — there is no
+# `{rows: […]}` envelope to unwrap.
 rows   = rc_served == 200 ? Array(resp_served) : []
 served = rc_served == 200 && rows.any?
 unless served

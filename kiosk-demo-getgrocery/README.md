@@ -202,8 +202,9 @@ instant in a second spelling, and `my_orders` is the verb §11.6 sends an
 assistant to after a `pay` whose response was lost — which is exactly the row a
 human hears read back.
 
-`delivery_slots` returns only **still-bookable** windows: for **today**, a slot
-whose start has already passed in Dublin is dropped (querying at 11:00 hides
+`delivery_slots` returns only **still-bookable** windows: for **today** at the
+delivery address, a slot whose start has already passed *there* is dropped
+(querying at 11:00 Dublin hides
 `08:00–10:00` and `10:00–12:00`; if every window has begun, today yields no slots
 and the earliest is tomorrow — correct, not a bug). Future dates keep all slots.
 `create_order`/`reschedule_delivery` re-validate the same rule (consistency): a

@@ -353,8 +353,8 @@ kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Li
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	# delivers in Dublin, so "08:00" means 08:00 in Europe/Dublin, and "now" for the
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	# handled automatically across DST. A NAIVE UTC `slot_at`
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	# district getgrocery serves is in Dublin today, so the answers are unchanged;
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	# so IST (UTC+1, summer) and GMT (UTC+0, winter) are both handled automatically
 kiosk-demo-getgrocery/app/models/product.rb	def self.age_restricted?(value)
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)

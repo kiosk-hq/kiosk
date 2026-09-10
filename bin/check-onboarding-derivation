@@ -3132,7 +3132,11 @@ arms << plant_arm("the :kiosk_verb catch-all taught in place of #{route_verb}'s 
   # R16's chain is rooted in the slot module's own clock reader. Rename it at
   # its DEFINITION and every guard that reads it still names it, so the chain
   # resolves to nothing -- which the rule must SAY rather than pass over.
-  no_clock = sources[:delivery_slots].sub(/^(\s*)def now$/, "\\1def clock_renamed")
+  # `\b` and not `$`: the reader takes the zone it is being asked about since the
+  # per-resource clock rule, so `def now` is followed by a parameter list. An
+  # end-anchored pattern stopped matching and the plant became a NO-OP, which is
+  # what {planted} exists to catch.
+  no_clock = sources[:delivery_slots].sub(/^(\s*)def now\b/, "\\1def clock_renamed")
   planted.call("the slot module's clock reader renamed at its definition",
                sources[:delivery_slots], no_clock)
   arms << vacuity_arm("the slot module declares no clock reader", page,

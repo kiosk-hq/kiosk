@@ -112,10 +112,10 @@ Kiosk.configure do |c|
   # engine already ships the adapter that verifies its own tokens:
   # `IdentityResolution.agent_idp` falls back to
   # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured. This demo used to override it with a hand-copied composite that
-  # re-implemented the JWT half (more loosely — it never checked `iss`) in
-  # order to bolt on a dev-only parser turning a self-asserted
-  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # configured, and that adapter checks `iss` as well as the signature. An
+  # adopter copying this file gets the shipped verifier rather than a
+  # hand-rolled composite, and assistant.sh asserts that a self-asserted
+  # `agent:u-…:a-…:r-…` bearer resolves to no identity here.
   # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
   # Okta, an ID-JAG-style broker) by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that

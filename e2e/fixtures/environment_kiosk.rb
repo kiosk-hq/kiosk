@@ -58,8 +58,7 @@
   # The operator audit sink's two files. The PRESENCE of
   # KIOSK_AUDIT_SINK_FILE is what makes the initializer configure a sink at all,
   # and run.sh's second boot UNSETS it to prove the default is nil — so the
-  # redacted path is fetched crash-if-absent only when the first one is set,
-  # which is exactly the short-circuit the initializer used to carry.
+  # redacted path is fetched crash-if-absent only when the first one is set.
   config.x.kiosk.audit_sink_file = ENV["KIOSK_AUDIT_SINK_FILE"]
   config.x.kiosk.audit_sink_redacted_file =
     config.x.kiosk.audit_sink_file && ENV.fetch("KIOSK_AUDIT_SINK_REDACTED_FILE")

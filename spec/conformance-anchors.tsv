@@ -80,7 +80,6 @@ e2e/README.md	`.github/workflows/ci.yml` invokes the same script (the `e2e` job)
 e2e/README.md	└── fixtures/                               # files copied into the generated app
 e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	# composite body shape left at all. `POST /kiosk/{query,run}` do not exist;
 e2e/assistant.sh	$public_doc is really being read (control token)
 e2e/assistant.sh	$public_doc names no verb ($verb_name) — pointer, not copy
 e2e/assistant.sh	?v=<digest> is immutable for a year
@@ -93,9 +92,10 @@ e2e/assistant.sh	Kiosk-API-Version present
 e2e/assistant.sh	Kiosk-Min-Client is a version, and it is advertised
 e2e/assistant.sh	Kiosk-Min-Client present
 e2e/assistant.sh	Kiosk-Server-Version present
-e2e/assistant.sh	POST /kiosk/$retired unauthenticated → 404 too
-e2e/assistant.sh	POST /kiosk/$retired → 404
+e2e/assistant.sh	POST /kiosk/$undrawn unauthenticated → 404 too
+e2e/assistant.sh	POST /kiosk/$undrawn → 404
 e2e/assistant.sh	POST at a query's path → 404
+e2e/assistant.sh	There is no name-dispatch endpoint: a verb
 e2e/assistant.sh	Vary names all three request headers
 e2e/assistant.sh	X-Total-Count is not dressed up as a standard
 e2e/assistant.sh	a COMPLETE answer carries X-Total-Count
@@ -204,6 +204,7 @@ e2e/assistant.sh	…and kiosk.json itself expires quickly
 e2e/assistant.sh	…and links the catalog at its versioned url
 e2e/assistant.sh	…and neither does the operator's own 500 — same exception path
 e2e/assistant.sh	…and never a 402: the toll went with the gate
+e2e/assistant.sh	…and the body is no envelope
 e2e/assistant.sh	…and the boot digest IS the ETag
 e2e/assistant.sh	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	…and the route loop actually ran
@@ -219,7 +220,6 @@ e2e/assistant.sh	…title is the code's, not the incident's
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	…while the same request with a bad token is still 401
-e2e/assistant.sh	…with no 0.3 envelope residue
 e2e/assistant.sh	…with no Allow on it
 e2e/assistant.sh	…with no code to branch on
 e2e/fixtures/auth_wire_capture.rb	THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT.

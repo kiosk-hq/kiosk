@@ -3,12 +3,12 @@
 # kiosk-server. Executed as a bash subprocess by e2e/run.sh after server
 # start (not sourced — it runs under its own `set -euo pipefail`).
 #
-# Asserts on responses from the REST wire surface: the 0.4 per-verb endpoints
+# Asserts on responses from the REST wire surface: the per-verb endpoints
 # (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and the
-# two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). The 0.3
-# name-dispatch endpoints are gone and are asserted to answer the ordinary 404
-# an authenticated caller gets — and 401 without a bearer, since auth precedes
-# verb dispatch.
+# two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). A path
+# the catalogue does not name is asserted to answer the ordinary routing 404 —
+# with a bearer and without one alike, since a routing miss is decided before
+# any credential is read.
 # Exits non-zero on any failure.
 #
 # ONE ANSWER SHAPE. Every
@@ -16,8 +16,9 @@
 # ARRAY whether or not it paginates, an action its own object — and an RFC 9457
 # problem document on an error. A paginated page says so in an RFC 8288 `Link:
 # …; rel="next"` HEADER, with `X-Total-Count` beside it, so there is no
-# composite body shape left at all. `POST /kiosk/{query,run}` do not exist;
-# `schema` and `pay` answer the same shape as the per-verb wire.
+# composite body shape left at all. There is no name-dispatch endpoint: a verb
+# is addressed by its own path, and `schema` and `pay` answer the same shape as
+# the per-verb wire.
 #
 # ONE AUTH SHAPE, WITH TWO DELIBERATE EXCEPTIONS. Everything under the mount is
 # Bearer-gated except the two DESCRIPTIONS of this origin's wire —
@@ -46,11 +47,11 @@ BOB="00000000-0000-0000-0000-000000000002"
 # the shipped ceremony (Equihash-tolled register -> the human's link code ->
 # claim) and exports the results here.
 #
-# The agent id is still a UUID — now by construction rather than by convention,
-# because `/auth/register` minted it: `kiosk.agents.id`, every
+# The agent id is a UUID by construction rather than by convention, because
+# `/auth/register` minted it: `kiosk.agents.id`, every
 # `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema, and a caller can no longer
-# choose a shape the shipped tables cannot store.
+# `uuid` in the canonical schema, so a caller cannot choose a shape the shipped
+# tables cannot store.
 ALICE_AGENT="${ALICE_AGENT:?run.sh must export ALICE_AGENT from the binding ceremony}"
 BOB_AGENT="${BOB_AGENT:?run.sh must export BOB_AGENT from the binding ceremony}"
 ALICE_AGENT_TOKEN="${ALICE_AGENT_TOKEN:?run.sh must export ALICE_AGENT_TOKEN}"
@@ -293,8 +294,8 @@ assert "server is this origin's endpoint" \
 # DERIVED, and this is the assertion that says so: the operator paths are
 # exactly the verbs the canonical catalog publishes, with the query half at GET
 # and the action half at POST. `/schema` and `/pay` are the wire's OWN reserved
-# endpoints — the protocol's, not the operator's — and joined the document at
-# the cutover, when they left the 0.3 envelope.
+# endpoints — the protocol's, not the operator's — which is why the comparison
+# below subtracts them before matching the two documents.
 schema_doc=$(curl -sf "$SERVER_URL/kiosk/schema")
 assert "one path per verb the canonical catalog publishes" \
   "$(echo "$oa" | jq -r '.paths | keys_unsorted | map(ltrimstr("/")) | map(select(. != "schema" and . != "pay")) | sort | join(",")')" \
@@ -746,12 +747,13 @@ assert "unknown action → 404"         "$status" "404"
 
 # ─── the refusal split: TWO codes an assistant can still meet here ──────
 #
-# One code, `not_found`, used to carry three situations at once, and `code` is
-# the ONE field the spec tells an assistant to branch on -- so an assistant told
-# "not found" for a hotel nobody has re-read the catalogue and retried, which is
-# right for one of them and a wasted round trip plus a wrong report to the human
-# for the others. Two of the three are dialled at
-# this BOOTED origin below, and the discriminating assertion is that they DIFFER.
+# `code` is the ONE field the spec tells an assistant to branch on, and three
+# distinct situations can present as a 404-shaped miss. They carry three
+# SEPARATE codes precisely so an assistant does not answer all three the same
+# way: re-reading the catalogue and retrying is right for one of them, and for
+# the others it is a wasted round trip plus a wrong report to the human. Two of
+# the three are dialled at this BOOTED origin below, and the discriminating
+# assertion is that they DIFFER.
 #
 # The third, `verb_not_found`, is not dialable at an origin that draws one
 # explicit route per verb: an unregistered name has no route, so it is the plain
@@ -823,37 +825,38 @@ assert "forged self-asserted bearer → 401" "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/Salons")
 assert "a non-verb-shaped path → 404" "$status" "404"
 
-# ─── the 0.3 wire is GONE ───────────────────────────────────────────────
+# ─── paths the catalogue does not name answer the ordinary 404 ──────────
 #
-# A hard cut: no dedicated route, no tombstone, no 404 hint payload naming the
-# retired endpoints, no second conformance surface. Nothing draws `/kiosk/query`
-# or `/kiosk/run`, so they are the ordinary routing 404 any undrawn path gets.
-# That is the assertion: not that the old endpoint is special-cased, but that it
-# is not special at all — with a bearer or without one, since a routing miss is
-# decided before any credential is read.
+# No path under the mount is special-cased: no route drawn for a name the
+# catalogue does not publish, no tombstone, no 404 hint payload, no second
+# conformance surface. `/kiosk/query` and `/kiosk/run` are two such names, so
+# they are the ordinary routing 404 any undrawn path gets. That is the
+# assertion — not that some path is handled specially, but that none is — with
+# a bearer or without one, since a routing miss is decided before any
+# credential is read.
 
-printf "\n\033[1m=== the 0.3 wire is gone ===\033[0m\n"
+printf "\n\033[1m=== paths the catalogue does not name ===\033[0m\n"
 
-for retired in query run; do
-  body=$(curl -sS -X POST "$SERVER_URL/kiosk/$retired" \
+for undrawn in query run; do
+  body=$(curl -sS -X POST "$SERVER_URL/kiosk/$undrawn" \
            -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
-  code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$retired" \
+  code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$undrawn" \
            -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
-  assert "POST /kiosk/$retired → 404"        "$code" "404"
-  assert "…with no 0.3 envelope residue"     "$(echo "$body" | grep -c '\"ok\"')" "0"
+  assert "POST /kiosk/$undrawn → 404"        "$code" "404"
+  assert "…and the body is no envelope"      "$(echo "$body" | grep -c '\"ok\"')" "0"
 
-  anon_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$retired" \
+  anon_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$undrawn" \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
-  assert "POST /kiosk/$retired unauthenticated → 404 too" "$anon_code" "404"
+  assert "POST /kiosk/$undrawn unauthenticated → 404 too" "$anon_code" "404"
 done
 
-# `schema` answers the payload VERBATIM now — it moved off the envelope with
-# `pay` and the auth plane in the cutover wave — and it answers it to ANYONE.
-old_schema=$(curl -sS "$SERVER_URL/kiosk/schema")
-assert "GET /kiosk/schema is unenveloped"  "$(echo "$old_schema" | jq -r 'has("ok") or has("kind") or has("value")')" "false"
-assert "…the catalog is the body itself"   "$(echo "$old_schema" | jq -r '.queries | length > 0')" "true"
+# `schema` answers the payload VERBATIM — no `ok`/`kind`/`value` wrapper — and
+# it answers it to ANYONE.
+schema_body=$(curl -sS "$SERVER_URL/kiosk/schema")
+assert "GET /kiosk/schema is unenveloped"  "$(echo "$schema_body" | jq -r 'has("ok") or has("kind") or has("value")')" "false"
+assert "…the catalog is the body itself"   "$(echo "$schema_body" | jq -r '.queries | length > 0')" "true"
 
 # A GET at an action's path draws no route here — this origin draws `POST
 # /kiosk/book_appointment` and nothing else at that path — so it is the same
@@ -867,7 +870,7 @@ mna_allow=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/book_appointment" \
 assert "GET an action → 404"               "$mna_code" "404"
 assert "…with no Allow header"             "$mna_allow" ""
 assert "…and the catalogue says it is an action" \
-  "$(echo "$old_schema" | jq -r '.actions | map(.name) | index("book_appointment") != null')" "true"
+  "$(echo "$schema_body" | jq -r '.actions | map(.name) | index("book_appointment") != null')" "true"
 
 # THE MODULE SET HAS ONE HOME, and these two assertions pin both halves of it.
 # `/kiosk/schema` publishes `{queries, actions}` and nothing else; the modules
@@ -875,7 +878,7 @@ assert "…and the catalogue says it is an action" \
 # name for the same value would be a field two documents have to agree about,
 # and a comparison between two renderings of one call can only ever pass.
 assert "schema publishes {queries, actions} and nothing else" \
-  "$(echo "$old_schema" | jq -r 'keys_unsorted | join(",")')" "queries,actions"
+  "$(echo "$schema_body" | jq -r 'keys_unsorted | join(",")')" "queries,actions"
 assert "…and the module set lives in kiosk.json alone" \
   "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
 
@@ -1032,8 +1035,8 @@ pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER
              bundle exec ruby "$FIXTURES/pay_flow.rb" )
 
 assert "pay: http 200"                "$(echo "$pay_out" | jq -r '.http_code')"                       "200"
-# `pay` answers the settlement object VERBATIM since the cutover — no
-# `ok`/`kind`/`value` wrapper to unwrap.
+# `pay` answers the settlement object VERBATIM — no `ok`/`kind`/`value`
+# wrapper to unwrap.
 assert "pay: unenveloped"             "$(echo "$pay_out" | jq -r '.response | has("ok") or has("kind") or has("value")')" "false"
 assert "pay: psp_reference present"   "$(echo "$pay_out" | jq -r '.response.psp_reference | length > 0')" "true"
 assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.settled_amount_cents')" "1599"
@@ -1049,11 +1052,11 @@ assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT sett
 #
 # Kiosk STORES no audit trail — it OFFERS one. `c.audit_sink` is a callable the
 # operator sets, and this origin's is DemoAuditSink (app/services/demo_audit_sink.rb),
-# which appends one JSON line per action invocation to $AUDIT_EVENTS. These are
-# the assertions the 13 `kiosk.action_log` read-backs used to make, moved to
-# where the trail now lives, plus the three the reversal itself needs: the
-# arguments arrive IN FULL, a sink that RAISES does not fail the action, and the
-# two tables are GONE from a freshly migrated origin.
+# which appends one JSON line per action invocation to $AUDIT_EVENTS. The
+# assertions below read that trail back off the booted origin, and three of
+# them are what an OFFERED trail specifically needs: the arguments arrive IN
+# FULL, a sink that RAISES does not fail the action, and the canonical
+# migration set creates no log table of its own.
 
 printf "\n\033[1m=== the audit sink (c.audit_sink) ===\033[0m\n"
 
@@ -1151,9 +1154,10 @@ assert "audit: …the booking it choked on really landed" \
 assert "audit: …and the sink that raised emitted nothing" \
   "$(( $(events 'length') - before_raise ))" "0"
 
-# 10. THE TWO TABLES ARE GONE. This origin was built by `rails g kiosk:install`
-#     and migrated from scratch minutes ago, so this is the canonical migration
-#     set speaking: `kiosk.actions` and `kiosk.action_log` are not in it.
+# 10. NO ENGINE-OWNED LOG TABLE. This origin was built by `rails g
+#     kiosk:install` and migrated from scratch minutes ago, so this is the
+#     canonical migration set speaking: it creates neither `kiosk.actions` nor
+#     `kiosk.action_log`, and an operator who wants a trail sets `c.audit_sink`.
 assert "audit: kiosk.action_log does not exist in a freshly migrated origin" \
   "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.action_log') IS NULL")" "t"
 assert "audit: …and neither does kiosk.actions" \

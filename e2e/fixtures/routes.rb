@@ -15,8 +15,8 @@ Rails.application.routes.draw do
   # ── the responses RAILS composes, not Kiosk ──────────────────────────────
   #
   # §3.6 binds every response under the mount "on success and on error alike",
-  # and the two that used to escape it are the two no Kiosk code ever touches:
-  # a routing 404 for a path under the mount that nobody drew, and an unhandled
+  # and the two hardest to bind are the two no Kiosk code ever composes: a
+  # routing 404 for a path under the mount that nobody drew, and an unhandled
   # 500. `GET /kiosk/nope/nope` is the 404 probe: nothing under the mount draws
   # it, so it matches no route and Rails composes the answer.
   # `/kiosk/boom` is the 500, and the two `/operator/*` lines are its

@@ -62,16 +62,16 @@ pem = key.public_key.to_pem
 # THE OPENING REQUEST MAY NOT NAME A ROLE.
 #
 # This request is UNAUTHENTICATED — no Cookie, no Authorization — so anything it
-# carries is an assertion by a stranger. The engine used to read `role` (or its
-# OAuth spelling `scope`) off it and bake the value into the JWT the poll
-# returns, with membership of `config.roles` as the only filter; the role now
-# comes from the approving human and the parameter is REFUSED rather than
-# ignored.
+# carries is an assertion by a stranger. The engine does not read `role` (or its
+# OAuth spelling `scope`) off it at all: the role comes from the approving
+# human, and the parameter is REFUSED rather than ignored.
 #
 # THE DECLARED VALUE IS THE ONE THAT MATTERS. An UNDECLARED role (`owner` here —
-# this origin declares only `customer`) was refused by the vulnerable code too,
-# so a probe using only that cannot fail. `role=customer` is the probe with
-# teeth: it answered 200 before the fix, on this very fixture. Both transports
+# this origin declares only `customer`) is refused by anything that filters on
+# membership of `config.roles`, so a probe using only that distinguishes
+# nothing. `role=customer` is the probe with teeth: it is the value a
+# membership filter would wave through, so the refusal it draws can only come
+# from the parameter being refused outright. Both transports
 # are probed because the controller reads `params[:role]`, which Rails fills
 # from a form body and a JSON body alike — a guard on one would not be a guard.
 role_probes = [%w[role customer], %w[scope customer], %w[role owner]].map do |param, value|
@@ -158,11 +158,11 @@ results[:link_claim] = [rc, claim["user_id"] == HUMAN]
 # ── unlink the first assistant: registration-layer revocation ──
 #
 # Spec §6.3/§15.4 promise BOTH halves — "the key's tokens stop verifying AND
-# /auth/login answers 404" — and this driver used to assert only the second,
-# which is how the same-second aperture in the watermark survived unnoticed
-# unnoticed. Re-login is aligned to a wall-clock second boundary so the fresh
-# token's
-# `iat` lands in the SAME second as the unlink, then assert the refusal.
+# /auth/login answers 404" — and this driver asserts both, because a watermark
+# that is compared at one-second resolution has an aperture exactly one second
+# wide and only the first half sees it. Re-login is aligned to a wall-clock
+# second boundary so the fresh token's `iat` lands in the SAME second as the
+# unlink, then assert the refusal.
 proof = pop_proof(key, pem)
 sleep(1.0 - (Time.now.to_f % 1.0) + 0.02)
 rc, fresh = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: proof })

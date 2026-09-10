@@ -34,7 +34,7 @@
         },
         "capabilities": {
           "type": "array",
-          "description": "The MODULES this endpoint serves, from the canonical set, in canonical order. Never the origin's registered verb NAMES -- this document is a POINTER, not a copy of the contract, and the names are published once, in the catalog at `schema_url`. This is also the ONLY place the module set appears: the catalog carried a byte-identical copy as `verbs` until protocol 0.4 dropped it.",
+          "description": "The MODULES this endpoint serves, from the canonical set, in canonical order. Never the origin's registered verb NAMES -- this document is a POINTER, not a copy of the contract, and the names are published once, in the catalog at `schema_url`. This is also the ONLY place the module set appears: no other surface on this wire publishes it, and the catalog carries no copy of it.",
           "items": {
             "enum": [
               "schema",

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Every published verb declares a `description`, an `input_schema` AND an
-# `output_schema` (T-073 = A, Phil 2026-08-17: both schemas REQUIRED on every
+# `output_schema` (T-073 = A, 2026-08-17: both schemas are REQUIRED on every
 # verb in 0.4).
 #
 # WHY A TEXT LINT WHEN THE ENGINE ALREADY RAISES. {HandlerMixin} refuses a

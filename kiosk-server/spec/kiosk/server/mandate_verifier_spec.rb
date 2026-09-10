@@ -218,7 +218,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       # purpose («still accepts a string outside ISO 4217, canonicalised — the
       # domain is K-1252, not this guard»). It was written so a later tightening
       # could not happen by accident; the tightening has now happened ON PURPOSE
-      # — Phil decided K-1252 on 2026-08-31 with «accept iso codes» — so the
+      # — K-1252 settled on 2026-08-31 as «accept iso codes» — so the
       # example asserts the NEW boundary instead of being deleted with the old one.
       #
       # WHAT IT PINS, and each clause is a place a regression would land:
@@ -467,7 +467,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
-    # K-741 / LINE-ITEMS-REQUIRED (Phil, 2026-08-16). `line_items` was optional
+    # K-741 / LINE-ITEMS-REQUIRED (2026-08-16). `line_items` was optional
     # while the settlement path already depended on it: an assistant could omit
     # it, pay successfully, and leave the operator holding a settlement it
     # cannot match to any domain object — a degraded audit and reconciliation

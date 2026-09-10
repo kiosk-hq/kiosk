@@ -634,7 +634,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(by_href["https://api.acme.example/kiosk/schema#{v}"]).to be_nil
     end
 
-    # The RFC question T-093 re-settled: Phil overruled the SECURITY objection,
+    # The RFC question T-093 re-settled: the SECURITY objection was overruled,
     # not slice 5's reading of RFC 9727 (a catalog lists APIs and points at
     # their DESCRIPTIONS). So both members survive, unchanged, and the
     # operations were ADDED alongside them rather than replacing them.

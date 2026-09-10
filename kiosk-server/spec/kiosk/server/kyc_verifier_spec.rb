@@ -157,7 +157,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
     # `kyc_public_key` serves no KYC at all — an ORIGIN-WIDE fact, true of an
     # anonymous caller too — while `forbidden` is glossed "authenticated, but
     # this identity may not do this". That mis-fit is what K-1207 measured and
-    # what Phil's decision «A» split into its own code.
+    # what decision «A» split into its own code.
     it "raises Errors::ModuleNotServed when kyc_public_key is not configured" do
       Kiosk.configure { |c| c.kyc_public_key = nil }
       raw_jws = sign_kyc(valid_payload)

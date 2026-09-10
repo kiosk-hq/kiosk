@@ -3,7 +3,7 @@
 require "active_record"
 require "securerandom"
 
-# THE AUDIT SEAM (K-828, Phil 2026-08-20 — the reversal of T-088/K-791).
+# THE AUDIT SEAM (K-828, 2026-08-20 — the reversal of T-088/K-791).
 #
 # Kiosk no longer stores an audit trail; it OFFERS one. `c.audit_sink` receives
 # one {Kiosk::Server::ActionEvent} per action invocation, success and failure

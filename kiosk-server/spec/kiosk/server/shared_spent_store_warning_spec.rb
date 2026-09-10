@@ -3,7 +3,7 @@
 # K-752 — the boot warning for a production origin still on the IN-PROCESS
 # spent store.
 #
-# Phil decided option C (2026-08-19): WARN, never refuse. A fail-closed boot
+# The engine WARNS, never refuses (option C, 2026-08-19). A fail-closed boot
 # was rejected because it turns a routine `WEB_CONCURRENCY` 1→2 into an outage
 # and, decisively, because a process-count check cannot see the case that
 # matters at all — on separate machines every process boots with a count of

@@ -119,7 +119,7 @@ RSpec.describe "DiscoveryController" do
 
   # ─── the cache policy of the POINTER documents ───────────────────────────
   #
-  # `max-age=60` (Phil, 2026-08-19), not because a minute is efficient but
+  # `max-age=60` (settled 2026-08-19), not because a minute is efficient but
   # because a minute is how long an operator must live with the previous
   # document after a deploy. The load these documents would otherwise carry is
   # carried by the immutable `?v=` url they point at.

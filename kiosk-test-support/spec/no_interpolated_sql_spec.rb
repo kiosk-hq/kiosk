@@ -4,8 +4,8 @@
 #
 # WHY THIS GUARD EXISTS AT ALL, given that nothing it catches is exploitable
 # today. Every site it was written against passed its values through
-# `connection.quote` first, so none of them was injectable — Phil's brakeman
-# run over all eight apps says so, and the ledger records it. The charge is not
+# `connection.quote` first, so none of them was injectable — a brakeman run
+# over all eight apps says so, and the ledger records it. The charge is not
 # safety, it is EXEMPLARITY: the demos are the reference a provider copies to
 # build their own origin, and `"… WHERE id = #{conn.quote(id)}::uuid"` is the
 # shape that becomes an injection the first time somebody copies it and forgets

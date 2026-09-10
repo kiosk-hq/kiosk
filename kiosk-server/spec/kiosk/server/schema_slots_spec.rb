@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# DATA-DERIVED DESCRIPTOR SLOTS (K-922, Phil 2026-08-21).
+# DATA-DERIVED DESCRIPTOR SLOTS (K-922, 2026-08-21).
 #
 # A descriptor slot may be a proc — `enum: -> { Category.pluck(:slug) }` — so a
 # schema can state a fact about the operator's ROWS. Three properties carry the

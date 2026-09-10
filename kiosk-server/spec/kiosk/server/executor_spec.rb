@@ -685,7 +685,7 @@ RSpec.describe Kiosk::Server::Executor do
     # T-158: `module_not_served` (501), not `forbidden` (403). "This origin does
     # not do payments" is a fact about the ORIGIN and is true of every caller,
     # while `forbidden` is glossed "authenticated, but this identity may not do
-    # this" — the mis-fit K-1207 measured and Phil's decision «A» split.
+    # this" — the mis-fit K-1207 measured and decision «A» split.
     it "raises ModuleNotServed when no payment_provider is configured" do
       Kiosk.configuration.payment_provider = nil
       expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }

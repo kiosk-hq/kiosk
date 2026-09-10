@@ -456,7 +456,7 @@ RSpec.describe Kiosk::Server::Executor do
     # violation that reaches the rescue here is a REAL one, raised by the real
     # `UNIQUE (user_id, mandate_id)` in the shipped migration SQL.
     #
-    # THE DECISION (Phil, 2026-08-21, ADR-0026): a `pay` replaying an
+    # THE DECISION (2026-08-21, ADR-0026): a `pay` replaying an
     # already-SETTLED cart is IDEMPOTENT — it returns the settlement the first
     # call returned. A re-presented chain that was never captured, or whose
     # capture is still in flight, keeps `409 conflict` before any capture.

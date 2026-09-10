@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The 0.4 query-argument encoding, as decided by Phil in T-070 (option B,
+# The 0.4 query-argument encoding, as decided in T-070 (option B,
 # 2026-08-17) and narrowed in T-087 (option A, 2026-08-19). That decision is
 # the normative text these examples encode until both specs are rewritten;
 # each `describe` below names the clause it covers.
@@ -191,8 +191,8 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
     # about — draft 2020-12 defines `integer` by VALUE, so a JSON body's
     # `{"party_size": 2.0}` IS a valid integer and an action takes it, while a
     # query string is TEXT and the declared type is the grammar its spelling
-    # must match. Phil decided 2026-08-30 that this strictness is right and
-    # that a field which may legitimately be fractional must DECLARE itself
+    # must match. That strictness is deliberate, settled 2026-08-30: a field
+    # which may legitimately be fractional must DECLARE itself
     # `number` instead. Both halves are pinned so neither can drift back into
     # the other: the body half is kiosk-demo-atablefor's
     # `WHOLE-VALUED FLOAT BODY` probe in `script/redteam_suite.rb`.

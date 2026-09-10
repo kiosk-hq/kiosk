@@ -75,11 +75,14 @@
 #     named here so the boundary is a decision rather than an accident.
 #   * `spec/`, `test/` — developer surfaces, absent from every `spec.files`,
 #     and the constitution REQUIRES an inline TODO/FIXME to carry a ledger id,
-#     which is a rule these directories have to be able to obey. So R1, R2 and
-#     R4 do not reach them. R3 DOES: a gem's `spec/` is not shipped but it IS
-#     published, and a Russian sentence is unreadable to a stranger who clones
-#     this repository whether or not it travels in the .gem. `test/` stays out
-#     entirely — no gem here has one, so a rule over it would cover nothing.
+#     which is a rule these directories have to be able to obey. So R1 and R2
+#     do not reach them. R3 AND R4 DO: a gem's `spec/` is not shipped but it IS
+#     published, and neither a Russian sentence nor an attributed decision is
+#     readable to a stranger who clones this repository, whether or not it
+#     travels in the .gem. An example's comment is where a reader goes to find
+#     out what a control PROMISES, and «the maintainer ruled X» tells them to
+#     trust a person instead. `test/` stays out entirely — no gem here has
+#     one, so a rule over it would cover nothing.
 #   * `Gemfile`, `Rakefile`, `.rubocop.yml` and the rest of a gem's root —
 #     build and dev tooling, not packaged, never read by an adopter.
 #   * `kiosk-demo-*/bin/` — generator binstubs, and Phil's exemption again.
@@ -104,7 +107,7 @@
 #       whether the sentence binds them. Guillemets, em dashes and § are Latin
 #       and stay; only the Cyrillic block is banned, so the rule cannot argue
 #       with the house punctuation.
-#   R4  no maintainer named in prose — /\bPhil\b/ — in the GEM scope only.
+#   R4  no maintainer named in prose — /\bPhil\b/ — in the GEM and SPEC scopes.
 #       «Phil accepted this control's weakness openly» tells an adopter to trust
 #       a person they have never met instead of stating the property. Say what
 #       the code does and why; the name belongs in `spec.authors` and in git.
@@ -152,8 +155,9 @@ ADR_RE       = /\bADR-\d{4}\b/
 CYRILLIC_RE  = /[Ѐ-ӿ]/
 MAINTAINER_RE = /\bPhil\b/
 
-# `scopes` is which published surface each rule speaks for. R4 is gem-only for
-# the reason given in the header: one demo is NAMED after the maintainer.
+# `scopes` is which published surface each rule speaks for. R4 reaches the gems
+# and their `spec/` but NOT the demos, for the reason given in the header: one
+# demo is NAMED after the maintainer.
 RULES = [
   { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo], what: "a ledger id",
     none: "no ledger id" },
@@ -161,7 +165,7 @@ RULES = [
     none: "no ADR reference" },
   { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec], what: "Cyrillic prose",
     none: "no Cyrillic" },
-  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem],      what: "the maintainer named in prose",
+  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec], what: "the maintainer named in prose",
     none: "no maintainer named in prose" }
 ].freeze
 
@@ -202,10 +206,12 @@ end
 
 # The gems' own spec/ directories. These do NOT ship — every gemspec globs
 # `lib/**/*`, so nothing here reaches a `gem install` — but the repository is
-# public, and a stranger who clones it reads them. Only R3 applies: a ledger id
-# or an ADR reference is a note between maintainers on a developer surface and
-# stays (that is T-186's declared exemption), while a Russian sentence is simply
-# unreadable to most of the people this repository is published for.
+# public, and a stranger who clones it reads them. Only R3 and R4 apply: a
+# ledger id or an ADR reference is a note between maintainers on a developer
+# surface and stays (that is T-186's declared exemption), while a Russian
+# sentence is unreadable to most of the people this repository is published
+# for and an attributed ruling asks them to trust a stranger's judgement in
+# place of the property the example pins.
 def spec_dirs
   (Dir.glob(File.join(REPO, "kiosk-*")) - Dir.glob(File.join(REPO, "kiosk-demo-*")))
     .select { |d| File.directory?(File.join(d, "spec")) }
@@ -326,7 +332,7 @@ SCOPES = {
                "Rakefile, config.ru, README.md, before-after.md" },
   spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
           files: ->(d) { spec_files(d) },
-          per: "spec/** (text extensions) — R3 only" }
+          per: "spec/** (text extensions) — R3 and R4 only" }
 }.freeze
 
 def run_check
@@ -341,7 +347,7 @@ def run_check
     [name, files]
   end
   puts "  exempt         : bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption); " \
-       "spec/, test/ for R1/R2/R4 (developer surfaces; R3 DOES reach spec/);"
+       "spec/, test/ for R1/R2 (developer surfaces; R3 and R4 DO reach spec/);"
   puts "                   Gemfile/Gemfile.lock/mise.toml and the rest of a directory root " \
        "(not packaged, not browsed);"
   puts "                   a demo's public/, log/, tmp/, storage/ and its non-text config " \
@@ -494,6 +500,8 @@ def self_test
                scan(demo_only, rules_for(:demo)).first.empty?)
     check.call("…and DOES apply in the gem scope",
                !scan(demo_only, rules_for(:gem)).first.empty?)
+    check.call("…and DOES apply in a gem's spec/ scope (K-1457)",
+               !scan(demo_only, rules_for(:spec)).first.empty?)
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.

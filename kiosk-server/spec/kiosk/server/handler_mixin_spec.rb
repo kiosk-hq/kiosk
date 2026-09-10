@@ -8,7 +8,7 @@
 # the end-to-end ones, {Kiosk::Server::Executor} for the rest. Nothing calls the
 # mixin's internals.
 #
-# `ApplicationController` (spec_helper.rb) is the fake Phil asked for: a
+# `ApplicationController` (spec_helper.rb) is the fake this suite needs: a
 # stand-in for the host app's base class, carrying `protect_from_forgery`
 # because every real Rails app does.
 

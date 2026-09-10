@@ -261,7 +261,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(minted).to eq(["agent-known", "owner"])
     end
 
-    # ── THE MISCONFIGURATION WARNING (T-165, Phil 2026-09-02 on K-1134) ──────
+    # ── THE MISCONFIGURATION WARNING (T-165, on K-1134) ──────────────────────
     #
     # The example above characterises what the engine DOES; these pin the only
     # thing that changed when the contract was written down. Role resolution is
@@ -270,8 +270,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # else — the one moment the misconfiguration is decidable with certainty,
     # which is why it is detected here and not at boot (see the comment on
     # {AccountBinding.warn_role_resolution_not_total}). It WARNS; the ceremony is
-    # unchanged, because Phil's ruling was that the operator fixes the identity
-    # system and the engine keeps its behaviour.
+    # unchanged: the operator fixes the identity system, and the engine keeps
+    # its behaviour.
     #
     # Rails.logger is nil in this plain-Ruby suite, so the line lands on $stderr.
     def capture_operator_log

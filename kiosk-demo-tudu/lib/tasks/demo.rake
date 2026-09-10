@@ -448,10 +448,11 @@ namespace :demo do
     (the forged account_id is now REFUSED 400, not accepted-and-ignored),
     MalformedUuidArg (400), MissingAuth (401), GarbageToken (401), UnknownQuery
     (404), UnknownAction (404), UnregisteredVerbIsOrdinaryRefusal (/kiosk/query
-    and /kiosk/run name no registered verb: the ordinary 404 an authenticated
-    caller gets, and 401 without a bearer — auth precedes verb dispatch),
-    MethodMismatch (a GET at an action's path
-    is 405 + Allow, never a silent 404), plus tudu beats — InviteCodeReplay
+    and /kiosk/run name no registered verb and no route draws them: the
+    ordinary 404 any undrawn path gets, bearer or not — a routing miss precedes
+    the credential), MethodMismatch (a GET at an action's path draws
+    no route either, so it is the same plain 404 and the write never runs),
+    plus tudu beats — InviteCodeReplay
     (403), RevokedMemberAccess (403), RevokedAgentKey (404),
     PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's
     list_members and whoami carry display names and no account address anywhere

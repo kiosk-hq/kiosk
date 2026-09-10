@@ -255,9 +255,10 @@ jobs:
             # server, no PoW and no Stripe, ~3 s.
             # Watched fail, both proven by plant-and-restore: delete the
             # `get "/kiosk/delivery_slots"` line from config/routes/kiosk.rb and
-            # the route assertion names the verb the engine's refusal route
-            # caught; replace `Order.owned_by_current_principal` with
-            # `Order.all` and the scoping assertion names the leaked rows.
+            # the route assertion names the verb as declared and never routed —
+            # nothing draws that path, so it is a 404 to every caller; replace
+            # `Order.owned_by_current_principal` with `Order.all` and the
+            # scoping assertion names the leaked rows.
             # LAST — demo:race, the pay path's ONLY permanent regression net:
             # the K-544 double-charge/order-swap races, K-578 stuck-`paying`
             # reconciliation, and the K-579 malformed-uuid 400 over the real

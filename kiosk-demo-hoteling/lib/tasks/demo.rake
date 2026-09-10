@@ -813,11 +813,13 @@ namespace :demo do
                                        never a 500 and never a wrong answer served as 200
       BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and /kiosk/run name
-                                       no registered verb: the ordinary 404 an authenticated
-                                       caller gets, 401 without a bearer, and no privileged
-                                       endpoint behind a generic-sounding word
-      BLOCKED  MethodMismatch        — a GET at an action's path is 405 method_not_allowed
-                                       with Allow:, never a silent 404
+                                       no registered verb and no route draws them: the
+                                       ordinary 404 any undrawn path gets, bearer or not,
+                                       and no privileged endpoint behind a generic-sounding
+                                       word
+      BLOCKED  MethodMismatch        — the wrong method at a registered verb's path draws
+                                       no route either, so it is the same plain 404 with no
+                                       Allow, and the verb never runs
       BLOCKED  PastStay              — a check_in before today is a typed 400 on BOTH
                                        availability and reserve_room — never rooms,
                                        never a hold

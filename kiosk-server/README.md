@@ -18,7 +18,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. Kiosk stores nothing itself: default is no sink and no emission. See [The audit sink](#the-audit-sink).
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, reservations, device authorizations, mandates).
-- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, appends the wire's own 404/405 refusal below your routes, and auto-injects the headers middleware (see [Draw the routes](#draw-the-routes)).
+- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding) and nothing else — your own verbs are yours to draw, one explicit route each — installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
 

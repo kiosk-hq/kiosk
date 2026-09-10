@@ -670,11 +670,11 @@ namespace :demo do
       BLOCKED  UnknownQuery     — unregistered query name → 404
       BLOCKED  UnknownAction    — unregistered action name → 404
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
-               POST /kiosk/run name no registered verb, so they answer the
-               ordinary 404 an authenticated caller gets, 401 without a bearer
-               (no privileged surface behind either name)
-      BLOCKED  MethodMismatch   — a GET at an action's path → 405
-               method_not_allowed with Allow: POST, never a silent 404
+               POST /kiosk/run name no registered verb and no route draws
+               them, so they answer the ordinary 404 any undrawn path gets,
+               bearer or not (no privileged surface behind either name)
+      BLOCKED  MethodMismatch   — a GET at an action's path draws no route
+               either, so it is the same plain 404 and the write never runs
       BLOCKED  CustomerLinkCannotCarryOwnerRole — a customer signs in for real
                and mints a link; the bound token's role is customer, because
                the role is read off the human, never chosen

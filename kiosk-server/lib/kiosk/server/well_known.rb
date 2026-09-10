@@ -70,9 +70,12 @@ module Kiosk
             register_url:  auth_urls(endpoint)[:register],
             login_url:     auth_urls(endpoint)[:login],
             revoke_url:    auth_urls(endpoint)[:revoke],
-            # Account-binding ceremony — additive 0.1.x-compatible
-            # keys: the claim flow's opening endpoint and the link-code
-            # redeem endpoint. Full ceremony description: <base>/auth.md.
+            # Account-binding ceremony — two ADDITIVE keys: the claim flow's
+            # opening endpoint and the link-code redeem endpoint. A consumer
+            # that does not know them still finds a complete register/login
+            # path in this same block, so binding is an option a client may
+            # ignore rather than a second dialect it has to speak. Full
+            # ceremony description: <base>/auth.md.
             device_authorization_url: "#{endpoint}/oauth/device_authorization",
             claim_url:                "#{endpoint}/auth/claim",
           },
@@ -281,8 +284,9 @@ module Kiosk
       # serialized as an array of strings per RFC 9264 §4.2.4.3 (that is how a
       # linkset+json document carries a non-registered attribute). It is needed
       # because a query and an action differ only by method — `rel` cannot say
-      # it, and a bare href would invite a `GET` at an action's path, which is
-      # a `405`.
+      # it, and a bare href would invite a `GET` at an action's path, which
+      # this origin draws no route for: an ordinary 404, with nothing in it to
+      # say that a `POST` would have worked.
       #
       # @return [Hash]
       def self.api_catalog(base_url:, config: Kiosk.configuration)

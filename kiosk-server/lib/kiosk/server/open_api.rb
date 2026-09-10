@@ -132,11 +132,12 @@ module Kiosk
       CONTENT_TYPE = "application/vnd.oai.openapi+json;version=3.1"
 
       # `405 method_not_allowed` is in the vocabulary (slice 2) but is NOT a
-      # response of any operation HERE: it is what the OTHER method at a
-      # verb's path answers, and that method is not a declared operation.
-      # Declaring it as an operation that always fails would put a broken
-      # client method in every generated SDK. The rule is stated once in
-      # `info.description` instead.
+      # response of any operation HERE. This origin draws one route per verb
+      # with the method its kind requires, so the other method at a verb's path
+      # matches no route and reaches no operation at all; declaring a response
+      # for it would put a broken client method in every generated SDK. What an
+      # assistant needs instead — read the kind, dial the method it names — is
+      # stated once in `info.description`.
       METHOD_NOT_ALLOWED = "method_not_allowed"
 
       # Prose the RENDERER owns — about the protocol, never about a verb. A
@@ -149,9 +150,11 @@ module Kiosk
 
         Every verb is its own endpoint: a query is a GET whose arguments are in
         the query string, an action is a POST whose arguments are a JSON body.
-        There is no third channel. Calling a verb with the other method answers
-        `405` with an `Allow` header naming the one it accepts — that is a
-        different answer from `404`, because the resource exists.
+        There is no third channel. This origin draws one route per verb with
+        the method its kind requires and nothing else, so calling a verb with
+        the other method matches no route and answers an ordinary 404 with no
+        problem document and no `Allow`. Read the kind off this document, or
+        off `GET <endpoint>/schema`, and dial the method it names.
 
         A success body is the verb's result and nothing else: no envelope, no
         `ok` flag, no `kind`. An error body is an RFC 9457 problem document

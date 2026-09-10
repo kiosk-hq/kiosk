@@ -19,9 +19,12 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   (closed K-479); per-verb `input_schema` validation of a request's coerced
   arguments, which is **unconditional** rather than flag-gated, because
   `input_schema` is required on every 0.4 verb and a flag would leave the typed
-  `400` existing on some origins and not others; a helpful `405
-  method_not_allowed` carrying `Allow` and a hint when a verb is dialed with
-  the wrong method; a CI conformance test that validates a live origin's
+  `400` existing on some origins and not others; the `405 method_not_allowed`
+  answer, carrying `Allow` and a hint, which the wire composes when a route
+  hands it a name the registry has as the other kind — an origin drawing one
+  explicit route per verb answers the framework's ordinary 404 to a wrong
+  method instead, which §8.1 makes conforming; a CI conformance test that
+  validates a live origin's
   RESPONSE bytes against the published JSON Schemas
   (`e2e/schema_conformance.rb`, run by `e2e/run.sh`); and a sync-check that the
   vendored schema copies match the normative `kiosk.tech/spec/schemas/`

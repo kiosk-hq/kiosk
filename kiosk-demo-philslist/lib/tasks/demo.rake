@@ -561,11 +561,11 @@ namespace :demo do
       BLOCKED  UnknownQuery      — unregistered query name → 404
       BLOCKED  UnknownAction     — unregistered action name → 404
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
-               POST /kiosk/run name no registered verb: the ordinary 404 an
-               authenticated caller gets, 401 without a bearer, and no
-               privileged endpoint to attack either way
-      BLOCKED  MethodMismatch    — a GET at an action's path is 405 + Allow: POST,
-               never a silent 404
+               POST /kiosk/run name no registered verb and no route draws
+               them: the ordinary 404 any undrawn path gets, bearer or not,
+               and no privileged endpoint to attack either way
+      BLOCKED  MethodMismatch    — a GET at an action's path draws no route
+               either, so it is the same plain 404 and the write never runs
       BLOCKED  OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings
                `category_slug` outside the LIVE categories table is a typed 400
                naming the sections that exist, never a 200 answering a

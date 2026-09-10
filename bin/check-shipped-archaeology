@@ -141,6 +141,13 @@
 #       `historically`, `until recently`, `used to be`, `before the fix`,
 #       `cutover`, `has since been — in the same three scopes. See below.
 #
+# AND ONE THING THAT IS COUNTED RATHER THAN BANNED:
+#
+#   C1  a bare `used to` — PRINTED, NEVER RED. It is the one construction that
+#       spells archaeology and ordinary English with the same letters, so it
+#       gets a census for a human to adjudicate instead of a rule that would
+#       either fail on live prose or say nothing. See the census section below.
+#
 # ── R5 AND R6: A PUBLIC ARTEFACT DESCRIBES WHAT IS (T-195, K-1460) ──────────
 #
 # Phil, 2026-09-07, on finding two demo READMEs explaining that the retired
@@ -193,13 +200,42 @@
 #   WHAT R6 DELIBERATELY DOES NOT CARRY, because it would fire on live prose:
 #   `no longer` (measured live in three harness sentences — «a key the origin no
 #   longer knows» is the state of the flow at that line, not its history), and
-#   `used to`, which is ALSO the ordinary passive «employed in order to» — of
-#   the four occurrences in the gems when this rule was written, all four were
-#   that passive («an RSA key used to sign mandates»). Nothing lexical separates
-#   «the engine used to read `role`» from «a key used to sign mandates», so the
-#   marker is absent rather than present-and-noisy. THAT IS A REAL HOLE and it
-#   is named here rather than left for someone to discover: a sentence spelling
-#   its archaeology «X used to Y» passes this guard.
+#   a bare `used to`, which is ALSO the ordinary passive «employed in order to».
+#   Nothing lexical separates «the engine used to read `role`» from «a key used
+#   to sign mandates», so it cannot be a BAN. It is a CENSUS instead — see the
+#   next section, which also records the measurement that settled the question.
+#
+# ── C1: THE `used to` CENSUS — PRINTED, NEVER RED ──────────────────────────
+#
+# `used to be` is a rule (R6) because the copula has no live reading here. A
+# bare `used to` has two readings and no lexical fork between them, so this
+# guard prints every one it finds, in the same three scopes, and the exit code
+# never moves. A count that is printed and never enforced is the honest shape
+# for a residue with two readings: an honest number is worth more than a gate
+# somebody switches off because it reddens on correct prose.
+#
+# WHY A CENSUS RATHER THAN A DECLARED GAP, decided on a measurement rather than
+# on taste. The gap was declared here in prose when R6 was written, and a
+# declared gap finds nothing — a sentence nobody greps for is a sentence nobody
+# reads. Re-measured word-bounded across these three scopes, `git grep -nP` with
+# pathspecs ending in `/*`: SIX lines. Four are the ordinary passive, one is a
+# vendored mirror this repository cannot repair (below), and the sixth is a
+# genuine archaeology paragraph in a shipped demo script that the declared gap
+# had not surfaced. Six rows is not a backlog; it is a list a human reads once.
+#
+# WHY THE WORD BOUNDARY IS PART OF THE PATTERN AND NOT A DETAIL: unbounded,
+# `used to` also matches the tail of «ref-used to», «ab-used to», «ca-used to».
+# The first of those is live in this repository today, and counting it made the
+# gem figure four where three is right.
+#
+# WHAT A CENSUS ROW DOES NOT MEAN. It is not a finding. Most rows are the
+# passive and want nothing done. And a row inside a VENDORED SCHEMA MIRROR is
+# not repairable from this side at all — `bin/check-spec-schemas` compares the
+# parsed documents and removes only the TOP-LEVEL provenance `$comment`, so a
+# NESTED `$comment` in one of those files is upstream's byte and editing it
+# here makes the mirror stop mirroring. Such rows are labelled where they are
+# printed rather than silently dropped, because a reader who cannot see them
+# cannot know the sentence exists at all.
 #
 # ── WHAT R5 AND R6 MUST NOT REDDEN ON, AND WHY EACH IS SAFE ────────────────
 #
@@ -320,7 +356,20 @@ RULES = [
     what: "a sentence narrating a past state", none: "no narration of a past state" }
 ].freeze
 
+# A bare `used to`, with the copula excluded because R6 already fails on it and
+# one sentence must not be reported twice. The word boundary is load-bearing:
+# without it the pattern matches the tail of `refused to`. See the census
+# section in the header.
+BARE_USED_TO_RE = /\bused\s+to\b(?!\s+be\b)/i
+
+# Counted, never banned. Same shape as a rule so `scan` can take it unchanged.
+CENSUS = [
+  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e],
+    what: "a bare `used to`", none: "no bare `used to`" }
+].freeze
+
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
+def census_for(scope) = CENSUS.select { |r| r[:scopes].include?(scope) }
 
 # `spec.authors` is where a gem states its author, and RubyGems reads it. It is
 # the one place R4 does not reach; every other mention is prose.
@@ -621,6 +670,25 @@ def run_check
              "#{REMEDY[rule[:id]]}: #{h.text}"
       end
     end
+
+    # ── the census. It PRINTS and it never touches `failed`. ───────────────
+    census_for(scope).each do |rule|
+      seen = files.flat_map { |path| scan(path, [rule]).first }
+      if seen.empty?
+        puts "#{rule[:id]}/#{scope}. #{rule[:none]} in #{SCOPES[scope][:label]} — census " \
+             "empty (#{files.size} files)"
+        next
+      end
+      puts "#{rule[:id]}/#{scope}. #{rule[:what]} in #{SCOPES[scope][:label]} — " \
+           "#{seen.size} occurrence(s), CENSUS ONLY, never red:"
+      seen.each do |h|
+        upstream = "/#{h.path}".match?(VENDORED_MIRROR_RE) ?
+                     " [vendored mirror — upstream's byte, not repairable from this side]" : ""
+        puts "  WARN #{h.path}:#{h.line}#{upstream} — #{WHERE[h.where]} — read it: the " \
+             "passive «employed in order to» wants nothing done; «X used to Y» is " \
+             "archaeology and wants the present tense: #{h.text}"
+      end
+    end
   end
 
   failed ? 1 : 0
@@ -819,6 +887,30 @@ def self_test
     _, truncated = plant.call("truncated", "truncated.rb", "S = \"unterminated\n# K-1035\n")
     _, part_lexed = scan(truncated)
     check.call("a citation on a line the lexer never reached is an ERROR too", !part_lexed)
+
+    # ── C1's own arms: it must SEE the archaeology, and must not double-report
+    #    or fire on the two spellings that are not it ───────────────────────
+    _, arch = plant.call("c1-arch", "t.rb", "# The engine used to read the role off the wire.\n")
+    check.call("C1 counts a bare `used to` narrating a past state",
+               scan(arch, CENSUS).first.any? { |h| h.rule[:id] == "C1" })
+
+    _, passive = plant.call("c1-passive", "u.rb", "# The RSA key used to sign mandates.\n")
+    check.call("C1 counts the ordinary passive too — the census does NOT judge, which is " \
+               "why it is not a rule",
+               scan(passive, CENSUS).first.any? { |h| h.rule[:id] == "C1" })
+
+    _, refused = plant.call("c1-refused", "v.rb", "# a grant row this endpoint just refused to " \
+                                                  "accept.\n")
+    check.call("C1 does NOT fire on the tail of `refused to` — the word boundary is the " \
+               "difference between three hits and four",
+               scan(refused, CENSUS).first.none? { |h| h.rule[:id] == "C1" })
+
+    _, copula = plant.call("c1-copula", "w.rb", "# It used to be that the caller could not " \
+                                                "say which day.\n")
+    check.call("C1 does NOT re-report `used to be`, which R6 already FAILS on — one " \
+               "sentence, one report",
+               scan(copula, CENSUS).first.none? { |h| h.rule[:id] == "C1" } &&
+                 scan(copula).first.any? { |h| h.rule[:id] == "R6" })
   end
 
   # ── VACUITY: the guard must be looking at something real ──────────────────
@@ -935,7 +1027,7 @@ def self_test
 
   corpus = vacuity_corpus
   check.call("the vacuity corpus is non-empty", !corpus.empty?)
-  RULES.each do |rule|
+  (RULES + CENSUS).each do |rule|
     hits = corpus.count do |p|
       File.read(p, encoding: "UTF-8", invalid: :replace, undef: :replace).match?(rule[:re])
     end
@@ -945,6 +1037,28 @@ def self_test
       hits.positive?
     )
   end
+
+  # ── VACUITY: the census must reach the scopes it claims, and must be able
+  #    to answer NON-empty — a census that structurally cannot print a row is
+  #    the same green nothing a rotted ban is ────────────────────────────────
+  check.call("the census declares the same three scopes R6 does",
+             CENSUS.all? { |r| r[:scopes] == %i[gem demo e2e] })
+  census_files = %i[gem demo e2e].sum do |scope|
+    SCOPES[scope][:dirs].call.sum { |d| SCOPES[scope][:files].call(d).size }
+  end
+  check.call("the census reads a non-empty file set (#{census_files} files)",
+             census_files.positive?)
+  # The census ROW COUNT is deliberately NOT asserted: unlike a ban, zero is the
+  # outcome this one is trying to reach, and a self-test that reddened on a
+  # drained census would punish the fix. What holds the pattern is the vacuity
+  # arm above, which re-runs it against a corpus that cannot honestly drain.
+  census_rows = %i[gem demo e2e].sum do |scope|
+    SCOPES[scope][:dirs].call
+                        .flat_map { |d| SCOPES[scope][:files].call(d) }
+                        .sum { |p| scan(p, census_for(scope)).first.size }
+  end
+  puts "  note the census stands at #{census_rows} row(s) at head (informational — a census " \
+       "row count is never an assertion)"
 
   if failures.empty?
     puts "SELF-TEST OK"

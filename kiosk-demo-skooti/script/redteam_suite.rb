@@ -40,7 +40,8 @@
 #   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
 #                        operator is rejected at skooti's /kyc/callback
 #   ForgedCallbackNoSig — a callback whose jws is wrong-key (or absent) is
-#                        rejected, so kyc_status stays pending and the agent 403
+#                        rejected, so kyc_status stays pending and the gate
+#                        never opens
 #
 # And two forgery beats at the identity boundary, both over the wire in the
 # SAME environment the drivers run in:

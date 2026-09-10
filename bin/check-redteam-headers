@@ -92,6 +92,32 @@
 #     this file: at the time of writing exactly two READMEs carry one, and a
 #     third that grows one is covered without an edit.
 #
+# R7  STATUS AGREEMENT (derivation). A restatement may not attribute an HTTP
+#     status to a beat that the beat's OWN assertion code does not name. The
+#     beat SET is already derived; this derives each beat's STATUS SET too, from
+#     wherever that beat is implemented -- a scenario class in the suite, an
+#     inline `record` call, an entry of a locally-built beat table, or the gem's
+#     `Kiosk::Redteam::Scenarios::<Name>` file -- and holds all three
+#     restatements to it: the suite header, the `demo:redteam` desc and the
+#     README battery section. A registered beat whose implementation this guard
+#     cannot FIND is red for R1's reason: an unlocatable beat is one whose prose
+#     nothing here checks.
+#
+#     THIS IS THE RULE K-1482 ASKED FOR, and what it missed is worth writing
+#     down. For the whole life of the K-1418 change, four demos' `demo:redteam`
+#     descs promised `405 method_not_allowed with Allow:` and `401 without a
+#     bearer` for two beats whose suites had already moved to the plain 404 --
+#     and R1..R6, which own exactly those two files, stayed green throughout,
+#     because every rule above asks only whether a NAME is present. The names
+#     were never what rotted.
+#
+#     A beat that delegates its verdict to `verdict_from` with no explicit
+#     `expect:` asserts the gem's own definition of a refusal, so its status set
+#     is `Kiosk::Redteam::BLOCKED_STATUSES` -- READ OUT OF THE GEM, not written
+#     down here. That is why hoteling and skooti may say a tampered cart is
+#     «→ 403» while getgrocery says only «rejected»: both are true of the same
+#     assertion, and R7 knows it because it read the constant.
+#
 # LISTS, NEVER COUNTS. The 2026-08-26 wave that last repaired this class DELETED
 # the totals from two rake descs rather than correcting them, on the ground that
 # both suites print their count at runtime, so a count in a `desc` is redundant
@@ -110,6 +136,22 @@
 # * The FLOW drivers' sibling class (K-707's hardcoded literals, K-711's
 #   independently declared paths), which T-078 records as not mechanically
 #   checkable the same way and which stays a fix rather than a guard.
+# * Whether the status a beat ASSERTS is the RIGHT one. R7 holds the prose to
+#   the assertion, never the assertion to the spec: a beat that asserts 403
+#   where the wire says 409 is green here and always will be.
+# * A DENIED status. «never a 500» is a claim about what does NOT happen, so the
+#   beat's own assertion cannot contain it by construction. R7 reads the words
+#   IMMEDIATELY before the number and exempts those mentions instead of
+#   demanding they be backed, so a wrong denial is invisible. The cue is
+#   deliberately adjacent-only: «no route draws them: the ordinary 404» denies
+#   nothing, and a wider window would read it as a denial and stop checking the
+#   one number in that sentence that matters.
+# * The permissiveness of R7's oracle. A beat's status set is every
+#   status-shaped literal in its implementation -- including one that is a
+#   quantity rather than a status, and including a branch the beat never takes.
+#   That direction is chosen: an over-wide oracle lets a stale sentence through,
+#   a too-narrow one reddens a true one, and only the second kind of failure
+#   gets a guard switched off.
 #
 # ── IN-BAND VACUITY, and the polarity is deliberate (K-1262) ─────────────────
 #
@@ -124,6 +166,15 @@
 #   * zero desc entries across the fleet (R5 could not bite)
 #   * a README battery section that names fewer than three beats (R6's scope
 #     detector has found a heading over something that is not a beat list)
+#   * a demo none of whose three restatements names a single checkable HTTP
+#     status -- R7 is covering nothing THERE (R7-vacuity). The set of demos is
+#     the suite glob, never a list in this file, so an eighth demo is held to
+#     this without an edit here and a demo that stops naming statuses says so
+#     instead of going quiet. That polarity is the K-1213 lesson, paid for again
+#     when bin/check-demo-prereqs' hand-listed arm stopped draining its corpus
+#     the moment two demos grew a task.
+#   * a registered beat whose implementation this guard cannot find at all
+#     (R7-locate), and a `BLOCKED_STATUSES` it can no longer read out of the gem
 #
 # A README that names at least half the suite's beats WITHOUT carrying such a
 # heading is REPORTED, not failed: that is the shape of a beat list whose heading
@@ -134,6 +185,8 @@
 #   bin/check-redteam-headers              # exit 1 on any mismatch
 #   bin/check-redteam-headers --list       # print each demo's derived beat set
 #   bin/check-redteam-headers --self-test  # fixtures: every rule, red and green
+#                                          # (R7's arms are one PER DEMO, derived
+#                                          #  from the suite glob)
 
 require "fileutils"
 require "tmpdir"
@@ -142,14 +195,18 @@ ROOT = File.expand_path("..", __dir__)
 
 # ── Extraction ───────────────────────────────────────────────────────────────
 
+# The battery's receiver name, derived per file: every rule is about what is
+# registered ON it, so a suite that builds none registers nothing readable.
+def battery_name(src)
+  src[/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*Kiosk::Redteam::Battery\.new/, 1]
+end
+
 # E1 + E2 + E3 + E4. Returns [names, problems]; `problems` is R1's loud half.
 def suite_beats(src)
   names    = []
   problems = []
 
-  # The battery's receiver name, derived per file: every rule below is about what
-  # is registered ON it, so a suite that builds none registers nothing readable.
-  battery = src[/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*Kiosk::Redteam::Battery\.new/, 1]
+  battery = battery_name(src)
   unless battery
     problems << "no `<name> = Kiosk::Redteam::Battery.new` — the gem's ledger is where every beat " \
                 "registers, so this guard can read no beat off this suite at all"
@@ -268,6 +325,159 @@ def readme_battery_section(md)
   body.join
 end
 
+# ── R7: statuses, derived from the beat's own assertion code ─────────────────
+
+# The status codes the wire can carry. A whitelist of the PROTOCOL rather than
+# of this corpus: it decides which three-digit numbers count as statuses at all,
+# so a port number or a cents amount is not read as one.
+HTTP_STATUSES = %w[100 101 200 201 202 204 206 301 302 303 304 307 308 400 401
+                   402 403 404 405 406 409 410 412 415 422 423 425 428 429 500
+                   501 502 503 504].freeze
+
+# A three-digit number standing on its own — not part of a version, a decimal,
+# a date or a path.
+STATUS_TOKEN = %r{(?<![\d./-])(\d{3})(?![\d./-])}
+
+# A DENIAL — the words IMMEDIATELY before the number say this status is what
+# does not happen («never a 500», «not 201»). Adjacent-only on purpose: see the
+# «what it does not cover» note above.
+DENIAL          = /(?:\bnever|\bnot)\s+(?:an?\s+|the\s+)?(?:[a-z]+\s+)?\z/i
+CURRENCY_BEFORE = /[€$£¥]\s*\z/
+UNIT_AFTER      = /\A\s*(?:ms|kb|mb|cents?|bytes?|chars?|characters?|columns?|lines?|px|items?)\b/i
+
+# Every status a piece of PROSE asserts.
+def asserted_statuses(text)
+  flat = text.gsub(/\s+/, " ")
+  out  = []
+  flat.to_enum(:scan, STATUS_TOKEN).each do
+    m = Regexp.last_match
+    next unless HTTP_STATUSES.include?(m[1])
+
+    pre  = flat[[0, m.begin(0) - 40].max...m.begin(0)]
+    post = flat[m.end(0), 16].to_s
+    next if pre =~ DENIAL || pre =~ CURRENCY_BEFORE || post =~ UNIT_AFTER
+
+    out << m[1]
+  end
+  out.uniq.sort
+end
+
+# Every status a piece of CODE names. Comments go first: a comment is prose, and
+# prose is the thing being checked — letting it into the oracle would let a
+# stale sentence vouch for itself.
+def code_statuses(code)
+  code.lines.reject { _1 =~ /\A\s*#/ }.join
+      .scan(STATUS_TOKEN).flatten
+      .select { HTTP_STATUSES.include?(_1) }.uniq.sort
+end
+
+# `Kiosk::Redteam.blocked?` is the gem's own definition of a refusal, and a beat
+# that delegates to `verdict_from` with no explicit `expect:` asserts exactly
+# that. Read out of the gem so this file holds no copy of it.
+def blocked_statuses(root)
+  path = File.join(root, "kiosk-redteam", "lib", "kiosk", "redteam.rb")
+  return nil unless File.exist?(path)
+
+  list = File.read(path)[/^\s*BLOCKED_STATUSES\s*=\s*\[([^\]]*)\]/, 1]
+  list&.scan(/\d{3}/)
+end
+
+def snake_case(name)
+  name.gsub(/([a-z0-9])([A-Z])/) { "#{Regexp.last_match(1)}_#{Regexp.last_match(2)}" }
+      .gsub(/([A-Z]+)([A-Z][a-z])/) { "#{Regexp.last_match(1)}_#{Regexp.last_match(2)}" }
+      .downcase
+end
+
+# The offset of the `)` closing the `(` at `open`.
+def balanced_paren(src, open)
+  depth = 0
+  i     = open
+  while i < src.length
+    depth += 1 if src[i] == "("
+    if src[i] == ")"
+      depth -= 1
+      return i if depth.zero?
+    end
+    i += 1
+  end
+  src.length - 1
+end
+
+# WHERE A BEAT IS IMPLEMENTED — the four registration shapes above, walked in
+# the other direction. A LOCAL implementation always wins over the gem's: tudu
+# records its own `CrossTenantRead` inline and the gem ships one too, and the
+# beat that RUNS is the local one. Returns [kind, source] or [nil, nil].
+def beat_code(root, src, name, battery)
+  esc = Regexp.escape(name)
+
+  # (a) a scenario class defined in the suite itself
+  return ["class", Regexp.last_match(1)] if src =~ /^class #{esc} < .*?\n(.*?)^end\b/m
+
+  # (b) a locally-built beat fed to the battery through a table: the table names
+  #     a local, the local is what calling a lambda returned, the lambda is the
+  #     beat. Two hops, both spelled one way in the one suite that does it.
+  if (m = src.match(/"#{esc}"\s*=>\s*(\w+)/)) &&
+     (a = src.match(/^#{Regexp.escape(m[1])}\s*=\s*(\w+)\.call\b/)) &&
+     (b = src.match(/^#{Regexp.escape(a[1])}\s*=\s*(?:lambda|proc) do\b(.*?)^end\b/m))
+    return ["table", b[1]]
+  end
+
+  # (c) an inline `record`. The beat is the code that RAN to produce the verdict
+  #     argument, so the span reaches back to the previous registration.
+  if battery && (m = src.match(/#{Regexp.escape(battery)}\.record\(\s*"#{esc}"/))
+    call_end = balanced_paren(src, src.index("(", m.begin(0)))
+    prev     = 0
+    src.to_enum(:scan, /#{Regexp.escape(battery)}\.(?:record|scenario)\(/).each do
+      earlier = Regexp.last_match
+      break if earlier.begin(0) >= m.begin(0)
+
+      prev = balanced_paren(src, src.index("(", earlier.begin(0)))
+    end
+    return ["inline", src[prev..call_end]]
+  end
+
+  # (d) the gem's shared library scenario
+  gem = File.join(root, "kiosk-redteam", "lib", "kiosk", "redteam", "scenarios", "#{snake_case(name)}.rb")
+  return ["gem", File.read(gem)] if File.exist?(gem)
+
+  [nil, nil]
+end
+
+# THE TEXT A RESTATEMENT ATTRIBUTES TO ONE BEAT. Two shapes, both read off the
+# documents rather than declared here: an ENTRY opening with the beat's name and
+# running to the next entry or the next unindented line (the desc's
+# `BLOCKED  Name — …` column, the header's `Name — …` list), and a PARENTHETICAL
+# opening straight after the name (`MalformedUuidArg (400)`), which is how
+# tudu's prose desc and both battery READMEs write theirs.
+DESC_ENTRY   = /^\s*(?:BLOCKED|SKIPPED|BREACH)\s+([A-Z][A-Za-z0-9]{3,})\b(.*)$/
+HEADER_ENTRY = /^\s{2,}(?:C\d+\s+)?([A-Z][A-Za-z0-9]{3,})[ \t]*(?:\(.*?\))?[ \t]*(?:—|–|-{1,2})[ \t](.*)$/
+NO_ENTRY     = /(?!)/ # the README is flowing prose: parentheticals only
+
+def attributed(text, beats, entry_re)
+  out = Hash.new { |h, k| h[k] = +"" }
+  cur = nil
+  text.lines.each do |line|
+    if (m = line.match(entry_re))
+      cur = m[1]
+      out[cur] << m[2].to_s << "\n"
+    elsif cur
+      if line.strip.empty? || line !~ /\A[ \t]{2,}\S/
+        cur = nil
+      else
+        out[cur] << line
+      end
+    end
+  end
+  beats.each do |name|
+    text.to_enum(:scan, /(?<![A-Za-z0-9_])#{Regexp.escape(name)}`?(?![A-Za-z0-9_])[ \t\n]*\(/).each do
+      m    = Regexp.last_match
+      open = text.index("(", m.begin(0))
+      out[name] << text[open..balanced_paren(text, open)] << "\n"
+    end
+  end
+  out
+end
+
 # ── The check ────────────────────────────────────────────────────────────────
 
 Report = Struct.new(:failures, :notes, :stats, keyword_init: true)
@@ -287,6 +497,16 @@ def check(root)
   header_entry_total = 0
   desc_entry_total   = 0
   readme_sections    = 0
+  r7_checked         = {}
+
+  # R7's oracle for every beat that delegates its verdict to the gem.
+  blocked = blocked_statuses(root)
+  if blocked.nil? || blocked.empty?
+    failures << "kiosk-redteam's BLOCKED_STATUSES could not be read — every beat that delegates to " \
+                "`verdict_from` with no explicit `expect:` has lost its status oracle, so R7 would " \
+                "redden true sentences instead of stale ones [R7-locate]"
+    blocked = []
+  end
 
   suites.each do |suite_path|
     dir  = File.dirname(File.dirname(suite_path))
@@ -373,11 +593,47 @@ def check(root)
       end
     end
 
+    # R7 — STATUS AGREEMENT. Every status a restatement attributes to a beat
+    # must be one that beat's own assertion code names. Three surfaces, one
+    # oracle, and the oracle is CODE.
+    surfaces = {
+      "script/redteam_suite.rb's header" => attributed(header.gsub(/^#[ \t]?/, ""), beats, HEADER_ENTRY),
+      "demo:redteam's desc"              => attributed(desc.to_s, beats, DESC_ENTRY),
+      "README.md's battery section"      => attributed(section.to_s, beats, NO_ENTRY),
+    }
+    r7_checked[demo] ||= 0
+    battery = battery_name(src)
+    beats.each do |beat|
+      kind, code = beat_code(root, src, beat, battery)
+      if kind.nil?
+        failures << "#{demo}: #{beat} is registered but this guard cannot find where it is IMPLEMENTED — " \
+                    "not a scenario class in the suite, not a beat table entry, not an inline record, and " \
+                    "no kiosk-redteam/lib/kiosk/redteam/scenarios/#{snake_case(beat)}.rb — so nothing " \
+                    "checks what its prose promises [R7-locate]"
+        next
+      end
+
+      asserts = code_statuses(code)
+      asserts |= blocked if code.match?(/verdict_from\(/) && !code.match?(/expect(?:_code)?:/)
+
+      surfaces.each do |where, table|
+        said = asserted_statuses(table[beat].to_s)
+        r7_checked[demo] += said.length
+        (said - asserts).each do |ghost|
+          failures << "#{demo}: #{where} says #{beat} answers #{ghost}, and nothing in that beat's own " \
+                      "#{kind} assertion names it (it asserts " \
+                      "#{asserts.empty? ? 'no status at all' : asserts.join('/')}) — the prose describes " \
+                      "a refusal the suite does not check for [R7]"
+        end
+      end
+    end
+
     stats << format("  %-24s beats %2d  header-entries %2d%s  desc-entries %2d  readme %s",
                     demo, beats.length, entries.length,
                     header.include?("each must be BLOCKED") ? " (declares complete)" : "                    ",
                     desc ? desc_entries(desc).length : 0,
                     section ? "section names #{named}" : "no battery heading")
+    stats[-1] << format("  statuses-checked %2d", r7_checked[demo])
   end
 
   # In-band vacuity. Coverage rules answer for themselves; the two BANS cannot,
@@ -397,6 +653,15 @@ def check(root)
   if readme_sections.zero?
     failures << "no README carries a battery heading — R6 is covering nothing [R6-vacuity]"
   end
+  # R7's liveness is asked PER DEMO, and the demo set is the suite glob above:
+  # an eighth demo is held to this with no edit here, and a demo whose prose
+  # stops naming statuses says so rather than going quiet (K-1213).
+  r7_checked.each do |demo, checked|
+    next unless checked.zero?
+
+    failures << "#{demo}: not one of its three restatements names an HTTP status R7 can check, so the " \
+                "rule covers nothing in this demo [R7-vacuity]"
+  end
 
   Report.new(failures:, notes:, stats:)
 end
@@ -414,6 +679,10 @@ CORPUS_GLOBS = [
   "kiosk-demo-*/script/redteam_suite.rb",
   "kiosk-demo-*/lib/tasks/demo.rake",
   "kiosk-demo-*/README.md",
+  # R7's oracle lives in the gem, so the throwaway tree needs it too — and an
+  # arm can then plant a break in the gem's own scenarios.
+  "kiosk-redteam/lib/kiosk/redteam.rb",
+  "kiosk-redteam/lib/kiosk/redteam/scenarios/*.rb",
 ].freeze
 
 def fixture_root(dir)
@@ -553,6 +822,72 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     end
   end
 
+  # R7 — ONE ARM PER DEMO, and the demo list is the SUITE GLOB rather than a
+  # list written here: an eighth demo is planted into with no edit to this file.
+  # That polarity is the K-1213 lesson and it has now been paid for twice — most
+  # recently when bin/check-demo-prereqs' hand-listed arm stopped draining its
+  # own corpus the moment two demos grew a task.
+  #
+  # Each arm rewrites the first status R7 actually checks in that demo's
+  # `demo:redteam` desc into one no beat asserts, which is the K-1418 shape
+  # exactly: the assertion moved, the sentence beside it did not. A demo whose
+  # desc stops naming a checkable status RAISES here rather than passing, for
+  # the same reason the vacuity arm exists.
+  # 429 is asserted by no beat in this repository; a beat that starts asserting
+  # it turns these arms GREEN, which fails the self-test loudly rather than
+  # quietly weakening it.
+  stale = "429"
+  Dir.glob(File.join(ROOT, "kiosk-demo-*", "script", "redteam_suite.rb")).sort.each do |real_suite|
+    demo = File.basename(File.dirname(File.dirname(real_suite)))
+    run.call("R7 — #{demo}'s demo:redteam desc promises a status its own suite never asserts", "R7") do |root|
+      src      = File.read(File.join(root, demo, "script", "redteam_suite.rb"))
+      beats, _ = suite_beats(src)
+      rake     = File.join(root, demo, "lib", "tasks", "demo.rake")
+      rake_src = File.read(rake)
+      desc     = redteam_desc(rake_src)
+      table    = attributed(desc.to_s, beats, DESC_ENTRY)
+      beat, statuses = beats.map { |b| [b, asserted_statuses(table[b].to_s)] }.find { |_, st| !st.empty? }
+      raise "self-test fixture: #{demo}'s demo:redteam desc names no status R7 checks" unless beat
+
+      from = desc.index(/(?<![A-Za-z0-9_])#{Regexp.escape(beat)}(?![A-Za-z0-9_])/)
+      at   = desc.index(statuses.first, from)
+      raise "self-test fixture: cannot locate #{statuses.first} beside #{demo}'s #{beat}" unless at
+
+      planted = desc.dup
+      planted[at, 3] = stale
+      File.write(rake, rake_src.sub(desc) { planted })
+    end
+  end
+
+  run.call("R7-locate — a registered beat with no implementation anywhere", "R7-locate") do |root|
+    edit(File.join(root, "kiosk-demo-getgrocery/script/redteam_suite.rb"),
+         "  Kiosk::Redteam::Scenarios::CrossTenantRead.new,",
+         "  Kiosk::Redteam::Scenarios::NoSuchBeatAnywhere.new,")
+  end
+
+  run.call("R7-locate — BLOCKED_STATUSES can no longer be read out of the gem", "R7-locate") do |root|
+    p = File.join(root, "kiosk-redteam/lib/kiosk/redteam.rb")
+    File.write(p, File.read(p).sub(/^(\s*)BLOCKED_STATUSES\s*=\s*\[[^\]]*\]/) { "#{Regexp.last_match(1)}BLOCKED_STATUSES = refusal_statuses" })
+  end
+
+  # R7-vacuity — the demo is taken off the glob, not named, for the same reason
+  # the arms above are.
+  run.call("R7-vacuity — a demo whose three restatements stop naming any status", "R7-vacuity") do |root|
+    demo  = File.basename(File.dirname(File.dirname(
+              Dir.glob(File.join(root, "kiosk-demo-*", "script", "redteam_suite.rb")).sort.first)))
+    strip = lambda do |text|
+      text.gsub(STATUS_TOKEN) { HTTP_STATUSES.include?(Regexp.last_match(1)) ? "a refusal" : Regexp.last_match(1) }
+    end
+    suite = File.join(root, demo, "script", "redteam_suite.rb")
+    src   = File.read(suite)
+    head  = header_block(src)
+    File.write(suite, strip.call(head) + src[head.length..])
+    rake = File.join(root, demo, "lib", "tasks", "demo.rake")
+    File.write(rake, strip.call(File.read(rake)))
+    readme = File.join(root, demo, "README.md")
+    File.write(readme, strip.call(File.read(readme))) if File.exist?(readme)
+  end
+
   if failures.empty?
     puts "check-redteam-headers --self-test: OK — #{arms.length} arm(s), one per rule plus its vacuity arm, " \
          "each planted into a throwaway copy of the REAL suites and answered by the rule tag it was " \
@@ -579,14 +914,16 @@ report.notes.each { puts "check-redteam-headers NOTE: #{_1}" }
 
 if report.failures.empty?
   puts report.stats
-  puts "check-redteam-headers: OK — every registered beat is named where its demo restates the list, and " \
-       "no restatement names a beat that does not run."
+  puts "check-redteam-headers: OK — every registered beat is named where its demo restates the list, no " \
+       "restatement names a beat that does not run, and no restatement attributes an HTTP status to a beat " \
+       "whose own assertion never names it."
   exit 0
 end
 
 warn "\ncheck-redteam-headers FAILED (#{report.failures.length}):\n"
 report.failures.each { warn "  x #{_1}" }
-warn "\nThe beat set is DERIVED from each suite's own registrations; the header, the demo:redteam desc and " \
-     "the README battery section are RESTATEMENTS of it. Repair the restatement, never the derivation — " \
-     "and if a beat was renamed, all three move together (K-709, K-710, T-078)."
+warn "\nThe beat set — and, since K-1482, each beat's status set — is DERIVED from each suite's own " \
+     "registrations and assertions; the header, the demo:redteam desc and the README battery section are " \
+     "RESTATEMENTS of it. Repair the restatement, never the derivation — and if a beat was renamed, or the " \
+     "status it asserts moved, all three move together (K-709, K-710, K-1482, T-078)."
 exit 1

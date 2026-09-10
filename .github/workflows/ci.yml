@@ -1591,10 +1591,12 @@ jobs:
   # A separate job for the reason bin/check-demo-derivations gives above: the
   # boundary between these checks is the comparison INPUT, and this one compares
   # a demo's redteam PROSE — the suite header, the demo:redteam rake desc, the
-  # README battery section — against that demo's own suite REGISTRATIONS.
+  # README battery section — against that demo's own suite REGISTRATIONS, and
+  # since K-1482 against its ASSERTIONS too: a sentence there may not attribute
+  # an HTTP status to a beat whose own implementation never names it.
   # Stdlib Ruby only: no bundle, no services, no database.
   redteam-beat-lists:
-    name: redteam prose names the beats that run (bin/check-redteam-headers)
+    name: redteam prose names the beats — and the statuses — that run (bin/check-redteam-headers)
     runs-on: ubuntu-latest
     # The daily schedule exists for solver-pin-live; don't rebuild the world.
     if: github.event_name != 'schedule'
@@ -1611,7 +1613,7 @@ jobs:
       - name: Every restatement of a beat list agrees with the suite that runs it
         run: ./bin/check-redteam-headers
 
-      # Its own step, for the reason the sibling self-tests are: two of the six
+      # Its own step, for the reason the sibling self-tests are: two of the seven
       # rules are BANS, and a ban's violation set is EMPTY when the tree is
       # healthy, so an extractor broken by an edit leaves the bare run at exit 0
       # and says nothing. The vacuity arms assert liveness on the DECLARATIONS —

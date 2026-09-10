@@ -755,9 +755,11 @@ assert "unknown action → 404"         "$status" "404"
 # the three are dialled at this BOOTED origin below, and the discriminating
 # assertion is that they DIFFER.
 #
-# The third, `verb_not_found`, is not dialable at an origin that draws one
-# explicit route per verb: an unregistered name has no route, so it is the plain
-# 404 above rather than anything the wire composed. It stays in the vocabulary
+# (1) verb_not_found -- the NAME is not a verb this origin registers. NOT
+# dialable here, and that is a property of the ORIGIN rather than of the code:
+# this app draws one explicit route per verb, so an unregistered name reaches no
+# route at all and the answer is the plain 404 asserted just above -- Rails' own,
+# with no `code` for an assistant to branch on. The code stays in the vocabulary
 # for an operator who draws a catch-all action of their own, and the wire's
 # answer for it is asserted in kiosk-server's own suite.
 

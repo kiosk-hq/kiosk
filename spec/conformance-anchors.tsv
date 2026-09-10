@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1691 anchors.
+# 1690 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -439,9 +439,8 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registrati
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
 kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
-kiosk-demo-getgrocery/script/redteam_suite.rb	# KYC here). The membership is `scenarios = [` further down, which is the single
-kiosk-demo-getgrocery/script/redteam_suite.rb	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
+kiosk-demo-getgrocery/script/redteam_suite.rb	The list is COMPLETE and each must be BLOCKED
 kiosk-demo-getgrocery/spec/wire_arguments_spec.rb	caller_day: a day the caller is still in is not past
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES

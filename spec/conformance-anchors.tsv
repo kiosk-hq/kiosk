@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1663 anchors.
+# 1689 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -299,6 +299,7 @@ kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
+kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	ONE ROSTER PER RESTAURANT CLOCK
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
 kiosk-demo-atablefor/app/views/home/index.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
@@ -345,21 +346,26 @@ kiosk-demo-atablefor/script/pow_flow.rb	rc_wrong, resp_wrong = availability_once
 kiosk-demo-atablefor/script/redteam_suite.rb	BATTERY.record("WholeValuedFloatBody",
 kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected no challenge (n2=nil) after 2 bookings — principal must be proven. Got n2=#{n2}"
 kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected proof count to drop after a booking: n1=#{n1} not < n0=#{n0}" unless n1 < n0
+kiosk-demo-atablefor/spec/wire_arguments_spec.rb	the two rosters DIFFER at one instant
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
 kiosk-demo-getgrocery/README.md	`STRIPE_MOCK_URL=http://localhost:12111` to boot the app secret-free.
 kiosk-demo-getgrocery/README.md	kiosk-redteam battery — every applicable attack BLOCKED
 kiosk-demo-getgrocery/README.md	silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	THE CALLER'S DAY, ON THE SHOP'S CALENDAR.
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	# district getgrocery serves is in Dublin today, so the answers are unchanged;
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	# so IST (UTC+1, summer) and GMT (UTC+0, winter) are both handled automatically
+kiosk-demo-getgrocery/app/models/dublin_zones.rb	THE CLOCK OF EACH DISTRICT THIS SHOP DELIVERS TO
 kiosk-demo-getgrocery/app/models/product.rb	def self.age_restricted?(value)
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	Gate 4: a settlement of THIS principal for THIS order
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID
+kiosk-demo-getgrocery/app/operations/wire_arguments.rb	AND IT IS READ AS PUBLISHED, NOT IN THE CALLER'S CALENDAR.
+kiosk-demo-getgrocery/app/operations/wire_arguments.rb	caller is asking about a day that is still current or
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	#   1. the cart is denominated in the operator's currency;
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	#   4. its total equals both the sum of those lines and the order's total.
 kiosk-demo-getgrocery/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
@@ -416,6 +422,8 @@ kiosk-demo-getgrocery/script/claim_flow.rb	#   human's saved card (the seeded st
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	  exp:              now + 600,
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	# Agent-side driver: no-human grocery order end-to-end.
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	# slot). This only asserts when there genuinely is a past slot for the queried
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	A REAL ASSISTANT TAKES THIS FROM THE HUMAN IT ACTS FOR, never from the
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	EVERY ROW SAYS WHICH CLOCK IT IS WRITTEN ON, and that clock is the DELIVERY
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Prints ONE JSON line on stdout
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 3: query delivery_slots
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 4: create_order
@@ -433,6 +441,7 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a pa
 kiosk-demo-getgrocery/script/redteam_suite.rb	# KYC here). The membership is `scenarios = [` further down, which is the single
 kiosk-demo-getgrocery/script/redteam_suite.rb	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
+kiosk-demo-getgrocery/spec/wire_arguments_spec.rb	caller_day: a day the caller is still in is not past
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
 kiosk-demo-hoteling/README.md	Hotel booking demo operator for Kiosk.
@@ -440,6 +449,7 @@ kiosk-demo-hoteling/README.md	always gated by Equihash proof-of-work** (`registr
 kiosk-demo-hoteling/README.md	bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the paym
 kiosk-demo-hoteling/README.md	bin/rails demo:setup       # create + load schema + seed the properties and rooms
 kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
+kiosk-demo-hoteling/app/models/property.rb	zone is a recorded column rather than a constant on the origin, because an
 kiosk-demo-hoteling/app/models/room_hold.rb	  # this as an expiry: nothing enforces it.
 kiosk-demo-hoteling/app/models/room_hold.rb	  PAY_BY = 15.minutes
 kiosk-demo-hoteling/app/models/room_hold.rb	# Nothing in this demo reads `expires_at` back: {ConfirmBookingOperation} gates on
@@ -477,6 +487,10 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the 
 kiosk-demo-hoteling/script/pay_window.rb	RoomHold.where(user_id: USER_ID).delete_all
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
 kiosk-demo-hoteling/script/spending_cap_flow.rb	makes it a cap rather than a suggestion
+kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	answers BOTH properties the same way when the zone is read off the origin
+kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calendar day back byte-identical
+kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property, not off this origin
+kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	sells the 15th at one property and refuses it as past at the other, at the same instant
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	# philslist — Kiosk reference demo (NON-COMMERCE)
 kiosk-demo-philslist/README.md	### Adversarial battery (`rake demo:redteam`)
@@ -615,6 +629,7 @@ kiosk-demo-stylish/README.md	| *(no `c.agent_idp`)* | Deliberate, and the point 
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	  def book_appointment
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	  kind :action
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	# `POST /kiosk/book_appointment` — arguments in the JSON body, and `kind :action`
+kiosk-demo-stylish/app/operations/book_appointment_operation.rb	names no time zone — an appointment is an INSTANT, so pass an
 kiosk-demo-stylish/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-stylish/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
 kiosk-demo-stylish/bin/demo	run an Action
@@ -662,6 +677,7 @@ kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantCannotSelf
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRebindCannotEscalate",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRoleComesFromTheApprover",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
+kiosk-demo-stylish/spec/salon_clock_spec.rb	A ZONELESS SLOT IS REFUSED, NOT COMPLETED
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
@@ -679,6 +695,7 @@ kiosk-demo-tudu/app/controllers/lists_controller.rb	    conn = ActiveRecord::Bas
 kiosk-demo-tudu/app/controllers/lists_controller.rb	    rows = conn.exec_query(<<~SQL, "housemate_board", [HOUSEMATE_ID]).to_a
 kiosk-demo-tudu/app/models/invite.rb	# A single-use, TTL'd, HASHED collaboration code — tudu's own app-layer
 kiosk-demo-tudu/app/models/invite.rb	# `code_digest` is stored, and the plaintext is returned ONCE and travels
+kiosk-demo-tudu/app/operations/add_todo_operation.rb	names no time zone — a deadline is an INSTANT
 kiosk-demo-tudu/app/operations/list_access.rb	return nil if Membership.reachable?(list_id, require_owner: require_owner)
 kiosk-demo-tudu/app/views/lists/index.html.erb	      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
 kiosk-demo-tudu/app/views/lists/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
@@ -705,6 +722,7 @@ kiosk-demo-tudu/lib/tasks/demo.rake	check.call("discovery capabilities do NOT in
 kiosk-demo-tudu/lib/tasks/demo.rake	task collab: :setup do
 kiosk-demo-tudu/lib/tasks/demo.rake	task demo: ["demo:setup", "demo:collab"]
 kiosk-demo-tudu/lib/tasks/demo.rake	task schema: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	the two rows name DIFFERENT zones
 kiosk-demo-tudu/script/redteam_suite.rb	#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("NoLoginAddressOnTheRoster",
@@ -1011,6 +1029,9 @@ kiosk-server/lib/kiosk/server/auth_controller.rb	def link
 kiosk-server/lib/kiosk/server/auth_controller.rb	pow    = PowGate.proofs_from_header(
 kiosk-server/lib/kiosk/server/auth_controller.rb	respond({ access_token: token }, :ok)
 kiosk-server/lib/kiosk/server/auth_controller.rb	result = AgentRegistration.call(
+kiosk-server/lib/kiosk/server/caller_timezone.rb	      ENV_KEY = "HTTP_KIOSK_TIMEZONE"
+kiosk-server/lib/kiosk/server/caller_timezone.rb	A UTC OFFSET IS REFUSED, and that is the point of the shape rather than
+kiosk-server/lib/kiosk/server/caller_timezone.rb	THE CALLER'S OWN CLOCK, READ ONCE PER REQUEST
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	class ColumnSpendingCap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= "https://kiosk.tech/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
@@ -1228,6 +1249,7 @@ kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 400 bad_request w
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated when NO Authorization header is present
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	revokes all sessions for the caller and hands back a fresh usable token
+kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	refuses a UTC offset by name
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil for an unknown or revoked key (no row)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil when the assistant row has no cap set (unlimited)
@@ -1578,14 +1600,18 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	does not read a query str
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	draws no /query and no /run — the route table has no such paths
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	emits the handler's total on a truncated page
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	hands the handler an Integer, not the query string's String
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	hands the handler nil when the caller declared none — silence is not an error
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	hands the handler the caller's declared timezone
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	is still private, no-store — a page is never shared-cacheable
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	keeps `private, max-age=N` the handler set
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	no verb response is shared-cacheable (§3.7.3)
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	omits X-Total-Count on a truncated page whose handler gave no total
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	on an ACTION as well as a query
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	puts the next page in a Link header with rel=next, not in the body
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a UTC offset in Kiosk-Timezone with a 400 naming the header
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a value outside a declared enum — K-717's schema half
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a value that will not coerce with a 400 naming the parameter
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a zone name nobody has, and never falls back
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	replaces an incoming cursor rather than appending a second one
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends NO Link on the last page — its absence is what completeness means
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step

@@ -610,30 +610,32 @@ self_asserted_staff_forgery.call
 # ── UntypedBookingInput — bad input is a typed 400, never a 500 and ──────────
 # never a silent booking.
 #
-# `book_appointment` used to validate NOTHING, and the three ways that failed
-# were not equally visible. An unparseable `slot` and an unknown `salon_id`
-# blew up as opaque 500s with PG internals in the message; an unknown
-# `service_id` was the worst of the three, because it SUCCEEDED — HTTP 200,
-# an appointment with no service and `price_cents` NULL, which the owner's
-# revenue forecast then summed as €0 while the calendar rendered it as an
-# ordinary booking. Nothing anywhere surfaced it, which is exactly why it
-# survived: a silent wrong answer has no failing test to write itself.
+# THE TWO FAILURES THIS BEAT FORBIDS ARE NOT EQUALLY VISIBLE, and the quiet
+# one is why the catalogue below is long. An unparseable `slot` or an unknown
+# `salon_id` reaching the database is an opaque 500 with PG internals in the
+# message — loud, and ugly. An unknown `service_id` that is merely IGNORED is
+# worse: HTTP 200, an appointment with no service and `price_cents` NULL,
+# which the owner's revenue forecast sums as €0 while the calendar renders it
+# as an ordinary booking. A silent wrong answer has no failing test to write
+# itself, so it is asserted here or nowhere.
 #
-# The catalogue of shapes is deliberately wider than the three named cases,
-# because ActiveRecord's timestamp cast fails in two directions: "banana"
-# casts to nil (→ NOT NULL violation), while "next tuesday" cast to TODAY AT
-# MIDNIGHT and booked a real appointment in the past.
+# THE SHAPE CATALOGUE IS DELIBERATELY WIDER THAN THOSE TWO, because
+# ActiveRecord's timestamp cast fails in BOTH directions and only one of them
+# looks like a failure: "banana" casts to nil (→ NOT NULL violation), while
+# "next tuesday" casts to TODAY AT MIDNIGHT — a well-formed instant in the
+# past, which without a past-slot refusal is a real appointment on a real
+# calendar.
 #
 # Each probe asserts HTTP 400 AND the problem document's TOP-LEVEL
 # `code == "bad_request"` AND no PG internals in the body — a "not 200"
 # assertion would accept the 500s this beat exists to forbid.
 #
-# Since 0.4 some of these shapes are refused one layer earlier: `input_schema`
-# is validated on every call, so a non-string or missing `slot` and a missing
+# Some of these shapes are refused one layer earlier: `input_schema` is
+# validated on every call, so a non-string or missing `slot` and a missing
 # `salon_id` are caught by the declaration before the handler's guards run.
 # The verdict an assistant sees is the same typed 400 either way, which is why
 # the assertion is written against the STATUS and CODE rather than against a
-# sentence one particular layer happened to phrase.
+# sentence one particular layer happens to phrase.
 BAD_INPUTS = [
   ["unparseable slot",        { salon_id: :seeded, slot: "banana" }],
   ["fuzzy slot (silent past booking)", { salon_id: :seeded, slot: "next tuesday" }],

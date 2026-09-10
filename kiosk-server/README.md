@@ -488,7 +488,7 @@ assistant branches on. Three Rails-native moves cover all of it:
   **The CODE travels; the exception's own SENTENCE does not.** That branch is
   for exceptions you did not author, so the message would be some library's
   wording — actionpack's «param is missing or the value is empty or invalid:
-  sku» is what `params.require` used to put on a 400 — and it moves when a
+  sku» is what `params.require` puts on a 400 — and it moves when a
   dependency moves. The caller gets a Kiosk sentence and a `hint` for that
   code; the exception's class, message and backtrace go to your `Rails.logger`.
   When you mean to say something to the assistant, say it: render the envelope,

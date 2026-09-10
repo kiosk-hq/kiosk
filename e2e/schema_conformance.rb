@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# THE PUBLISHED JSON SCHEMAS, RUN AGAINST THIS ORIGIN'S LIVE WIRE BYTES (K-822).
+# THE PUBLISHED JSON SCHEMAS, RUN AGAINST THIS ORIGIN'S LIVE WIRE BYTES.
 #
 # WHY THIS FILE EXISTS. `kiosk.tech/spec/schemas/validate.sh` is a real merge
 # gate — it compiles all six normative schemas and checks fifteen example
@@ -9,7 +9,8 @@
 # Nothing joined the schemas to a SERVED byte, so the two artifacts could drift
 # apart indefinitely with both suites green: the schemas checked against a
 # fiction, the code checked against its own specs, and the pair never met. That
-# is the K-811 failure — an oracle whose subject has moved — one layer down,
+# is the classic oracle failure — an oracle whose subject has moved — one layer
+# down,
 # and §16.3 anchor 1 ("every wire object validates against its JSON Schema") is
 # the requirement it leaves untested.
 #
@@ -17,7 +18,7 @@
 # origin produce — the discovery document, the catalog, four problem documents
 # across four codes (one of them carrying live PoW challenges), the pay request
 # and the settlement it answered, and every wire object of Sections 5 and 6
-# (T-152) — and validates each against the PUBLISHED schema for it, under draft
+# — and validates each against the PUBLISHED schema for it, under draft
 # 2020-12.
 #
 # THE SCHEMAS ARE VENDORED, and that was a fork in the road: they live in the
@@ -168,7 +169,8 @@ end
 _status, raw = get("/kiosk/schema")
 catalog = parse(raw)
 conforms("GET /kiosk/schema", "#{B}/schema-descriptor.schema.json", catalog) do |doc|
-  # T-095 deleted `verbs`, and the schema's root is CLOSED so it can say so.
+  # `verbs` is not a member of the catalog, and the schema's root is CLOSED so
+  # it can say so.
   doc["verbs"] = ["schema", "queries"]
   doc
 end
@@ -268,7 +270,7 @@ examples_checked = 0
       # is the more specific statement — before validating a real request, so a
       # check that did not would refuse an example the origin ACCEPTS. Read
       # from the engine's own constant; a second copy is the drift this file
-      # exists to catch elsewhere. (K-1273, found extending §4 to the demos.)
+      # exists to catch elsewhere.
       declared_props = Kiosk::Server::ArgumentDecoder.fetch(descriptor["input_schema"], :properties)
       exempt = Kiosk::Server::ArgumentDecoder::RESERVED.keys -
                (declared_props.is_a?(Hash) ? declared_props.keys.map(&:to_s) : [])
@@ -362,22 +364,21 @@ else
       "captured request/claims/response, so five mandate schemas checked nothing"
 end
 
-# ── 6. the SOLVED PoW proof, against `pow.schema.json#/$defs/proof` (K-849) ──
+# ── 6. the SOLVED PoW proof, against `pow.schema.json#/$defs/proof` ──────────
 #
 # `pow.schema.json` has two halves and only one of them was ever reached from
 # here. The 402 above follows `problem.schema.json`'s cross-file `$ref` into
 # `#/$defs/challenge` — the half the SERVER writes. `#/$defs/proof` is the half
 # the CLIENT writes, and it is where `indices`, its Zcash canonical order and
-# the INCLUSIVE u64 `maximum` (K-839, K-845) live. Those rows were gated by a
-# run that structurally could not have failed on them: their only executable
-# coverage was a kiosk-server unit spec and kiosk.tech's hand-written examples,
+# the INCLUSIVE u64 `maximum` live. Without this step their only executable
+# coverage is a kiosk-server unit spec and kiosk.tech's hand-written examples,
 # neither of which sees live bytes.
 #
 # No new solve is needed — the harness already solves a real register toll, and
 # `register_pow_flow.rb` writes the header value the origin ACCEPTED to
 # POW_CAPTURE. The whole array is validated against the ROOT schema too, which
 # is `$ref`d to `#/$defs/powHeader`: that is the one thing asserting the
-# ARRAY-of-proofs presentation of ADR-0022's raw-JSON header.
+# ARRAY-of-proofs presentation of the `Kiosk-PoW` raw-JSON header.
 pow_capture = ENV["POW_CAPTURE"]
 if pow_capture && !pow_capture.empty? && File.exist?(pow_capture)
   proofs = JSON.parse(File.read(pow_capture)).fetch("proofs")
@@ -386,8 +387,8 @@ if pow_capture && !pow_capture.empty? && File.exist?(pow_capture)
     ok "the register toll fired and its solved proof(s) were kept (#{proofs.length})"
 
     conforms("the Kiosk-PoW header this origin ACCEPTED", "#{B}/pow.schema.json", proofs) do |hdr|
-      # ONE PAST THE INCLUSIVE u64 BOUND. This is the bound K-845 argued about
-      # and the reason the control is here: a schema that stated the bound
+      # ONE PAST THE INCLUSIVE u64 BOUND, which is the reason the control is
+      # here: a schema that stated the bound
       # exclusively, or dropped it, would accept this and the check above would
       # be proving nothing about the range at all.
       hdr.first["nonce"]["indices"][0] = 18_446_744_073_709_551_616
@@ -427,13 +428,12 @@ rescue StandardError => e
   bad "kyc.schema.json compiles", e.message
 end
 
-# ── 8. §5 and §6 — the auth and binding planes (T-152) ──────────────────────
+# ── 8. §5 and §6 — the auth and binding planes ──────────────────────────────
 #
-# auth.schema.json and binding.schema.json shipped with T-149 and were vendored
-# beside the other six the same day, so this file LOADED and COMPILED them from
-# the moment they existed — and validated nothing against them. That is K-822's
-# own defect one layer on: the pair of artefacts sat in the same process and
-# never met. `fixtures/auth_wire_capture.rb` runs both ceremonies against this
+# auth.schema.json and binding.schema.json are vendored beside the other six,
+# and LOADING and COMPILING them is not the same as validating anything against
+# them: a pair of artefacts can sit in the same process and never meet.
+# `fixtures/auth_wire_capture.rb` runs both ceremonies against this
 # still-booted origin and writes down what went over the wire, request bodies
 # included; every one of the THIRTEEN `$defs` those two documents publish is
 # validated below against the bytes this origin produced for it, each paired
@@ -441,8 +441,7 @@ end
 #
 # WHAT IS NOT HERE, and it is not an omission: the two /oauth/* REQUESTS are
 # form-encoded rather than JSON, so no JSON Schema is their oracle and none
-# exists to run (T-149, K-1248; binding.schema.json's own description and §17
-# both say so). The driver still sends them — that is how the answers below
+# exists to run (binding.schema.json's own description and §17 both say so). The driver still sends them — that is how the answers below
 # come to exist — but there is nothing to validate them against. `unlink`'s
 # 204 is the other one: §6.3 gives it no body at all, which is asserted here as
 # a length rather than as a schema.
@@ -499,7 +498,7 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
     doc.delete("access_token")
     doc
   end
-  conforms("the POST /auth/revoke 200 — the SAME object (K-1249)", A, auth.fetch("token_revoke"),
+  conforms("the POST /auth/revoke 200 — the SAME object as login", A, auth.fetch("token_revoke"),
            pointer: "#/$defs/token") do |doc|
     doc["access_token"] = 1  # a compact JWT is a string
     doc
@@ -583,7 +582,7 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
     doc
   end
   if auth["unlink_status"] == 204 && auth["unlink_body_len"].to_i.zero?
-    ok "…and /auth/unlink answered 204 with no body at all (§6.3, K-870)"
+    ok "…and /auth/unlink answered 204 with no body at all (§6.3)"
   else
     bad "/auth/unlink answered 204 with no body at all",
         "status=#{auth["unlink_status"].inspect} body_len=#{auth["unlink_body_len"].inspect}"

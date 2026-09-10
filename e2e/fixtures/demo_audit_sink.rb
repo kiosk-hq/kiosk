@@ -5,7 +5,7 @@ require "time"
 
 # THE OPERATOR'S AUDIT SINK — what an adopter writes, not what Kiosk ships.
 #
-# Kiosk keeps no audit trail (K-828, Phil 2026-08-20). It emits one
+# Kiosk keeps no audit trail. It emits one
 # `Kiosk::Server::ActionEvent` per action invocation to whatever callable the
 # operator sets on `c.audit_sink`, and everything past that seam — where the
 # events go, how long they live, what is in them — is the operator's, PII

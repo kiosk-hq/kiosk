@@ -50,21 +50,20 @@ results[:no_proof_status] = rc_noproof
 # top-level extension member beside it.
 results[:no_proof_code]   = reg_noproof["code"]
 results[:challenges_len]  = Array(reg_noproof["challenges"]).length
-# HOW BIG THE TOLL IS, OFF THE WIRE (T-122). `challenges_len` above says how
-# MANY proofs this origin demanded and nothing said how HARD each one is —
-# every statement in this harness about the register toll's SIZE was a comment
-# (K-1039 repaired the comments; the fact stayed unchecked). The Equihash (n,k)
+# HOW BIG THE TOLL IS, OFF THE WIRE. `challenges_len` above says how MANY
+# proofs this origin demanded; how HARD each one is would otherwise be stated
+# only by a comment, which cannot notice a retune. The Equihash (n,k)
 # the server PUBLISHES in the challenge it just issued is recorded here, joined
 # so one `jq -r` reads the pair as one value: a retune that moved only `n` must
 # not slip past an assertion that happened to look at `k`. assistant.sh compares
 # it against the pair the fixture initializer CONFIGURED, read out of that file
-# rather than typed — a typed expectation would re-file K-1039 inside the
-# assertion it is supposed to close.
+# rather than typed — a typed expectation would put a fourth hand-kept copy of
+# the constant inside the assertion that is supposed to end them.
 challenge_params = Array(reg_noproof["challenges"]).first&.fetch("params", nil) || {}
 results[:challenge_params_nk] = [challenge_params["n"], challenge_params["k"]].join(":")
 
 # ── 2. Solve the toll + register succeeds (fresh key via the shared helper) ──
-# THE BYTES, KEPT (K-849) — the same discipline `pay_flow.rb` uses for the
+# THE BYTES, KEPT — the same discipline `pay_flow.rb` uses for the
 # mandate chain. `POW_CAPTURE` names a file to write the `Kiosk-PoW` header
 # value this origin ACCEPTED, so `e2e/schema_conformance.rb` can validate a
 # real solved proof against the published `pow.schema.json`. Until this
@@ -92,7 +91,7 @@ results[:role] = claims["role"]
 # ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
 rc_wire, wire = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{token}" })
 results[:wire_status] = rc_wire
-# 0.4 answers a query with the handler's payload verbatim (T-068 slice 2), so
+# A query is answered with the handler's payload verbatim, so
 # the proof that the wire served this token is that a LIST came back — there
 # is no `ok` flag left to read, and the status line carries success.
 results[:wire_payload_is_array] = wire.is_a?(Array)

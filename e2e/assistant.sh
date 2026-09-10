@@ -8,10 +8,10 @@
 # two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). The 0.3
 # name-dispatch endpoints are gone and are asserted to answer the ordinary 404
 # an authenticated caller gets — and 401 without a bearer, since auth precedes
-# verb dispatch (K-1094).
+# verb dispatch.
 # Exits non-zero on any failure.
 #
-# ONE ANSWER SHAPE (T-074 = A, the cutover; narrowed further by T-092). Every
+# ONE ANSWER SHAPE. Every
 # endpoint answers the handler's payload VERBATIM on success — a query a BARE
 # ARRAY whether or not it paginates, an action its own object — and an RFC 9457
 # problem document on an error. A paginated page says so in an RFC 8288 `Link:
@@ -21,7 +21,7 @@
 #
 # ONE AUTH SHAPE, WITH TWO DELIBERATE EXCEPTIONS. Everything under the mount is
 # Bearer-gated except the two DESCRIPTIONS of this origin's wire —
-# `GET /kiosk/schema` (T-094) and `GET /kiosk/openapi.json` (K-804) — which are
+# `GET /kiosk/schema` and `GET /kiosk/openapi.json` — which are
 # public, untolled and cacheable, and are the same registry in two dresses.
 #
 # Env (all set by run.sh; the pay-flow + DB assertions dereference them
@@ -32,7 +32,7 @@
 #   DB_NAME      — Postgres database for the direct AP2-trail assertions
 #   KIOSK_ISSUER — issuer/audience passed through to pay_flow.rb
 #   ALICE_AGENT / ALICE_AGENT_TOKEN, BOB_AGENT / BOB_AGENT_TOKEN — the two
-#                  agent principals, minted by the binding ceremony (T-104)
+#                  agent principals, minted by the binding ceremony
 
 set -euo pipefail
 
@@ -44,18 +44,12 @@ BOB="00000000-0000-0000-0000-000000000002"
 # The two agent principals this suite runs as. They are REAL kiosk-pop JWTs the
 # booted origin issued: run.sh drives e2e/fixtures/bind_assistants.rb through
 # the shipped ceremony (Equihash-tolled register -> the human's link code ->
-# claim) and exports the results here (T-104).
-#
-# Until T-104 these four values were written down — two
-# `agent:u-<uuid>:a-<uuid>:r-customer` strings that a dev-only parser in the
-# fixture host turned into authenticated identities at any role (K-539). The
-# parser is deleted; the assertions below are unchanged, because the ceremony
-# ends with the same two principals it used to assert.
+# claim) and exports the results here.
 #
 # The agent id is still a UUID — now by construction rather than by convention,
 # because `/auth/register` minted it: `kiosk.agents.id`, every
 # `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema (K-829/K-830), and a caller can no longer
+# `uuid` in the canonical schema, and a caller can no longer
 # choose a shape the shipped tables cannot store.
 ALICE_AGENT="${ALICE_AGENT:?run.sh must export ALICE_AGENT from the binding ceremony}"
 BOB_AGENT="${BOB_AGENT:?run.sh must export BOB_AGENT from the binding ceremony}"
@@ -131,35 +125,31 @@ assert "kiosk.endpoint correct"    "$(echo "$wk" | jq -r '.kiosk.endpoint')"    
 assert "kiosk.auth.kind kiosk-pop" "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   "kiosk-pop"
 assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_url')" "$SERVER_URL/kiosk/auth/challenge"
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
-# `capabilities` names the MODULES this origin serves, not its verbs
-# (T-068 slice 5, T-075 = A, ADR-0025).
+# `capabilities` names the MODULES this origin serves, not its verbs.
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
-# THE CACHE-BUSTED CATALOG LINK (T-094). This document is the SHORT-lived half
-# of the pair: it expires in ONE MINUTE (Phil, 2026-08-19 — the length of the
-# post-deploy staleness window, not a load knob) and republishes the link,
+# THE CACHE-BUSTED CATALOG LINK. This document is the SHORT-lived half of the
+# pair: it expires in ONE MINUTE — the length of the post-deploy staleness
+# window, not a load knob — and republishes the link,
 # which is what lets the link itself be cached for a year.
 assert "kiosk.schema_url is digest-versioned" \
   "$(echo "$wk" | jq -r '.kiosk.schema_url' | grep -Ec "^$SERVER_URL/kiosk/schema\?v=[0-9a-f]{32}\$")" "1"
 assert "…and kiosk.json itself expires quickly" \
   "$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Cache-Control: max-age=60, public')" "1"
-# «А Vary зачем? Это паблик, общедоступная инфа.» — a public document that
-# varies on anything is one a shared cache splits for nothing. Rails stamps
+# A public document that varies on anything is one a shared cache splits for
+# nothing, and this one is public. Rails stamps
 # `Vary: Accept` on a negotiated render, which is why the Accept header below
 # is SENT rather than omitted: without it this assertion cannot fail.
 assert "…and carries NO Vary, even when the request negotiates" \
   "$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 
-# THE FLEET OF PUBLIC DOCUMENTS, SPLIT IN TWO — and the split is the point
-# (T-093, 2026-08-19).
+# THE FLEET OF PUBLIC DOCUMENTS, SPLIT IN TWO — and the split is the point.
 #
-# Until that date this was ONE loop over FIVE documents asserting that none of
-# them named a verb, because the catalogue was Bearer-gated and three separate
-# defences depended on it staying that way. Phil retired the premise: «на
-# статичных GET endpoint'ах — пожалуйста… Пускай долбятся в них сколько хотят
-# без аутентификации». So the api-catalog now MUST name every verb, and the
-# other four still must not — for a different reason, which is that they are
-# POINTERS and not copies of the contract (T-075 = A). Both halves are asserted
-# POSITIVELY below; "no longer refuses to publish" would be a green nothing.
+# The api-catalog MUST name every verb. It is a static, untolled GET that
+# anyone may read without authenticating, and an enumeration nobody has to ask
+# for is not a defence worth keeping. The other four still must NOT name one —
+# for a different reason, which is that they are POINTERS and not copies of the
+# contract. Both halves are asserted POSITIVELY below; "no longer refuses to
+# publish" would be a green nothing.
 #
 # NON-VACUITY, COMMITTED RATHER THAN PROVED ONCE BY HAND. Slice 5 checked this
 # loop was not vacuous by temporarily adding a token that IS present and
@@ -190,7 +180,7 @@ assert "…a query is advertised GET" \
 assert "…an action is advertised POST" \
   "$(echo "$apc_body" | jq -r --arg h "$SERVER_URL/kiosk/book_appointment" \
       '.linkset[0].item[] | select(.href == $h) | ."kiosk-method" | join(",")')" "POST"
-# THE TWO DESCRIPTIONS ARE LINKED AT `?v=<version>` (K-804): this document is a
+# THE TWO DESCRIPTIONS ARE LINKED AT `?v=<version>`: this document is a
 # pointer with a one-minute TTL, so what it hands a reader is the url that may
 # be cached for a year.
 assert "…and links the catalog at its versioned url" \
@@ -228,9 +218,9 @@ assert "agents.json → 200"           "$aj_status" "200"
 assert "agents.json Content-Type"    "$(echo "$aj_headers" | grep -i '^Content-Type:' | grep -ic 'application/json')" "1"
 assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/agent-configuration"
 # x-kiosk carries POINTERS, not a copy of the contract: it stopped echoing
-# `capabilities` under `wire.verbs` (T-075 = A).
+# `capabilities` under `wire.verbs`.
 assert "agents.json x-kiosk keys"    "$(echo "$aj" | jq -r '."x-kiosk" | keys_unsorted | join(",")')" "schema,api_catalog,mount_path,api_version"
-# The pointer carries the boot digest as `?v=` (T-094) — the cache-busting
+# The pointer carries the boot digest as `?v=` — the cache-busting
 # half, without which a year-long TTL on a fixed URL is a stale catalogue.
 assert "agents.json x-kiosk.schema is digest-versioned" \
   "$(echo "$aj" | jq -r '."x-kiosk".schema' | grep -Ec '^/kiosk/schema\?v=[0-9a-f]{32}$')" "1"
@@ -252,30 +242,28 @@ assert "api-catalog → 200"           "$apc_status" "200"
 assert "api-catalog Content-Type"    "$(echo "$apc_headers" | grep -i '^Content-Type:' | grep -ic 'application/linkset+json')" "1"
 assert "api-catalog items non-empty" "$(echo "$apc" | jq -r '.linkset[0].item | length > 0')" "true"
 
-# ─── the DERIVED OpenAPI document (T-068 slice 4, T-071 = C) ────────────
+# ─── the DERIVED OpenAPI document ───────────────────────────────────────
 #
 # A SECOND renderer over the registry `GET /kiosk/schema` renders. It is for
 # TOOLING, it is named nowhere in skill.md, and it is PROVISIONAL — so what is
 # asserted here is only that it is served, that it is gated exactly as the
-# canonical catalog is, and that it says the four things the T-086 research
-# measured it must. Nothing in this harness may come to DEPEND on it.
+# canonical catalog is, and that it says the four things a tooling generator
+# measurably needs. Nothing in this harness may come to DEPEND on it.
 
 printf "\n\033[1m=== GET /kiosk/openapi.json (derived, RFC 9727 service-desc) ===\033[0m\n"
 
-# THE api-catalog LINKS IT AT ITS VERSIONED URL (K-804) — this document is a
+# THE api-catalog LINKS IT AT ITS VERSIONED URL — this document is a
 # pointer with a one-minute TTL, so the url it hands a reader is the one that
 # may be cached for a year, not the bare path.
 assert "api-catalog advertises it as a service-desc" \
   "$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(test("/kiosk/openapi\\.json\\?v=[0-9a-f]{32}$")) | any')" \
   "true"
 
-# PUBLIC SINCE K-804 (Phil: «K-804 открывать»), and this block is the inverse
-# of what it asserted the day before. The gate's stated reason — that an
-# anonymous read hands out the catalog enumeration — was retired for `GET
-# /kiosk/schema` (T-094) and for the api-catalog's per-verb links (T-093) on
-# the same day; this document is the same registry in another dress, so it
-# withheld nothing. The toll went with the gate: a toll is charged against an
-# identity this endpoint no longer resolves.
+# PUBLIC AND UNTOLLED, on the same terms as `GET /kiosk/schema` and the
+# api-catalog's per-verb links. An anonymous read does hand out the catalog
+# enumeration, and that is deliberate: this document is the same registry in
+# another dress, so withholding it protected nothing. There is no toll either,
+# because a toll is charged against an identity this endpoint does not resolve.
 oa_anon=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/openapi.json")
 assert "no Authorization header → 200"  "$oa_anon" "200"
 
@@ -330,8 +318,8 @@ assert "pay's capability is advertised" \
 assert "…and no /query or /run, ever again" \
   "$(echo "$oa" | jq -r '.paths | has("/query") or has("/run")')" "false"
 
-# The verb's prose semantics travel VERBATIM — ADR-0021 stays the authority on
-# meaning, and ADR-0024 narrows it rather than reversing it.
+# The verb's prose semantics travel VERBATIM: this renderer copies the
+# descriptor's `description` and never paraphrases it.
 assert "the descriptor's description travels verbatim" \
   "$(echo "$oa" | jq -r '.paths."/salons".get.description')" \
   "$(echo "$schema_doc" | jq -r '.queries[] | select(.name == "salons") | .description')"
@@ -350,7 +338,7 @@ assert "the reserved parameters are form/explode:true" \
 assert "an action gets no query parameters" \
   "$(echo "$oa" | jq -r '.paths."/book_appointment".post | has("parameters")')" "false"
 
-# T-092. The two pagination facts are RESPONSE HEADERS (RFC 8288 `Link`,
+# The two pagination facts are RESPONSE HEADERS (RFC 8288 `Link`,
 # `X-Total-Count`), and OpenAPI declares a response header under
 # `responses.<code>.headers` — never as a body property. A generator pointed at
 # this document must emit a header read, not a field read.
@@ -371,9 +359,10 @@ assert "X-Total-Count is not dressed up as a standard" \
 # a response of a declared operation — it is what the OTHER method answers.
 assert "the code enum is the closed vocabulary" \
   "$(echo "$oa" | jq -r '.components.schemas.Problem.properties.code.enum | length')" "17"
-# …and it carries the two T-158 members by name, not merely by count -- a count
-# alone would pass a document that swapped one member for another.
-assert "…including both T-158 members" \
+# …and it carries `verb_not_found` and `module_not_served` BY NAME, not merely
+# by count -- a count alone would pass a document that swapped one member for
+# another.
+assert "…including verb_not_found and module_not_served" \
   "$(echo "$oa" | jq -r '[.components.schemas.Problem.properties.code.enum[] | select(. == "verb_not_found" or . == "module_not_served")] | length')" "2"
 assert "problems are application/problem+json" \
   "$(echo "$oa" | jq -r '.components.responses.problem404.content | keys | join(",")')" \
@@ -475,18 +464,19 @@ root_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json")
 assert "…while a ROOT discovery surface carries none of them" \
   "$(echo "$root_h" | grep -ic '^Kiosk-\(Server-Version\|API-Version\|Min-Client\):')" "0"
 
-# ─── the responses RAILS composes, not Kiosk (§3.6, K-824) ──────────────
+# ─── the responses RAILS composes, not Kiosk (§3.6) ─────────────────────
 #
 # The loop above walks routes an operator DREW; every one of them is answered
 # by a Kiosk controller, which stamps the three headers at its own render seam
 # even if the middleware never ran. The class of response it cannot reach is
 # the one no Kiosk code touches: a routing 404 for a path under the mount that
 # nobody drew, and an unhandled 500. Both are manufactured by
-# `ActionDispatch::ShowExceptions` ABOVE the router, so until K-824 — when the
-# middleware was APPENDED, i.e. innermost — they left the origin bare. MEASURED
-# on hoteling before the fix: `POST /kiosk/agents/kyc` on an app that had not
-# drawn that route answered 404 with none of the three, while the same origin's
-# `POST /kiosk/auth/login` 400 carried all of them.
+# `ActionDispatch::ShowExceptions` ABOVE the router, so the header middleware
+# is APPENDED — i.e. innermost — which is what lets it stamp a response no
+# Kiosk controller composed. Appended anywhere else and those two responses
+# leave the origin bare: a `POST` to an undrawn route under the mount answers
+# 404 with none of the three, while the same origin's `POST /kiosk/auth/login`
+# 400 carries all of them.
 #
 # These four probes are the whole of it: the two exception responses UNDER the
 # mount must carry all three, and the operator's own routes outside it — a
@@ -570,8 +560,8 @@ assert "Vary names all three request headers" \
 # §3.7.4 (matrix SPEC-016), ON A BOOTED ORIGIN — "an operator MAY relax a 200
 # to `private, max-age=N` for a payload that is genuinely identity-independent
 # — a public catalogue, say". `salons` IS that catalogue and its handler now
-# says so; the value reaches the wire only because K-823 stopped the dispatch
-# seam from discarding a handler's response headers, so this line is the proof
+# says so; the value reaches the wire because the dispatch seam preserves a
+# handler's own response headers, so this line is the proof
 # that a published permission is exercisable rather than decorative.
 #
 # The SPELLING is Rails': ActionDispatch parses `Cache-Control` and regenerates
@@ -591,7 +581,8 @@ mine_cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/my_appointmen
 assert "…while an identity-scoped 200 keeps private, no-store" \
   "$(echo "$mine_cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
 
-# T-092, on the wire rather than in the document. `salons` does not paginate,
+# The pagination facts, on the wire rather than in the document. `salons` does
+# not paginate,
 # so its answer is COMPLETE: the wire states the matching total (which for a
 # complete array is its own length) and sends NO `Link` at all — the link's
 # absence is the only completeness signal an assistant may rely on.
@@ -602,11 +593,11 @@ assert "…and NO Link header, because there is no next page" \
 
 # ─── GET /kiosk/schema — PUBLIC, AND THE ONE EXCEPTION TO THE LINE ABOVE ───
 #
-# T-094. The two assertions above are the fleet-wide policy: every wire
+# The two assertions above are the fleet-wide policy: every wire
 # response is identity-scoped, so it varies on `Authorization` and is never
 # stored by a shared cache. `schema` is one of TWO endpoints under the mount
 # that are none of those things — no identity, no toll, the same bytes for
-# everyone, derived once at boot (`openapi.json` is the other, K-804) — so it
+# everyone, derived once at boot (`openapi.json` is the other) — so it
 # gets the opposite policy, and BOTH halves are asserted here because getting
 # only one right is worse than neither: `public` with a `Vary: Authorization`
 # is a document no CDN will ever reuse.
@@ -642,7 +633,7 @@ assert "…a stale ?v= still answers the CURRENT catalogue, short-lived" \
 assert "If-None-Match on the digest → 304" \
   "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema" -H "If-None-Match: \"$sch_digest\"")" "304"
 
-# `limit` and `cursor` are RESERVED parameter names (T-070 rule 7): always
+# `limit` and `cursor` are RESERVED parameter names: always
 # accepted, never declared. `salons` declares the CLOSED empty object
 # `{additionalProperties: false, properties: {}}`, so without the reserved
 # rule this is exactly the request that would 400 as a disallowed additional
@@ -753,13 +744,13 @@ status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/nope
   -d '{}')
 assert "unknown action → 404"         "$status" "404"
 
-# ─── the T-158 split: TWO codes an assistant can still meet here ────────
+# ─── the refusal split: TWO codes an assistant can still meet here ──────
 #
 # One code, `not_found`, used to carry three situations at once, and `code` is
 # the ONE field the spec tells an assistant to branch on -- so an assistant told
 # "not found" for a hotel nobody has re-read the catalogue and retried, which is
 # right for one of them and a wasted round trip plus a wrong report to the human
-# for the others (K-1207; Phil's decision «A»). Two of the three are dialled at
+# for the others. Two of the three are dialled at
 # this BOOTED origin below, and the discriminating assertion is that they DIFFER.
 #
 # The third, `verb_not_found`, is not dialable at an origin that draws one
@@ -820,9 +811,9 @@ status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer garbage")
 assert "garbage token → 401"       "$status" "401"
 
-# The self-asserted shape the demos' deleted StubIdp used to believe, naming a
-# SEEDED human and the `owner` role (K-539). It is not a token, it is a
-# sentence; there is no parser left to read it, in any environment (T-104).
+# A SELF-ASSERTED bearer, naming a seeded human and the `owner` role. It is not
+# a token, it is a sentence: no parser anywhere reads this shape, in any
+# environment, so it resolves to no identity like any other garbage.
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer agent:u-$ALICE:a-$ALICE_AGENT:r-owner")
 assert "forged self-asserted bearer → 401" "$status" "401"
@@ -832,7 +823,7 @@ assert "forged self-asserted bearer → 401" "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/Salons")
 assert "a non-verb-shaped path → 404" "$status" "404"
 
-# ─── the 0.3 wire is GONE (T-074 = A) ───────────────────────────────────
+# ─── the 0.3 wire is GONE ───────────────────────────────────────────────
 #
 # A hard cut: no dedicated route, no tombstone, no 404 hint payload naming the
 # retired endpoints, no second conformance surface. Nothing draws `/kiosk/query`
@@ -878,11 +869,11 @@ assert "…with no Allow header"             "$mna_allow" ""
 assert "…and the catalogue says it is an action" \
   "$(echo "$old_schema" | jq -r '.actions | map(.name) | index("book_appointment") != null')" "true"
 
-# T-095 / K-801: the catalog's `verbs` is GONE. It rendered
-# `Array(config.capabilities)` — the same call `/.well-known/kiosk.json` makes
-# for `capabilities` — so it was ONE value published under two names, and the
-# beat that used to compare them could only ever pass. The module set has one
-# home now, and this asserts the field did not come back.
+# THE MODULE SET HAS ONE HOME, and these two assertions pin both halves of it.
+# `/kiosk/schema` publishes `{queries, actions}` and nothing else; the modules
+# this origin serves are published once, by `/.well-known/kiosk.json`. A second
+# name for the same value would be a field two documents have to agree about,
+# and a comparison between two renderings of one call can only ever pass.
 assert "schema publishes {queries, actions} and nothing else" \
   "$(echo "$old_schema" | jq -r 'keys_unsorted | join(",")')" "queries,actions"
 assert "…and the module set lives in kiosk.json alone" \
@@ -923,11 +914,12 @@ bind_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUE
               HUMAN_PASSWORD="e2e-demo-password" \
               bundle exec ruby "$FIXTURES/claim_flow.rb" )
 
-# THE ROLE IS NOT THE CALLER'S TO NAME (K-072, asserted here by K-1129).
+# THE ROLE IS NOT THE CALLER'S TO NAME.
 # `role=customer` is the probe with teeth: `customer` is what THIS origin
-# declares, and a declared value was honoured by the vulnerable engine while an
-# undeclared one (`owner`) was refused — so a harness probing only the invented
-# role would have passed straight over the escalation.
+# declares, and a declared value is the one an engine that trusted the caller
+# would honour, while an undeclared one (`owner`) it would refuse anyway — so a
+# harness probing only the invented role would pass straight over the
+# escalation.
 assert "binding: role/scope refused on the opening request" \
   "$(echo "$bind_out" | jq -r '.role_refused | join(" ")')" \
   "role=customer:400:invalid_request scope=customer:400:invalid_request role=owner:400:invalid_request json-role=customer:400:invalid_request"
@@ -946,25 +938,26 @@ assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire
 assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.login_bound')"                          "200"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
 assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "201:true"
-# 204, not 200 (K-870): the undocumented `{ok: true}` body is withdrawn and
-# protocol.md §6.2 now states what unlink answers, beside its two siblings.
+# 204, not 200: unlink answers with no body at all, and protocol.md §6.2 states
+# that beside its two siblings.
 assert "binding: unlink → 204 (no body)"      "$(echo "$bind_out" | jq -r '.unlink')"                               "204"
-# K-835: the TOKEN half of the unlink promise, including a token minted in the
-# same wall-clock second as the unlink — which used to survive for its full hour.
+# THE TOKEN half of the unlink promise, including a token minted in the same
+# wall-clock second as the unlink, which the watermark has to kill too.
 assert "binding: held token dies at unlink"   "$(echo "$bind_out" | jq -r '.held_token_after_unlink')"        "401"
 assert "binding: same-second token dies too"  "$(echo "$bind_out" | jq -r '.same_second_token_after_unlink')" "401"
 assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.login_after_unlink')"                   "404"
-# T-158's OTHER LIVE LEG. The key was real, the proof was real, and the thing
+# THE OTHER LIVE LEG of the split. The key was real, the proof was real, and
+# the thing
 # the call ADDRESSED is gone -- spec §9.1 rule 2. So the code is `not_found`,
 # and it is specifically NOT `module_not_served`: this origin serves the auth
 # module, and `auth/login` is a verb it very much has.
 assert "binding: …and the code is not_found"  "$(echo "$bind_out" | jq -r '.login_after_unlink_code')"              "not_found"
 assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.login_after_unlink_type')"              "https://kiosk.tech/problems/not_found"
 
-# THE DISCRIMINATOR, and the point of the T-158 split. Two situations that used
-# to share one code, dialled at this booted origin, must answer with TWO
-# DIFFERENT codes. A harness that only asserted "some refusal" would have passed
-# the single-code wire this replaced; this line would not have. (The third
+# THE DISCRIMINATOR, and the point of the split. Two situations that could
+# share one code, dialled at this booted origin, must answer with TWO
+# DIFFERENT codes. A harness that only asserted "some refusal" would pass a
+# single-code wire; this line would not. (The third
 # situation, an unregistered verb NAME, is not dialable at an origin that draws
 # one explicit route per verb -- it is the plain routing 404 asserted far above.)
 assert "the two 'it is not here' answers are two DIFFERENT codes" \
@@ -978,16 +971,16 @@ assert "the two 'it is not here' answers are two DIFFERENT codes" \
 # Equihash proof-of-work, not a toll-free shortcut. HOW MANY proofs and HOW BIG
 # is the app's configuration — `registration_pow_count` and
 # `E2E_REGISTRATION_POW_PARAMS`, both in fixtures/initializer_kiosk.rb — and
-# this comment does not restate either (K-1039, the K-1035 class): the pair was
-# typed here, in the fixture that sets it, and in the register helper, so one
-# hand edit to the constant left two files describing a toll the server no
-# longer charges. The count is asserted from the WIRE by the "1 challenge
+# this comment does not restate either: a number typed here, in the fixture
+# that sets it, and in the register helper is three hand-kept copies, and one
+# edit to the constant leaves two of them describing a toll the server does
+# not charge. The count is asserted from the WIRE by the "1 challenge
 # issued" check below — `challenges_len`, read off the 402 the server actually
 # answered with — which is where a number in this file belongs.
 # register_pow_flow.rb proves, in one run: (1) a no-proof register is
 # REJECTED 402 pow_required with challenges[], (2) solving each challenge with
 # the bundled numpy solver and re-POSTing the SAME body with the proof(s) in the
-# `Kiosk-PoW` request header (ADR-0022 — never a body `pow` field) SUCCEEDS 201,
+# `Kiosk-PoW` request header — never a body `pow` field — SUCCEEDS 201,
 # (3) the PoW-minted token authenticates a real wire verb. Same mechanism the
 # demos use (kiosk-demo-skooti).
 printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → wire ===\033[0m\n"
@@ -1000,16 +993,16 @@ assert "register-pow: no-proof → 402"          "$(echo "$reg_out" | jq -r '.no
 assert "register-pow: code pow_required"       "$(echo "$reg_out" | jq -r '.no_proof_code')"          "pow_required"
 assert "register-pow: 1 challenge issued"      "$(echo "$reg_out" | jq -r '.challenges_len')"         "1"
 
-# ─── HOW BIG the toll is, asserted off the wire (T-122) ──────────────────────
+# ─── HOW BIG the toll is, asserted off the wire ──────────────────────────────
 #
-# The count above has been read off the 402 since it was written; the SIZE never
-# was. Every statement this harness made about the register toll's (n, k) was a
-# comment — three of them, all true, all unable to notice a retune (K-1039). The
-# server now has to say it: `challenge_params_nk` is `challenges[0].params`
+# The count above is read off the 402, and so is the SIZE. A comment stating
+# the register toll's (n, k) is true only until somebody retunes it and cannot
+# notice when they do, so the server has to say it instead:
+# `challenge_params_nk` is `challenges[0].params`
 # joined `n:k`, off the same 402 the count comes from.
 #
 # THE EXPECTED PAIR IS READ, NOT TYPED. Typing `96:5` here would put a fourth
-# hand-kept copy of the constant in the file K-1039 cleaned, and this assertion
+# hand-kept copy of the constant in this file, and this assertion
 # would then hold two hand edits in agreement rather than the server to its own
 # configuration. It is extracted from the initializer that CONFIGURES the gate,
 # so what is proven is that the origin publishes the toll this harness asked for
@@ -1052,7 +1045,7 @@ assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUN
 assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
 assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
 
-# ─── the audit sink, read back off a booted origin (K-828) ──────────────
+# ─── the audit sink, read back off a booted origin ──────────────────────
 #
 # Kiosk STORES no audit trail — it OFFERS one. `c.audit_sink` is a callable the
 # operator sets, and this origin's is DemoAuditSink (app/services/demo_audit_sink.rb),
@@ -1113,10 +1106,10 @@ assert "audit: …and the FAILED invocation emitted an event too" \
   "$(event_count '.status == "error"')" "1"
 assert "audit: …carrying the error class and message" \
   "$(event_count '.status == "error" and (.error_class | length > 0) and (.error_message | length > 0)')" "1"
-# …AND THE HANDLER'S OWN EXCEPTION, NOT ONLY THE WIRE'S WRAPPER (K-1311). The
+# …AND THE HANDLER'S OWN EXCEPTION, NOT ONLY THE WIRE'S WRAPPER. The
 # wire error is `action_failed` naming the exception CLASS and nothing else,
-# because since K-1307 a handler's arbitrary sentence is not this protocol's to
-# publish to an untrusted caller. A sink is the operator's own process, so it
+# because a handler's arbitrary sentence is not this protocol's to publish to
+# an untrusted caller. A sink is the operator's own process, so it
 # gets the wrapped exception too — which is the thing alerting is actually
 # built on.
 assert "audit: …and the handler's OWN error as the cause, not only the wrapper" \

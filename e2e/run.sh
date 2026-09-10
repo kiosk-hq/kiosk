@@ -66,7 +66,7 @@ cleanup() {
   # creates the CURRENT environment's database AND the test one, so every run
   # also lays down ${DB_NAME}_test (see the database.yml written below). CI
   # throws the container away and never noticed; on a developer machine the
-  # test halves accumulated one per run (267 of them were swept in T-098).
+  # test halves accumulate one per run unless they are dropped here.
   psql -d postgres -tAc "DROP DATABASE IF EXISTS $DB_NAME" >/dev/null 2>&1 || true
   psql -d postgres -tAc "DROP DATABASE IF EXISTS ${DB_NAME}_test" >/dev/null 2>&1 || true
   rm -rf "$TMP_DIR"
@@ -119,7 +119,7 @@ ok "PG role 'app_role' present"
 log "rails new $APP_NAME in $TMP_DIR"
 cd "$TMP_DIR"
 # The generator's output is noise on success and the ONLY diagnosis on failure,
-# so it goes to a per-invocation log whose tail the fail branch prints (K-1091) —
+# so it goes to a per-invocation log whose tail the fail branch prints —
 # the shape deploy/production-smoke.sh and deploy/demo-reset.sh already use. It is
 # deliberately NOT the re-run-with-output shape used for `db:create db:migrate
 # db:seed` below: that step is safe to repeat, whereas re-running `rails new` over
@@ -140,7 +140,7 @@ ok "$APP_NAME generated"
 
 # ─── Gemfile patch (path overrides) ─────────────────────────────────────
 
-# THE DELIMITER IS QUOTED, AND THAT IS LOAD-BEARING (K-1337). With an
+# THE DELIMITER IS QUOTED, AND THAT IS LOAD-BEARING. With an
 # UNQUOTED `<<RUBY` the shell runs parameter expansion AND COMMAND
 # SUBSTITUTION over the heredoc BODY before writing it -- so a backticked
 # span in a COMMENT is executed. It was: every run of this harness printed
@@ -180,7 +180,7 @@ gem "kiosk-user-idp-devise", path: "@KIOSK_OSS@/kiosk-user-idp-devise"
 
 # Devise backs the HUMAN half of the account-binding ceremony. The adapter above
 # only reads the request's Warden user, so the provider's own Devise install is
-# what satisfies it — which is why both lines are here rather than one (T-066).
+# what satisfies it — which is why both lines are here rather than one.
 gem "devise"
 
 # json_schemer backs `c.validate_requests = true` in the initializer, which is
@@ -192,10 +192,10 @@ gem "devise"
 # what the initializer relies on is the point of the file. It is only lazily
 # REQUIRED — the flag being off loads nothing — and a bundle that somehow does
 # not carry it raises a ConfigurationError naming the gem at the first
-# validation, deliberately fail-loud (K-931).
+# validation, deliberately fail-loud.
 gem "json_schemer"
 
-# K-1384 -- THE ONE PIN IN THIS GENERATED GEMFILE, AND IT IS NOT OURS TO NEED.
+# THE ONE PIN IN THIS GENERATED GEMFILE, AND IT IS NOT OURS TO NEED.
 # json 3.0.0 (published 2026-09-07) dropped the POSITIONAL options argument from
 # JSON.parse: it is now JSON.parse(source, **opts), so JSON.parse(str, {}) raises
 # ArgumentError (wrong number of arguments (given 2, expected 1)). activesupport
@@ -235,7 +235,7 @@ ok "bundle complete"
 
 # ─── DB config ──────────────────────────────────────────────────────────
 
-# UNQUOTED on purpose, unlike the Gemfile block above (K-1337): this body is
+# UNQUOTED on purpose, unlike the Gemfile block above: this body is
 # three deliberate expansions and no prose, so there is nothing here for
 # command substitution to reach. THE MOMENT A COMMENT GOES IN, quote the
 # delimiter and splice the values the way that block does -- a backtick in a
@@ -284,7 +284,7 @@ cp "$FIXTURES/create_salons_and_appointments.rb" \
    "db/migrate/${ts3}_create_salons_and_appointments.rb"
 
 # 4) Models, seeds, app services, initializer, routes. No agent IdP is staged
-# (see the T-104 note below).
+# (see the note below).
 # `rails new --api` generates ApplicationController < ActionController::API, and
 # Devise's controllers inherit from it — the sign-in form 500s on `flash`, which
 # ::API does not have. This is the controller half of leaving api_only behind
@@ -294,7 +294,7 @@ cp "$FIXTURES/user.rb"               app/models/user.rb
 cp "$FIXTURES/salon.rb"              app/models/salon.rb
 cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
 cp "$FIXTURES/seeds.rb"              db/seeds.rb
-# The three wire verbs are ordinary Rails controllers (T-081), named in
+# The three wire verbs are ordinary Rails controllers, named in
 # `c.handlers` in the initializer below. `rails new --api` does not create
 # app/controllers/kiosk/, so make it before copying into it.
 mkdir -p app/controllers/kiosk
@@ -302,16 +302,15 @@ cp "$FIXTURES/catalog_controller.rb"  app/controllers/kiosk/catalog_controller.r
 cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.rb
 # The adapters the initializer hands to `Kiosk.configure` are APPLICATION code,
 # so they go under app/ — not into lib/ behind a hand-written
-# `require Rails.root.join("lib/...")`, which is what this harness used to do
-# (K-502). `rails new --api` does not create app/services either.
+# `require Rails.root.join("lib/...")`. `rails new --api` does not create
+# app/services either.
 #
-# There is no agent-IdP among them any more (T-104): the two that used to be
-# staged here, StubIdp and JwtOrStubIdp, are deleted, and the engine's own
+# THERE IS NO AGENT-IdP AMONG THEM, and that is the point: the engine's own
 # DefaultAgentIdp — the adapter that verifies the tokens the engine mints — is
 # what authenticates assistants, with nothing configured.
 mkdir -p app/services
 cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
-# The operator's audit sink (K-828). Kiosk stores no audit trail — it emits one
+# The operator's audit sink. Kiosk stores no audit trail — it emits one
 # event per action invocation to whatever callable `c.audit_sink` names, and
 # this is that callable, written the way an adopter would write it.
 cp "$FIXTURES/demo_audit_sink.rb"    app/services/demo_audit_sink.rb
@@ -319,7 +318,7 @@ cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/devise_initializer.rb" config/initializers/devise.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
 # The wire surface itself, in its own file — the ninth showcase of what every
-# demo now does (T-183): config/routes.rb reaches it with Rails' own
+# demo now does: config/routes.rb reaches it with Rails' own
 # `draw(:kiosk)`, it mounts the engine for the protocol plane, and it draws one
 # explicit route per registered verb with the method following the kind.
 mkdir -p config/routes
@@ -357,12 +356,11 @@ ruby -e '
 ' || fail "could not turn api_only off for the Devise session middleware"
 
 # …and the harness's env inputs are PUBLISHED from the generated environment
-# files rather than resolved in the initializer. Phil decided on 2026-08-12 that
+# files rather than resolved in the initializer. THE SPLIT IS FLEET-WIDE:
 # env-var reading, dev/test fallbacks and crash-if-absent fetches live in
-# config/environments/* as Rails custom config and that initializers READ
-# `Rails.configuration.x.kiosk.*`; all seven demos carry that split, and this
-# harness — which e2e/README presents as the edits an adopter makes — carries it
-# too since K-1009. The variables themselves stay honourable from the outside:
+# config/environments/* as Rails custom config, and initializers READ
+# `Rails.configuration.x.kiosk.*`. All seven demos carry it, and this harness
+# — which e2e/README presents as the edits an adopter makes — carries it too. The variables themselves stay honourable from the outside:
 # this script exports KIOSK_ISSUER and the audit-sink paths before each boot and
 # the block below is what reads them.
 # BOTH files get the SAME block: the harness only ever boots development, but
@@ -400,14 +398,14 @@ REGISTER_DUP_KEY="register-dup-$$"
 # STDOUT only. `-qtA` prints row counts nobody reads, but ON_ERROR_STOP reports
 # the constraint name, a missing pgcrypto or a typo in the SQL below on STDERR —
 # and the one-sentence `fail` message cannot reconstruct any of them, so stderr
-# is let through (K-1091). Costs no noise on the success path: there is none.
+# is let through. Costs no noise on the success path: there is none.
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "live-key uniqueness setup insert failed"
   INSERT INTO users (id, created_at, updated_at) VALUES (gen_random_uuid(), now(), now());
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
 SQL
 # Second LIVE insert of the same key must be REJECTED by the unique index.
-# THE ONE PLACE `2>&1` IS CORRECT AND MUST STAY (K-1091): this is the NEGATIVE
+# THE ONE PLACE `2>&1` IS CORRECT AND MUST STAY: this is the NEGATIVE
 # CONTROL, so Postgres's unique-violation message is what SUCCESS looks like —
 # printing it would make a passing run read as broken. Do not "fix" this line to
 # match the two around it, which discard a diagnostic instead of an expectation.
@@ -419,7 +417,7 @@ then
   fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
 fi
 # A revoked row for the same key IS allowed (partial index skips revoked rows).
-# stderr let through for the same reason as the setup insert above (K-1091): if
+# stderr let through for the same reason as the setup insert above: if
 # the partial index is wrong, Postgres NAMES it and "wrongly rejected" does not.
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "revoked-key re-insert wrongly rejected"
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, revoked_at)
@@ -469,10 +467,9 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 
 # ─── mint the two agent principals, by ceremony ─────────────────────────────
 #
-# T-104. The assistant suite used to hand itself its two principals as
-# `agent:u-…:a-…:r-customer` strings that a dev-only parser in the fixture host
-# believed. That parser is deleted, so the suite has to EARN them the way a real
-# assistant does: an Equihash-tolled `/auth/register` (a HEADLESS account), the
+# THE SUITE EARNS ITS PRINCIPALS the way a real assistant does, because there is
+# no parser anywhere that would believe a self-asserted one: an Equihash-tolled
+# `/auth/register` (a HEADLESS account), the
 # human's link code minted on a real Devise session, and `/auth/claim` — which
 # rebinds the key to that human and returns the token every assertion below
 # rides. Two of them, one for alice and one for bob, because the isolation
@@ -518,10 +515,10 @@ fi
 
 ok "all assertions passed"
 
-# ─── the §5/§6 ceremonies, driven for their BYTES (T-152) ───────────────────
+# ─── the §5/§6 ceremonies, driven for their BYTES ───────────────────────────
 #
-# auth.schema.json and binding.schema.json have been vendored beside the other
-# six since T-149, and until now nothing produced a byte for them to judge.
+# auth.schema.json and binding.schema.json are vendored beside the other six,
+# and this is what produces a byte for them to judge.
 # This driver runs kiosk-pop (challenge → register → login → revoke) and both
 # binding directions (link → claim → unlink, and the RFC 8628 device grant with
 # a real human approving on the real verify page) and writes down the requests
@@ -544,12 +541,12 @@ ok "auth + binding wire bytes captured: $auth_capture_out"
 
 # ─── the published schemas, against the bytes just served ───────────────────
 #
-# K-822 / spec §16.3 anchor 1. The assistant above asserts field by field, in
+# Spec §16.3 anchor 1. The assistant above asserts field by field, in
 # this harness's own words; this step asserts the SAME responses against the
 # normative JSON Schemas kiosk.tech publishes. The two are different oracles
 # and the second is the one an outside implementer can run: a wire that drifts
 # from the published schema fails here even when every assertion above still
-# passes, which until now nothing could detect. Run from the generated app dir
+# passes. Run from the generated app dir
 # so json_schemer (a kiosk-server runtime dependency) is on the load path, and
 # with the server still up — these are live requests, not a replay.
 log "validate live wire bytes against the published JSON Schemas"
@@ -566,7 +563,7 @@ fi
 
 ok "live wire bytes conform to the published schemas"
 
-# ─── the audit sink is OFF by default (K-828) ───────────────────────────────
+# ─── the audit sink is OFF by default ───────────────────────────────────────
 #
 # Everything above ran with `c.audit_sink` SET. The default is nil, and «the
 # default emits nothing» is not a claim a suite can make from the side that has

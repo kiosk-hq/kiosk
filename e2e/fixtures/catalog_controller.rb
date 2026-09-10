@@ -8,11 +8,11 @@
 # wire cannot see.
 #
 # `kind :query` is what puts this verb on `GET`, and it is a property of the
-# DECLARATION rather than of the class (K-921): Kiosk::BookingsController next
+# DECLARATION rather than of the class: Kiosk::BookingsController next
 # door declares a query AND an action, which is the harness's proof that one
 # controller can. Both classes are named in `c.handlers` in
 # config/initializers/kiosk.rb; without that line the engine has nothing to
-# register from and the origin serves no verbs at all (K-761).
+# register from and the origin serves no verbs at all.
 #
 # NOT ROUTABLE BY HAND. config/routes.rb draws nothing at this controller by
 # name: handlers are reached only through the wire, which is where
@@ -23,7 +23,7 @@
 # the registry and reaches these actions through the gates, not around them.
 #
 # The SQL here is deliberately RAW and deliberately unchanged from the
-# registered blocks this file replaces (T-081).
+# registered blocks a hand-written handler would carry.
 class Kiosk::CatalogController < ApplicationController
   include Kiosk::Handler
 
@@ -61,9 +61,9 @@ class Kiosk::CatalogController < ApplicationController
     # data. It is also how an assistant's own cache saves a toll — a response
     # still fresh is never re-requested and therefore never re-challenged.
     #
-    # It reaches the wire only because K-823 fixed the seam: {HandlerDispatch}
-    # used to drop the sub-response's headers, which made this permission
-    # unreachable from the one kind of code an operator writes. `my_appointments`
+    # It reaches the wire because {HandlerDispatch} PRESERVES the sub-response's
+    # headers; a seam that dropped them would make this permission unreachable
+    # from the one kind of code an operator writes. `my_appointments`
     # (Kiosk::BookingsController) sets nothing and keeps `private, no-store` —
     # the control, and the honest policy for a per-principal payload.
     response.headers["Cache-Control"] = "private, max-age=60"

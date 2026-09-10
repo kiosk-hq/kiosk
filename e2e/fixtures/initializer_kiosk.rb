@@ -5,7 +5,7 @@
 # the demo: synthetic users (uuid), the engine's own agent IdP, two handler
 # controllers.
 #
-# THE VERBS ARE NOT HERE (T-081). They are ordinary Rails controllers under
+# THE VERBS ARE NOT HERE. They are ordinary Rails controllers under
 # app/controllers/kiosk/ — Kiosk::CatalogController (the salons query) and
 # Kiosk::BookingsController (the my_appointments query AND the book_appointment
 # action, one controller declaring both kinds) — named in `c.handlers`
@@ -13,9 +13,9 @@
 # configuration, which is what an initializer is for.
 #
 # The two adapters it wires — StubPsp and DemoAuditSink — are named, not
-# required (K-502). Both agent and human authentication are real now and neither
-# is stubbed: the human's is `kiosk-user-idp-devise` (T-066), the agent's is the
-# engine's own DefaultAgentIdp with no wiring at all (T-104).
+# required. Both agent and human authentication are real and neither is
+# stubbed: the human's is `kiosk-user-idp-devise`, the agent's is the engine's
+# own DefaultAgentIdp with no wiring at all.
 # run.sh copies the two adapters to app/services and
 # declares that an autoload-ONCE path, which is what makes them resolvable here:
 # Rails sets the reloadable autoloader up AFTER config/initializers run, so a
@@ -29,26 +29,25 @@
 # golden path so the harness exercises the real 402 → solve → retry handshake,
 # not a toll-free shortcut.
 #
-# NO (n, k) IS RESTATED IN THIS COMMENT (K-1039, the K-1035 class). It named the
-# pair a few lines above the constant that defines it, and two further files
-# retyped the same pair — three hand-kept copies of one value, which is K-710's
-# rot shape one degree colder than the demos': this harness resolves no
-# difficulty knob at all, so nothing but a hand edit can move the constant, and
-# all three copies were true when they were written. A comment cannot read a
-# value, so the repair is to describe the params and let the constant be the one
+# NO (n, k) IS RESTATED IN THIS COMMENT. A pair named a few lines above the
+# constant that defines it, and retyped in two further files, is three
+# hand-kept copies of one value — and every copy is true the day it is
+# written. This harness resolves no difficulty knob at all, so nothing but a
+# hand edit can move the constant; a comment cannot read a value, so it
+# describes the params and lets the constant be the one
 # place they are stated.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 E2E_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
 
-# ── Where this file's env inputs come from (K-1009) ────────────────────────
+# ── Where this file's env inputs come from ─────────────────────────────────
 # Nothing below resolves an environment variable. The PoW HMAC secret, the
 # Postgres role names, the issuer and the audit-sink paths are read from ENV
 # and published as `Rails.configuration.x.kiosk.*` by the block run.sh splices
 # into the generated app's config/environments/{development,production}.rb
-# (e2e/fixtures/environment_kiosk.rb) — Phil's ENV-CONFIG-PLACEMENT decision,
-# the same split all seven demos carry, enforced here by
+# (e2e/fixtures/environment_kiosk.rb) — the ENV-CONFIG-PLACEMENT split all
+# seven demos carry, enforced here by
 # bin/check-demo-copies. That file is also where the postures live: the PoW
 # secret's stable dev default and its fail-loud-outside-development raise, and
 # the audit sink's «redacted path required only when a sink path is set».
@@ -76,7 +75,7 @@ Kiosk.configure do |c|
   c.system_role = Rails.configuration.x.kiosk.system_role
 
   c.issuer = Rails.configuration.x.kiosk.issuer
-  # ONE ROLE, AND THE HARNESS ASSERTS THE BINDING CEREMONY WITH ONE (K-1129).
+  # ONE ROLE, AND THE HARNESS ASSERTS THE BINDING CEREMONY WITH ONE.
   #
   # A second declared role was considered and deliberately not added. It would
   # buy the claim-ceremony assertion in `fixtures/claim_flow.rb` a DISTINCTION
@@ -107,7 +106,7 @@ Kiosk.configure do |c|
   c.pow_secret              = Rails.configuration.x.kiosk.pow_secret
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence (T-104). An assistant
+  # Deliberate, and the point of the line's absence. An assistant
   # authenticates with the kiosk-pop JWT this very engine minted at
   # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
   # engine already ships the adapter that verifies its own tokens:
@@ -120,12 +119,12 @@ Kiosk.configure do |c|
   # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
   # Okta, an ID-JAG-style broker) by subclassing
   # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID (K-830).
+  # the `agent_id` you return must be a UUID.
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding pages (device verify, link mint,
   # unlink). ONE channel in every environment — this is the shipped
   # kiosk-user-idp-devise adapter reading the request's Warden user, not a
-  # stand-in, so an adopter reading this harness copies a real wiring (T-066).
+  # stand-in, so an adopter reading this harness copies a real wiring.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   c.payment_provider = StubPsp.new
@@ -136,19 +135,19 @@ Kiosk.configure do |c|
   # harness boots DEVELOPMENT (eager_load = false), so without it Zeitwerk never
   # loads them, the registry stays empty, and the origin answers `GET
   # /kiosk/schema` with `queries=[] actions=[]`, 404s every query and run, and
-  # advertises `"capabilities": []` (K-761).
+  # advertises `"capabilities": []`.
   c.handlers = %w[Kiosk::CatalogController Kiosk::BookingsController]
 
   # Request-shape validation ON, as all seven demos have it. Two things ride
   # on it: a malformed Kiosk-PoW proof answers a clear 400 instead of a silent
-  # re-challenge loop (K-479), and — since the 0.4 per-verb wire — a verb's
+  # re-challenge loop, and a verb's
   # declared `input_schema` VALIDATES the arguments of every request to it
   # rather than merely describing them, so the harness's reserved-name and
   # closed-schema assertions are testing the real path. Needs `json_schemer`,
   # which run.sh adds to the generated app's Gemfile.
   c.validate_requests = true
 
-  # T-068 slice 3: every query/action answer is validated against the
+  # Every query/action answer is validated against the
   # `output_schema` that verb declares, and a mismatch is a loud 500 rather
   # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
   # request check — nothing a caller sends can trigger it — and it is what
@@ -156,7 +155,7 @@ Kiosk.configure do |c|
   # descriptors rather than a smoke test.
   c.validate_responses = true
 
-  # ── The audit sink (K-828) ──────────────────────────────────────────────
+  # ── The audit sink ──────────────────────────────────────────────────────
   # Kiosk stores no audit trail; it emits one ActionEvent per action
   # invocation to whatever callable an operator sets here, and stores nothing
   # itself. THE DEFAULT IS NIL — and this harness proves that too: run.sh

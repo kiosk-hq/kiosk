@@ -3,7 +3,7 @@
 Rails.application.routes.draw do
   # Human sign-in (Devise) — the web session the account-binding surfaces
   # authenticate through kiosk-user-idp-devise. claim_flow.rb drives this very
-  # form; there is no stub session channel to assert instead (T-066).
+  # form; there is no stub session channel to assert instead.
   devise_for :users
 
   # ── The Kiosk wire surface ────────────────────────────────────────────────
@@ -12,7 +12,7 @@ Rails.application.routes.draw do
   # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
   draw(:kiosk)
 
-  # ── K-824 probes: the responses RAILS composes, not Kiosk ────────────────
+  # ── the responses RAILS composes, not Kiosk ──────────────────────────────
   #
   # §3.6 binds every response under the mount "on success and on error alike",
   # and the two that used to escape it are the two no Kiosk code ever touches:

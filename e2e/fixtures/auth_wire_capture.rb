@@ -1,16 +1,15 @@
 # frozen_string_literal: true
 
-# THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT (T-152).
+# THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT.
 #
 # Same discipline as `pay_flow.rb`'s PAY_CAPTURE and `register_pow_flow.rb`'s
 # POW_CAPTURE, and it exists for the same reason: `e2e/schema_conformance.rb`
 # validates this origin's LIVE bytes against the PUBLISHED JSON Schemas, and it
-# can only validate bytes something actually produced. T-149 published
-# `auth.schema.json` and `binding.schema.json` and VENDORED them beside the
-# other six, so the harness already loaded and compiled them — and validated
-# nothing against them, which is K-822 exactly one layer on: hand-written
-# examples on one side, code checked against its own specs on the other, the
-# two never meeting.
+# can only validate bytes something actually produced. `auth.schema.json` and
+# `binding.schema.json` are VENDORED beside the other six, and loading and
+# compiling them is not the same as validating anything against them:
+# hand-written examples on one side, code checked against its own specs on the
+# other, the two never meeting.
 #
 # So this driver runs the two ceremonies end to end against the booted origin
 # and writes down what went over the wire, request bodies included:
@@ -154,7 +153,7 @@ cap["token_login"]        = login
 #
 # Revoking stamps a per-identity watermark and hands back a token issued after
 # it, so the caller is not signed out by its own call. Section 5.5 named no
-# member of that answer until 2026-08-30 (K-1249); `#/$defs/token` now says it
+# member of that answer until 2026-08-30; `#/$defs/token` now says it
 # is login's object member for member, and this is the byte that has to agree.
 rc, revoked = post_json("#{SERVER}/kiosk/auth/revoke", {},
                         { "Authorization" => "Bearer #{login.fetch("access_token")}" })

@@ -4,13 +4,10 @@
 # shipped ceremony against the booted origin — register (Equihash-tolled) ->
 # the human's link code -> claim.
 #
-# Until T-104 the suite wrote its principals down instead: two
-# `agent:u-<uuid>:a-<uuid>:r-customer` strings that a dev-only parser in the
-# fixture host turned into authenticated identities at any role. That parser is
-# deleted, and with it the last place in the tree where a caller could name an
-# identity rather than prove one. The 223 assertions downstream are unchanged —
-# they still run as "Alice's assistant" and "Bob's assistant"; the difference is
-# that the origin issued those two tokens.
+# NOTHING IN THIS TREE LETS A CALLER NAME AN IDENTITY RATHER THAN PROVE ONE,
+# which is why the suite cannot simply write two principals down. The
+# assertions downstream still run as "Alice's assistant" and "Bob's
+# assistant"; the point is that the origin issued both tokens.
 #
 # The ceremony helper is the demos' single copy, reached rather than duplicated
 # for the reason claim_flow.rb states about DeviseSession: an eighth copy of a
@@ -34,7 +31,7 @@ bob   = bind_assistant(server: SERVER, issuer: ISSUER, email: "bob@example.com",
   claims = a.claims
   abort "#{name}: token actor is #{claims["actor"].inspect}, expected \"agent\"" unless claims["actor"] == "agent"
   abort "#{name}: bound to #{a.user_id}, which is not the seeded human" unless claims["sub"] == a.user_id
-  abort "#{name}: agent_id #{a.agent_id.inspect} is not a uuid (K-830)" unless
+  abort "#{name}: agent_id #{a.agent_id.inspect} is not a uuid" unless
     a.agent_id =~ /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 end
 

@@ -1,12 +1,11 @@
 
-  # ── Kiosk env inputs (K-1009, ENV-CONFIG-PLACEMENT) ─────────────────────────
+  # ── Kiosk env inputs (ENV-CONFIG-PLACEMENT) ─────────────────────────────────
   # `run.sh` splices this block into the GENERATED app's
-  # config/environments/{development,production}.rb, which is where Phil decided
-  # env-var reading, dev/test fallbacks and crash-if-absent fetches belong
-  # (decided 2026-08-12; K-650, K-699). config/initializers/kiosk.rb then
-  # READS `Rails.configuration.x.kiosk.*` and resolves nothing itself — the same
-  # split all seven demos carry, and since K-1009 bin/check-demo-copies enforces
-  # it for this harness fixture too. The variables stay honourable from the
+  # config/environments/{development,production}.rb, which is where env-var
+  # reading, dev/test fallbacks and crash-if-absent fetches belong.
+  # config/initializers/kiosk.rb then READS `Rails.configuration.x.kiosk.*` and
+  # resolves nothing itself — the same split all seven demos carry, and
+  # bin/check-demo-copies enforces it for this harness fixture too. The variables stay honourable from the
   # OUTSIDE: run.sh exports KIOSK_ISSUER and the audit-sink paths before each
   # boot, and this file is what reads them, once, at boot.
   #
@@ -18,7 +17,7 @@
   # guard is what lets one block serve both, exactly as the initializer's own
   # fetch did before this moved.
 
-  # PoW HMAC secret — REQUIRED outside development/test (K-541). It is the key
+  # PoW HMAC secret — REQUIRED outside development/test. It is the key
   # the engine signs every PoW challenge with. This repo is PUBLIC, so a shipped
   # fallback would be world-readable: a reader could mint a self-signed challenge
   # at trivial difficulty {n:8,k:1} and forge a proof the server accepts,
@@ -47,7 +46,7 @@
   # the engine returns to afterwards. run.sh pre-creates both in the harness
   # database. WHICH roles a database actually has is deployment posture rather
   # than a demo mode, so the names are resolved here and the initializer reads
-  # the config (K-699).
+  # the config.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
@@ -56,7 +55,7 @@
   # the server; the default is for a hand-started harness app.
   config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
 
-  # The operator audit sink's two files (K-828). The PRESENCE of
+  # The operator audit sink's two files. The PRESENCE of
   # KIOSK_AUDIT_SINK_FILE is what makes the initializer configure a sink at all,
   # and run.sh's second boot UNSETS it to prove the default is nil — so the
   # redacted path is fetched crash-if-absent only when the first one is set,

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
-# controller may declare BOTH kinds (K-921): `my_appointments` is a query
+# controller may declare BOTH kinds: `my_appointments` is a query
 # (`GET /kiosk/my_appointments`) and `book_appointment` is an action
 # (`POST /kiosk/book_appointment`), and the two sit here together because they
 # are the read and the write of the same thing. The kind is a property of each
@@ -14,13 +14,11 @@
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
 
-  # THE EXAMPLE SLOT IS RESOLVED, NOT WRITTEN DOWN (K-974). Three declarations
-  # below published `2026-06-15T14:00:00Z` — an instant that was two months in
-  # the past by the time anyone noticed, in a document whose whole promise is
-  # «copy this verbatim». Nothing had been edited; the clock moved, which is
-  # the class K-972 closed across the seven demos and left standing here,
-  # because the guard that enforces it scanned `kiosk-demo-*` only. It scans
-  # this file now too.
+  # THE EXAMPLE SLOT IS RESOLVED, NOT WRITTEN DOWN. A literal instant in a
+  # descriptor goes into the past on its own, with nothing edited, in a
+  # document whose whole promise is «copy this verbatim» — so the value is
+  # computed at read time instead, and the guard that enforces that scans this
+  # file as well as the seven demos.
   #
   # `example_params`, `example_row` and `input_schema` are RESOLVABLE SLOTS
   # (see {Kiosk::Server::SchemaSlots}), so a zero-arity proc in a declaration
@@ -68,7 +66,7 @@ class Kiosk::BookingsController < ApplicationController
   # a descriptor's examples against that descriptor's own schemas (§8.3,
   # matrix SPEC-084) — refused it on its first run. An assistant that copied
   # this row verbatim built an integer id for a value the wire never returns
-  # as one. K-825.
+  # as one.
   example_row({ id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
                 slot: -> { example_slot } })
   def my_appointments
@@ -111,7 +109,7 @@ class Kiosk::BookingsController < ApplicationController
   # A UUID for the same reason `my_appointments` publishes one: this IS the
   # same value under its other name, `appointments.id` is a uuid column, and
   # the declaration above says `type: "string"`. Caught by
-  # e2e/schema_conformance.rb's §8.3 check on its first run — K-825.
+  # e2e/schema_conformance.rb's §8.3 check.
   example_row({ appointment_id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
                 slot: -> { example_slot } })
   def book_appointment

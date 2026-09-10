@@ -6,7 +6,7 @@
 # Prints a JSON result line on stdout; the shell asserts each field.
 require "jwt"; require "json"; require "net/http"; require "uri"; require "openssl"; require "securerandom"; require "base64"
 
-# The human half of this ceremony is a REAL browser session (T-066): there is
+# The human half of this ceremony is a REAL browser session: there is
 # no stub user-IdP left to hand this driver a `user:u-<uuid>` bearer. The
 # cookie-jar-and-CSRF helper is the demos' single copy — reached here rather
 # than duplicated into e2e/fixtures, because an eighth copy of a mechanism is
@@ -59,7 +59,7 @@ results   = {}
 key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem
 
-# THE OPENING REQUEST MAY NOT NAME A ROLE (K-072, covered here by K-1129).
+# THE OPENING REQUEST MAY NOT NAME A ROLE.
 #
 # This request is UNAUTHENTICATED — no Cookie, no Authorization — so anything it
 # carries is an assertion by a stranger. The engine used to read `role` (or its
@@ -138,7 +138,7 @@ agent_id = claims.fetch("agent_id")
 
 # Wire verb as the bound assistant account — a query is a GET at its own path.
 rc, q = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{token}" })
-# 0.4: the answer IS the rows (T-068 slice 2), so "the wire served it" is "a
+# The answer IS the rows, so "the wire served it" is "a
 # list came back", not "ok was true".
 results[:wire_as_bound] = [rc, q.is_a?(Array)]
 
@@ -160,7 +160,8 @@ results[:link_claim] = [rc, claim["user_id"] == HUMAN]
 # Spec §6.3/§15.4 promise BOTH halves — "the key's tokens stop verifying AND
 # /auth/login answers 404" — and this driver used to assert only the second,
 # which is how the same-second aperture in the watermark survived unnoticed
-# (K-835). Re-login aligned to a wall-clock second boundary so the fresh token's
+# unnoticed. Re-login is aligned to a wall-clock second boundary so the fresh
+# token's
 # `iat` lands in the SAME second as the unlink, then assert the refusal.
 proof = pop_proof(key, pem)
 sleep(1.0 - (Time.now.to_f % 1.0) + 0.02)
@@ -174,12 +175,12 @@ results[:held_token_after_unlink] = rc
 rc, = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{fresh_token}" })
 results[:same_second_token_after_unlink] = rc
 
-# T-158: the CODE, not only the status. A key the origin no longer knows is
+# THE CODE, not only the status. A key the origin no longer knows is
 # spec §9.1 rule 2 -- an argument ADDRESSING something absent -- so it is
 # `not_found` and specifically NOT `verb_not_found`, which is the other 404 in
 # the vocabulary and means an unregistered verb NAME. This is the only place in
 # the harness that reaches an addressed-thing-absent 404 through a real
-# possession proof, so it is where the second of the three T-158 codes is
+# possession proof, so it is where the second of the three refusal codes is
 # exercised on a booted origin.
 rc, login_body = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
 results[:login_after_unlink]      = rc

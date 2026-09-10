@@ -66,6 +66,26 @@
 #   .txt .html) because `config/` also holds credentials keys and `.enc`
 #   blobs, and a byte-scan of those answers a question nobody asked.
 #
+# And `e2e/`, the end-to-end harness, where the receiver is an ADOPTER: its
+# README is a teaching surface this repository points people at, `run.sh` is
+# the sequence of edits it presents as what adopting Kiosk looks like, and
+# `fixtures/` is the generated origin those edits produce. Nothing about that
+# reader differs from the one the gem and demo scopes are written for, and
+# the ban stopped at the harness door for no stated reason until it did not.
+#
+#   * `e2e/**` restricted to `.md .sh .rb .json`, excluding `e2e/.gems/` —
+#     the harness's INSTALLED bundle, gitignored, thousands of files deep and
+#     none of them ours.
+#   * `e2e/schemas/*.schema.json` are VENDORED MIRRORS and are read for one
+#     thing only: their local `$comment`. `bin/check-spec-schemas` holds every
+#     other byte of them equal to the schema kiosk.tech publishes, with that
+#     marker — which upstream does not carry — removed from this side first.
+#     So the `$comment` is the harness's own text and is in scope, while the
+#     body is the site repository's: a citation cannot enter it from here
+#     without turning THAT guard red, and scrubbing one out here would make
+#     the mirror stop mirroring. Two such citations are live in the published
+#     schemas today and are kiosk.tech's to remove.
+#
 # ── WHAT IS EXEMPT, DECLARED WITH ITS REASON ─────────────────────────────────
 #
 #   * `bin/`, `CHANGELOG.md`, `CLAUDE.md` — Phil's standing exemption. The
@@ -107,12 +127,13 @@
 #       whether the sentence binds them. Guillemets, em dashes and § are Latin
 #       and stay; only the Cyrillic block is banned, so the rule cannot argue
 #       with the house punctuation.
-#   R4  no maintainer named in prose — /\bPhil\b/ — in the GEM and SPEC scopes.
+#   R4  no maintainer named in prose — /\bPhil\b/ — everywhere but the demos.
 #       «Phil accepted this control's weakness openly» tells an adopter to trust
 #       a person they have never met instead of stating the property. Say what
 #       the code does and why; the name belongs in `spec.authors` and in git.
 #       DEMO-EXEMPT because `kiosk-demo-philslist` is an app called Phil's List
-#       and the word is its subject matter, not an attribution.
+#       and the word is its subject matter, not an attribution. No other scope
+#       has a reason like that.
 #
 # Both rules read every file as lines, so `.md`, `.json`, `.erb` and `.tt` are
 # covered as well as Ruby. For a RUBY file the hit is additionally CLASSIFIED
@@ -155,17 +176,17 @@ ADR_RE       = /\bADR-\d{4}\b/
 CYRILLIC_RE  = /[Ѐ-ӿ]/
 MAINTAINER_RE = /\bPhil\b/
 
-# `scopes` is which published surface each rule speaks for. R4 reaches the gems
-# and their `spec/` but NOT the demos, for the reason given in the header: one
-# demo is NAMED after the maintainer.
+# `scopes` is which published surface each rule speaks for. R4 reaches every
+# scope but the demos, for the reason given in the header: one demo is NAMED
+# after the maintainer.
 RULES = [
-  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo], what: "a ledger id",
+  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo e2e], what: "a ledger id",
     none: "no ledger id" },
-  { id: "R2", re: ADR_RE,        scopes: %i[gem demo], what: "an ADR reference",
+  { id: "R2", re: ADR_RE,        scopes: %i[gem demo e2e], what: "an ADR reference",
     none: "no ADR reference" },
-  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec], what: "Cyrillic prose",
+  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec e2e], what: "Cyrillic prose",
     none: "no Cyrillic" },
-  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec], what: "the maintainer named in prose",
+  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e], what: "the maintainer named in prose",
     none: "no maintainer named in prose" }
 ].freeze
 
@@ -228,6 +249,39 @@ def demo_dirs
   Dir.glob(File.join(REPO, "kiosk-demo-*")).select { |d| File.directory?(d) }.sort
 end
 
+# The end-to-end harness. One directory, so `dirs` is a list of one — the
+# SCOPES table wants a per-directory shape and there is no reason to give this
+# one a different one.
+E2E_ROOT = File.join(REPO, "e2e").freeze
+E2E_EXTS = %w[.md .sh .rb .json].freeze
+
+def e2e_dirs
+  File.directory?(E2E_ROOT) ? [E2E_ROOT] : []
+end
+
+# `e2e/.gems/` is the installed bundle and `e2e/tmp/` is the generated app.
+# `Dir.glob` does not match a leading dot, so `.gems` is already outside this
+# glob; the reject is written down anyway so the boundary is a decision rather
+# than a property of the globber, and a self-test arm holds it.
+def e2e_files(root)
+  Dir.glob(File.join(root, "**", "*"))
+    .reject { |p| p.include?("/.gems/") || p.include?("/tmp/") }
+    .select { |p| File.file?(p) && E2E_EXTS.include?(File.extname(p)) }
+    .sort
+end
+
+# A vendored mirror is read for its local `$comment` and nothing else — see
+# the header. Masking the other lines rather than skipping the file keeps the
+# reported line number honest.
+VENDORED_MIRROR_RE = %r{/e2e/schemas/[^/]+\.schema\.json\z}
+
+def rule_source(path)
+  src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+  return src unless path.match?(VENDORED_MIRROR_RE)
+
+  src.each_line.map { |l| l.include?(%q("$comment")) ? l : "\n" }.join
+end
+
 # Text only: `config/` also holds `credentials.yml.enc` and `*.key`, and a
 # byte-scan of those answers a question nobody asked.
 DEMO_ROOTS = %w[app lib script config db].freeze
@@ -254,7 +308,7 @@ Hit = Struct.new(:path, :line, :rule, :where, :text)
 # :comment or :code. Returns [hits, lexed] — `lexed` is false when the file is
 # Ruby, carries a hit, and Ripper could not read it.
 def scan(path, rules = RULES)
-  src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+  src = rule_source(path)
   return [[], true] unless rules.any? { |r| src.match?(r[:re]) }
 
   code_lines  = {}
@@ -332,7 +386,10 @@ SCOPES = {
                "Rakefile, config.ru, README.md, before-after.md" },
   spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
           files: ->(d) { spec_files(d) },
-          per: "spec/** (text extensions) — R3 and R4 only" }
+          per: "spec/** (text extensions) — R3 and R4 only" },
+  e2e: { label: "the e2e harness", dirs: -> { e2e_dirs }, files: ->(d) { e2e_files(d) },
+         per: "e2e/** (.md .sh .rb .json), minus .gems/ and tmp/; a vendored " \
+              "schema mirror is read for its local `$comment` only" }
 }.freeze
 
 def run_check
@@ -354,6 +411,10 @@ def run_check
        "(credentials keys, *.enc);"
   puts "                   any line carrying a live TODO/FIXME (the constitution requires " \
        "that marker to cite a row);"
+  puts "                   e2e/.gems (the installed bundle) and e2e/tmp (the generated app); " \
+       "the BODY of a vendored"
+  puts "                   e2e/schemas mirror, whose bytes bin/check-spec-schemas holds equal " \
+       "to kiosk.tech's;"
   puts "                   `spec.authors` for R4 only"
   puts
 
@@ -407,6 +468,7 @@ end
 
 def self_test
   require "tmpdir"
+  require "fileutils"
   failures = []
 
   check = lambda do |name, ok|
@@ -503,6 +565,25 @@ def self_test
     check.call("…and DOES apply in a gem's spec/ scope (K-1457)",
                !scan(demo_only, rules_for(:spec)).first.empty?)
 
+    # THE VENDORED-MIRROR MASK, both ways. The `$comment` is the harness's own
+    # provenance marker and is IN scope; every other byte is the schema
+    # kiosk.tech publishes and is NOT, because bin/check-spec-schemas holds it
+    # equal and scrubbing it here would make the mirror stop mirroring.
+    mirror_dir = File.join(dir, "e2e", "schemas")
+    FileUtils.mkdir_p(mirror_dir)
+    mirror = File.join(mirror_dir, "x.schema.json")
+    File.write(mirror, <<~JSON)
+      {
+        "$comment": "VENDORED copy, K-822.",
+        "description": "a normative sentence, K-1278."
+      }
+    JSON
+    mirror_hits = scan(mirror).first
+    check.call("a citation in a vendored mirror's own `$comment` IS flagged",
+               mirror_hits.any? { |h| h.line == 2 })
+    check.call("…and one in the mirror's BODY is NOT — it is kiosk.tech's to remove",
+               mirror_hits.none? { |h| h.line == 3 })
+
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.
     _, unlexable = plant.call("unlexable", "broken.rb", "\0\0# K-1035\n")
@@ -568,6 +649,32 @@ def self_test
     demo_paths.none? { |p| p.end_with?(".key", ".pem", ".enc") }
   )
   check.call("a gem is NOT in the demo scope", demo_paths.none? { |p| p.include?("/kiosk-server/") })
+
+  # ── VACUITY: the same questions of the e2e scope ──────────────────────────
+  e2e_roots = e2e_dirs
+  e2e_paths = e2e_roots.flat_map { |d| e2e_files(d) }
+  check.call("the e2e scope finds the harness directory", !e2e_roots.empty?)
+  check.call("the e2e scope reads files", !e2e_paths.empty?)
+  check.call("the e2e scope contains Ruby files to lex",
+             e2e_paths.any? { |p| ruby_file?(p) })
+  check.call(
+    "Ripper actually lexes them (a sampled harness Ruby file yields tokens)",
+    e2e_paths.select { |p| ruby_file?(p) }.take(25)
+             .all? { |p| !(Ripper.lex(File.read(p)) || []).empty? }
+  )
+  check.call(
+    "the e2e scope reaches the adopter-facing surfaces: README, the runner, the " \
+    "assistant, a fixture and a vendored schema",
+    e2e_paths.any? { |p| p.end_with?("/e2e/README.md") } &&
+      e2e_paths.any? { |p| p.end_with?("/e2e/run.sh") } &&
+      e2e_paths.any? { |p| p.end_with?("/e2e/assistant.sh") } &&
+      e2e_paths.any? { |p| p.include?("/e2e/fixtures/") } &&
+      e2e_paths.any? { |p| p.include?("/e2e/schemas/") }
+  )
+  check.call("the e2e scope skips the installed bundle and the generated app",
+             e2e_paths.none? { |p| p.include?("/.gems/") || p.include?("/e2e/tmp/") })
+  check.call("a gem is NOT in the e2e scope",
+             e2e_paths.none? { |p| p.include?("/kiosk-server/") })
 
   corpus = vacuity_corpus
   check.call("the vacuity corpus is non-empty", !corpus.empty?)

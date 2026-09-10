@@ -59,7 +59,7 @@ pay_request = { intent_mandate_jws: JWT.encode(intent, key, "RS256"),
 rc, pay = post_json("#{SERVER}/kiosk/pay", pay_request,
   { "Authorization" => "Bearer #{token}" })
 
-# THE BYTES, KEPT (K-822). `PAY_CAPTURE` names a file to write the request this
+# THE BYTES, KEPT. `PAY_CAPTURE` names a file to write the request this
 # origin ACCEPTED, the mandate claims inside it, and the settlement it answered
 # — so `e2e/schema_conformance.rb` can validate all five against the published
 # `mandates.schema.json` rather than against a hand-written example. Nothing is

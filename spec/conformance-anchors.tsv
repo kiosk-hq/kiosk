@@ -222,10 +222,10 @@ e2e/assistant.sh	…while the same request with a bad token is still 401
 e2e/assistant.sh	…with no 0.3 envelope residue
 e2e/assistant.sh	…with no Allow on it
 e2e/assistant.sh	…with no code to branch on
-e2e/fixtures/auth_wire_capture.rb	THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT (T-152).
+e2e/fixtures/auth_wire_capture.rb	THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT.
 e2e/fixtures/bookings_controller.rb	      "WHERE user_id = kiosk.current_user_id() " \
 e2e/fixtures/bookings_controller.rb	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
-e2e/fixtures/bookings_controller.rb	# controller may declare BOTH kinds (K-921): `my_appointments` is a query
+e2e/fixtures/bookings_controller.rb	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/equihash_register.rb	body = { public_key: pem, signed: pop }
 e2e/fixtures/equihash_register.rb	def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil)
 e2e/fixtures/equihash_register.rb	pop = JWT.encode(
@@ -257,7 +257,7 @@ e2e/schema_conformance.rb	the #{defn} mandate's claims
 e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	the pay REQUEST body
 e2e/schema_conformance.rb	the settlement this origin answered
-e2e/schema_conformance.rb	§5 and §6 — the auth and binding planes (T-152)
+e2e/schema_conformance.rb	§5 and §6 — the auth and binding planes
 e2e/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 e2e/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 e2e/schemas/schema-descriptor.schema.json	One verb's description. CLOSED (K-1278, Section 8.3): a descriptor carries the members named here and no others

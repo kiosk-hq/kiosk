@@ -11,8 +11,8 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - The 0.4 per-verb endpoints (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) and `POST /kiosk/pay` dispatch through `Kiosk::Server::Executor` — a query's arguments ride in the query string, an action's in the JSON body
 - `GET /kiosk/salons` and `GET /kiosk/my_appointments` reach the origin's named queries and answer a bare JSON array of rows (no envelope), with `X-Total-Count` beside it and NO `Link` header, because the fixture's one-salon dataset is a complete page. That a page's cursor rides in an RFC 8288 `Link` header is asserted only as an OpenAPI DECLARATION here; a truncated page with a live cursor is exercised by the demos (hoteling `demo:search`), not by this fixture
 - `POST /kiosk/book_appointment` reaches the origin's named Action and answers that handler's own JSON object
-- Handler controllers declared with `include Kiosk::Handler` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
-- ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over the wire (K-921)
+- Handler controllers declared with `include Kiosk::Handler` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/`
+- ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over the wire
 - Errors are RFC 9457 problem documents — `application/problem+json`, `type`/`title`/`status`/`code`/`hint`, the branch point a FLAT top-level `code` — with the right HTTP status (an argument addressing nothing → 404 `not_found`, an absent capability → 501 `module_not_served`, missing/garbage token → 401 `unauthenticated`). A path this origin draws no route for — a name nobody registered, a verb dialed with the other method — is the framework's ordinary 404 instead, with no problem document behind it
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
 - The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration
@@ -75,7 +75,7 @@ Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failur
 e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
-├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes (K-822), §5/§6 included (T-152)
+├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes, §5/§6 included
 ├── schemas/                                # vendored copies of seven of the eight published normative schemas (pow.schema.json is vendored in kiosk-server instead; `bin/check-spec-schemas` holds all eight against the originals)
 ├── mise.toml                               # pins the Ruby the harness runs on
 ├── README.md                               # this file
@@ -88,17 +88,17 @@ e2e/
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
     ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: register → the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
     ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
-    ├── demo_audit_sink.rb                  # the OPERATOR's `c.audit_sink` callable — Kiosk stores no audit trail (K-828), so the harness writes the one an adopter would
+    ├── demo_audit_sink.rb                  # the OPERATOR's `c.audit_sink` callable — Kiosk stores no audit trail, so the harness writes the one an adopter would
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
-    ├── auth_wire_capture.rb                 # the §5/§6 ceremonies driven for their BYTES: kiosk-pop (challenge → tolled register → login → revoke), link → claim → unlink, and the device grant with a real verify-page approval — written to AUTH_CAPTURE for schema_conformance.rb (T-152)
+    ├── auth_wire_capture.rb                 # the §5/§6 ceremonies driven for their BYTES: kiosk-pop (challenge → tolled register → login → revoke), link → claim → unlink, and the device grant with a real verify-page approval — written to AUTH_CAPTURE for schema_conformance.rb
     ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
     ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Handler`, `kind :query`: the salons verb
-    ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller (K-921)
+    ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller
     ├── devise_initializer.rb               # Devise setup (database_authenticatable) — the HUMAN channel the binding pages authenticate
     ├── initializer_kiosk.rb                # Kiosk.configure, including `c.handlers` naming the two controllers above
-    ├── environment_kiosk.rb                 # SPLICED (not copied) into the generated config/environments/{development,production}.rb, ahead of their closing `end`: the block that resolves the harness's four env inputs and publishes them as `Rails.configuration.x.kiosk.*`, which the initializer above then READS (ENV-CONFIG-PLACEMENT, K-1009). Both files get the same block so KIOSK_POW_SECRET still fails loud outside development
-    ├── routes.rb                           # the generated app's OWN pages: Devise, the two K-824 exception probes, and the one `draw(:kiosk)` that reaches the wire file below
-    └── routes_kiosk.rb                     # copied to config/routes/kiosk.rb — THE WIRE, split the way every demo splits it (T-183): `mount Kiosk::Server::Engine` draws the protocol plane (schema, pay, openapi.json, jwks, auth/*, the RFC 8628 device pair, agents/kyc, the binding pages and the root discovery documents), then ONE EXPLICIT ROUTE PER REGISTERED VERB with the method following the kind — GET salons, GET my_appointments, POST book_appointment
+    ├── environment_kiosk.rb                 # SPLICED (not copied) into the generated config/environments/{development,production}.rb, ahead of their closing `end`: the block that resolves the harness's four env inputs and publishes them as `Rails.configuration.x.kiosk.*`, which the initializer above then READS (ENV-CONFIG-PLACEMENT). Both files get the same block so KIOSK_POW_SECRET still fails loud outside development
+    ├── routes.rb                           # the generated app's OWN pages: Devise, the two exception probes, and the one `draw(:kiosk)` that reaches the wire file below
+    └── routes_kiosk.rb                     # copied to config/routes/kiosk.rb — THE WIRE, split the way every demo splits it: `mount Kiosk::Server::Engine` draws the protocol plane (schema, pay, openapi.json, jwks, auth/*, the RFC 8628 device pair, agents/kyc, the binding pages and the root discovery documents), then ONE EXPLICIT ROUTE PER REGISTERED VERB with the method following the kind — GET salons, GET my_appointments, POST book_appointment
 ```

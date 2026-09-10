@@ -4,13 +4,13 @@
 #
 # Registration is gated by Equihash proofs — how MANY is the app's
 # `registration_pow_count` and how BIG is its `E2E_REGISTRATION_POW_PARAMS`,
-# both set in initializer_kiosk.rb and NEITHER RESTATED HERE (K-1039, the
-# K-1035 class): this helper reads neither, because it takes both off the 402
+# both set in initializer_kiosk.rb and NEITHER RESTATED HERE: this helper reads
+# neither, because it takes both off the 402
 # it is answering, so a comment quoting them here could only ever be a second
 # copy of a fact this file does not depend on. It does the full handshake:
 # challenge → sign PoP → register; on a 402 pow_required it solves every
 # challenge with the shipped Python solver and retries the SAME register body,
-# sending the proof(s) in the Kiosk-PoW request header as raw JSON (ADR-0022).
+# sending the proof(s) in the Kiosk-PoW request header as raw JSON.
 # Same mechanism the demos use (kiosk-demo-skooti/script/equihash_register.rb).
 #
 # Requires: json, jwt, openssl, securerandom, uri (callers already require most
@@ -38,7 +38,7 @@ end
 # @param post_json [#call]  ->(url, body, headers = {}) { [code, body] }
 #   (the header slot carries the Kiosk-PoW proof on the retry)
 # @param on_proofs [#call, nil] called with the proofs array this helper put in
-#   the `Kiosk-PoW` header, AFTER the server accepted them (K-849).  The e2e
+#   the `Kiosk-PoW` header, AFTER the server accepted them.  The e2e
 #   schema-conformance block validates those very bytes against
 #   `pow.schema.json#/$defs/proof`, which nothing reached before: the only path
 #   into that schema was `problem.schema.json`'s cross-file `$ref`, and that

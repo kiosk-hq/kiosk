@@ -83,8 +83,14 @@
 #     a prose sentence and the other six as a `BLOCKED  Name` column, and the
 #     rule holds for both because it asks only whether the name is there.
 #
-# R5  DESC NAMES ARE REAL (ban). Every `BLOCKED|SKIPPED|BREACH  Name` entry in a
-#     `demo:redteam` desc must be a registered beat.
+# R5  DESC NAMES ARE REAL (ban). Every beat entry in a `demo:redteam` desc must
+#     be a registered beat. THE DESC HAS TWO LEGITIMATE SHAPES and this rule
+#     reads both (K-1490): the `BLOCKED|SKIPPED|BREACH  Name` column six demos
+#     write, and the prose sentence tudu writes. R4 has held both from the
+#     start; R5 read only the column, so for the one demo written the other way
+#     it asserted nothing at all while the fleet-wide vacuity arm stayed
+#     satisfied by the other six. The extractor and the measurement that chose a
+#     FALLBACK over a UNION are beside `desc_entries`.
 #
 # R6  README COVERAGE (coverage). A README section headed for the battery --
 #     a heading whose text matches /redteam|adversarial/i -- must name every
@@ -170,6 +176,13 @@
 #     R7's is: a vacuity arm whose UNIT is the corpus rather than the member
 #     reads as coverage of every member, which is the K-1213 shape one level up.
 #   * zero desc entries across the fleet (R5 could not bite)
+#   * a demo whose `demo:redteam` desc yields no entry under EITHER shape — the
+#     `BLOCKED  Name` column or a prose sentence — so R5 says nothing about that
+#     demo while the fleet-wide count above stays satisfied by the others
+#     (R5-vacuity, K-1490). Asked PER DEMO off the suite glob, for the same
+#     reason R2/R3's and R7's are. This is the arm the rule was missing: for the
+#     whole life of the fleet-wide one, `--list` printed `kiosk-demo-tudu …
+#     desc-entries 0` beside a green run and nothing said that was a hole.
 #   * a README battery section that names fewer than three beats (R6's scope
 #     detector has found a heading over something that is not a beat list)
 #   * a demo none of whose three restatements names a single checkable HTTP
@@ -311,8 +324,50 @@ def redteam_desc(rake_src)
   body
 end
 
+# THE DESC HAS TWO LEGITIMATE SHAPES, AND R5 READS BOTH (K-1490).
+#
+# Six demos write their beat list as a `BLOCKED  Name` column; tudu writes it as
+# a prose sentence. R4 has always held BOTH -- it asks only whether the name is
+# there -- and its own paragraph above says so. R5 read the column only, so for
+# the one demo written the other way it asserted NOTHING, while the fleet-wide
+# `R5-vacuity` arm stayed satisfied by the other six: `--list` printed
+# `kiosk-demo-tudu ... desc-entries 0` and nothing was wrong with the run.
+#
+# WHY THE PROSE SHAPE AND NOT A REWRITE OF THE DEMO. The other remedy on the
+# table was to give tudu a `BLOCKED  Name` column so R5 would have a subject.
+# That is a guard editing a shipped artefact to suit itself: R4 already declares
+# the prose form legitimate, and the parentheticals tudu's sentence carries
+# ("the forged account_id is now REFUSED 400, not accepted-and-ignored") are the
+# gloss a column has nowhere to put. A rule should read the documents people
+# write.
+#
+# WHY IT IS A FALLBACK AND NOT A UNION, decided on a measurement rather than on
+# taste. Over all seven descs, the loose CamelCase pattern this started as
+# reports `PoW`, `PoP`, `IdP` and `PostgreSQL` -- acronyms and a product name --
+# so a union would have turned four demos red on prose that is correct. The
+# tightened pattern below requires each hump to be followed by a LOWERCASE
+# letter, which drops all four; measured again over the same seven, it yields
+# exactly the beat names and nothing else. Even so the shapes stay exclusive: a
+# desc is a column OR a sentence, and reading a column demo's glosses as prose
+# would put a heuristic where an exact rule already works, for no coverage.
+# That is the direction this guard's header already commits to -- a heuristic
+# that misfires gets a guard switched off rather than fixed.
+#
+# WHAT SAVES THE HEURISTIC FROM THE FAILURE THE README CASE HAS. R5 is not the
+# only rule reading this text: R4 holds every REGISTRATION to appear in the
+# desc, and R5 holds every desc ENTRY to be a registration, so the list is held
+# against the registrations in BOTH directions. A CamelCase token that is not a
+# beat therefore reddens R5 immediately, in the file its author is editing, with
+# the token named. A README is free-form Markdown across a whole document and
+# gets no such second direction, which is why that one is still declined.
+DESC_TABLE_ENTRY = /^\s*(?:BLOCKED|SKIPPED|BREACH)\s+([A-Z][A-Za-z0-9]{3,})\b/
+DESC_PROSE_ENTRY = /\b([A-Z][a-z][A-Za-z0-9]*(?:[A-Z][a-z][A-Za-z0-9]*)+)\b/
+
 def desc_entries(desc)
-  desc.scan(/^\s*(?:BLOCKED|SKIPPED|BREACH)\s+([A-Z][A-Za-z0-9]{3,})\b/).flatten.uniq
+  table = desc.scan(DESC_TABLE_ENTRY).flatten.uniq
+  return table unless table.empty?
+
+  desc.scan(DESC_PROSE_ENTRY).flatten.uniq
 end
 
 # The README's battery section: a heading naming the red team, up to the next
@@ -503,6 +558,7 @@ def check(root)
   declaring_headers = 0
   header_entry_total = 0
   header_entries_by_demo = {}
+  desc_entries_by_demo   = {}
   desc_entry_total   = 0
   readme_sections    = 0
   r7_checked         = {}
@@ -563,6 +619,7 @@ def check(root)
     else
       d_entries = desc_entries(desc)
       desc_entry_total += d_entries.length
+      desc_entries_by_demo[demo] = d_entries.length
 
       # R5 — the desc may not name a beat the suite does not register.
       (d_entries - beats).each do |ghost|
@@ -673,6 +730,22 @@ def check(root)
   if desc_entry_total.zero?
     failures << "the desc entry extractor found no entries in any demo:redteam desc — R5 is a ban that " \
                 "cannot bite [R5-vacuity]"
+  end
+  # …and the same question asked PER DEMO, which is the arm this rule was
+  # missing (K-1490). A fleet-wide count is satisfied by six demos while a
+  # seventh whose desc yields nothing is covered by neither shape, and `--list`
+  # printed that state — `desc-entries 0` — beside a green run for as long as it
+  # lasted. That is the K-1213 shape one level up: a vacuity arm whose UNIT is
+  # the corpus rather than the member reads as coverage of every member. The
+  # demo set is the suite glob, so an eighth demo is held to this with no edit
+  # here, and a demo that adopts a THIRD desc shape says so instead of going
+  # quiet.
+  desc_entries_by_demo.each do |demo, count|
+    next unless count.zero?
+
+    failures << "#{demo}: its demo:redteam desc yields no beat entry under either shape — neither the " \
+                "`BLOCKED  Name` column nor a prose sentence — so R5 says nothing about this demo while " \
+                "the fleet-wide count stays satisfied by the others [R5-vacuity]"
   end
   if readme_sections.zero?
     failures << "no README carries a battery heading — R6 is covering nothing [R6-vacuity]"
@@ -830,10 +903,54 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     edit(File.join(root, "kiosk-demo-hoteling/lib/tasks/demo.rake"),
          "      BLOCKED  PastStay", "      BLOCKED  GhostDescBeat\n      BLOCKED  PastStay")
   end
-  run.call("R5-vacuity — the desc entry extractor finds nothing in any demo", "R5-vacuity") do |root|
-    Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/demo.rake")).each do |p|
-      File.write(p, File.read(p).gsub(/^([ \t]*)(?:BLOCKED|SKIPPED|BREACH)([ \t]+[A-Z])/) { "#{$1}listed#{$2}" })
-    end
+  # THE MUTATION HAS TO KILL BOTH SHAPES NOW (K-1490). It used to strip the
+  # `BLOCKED` markers only, which stopped being a vacuity mutation the moment
+  # R5 grew the prose fallback: a stripped column reads as a sentence and the
+  # extractor goes on finding the same names. An arm whose break the code has
+  # since learned to survive is a green arm proving nothing, so it flattens the
+  # CamelCase too.
+  flatten_desc = lambda do |path|
+    src  = File.read(path)
+    body = redteam_desc(src)
+    next if body.nil?
+
+    flat = body
+           .gsub(/^([ \t]*)(?:BLOCKED|SKIPPED|BREACH)([ \t]+)/) { "#{Regexp.last_match(1)}listed#{Regexp.last_match(2)}" }
+           .gsub(DESC_PROSE_ENTRY) { |tok| tok.gsub(/([a-z0-9])([A-Z])/) { "#{Regexp.last_match(1)} #{Regexp.last_match(2)}" } }
+    File.write(path, src.sub(body, flat))
+  end
+
+  run.call("R5-vacuity — the desc entry extractor finds nothing in any demo, under EITHER shape",
+           "R5-vacuity") do |root|
+    Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/demo.rake")).each { |p| flatten_desc.call(p) }
+  end
+  # …and the same loss in ONE demo, which the fleet-wide count above cannot see
+  # because the other six keep it non-zero. That hole is what K-1490 was: tudu's
+  # prose desc yielded zero entries under the column-only extractor and `--list`
+  # printed `desc-entries 0` beside a green run. The demo is taken off the glob,
+  # not named, for the same reason R2/R3's and R7's arms are.
+  run.call("R5-vacuity — ONE demo's desc stops yielding an entry under either shape", "R5-vacuity") do |root|
+    flatten_desc.call(Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/demo.rake")).sort.first)
+  end
+  # R5 over the SECOND shape. The ban has to bite on a prose desc as well as on
+  # a column, or the fallback is a count that reads as coverage.
+  run.call("R5 — a PROSE desc naming a beat that does not run", "R5") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
+         "MalformedUuidArg (400)", "GhostProseBeat (400), MalformedUuidArg (400)")
+  end
+  # …and the boundary the fallback is built on, proved rather than argued: a
+  # COLUMN demo whose markers are removed falls through to the prose shape and
+  # must still yield exactly its registered beats. Its glosses carry `PoW` and
+  # `PostgreSQL`, which the loose CamelCase pattern this started as reported as
+  # beats; either would be a ghost and turn R5 red here.
+  run.call("GREEN — a column desc read as prose yields its beats and NOT the acronyms in its glosses",
+           nil) do |root|
+    p = File.join(root, "kiosk-demo-hoteling/lib/tasks/demo.rake")
+    src  = File.read(p)
+    body = redteam_desc(src)
+    File.write(p, src.sub(body, body.gsub(/^([ \t]*)(?:BLOCKED|SKIPPED|BREACH)([ \t]+)/) do
+      "#{Regexp.last_match(1)}listed#{Regexp.last_match(2)}"
+    end))
   end
 
   # R6 — the README battery section, its coverage and its DERIVED scope.

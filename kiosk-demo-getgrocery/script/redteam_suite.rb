@@ -30,20 +30,65 @@
 # the ordinary refusal, or serves a write to the wrong method, is an attack
 # surface.
 #
-# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER, for the same reason. The rule
-# is: every APPLICABLE scenario must be BLOCKED and the KYC trio must SKIP (no
-# KYC here). The membership is `scenarios = [` further down, which is the single
-# copy.
+# THE BEAT LIST. `scenarios = [` further down is the single copy of the
+# MEMBERSHIP and `EXPECTED_SKIP_NAMES` beside it is what ASSERTS the
+# applicable/skip split, so a silently disabled gate fails the RUN rather than
+# merely contradicting a comment. What follows is a restatement of that
+# membership for a reader, and it is held to it mechanically in both
+# directions: a name here that nothing registers, and a registered beat with
+# no line here, are each a red gate rather than a stale comment. That is what
+# makes an enumeration worth writing down — the PROFILE above is the opposite
+# case, because nothing derives it.
 #
-# An enumeration up here would go stale in the way a hand-kept list does, and
-# nothing would go red: the run's totals are COMPUTED from the array, so no run
-# can disagree with itself. Only the comment would be wrong, and only a reader
-# misled — which is the worst kind of defect to leave in a file whose whole job
-# is to say what is and is not covered.
+# The list is COMPLETE and each must be BLOCKED, except the KYC trio, which
+# must SKIP because this shop asks for no attestation:
 #
-# Read the membership off the array. `EXPECTED_SKIP_NAMES` beside it is what
-# ASSERTS the applicable/skip split — so a silently disabled gate fails the run,
-# where a stale comment could only mislead a reader.
+#   CrossTenantRead        — B's my_orders must not include A's orders
+#   ForgedUserId           — a forged user_id in create_order is a typed 400:
+#                            the principal is not a declared input, and B's own
+#                            order stays B's
+#   UnpaidGatedAction      — reschedule_delivery without a settled mandate
+#   SpentResourceReuse     — a paid order reschedules once; the second attempt
+#                            is refused
+#   PayForOtherUseSelf     — a mandate paid for one order cannot gate another
+#   MandatePrincipalSwap   — B signs a mandate carrying A's identity
+#   MandateReplay          — B re-submits A's signed mandate JWS
+#   TokenTampering         — an altered JWT (one claim flipped) is a 401
+#   PrivilegeSelfSelection — an agent cannot self-assign elevated privilege
+#   DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
+#                            opening request refuses `role`/`scope`, at a
+#                            DECLARED value as well as an invented one
+#   WrongCurrencyCart      — a usd cart at a EUR operator, refused at capture
+#   TamperedPriceCart      — a line price differing from the catalog
+#   InflatedTotalCart      — a total above the sum of its lines
+#   MalformedItemsCart     — a non-array (or non-object-element) `items` is a
+#                            typed 400, never a 500
+#   HostileArgShapes       — boolean/array/object/junk on delivery_slot_id,
+#                            delivery_date, delivery_address and order_id is a
+#                            typed 400 too, never a 500
+#   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and POST /kiosk/run
+#                            name no registered verb and no route draws them,
+#                            so both answer the ordinary 404 any undrawn path
+#                            gets, bearer or not; no privileged endpoint hides
+#                            behind a generic-sounding word
+#   MethodMismatch         — a GET at an action's path draws no route either,
+#                            so it is the same plain 404 with no `Allow`, and
+#                            the write never runs
+#   PastDeliveryDate       — a delivery date in the past is a named 400, never
+#                            an ambiguous 200 with an empty list
+#   KycBrokerUnwired       — with no KYC broker configured (which is how the
+#                            demo task boots this origin, and how a plain
+#                            `rails s` does), request_kyc answers 501 with a
+#                            hint saying a retry will not help — never a 500
+#                            carrying a Ruby exception message
+#   RegistrationWithoutPow — register without a valid PoW proof; this origin
+#                            gates registration (registration_pow_count = 1)
+#
+# And the trio that must SKIP:
+#
+#   MissingKyc             — no attestation surface here to attack
+#   ExpiredKyc             — same, with an expired attestation
+#   ForgedKyc              — same, with a self-asserted one
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \

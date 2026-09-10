@@ -163,6 +163,12 @@
 #   * a demo whose derived beat set is empty (R1)
 #   * no header anywhere declaring «each must be BLOCKED» (R2 would cover nothing)
 #   * zero header list entries across the fleet (R3 could not bite)
+#   * a demo whose suite header carries NO list entries at all — R2 and R3 read
+#     that one list, so neither says anything about that demo, while the
+#     fleet-wide count above stays satisfied by the demos that do carry one
+#     (R2/R3-vacuity). Asked PER DEMO off the suite glob, for the same reason
+#     R7's is: a vacuity arm whose UNIT is the corpus rather than the member
+#     reads as coverage of every member, which is the K-1213 shape one level up.
 #   * zero desc entries across the fleet (R5 could not bite)
 #   * a README battery section that names fewer than three beats (R6's scope
 #     detector has found a heading over something that is not a beat list)
@@ -185,8 +191,9 @@
 #   bin/check-redteam-headers              # exit 1 on any mismatch
 #   bin/check-redteam-headers --list       # print each demo's derived beat set
 #   bin/check-redteam-headers --self-test  # fixtures: every rule, red and green
-#                                          # (R7's arms are one PER DEMO, derived
-#                                          #  from the suite glob)
+#                                          # (R7's arms, and R2/R3's per-demo
+#                                          #  vacuity arm, are derived from the
+#                                          #  suite glob rather than listed)
 
 require "fileutils"
 require "tmpdir"
@@ -495,6 +502,7 @@ def check(root)
 
   declaring_headers = 0
   header_entry_total = 0
+  header_entries_by_demo = {}
   desc_entry_total   = 0
   readme_sections    = 0
   r7_checked         = {}
@@ -524,6 +532,7 @@ def check(root)
     header  = header_block(src)
     entries = header_entries(header)
     header_entry_total += entries.length
+    header_entries_by_demo[demo] = entries.length
 
     # R3 — a header may not name a beat the suite does not register.
     (entries - beats).each do |ghost|
@@ -645,6 +654,21 @@ def check(root)
   if header_entry_total.zero?
     failures << "the header list-entry extractor found no entries in any suite — R3 is a ban that cannot " \
                 "bite [R3-vacuity]"
+  end
+  # …and the same question asked PER DEMO, off the suite glob. R2 and R3 read
+  # ONE list — the suite header's — and the fleet-wide count above is satisfied
+  # by six demos while a seventh carrying no list at all is covered by neither:
+  # R3 has no entry to hold against the registrations, and R2's «is this list
+  # complete?» cannot be asked of a header that has no list. That is the K-1213
+  # shape one level up — a vacuity arm whose UNIT is the corpus rather than the
+  # member reads as coverage of every member. The demo set is the glob, so an
+  # eighth demo is held to this with no edit here.
+  header_entries_by_demo.each do |demo, count|
+    next unless count.zero?
+
+    failures << "#{demo}: its suite header carries no beat list at all — R3 has no entry to check against " \
+                "the registrations and R2 has no list to ask about, so NEITHER rule says anything about " \
+                "this demo while the fleet-wide counts stay satisfied by the others [R2/R3-vacuity]"
   end
   if desc_entry_total.zero?
     failures << "the desc entry extractor found no entries in any demo:redteam desc — R5 is a ban that " \
@@ -786,6 +810,15 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       head, rest = s.split("\nrequire ", 2)
       File.write(p, "#{head.gsub(/^#[ \t]{2,}/, '# ')}\nrequire #{rest}")
     end
+  end
+  # …and the same loss in ONE demo, which the fleet-wide count above cannot see
+  # because the other six keep it non-zero. The demo is taken off the glob, not
+  # named, for the same reason R7's arms are.
+  run.call("R2/R3-vacuity — ONE demo's suite header stops carrying a beat list", "R2/R3-vacuity") do |root|
+    p = Dir.glob(File.join(root, "kiosk-demo-*/script/redteam_suite.rb")).sort.first
+    s = File.read(p)
+    head, rest = s.split("\nrequire ", 2)
+    File.write(p, "#{head.gsub(/^#[ \t]{2,}/, '# ')}\nrequire #{rest}")
   end
 
   # R4 / R5 — the rake desc, both directions.

@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/schema-descriptor.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed; bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not.",
   "title": "Kiosk schema descriptor",
-  "description": "The body returned by GET <endpoint>/schema. UNAUTHENTICATED: the catalog is public. It carries the origin's verbs and their contracts and nothing else -- the MODULE set it once duplicated as `verbs` lives in `capabilities` in /.well-known/kiosk.json, which is where an AI assistant reads it. The root is CLOSED: a document carrying `verbs`, or any other key this schema does not declare, is not a conformant catalog.",
+  "description": "The body returned by GET <endpoint>/schema. UNAUTHENTICATED: the catalog is public. It carries the origin's verbs and their contracts and nothing else -- the MODULE set lives in `capabilities` in /.well-known/kiosk.json, which is where an AI assistant reads it. The root is CLOSED: a document carrying `verbs`, or any other key this schema does not declare, is not a conformant catalog.",
   "type": "object",
   "required": [
     "queries",
@@ -29,7 +29,7 @@
   "$defs": {
     "descriptor": {
       "type": "object",
-      "description": "One verb's description. CLOSED (K-1278, Section 8.3): a descriptor carries the members named here and no others, so a key this specification does not declare at this level -- `x_internal_sla`, `ttl`, an operator's internal owner -- makes the catalog non-conformant. An operator that wants a field on a verb proposes it for the protocol rather than publishing it: a name taken privately is a name a later revision can no longer claim. This closes the DESCRIPTOR and nothing else; a problem document still carries its RFC 9457 extension members, which is that object's own rule.",
+      "description": "One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others, so a key this specification does not declare at this level -- `x_internal_sla`, `ttl`, an operator's internal owner -- makes the catalog non-conformant. An operator that wants a field on a verb proposes it for the protocol rather than publishing it: a name taken privately is a name a later revision can no longer claim. This closes the DESCRIPTOR and nothing else; a problem document still carries its RFC 9457 extension members, which is that object's own rule.",
       "additionalProperties": false,
       "required": [
         "name",
@@ -76,7 +76,7 @@
           "description": "REQUIRED. JSON Schema (draft 2020-12) for what this verb RETURNS. With no response envelope, this is the ONLY machine-readable statement of the result shape: what a query's rows look like, or what an action's object contains. A query's is an ARRAY schema whether or not the verb paginates -- a paginated page carries its cursor in an RFC 8288 Link header, not in the body -- so a paginating verb declares one shape, not a two-branch union. It must describe what the verb actually renders -- a success body that does not satisfy it is an operator-side defect, not a permitted variation."
         },
         "params": {
-          "description": "FORBIDDEN. `false` refuses the key outright: the retired 0.3 free-form hint object was WITHDRAWN from the wire in 0.4 (Section 8.3), and a catalog that still publishes one -- including the `null` every 0.3 origin published -- is not conformant. It keeps its own declaration now that the object around it is closed, and the redundancy is only apparent: `additionalProperties` does not reach a key `properties` names, so a descriptor still publishing `params` is refused by THIS sentence, which says what was withdrawn and when, rather than by the generic unknown-member refusal every other stray key gets. Contrast the ROOT, closed for the same reason and saying so above.",
+          "description": "FORBIDDEN. `false` refuses the key outright: a conformant descriptor does not carry `params`, and a `null` is a value like any other (Section 8.3). It carries its own declaration even though the object around it is closed, and the redundancy is only apparent: `additionalProperties` does not reach a key `properties` names, so a descriptor publishing `params` is refused by THIS declaration, which names the key, rather than by the generic unknown-member refusal every other stray key gets. A verb's inputs are declared in `input_schema` and nowhere else. Contrast the ROOT, closed for the same reason and saying so above.",
           "not": {}
         },
         "example_params": {

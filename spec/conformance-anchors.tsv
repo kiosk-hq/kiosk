@@ -260,7 +260,7 @@ e2e/schema_conformance.rb	the settlement this origin answered
 e2e/schema_conformance.rb	§5 and §6 — the auth and binding planes
 e2e/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 e2e/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
-e2e/schemas/schema-descriptor.schema.json	One verb's description. CLOSED (K-1278, Section 8.3): a descriptor carries the members named here and no others
+e2e/schemas/schema-descriptor.schema.json	One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others
 kiosk-all/README.md	`kiosk-all` declares runtime dependencies on the two production data-plane gems:
 kiosk-all/README.md	`kiosk-all` does **not** pull in `kiosk-rls`.
 kiosk-all/README.md	`kiosk-all` does **not** pull in any adapter gem.

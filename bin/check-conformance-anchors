@@ -40,6 +40,34 @@
 #
 # Usage: bin/check-conformance-anchors     # exits 0 clean, 1 on any mismatch
 
+# ── An argument this script does not implement is REFUSED, not ignored ───────
+#
+# K-1462: until this block existed the script ACCEPTED `--self-test`, ignored
+# it, ran its ordinary check and exited 0 printing its ordinary success line —
+# so a session could type the flag, read a green exit code and honestly record a
+# self-test that never ran. That is the constitution's false-clean shape: the
+# output is the answer to a different question from the one that was asked, and
+# the exit code cannot say so. Whether this script SHOULD have a self-test is a
+# separate judgement about what its subject is worth; what is settled is that
+# the flag may never read as a pass. Refusing every argument it does not
+# implement closes the class rather than the one flag, so a mistyped real flag
+# is refused too.
+#
+# The runtime message names the mode `self-test` WITHOUT its two leading dashes
+# on purpose. The tooling that watches these guards decides whether a script HAS
+# that mode by looking for the literal flag outside a whole-line comment, and a
+# script it reads as HAVING one is then required to exit 0 on it — which is the
+# opposite of what this block is for. The unrecognised arguments are echoed
+# back, so a reader who passed the flag still sees it named.
+KNOWN_ARGS = [].freeze
+unless (unknown_args = ARGV - KNOWN_ARGS).empty?
+  warn "check-conformance-anchors: unrecognised argument(s): #{unknown_args.join(' ')}"
+  warn "It takes no arguments at all. In particular it has no self-test mode, so that flag is " \
+       "refused here rather than silently performing the ordinary check — an argument that " \
+       "does nothing must never exit 0."
+  exit 2
+end
+
 ROOT     = File.expand_path("..", __dir__)
 MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
 

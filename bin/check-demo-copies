@@ -652,6 +652,33 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "bin/check-demo-copies", "HOUSE_SENTENCE_WINDOW = 400", "HOUSE_SENTENCE_WINDOW = 1"]],
       expect: /the absent-field refusal cannot be read out of .*errors\.rb/ },
 
+    { id: "engine-widens-wire-date", kind: :break,
+      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
+      what: "the engine relaxes the one date spelling the wire has, changing the protocol for " \
+            "every adopting operator while no demo file moves at all",
+      ops:  [[:edit, "kiosk-server/lib/kiosk/server/argument_decoder.rb", '"%Y-%m-%d"', '"%d/%m/%Y"']],
+      expect: /a date on the wire has 2 accepted shapes across the demos and the engine/ },
+    { id: "demos-widen-wire-date-together", kind: :break,
+      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
+      what: "all three demo copies widen AT ONCE — the edit somebody makes to be helpful, which " \
+            "the `:code` lockstep cannot see because the three still agree with each other",
+      ops:  [[:each, "kiosk-demo-*/app/operations/wire_arguments.rb",
+              '/\A\d{4}-\d{2}-\d{2}\z/', '/\A\d{4}-\d{1,2}-\d{1,2}\z/']],
+      expect: /a date on the wire has 2 accepted shapes across the demos and the engine/ },
+    { id: "engine-drops-wire-date-roundtrip", kind: :break,
+      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
+      what: "the engine keeps the strptime and loses the round trip beside it, so it silently " \
+            "accepts `2026-9-1` and its field widths can no longer be read off it",
+      ops:  [[:edit, "kiosk-server/lib/kiosk/server/argument_decoder.rb",
+              'return if parsed && parsed.strftime("%Y-%m-%d") == value', "return if parsed"]],
+      expect: /the accepted shape of a wire date cannot be read out of .*argument_decoder\.rb/ },
+    { id: "vacuity-wire-date", kind: :vacuity,
+      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
+      what: "the slice stops reaching the shape, so every producer reads as silent and agrees " \
+            "with nothing",
+      ops:  [[:edit, "bin/check-demo-copies", "WIRE_DATE_WINDOW = 400", "WIRE_DATE_WINDOW = 1"]],
+      expect: /the accepted shape of a wire date cannot be read out of/ },
+
     { id: "lockfile-platforms-drift", kind: :break,
       rule: "every demo lockfile resolves for the SAME platforms (K-962)",
       what: "one lockfile loses a platform, so that demo alone cannot be installed frozen",
@@ -6231,6 +6258,151 @@ if house_spellings.size > 1
             "Ruby KeyError message on the auth plane — and nothing in this file could see it."
 end
 
+# ── The WIRE DATE RULE, where the ENGINE says it too (K-1467) ────────────────
+#
+# Spec §8.1 rule 9 — a date on the wire is `YYYY-MM-DD` and nothing else
+# (ADR-0029) — is implemented FOUR times in this repository. The FRAGMENTS entry
+# for `app/operations/wire_arguments.rb#ISO_DATE` holds the three demo copies in
+# lockstep, so they cannot drift from EACH OTHER. The fourth implementation is
+# the engine's `check_date!`, and it is the one an adopting operator actually
+# inherits: a verb declares `format: "date"` and the engine is what refuses the
+# value, by name, before any handler runs.
+#
+# Nothing compared those two until this rule, and the lockstep is blind in
+# exactly the two directions that matter. A UNIFORM widening — all three demos
+# edited at once, which is the shape of an edit somebody makes to be helpful —
+# keeps every `:code` comparison green. So does a widening on the ENGINE side,
+# where one relaxed line changes the protocol for every adopter simultaneously
+# and no demo file moves at all. That is the K-1294 shape, one wire element over.
+#
+# READ OFF THE PRODUCER, NOT MATCHED AGAINST A REMEMBERED SHAPE — the same
+# discipline the house-sentence section above is written to, and for the same
+# reason: a pattern that already knows the answer can only ever notice the
+# answer VANISHING, never a producer disagreeing. The complication here is that
+# the two producers do not share a NOTATION: the demos publish an anchored Ruby
+# regexp and the engine publishes a `strftime` format. So each is read in its
+# own notation and translated into ONE canonical shape — the widths of its digit
+# groups and the separators between them — and the rule compares those and holds
+# nothing else. `\A\d{4}-\d{2}-\d{2}\z` and `%Y-%m-%d` both canonicalise to
+# `4-2-2`; `%d/%m/%Y` gives `2/2/4` and `\A\d{4}-\d{1,2}-\d{1,2}\z` gives
+# `4-1,2-1,2`. A widening on either side is therefore a DIFFERENT shape rather
+# than an unreadable one, which is what makes the comparison a comparison.
+#
+# WHY THE ENGINE HAS TO NAME ITS FORMAT TWICE, and why one occurrence reads as
+# silence rather than as an answer. `Date.strptime("2026-9-1", "%Y-%m-%d")`
+# SUCCEEDS — strptime does not pin field widths — so the thing that actually
+# makes the engine's answer `4-2-2` is the round trip beside it,
+# `parsed.strftime(fmt) == value`. A body that names the format once has stopped
+# pinning the widths, and its accepted shape can no longer be read off it. This
+# rule says so instead of reading the strptime alone and reporting an agreement
+# it cannot see.
+#
+# WHAT THIS DOES NOT DO. It compares the accepted SHAPE, not the behaviour: the
+# engine's own suite and each demo's `demo:wire_args_spec` are what dispatch a
+# real value and read the answer. It says nothing about the refusal SENTENCE
+# either — the three demos word theirs differently on purpose, each naming the
+# row an assistant gets a right value from, which the FRAGMENTS entry for
+# `#iso_date` records in as many words.
+WIRE_DATE_UNIT   = "app/operations/wire_arguments.rb#ISO_DATE"
+WIRE_DATE_ENGINE = "kiosk-server/lib/kiosk/server/argument_decoder.rb"
+WIRE_DATE_ENTRY  = { WIRE_DATE_ENGINE => "def check_date!(",
+                     WIRE_DATE_UNIT   => "ISO_DATE = " }.freeze
+# How far past the entry point the shape may be built. Both producers put it
+# within a line or two; the window exists so a later method cannot be read as
+# this one's answer.
+WIRE_DATE_WINDOW = 400
+# The demos' notation: an anchored Ruby regexp literal, captured as source.
+WIRE_DATE_DEMO_RE   = %r{ISO_DATE\s*=\s*/(\S+)/}
+# The engine's notation: a `strftime`/`strptime` format literal.
+WIRE_DATE_ENGINE_RE = /"(%[^"\n]*)"/
+
+# @return [String, nil] the digit-group shape of an anchored regexp source, or
+#   nil when it is not one this rule can read
+def wire_date_shape_from_regexp(source)
+  body = source.sub(/\A\\A/, "").sub(/\\z\z/, "")
+  return nil if body.empty?
+
+  out = body.gsub(/\\d\{(\d+(?:,\d*)?)\}/) { ::Regexp.last_match(1) }.gsub("\\d", "1")
+  out.include?("\\") ? nil : out
+end
+
+# @return [String, nil] the digit-group shape of a strftime format, or nil when
+#   it carries a directive whose width this rule cannot state
+def wire_date_shape_from_strftime(format)
+  out = format.gsub("%Y", "4").gsub("%y", "2").gsub("%m", "2").gsub("%d", "2").gsub("%j", "3")
+  out.include?("%") ? nil : out
+end
+
+wire_date_sites = {}
+
+wire_date_engine_path = File.join(ROOT, WIRE_DATE_ENGINE)
+if File.file?(wire_date_engine_path)
+  wire_src   = code_source(wire_date_engine_path)
+  wire_idx   = wire_src.index(WIRE_DATE_ENTRY.fetch(WIRE_DATE_ENGINE))
+  wire_fmts  = wire_idx.nil? ? [] : wire_src[wire_idx, WIRE_DATE_WINDOW].scan(WIRE_DATE_ENGINE_RE).flatten
+  if wire_fmts.uniq.length > 1
+    errors << "#{WIRE_DATE_ENGINE} parses a wire date with #{wire_fmts.uniq.map(&:inspect).join(' and ')} " \
+              "inside one method (K-1467). One of those is the parse and the other is the round trip " \
+              "that pins the field widths; while they disagree the engine accepts a shape neither of " \
+              "them states, and no demo copy can be compared with it."
+  end
+  wire_date_sites[WIRE_DATE_ENGINE] =
+    wire_fmts.length >= 2 && wire_fmts.uniq.length == 1 ? wire_date_shape_from_strftime(wire_fmts.first) : nil
+else
+  errors << "#{WIRE_DATE_ENGINE} is not in the tree — the engine half of the wire-date rule " \
+            "(K-1467) is aimed at a file that no longer exists. Re-aim it or delete it; a rule " \
+            "with no subject is not coverage."
+end
+
+wire_date_rel   = WIRE_DATE_UNIT.split("#").first
+wire_date_ships = (FRAGMENTS[WIRE_DATE_UNIT] || {})[:ships]
+if wire_date_ships.nil?
+  errors << "the wire-date rule (K-1467) derives its demo list from " \
+            "FRAGMENTS[#{WIRE_DATE_UNIT.inspect}], which is gone. The engine is then compared to " \
+            "nothing at all until that entry is restored or this rule is given another source."
+else
+  wire_date_ships.each do |demo|
+    path = (dups[wire_date_rel] || {})["kiosk-demo-#{demo}"]
+    if path.nil?
+      errors << "#{demo}: #{wire_date_rel} is declared in `ships:` for the wire-date rule (K-1467) " \
+                "but is not in the tree."
+      next
+    end
+    src = code_source(path)
+    idx = src.index(WIRE_DATE_ENTRY.fetch(WIRE_DATE_UNIT))
+    raw = idx.nil? ? nil : src[idx, WIRE_DATE_WINDOW][WIRE_DATE_DEMO_RE, 1]
+    wire_date_sites["kiosk-demo-#{demo}/#{wire_date_rel}"] = raw && wire_date_shape_from_regexp(raw)
+  end
+end
+
+# VACUITY: a producer this rule cannot read is not a producer that agrees — the
+# same reasoning as the house sentence above. A `nil` folded in as one more
+# value is how a rule starts confirming agreement between one site and nothing.
+wire_date_silent = wire_date_sites.select { |_, shape| shape.nil? }.keys
+if wire_date_silent.any?
+  errors << "the accepted shape of a wire date cannot be read out of #{wire_date_silent.join(', ')} " \
+            "(K-1467). A demo must build it from an anchored `ISO_DATE` regexp within " \
+            "#{WIRE_DATE_WINDOW} characters of that assignment; the engine must name ONE strftime " \
+            "format at least TWICE inside `check_date!` — once to parse and once to round-trip, " \
+            "which is the half that pins the field widths, because strptime alone accepts " \
+            "`2026-9-1`. A producer that has been restructured needs this rule re-aimed at where " \
+            "it now states the shape. It may not simply become unreadable: an unread producer is " \
+            "compared to nothing."
+end
+
+wire_date_shapes = wire_date_sites.values.compact.uniq
+if wire_date_shapes.size > 1
+  errors << "a date on the wire has #{wire_date_shapes.size} accepted shapes across the demos and " \
+            "the engine — " +
+            wire_date_sites.compact.map { |site, shape| "#{site} accepts #{shape.inspect}" }.join("; ") +
+            " (K-1467, ADR-0029). Spec §8.1 rule 9 says a date is `YYYY-MM-DD` and nothing else, " \
+            "and the engine's copy is the one an adopting operator inherits — so a disagreement " \
+            "here is one origin answering a different protocol from the others, not a local " \
+            "relaxation. The three demo copies are held in lockstep by FRAGMENTS, which means a " \
+            "UNIFORM widening of all three passes every other rule in this file and only this one " \
+            "can see it."
+end
+
 # ── Every `bin/` script a demo names EXISTS and is runnable (K-1315) ─────────
 #
 # WHAT WENT WRONG. All seven copies of `bin/setup` ended `exec "bin/dev"`, and
@@ -6726,6 +6898,9 @@ if errors.empty?
        "one spelling (#{house_spellings.first.inspect}) of the absent-field refusal read off " \
        "#{house_sentence_sites.length} producer(s) — #{house_ships ? house_ships.length : 0} demo(s) " \
        "plus the engine, " \
+       "one accepted shape (#{wire_date_shapes.first.inspect}) for a wire date read off " \
+       "#{wire_date_sites.length} producer(s) in two notations — " \
+       "#{wire_date_ships ? wire_date_ships.length : 0} demo(s) plus the engine, " \
        "#{bin_refs} `bin/` reference(s) in #{bin_ref_files} demo script(s) and README(s) resolved to " \
        "an existing executable (#{bin_local} of them to the demo's own bin/), " \
        "`validate_responses` gated off production in #{vr_demos} operator initializer(s) against " \

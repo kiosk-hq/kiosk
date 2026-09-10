@@ -77,14 +77,15 @@
 #     the harness's INSTALLED bundle, gitignored, thousands of files deep and
 #     none of them ours.
 #   * `e2e/schemas/*.schema.json` are VENDORED MIRRORS and are read for one
-#     thing only: their local `$comment`. `bin/check-spec-schemas` holds every
-#     other byte of them equal to the schema kiosk.tech publishes, with that
-#     marker — which upstream does not carry — removed from this side first.
-#     So the `$comment` is the harness's own text and is in scope, while the
-#     body is the site repository's: a citation cannot enter it from here
-#     without turning THAT guard red, and scrubbing one out here would make
-#     the mirror stop mirroring. Two such citations are live in the published
-#     schemas today and are kiosk.tech's to remove.
+#     thing only: the TOP-LEVEL `$comment`, the provenance marker upstream
+#     does not carry. `bin/check-spec-schemas` removes exactly that member
+#     from each side and holds every other byte equal to the schema
+#     kiosk.tech publishes, so it is the one part of a mirror this repository
+#     may change; everything else, a NESTED `$comment` included, is the site
+#     repository's. A citation cannot enter the body from here without
+#     turning THAT guard red, and scrubbing one out here would make the
+#     mirror stop mirroring. WHICH member is exempt is READ OUT of that
+#     script rather than restated here — see `exempt_mirror_members`.
 #
 # ── WHAT IS EXEMPT, DECLARED WITH ITS REASON ─────────────────────────────────
 #
@@ -230,12 +231,11 @@
 #
 # WHAT A CENSUS ROW DOES NOT MEAN. It is not a finding. Most rows are the
 # passive and want nothing done. And a row inside a VENDORED SCHEMA MIRROR is
-# not repairable from this side at all — `bin/check-spec-schemas` compares the
-# parsed documents and removes only the TOP-LEVEL provenance `$comment`, so a
-# NESTED `$comment` in one of those files is upstream's byte and editing it
-# here makes the mirror stop mirroring. Such rows are labelled where they are
-# printed rather than silently dropped, because a reader who cannot see them
-# cannot know the sentence exists at all.
+# not repairable from this side at all — the mask above leaves only the member
+# `bin/check-spec-schemas` exempts, so anything a census row can still name in
+# such a file is the provenance marker this repository itself wrote. Such rows
+# are labelled where they are printed rather than silently dropped, because a
+# reader who cannot see them cannot know the sentence exists at all.
 #
 # ── WHAT R5 AND R6 MUST NOT REDDEN ON, AND WHY EACH IS SAFE ────────────────
 #
@@ -251,9 +251,11 @@
 #   * a schema this repository VENDORS from kiosk.tech. `bin/check-spec-schemas`
 #     holds eight files byte-equal to what that repository publishes, so a
 #     sentence in one is not repairable from this side — scrubbing it here
-#     would make the mirror stop mirroring. Their bodies are masked, in BOTH
-#     homes, and a vacuity arm re-reads that guard's own manifest and fails if
-#     it ever mirrors a path this mask does not cover.
+#     would make the mirror stop mirroring. Everything but the member THAT
+#     guard exempts is masked, in BOTH homes, and two vacuity arms re-read it:
+#     one fails if it ever mirrors a path this mask does not cover, the other
+#     if it stops naming a member at all, which would leave this file guessing
+#     which bytes are ours.
 #
 # Both rules read every file as lines, so `.md`, `.json`, `.erb` and `.tt` are
 # covered as well as Ruby. For a RUBY file the hit is additionally CLASSIFIED
@@ -335,7 +337,7 @@ RETIRED_WIRE_RE = retired_wire_re
 # A construction that announces a past state. A LEXICAL PROXY — see the header
 # for what is deliberately absent from it and why.
 PAST_NARRATION_RE =
-  /\b(?:formerly|previously(?!-)|historically|until\s+recently|used\s+to\s+be|
+  /\b(?:formerly|previously(?!-)|historically|until\s+recently|(?<!-)used\s+to\s+be|
        before\s+the\s+fix|cutover|has\s+since\s+been)\b/ix
 
 # `scopes` is which published surface each rule speaks for. R4 reaches every
@@ -357,10 +359,14 @@ RULES = [
 ].freeze
 
 # A bare `used to`, with the copula excluded because R6 already fails on it and
-# one sentence must not be reported twice. The word boundary is load-bearing:
-# without it the pattern matches the tail of `refused to`. See the census
-# section in the header.
-BARE_USED_TO_RE = /\bused\s+to\b(?!\s+be\b)/i
+# one sentence must not be reported twice. TWO boundary conditions, and both
+# were bought with a false row: `\b` keeps the pattern off the tail of
+# `refused to`, which is live in a shipped controller; `(?<!-)` keeps it off
+# the tail of a HYPHENATED COMPOUND — «being cross-used to mint anything else»
+# is one hyphenated verb followed by an infinitive, and a hyphen IS a word
+# boundary, so the first condition let the second shape straight through. A
+# census is only worth its cost while every row it prints is worth reading.
+BARE_USED_TO_RE = /\b(?<!-)used\s+to\b(?!\s+be\b)/i
 
 # Counted, never banned. Same shape as a rule so `scan` can take it unchanged.
 CENSUS = [
@@ -465,11 +471,69 @@ def mirrored_paths
   src.scan(/File\.join\(REPO,\s*"([^"]+\.schema\.json)"\)/).flatten.uniq
 end
 
+# WHICH `$comment` IS OURS — DERIVED FROM THE GUARD THAT FREEZES THE REST, NOT
+# RE-TYPED HERE. `bin/check-spec-schemas` compares the PARSED documents after
+# removing named members from each side, and those members — and only those —
+# are the bytes of a mirror this repository may change. A second answer typed
+# here is a second thing to be wrong about: while this file assumed EVERY
+# `$comment` line was ours and that script exempted only the top-level one, the
+# gap between the two masks was a trap where R5 or R6 could demand a repair
+# `check-spec-schemas` fails on, leaving a red tree with no legal move from
+# inside this repository. Same "derive it, do not re-type it" move R5 makes for
+# the wire version.
+def exempt_mirror_members
+  src = File.read(File.join(REPO, "bin", "check-spec-schemas"), encoding: "UTF-8")
+  members = src.scan(/^\s*(?:local|upstream)\.delete\("([^"]+)"\)/).flatten.uniq
+  if members.empty?
+    raise "check-shipped-archaeology: bin/check-spec-schemas names no member it removes " \
+          "before comparing a vendored mirror with the published original, so this guard " \
+          "cannot know which bytes of a mirror are ours. Re-point exempt_mirror_members at " \
+          "however that script now spells the carve-out; do not guess."
+  end
+  members
+end
+
+EXEMPT_MIRROR_MEMBERS = exempt_mirror_members.freeze
+
+# The nesting depth at the START of each line. A JSON string cannot contain a
+# newline, so a per-line tally of the brackets outside string literals answers
+# it exactly — and it is the only thing that separates a TOP-LEVEL `$comment`,
+# which is the provenance marker this repository writes, from a NESTED one,
+# which is a byte of the schema kiosk.tech publishes. The two are identical on
+# their own line.
+def json_line_depths(src)
+  depth = 0
+  src.each_line.map do |line|
+    at_start = depth
+    in_string = false
+    escaped = false
+    line.each_char do |c|
+      if in_string
+        if escaped        then escaped = false
+        elsif c == "\\"   then escaped = true
+        elsif c == '"'    then in_string = false
+        end
+        next
+      end
+      case c
+      when '"'       then in_string = true
+      when "{", "["  then depth += 1
+      when "}", "]"  then depth -= 1
+      end
+    end
+    at_start
+  end
+end
+
 def rule_source(path)
   src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
   return src unless path.match?(VENDORED_MIRROR_RE)
 
-  src.each_line.map { |l| l.include?(%q("$comment")) ? l : "\n" }.join
+  keys   = EXEMPT_MIRROR_MEMBERS.map { |m| /\A\s*"#{Regexp.escape(m)}"\s*:/ }
+  depths = json_line_depths(src)
+  src.each_line.with_index
+     .map { |l, i| depths[i] == 1 && keys.any? { |re| l.match?(re) } ? l : "\n" }
+     .join
 end
 
 # Text only: `config/` also holds `credentials.yml.enc` and `*.key`, and a
@@ -597,7 +661,7 @@ SCOPES = {
           per: "spec/** (text extensions) — R3 and R4 only" },
   e2e: { label: "the e2e harness", dirs: -> { e2e_dirs }, files: ->(d) { e2e_files(d) },
          per: "e2e/** (.md .sh .rb .json), minus .gems/ and tmp/; a vendored " \
-              "schema mirror is read for its local `$comment` only" }
+              "schema mirror is read for its TOP-LEVEL `$comment` only" }
 }.freeze
 
 def run_check
@@ -621,8 +685,8 @@ def run_check
        "that marker to cite a row);"
   puts "                   e2e/.gems (the installed bundle) and e2e/tmp (the generated app); " \
        "the BODY of a vendored"
-  puts "                   schema mirror in EITHER home, whose bytes bin/check-spec-schemas " \
-       "holds equal to kiosk.tech's;"
+  puts "                   schema mirror in EITHER home (everything but the TOP-LEVEL " \
+       "$comment bin/check-spec-schemas exempts);"
   puts "                   `spec.authors` for R4 only; and, for R5 only, a version token that " \
        "is CODE rather than prose"
   puts "                   (a float literal, a dependency constraint) — R5 and R6 do not " \
@@ -817,14 +881,25 @@ def self_test
     File.write(mirror, <<~JSON)
       {
         "$comment": "VENDORED copy, K-822.",
-        "description": "a normative sentence, K-1278."
+        "description": "a normative sentence, K-1278.",
+        "$defs": {
+          "thing": {
+            "$comment": "an upstream aside, K-1249.",
+            "type": "object"
+          }
+        }
       }
     JSON
     mirror_hits = scan(mirror).first
-    check.call("a citation in a vendored mirror's own `$comment` IS flagged",
+    check.call("a citation in a vendored mirror's TOP-LEVEL `$comment` IS flagged — that " \
+               "member is the provenance marker this repository itself writes",
                mirror_hits.any? { |h| h.line == 2 })
     check.call("…and one in the mirror's BODY is NOT — it is kiosk.tech's to remove",
                mirror_hits.none? { |h| h.line == 3 })
+    check.call("…and one in a NESTED `$comment` is NOT either — bin/check-spec-schemas holds " \
+               "that byte equal, so a rule firing on it would demand the one edit that guard " \
+               "fails on",
+               mirror_hits.none? { |h| h.line == 6 })
 
     # ── R5 IS PROSE-ONLY: a version token inside CODE is a number ───────────
     _, sleeper = plant.call("sleep", "sleep.rb", "def f\n  sleep 0.2\n  sleep 0.3\nend\n")
@@ -904,6 +979,18 @@ def self_test
     check.call("C1 does NOT fire on the tail of `refused to` — the word boundary is the " \
                "difference between three hits and four",
                scan(refused, CENSUS).first.none? { |h| h.rule[:id] == "C1" })
+
+    _, hyphenated = plant.call("c1-hyphen", "x.rb", "#   being cross-used to mint anything " \
+                                                    "else a lock would accept.\n")
+    check.call("C1 does NOT fire on the tail of a HYPHENATED COMPOUND — `cross-used to` is " \
+               "one verb plus an infinitive, and a hyphen IS a word boundary, so the word " \
+               "boundary alone let this shape through",
+               scan(hyphenated, CENSUS).first.none? { |h| h.rule[:id] == "C1" })
+
+    _, hyphcopula = plant.call("r6-hyphen", "y.rb", "# a key cross-used to be minted twice.\n")
+    check.call("…and R6 does not fire on the same compound before `be` — a false RED there " \
+               "would be a repair nobody can make",
+               scan(hyphcopula).first.none? { |h| h.rule[:id] == "R6" })
 
     _, copula = plant.call("c1-copula", "w.rb", "# It used to be that the caller could not " \
                                                 "say which day.\n")
@@ -1013,6 +1100,18 @@ def self_test
   mirrors = mirrored_paths
   check.call("bin/check-spec-schemas names the mirrors it holds (#{mirrors.size})", !mirrors.empty?)
   uncovered = mirrors.reject { |rel| File.join(REPO, rel).match?(VENDORED_MIRROR_RE) }
+  check.call("…and WHICH member of one is ours is read out of that script too " \
+             "(#{EXEMPT_MIRROR_MEMBERS.join(', ')}) — a second answer typed here is a " \
+             "second thing to drift",
+             !EXEMPT_MIRROR_MEMBERS.empty?)
+  on_disk = mirrors.map { |rel| File.join(REPO, rel) }.select { |p| File.exist?(p) }
+  check.call("the mask leaves a mirror's TOP-LEVEL marker readable and blanks everything " \
+             "else, nested `$comment` included (#{on_disk.size} mirror(s) on disk)",
+             !on_disk.empty? && on_disk.all? do |p|
+               kept = rule_source(p).each_line.reject { |l| l == "\n" }
+               kept.size == 1 &&
+                 kept.first.match?(/\A\s*"#{Regexp.escape(EXEMPT_MIRROR_MEMBERS.first)}"\s*:/)
+             end)
   check.call("every path it mirrors is masked here — scrubbing one would make the mirror " \
              "stop mirroring#{uncovered.empty? ? '' : " (uncovered: #{uncovered.join(', ')})"}",
              uncovered.empty?)

@@ -6414,9 +6414,8 @@ if container_tracked.length < 500
             "in it."
 end
 
-container_ignores = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IGNORE_RE }
-container_recipes = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_RECIPE_RE }
-container_dirs    = container_recipes.each_with_object({}) { |rel, h| h[File.dirname(rel)] = true }
+container_ignores  = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IGNORE_RE }
+container_recipes  = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_RECIPE_RE }
 container_composes = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_COMPOSE_RE }
 container_images   = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IMAGE_RE }
 

@@ -115,18 +115,32 @@ module Kiosk
       # The verb's published descriptor, or a refusal that says something
       # useful — and the two refusals are deliberately DIFFERENT STATUSES.
       #
-      # A name nobody registered is `404 verb_not_found` with the registry's
+      # A ROUTE IS WHAT REACHES THIS METHOD, so the ordinary «that verb does
+      # not exist» case never arrives here at all: a path no line in the
+      # operator's routes file draws matches nothing and is the host
+      # framework's plain 404, with no `code` and no `hint`, exactly as at any
+      # other unrouted path.
+      #
+      # What DOES arrive here is a route whose `defaults: { kiosk_verb: … }`
+      # names something this origin does not register — a typo in the routes
+      # file, or a verb whose declaration was removed while its route stayed.
+      # That is `404 verb_not_found`, carrying the registry's own hint, which
+      # lists the registered names so a mistyped `listings` for
       # `browse_listings` self-corrects without a schema round-trip. It is NOT
       # `not_found`: that code means an ARGUMENT addressed something absent
       # (spec §9.1 rule 2), and an assistant recovers from the two differently
       # — re-read the catalogue, versus tell the human it is not there.
       #
-      # A name registered as the OTHER KIND is `405 method_not_allowed` with
-      # `Allow:` naming the method the verb does accept. The verb EXISTS —
-      # answering a 404 of either kind would be a lie about it, and RFC 9110
-      # §15.5.6 already has the status for exactly this. It discloses nothing: `GET
-      # <endpoint>/schema` publishes every name and its kind to ANYONE, so a
-      # 405 tells a caller only what it could have read first.
+      # A route drawn with the method of the OTHER KIND — `GET` at an action,
+      # `POST` at a query, both of which `bin/check-verb-routes` refuses in
+      # this repository — is `405 method_not_allowed` with `Allow:` naming the
+      # method the verb does accept. The verb EXISTS, and answering a 404 of
+      # either kind would be a lie about it; RFC 9110 §15.5.6 already has the
+      # status for exactly this. It discloses nothing: `GET <endpoint>/schema`
+      # publishes every name and its kind to ANYONE, so a 405 tells a caller
+      # only what it could have read first. Note what this is NOT: dialing a
+      # verb with the wrong method at a path nobody drew that pair for reaches
+      # no route, so it is the plain 404 above and carries no `Allow` at all.
       def descriptor_for!(command, name)
         registry, other = command == :query ? [Queries, Actions] : [Actions, Queries]
         return registry.describe(name) if registry.known.include?(name)

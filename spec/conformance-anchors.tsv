@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1689 anchors.
+# 1691 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -423,14 +423,15 @@ kiosk-demo-getgrocery/script/getgrocery_flow.rb	  exp:              now + 600,
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	# Agent-side driver: no-human grocery order end-to-end.
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	# slot). This only asserts when there genuinely is a past slot for the queried
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	A REAL ASSISTANT TAKES THIS FROM THE HUMAN IT ACTS FOR, never from the
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	EVERY ROW SAYS WHICH CLOCK IT IS WRITTEN ON, and that clock is the DELIVERY
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Prints ONE JSON line on stdout
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 3: query delivery_slots
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 4: create_order
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 5: payment_setup (verify card is on file before paying)
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	delivery_slots rows must name the zone they are rendered in
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	missing_ids     = (1..6).to_a - returned_ids
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	no card-setup step here. This runs with KIOSK_TEST_AUTOCARD=1
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	pay: psp_reference expected 'pi_…' (real Stripe)
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	the row's label must name the same zone the row does
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	unless missing_ids.empty?
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Applicable — must be BLOCKED
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (no KYC)
@@ -677,7 +678,7 @@ kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantCannotSelf
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRebindCannotEscalate",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRoleComesFromTheApprover",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
-kiosk-demo-stylish/spec/salon_clock_spec.rb	A ZONELESS SLOT IS REFUSED, NOT COMPLETED
+kiosk-demo-stylish/spec/salon_clock_spec.rb	carries no offset, so it names no instant
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
@@ -959,9 +960,10 @@ kiosk-reputation/spec/kiosk/reputation/backoff_store_spec.rb	consuming one key d
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	      it "does not invoke the backend when sig is wrong (uses spy backend)" do
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	    context "anti-DoS ordering — backend is NOT called on :bad_sig" do
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	    context "anti-DoS ordering — backend is NOT called on :expired" do
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	# .verify — :bad_sig cases (cheap check, step 1)
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	does not invoke the backend when sig is wrong (uses spy backend)
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when params are tampered
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when salt is tampered
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when the sig field itself is corrupted
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	falls back to user_id when agent_id is nil
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	grants are per-identity (agent-2's solve does not free agent-1)
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	keys a Kiosk::Identity-shaped object by agent_id when present

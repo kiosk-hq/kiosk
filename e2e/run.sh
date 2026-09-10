@@ -47,6 +47,14 @@ DB_NAME="kiosk_e2e_$$"
 APP_NAME="demo_app"
 TMP_DIR="$(mktemp -d -t kiosk-e2e.XXXX)"
 SERVER_PID=""
+# The origin's log. Named UNIQUELY PER INVOCATION and read back through this
+# variable, never through a re-typed literal (K-1469): a fixed `/tmp` path is
+# shared with every process on the machine and survives between runs, so a
+# `tail` of it can show a PREVIOUS run's failure as though it were this one's.
+# It is deliberately NOT under $TMP_DIR, which `cleanup` removes — a post-mortem
+# wants the whole log after the run has ended, so the failure paths below name
+# the path instead of leaving it to be guessed.
+SERVER_LOG="/tmp/kiosk-e2e-server.$$.log"
 
 # Make rails/bundle available even if gem-bin-dir isn't on PATH.
 GEM_BIN="$(gem env 2>/dev/null | awk -F': ' '/EXECUTABLE DIRECTORY/ {print $2}')"
@@ -446,7 +454,7 @@ AUDIT_EVENTS_REDACTED="$TMP_DIR/audit-events-redacted.jsonl"
 export KIOSK_AUDIT_SINK_FILE="$AUDIT_EVENTS"
 export KIOSK_AUDIT_SINK_REDACTED_FILE="$AUDIT_EVENTS_REDACTED"
 bundle exec rails s -p "$SERVER_PORT" -b 127.0.0.1 -e development \
-  > /tmp/kiosk-e2e-server.log 2>&1 &
+  > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 # Wait for readiness — max 30s.
@@ -460,8 +468,8 @@ for i in $(seq 1 30); do
 done
 
 [ $ready -eq 1 ] || {
-  tail -50 /tmp/kiosk-e2e-server.log
-  fail "server did not become ready on http://127.0.0.1:$SERVER_PORT (see log above)"
+  tail -50 "$SERVER_LOG"
+  fail "server did not become ready on http://127.0.0.1:$SERVER_PORT (see log above; full log: $SERVER_LOG)"
 }
 ok "server up on http://127.0.0.1:$SERVER_PORT"
 
@@ -508,8 +516,8 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
-  log "assistant failed — last 80 lines of server log:"
-  tail -80 /tmp/kiosk-e2e-server.log
+  log "assistant failed — last 80 lines of server log ($SERVER_LOG):"
+  tail -80 "$SERVER_LOG"
   exit 1
 fi
 
@@ -556,8 +564,8 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        POW_CAPTURE="$POW_CAPTURE" \
        AUTH_CAPTURE="$AUTH_CAPTURE" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
-  log "schema conformance failed — last 40 lines of server log:"
-  tail -40 /tmp/kiosk-e2e-server.log
+  log "schema conformance failed — last 40 lines of server log ($SERVER_LOG):"
+  tail -40 "$SERVER_LOG"
   exit 1
 fi
 
@@ -594,7 +602,7 @@ kiosk_rows() {
 rows_before=$(kiosk_rows)
 
 bundle exec rails s -p "$SERVER_PORT" -b 127.0.0.1 -e development \
-  >> /tmp/kiosk-e2e-server.log 2>&1 &
+  >> "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 ready=0
 for i in $(seq 1 30); do
@@ -605,8 +613,8 @@ for i in $(seq 1 30); do
   sleep 1
 done
 [ $ready -eq 1 ] || {
-  tail -50 /tmp/kiosk-e2e-server.log
-  fail "sink-less origin did not become ready (see log above)"
+  tail -50 "$SERVER_LOG"
+  fail "sink-less origin did not become ready (see log above; full log: $SERVER_LOG)"
 }
 
 # The SAME token alice's assistant has been using. This restart shares the

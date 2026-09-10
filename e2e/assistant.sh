@@ -39,6 +39,15 @@ set -euo pipefail
 
 SERVER_URL="${SERVER_URL:-http://127.0.0.1:3001}"
 
+# A scratch file is named UNIQUELY PER INVOCATION and is read back through the
+# variable that names it, never through a pattern and never through a re-typed
+# literal (K-1469). A fixed `/tmp` path is shared with every process on the
+# machine and survives between runs, so a `curl` that fails leaves the PREVIOUS
+# run's body in place and the next line parses it as this run's answer — a
+# clean-looking pass for a request that never happened.
+AGENTS_TXT_BODY="/tmp/kiosk-e2e-agents-txt.$$"
+trap 'rm -f "$AGENTS_TXT_BODY"' EXIT
+
 ALICE="00000000-0000-0000-0000-000000000001"
 BOB="00000000-0000-0000-0000-000000000002"
 
@@ -201,9 +210,9 @@ assert "…and carries NO Vary, even when the request negotiates" \
 printf "\n\033[1m=== /agents.txt (native agents.txt v1.0) ===\033[0m\n"
 
 # Capture status + headers + body in one request.
-at_headers=$(curl -sS -o /tmp/agents_txt_body -D - "$SERVER_URL/agents.txt")
+at_headers=$(curl -sS -o "$AGENTS_TXT_BODY" -D - "$SERVER_URL/agents.txt")
 at_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/agents.txt")
-at_body=$(cat /tmp/agents_txt_body)
+at_body=$(cat "$AGENTS_TXT_BODY")
 assert "agents.txt → 200"            "$at_status" "200"
 assert "agents.txt Content-Type"     "$(echo "$at_headers" | grep -i '^Content-Type:' | grep -ic 'text/plain')" "1"
 assert "agents.txt CORS *"           "$(echo "$at_headers" | grep -i '^Access-Control-Allow-Origin:' | grep -c '\*')" "1"
@@ -1101,7 +1110,7 @@ assert "audit: queries emit nothing" \
 #    handler and raises; the action's own transaction ROLLS BACK and the event
 #    must be emitted anyway — which is why the seam sits outside the transaction.
 before_fail=$(event_count '.action == "book_appointment"')
-fail_code=$(curl -sS -o /tmp/kiosk-audit-fail.json -w "%{http_code}" -X POST \
+fail_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
   "$SERVER_URL/kiosk/book_appointment" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
   -d '{"salon_id":987654,"slot":"2027-01-01T09:00:00Z"}')
@@ -1146,7 +1155,7 @@ assert "audit: pay emits no event" "$(event_count '.action == "pay"')" "0"
 #    sentinel slot (its bug, planted on purpose). The booking must still be
 #    served, must still land in the database, and must leave no event behind.
 before_raise=$(events 'length')
-raise_code=$(curl -sS -o /tmp/kiosk-audit-raise.json -w "%{http_code}" -X POST \
+raise_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
   "$SERVER_URL/kiosk/book_appointment" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
   -d "{\"salon_id\":$salon_id,\"slot\":\"2030-01-01T00:00:00Z\"}")

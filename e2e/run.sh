@@ -48,9 +48,9 @@ APP_NAME="demo_app"
 TMP_DIR="$(mktemp -d -t kiosk-e2e.XXXX)"
 SERVER_PID=""
 # The origin's log. Named UNIQUELY PER INVOCATION and read back through this
-# variable, never through a re-typed literal (K-1469): a fixed `/tmp` path is
-# shared with every process on the machine and survives between runs, so a
-# `tail` of it can show a PREVIOUS run's failure as though it were this one's.
+# variable, never through a re-typed literal: a fixed `/tmp` path is shared
+# with every process on the machine and survives between runs, so a `tail` of
+# it can show a PREVIOUS run's failure as though it were this one's.
 # It is deliberately NOT under $TMP_DIR, which `cleanup` removes — a post-mortem
 # wants the whole log after the run has ended, so the failure paths below name
 # the path instead of leaving it to be guessed.

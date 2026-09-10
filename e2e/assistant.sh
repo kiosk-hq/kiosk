@@ -41,10 +41,10 @@ SERVER_URL="${SERVER_URL:-http://127.0.0.1:3001}"
 
 # A scratch file is named UNIQUELY PER INVOCATION and is read back through the
 # variable that names it, never through a pattern and never through a re-typed
-# literal (K-1469). A fixed `/tmp` path is shared with every process on the
-# machine and survives between runs, so a `curl` that fails leaves the PREVIOUS
-# run's body in place and the next line parses it as this run's answer — a
-# clean-looking pass for a request that never happened.
+# literal. A fixed `/tmp` path is shared with every process on the machine and
+# survives between runs, so a `curl` that fails leaves the PREVIOUS run's body
+# in place and the next line parses it as this run's answer — a clean-looking
+# pass for a request that never happened.
 AGENTS_TXT_BODY="/tmp/kiosk-e2e-agents-txt.$$"
 trap 'rm -f "$AGENTS_TXT_BODY"' EXIT
 

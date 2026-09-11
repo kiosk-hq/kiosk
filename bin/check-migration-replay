@@ -627,9 +627,19 @@ end
 # tables. That is a fact about the window, not about the entries, and widening
 # the window with `--since` brings them back — which is the only way to see them
 # work. It is a NOTE and not a failure for exactly that reason: making it fatal
-# would demand the defect exist. (`--since 2026-08-11`, the pre-rebuild window,
-# measured 2026-08-31: 22 distinct leftover objects, all three entries reached,
-# zero undeclared.)
+# would demand the defect exist.
+#
+# THE WIDE RUN IS THE FALSIFIER, AND THE NUMBER BESIDE IT IS AS OF THE DAY IT WAS
+# TAKEN — re-run it rather than quoting this line, because both the entry count
+# and the reach counts move as declarations are added. `--since 2026-08-11`, the
+# pre-rebuild window, measured 2026-09-11: 72 replays across 8 demos, ALL FIVE
+# entries reached (telemetry x207, kiosk.actions x45, kiosk.action_log x144,
+# notification_pubkey x51, kyc_attributes x4), zero undeclared, exit 0. It was
+# three entries and 22 distinct leftover objects when this was first measured on
+# 2026-08-31; the entries grew and the sentence did not, which is the reason the
+# count is now stated with its date and an instruction to take it again. Run it
+# when a declaration is ADDED: that is the only thing that shows the object it
+# excuses was ever real, and a zero in the default window says nothing either way.
 unless ACCEPTED_LEFTOVERS.empty? || options[:list]
   reached = ACCEPTED_LEFTOVERS.keys.count { accepted_reach[_1].positive? }
   detail  = ACCEPTED_LEFTOVERS.map { |k, e| "#{k} (#{e[:row]}) x#{accepted_reach[k]}" }.join(", ")

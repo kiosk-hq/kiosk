@@ -435,6 +435,20 @@ if ARGV.include?("--self-test")
       ops:  SELF_TEST_AC_PLANT,
       expect: /tudu: app\/controllers\/application_controller\.rb names "schema, query, run, pay" in CODE/ },
 
+    { id: "wrong-door-rationale-one-sided", kind: :break,
+      rule: "The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508)",
+      what: "one demo's copy of the shared rationale is edited and the other six are not",
+      ops:  [[:edit, "kiosk-demo-atablefor/app/controllers/application_controller.rb",
+              "name no registered verb, so", "name no registered VERB, so"]],
+      expect: /atablefor: the wrong-door rationale above `hint:` in app\/controllers\/application_controller\.rb differs from the 6 copy/ },
+
+    { id: "vacuity-wrong-door-anchor", kind: :vacuity,
+      rule: "The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508)",
+      what: "the anchor stops finding the block, so a lockstep rule with nothing to compare must say so",
+      ops:  [[:edit, "bin/check-demo-copies", "WRONG_DOOR_LABEL = \"hint:\"\n",
+              "WRONG_DOOR_LABEL = \"no_such_key_in_any_copy:\"\n"]],
+      expect: /the K-1508 rule found 0 wrong-door rationale block\(s\)/ },
+
     { id: "retired-wire-on-static-page", kind: :break,
       rule: "The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)",
       what: "the same enumeration comes back on the page served for every unrouted path",
@@ -2994,6 +3008,119 @@ prose_units.each do |unit|
             "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, the " \
             "modules this origin serves); do NOT re-enumerate verbs, which would be a third copy " \
             "of the catalog kiosk.json deliberately stopped publishing."
+end
+
+# ── The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508) ─
+#
+# The block of comments directly above the `hint:` key of that same CSRF rescue
+# is not a per-demo note: it is the REASON the hint names what the discovery
+# document carries instead of enumerating verbs, and it is byte-identical in all
+# seven operator copies because K-1431 rewrote all seven in one wave. It had to:
+# a two-demo fix would have left five copies of a deleted sentence standing with
+# nothing to say so, which is the finding K-1431 was filed for.
+#
+# AND NOTHING HELD IT. `app/controllers/application_controller.rb` is declared
+# `:code`, and `:code` compares MODULO COMMENTS — the right rule for a file whose
+# header must name its own demo's controllers, and the exact reason this block is
+# unguarded. WATCHED, not argued: one word changed in atablefor's copy (`verb` to
+# `VERB`) left `check-demo-copies`, `check-prose-counts`, `check-redteam-headers`,
+# `check-shipped-archaeology` and `check-demo-derivations` ALL at exit 0. So the
+# next wave that edits one copy diverges silently, in seven files, which is the
+# shape K-1021 recorded once and this file's `:code` rule reproduces every time.
+#
+# THE BLOCK IS LOCATED STRUCTURALLY, NOT BY A NEEDLE. A hand-typed anchor string
+# is a hand-kept list of one, and this repository has measured what those cost.
+# So it is found the way a reader finds it: lex the file, take the `hint:` LABEL
+# of the rescue body, and walk back over the contiguous run of lines that carry
+# nothing but a comment. Ripper rather than a `^\s*#` scan, for the reason
+# `code_digest` and `comment_prose` both give — a `#` inside a string or a regex
+# is not a comment, and a trailing comment after code is not a block line either.
+# A file with no `hint:` label yields nothing and is skipped, which is how the
+# e2e fixture stays out of this rule without being named in it; a file with more
+# than one is an ERROR rather than a guess, so the anchor cannot silently move.
+#
+# WHAT THIS RULE IS NOT. It does not say the block is CORRECT — K-1088 above
+# holds the live JSON body against the retired vocabulary and is where that
+# question lives. This one says only that the seven answers are the SAME answer,
+# so a wave that improves one has to improve all of them or go red.
+WRONG_DOOR_LABEL = "hint:"
+
+# The contiguous comment-only lines immediately above the `hint:` label, with
+# each line stripped of trailing space so an invisible byte is not a divergence.
+# Returns nil when the file carries no such label, and raises the count when it
+# carries more than one — a moved anchor must cost a decision, not a silent pass.
+def wrong_door_rationale(path)
+  toks = Ripper.lex(File.read(path))
+  labels = toks.select { |(_, type, tok, _)| type == :on_label && tok == WRONG_DOOR_LABEL }
+  return [nil, labels.length] unless labels.length == 1
+
+  line = labels.first[0][0]
+  comment_at = {}
+  code_at    = {}
+  toks.each do |(pos, type, tok, _)|
+    next if %i[on_sp on_nl on_ignored_nl].include?(type)
+
+    if COMMENT_TOKENS.include?(type) then comment_at[pos[0]] ||= tok.rstrip
+    else code_at[pos[0]] = true
+    end
+  end
+
+  run = []
+  n = line - 1
+  while comment_at.key?(n) && !code_at.key?(n)
+    run.unshift(comment_at[n])
+    n -= 1
+  end
+  [run, 1]
+end
+
+# Three lines is not a threshold anyone tuned: it is the floor below which a
+# block compares equal BY ACCIDENT, which would make this rule read green while
+# holding nothing — the same vacuity the `:code` rule already has here.
+WRONG_DOOR_MIN_LINES = 3
+
+wrong_door_units = prose_units.filter_map do |unit|
+  run, label_count = wrong_door_rationale(unit[:ac])
+  if run.nil? && label_count > 1
+    errors << "#{unit[:label]}: #{unit[:rel]} carries #{label_count} `#{WRONG_DOOR_LABEL}` " \
+              "labels, so the K-1508 rule cannot tell which one the wrong-door rationale sits " \
+              "above. Give the other one a different key, or re-point this rule at the rescue " \
+              "body explicitly — do not leave it guessing."
+    next
+  end
+  next if run.nil? || run.empty?
+
+  if run.length < WRONG_DOOR_MIN_LINES
+    errors << "#{unit[:label]}: the comment block above `#{WRONG_DOOR_LABEL}` in #{unit[:rel]} is " \
+              "#{run.length} line(s) (K-1508). A block this short compares equal by accident, so " \
+              "this rule would read green while holding nothing. Keep the rationale, or delete " \
+              "this rule deliberately — do not let it drain to vacuity."
+  end
+  { label: unit[:label], rel: unit[:rel], block: run.join("\n") }
+end
+
+if wrong_door_units.length < 2
+  errors << "check-demo-copies: the K-1508 rule found #{wrong_door_units.length} wrong-door " \
+            "rationale block(s) to compare. The CSRF rescue has moved, or its `hint:` key has " \
+            "been renamed, and a lockstep rule with fewer than two copies passes everything."
+else
+  groups = wrong_door_units.group_by { |u| u[:block] }
+  if groups.length > 1
+    majority = groups.max_by { |_, us| us.length }
+    groups.each do |block, us|
+      next if block == majority.first
+
+      errors << "#{us.map { |u| u[:label] }.join(', ')}: the wrong-door rationale above " \
+                "`#{WRONG_DOOR_LABEL}` in #{us.first[:rel]} differs from the " \
+                "#{majority.last.length} copy(ies) in " \
+                "#{majority.last.map { |u| u[:label] }.join(', ')} (K-1508). That block is one " \
+                "answer to one question — why the live CSRF body names what the discovery " \
+                "document carries instead of enumerating verbs — and it is compared by NOTHING " \
+                "else, because this file's rule is `:code` and `:code` compares modulo comments. " \
+                "Edit all #{wrong_door_units.length} copies in one wave, or give this demo a " \
+                "reason of its own and record it here."
+    end
+  end
 end
 
 # ── The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)

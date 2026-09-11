@@ -21,12 +21,12 @@
 # and refuses to guess: it never edits in place, never patches a line, and never
 # merges. It ships the whole file or it ships nothing.
 #
-# WHAT MADE THAT SAFE TO DO, and it was checked rather than assumed: the live
-# file was read first and is 49 lines, ALL of them Kiosk — eight demo vhosts and
-# one snippet, no other sites. deploy/Caddyfile's own header claimed the box
-# "also serves other sites", which was FALSE at the time this was written; had it
-# been true, owning the whole file would have been the wrong design and this
-# would have had to manage a fragment instead.
+# WHAT MAKES THAT SAFE, and it is checked rather than assumed: the live file is
+# read first, and it is 49 lines, ALL of them Kiosk — eight demo vhosts and one
+# snippet, no other sites. Owning the whole file is the right design only while
+# that holds. If this box ever gains a non-Kiosk vhost, this script has to
+# manage a FRAGMENT instead, so re-read /etc/caddy/Caddyfile before assuming it
+# still holds.
 
 set -euo pipefail
 

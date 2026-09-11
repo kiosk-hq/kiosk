@@ -3,7 +3,8 @@
 # K-683: no demo may `require` its way into another demo's tree.
 #
 # WHAT THIS CATCHES, AND WHY NOTHING ELSE DID. K-681 was skooti's
-# `prove_test_issuer.rb` loading `kiosk-demo-prove/lib/prove_key.rb` — one
+# `prove_test_issuer.rb` loading the broker's `ProveKey` source out of
+# `kiosk-demo-prove` — one
 # standalone Rails app pulling another standalone Rails app's source into its
 # own process. Each demo has its own Gemfile, its own initializers and its own
 # autoloader, so a file that crosses that boundary is loaded under a

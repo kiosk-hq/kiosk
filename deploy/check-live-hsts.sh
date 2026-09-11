@@ -20,21 +20,20 @@
 # proves the header arrives at the moment it runs, and this proves it still
 # arrives now, from anywhere, without ssh.
 #
-# WHY IT PROBES THE WIRE RATHER THAN PARSING A CONFIG. Its retired sibling
-# (deploy/check-edge-ratelimit.sh, gone with the default throttle it asserted)
-# answered "does this config reach a directive", which is the right question for
-# a directive that cannot be observed without flooding the box. HSTS is on every
-# single response, so the strongest available oracle is the response itself --
-# and it is the oracle that caught this: a config check run on the template
-# would have said OK for as long as the box was serving without it.
+# WHY IT PROBES THE WIRE RATHER THAN PARSING A CONFIG. "Does this config reach
+# a directive" is the right question only for a setting that cannot be observed
+# without flooding the box. HSTS is on every single response, so the strongest
+# available oracle is the response itself -- and it is the oracle that caught
+# this: a config check run on the template would have said OK for as long as the
+# box was serving without it.
 #
 # WHAT IT CANNOT SEE, said plainly:
 #   * Anything about a response the origin did not produce. An edge-generated
-#     refusal is invisible here. When the fleet ran a per-IP throttle that was
-#     deliberate -- reaching one would have cost 60+ requests against a bucket
-#     shared across every demo vhost, i.e. a self-inflicted outage on the whole
-#     fleet to observe one header. There is no default throttle any more
-#     (T-171), so today it is simply out of scope rather than avoided.
+#     refusal is invisible here, and this script does not try to provoke one.
+#     The fleet runs no throttle at all (T-171), and the snippet
+#     deploy/Caddyfile ships commented is a bucket shared across every demo
+#     vhost: reaching it would cost 60+ requests, i.e. a self-inflicted outage
+#     on the whole fleet to observe one header.
 #   * Whether HSTS came from Caddy, from a CDN, or from the app. It answers
 #     "does the client get one", which is the only thing a client can act on.
 #   * kiosk.tech itself, unless you pass it. That host is GitHub Pages, not this

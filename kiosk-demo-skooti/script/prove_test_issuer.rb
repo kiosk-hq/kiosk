@@ -14,7 +14,7 @@ require "jwt"
 #
 # WHY IT DOES NOT LOAD THE BROKER'S ProveKey. The broker's key and issuer live
 # in the BROKER's own per-environment Rails config (Rails.configuration.x.prove),
-# so `require`-ing the sibling app's kiosk-demo-prove/lib/prove_key.rb across
+# so `require`-ing the sibling app's kiosk-demo-prove/app/services/prove_key.rb across
 # the app boundary only works inside the BOOTED BROKER — and this file is
 # loaded into two FOREIGN processes, where it would break in two ways:
 #   * skooti's own Rails (demo:rideflow, demo:isolation, the KYC rake tasks):

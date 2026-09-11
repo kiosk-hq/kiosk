@@ -11,18 +11,16 @@
 # change nothing. Do not hand-edit /etc/caddy/Caddyfile: this file is the source
 # of truth and the script overwrites it entirely.
 #
-# THE NOTE THAT USED TO BE HERE SAID THE OPPOSITE, AND IT WAS FALSE. It warned
-# that the live VPS is a SHARED host whose Caddyfile "also serves other sites",
-# and that overwriting it "would drop the other sites' vhosts". MEASURED
-# 2026-09-06 before the first deploy: /etc/caddy/ holds one Caddyfile and one
-# old backup, nothing imports anything, and the RUNNING caddy's admin API lists
-# exactly the eight demo hosts and no others. There were no other sites. The
-# note cost a month: it is why the template was never applied, which is why the
-# fleet sent no HSTS (K-1295) while this file shipped the header enabled, and
-# why the fleet throttled every request (K-1168) while this file shipped the
-# limiter commented out. A warning nobody can check is a warning nobody can
-# retire -- so if this box ever does gain a non-Kiosk vhost, the answer is to
-# make the script manage a fragment, not to write another note.
+# THIS BOX SERVES NOTHING BUT KIOSK, WHICH IS WHY THE SCRIPT MAY OVERWRITE.
+# MEASURED 2026-09-06, before the first deploy: /etc/caddy/ holds one Caddyfile
+# and one old backup, nothing imports anything, and the RUNNING caddy's admin
+# API lists exactly the eight demo hosts and no others. Re-measure it that way
+# rather than trusting this line. If the box ever does gain a non-Kiosk vhost,
+# the answer is to make the script manage a FRAGMENT -- never to put a warning
+# in this header that a later reader has no way to check, because an uncheckable
+# warning is also one nobody can retire, and the cost of keeping one is that the
+# template stops being applied: a Caddyfile that never reaches the box is a file
+# whose every setting is a claim about a machine that does not run it.
 #
 # Port map (must match env/<app>.env PORT and kiosk-demo@.service):
 #   getgrocery -> 3001   atablefor -> 3002   hoteling  -> 3003
@@ -91,10 +89,11 @@
 # still costs ~18 ms. Worker saturation on this path moved from ~54 req/s to
 # ~3.3k req/s. A proof verifies in 4.46 ms at the params this fleet runs, one
 # worker completes a full registration 60 times a second and a plain read 1075
-# times a second — and the limit that used to run on the box was ONE request a
-# second, keyed per-IP across every vhost, so bursting one demo refused the
-# other seven. That is a self-inflicted outage on the traffic these demos exist
-# to receive, which is the other half of why it came off.
+# times a second — and the snippet below is ONE request a second (60 events a
+# minute), keyed per-IP in a single zone every vhost imports, so enabling it as
+# written makes bursting one demo refuse the other seven. That is a
+# self-inflicted outage on the traffic these demos exist to receive, which is
+# the other half of why it is not a default.
 #
 # ── If you do turn it back on ────────────────────────────────────────────────
 # `rate_limit` is NOT a stock Caddy directive — it comes from the third-party

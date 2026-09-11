@@ -368,7 +368,7 @@ ruby -e '
 # env-var reading, dev/test fallbacks and crash-if-absent fetches live in
 # config/environments/* as Rails custom config, and initializers READ
 # `Rails.configuration.x.kiosk.*`. All seven demos carry it, and this harness
-# — which e2e/README presents as the edits an adopter makes — carries it too. The variables themselves stay honourable from the outside:
+# — which e2e/README.md presents as the edits an adopter makes — carries it too. The variables themselves stay honourable from the outside:
 # this script exports KIOSK_ISSUER and the audit-sink paths before each boot and
 # the block below is what reads them.
 # BOTH files get the SAME block: the harness only ever boots development, but

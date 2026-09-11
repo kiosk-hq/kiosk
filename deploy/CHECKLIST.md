@@ -67,7 +67,7 @@ For EACH of the 7 apps:
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.
 - [ ] **Rental-token signing key (skooti only, K-686):** set `KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey -algorithm ed25519)"`
       — REQUIRED, enforced at boot: skooti refuses to start in production without it (and rejects a value that does not
-      parse as an Ed25519 **private** key), because the dev keypair it used to sign with unconditionally ships in this
+      parse as an Ed25519 **private** key), because the dev keypair it signs with outside production unconditionally ships in this
       public repo — anyone with a clone could mint an unlock token every provisioned lock accepts, past reserve, payment,
       ownership and KYC. Provision/flash the locks with the matching public half
       (`openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32`); any lock still carrying the old
@@ -149,7 +149,7 @@ For EACH of the 7 apps:
       надо»). `deploy/Caddyfile` ships `import ratelimit` and the whole `(ratelimit)` snippet
       COMMENTED, that file is what the box runs, and `--apply`'s wire check bursts an origin 75 times
       and fails if a 429 comes back. Do not tick this as a skipped step — there is no step.
-      The exposure it used to cover has not gone away and the analysis is kept beside the commented
+      The exposure the snippet covers has not gone away and the analysis is kept beside the commented
       block in `deploy/Caddyfile` and in `deploy/README.md` §"Edge rate-limit"; if the box ever
       actually falls over, re-enable it IN THE REPO and deploy, then pick the bound from a burst
       rather than from either number written down (1 req/s live, 60/min in the snippet, neither
@@ -168,12 +168,12 @@ For EACH of the 7 apps:
       This tick exists because an earlier one did not: HSTS was in the template from K-916, the tick
       was written, never ticked, and MEASURED 2026-09-05 not one deployed origin sent the header — for
       as long as the box had been serving. A checklist line is not a mechanism.
-- [ ] **Prove the throttle is really off, and burst before you probe the sibling (T-171):** the bucket
-      was per-IP across every vhost, so 60+ sequential requests to one origin used to 429 the other
-      seven — but it drained in under a minute, so a sibling probed AFTER the burst answers 200
-      whether or not a limiter exists. Probe the sibling while the burst is still running, or a
-      removed limiter and a drained window read identically. `deploy-caddy.sh --apply` does exactly
-      that, inside its verify step.
+- [ ] **Prove the throttle is really off, and burst before you probe the sibling (T-171):** the
+      snippet's bucket is per-IP across every vhost, so 60+ sequential requests to one origin would
+      429 the other seven — and it drains in under a minute, so a sibling probed AFTER the burst
+      answers 200 whether or not a limiter exists. Probe the sibling while the burst is still
+      running, or an absent limiter and a drained window read identically. `deploy-caddy.sh --apply`
+      does exactly that, inside its verify step.
 ## 7. Deploy new code (push-to-deploy) + housekeeping
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,

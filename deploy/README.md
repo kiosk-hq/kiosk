@@ -273,19 +273,20 @@ req/s to ~3.3k req/s.
   on `/kiosk/*`. Nothing on this box can see that one, so write down that you
   did it.
 
-**And pick a bound from a measurement.** The retired limit was 1 req/s against a
-worker that serves 1075 reads a second; the commented snippet says 60/min for no
-recorded reason either. Whatever you turn on, burst the origin first and find
-the rate at which it actually degrades.
+**And pick a bound from a measurement.** The snippet as shipped is 60 events a
+minute -- one request a second -- against a worker that serves 1075 reads a
+second, and nothing anywhere records a measurement behind that number. Whatever
+you turn on, burst the origin first and find the rate at which it actually
+degrades.
 
-**A note for whoever re-checks this.** `deploy/check-edge-ratelimit.sh` used to
-assert the limiter was PRESENT and is **retired** as of this change: with no
-default throttle its assertion is the wrong direction, and inverting it would
-have gone red the day someone correctly turned the throttle back on. What
-replaced it is not another config parse -- it is `deploy-caddy.sh`, which
-compares the WHOLE file against the box and probes the live wire, so a
-divergence in either direction shows up as a diff. Its `--self-test` holds the
-repo posture (HSTS declared, limiter not enabled) and runs in CI.
+**How this posture is checked.** Nothing here parses the installed config
+looking for a `rate_limit` directive. An assertion that the limiter is PRESENT
+is the wrong direction while there is no default throttle, and an assertion that
+it is ABSENT would go red the day someone correctly turns it back on -- so the
+check is not a config parse at all. It is `deploy-caddy.sh`, which compares the
+WHOLE file against the box and probes the live wire, so a divergence in either
+direction shows up as a diff. Its `--self-test` holds the repo posture (HSTS
+declared, limiter not enabled) and runs in CI.
 
 ## HSTS -- live on all eight origins (K-1295)
 

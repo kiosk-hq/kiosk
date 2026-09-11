@@ -87,6 +87,32 @@
 #     mirror stop mirroring. WHICH member is exempt is READ OUT of that
 #     script rather than restated here — see `exempt_mirror_members`.
 #
+# And `deploy/`, the fleet runbook — ON TWO RULES ONLY, and the boundary is the
+# point rather than a detail (K-1409, reopened twice). This directory was in NO
+# scope at all until `deploy/README.md` was found telling its re-checker to look
+# at `deploy/check-edge-ratelimit.sh`, a file that does not exist and has not
+# since 2026-09-06. Every other guard that owns this tree reads the Caddyfile,
+# the wire or the box; nothing read a sentence, so the sentence stood.
+#
+#   * `deploy/**` — every tracked file. A self-test arm re-derives the tracked
+#     set from git and fails if one of them falls outside this scope, so a file
+#     added with an extension nobody thought of is a DECISION rather than a
+#     silent gap.
+#
+#   R1 (a ledger id), R2 (an ADR reference), R3 (Cyrillic) and R4 (the
+#   maintainer named) DO NOT REACH IT, on the same footing as `bin/`: this is
+#   maintainer tooling for one fleet, its reader is the person holding the ssh
+#   key, and the harm those four rules exist for is that a STRANGER cannot
+#   resolve what they are reading. R5, R6 and R7 do reach it, because their
+#   harm is different in kind — a document that describes something which does
+#   not exist is broken for EVERY reader, the maintainer included, and that is
+#   exactly what was measured here. MEASURED at head when the scope was added,
+#   `git grep -cP` over `-- 'deploy/*'`: R1 would fail on 168 lines in 12 files,
+#   R3 on 11 lines in 4, R4 on 5 lines in 4. Those numbers are NOT a judgement
+#   that the four are acceptable here — the R3/R4 residue is filed as K-1505 —
+#   they are the measurement behind not turning this guard red on a standing
+#   backlog nobody has agreed to drain.
+#
 # ── WHAT IS EXEMPT, DECLARED WITH ITS REASON ─────────────────────────────────
 #
 #   * `bin/`, `CHANGELOG.md`, `CLAUDE.md` — Phil's standing exemption. The
@@ -135,12 +161,15 @@
 #       DEMO-EXEMPT because `kiosk-demo-philslist` is an app called Phil's List
 #       and the word is its subject matter, not an attribution. No other scope
 #       has a reason like that.
-#   R5  no RETIRED WIRE VERSION named in prose — in the gems, the demos and the
-#       harness. See the section below; the pattern is DERIVED from
-#       `Kiosk::Protocol::API_VERSION` rather than typed here.
+#   R5  no RETIRED WIRE VERSION named in prose — in the gems, the demos, the
+#       harness and the deploy directory. See the section below; the pattern is
+#       DERIVED from `Kiosk::Protocol::API_VERSION` rather than typed here.
 #   R6  no sentence NARRATING A PAST STATE — `formerly`, `previously`,
 #       `historically`, `until recently`, `used to be`, `before the fix`,
-#       `cutover`, `has since been — in the same three scopes. See below.
+#       `cutover`, `has since been — in the same four scopes. See below.
+#   R7  no REPOSITORY PATH THAT DOES NOT EXIST — in EVERY scope, `spec/`
+#       included. See the section below; the directory prefixes it recognises
+#       are DERIVED from the repository layout rather than typed here.
 #
 # AND ONE THING THAT IS COUNTED RATHER THAN BANNED:
 #
@@ -205,6 +234,36 @@
 #   Nothing lexical separates «the engine used to read `role`» from «a key used
 #   to sign mandates», so it cannot be a BAN. It is a CENSUS instead — see the
 #   next section, which also records the measurement that settled the question.
+#
+# ── R7: A PATH A DOCUMENT NAMES MUST RESOLVE (K-1409) ───────────────────────
+#
+# R6 is a LEXICAL proxy and says so; R7 is the same class asked as a question
+# the filesystem answers, which is why it is worth having beside it. The
+# sentence that reopened K-1409 twice carries no R6 marker at all — it names a
+# script, in the present tense, and the script is gone. No idiom set finds that.
+# `File.exist?` does, every time, for every spelling.
+#
+# THE PREFIXES ARE DERIVED, NOT LISTED: every `kiosk-*` directory at the
+# repository root, plus `deploy` and `e2e`. A path that starts with one of those
+# is unambiguously repository-relative, so it can be resolved without guessing.
+# `bin/` is deliberately NOT among them and that is a measurement rather than a
+# preference: `bin/rails`, `bin/dev`, `bin/setup` and `bin/demo` are each a
+# DEMO'S binstub, resolved relative to the app being run, and a repo-root reading
+# of them is wrong in 100-plus places — the rule would have to be switched off
+# within the hour. Anything under `bin/` therefore stays unchecked here, and that
+# gap is stated rather than hidden.
+#
+# IT APPLIES IN EVERY SCOPE, `spec/` INCLUDED, because it is the one rule in
+# this file that is not about WHO is reading: a dangling path is equally wrong
+# for the maintainer, the adopter and the stranger.
+#
+# WHAT MAKES IT SAFE, measured at head when it was written over the 936 files in
+# scope: 209 path tokens resolve and 3 distinct ones did not, at 5 sites — the
+# two that reopened K-1409, a stale `lib/prove_key.rb` in two files that named a
+# path a move had emptied (K-1504), and one extensionless `e2e/README`. Zero
+# false positives. Its vacuity arm asserts the RESOLVING count is non-zero,
+# because a pattern that stopped matching paths would print the same clean line
+# as a repository with no dangling ones.
 #
 # ── C1: THE `used to` CENSUS — PRINTED, NEVER RED ──────────────────────────
 #
@@ -340,6 +399,33 @@ PAST_NARRATION_RE =
   /\b(?:formerly|previously(?!-)|historically|until\s+recently|(?<!-)used\s+to\s+be|
        before\s+the\s+fix|cutover|has\s+since\s+been)\b/ix
 
+# A repository-relative path, recognised by a prefix that EXISTS at the root.
+# Derived so a new gem or demo is covered the day it lands; `bin/` is excluded
+# for the reason the header gives (every `bin/<x>` in this tree is a demo's own
+# binstub). The trailing class refuses a closing `.` or `/` so a path at the end
+# of a sentence — «see e2e/README.md.» — resolves as the file rather than as a
+# miss.
+def repo_path_prefixes
+  (Dir.glob(File.join(REPO, "kiosk-*")) + [File.join(REPO, "deploy"), File.join(REPO, "e2e")])
+    .select { |d| File.directory?(d) }
+    .map { |d| File.basename(d) }
+    .uniq
+    .sort
+end
+
+REPO_PATH_PREFIXES = repo_path_prefixes.freeze
+
+REPO_PATH_RE =
+  Regexp.new("(?<![\\w/.@-])(?:#{REPO_PATH_PREFIXES.map { |p| Regexp.escape(p) }.join('|')})" \
+             "/[A-Za-z0-9._@/-]*[A-Za-z0-9_@-]")
+
+# The tokens on one line that name nothing. `File.exist?` and not `git ls-files`
+# on purpose: a path this repository generates but does not track (`e2e/.gems`,
+# a demo's `tmp/`) is still a path a reader can follow.
+def unresolved_paths(line)
+  line.scan(REPO_PATH_RE).uniq.reject { |t| File.exist?(File.join(REPO, t)) }
+end
+
 # `scopes` is which published surface each rule speaks for. R4 reaches every
 # scope but the demos, for the reason given in the header: one demo is NAMED
 # after the maintainer.
@@ -352,10 +438,12 @@ RULES = [
     none: "no Cyrillic" },
   { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e], what: "the maintainer named in prose",
     none: "no maintainer named in prose" },
-  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e], what: "a retired wire version",
+  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e deploy], what: "a retired wire version",
     none: "no retired wire version", prose_only: true },
-  { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e],
-    what: "a sentence narrating a past state", none: "no narration of a past state" }
+  { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy],
+    what: "a sentence narrating a past state", none: "no narration of a past state" },
+  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec e2e deploy], resolve: true,
+    what: "a repository path that does not exist", none: "no dangling repository path" }
 ].freeze
 
 # A bare `used to`, with the copula excluded because R6 already fails on it and
@@ -370,7 +458,7 @@ BARE_USED_TO_RE = /\b(?<!-)used\s+to\b(?!\s+be\b)/i
 
 # Counted, never banned. Same shape as a rule so `scan` can take it unchanged.
 CENSUS = [
-  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e],
+  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e deploy],
     what: "a bare `used to`", none: "no bare `used to`" }
 ].freeze
 
@@ -452,6 +540,25 @@ def e2e_files(root)
   Dir.glob(File.join(root, "**", "*"))
     .reject { |p| p.include?("/.gems/") || p.include?("/tmp/") }
     .select { |p| File.file?(p) && E2E_EXTS.include?(File.extname(p)) }
+    .sort
+end
+
+# The fleet runbook. Every file here is text — the runbook, the checklist, the
+# Caddy template (no extension), the unit file, the SQL and the `.env.example`
+# set — so the extension list is a statement about what is THERE rather than a
+# filter against binaries, and a self-test arm re-derives the tracked set from
+# git and fails when something falls outside it.
+DEPLOY_ROOT = File.join(REPO, "deploy").freeze
+DEPLOY_EXTS = %w[.md .sh .sql .service .example .conf .yml .json .txt].freeze
+
+def deploy_dirs
+  File.directory?(DEPLOY_ROOT) ? [DEPLOY_ROOT] : []
+end
+
+def deploy_files(root)
+  Dir.glob(File.join(root, "**", "*"))
+    .select { |p| File.file?(p) && (DEPLOY_EXTS.include?(File.extname(p)) ||
+                                    File.extname(p).empty?) }
     .sort
 end
 
@@ -607,6 +714,11 @@ def scan(path, rules = RULES)
       # The one place a gem states its author, and RubyGems reads it.
       next if rule[:id] == "R4" && line.match?(AUTHORS_RE)
 
+      # A resolving rule matches a SHAPE and is only a violation when the thing
+      # the shape names is absent, so the pattern alone decides nothing.
+      dangling = rule[:resolve] ? unresolved_paths(line) : nil
+      next if dangling&.empty?
+
       # A citation line the lexer never reached cannot be classified, and
       # defaulting it to :comment would be a guess dressed as an answer.
       lexed = false if ruby_file?(path) && !token_lines[lineno]
@@ -620,7 +732,8 @@ def scan(path, rules = RULES)
       # dependency constraint. R5 is about sentences; see the header.
       next if rule[:prose_only] && where == :code
 
-      hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, where, line.strip[0, 100])
+      text = dangling ? "#{dangling.join(', ')} — #{line.strip[0, 80]}" : line.strip[0, 100]
+      hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, where, text)
     end
   end
   [hits, lexed]
@@ -647,7 +760,9 @@ REMEDY = {
   "R5" => "no reader of this repository has met that wire. Say what the wire does NOW; the removed " \
           "one gets one changelog line and nothing else",
   "R6" => "a reader arriving today has no memory to correct. State the property in the present; if " \
-          "it is a caveat they can still meet, say what they will meet"
+          "it is a caveat they can still meet, say what they will meet",
+  "R7" => "the path names nothing — a reader cannot follow it. Point at what is there now, or " \
+          "drop the reference and state the property"
 }.freeze
 
 SCOPES = {
@@ -661,7 +776,11 @@ SCOPES = {
           per: "spec/** (text extensions) — R3 and R4 only" },
   e2e: { label: "the e2e harness", dirs: -> { e2e_dirs }, files: ->(d) { e2e_files(d) },
          per: "e2e/** (.md .sh .rb .json), minus .gems/ and tmp/; a vendored " \
-              "schema mirror is read for its TOP-LEVEL `$comment` only" }
+              "schema mirror is read for its TOP-LEVEL `$comment` only" },
+  deploy: { label: "the deploy runbook", dirs: -> { deploy_dirs },
+            files: ->(d) { deploy_files(d) },
+            per: "deploy/** (every tracked file) — R5, R6 and R7 only; R1–R4 stop " \
+                 "at the door on `bin/`'s footing (maintainer tooling for one fleet)" }
 }.freeze
 
 def run_check
@@ -690,7 +809,11 @@ def run_check
   puts "                   `spec.authors` for R4 only; and, for R5 only, a version token that " \
        "is CODE rather than prose"
   puts "                   (a float literal, a dependency constraint) — R5 and R6 do not " \
-       "reach spec/ at all"
+       "reach spec/ at all;"
+  puts "                   deploy/ for R1-R4 on bin/'s footing (maintainer tooling for one " \
+       "fleet), and anything under"
+  puts "                   bin/ for R7 (every `bin/<x>` in this tree is a DEMO's binstub, " \
+       "not a repo-root path)"
   puts
 
   if scoped.any? { |_, files| files.empty? }
@@ -943,12 +1066,46 @@ def self_test
 
     # ── R5/R6 reach the demo and harness scopes, and NOT spec/ ─────────────
     _, cut = plant.call("cutover", "w.rb", "# Retired at the 0.3 cutover, in one wave.\ndef f = 1\n")
-    %i[gem demo e2e].each do |scope|
+    rule_scopes = ->(id) { RULES.find { |r| r[:id] == id }[:scopes] }
+    (rule_scopes.call("R5") & rule_scopes.call("R6")).each do |scope|
       check.call("R5 and R6 both reach the #{scope} scope",
                  %w[R5 R6].all? { |id| scan(cut, rules_for(scope)).first.any? { |h| h.rule[:id] == id } })
     end
     check.call("…and NEITHER reaches a gem's spec/ (a developer surface, like R1 and R2)",
                scan(cut, rules_for(:spec)).first.none? { |h| %w[R5 R6].include?(h.rule[:id]) })
+
+    # ── R7: a path is a violation only when it RESOLVES to nothing ──────────
+    _, gone = plant.call("r7-gone", "gone.md",
+                         "Re-check it with `deploy/check-edge-ratelimit.sh` before the deploy.\n")
+    r7 = ->(p) { scan(p).first.select { |h| h.rule[:id] == "R7" } }
+    check.call("R7 flags a path that names nothing — the sentence that reopened this class " \
+               "twice carries no R6 marker at all, so no idiom set could reach it",
+               r7.call(gone).size == 1)
+    check.call("…and the message NAMES the missing path rather than echoing the line",
+               r7.call(gone).first.text.start_with?("deploy/check-edge-ratelimit.sh —"))
+
+    _, live = plant.call("r7-live", "live.md",
+                         "See `deploy/README.md`, `kiosk-server/lib` and e2e/run.sh.\n")
+    check.call("R7 does NOT flag a path that exists, with or without backticks, and a " \
+               "DIRECTORY resolves as well as a file",
+               r7.call(live).empty?)
+
+    _, stop = plant.call("r7-stop", "stop.md", "The adopter edits e2e/README.md. Then run it.\n")
+    check.call("R7 does NOT flag a path that ends a sentence — the closing `.` is not part " \
+               "of the name",
+               r7.call(stop).empty?)
+
+    _, binstub = plant.call("r7-binstub", "binstub.md",
+                            "Run `bin/rails demo:setup`, then `bin/dev` and `bin/setup`.\n")
+    check.call("R7 does NOT read `bin/<x>` as a repository path — every one in this tree is " \
+               "a DEMO's own binstub, and a repo-root reading is wrong in 100-plus places",
+               r7.call(binstub).empty?)
+
+    rule_scopes.call("R7").each do |scope|
+      check.call("R7 reaches the #{scope} scope — a dangling path is the one defect here " \
+                 "that is not about WHO is reading",
+                 scan(gone, rules_for(scope)).first.any? { |h| h.rule[:id] == "R7" })
+    end
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.
@@ -1078,6 +1235,64 @@ def self_test
   check.call("a gem is NOT in the e2e scope",
              e2e_paths.none? { |p| p.include?("/kiosk-server/") })
 
+  # ── VACUITY: the deploy scope, and the one arm that is not a list ────────
+  #
+  # The extension filter is a statement about what is in `deploy/` today, so the
+  # arm that matters re-derives the TRACKED set from git and fails when a file
+  # falls outside the scope. A `.py` or a `.toml` landing there then costs a
+  # decision instead of becoming a silent gap — which is the shape this whole
+  # directory was until K-1409 was reopened a second time.
+  deploy_roots = deploy_dirs
+  deploy_paths = deploy_roots.flat_map { |d| deploy_files(d) }
+  check.call("the deploy scope finds the runbook directory", !deploy_roots.empty?)
+  check.call("the deploy scope reads files (#{deploy_paths.size})", !deploy_paths.empty?)
+  tracked_deploy =
+    IO.popen(["git", "-C", REPO, "ls-files", "deploy"], &:read).lines(chomp: true)
+      .map { |rel| File.join(REPO, rel) }
+      .select { |p| File.file?(p) }
+  missing_from_scope = tracked_deploy - deploy_paths
+  check.call("every TRACKED file under deploy/ is in the deploy scope " \
+             "(#{tracked_deploy.size} tracked)" \
+             "#{missing_from_scope.empty? ? '' : " — outside: #{missing_from_scope.map do |p|
+               p.delete_prefix("#{REPO}/")
+             end.join(', ')}"}",
+             !tracked_deploy.empty? && missing_from_scope.empty?)
+  check.call("it reaches the runbook, the checklist, the extensionless Caddy template, the " \
+             "unit file and an env example",
+             deploy_paths.any? { |p| p.end_with?("/deploy/README.md") } &&
+               deploy_paths.any? { |p| p.end_with?("/deploy/CHECKLIST.md") } &&
+               deploy_paths.any? { |p| p.end_with?("/deploy/Caddyfile") } &&
+               deploy_paths.any? { |p| p.end_with?(".service") } &&
+               deploy_paths.any? { |p| p.include?("/deploy/env/") })
+  check.call("R1-R4 do NOT reach the deploy runbook — it is maintainer tooling for one " \
+             "fleet, on bin/'s footing",
+             (rules_for(:deploy).map { |r| r[:id] } & %w[R1 R2 R3 R4]).empty?)
+  check.call("R5, R6 and R7 DO — a document describing something that does not exist is " \
+             "broken for the maintainer too",
+             (%w[R5 R6 R7] - rules_for(:deploy).map { |r| r[:id] }).empty?)
+  check.call("a gem is NOT in the deploy scope",
+             deploy_paths.none? { |p| p.include?("/kiosk-server/") })
+
+  # ── VACUITY: R7's prefixes are DERIVED, and its pattern must still RESOLVE
+  #    paths. A regex that stopped matching prints the same clean line as a
+  #    repository with no dangling path in it. ────────────────────────────────
+  check.call("R7's prefixes are read off the repository root (#{REPO_PATH_PREFIXES.size} " \
+             "directories)", REPO_PATH_PREFIXES.size > 5)
+  check.call("…and include the gems, the demos, the harness and the runbook",
+             %w[kiosk-server kiosk-demo-getgrocery e2e deploy].all? { |d| REPO_PATH_PREFIXES.include?(d) })
+  check.call("…and NOT bin/, whose every entry in this tree is a demo binstub",
+             !REPO_PATH_PREFIXES.include?("bin"))
+  resolving = SCOPES.keys.sum do |scope|
+    next 0 unless rules_for(scope).any? { |r| r[:id] == "R7" }
+
+    SCOPES[scope][:dirs].call.flat_map { |d| SCOPES[scope][:files].call(d) }.sum do |p|
+      rule_source(p).scan(REPO_PATH_RE).count { |t| File.exist?(File.join(REPO, t)) }
+    end
+  end
+  check.call("R7's pattern still RESOLVES repository paths in scope (#{resolving} token(s)) " \
+             "— a pattern that matched nothing would read as a clean tree",
+             resolving.positive?)
+
   # ── VACUITY: R5's ban is DERIVED, so prove the derivation, not a list ────
   #
   # A hand-listed vacuity arm names what it already knows and is blind to what
@@ -1130,8 +1345,12 @@ def self_test
     hits = corpus.count do |p|
       File.read(p, encoding: "UTF-8", invalid: :replace, undef: :replace).match?(rule[:re])
     end
+    # A RESOLVING rule's pattern matches a shape and the filesystem decides the
+    # rest, so this arm can only honestly claim the shape is still being found.
+    # What holds its other half is the resolving-token count above.
+    subject = rule[:resolve] ? "the SHAPE of #{rule[:what]}" : rule[:what]
     check.call(
-      "#{rule[:id]}'s pattern still matches #{rule[:what]} outside the ban " \
+      "#{rule[:id]}'s pattern still matches #{subject} outside the ban " \
       "(CHANGELOG.md + bin/): #{hits} file(s)",
       hits.positive?
     )
@@ -1140,9 +1359,11 @@ def self_test
   # ── VACUITY: the census must reach the scopes it claims, and must be able
   #    to answer NON-empty — a census that structurally cannot print a row is
   #    the same green nothing a rotted ban is ────────────────────────────────
-  check.call("the census declares the same three scopes R6 does",
-             CENSUS.all? { |r| r[:scopes] == %i[gem demo e2e] })
-  census_files = %i[gem demo e2e].sum do |scope|
+  r6_scopes = RULES.find { |r| r[:id] == "R6" }[:scopes]
+  check.call("the census declares the same scopes R6 does (#{r6_scopes.join(', ')}) — derived " \
+             "from the rule, so widening one widens the other",
+             CENSUS.all? { |r| r[:scopes] == r6_scopes })
+  census_files = CENSUS.flat_map { |r| r[:scopes] }.uniq.sum do |scope|
     SCOPES[scope][:dirs].call.sum { |d| SCOPES[scope][:files].call(d).size }
   end
   check.call("the census reads a non-empty file set (#{census_files} files)",
@@ -1151,7 +1372,7 @@ def self_test
   # outcome this one is trying to reach, and a self-test that reddened on a
   # drained census would punish the fix. What holds the pattern is the vacuity
   # arm above, which re-runs it against a corpus that cannot honestly drain.
-  census_rows = %i[gem demo e2e].sum do |scope|
+  census_rows = CENSUS.flat_map { |r| r[:scopes] }.uniq.sum do |scope|
     SCOPES[scope][:dirs].call
                         .flat_map { |d| SCOPES[scope][:files].call(d) }
                         .sum { |p| scan(p, census_for(scope)).first.size }

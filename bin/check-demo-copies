@@ -6916,8 +6916,10 @@ if errors.empty?
        "(pattern and lexer proved against #{DEMO_ID_FIXTURES.size} fixtures this rule owns; " \
        "bin/check-shipped-archaeology carries the SAME four bans — ledger id, ADR " \
        "reference, Cyrillic, maintainer name — into comments and prose, in the demos and " \
-       "in the gems alike. Neither guard READS a sentence: narration of a retired wire " \
-       "element or a retired implementation is held by nothing here)"
+       "in the gems alike, and THAT script is also the one that reads a SENTENCE: its " \
+       "R5/R6/R7 refuse a retired wire version, a past-state construction and a " \
+       "repository path that resolves to nothing. THIS script reads none of them, so its " \
+       "green line says nothing about narration in a compared copy — ask that one)"
   exit 0
 end
 

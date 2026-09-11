@@ -146,7 +146,7 @@ class Kiosk::OrdersController < ActionController::API
                  # DECLARED contract says so too and the wire refuses the rest
                  # before any Ruby runs.
                  delivery_date:    { type: "string", format: "date",
-                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way the day you were offered is the day you get. Optional; omitting books tomorrow at the address." },
+                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way the day you were offered is the day you get. Omitting it books tomorrow at the address." },
                  delivery_address: { type: "string",
                                      description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
                  # `pattern`/`format` so the DECLARED contract carries the shape the

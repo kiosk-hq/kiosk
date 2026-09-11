@@ -55,9 +55,9 @@ module Kiosk
     #
     # == Lazy require, real dependency
     #
-    # `json_schemer` became a RUNTIME dependency of kiosk-server at 0.4. It had
-    # been optional while `input_schema` validation was opt-in; §8.1 item 5
-    # makes coerce-then-validate an operator obligation on every per-verb call,
+    # `json_schemer` is a RUNTIME dependency of kiosk-server, not an optional
+    # extra: §8.1 item 5 makes coerce-then-validate an operator obligation on
+    # every per-verb call,
     # so an origin that cannot load a validator cannot serve a conformant wire
     # — and an install-time optional that fails on the first request is a lie
     # told at the wrong moment.
@@ -157,8 +157,9 @@ module Kiosk
       # Memoized JSONSchemer::Schema for a SINGLE proof, built once from the
       # vendored file. The `Kiosk-PoW` header carries proof(s), which the parser
       # flattens to a list of `{challenge, nonce}` proofs — each validated
-      # against the `proof` $def (not the top-level powField wrapper, which
-      # existed for the retired body-pow `{proofs:[…]}` shape).
+      # against the `proof` $def rather than against the schema's own root,
+      # whose `$ref` types the `powHeader`: one proof OR an array of them, a
+      # choice this parser has already made by the time it gets here.
       def proof_schema
         @proof_schema ||= build_proof_schema
       end

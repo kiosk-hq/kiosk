@@ -18,7 +18,13 @@
 # across the fourteen gems' `lib/`, 473 of them in `kiosk-server` and
 # effectively all of them in comments.
 #
-# THE DEMO TREE IS HELD ON THE SAME TERMS, and the narrower rule it used to be
+# THE DEMO TREE IS HELD ON THE SAME TERMS — and «the same terms» means the
+# SCOPE TABLE below rather than a reader's inference, because for a while it
+# did not: the sentence covered a demo's `spec/` and `test/` and the file set
+# did not, so 14 tracked files were held by nothing at all (K-1509, K-1435).
+# Each tree now has two scopes that MEET: the surfaces a receiver browses, on
+# R1–R3 and R5–R7, and the test tree, on R3 and R7. R4 is the one asymmetry and
+# it is declared at the rule. The narrower rule this tree used to be
 # held on is why this file says so at length. `bin/check-demo-copies` bans a
 # ledger id in the demo tree's CODE TOKENS only — a `desc`, a banner, an
 # `abort`, an assertion label — on the argument that those reach an operator's
@@ -65,6 +71,20 @@
 #   Restricted to TEXT extensions (.rb .rake .ru .erb .yml .sql .md .json .tt
 #   .txt .html) because `config/` also holds credentials keys and `.enc`
 #   blobs, and a byte-scan of those answers a question nobody asked.
+#
+#   * `spec/**` and `test/**` — a SEPARATE scope, on the footing the gems' own
+#     spec trees are held on, and it is separate rather than folded in because
+#     the two receivers differ. A demo's spec tree does not ship anywhere, but
+#     the repository is public and a stranger who clones it to see how a worked
+#     example is TESTED reads it exactly as they read `app/`. Until K-1509 it
+#     was in NO scope at all: the `spec` scope below is derived with the demo
+#     directories SUBTRACTED, and the demo file set above names neither
+#     directory, so the two met nowhere and left 14 tracked files across 6
+#     demos unheld. WATCHED, not argued: one line carrying a ledger id, an ADR
+#     reference, Cyrillic and the maintainer's name at once, appended to
+#     `kiosk-demo-stylish/spec/salon_clock_spec.rb`, left this guard at exit 0
+#     naming nothing, while the identical line in `kiosk-server/spec/` reddened
+#     it.
 #
 # And `e2e/`, the end-to-end harness, where the receiver is an ADOPTER: its
 # README is a teaching surface this repository points people at, `run.sh` is
@@ -123,13 +143,24 @@
 #   * `spec/`, `test/` — developer surfaces, absent from every `spec.files`,
 #     and the constitution REQUIRES an inline TODO/FIXME to carry a ledger id,
 #     which is a rule these directories have to be able to obey. So R1 and R2
-#     do not reach them. R3 AND R4 DO: a gem's `spec/` is not shipped but it IS
+#     do not reach them, and neither do R5 and R6. R3 AND R4 DO: a gem's
+#     `spec/` is not shipped but it IS
 #     published, and neither a Russian sentence nor an attributed decision is
 #     readable to a stranger who clones this repository, whether or not it
 #     travels in the .gem. An example's comment is where a reader goes to find
 #     out what a control PROMISES, and «the maintainer ruled X» tells them to
-#     trust a person instead. `test/` stays out entirely — no gem here has
-#     one, so a rule over it would cover nothing.
+#     trust a person instead.
+#     A DEMO's `spec/` and `test/` are held the same way, in their own scope,
+#     with ONE difference and it is R4's existing demo exemption rather than a
+#     new judgement: `kiosk-demo-philslist` is an app called Phil's List, and a
+#     sentence that is legal in its `app/` cannot be illegal in its `spec/` —
+#     it is the same app and the same subject matter. The cost is stated rather
+#     than hidden: «the maintainer ruled X» in a demo's spec is held by nothing,
+#     exactly as it is in a demo's `app/`. No gem here has a `test/` and at
+#     least one demo does, which is why the directory is globbed in the demo
+#     half and not in the gem half — and a self-test arm re-derives the TRACKED
+#     set from git and fails when a file falls outside the scope, so the
+#     question «which directory is it this week» is answered by the tree.
 #   * `Gemfile`, `Rakefile`, `.rubocop.yml` and the rest of a gem's root —
 #     build and dev tooling, not packaged, never read by an adopter.
 #   * `kiosk-demo-*/bin/` — generator binstubs, and Phil's exemption again.
@@ -171,12 +202,17 @@
 #       included. See the section below; the directory prefixes it recognises
 #       are DERIVED from the repository layout rather than typed here.
 #
-# AND ONE THING THAT IS COUNTED RATHER THAN BANNED:
+# AND TWO THINGS THAT ARE COUNTED RATHER THAN BANNED:
 #
 #   C1  a bare `used to` — PRINTED, NEVER RED. It is the one construction that
 #       spells archaeology and ordinary English with the same letters, so it
 #       gets a census for a human to adjudicate instead of a rule that would
 #       either fail on live prose or say nothing. See the census section below.
+#   C2  `retired` and the PLUPERFECT `had been` — PRINTED, NEVER RED, and for
+#       the same reason. These are the two idioms K-1510 measured walking
+#       straight through R6's fixed word list. They are a CENSUS rather than
+#       new markers on that list because a ban on either would demand a repair
+#       that is wrong. See the census section below for the measurement.
 #
 # ── R5 AND R6: A PUBLIC ARTEFACT DESCRIBES WHAT IS (T-195, K-1460) ──────────
 #
@@ -287,6 +323,54 @@
 # `used to` also matches the tail of «ref-used to», «ab-used to», «ca-used to».
 # The first of those is live in this repository today, and counting it made the
 # gem figure four where three is right.
+#
+# ── C2: `retired` AND THE PLUPERFECT — PRINTED, NEVER RED (K-1510) ─────────
+#
+# R6 is a LEXICAL PROXY over a fixed word list, and a fixed list is a blind spot
+# waiting for the corpus to grow into it. It did: four shipped surfaces narrated
+# a retired element in words the list does not carry — the adjective «retired»
+# and the pluperfect «it had been» — and the guard was green on all four.
+#
+# THE INSTRUMENT WAS CHOSEN BY MEASUREMENT, NOT BY TASTE, and the measurement
+# says a ban would be wrong. Read by THIS SCRIPT over its own four scopes at the
+# head that added it — which is the file set that matters, and it is wider than
+# a hand-run pathspec: `retired` stands at SIX lines and every one of them is
+# LIVE —
+#
+#   * `kiosk-pow/README.md` and `kiosk-pow/kiosk-pow.gemspec` call that gem the
+#     «Retired / optional» backend. That is the gem's status TODAY, on a gem an
+#     adopter can still add to a Gemfile; it is what stops them picking it.
+#   * `kiosk-server/lib/kiosk/server/open_api.rb` says «`params` is the RETIRED
+#     slot and is published as null». The slot is IN the document a reader
+#     fetches, and this sentence is what tells them what they will find in it.
+#   * `deploy/README.md` says `box-prep-…sh` «strips the retired
+#     KIOSK_POW_DEMO/… flags that current code refuses at boot». The word is
+#     load-bearing and the caveat is live: the flags are gone from the code and
+#     may still be in a box's env file, which is why the script exists.
+#   * `deploy/Caddyfile` warns that «the retired live limit was 1 req/s … and
+#     neither number has a recorded derivation» — a bound an operator may still
+#     be running.
+#   * `deploy/check-live-hsts.sh` says «THIS SCRIPT IS NOT RETIRED BY THAT and
+#     must not be», which is a maintainer rule addressed to a future editor and
+#     is the shape the R5/R6 header already declares must never redden.
+#
+# A rule that reddened on those six would demand six repairs that each make the
+# document worse, which is the definition of a gate somebody switches off.
+# The pluperfect is the same story one degree weaker: `had been` stands at
+# THREE, and one of them — philslist's red-team beat, «nothing in the response
+# saying the filter had been discarded» — is an assertion about what the server
+# does NOW, phrased in the tense the attack needs.
+#
+# THOSE NINE ARE A READING OF ONE DAY AND THE CENSUS RE-DERIVES THEM ON EVERY
+# RUN. Read the rows the script prints, not this paragraph.
+#
+# AND THE WIDER RETIREMENT VOCABULARY IS NOT EVEN A CANDIDATE, which is the
+# other half of why this is a census. Over the same file set: «once» 286,
+# «old» 244, «deprecat» 59, «no longer» 47, «legacy» 32, «originally» 9. Those
+# are ordinary English in a repository that documents its own design at length.
+# The lesson R6's header already states — «every marker in it was chosen because
+# it has no reading in which a live sentence needs it» — is what keeps that list
+# SHORT, and this census is where the rest of the vocabulary goes.
 #
 # WHAT A CENSUS ROW DOES NOT MEAN. It is not a finding. Most rows are the
 # passive and want nothing done. And a row inside a VENDORED SCHEMA MIRROR is
@@ -434,7 +518,7 @@ RULES = [
     none: "no ledger id" },
   { id: "R2", re: ADR_RE,        scopes: %i[gem demo e2e], what: "an ADR reference",
     none: "no ADR reference" },
-  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec e2e], what: "Cyrillic prose",
+  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec demo_spec e2e], what: "Cyrillic prose",
     none: "no Cyrillic" },
   { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e], what: "the maintainer named in prose",
     none: "no maintainer named in prose" },
@@ -442,7 +526,7 @@ RULES = [
     none: "no retired wire version", prose_only: true },
   { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy],
     what: "a sentence narrating a past state", none: "no narration of a past state" },
-  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec e2e deploy], resolve: true,
+  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy], resolve: true,
     what: "a repository path that does not exist", none: "no dangling repository path" }
 ].freeze
 
@@ -456,10 +540,27 @@ RULES = [
 # census is only worth its cost while every row it prints is worth reading.
 BARE_USED_TO_RE = /\b(?<!-)used\s+to\b(?!\s+be\b)/i
 
-# Counted, never banned. Same shape as a rule so `scan` can take it unchanged.
+# The two idioms that walked through R6's fixed word list (K-1510). Counted and
+# never banned, for the reason the census section above measures: every live
+# occurrence of `retired` in this tree is a STATUS or a live caveat, not a
+# narration, and a rule would demand three repairs that make the document worse.
+RETIRED_OR_PLUPERFECT_RE = /\b(?:retired|had\s+been)\b/i
+
+# Counted, never banned. Same shape as a rule so `scan` can take it unchanged;
+# `read:` is the adjudication note printed beside each row, per census rather
+# than shared, because the two readings a reader has to separate are different.
 CENSUS = [
   { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e deploy],
-    what: "a bare `used to`", none: "no bare `used to`" }
+    what: "a bare `used to`", none: "no bare `used to`",
+    read: "the passive «employed in order to» wants nothing done; «X used to Y» is " \
+          "archaeology and wants the present tense" },
+  { id: "C2", re: RETIRED_OR_PLUPERFECT_RE, scopes: %i[gem demo e2e deploy],
+    what: "`retired` or the pluperfect `had been`",
+    none: "no `retired` and no pluperfect `had been`",
+    read: "a STATUS («this gem is the retired backend») and a live caveat («strips the " \
+          "retired flags a box may still carry») both want nothing done; «the retired X " \
+          "did Y» is archaeology and wants deleting, with one changelog line as its " \
+          "whole afterlife" }
 ].freeze
 
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
@@ -520,6 +621,24 @@ end
 
 def demo_dirs
   Dir.glob(File.join(REPO, "kiosk-demo-*")).select { |d| File.directory?(d) }.sort
+end
+
+# A DEMO's own spec/ and test/ trees (K-1509). The `spec` scope above subtracts
+# the demos and the demo file set names neither directory, so between them they
+# left these files in no scope at all — held by nothing, in a repository that is
+# published. The receiver is the gem-spec receiver: a stranger reading the tests
+# to find out what the example actually promises.
+DEMO_SPEC_ROOTS = %w[spec test].freeze
+
+def demo_spec_dirs
+  demo_dirs.select { |d| DEMO_SPEC_ROOTS.any? { |r| File.directory?(File.join(d, r)) } }
+end
+
+def demo_spec_files(demo_dir)
+  DEMO_SPEC_ROOTS
+    .flat_map { |r| Dir.glob(File.join(demo_dir, r, "**", "*")) }
+    .select { |p| File.file?(p) && DEMO_EXTS.include?(File.extname(p)) }
+    .sort
 end
 
 # The end-to-end harness. One directory, so `dirs` is a list of one — the
@@ -774,6 +893,11 @@ SCOPES = {
   spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
           files: ->(d) { spec_files(d) },
           per: "spec/** (text extensions) — R3 and R4 only" },
+  demo_spec: { label: "a demo's spec/ and test/ (published, not shipped)",
+               dirs: -> { demo_spec_dirs }, files: ->(d) { demo_spec_files(d) },
+               per: "spec/**, test/** (text extensions) — R3 only, plus R7; R4 stops at " \
+                    "the door on the demo scope's own footing (one demo is NAMED after " \
+                    "the maintainer, and it is the same app in both subtrees)" },
   e2e: { label: "the e2e harness", dirs: -> { e2e_dirs }, files: ->(d) { e2e_files(d) },
          per: "e2e/** (.md .sh .rb .json), minus .gems/ and tmp/; a vendored " \
               "schema mirror is read for its TOP-LEVEL `$comment` only" },
@@ -795,7 +919,9 @@ def run_check
     [name, files]
   end
   puts "  exempt         : bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption); " \
-       "spec/, test/ for R1/R2 (developer surfaces; R3 and R4 DO reach spec/);"
+       "spec/, test/ for R1/R2/R5/R6 (developer surfaces; R3 and R7 reach"
+  puts "                   BOTH a gem's spec/ and a demo's spec/ and test/, and R4 reaches " \
+       "the gem's only);"
   puts "                   Gemfile/Gemfile.lock/mise.toml and the rest of a directory root " \
        "(not packaged, not browsed);"
   puts "                   a demo's public/, log/, tmp/, storage/ and its non-text config " \
@@ -867,13 +993,11 @@ def run_check
         next
       end
       puts "#{rule[:id]}/#{scope}. #{rule[:what]} in #{SCOPES[scope][:label]} — " \
-           "#{seen.size} occurrence(s), CENSUS ONLY, never red:"
+           "#{seen.size} occurrence(s), CENSUS ONLY, never red. Read it: #{rule[:read]}."
       seen.each do |h|
         upstream = "/#{h.path}".match?(VENDORED_MIRROR_RE) ?
                      " [vendored mirror — upstream's byte, not repairable from this side]" : ""
-        puts "  WARN #{h.path}:#{h.line}#{upstream} — #{WHERE[h.where]} — read it: the " \
-             "passive «employed in order to» wants nothing done; «X used to Y» is " \
-             "archaeology and wants the present tense: #{h.text}"
+        puts "  WARN #{h.path}:#{h.line}#{upstream} — #{WHERE[h.where]}: #{h.text}"
       end
     end
   end
@@ -993,6 +1117,10 @@ def self_test
                !scan(demo_only, rules_for(:gem)).first.empty?)
     check.call("…and DOES apply in a gem's spec/ scope (K-1457)",
                !scan(demo_only, rules_for(:spec)).first.empty?)
+    check.call("…and does NOT apply in a DEMO's spec/ or test/ either (K-1509) — a sentence " \
+               "that is legal in Phil's List's app/ cannot be illegal in its spec/; it is " \
+               "the same app and the same subject matter",
+               scan(demo_only, rules_for(:demo_spec)).first.empty?)
 
     # THE VENDORED-MIRROR MASK, both ways. The `$comment` is the harness's own
     # provenance marker and is IN scope; every other byte is the schema
@@ -1073,6 +1201,23 @@ def self_test
     end
     check.call("…and NEITHER reaches a gem's spec/ (a developer surface, like R1 and R2)",
                scan(cut, rules_for(:spec)).first.none? { |h| %w[R5 R6].include?(h.rule[:id]) })
+    check.call("…nor a DEMO's spec/ or test/, which are held on the gem spec tree's footing",
+               scan(cut, rules_for(:demo_spec)).first.none? { |h| %w[R5 R6].include?(h.rule[:id]) })
+
+    # ── K-1509: the four shapes, asked of a demo's spec/ in ONE line ────────
+    #
+    # This is the exact plant that measured the hole — a ledger id, an ADR
+    # reference, Cyrillic and the maintainer's name on one line — so the arm
+    # and the finding are the same sentence.
+    _, demo_spec_line = plant.call("demo-spec-four", "salon_clock_spec.rb",
+                                   "# K-9999 / ADR-0029 — так решил Phil.\n")
+    demo_spec_ids = scan(demo_spec_line, rules_for(:demo_spec)).first.map { |h| h.rule[:id] }.uniq
+    check.call("a demo's spec/ is HELD for Cyrillic (K-1509) — it was in no scope at all, " \
+               "and this line left the guard at exit 0 naming nothing",
+               demo_spec_ids.include?("R3"))
+    check.call("…and R1, R2 and R4 still stop at its door (the developer-surface exemption " \
+               "and the demo's own R4 exemption)",
+               (demo_spec_ids & %w[R1 R2 R4]).empty?)
 
     # ── R7: a path is a violation only when it RESOLVES to nothing ──────────
     _, gone = plant.call("r7-gone", "gone.md",
@@ -1155,6 +1300,36 @@ def self_test
                "sentence, one report",
                scan(copula, CENSUS).first.none? { |h| h.rule[:id] == "C1" } &&
                  scan(copula).first.any? { |h| h.rule[:id] == "R6" })
+
+    # ── C2's own arms (K-1510): the two idioms that walked through R6 ───────
+    c2 = ->(p) { scan(p, CENSUS).first.select { |h| h.rule[:id] == "C2" } }
+
+    _, retired_arch = plant.call("c2-retired", "z1.rb",
+                                 "# It is the direct analogue of the retired StubKyc.attest.\n")
+    check.call("C2 counts the adjective `retired` — the word R6's fixed list does not carry, " \
+               "and the one the clean K-1510 instance was written with",
+               c2.call(retired_arch).size == 1)
+
+    _, pluperfect = plant.call("c2-pluperfect", "z2.rb",
+                               "# It had been optional while validation was opt-in.\n")
+    check.call("…and the pluperfect `had been`, which is the other one",
+               c2.call(pluperfect).size == 1)
+
+    _, retired_live = plant.call("c2-live", "z3.md",
+                                 "It strips the retired flags a box may still carry.\n")
+    check.call("…and it counts the LIVE reading too — a status and a live caveat are the " \
+               "reason this is a census and not a rule; the census does NOT judge",
+               c2.call(retired_live).size == 1)
+
+    check.call("C2 never moves the exit code — it is not in RULES at all",
+               RULES.none? { |r| r[:id] == "C2" })
+
+    _, r6_only = plant.call("c2-no-overlap", "z4.rb",
+                            "# The published field was formerly named `zone`.\n")
+    check.call("C2 does NOT re-report a sentence R6 already FAILS on — one sentence, one " \
+               "report, the same discipline C1 keeps against `used to be`",
+               c2.call(r6_only).empty? &&
+                 scan(r6_only).first.any? { |h| h.rule[:id] == "R6" })
   end
 
   # ── VACUITY: the guard must be looking at something real ──────────────────
@@ -1208,6 +1383,57 @@ def self_test
     demo_paths.none? { |p| p.end_with?(".key", ".pem", ".enc") }
   )
   check.call("a gem is NOT in the demo scope", demo_paths.none? { |p| p.include?("/kiosk-server/") })
+
+  # ── VACUITY: a demo's spec/ and test/ (K-1509) ───────────────────────────
+  #
+  # The arm that matters here is the one that is NOT a list: the tracked set is
+  # re-derived from git and every text file in it must land in this scope, so a
+  # demo that grows a `features/` directory, or a spec written with an extension
+  # nobody thought of, costs a DECISION instead of becoming the same silent gap
+  # this scope was added to close. The extension filter is shared with the demo
+  # scope, so a file git tracks and DEMO_EXTS does not name is reported by name.
+  demo_spec_roots = demo_spec_dirs
+  demo_spec_paths = demo_spec_roots.flat_map { |d| demo_spec_files(d) }
+  check.call("the demo spec/test scope names at least one demo (#{demo_spec_roots.size})",
+             !demo_spec_roots.empty?)
+  check.call("the demo spec/test scope reads files (#{demo_spec_paths.size})",
+             !demo_spec_paths.empty?)
+  check.call("…and contains Ruby files to lex", demo_spec_paths.any? { |p| ruby_file?(p) })
+  check.call(
+    "Ripper actually lexes them (a sampled demo spec file yields tokens)",
+    demo_spec_paths.select { |p| ruby_file?(p) }.take(25)
+                   .all? { |p| !(Ripper.lex(File.read(p)) || []).empty? }
+  )
+  tracked_demo_spec =
+    IO.popen(["git", "-C", REPO, "ls-files", "-z",
+              "kiosk-demo-*/spec/*", "kiosk-demo-*/test/*"], &:read)
+      .split("\0").reject(&:empty?)
+      .map { |rel| File.join(REPO, rel) }
+      .select { |p| File.file?(p) }
+  outside_demo_spec = tracked_demo_spec.reject do |p|
+    demo_spec_paths.include?(p) || !DEMO_EXTS.include?(File.extname(p))
+  end
+  unnamed_ext = (tracked_demo_spec - demo_spec_paths).reject { |p| DEMO_EXTS.include?(File.extname(p)) }
+  check.call("every TRACKED file under a demo's spec/ or test/ that this guard can read is " \
+             "IN the demo spec/test scope (#{tracked_demo_spec.size} tracked)" \
+             "#{outside_demo_spec.empty? ? '' : " — outside: #{outside_demo_spec.map do |p|
+               p.delete_prefix("#{REPO}/")
+             end.join(', ')}"}",
+             !tracked_demo_spec.empty? && outside_demo_spec.empty?)
+  check.call("…and none of them is dropped by an extension DEMO_EXTS does not name " \
+             "#{unnamed_ext.empty? ? '' : "(dropped: #{unnamed_ext.map do |p|
+               p.delete_prefix("#{REPO}/")
+             end.join(', ')})"}",
+             unnamed_ext.empty?)
+  check.call("the demo spec/test scope reaches BOTH directory names it globs " \
+             "(#{DEMO_SPEC_ROOTS.join(', ')})",
+             DEMO_SPEC_ROOTS.all? { |r| demo_spec_paths.any? { |p| p.include?("/#{r}/") } })
+  check.call("a gem's spec/ is NOT in the demo spec/test scope, and a demo's spec/ is NOT " \
+             "in the gem one — the two scopes MEET rather than overlap",
+             demo_spec_paths.none? { |p| p.include?("/kiosk-server/") } &&
+               spec_dirs.flat_map { |d| spec_files(d) }.none? { |p| p.include?("/kiosk-demo-") })
+  check.call("…and a demo's app/ is not in it either — the demo scope keeps its own rules",
+             demo_spec_paths.none? { |p| p.include?("/app/") })
 
   # ── VACUITY: the same questions of the e2e scope ──────────────────────────
   e2e_roots = e2e_dirs

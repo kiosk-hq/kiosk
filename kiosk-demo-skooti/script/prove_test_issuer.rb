@@ -7,10 +7,10 @@ require "jwt"
 # ProveKey PRIVATE key, for skooti's flow/redteam/isolation scaffolding that
 # needs a VALID (or expired) attestation for a given user_id WITHOUT driving the
 # full broker HTTP round-trip (e.g. "KYC a fresh agent so only the gate under
-# test can block"). It is the direct analogue of the retired StubKyc.attest —
-# but now signing with the SHARED broker key skooti trusts (the KYC rake tasks
-# pin c.kyc_public_key to ProveTestIssuer.public_key_pem — the ProveKey public
-# half — via KIOSK_PROVE_PUBLIC_KEY_PEM on the server they spawn).
+# test can block"). It signs with the SHARED broker key skooti trusts: the KYC
+# rake tasks pin c.kyc_public_key to ProveTestIssuer.public_key_pem — the
+# ProveKey public half — via KIOSK_PROVE_PUBLIC_KEY_PEM on the server they
+# spawn.
 #
 # WHY IT DOES NOT LOAD THE BROKER'S ProveKey. The broker's key and issuer live
 # in the BROKER's own per-environment Rails config (Rails.configuration.x.prove),

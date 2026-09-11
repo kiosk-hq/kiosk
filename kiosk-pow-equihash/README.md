@@ -26,8 +26,8 @@ numbers divided: the p50 reference-solver solve at the shipped n=168 k=7
 p95 solve gives ~570×. It is a cross-language ratio — a numpy solver against a
 pure-Ruby verifier — so read it as the order of magnitude a provider actually
 buys, and note that it moves the WRONG way with a faster solver and the right way
-with a native verifier. It is not millions, it was never millions at any tuning
-this gem has shipped (the retired 192/7 gives ~8600×), and the number matters
+with a native verifier. It is not millions at any tuning in the tables below
+(192/7, at ~155 s of solve, gives ~8600×), and the number matters
 because the lever IS the economic argument for a metered toll — a price on
 abuse, not a hardware wall. Cuckatoo29's column says `unbenched` for the same
 reason its verify row does: no measurement of it exists here.

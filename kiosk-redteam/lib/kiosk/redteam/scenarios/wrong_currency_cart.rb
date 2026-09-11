@@ -47,7 +47,14 @@ module Kiosk
           m[:intent] = m[:intent].merge(currency: foreign)
           m[:cart]   = m[:cart].merge(currency: foreign)
           resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+          # THE REFUSAL HAS TO COME FROM THE CASHIER, so the status is named
+          # rather than delegated. Delegating admits the whole `blocked?` set,
+          # and a `401` in it says the CREDENTIAL was rejected -- the cart never
+          # reached the counter, and scoring that a block prints BLOCKED for an
+          # attack that never executed. Same reason a bare `402` is not
+          # delegated either (see `verdict_from`).
           verdict_from(resp,
+                       expect: 403,
                        detail: "a #{foreign} cart settled at a #{native.upcase} operator " \
                                "(HTTP #{resp.status})")
         end

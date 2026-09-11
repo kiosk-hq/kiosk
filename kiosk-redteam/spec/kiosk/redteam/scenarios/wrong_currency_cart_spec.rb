@@ -35,6 +35,20 @@ RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart do
       end
     end
 
+    # AND A 401 IS NOT A CASHIER CHECK EITHER. It says the credential was
+    # rejected, so the cart never reached the counter; delegating to the gem's
+    # generic `blocked?` set would score that a BLOCK and print a refusal for an
+    # attack that never executed, which is why this scenario names its status.
+    it "does not score a 401 as a refusal — the cart never reached the cashier" do
+      stub_registers("a")
+      stub_pay(status: 401, code: "unauthenticated")
+
+      verdict = scenario.call(client, profile)
+
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("want status 403")
+    end
+
     # A crash is not a cashier check. The operator that 500s on a foreign
     # currency has not refused it — it has fallen over on the way to deciding.
     it "does not score a 500 as a refusal" do

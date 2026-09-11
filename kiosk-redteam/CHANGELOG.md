@@ -24,6 +24,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **`Scenarios::WrongCurrencyCart` names `403` instead of delegating to `blocked?`.** Delegating admitted a `401`, which says the credential was rejected rather than that the cashier refused the cart — a refusal scored for an attack that never reached the counter. Same reason the gem already declines to delegate a bare `402`.
+
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - The `pow_required` explanation and the device-grant scenario's
   control-registration refusal, both printed by a battery run, now say what the

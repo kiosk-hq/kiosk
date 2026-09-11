@@ -279,7 +279,9 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
       total_amount_cents: tampered_total,
     )
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    verdict_from(resp, detail: "below-catalog line price settled (HTTP #{resp.status})")
+    # 403 by name, not the delegated `blocked?` set: a 401 would say the
+    # credential was rejected, which means the cashier never priced this cart.
+    verdict_from(resp, expect: 403, detail: "below-catalog line price settled (HTTP #{resp.status})")
   end
 end
 
@@ -300,7 +302,8 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
     m = profile.pay_for.call(client, a, owned)
     m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 100)
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    verdict_from(resp, detail: "total above the order's catalog sum settled (HTTP #{resp.status})")
+    # 403 by name — see TamperedPriceCart above.
+    verdict_from(resp, expect: 403, detail: "total above the order's catalog sum settled (HTTP #{resp.status})")
   end
 end
 

@@ -46,8 +46,9 @@
 #
 # ── THE SCOPE, DERIVED RATHER THAN LISTED ────────────────────────────────────
 #
-# Every non-demo `kiosk-*` gem directory in this repository, and inside it the
-# four things a consumer actually receives:
+# Every non-demo `kiosk-*` gem directory in this repository, and inside it
+# WHAT THAT GEM'S OWN `spec.files` NAMES — the set an adopter receives, read
+# off the gemspec rather than re-globbed (K-1511). It reaches, today:
 #
 #   * `lib/**`      — everything, any file type. The install-generator
 #                     templates under `lib/generators/**/templates` are in here
@@ -56,7 +57,19 @@
 #   * `app/**`      — `kiosk-server` ships `app/views`; two controllers resolve
 #                     their templates from it, so it is packaged, not optional.
 #   * `README.md`   — listed in every gemspec's `spec.files`.
-#   * `<gem>.gemspec` — RubyGems renders its description on the gem's page.
+#   * the packaged assets that are in NEITHER of those directories — the two
+#     PoW backends' `solve*.py` and `requirements.txt`, and
+#     `kiosk-pow-equihash`'s `solve.py` and `bench/` pair. Those seven were the
+#     hole: the hand-list that stood here matched what MOST gems package, and a
+#     file inside the `.gem` but outside the list was read by nobody.
+#   * `<gem>.gemspec` — added on top, because it is not in `spec.files` and
+#     RubyGems renders its description on the gem's page.
+#
+# Minus `CHANGELOG.md` and `LICENSE.txt`, declared at `GEM_NOT_READ` below.
+# THIS LIST IS AN OBSERVATION, NOT THE SCOPE: the scope is the gemspec, so a
+# gem that starts packaging a directory nobody thought of is read the day it
+# does, and a self-test arm re-derives the packaged set and fails on anything
+# this scope drops.
 #
 # And every `kiosk-demo-*` directory, where the receiver is an operator reading
 # a worked example rather than an adopter installing a package, so the file set
@@ -590,11 +603,50 @@ def shipped_gems
      .sort
 end
 
+# THE TWO PACKAGED FILES THIS GUARD DOES NOT READ, each for its own reason.
+# `CHANGELOG.md` is the SANCTIONED AFTERLIFE of everything R6 bans — one line
+# per retirement is the whole point — and it is append-only, so a hit there
+# asks for a repair nobody may make; a self-test arm asserts it is in no scope
+# at all. `LICENSE.txt` is verbatim Apache-2.0 text: not ours to edit either.
+GEM_NOT_READ = %w[CHANGELOG.md LICENSE.txt].freeze
+
+# THE SHIPPED SET IS `spec.files`, NOT A GLOB THAT RESEMBLES IT (K-1511).
+#
+# This used to glob `lib/**` and `app/**` and add `README.md` and the gemspec —
+# a list, written down, matching what most gems package. What an adopter
+# actually receives is whatever that gem's `spec.files` names, and the two are
+# not the same set: MEASURED at head, SEVEN packaged regular files across three
+# gems were outside the glob and therefore held by nothing — `kiosk-pow`'s and
+# `kiosk-pow-cuckoo`'s `solve*.py` and `requirements.txt`, and
+# `kiosk-pow-equihash`'s `solve.py` and its `bench/` pair. Every one of them is
+# inside the `.gem` a stranger installs, which is the receiver this whole file
+# is written for, and `kiosk-pow-equihash/solve.py` is additionally the file
+# four published skill cuts pin by URL. Nothing was lost in the other
+# direction: the glob named no packaged file the gemspec does not (0 at head).
+#
+# The gemspecs call `Dir.glob`, which resolves against CWD, so the load has to
+# happen from inside the gem directory — the same reason `bin/check-gem-packaging`
+# builds each gem from its own dir. That script remains the authority on whether
+# `spec.files` is COMPLETE; this one only reads what it names.
+def gem_spec_for(gem_dir)
+  @gem_specs ||= {}
+  @gem_specs[gem_dir] ||= begin
+    name = File.basename(gem_dir)
+    spec = Dir.chdir(gem_dir) { Gem::Specification.load("#{name}.gemspec") }
+    if spec.nil?
+      abort("check-shipped-archaeology: #{name}/#{name}.gemspec did not load, so the shipped " \
+            "set of that gem cannot be derived. A scope this guard cannot read is a hole, " \
+            "not a pass.")
+    end
+    spec
+  end
+end
+
 def shipped_files(gem_dir)
   name = File.basename(gem_dir)
-  (Dir.glob(File.join(gem_dir, "lib", "**", "*")) +
-   Dir.glob(File.join(gem_dir, "app", "**", "*")) +
-   [File.join(gem_dir, "README.md"), File.join(gem_dir, "#{name}.gemspec")])
+  (gem_spec_for(gem_dir).files + ["#{name}.gemspec"]).uniq
+    .reject { |rel| GEM_NOT_READ.include?(rel) }
+    .map { |rel| File.join(gem_dir, rel) }
     .select { |p| File.file?(p) }
     .sort
 end
@@ -780,12 +832,82 @@ def ruby_file?(path)
   path.end_with?(".rb", ".rake", ".ru", ".gemspec") || File.basename(path) == "Rakefile"
 end
 
-# Shell has no lexer here and does not need one: R5's only question of a `.sh`
-# line is whether the number it carries is a sentence or an argument, and a
-# leading `#` answers that. A trailing comment after code is read as code,
-# which is the conservative direction — it can only SKIP a hit, never invent
-# one, and R5 is the only prose-only rule.
-def shell_file?(path) = File.extname(path) == ".sh"
+# Shell and Python have no lexer here and do not need one: R5's only question
+# of such a line is whether the number it carries is a sentence or an argument,
+# and a leading `#` answers that in both languages. A trailing comment after
+# code is read as code, which is the conservative direction — it can only SKIP
+# a hit, never invent one, and R5 is the only prose-only rule.
+#
+# `.py` JOINED THIS THE DAY THE GEM SCOPE STOPPED BEING A GLOB (K-1511). Four
+# Python files ship inside three gems and were in no scope at all; the moment
+# they were read, `def one_run(n, k, timeout, mem_cap_mb, poll=0.1)` was a
+# RETIRED WIRE VERSION named in prose, because "everything else is read as
+# prose" and Python was everything else. A keyword default is a number the code
+# uses — the exact shape the R5 header says must never redden — so the language
+# whose comment marker is `#` is named here rather than left to the default.
+HASH_COMMENT_EXTS = %w[.sh .py].freeze
+
+def hash_comment_file?(path) = HASH_COMMENT_EXTS.include?(File.extname(path))
+
+# ── A MARKDOWN TABLE PUTS THE UNIT IN THE COLUMN HEADER (K-1511) ────────────
+#
+# R5 already exempts `~0.3 ms` and `~0.2 s`: a token carrying a unit is a
+# duration or a size, not a wire. A table states that unit ONCE, in the header
+# row, and every cell under it is then a bare number — `| p50 s |` over
+# `| **0.2** |`. Without this the same quantity is exempt inline and a
+# violation in a table, which makes R5 a rule about typography rather than
+# about sentences. It surfaced with the scope: `kiosk-pow-equihash/bench/README.md`
+# is packaged and its measured grid has a `p50 s` and a `p95 s` column.
+#
+# The unit vocabulary is the SAME `WIRE_UNIT` list the inline exemption uses,
+# so the two cannot drift. And it exempts the CELL, never the row: in the very
+# table that motivated it the `note` column is still read as prose, so a
+# retired wire named in a table's sentence column is still a violation.
+UNIT_HEADER_RE = /(?:\A|[\s(\[])(?:#{WIRE_UNIT})[)\]]?\z/
+
+def md_cells(line)
+  l = line.strip
+  return nil unless l.start_with?("|") && l.count("|") >= 2
+
+  l.sub(/\A\|/, "").sub(/\|\z/, "").split("|", -1)
+end
+
+def md_separator_row?(cells) = cells.all? { |c| c.strip.match?(/\A:?-{2,}:?\z/) }
+
+# lineno => the header row's per-column «this column names a unit» flags, for
+# every BODY row of every table in the file. A line that is not a table body
+# row is absent, and absent means «not exempt».
+def md_unit_columns(src)
+  cols   = {}
+  header = nil
+  src.each_line.with_index(1) do |line, lineno|
+    cells = md_cells(line)
+    if cells.nil?
+      header = nil
+      next
+    end
+    if header.nil?
+      header = cells.map { |c| c.strip.match?(UNIT_HEADER_RE) }
+      next
+    end
+    next if md_separator_row?(cells)
+
+    cols[lineno] = header
+  end
+  cols
+end
+
+# True when EVERY occurrence of this rule's pattern on the line sits in a cell
+# whose column header names a unit. One occurrence in a prose column and the
+# line is read as prose, which is what keeps the `note` column live.
+def md_unit_cell_only?(line, flags, regexp)
+  return false if flags.nil?
+
+  cells = md_cells(line)
+  return false if cells.nil? || cells.size != flags.size
+
+  cells.each_with_index.none? { |c, i| !flags[i] && c.match?(regexp) }
+end
 
 # ── the scan ────────────────────────────────────────────────────────────────
 
@@ -824,6 +946,10 @@ def scan(path, rules = RULES)
     end
   end
 
+  # Per FILE, because the answer is a property of the table's header row rather
+  # than of the line carrying the hit.
+  unit_cols = File.extname(path) == ".md" ? md_unit_columns(src) : {}
+
   hits = []
   src.each_line.with_index(1) do |line, lineno|
     next if line.match?(TODO_RE)
@@ -832,6 +958,8 @@ def scan(path, rules = RULES)
       next unless line.match?(rule[:re])
       # The one place a gem states its author, and RubyGems reads it.
       next if rule[:id] == "R4" && line.match?(AUTHORS_RE)
+      # A number under a column header that names its unit is a measurement.
+      next if rule[:prose_only] && md_unit_cell_only?(line, unit_cols[lineno], rule[:re])
 
       # A resolving rule matches a SHAPE and is only a violation when the thing
       # the shape names is absent, so the pattern alone decides nothing.
@@ -844,7 +972,7 @@ def scan(path, rules = RULES)
 
       where =
         if ruby_file?(path) then (code_lines[rule[:id]][lineno] ? :code : :comment)
-        elsif shell_file?(path) then (line.match?(/^\s*#/) ? :comment : :code)
+        elsif hash_comment_file?(path) then (line.match?(/^\s*#/) ? :comment : :code)
         else :text
         end
       # A version token inside code is a NUMBER the code uses — `sleep 0.2`, a
@@ -886,7 +1014,8 @@ REMEDY = {
 
 SCOPES = {
   gem: { label: "a shipped gem", dirs: -> { shipped_gems }, files: ->(d) { shipped_files(d) },
-         per: "lib/**, app/**, README.md, <gem>.gemspec" },
+         per: "everything the gem's own `spec.files` names, plus <gem>.gemspec, " \
+              "minus CHANGELOG.md and LICENSE.txt" },
   demo: { label: "a demo", dirs: -> { demo_dirs }, files: ->(d) { demo_files(d) },
           per: "app/**, lib/**, script/**, config/**, db/** (text extensions), " \
                "Rakefile, config.ru, README.md, before-after.md" },
@@ -908,7 +1037,7 @@ SCOPES = {
 }.freeze
 
 def run_check
-  puts "SCOPE (derived from the directory layout, not listed)"
+  puts "SCOPE (derived from the layout and from each gem's own `spec.files`, not listed)"
   scoped = SCOPES.to_h do |name, spec|
     dirs  = spec[:dirs].call
     files = dirs.flat_map { |d| spec[:files].call(d) }
@@ -1121,6 +1250,53 @@ def self_test
                "that is legal in Phil's List's app/ cannot be illegal in its spec/; it is " \
                "the same app and the same subject matter",
                scan(demo_only, rules_for(:demo_spec)).first.empty?)
+
+    # ── PYTHON IS CODE, AND ITS COMMENT MARKER IS `#` (K-1511) ─────────────
+    #
+    # Four `.py` files ship inside three gems. Before the gem scope was derived
+    # from `spec.files` they were in no scope at all; the moment they were read,
+    # a keyword default `poll=0.1` was «a retired wire version in prose», which
+    # is precisely the shape the R5 header says must never redden.
+    _, pycode = plant.call("py code", "t.py", "def one_run(n, k, timeout, poll=0.1):\n    pass\n")
+    check.call("R5 does NOT fire on a Python keyword default (`poll=0.1` is a number the " \
+               "code uses, not a sentence)",
+               scan(pycode).first.empty?)
+    _, pycomment = plant.call("py comment", "u.py",
+                              "#!/usr/bin/env python3\n# The 0.3 envelope carried an ok wrapper.\n")
+    pyhits, = scan(pycomment)
+    check.call("…and DOES fire on the same token in a Python COMMENT", !pyhits.empty?)
+    check.call("…classified as a comment rather than as code",
+               !pyhits.empty? && pyhits.first.where == :comment)
+
+    # ── A MARKDOWN TABLE PUTS THE UNIT IN THE COLUMN HEADER (K-1511) ───────
+    #
+    # Three arms, because the exemption has to be keyed on the HEADER and has
+    # to stop at the CELL. The middle one is the live shape in
+    # kiosk-pow-equihash/bench/README.md; the third is the one that keeps this
+    # from becoming «numbers in tables are never wires».
+    _, tbl_unit = plant.call("md table, unit column", "tbl1.md", <<~MD)
+      | n | k | p50 s | note |
+      |---|---|-------|------|
+      | 96 | 5 | 0.2 | the toll a first-time poker meets |
+    MD
+    check.call("R5 does NOT fire on a bare number under a `p50 s` column header",
+               scan(tbl_unit).first.empty?)
+    _, tbl_note = plant.call("md table, prose column", "tbl2.md", <<~MD)
+      | n | k | p50 s | note |
+      |---|---|-------|------|
+      | 96 | 5 | 0.2 | measured on the 0.3 wire |
+    MD
+    check.call("…and DOES fire on a retired wire in the same row's PROSE column — the " \
+               "exemption is per CELL, never per row",
+               !scan(tbl_note).first.empty?)
+    _, tbl_bare = plant.call("md table, no unit", "tbl3.md", <<~MD)
+      | n | k | p50 | note |
+      |---|---|-----|------|
+      | 96 | 5 | 0.2 | fine |
+    MD
+    check.call("…and DOES fire on a bare number under a header that names NO unit — the " \
+               "exemption is the header's claim, not the pipe characters",
+               !scan(tbl_bare).first.empty?)
 
     # THE VENDORED-MIRROR MASK, both ways. The `$comment` is the harness's own
     # provenance marker and is IN scope; every other byte is the schema
@@ -1357,6 +1533,44 @@ def self_test
   )
   check.call("the demo tree is NOT in the GEM scope", files.none? { |p| p.include?("/kiosk-demo-") })
   check.call("spec/ is NOT in scope", files.none? { |p| p.include?("/spec/") })
+
+  # ── VACUITY: THE GEM SCOPE IS THE SHIPPED SET, RE-DERIVED (K-1511) ────────
+  #
+  # The arm that matters is the one that is NOT a list: every regular file the
+  # gem's own `spec.files` names must land in this scope, so a gem that starts
+  # packaging a directory nobody thought of is read the day it does. That is
+  # the same shape the demo spec/test arm below uses off `git ls-files`, and it
+  # is why the four things this scope «reaches» above are examples rather than
+  # the definition — a hand-list of four is exactly what left seven packaged
+  # files held by nothing.
+  packaged = gems.to_h do |g|
+    name = File.basename(g)
+    [g, (gem_spec_for(g).files + ["#{name}.gemspec"]).uniq
+          .map { |rel| File.join(g, rel) }
+          .select { |p| File.file?(p) }]
+  end
+  unread = packaged.values.flatten.reject do |p|
+    files.include?(p) || GEM_NOT_READ.include?(File.basename(p))
+  end
+  check.call("every gemspec in this repository LOADS, so no gem's shipped set is unknown " \
+             "(#{gems.size} gem(s))",
+             gems.all? { |g| !gem_spec_for(g).nil? })
+  check.call("every PACKAGED file is IN the gem scope (#{packaged.values.flatten.size} packaged)" \
+             "#{unread.empty? ? '' : " — unread: #{unread.map do |p|
+               p.delete_prefix("#{REPO}/")
+             end.join(', ')}"}",
+             !packaged.values.flatten.empty? && unread.empty?)
+  check.call("…and the scope reaches a packaged file that is in NEITHER lib/ NOR app/ — the " \
+             "hole this derivation closed (K-1511)",
+             files.any? do |p|
+               !p.include?("/lib/") && !p.include?("/app/") &&
+                 !p.end_with?(".gemspec") && File.basename(p) != "README.md"
+             end)
+  check.call("…including a file type no extension list here names (`.py`), which is why " \
+             "Python's `#` is declared beside shell's",
+             files.any? { |p| p.end_with?(".py") })
+  check.call("LICENSE.txt is in NO scope — it is verbatim Apache-2.0 text, not ours to edit",
+             files.none? { |p| File.basename(p) == "LICENSE.txt" })
 
   # ── VACUITY: the same three questions of the demo scope ───────────────────
   demos      = demo_dirs

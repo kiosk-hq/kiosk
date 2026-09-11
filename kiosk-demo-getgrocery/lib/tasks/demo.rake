@@ -494,7 +494,7 @@ namespace :demo do
     own_row  = my_orders.find { |o| o["order_id"] == this_order } || {}
     tz_label = own_row["slot_label"].to_s
     if !this_tz.empty? && tz_label.end_with?("(#{this_tz})")
-      puts "  OK  the order records the clock it was quoted on (#{this_tz}) and my_orders names that one (#{tz_label})"
+      puts "  OK  the order records the clock it was quoted on (#{this_tz}) and my_orders names that one: #{tz_label}"
     else
       failures << "orders[id=#{this_order}].timezone=#{this_tz.inspect} vs my_orders slot_label=#{tz_label.inspect} — the recorded clock and the published one must be the same"
       puts "  FAIL  recorded clock #{this_tz.inspect} vs published slot_label #{tz_label.inspect}"

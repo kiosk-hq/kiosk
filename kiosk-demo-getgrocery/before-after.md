@@ -52,8 +52,9 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
-**THREE LINES in the block below were re-spelled after the recording, and saying
-so is cheaper than pretending otherwise.** The FIRST is the `/etc/hosts` hint
+**FOUR LINES in the block below differ from what the run printed — three re-spelled
+after the recording and one added to the task since, and saying so is cheaper than
+pretending otherwise.** The FIRST is the `/etc/hosts` hint
 at the top. Where the recording printed `(add to /etc/hosts: 127.0.0.1
 getgrocery.demo.kiosk.tech -- using 127.0.0.1)`, this document carries the
 line the task prints today. The host lookup that line belongs to is now
@@ -87,7 +88,18 @@ assistant to after a `pay` whose response was lost. Both are fixed, so where
 the recording printed `"slot_at":"2026-08-27T07:00:00.000+00:00"` this document
 carries `"slot_at":"2026-08-27T08:00:00+01:00"` and the `"slot_label"` that now
 travels beside it — the same instant of the same recorded run, spelled the way
-the code spells it today. Apart from these three lines, every line is what the
+the code spells it today.
+
+The FOURTH is not a re-spelling but an ADDITION, and it is the only one of the
+four that was not in the run at all. The task gained an assertion after the
+recording: an order now carries the wall clock its delivery window was quoted
+on as a column of its own, rather than leaving every later screen to recover
+the clock by re-parsing the stored delivery address — so the task checks that
+the recorded clock and the `slot_label` the wire published name the same zone.
+The line stands where the task prints it, between the `my_orders` containment
+check and the verdict, and the two values in it are that recorded run's own:
+the window was `08:00–10:00` in `Europe/Dublin`. The run was not repeated for
+it. Apart from these four lines, every line is what the
 task printed on the day. `bin/check-demo-derivations` holds all of them —
 including these — to a literal the current driver prints, which is what makes
 this note checkable rather than a promise.
@@ -146,6 +158,7 @@ key whenever one is present.
   OK  exactly one kiosk.settlements row for this run's principal (fe1a7146-dc21-4ea6-91ea-e1d560e386bc)
   OK  this run's order has 3 order_items (id=1af6fb28-c05a-416b-adb6-a6965251808d)
   OK  my_orders contains own order 1af6fb28-c05a-416b-adb6-a6965251808d
+  OK  the order records the clock it was quoted on (Europe/Dublin) and my_orders names that one: 08:00–10:00 (Europe/Dublin)
 
   All assertions passed.
   Server stopped.

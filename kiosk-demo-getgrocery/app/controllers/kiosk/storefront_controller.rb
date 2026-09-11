@@ -278,9 +278,17 @@ class Kiosk::StorefrontController < ActionController::API
     # of one SQL string (see {Order.settling}).
     render json: Order.owned_by_current_principal
                       .order(created_at: :desc)
-                      .pluck(:id, :status, :total_cents, :slot_at, :address,
+                      .pluck(:id, :status, :total_cents, :slot_at, :address, :timezone,
                              Order.paid_flag(Settlement.of_current_principal))
-                      .map { |id, status, total_cents, slot_at, address, paid|
+                      .map { |id, status, total_cents, slot_at, address, timezone, paid|
+                        # The clock this order was quoted on, READ OFF THE ROW
+                        # and never re-parsed out of `address`. The district
+                        # parser answers about an address; this verb is answering
+                        # about an ORDER, which recorded its clock when it was
+                        # placed. An address that no longer resolves would take
+                        # the ORIGIN default with nothing in the published row
+                        # saying so, and the window would go out an hour wrong.
+                        order_zone = Time.find_zone!(timezone)
                         { "order_id"      => id,
                           "status"        => status,
                           "total_cents"   => total_cents,
@@ -299,15 +307,13 @@ class Kiosk::StorefrontController < ActionController::API
                           # TimeWithZone whose `as_json` follows `Time.zone` and
                           # the encoder's `time_precision`, so the published
                           # bytes would be the app's configuration talking.
-                          "slot_at"       => slot_at&.in_time_zone(DeliverySlots.zone_for(DublinZones.extract_district(address)))&.iso8601,
+                          "slot_at"       => slot_at&.in_time_zone(order_zone)&.iso8601,
                           # The window said out loud, zone named.
                           # `slot_at` carries the offset; nobody speaks an
                           # offset. This is the verb §11.6 sends an assistant to
                           # after a lost `pay`, so it is the row most likely to
                           # be read back TO a human.
-                          "slot_label"    => slot_at && DeliverySlots.label(
-                            slot_at, DeliverySlots.zone_for(DublinZones.extract_district(address))
-                          ),
+                          "slot_label"    => slot_at && DeliverySlots.label(slot_at, order_zone),
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }

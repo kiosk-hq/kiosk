@@ -477,6 +477,29 @@ namespace :demo do
       puts "  FAIL  my_orders does not contain order_id #{result["order_id"].inspect}"
     end
 
+    # -- the clock the order was QUOTED on is recorded ON THE ROW --
+    #
+    # `slot_at` is an instant and an instant cannot say which wall clock a human
+    # was read it on; `orders.timezone` is that other half, written by the verb
+    # that chose it from the delivery district. Every surface that renders the
+    # window reads it from there rather than parsing the stored ADDRESS, so an
+    # address that no longer resolves cannot quietly drop the render onto the
+    # origin default.
+    #
+    # Two things at once, and the SECOND is the one that bites: the column is
+    # written at all, and the `slot_label` the wire published NAMES exactly it.
+    # An origin that recorded one clock and published another would be telling
+    # its own back office and its caller two different times about one delivery.
+    this_tz  = `psql -X -d #{db} -tAc "SELECT timezone FROM orders WHERE id = '#{this_order}'" 2>&1`.strip
+    own_row  = my_orders.find { |o| o["order_id"] == this_order } || {}
+    tz_label = own_row["slot_label"].to_s
+    if !this_tz.empty? && tz_label.end_with?("(#{this_tz})")
+      puts "  OK  the order records the clock it was quoted on (#{this_tz}) and my_orders names that one (#{tz_label})"
+    else
+      failures << "orders[id=#{this_order}].timezone=#{this_tz.inspect} vs my_orders slot_label=#{tz_label.inspect} — the recorded clock and the published one must be the same"
+      puts "  FAIL  recorded clock #{this_tz.inspect} vs published slot_label #{tz_label.inspect}"
+    end
+
     # -- final verdict --
     if failures.empty?
       puts "\n  All assertions passed."

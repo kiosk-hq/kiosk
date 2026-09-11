@@ -53,7 +53,7 @@ module Admin
       # currency from.
       orders = Order.order(created_at: :desc)
                     .limit(RECENT)
-                    .pluck(:id, :status, :total_cents, :slot_at, :address, :created_at,
+                    .pluck(:id, :status, :total_cents, :slot_at, :address, :timezone, :created_at,
                            Order.settled_currency(Settlement.all))
       return [] if orders.empty?
 
@@ -68,12 +68,18 @@ module Admin
                                 .pluck(:order_id, :qty, products[:name], products[:price_cents])
                                 .group_by(&:first)
 
-      orders.map do |id, status, total_cents, slot_at, address, created_at, settled_currency|
-        # The clock this ORDER's times are said out loud on: the delivery
-        # address's, resolved through the same routing that chose its district
-        # when it was placed. Two orders on one screen may be on two clocks, and
-        # each label names its own.
-        order_zone = DeliverySlots.zone_for(DublinZones.extract_district(address))
+      orders.map do |id, status, total_cents, slot_at, address, timezone, created_at, settled_currency|
+        # The clock this ORDER's times are said out loud on — READ OFF THE ROW,
+        # because it is the clock the customer was quoted and the order is the
+        # only thing that knows it. Two orders on one screen may be on two
+        # clocks, and each label names its own.
+        #
+        # NOT re-parsed out of `address` here, deliberately. Running the district
+        # parser over stored free text would be a second answer to a question the
+        # order already answers, and an address that no longer resolves — hand-
+        # edited, restored from a dump — would take the ORIGIN default silently
+        # and put this screen's window on a clock nobody chose.
+        order_zone = Time.find_zone!(timezone)
         { "id"               => id,
           "short_id"         => id.to_s[0, 8],
           "status"           => status,
@@ -84,12 +90,11 @@ module Admin
           # `config.time_zone` — so a view that re-parsed
           # it would print 07:00 where the customer was told
           # «08:00–10:00 (Europe/Dublin)». {DeliverySlots.label} is the single
-          # writer for that string and {DeliverySlots.zone_for} for the day
-          # beside it, so the shop's own staff and the assistant read ONE answer
-          # about ONE window. The clock is the DELIVERY ADDRESS's, resolved from
-          # the order's own address through the same routing that chose the
-          # district when it was placed. The raw instant stays in the row for
-          # anything that needs the value rather than the sentence.
+          # writer for that string, so the shop's own staff and the assistant
+          # read ONE answer about ONE window. The clock is the DELIVERY
+          # ADDRESS's, and it is the one the order recorded when it was placed.
+          # The raw instant stays in the row for anything that needs the value
+          # rather than the sentence.
           "slot_at"          => slot_at,
           "slot_window"      => slot_at && "#{slot_at.in_time_zone(order_zone).strftime('%a %-d %b')}, " \
                                            "#{DeliverySlots.label(slot_at, order_zone)}",

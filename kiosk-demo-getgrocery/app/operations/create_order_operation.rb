@@ -159,6 +159,11 @@ class CreateOrderOperation
             total_cents: total_cents,
             slot_at:     slot_at,
             address:     delivery_address.to_s,
+            # THE CLOCK THIS WINDOW IS QUOTED ON, RECORDED BESIDE IT. A replace
+            # may move the delivery to a different address, so the zone moves
+            # with it: the row carries the clock of the door this order is going
+            # to, and every surface that renders the window reads it from there.
+            timezone:    zone.name,
             updated_at:  now,
           )
         end
@@ -177,6 +182,11 @@ class CreateOrderOperation
           total_cents: total_cents,
           slot_at:     slot_at,
           address:     delivery_address.to_s,
+          # The zone the window above was computed in, stored as a fact of the
+          # order rather than re-derived from `address` by every later reader.
+          # `slot_at` is an instant and an instant alone cannot say which wall
+          # clock it was spoken as; this column is that half of the answer.
+          timezone:    zone.name,
           created_at:  now,
           updated_at:  now },
         returning: %i[id],

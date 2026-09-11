@@ -26,11 +26,10 @@ class RescheduleDeliveryOperation
     end
 
     # THE CLOCK IS THE DELIVERY ADDRESS's. A move that names a NEW address is
-    # timed at the new door; one that does not keeps the order's own, which is
-    # resolved from the stored address inside the transaction below, where the
-    # row is read. Until then the origin default stands in — every district this
-    # shop serves is on it, and the value is re-read before anything is
-    # published.
+    # timed at the new door; one that does not keeps the clock the order was
+    # BOOKED on, which is READ OFF THE ROW inside the transaction below. Until
+    # then the origin default stands in — every district this shop serves is on
+    # it, and the value is re-read before anything is published.
     zone = district ? DeliverySlots.zone_for(district) : DeliverySlots.default_zone
 
     slot_id, refusal = WireArguments.delivery_slot_id(delivery_slot_id)
@@ -62,12 +61,14 @@ class RescheduleDeliveryOperation
       # `pick` and not `find_by!`: the bang form raises RecordNotFound, which
       # Rails maps to 404 and the mixin's `rescue_from` floor renders as
       # `not_found` — telling a prober that the id is unknown, which is the one
-      # thing this refusal is worded to avoid. The ADDRESS is read here because
-      # `update_all` cannot resolve "keep the old one" in SQL.
+      # thing this refusal is worded to avoid. The ADDRESS and the TIMEZONE are
+      # read here because `update_all` cannot resolve "keep the old one" in SQL,
+      # and because a move that names no new address must land on the clock this
+      # order was booked on rather than on one re-parsed out of its address.
       order = Order.owned_by_current_principal
                    .reschedulable
                    .where(id: order_id)
-                   .pick(:id, :address)
+                   .pick(:id, :address, :timezone)
       if order.nil?
         next OperationResult.refused(
           code:    "forbidden",
@@ -107,11 +108,18 @@ class RescheduleDeliveryOperation
         )
       end
 
-      row_id, current_address = order
+      row_id, current_address, current_timezone = order
       # The address this move lands at — the new one when given, the order's own
       # otherwise — and therefore the clock the window is written on.
       landing_address = delivery_address.to_s.presence || current_address
-      zone    = DeliverySlots.zone_for(DublinZones.extract_district(landing_address))
+      # AND THE CLOCK COMES FROM THE MOVE OR FROM THE ROW, NEVER FROM A PARSE OF
+      # STORED TEXT. A new address has been routed to a served district by gate 1,
+      # so `district` is that district and the zone is its declared one; a move
+      # that names none keeps the zone the order was quoted on, which the row
+      # carries. Running the address parser here would hand an address that no
+      # longer resolves — hand-edited, restored from a dump — the ORIGIN default
+      # with nothing saying so, and publish the window on a clock nobody chose.
+      zone    = district ? DeliverySlots.zone_for(district) : Time.find_zone!(current_timezone)
       slot_at = DeliverySlots.slot_at(date, slot_id, zone)
 
       Order.owned_by_current_principal
@@ -122,6 +130,10 @@ class RescheduleDeliveryOperation
              # `to_s.presence` and not `presence`: the TEXT the value renders as
              # is what decides "was a new address given", and what gets stored.
              address:    landing_address,
+             # The clock the NEW window was written on, stored beside it — a
+             # move to another district moves this with it, and a move that
+             # keeps the address writes back what it read.
+             timezone:   zone.name,
              updated_at: Time.current,
            )
 

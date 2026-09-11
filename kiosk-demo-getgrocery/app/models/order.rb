@@ -2,6 +2,15 @@
 
 # One grocery basket, its delivery window and its delivery address.
 #
+# `slot_at` is the INSTANT the window starts and `timezone` is the WALL CLOCK it
+# was quoted on — the delivery district's, chosen by {WireArguments.served_district}
+# when the order was written. Both halves are stored because an instant alone
+# cannot say which clock a human was read it on, and deriving the clock from the
+# stored address would make every later reader a parser of free text.
+# `timezone` is NOT NULL and carries NO column default, so a write that forgets
+# it raises instead of quietly claiming Dublin: an order is only ever placed by
+# a verb that already holds the zone.
+#
 # `status` is a tiny lifecycle rather than a label, and every gate on this
 # origin reads it: `created → paying → paid` is the per-order serialization the
 # pay path claims through (see app/services/validating_payment_provider.rb — that claim

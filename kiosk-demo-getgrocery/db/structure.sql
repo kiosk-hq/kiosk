@@ -319,7 +319,8 @@ CREATE TABLE public.orders (
     slot_at timestamp with time zone,
     address text,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    timezone character varying NOT NULL
 );
 
 
@@ -865,6 +866,7 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260911000001'),
 ('20260827000002'),
 ('20260820130117'),
 ('20260820130116'),

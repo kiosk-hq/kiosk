@@ -38,7 +38,7 @@ DEFAULT_GRID = [
     (168, 7),  # n_div 21  N=2^22
     (176, 7),  # n_div 22  N=2^23
     (184, 7),  # n_div 23  N=2^24
-    (192, 7),  # n_div 24  N=2^25  (prior default; the ~155s/5.4GB baseline)
+    (192, 7),  # n_div 24  N=2^25  (the ~155s/5.4GB end of the grid)
 ]
 
 

@@ -787,7 +787,7 @@ kiosk-pow-equihash/README.md	**~530×** (9.6 s / 18 ms)
 kiosk-pow-equihash/README.md	- **Asymmetric verify.** A few KB (and ~18 ms, pure Ruby — far less for a
 kiosk-pow-equihash/README.md	- The seed = `salt ‖ LE32(header_nonce)` is hashed with each nonce
 kiosk-pow-equihash/README.md	- The sorted nonce table must be rebuilt from scratch
-kiosk-pow-equihash/README.md	192/7 (the previous default) measured ~155 s and ~5.4 GiB on the reference
+kiosk-pow-equihash/README.md	192/7 measures ~155 s and ~5.4 GiB on the reference numpy
 kiosk-pow-equihash/README.md	2^k leaf hashes where **sibling XORs cancel** one n_div-bit block per level.
 kiosk-pow-equihash/README.md	Abuser:
 kiosk-pow-equihash/README.md	Buffer reuse: yes. Work reuse: no

@@ -72,7 +72,7 @@ imposes on every implementation, since a memory-optimised solver trades the
 table for time, which is precisely how Equihash 200/9's real footprint fell
 to ~144 MB and made it ASIC-able). Cost is driven by `n_div = n/(k+1)`.
 
-| Param | **n=168, k=7 (default)** | old n=192, k=7 | Zcash (n=200, k=9) | Toy (n=24, k=3) |
+| Param | **n=168, k=7 (default)** | n=192, k=7 | Zcash (n=200, k=9) | Toy (n=24, k=3) |
 |---|---|---|---|---|
 | n_div = n/(k+1) | **21** | 24 | 20 | 6 |
 | Nonces generated | **2^22 ≈ 4.2M** | 2^25 ≈ 33.5M | 2^21 ≈ 2M | 2^7 = 128 |
@@ -80,8 +80,8 @@ to ~144 MB and made it ASIC-able). Cost is driven by `n_div = n/(k+1)`.
 | Reference solve (numpy, one M-series laptop core) | **~10 s, ~1.3 GiB** | ~155 s, ~5.4 GiB | — | instant |
 | Verify cost | **128 BLAKE2b** | 128 BLAKE2b | 512 BLAKE2b | 8 BLAKE2b |
 
-192/7 (the previous default) measured ~155 s and ~5.4 GiB on the reference
-numpy solver — too heavy for a laptop; 168/7 is the retuned default. Providers
+192/7 measures ~155 s and ~5.4 GiB on the reference numpy
+solver — too heavy for a laptop, which is why 168/7 is the default. Providers
 pick their own `(n, k)` and proof count for their own cost/latency trade-off.
 
 ## Memory reuse across parallel challenges
@@ -254,7 +254,7 @@ the healthy small buckets, and unsolved seeds retry with the next
 |---|---|---|---|
 | n=96, k=5 (the demos' `low`) | ~0.2 s | ~0.3 s | ~44 MiB |
 | **n=168, k=7 (default)** | ~9.6 s | ~10.3 s | ~1.3 GiB |
-| n=192, k=7 (old default) | ~155 s | ~155 s | ~5.4 GiB |
+| n=192, k=7 | ~155 s | ~155 s | ~5.4 GiB |
 
 Full grid in [bench/README.md](bench/README.md). This is a REFERENCE
 implementation — correct and dependency-light, not a miner. **numpy is not

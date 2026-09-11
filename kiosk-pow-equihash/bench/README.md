@@ -24,12 +24,12 @@ python3 bench/bench.py --grid 168,7 --samples 5
 | **168** | **7** | **21** | **5/5** | **9.6** | **10.3** | **1350** | **shipped default** |
 | 176 | 7 | 22 | 5/5 | 24.5 | 25.1 | 2424 | time ok, RAM > 2 GiB |
 | 184 | 7 | 23 | — | ~60 | ~64 | ~3400 | over budget (1 OOM at 3.5 GB cap) |
-| 192 | 7 | 24 | 1/1 | 154.8 | 154.8 | 5377 | prior default — far over budget |
+| 192 | 7 | 24 | 1/1 | 154.8 | 154.8 | 5377 | far over budget |
 
 **Chosen: n=168, k=7** — the largest params fully inside the ≤30 s / 1–2 GiB
 budget (p95 ~10 s on the Apple M-series laptop the grid above names, ~1.3 GiB).
 176/7 keeps the time but breaches the 2 GiB memory
-ceiling; 192/7 (the old default) is ~155 s and ~5.4 GiB — unusable on a laptop.
+ceiling; 192/7 is ~155 s and ~5.4 GiB — unusable on a laptop.
 
 ## The LIGHT level, which is what the hosted fleet actually charges
 

@@ -146,10 +146,10 @@ module Kiosk
       #   2. PEM from the `KIOSK_SIGNING_KEY_PEM` env var, or base64-encoded
       #      PEM from `KIOSK_SIGNING_KEY_B64` (single-line friendly for
       #      mise.toml / dotenv)
-      #   3. otherwise RAISES with generation instructions. Auto-generation
-      #      was removed on purpose: a fresh per-boot key silently
-      #      invalidates every issued JWT — agents are forced to re-register
-      #      and lose their Stripe Customer card associations.
+      #   3. otherwise RAISES with generation instructions. It RAISES rather
+      #      than generating a key for you, on purpose: a fresh per-boot key
+      #      silently invalidates every issued JWT — agents are forced to
+      #      re-register and lose their Stripe Customer card associations.
       #
       # @return [Kiosk::Server::SigningKey]
       def signing_key

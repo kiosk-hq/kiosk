@@ -131,8 +131,8 @@ module Kiosk
     # body fields: {#to_payload} is the payload and nothing else, and the two
     # page facts are written as RESPONSE HEADERS by the wire controller.
     #
-    # The `:stream` kind (events, NDJSON) was removed with the `events` verb:
-    # it was never a capability and had no producer.
+    # Those two kinds are the whole set: `KINDS` below is what {#initialize}
+    # accepts and anything else raises.
     Result = Data.define(:kind, :payload, :next_cursor, :total) do
       KINDS = %i[rows value].freeze
 

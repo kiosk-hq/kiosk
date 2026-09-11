@@ -172,10 +172,9 @@ end
 ```
 
 **The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. There is no `kiosk.action_log` — an
-earlier release shipped one and it was removed, because an audit trail the
-framework keeps is a retention policy the framework decided for your
-customers' data.
+writes nothing to any table of its own. It keeps no audit table of its own at
+all, and will not grow one: an audit trail the framework keeps is a retention
+policy the framework decided for your customers' data.
 
 ### What the event carries
 

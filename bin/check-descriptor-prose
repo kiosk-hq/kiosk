@@ -242,6 +242,29 @@ MARKER_RE   = /#{EDGE_BEFORE}(?:#{LABEL_WORDS.join('|')})#{EDGE_AFTER}/i
 # existed, and both are foils below, so widening the ban reddens THIS file first.
 INFINITIVE_AFTER_RE = /\A[ ]+to[ ]+\p{L}/
 
+# The THIRD compound joiner, and it is the same argument the `EDGE` makes about
+# `-` and `_` (K-1524). A marker glued to its OPPOSITE by a slash names the AXIS
+# — «names, required/optional, types, enums, ranges» is a list of the things a
+# JSON Schema declares, in ADR-0023 decision 2's own words — and an axis is never
+# a label on the property carrying the sentence. It is a separate test rather
+# than a fourth character in `EDGE` so that the shared vocabulary of this guard
+# and `kiosk.tech/bin/check-schema-prose` stays identical character for character
+# and the extra question stays visible.
+#
+# MEASURED at head, and the residue is NIL, which is the whole point: `git grep
+# -nIc "required/optional\|optional/required" -- '*.rb' '*.rake'` (real `git
+# grep`, default BRE, tracked tree) answers TWO files, `kiosk-server/lib/kiosk/
+# server/{actions,queries}.rb`, and both are Ruby COMMENTS documenting the
+# descriptor API rather than `description:` values — so this guard never read
+# them and was never red. The shape is this project's own vocabulary, in the two
+# files that TEACH an author how to write a descriptor; the day somebody copies
+# that phrasing into a `description` the ban was red on a correct sentence and
+# the obvious repair was to reword ADR-0023's own words. Watched before the
+# predicate existed: that sentence planted into a live property description drove
+# this script to exit 1 telling the author to delete the label.
+SLASH_BEFORE_RE = %r{/\z}
+SLASH_AFTER_RE  = %r{\A/}
+
 # The first bare LABEL in this text, or nil. "the OFFSET IS REQUIRED" says a
 # word about the VALUE's spelling rather than about the property's membership,
 # and nothing lexical separates the two subjects, so the predicate form is
@@ -250,8 +273,11 @@ def label_marker(text)
   offset = 0
   while (m = MARKER_RE.match(text, offset))
     offset = m.end(0)
-    next if text[0...m.begin(0)] =~ COPULA_RE
-    next if text[m.end(0)..] =~ INFINITIVE_AFTER_RE
+    before = text[0...m.begin(0)]
+    after  = text[m.end(0)..].to_s
+    next if before =~ COPULA_RE
+    next if after  =~ INFINITIVE_AFTER_RE
+    next if before =~ SLASH_BEFORE_RE || after =~ SLASH_AFTER_RE
 
     return m[0]
   end
@@ -515,6 +541,10 @@ LABEL_FOILS = [
   ["infinitive complement, the second reserved parameter",
    "The OPAQUE `next` token from the previous page, echoed back verbatim. Never parse or " \
    "construct one. Reserved: always accepted, never required to be declared."],
+  ["a SLASH compound naming the AXIS, not this property's membership (K-1524)",
+   "JSON Schema for this verb's inputs: names, required/optional, types, enums, ranges."],
+  ["the same compound the other way round",
+   "It declares optional/required per field."],
 ].freeze
 
 COUNTED_PROBES = [

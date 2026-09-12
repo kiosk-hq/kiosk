@@ -976,10 +976,7 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
-    Boots the server, registers a fresh agent through the Equihash register toll
-    (params per KIOSK_POW_DIFFICULTY — not named and not derived here, for the
-    reason demo:redteam's desc gives: a `desc` body runs on every task load.
-    script/schema_flow.rb prints the pair the server demanded), calls:
+    Boots the server and calls, with NO credential at all:
       GET /kiosk/schema
 
     Asserts:

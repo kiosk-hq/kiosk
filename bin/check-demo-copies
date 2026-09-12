@@ -1722,14 +1722,15 @@ COPIES = {
   # copies nobody compared.
   "script/schema_flow.rb" => {
     rule:  :per_demo,
-    why:   "asserts THAT demo's declared capabilities and verb set — TRUE OF FOUR OF THE SEVEN " \
-           "COPIES, and the other three are declared below rather than left implied (K-1262). " \
-           "getgrocery, hoteling, skooti and stylish each drive their own catalogue and assert " \
-           "their own verbs; atablefor, philslist and tudu are ONE driver and one digest. None of " \
+    why:   "asserts THAT demo's declared capabilities and verb set — TRUE OF ONE OF THE SEVEN " \
+           "COPIES, and the other six are declared below rather than left implied (K-1262). " \
+           "stylish drives its own catalogue and asserts its own verbs; the other six are TWO " \
+           "hand-copied drivers of three copies each, one digest apiece. None of " \
            "the seven carries an HTTP helper any more — all open on one `Kiosk::Redteam::Wire`, " \
            "held by name in FRAGMENTS below (T-100) — so the length of a copy is now nearly all " \
            "assertion, and two copies happening to normalise to the same NUMBER of lines is not " \
-           "evidence of anything. The digest is; that is what this rule compares.",
+           "evidence of anything. The digest is; that is what this rule compares. Converging " \
+           "the remaining copy is not proposed — stylish's assertions really are its own.",
     agree: {
       %w[atablefor philslist tudu] => {
         rule: :lockstep,
@@ -1742,9 +1743,20 @@ COPIES = {
               "recorded, because the load-bearing half is an ABSENCE that a one-sided edit would " \
               "restore without failing anything: sending no Authorization header IS the T-094 " \
               "assertion that `schema` is public, and a copy that quietly re-added a Bearer token " \
-              "would still pass its own demo while proving the opposite of what it claims. " \
-              "Converging the other four is not the answer and is not proposed — their assertions " \
-              "really are their own.",
+              "would still pass its own demo while proving the opposite of what it claims.",
+      },
+      %w[getgrocery hoteling skooti] => {
+        rule: :lockstep,
+        why:  "A SECOND DISCOVERY DRIVER AT THREE PATHS, and it BECAME one the day the dead " \
+              "PoW-tolled register came out of all three (K-1539): each bound an access token " \
+              "it then read zero times, in front of two documents that take no credential. " \
+              "What is left is the half these three always asserted — GET `/kiosk/schema` and " \
+              "GET `/.well-known/kiosk.json` with NO credential, one JSON line out — while " \
+              "which capabilities and which verbs that line must carry stays in each demo's " \
+              "own `demo:schema` rake task. Held for the same reason as the group above: the " \
+              "load-bearing half is an ABSENCE, so a copy that quietly re-added a Bearer " \
+              "token would still pass its own demo while proving the opposite of what it " \
+              "claims.",
       },
     },
   },

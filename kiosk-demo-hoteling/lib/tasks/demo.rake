@@ -920,8 +920,7 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
-    Boots the server, registers a fresh agent (registration IS PoW-gated —
-    registration_pow_count = 1 — and the flow solves it transparently), calls:
+    Boots the server and calls, with NO credential at all:
       GET /kiosk/schema
 
     Asserts:

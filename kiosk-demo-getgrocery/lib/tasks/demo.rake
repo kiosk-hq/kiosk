@@ -873,7 +873,7 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
-    Boots the server, registers a fresh agent, calls:
+    Boots the server and calls, with NO credential at all:
       GET /kiosk/schema
 
     Asserts:

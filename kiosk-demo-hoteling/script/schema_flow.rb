@@ -2,9 +2,11 @@
 
 # Self-discovery proof driver — the schema verb over HTTP.
 #
-# Registers a fresh agent (registration IS PoW-gated; equihash_register
-# solves it transparently), calls `schema` (GET /kiosk/schema), prints one
-# JSON line on stdout.
+# Boots against a running hoteling server and calls, with NO credential at
+# all:
+#   GET /kiosk/schema            (unauthenticated — the catalogue is public)
+#   GET /.well-known/kiosk.json  (the one document carrying the module set)
+# and prints one JSON line on stdout.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3003 \
@@ -13,11 +15,7 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on any HTTP failure.
 
-require "jwt"
 require "json"
-require "openssl"
-require "securerandom"
-require "uri"
 require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
@@ -29,24 +27,6 @@ SERVER = ENV.fetch("SERVER_URL")
 # document can still be asserted on through `#get`, and an origin that refused
 # the connection answers status 0 rather than raising.
 WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
-
-# ── Register a fresh agent (register PoW solved transparently) ───────────────
-#
-# `equihash_register` drives FULL URLs through the two callables it is handed —
-# it is the one helper a driver shares with e2e, where the origin is not known
-# until the harness boots it — while {WIRE} is bound to this origin, so the
-# adapters below hand it the path.
-require_relative "equihash_register"
-
-STDERR.puts "  Registering agent (solving the register PoW if the provider gates it)..."
-
-_key, reg = equihash_register(
-  server: SERVER, issuer: SERVER,
-  get_json:  ->(url) { WIRE.get_json(url.delete_prefix(SERVER)) },
-  post_json: ->(url, body, headers = {}) { WIRE.post_json(url.delete_prefix(SERVER), body, headers) },
-)
-token = reg.fetch("access_token")
-STDERR.puts "  Registered: user_id=#{reg["user_id"]}"
 
 # ── Call schema — UNAUTHENTICATED, and that IS the assertion ─────────────────
 #

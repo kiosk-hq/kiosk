@@ -75,7 +75,7 @@ require "kiosk/redteam"
 require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans behind the two assistants (db/seeds.rb). Credentials arrive
 # in the environment from the rake task, the way demo:binding's HOLDER_EMAIL /

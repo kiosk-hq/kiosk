@@ -34,7 +34,7 @@ require "uri"
 require_relative "equihash_register"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 def post_json(url, body, headers = {})
   uri = URI(url)

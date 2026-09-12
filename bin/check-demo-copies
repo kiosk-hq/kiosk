@@ -708,6 +708,28 @@ if ARGV.include?("--self-test")
               "SETTLEMENT_WEBHOOK = ENV.fetch(\"KIOSK_SETTLEMENT_WEBHOOK\", nil)\n"]],
       expect: /philslist: config\/initializers\/kiosk\.rb:1 resolves KIOSK_SETTLEMENT_WEBHOOK with ENV\.fetch/ },
 
+    { id: "driver-env-defaulted", kind: :break,
+      rule: "A demo DRIVER fetches KIOSK_ISSUER with NO default (K-1543)",
+      what: "one driver regrows the fallback the six copies carried",
+      ops:  [[:edit, "kiosk-demo-skooti/script/redteam_suite.rb",
+              "ISSUER     = ENV.fetch(\"KIOSK_ISSUER\")",
+              "ISSUER     = ENV.fetch(\"KIOSK_ISSUER\", BASE_URL)"]],
+      expect: /skooti: script\/redteam_suite\.rb:\d+ fetches KIOSK_ISSUER WITH a default/ },
+    { id: "driver-env-single-demo", kind: :break,
+      rule: "A demo DRIVER fetches KIOSK_ISSUER with NO default (K-1543)",
+      what: "the SINGLE-demo driver no copy rule can see regrows it",
+      ops:  [[:edit, "kiosk-demo-atablefor/script/mint_agent_token.rb",
+              "ISSUER = ENV.fetch(\"KIOSK_ISSUER\")",
+              "ISSUER = ENV.fetch(\"KIOSK_ISSUER\", SERVER)"]],
+      expect: /atablefor: script\/mint_agent_token\.rb:\d+ fetches KIOSK_ISSUER WITH a default/ },
+    { id: "vacuity-driver-env", kind: :vacuity,
+      rule: "A demo DRIVER fetches KIOSK_ISSUER with NO default (K-1543)",
+      what: "the rule stops matching any driver's fetch and must say so rather than pass",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "DRIVER_NO_DEFAULT_VARS = %w[KIOSK_ISSUER].freeze",
+              "DRIVER_NO_DEFAULT_VARS = %w[KIOSK_ISSUER_RENAMED].freeze"]],
+      expect: /the K-1543 driver-env rule found NO no-default fetch of KIOSK_ISSUER_RENAMED/ },
+
     { id: "e2e-fixture-undeclared", kind: :break,
       rule: "The e2e fixture rule runs (T-118)",
       what: "a new harness fixture arrives with no E2E_FIXTURES entry",
@@ -5876,6 +5898,78 @@ if initializer_demos.zero? && errors.empty?
             "nothing passes everything."
 end
 
+# ── A demo DRIVER fetches KIOSK_ISSUER with NO default (K-1543) ──────────────
+#
+# THIS IS A PROPERTY OVER A GLOB, NOT A COMPARISON BETWEEN COPIES, and that is
+# deliberate. The seven `script/redteam_suite.rb` copies are declared
+# `:per_demo` and named in FRAGMENT_EXCLUDED, so no `#ISSUER` unit is compared
+# across them — which is how six of the seven grew a fallback (three to
+# `SERVER`, three to `BASE_URL`) against tudu's one without, held by nothing.
+# `script/mint_agent_token.rb` is single-demo and so is reachable by no copy
+# rule at all.
+#
+# TAKING THE PATH INTO FRAGMENT_PATHS WOULD ALSO HAVE CLOSED IT, AND WAS
+# MEASURED RATHER THAN GUESSED: planted at head, discovery demands 23
+# declarations — `ALICE`, `BOB`, `LEAKS`, `SHAPES`, `call`, `check`, `refused`
+# and the rest of the Scenario vocabulary — of which one is this line. That is
+# 22 settled `:per_demo` variants written down to hold a single unit, which is
+# the manifest FRAGMENT_EXCLUDED's own reason argues against, now with a number
+# behind it. A property rule costs one entry, reaches the single-demo file the
+# copy rules cannot see, and catches a driver that never existed as a copy of
+# anything — including the next one somebody writes.
+#
+# WHY NO DEFAULT, which is the DRIVER_ENV reason applied one file over: this
+# variable is the `aud` a possession proof is signed for. Every `demo:redteam`
+# and `bin/demo` passes it on the command line, so a fallback is never taken by
+# a gated run and can only fire on a HAND run — which is exactly where guessing
+# is wrong, because the deploy templates set it to a public host
+# (`https://<app>.demo.kiosk.tech`) that the server does not bind. Measured when
+# the fallback came out: with it, a driver walked PAST the issuer line and died
+# six lines later naming a different variable; without it, it names the one it
+# wants. The engine is crash-if-absent on the same name.
+#
+# A NAME JOINS THIS LIST WHEN ITS OWN RESIDUE IS GONE, never with an allowance
+# beside it — a standing permission excusing a known defect is the shape this
+# file refuses everywhere else.
+DRIVER_NO_DEFAULT_VARS = %w[KIOSK_ISSUER].freeze
+DRIVER_ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"(?<comma>\s*,)?/
+driver_env_held    = 0
+driver_env_scripts = 0
+
+operator_demos.each do |demo|
+  Dir[File.join(ROOT, demo, "script", "*.rb")].sort.each do |path|
+    rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
+    driver_env_scripts += 1
+
+    File.read(path).each_line.with_index(1) do |line, lineno|
+      next if line.lstrip.start_with?("#")
+
+      m = DRIVER_ENV_FETCH.match(line)
+      next if m.nil?
+      next unless DRIVER_NO_DEFAULT_VARS.include?(m[:var])
+
+      if m[:comma].nil?
+        driver_env_held += 1
+      else
+        errors << "#{short.(demo)}: #{rel}:#{lineno} fetches #{m[:var]} WITH a default. This " \
+                  "name is the `aud` a possession proof is signed for, every rake task and " \
+                  "bin/demo passes it on the command line, and the engine crashes without it — " \
+                  "so a fallback is never taken by a gated run and, on a hand run, quietly " \
+                  "drives whatever happens to be listening on that port instead of failing at " \
+                  "the line that wants the value. Spell it `ENV.fetch(\"#{m[:var]}\")` (K-1543)."
+      end
+    end
+  end
+end
+
+if driver_env_held.zero?
+  errors << "check-demo-copies: the K-1543 driver-env rule found NO no-default fetch of " \
+            "#{DRIVER_NO_DEFAULT_VARS.join(', ')} in #{driver_env_scripts} demo script(s), so it " \
+            "asserted nothing. Either the drivers stopped reading the name — in which case the " \
+            "rule should go with it — or `script/*.rb` is no longer where they live. A rule that " \
+            "inspects nothing passes everything."
+end
+
 # ── `validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332) ──
 #
 # The engine's own file says turning it on in production converts a descriptor
@@ -7559,6 +7653,8 @@ if errors.empty?
        "#{initializer_demos} operator demos nor in the #{e2e_initializers} e2e harness " \
        "initializer fixtures run.sh installs " \
        "(#{INITIALIZER_ENV_FETCH_ALLOWED.size} declared ENV.fetch allowances), " \
+       "#{driver_env_held} no-default #{DRIVER_NO_DEFAULT_VARS.join('/')} fetch(es) in " \
+       "#{driver_env_scripts} demo driver script(s) (none carries a fallback), " \
        "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles, " \
        "application_controller.rb's superclass sentence checked against the tree in " \
        "#{prose_units.length} copies, " \

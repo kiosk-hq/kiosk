@@ -126,7 +126,7 @@ FUTURE_SLOT = lambda { |n, hour = 9|
 PAST_SLOT = "1900-01-01T09:00:00Z"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans this battery drives (db/seeds.rb). Only the owner carries a
 # `staff_role`; Alice and Bob are plain customers. All three are ordinary Devise

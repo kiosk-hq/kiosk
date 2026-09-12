@@ -62,7 +62,7 @@ require "uri"
 require "date"
 
 BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
-ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
+ISSUER   = ENV.fetch("KIOSK_ISSUER")
 
 # Dates far enough in the future to avoid conflicts with existing data.
 # Each redteam run starts with a clean DB (demo:setup), so these are stable.

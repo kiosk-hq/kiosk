@@ -88,7 +88,7 @@ require "kiosk/redteam"
 require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # ── The two principals, EARNED rather than asserted ──────────────────────────
 #

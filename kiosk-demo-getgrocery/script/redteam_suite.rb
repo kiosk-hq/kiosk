@@ -101,7 +101,7 @@ require "securerandom"
 require "uri"
 
 BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3001")
-ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
+ISSUER   = ENV.fetch("KIOSK_ISSUER")
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 

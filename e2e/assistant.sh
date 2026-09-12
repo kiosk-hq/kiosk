@@ -6,9 +6,10 @@
 # Asserts on responses from the REST wire surface: the per-verb endpoints
 # (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and the
 # two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). A path
-# the catalogue does not name is asserted to answer the ordinary routing 404 —
-# with a bearer and without one alike, since a routing miss is decided before
-# any credential is read.
+# under the mount that names NEITHER a verb the catalogue publishes NOR one of
+# the wire's own reserved endpoints is asserted to answer the ordinary routing
+# 404 — with a bearer and without one alike, since a routing miss is decided
+# before any credential is read.
 # Exits non-zero on any failure.
 #
 # ONE ANSWER SHAPE. Every
@@ -836,17 +837,22 @@ assert "forged self-asserted bearer → 401" "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/Salons")
 assert "a non-verb-shaped path → 404" "$status" "404"
 
-# ─── paths the catalogue does not name answer the ordinary 404 ──────────
+# ─── a path in neither the catalogue nor the reserved set → ordinary 404 ──
 #
-# No path under the mount is special-cased: no route drawn for a name the
-# catalogue does not publish, no tombstone, no 404 hint payload, no second
-# conformance surface. `/kiosk/query` and `/kiosk/run` are two such names, so
-# they are the ordinary routing 404 any undrawn path gets. That is the
-# assertion — not that some path is handled specially, but that none is — with
-# a bearer or without one, since a routing miss is decided before any
+# TWO kinds of path are drawn under the mount and no third: the wire's OWN
+# reserved endpoints — `schema`, `pay`, `openapi.json`, the auth plane, JWKS,
+# KYC, the claim and link flows — and one explicit route per verb the
+# catalogue publishes. This script dials both kinds and gets real answers —
+# `/kiosk/schema`, a reserved name the catalogue does NOT publish, is dialed
+# immediately after this block and answers 200. A name in NEITHER set is
+# special-cased nowhere — no route, no tombstone, no 404 hint payload, no
+# second conformance surface — so it is the ordinary routing 404 any undrawn
+# path gets. `/kiosk/query` and `/kiosk/run` are two such names. That is the
+# assertion — not that some path is handled specially, but that none is —
+# with a bearer or without one, since a routing miss is decided before any
 # credential is read.
 
-printf "\n\033[1m=== paths the catalogue does not name ===\033[0m\n"
+printf "\n\033[1m=== paths in neither the catalogue nor the reserved set ===\033[0m\n"
 
 for undrawn in query run; do
   body=$(curl -sS -X POST "$SERVER_URL/kiosk/$undrawn" \

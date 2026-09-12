@@ -30,9 +30,10 @@
 #   OwnerLinkIgnoresForgedClaimBody — a genuine OWNER link smuggles a wider
 #     role into the claim body; the bound token role comes from the IdP
 #     session, not the body, so the forged role is ignored
-#   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
-#     bookings (no whole-book, no forecast) in salon_calendar — the role gate
-#     is provider-controlled and un-bypassable
+#   CustomerCalendarStaysOwnScoped — a customer's agent sees its OWN booking and
+#     only that (no whole-book, no forecast) in salon_calendar — the role gate
+#     is provider-controlled and un-bypassable. Both halves are asserted: an
+#     empty calendar satisfies every "does not contain" there is
 #   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
 #     opening request may not name a role: `role`/`scope`, declared value or
 #     not, is 400 invalid_request, while the role-less request still opens
@@ -43,7 +44,8 @@
 #   DeviceGrantVerifyPageNamesTheAccess — the consent page names the role it is
 #     handing over, and names a DIFFERENT one to each human
 #   DeviceGrantRebindCannotEscalate — a key already bound `customer` re-runs the
-#     ceremony: the role stays `customer`, agent_id stable, calendar own-scoped
+#     ceremony: the role stays `customer`, agent_id stable, and the calendar
+#     still carries the approver's own booking and nobody else's
 #   SelfAssertedTokenForgery — the AGENT sibling of the beat below: a
 #     self-asserted `agent:u-…:a-…:r-owner` bearer naming the seeded owner
 #     resolves to NO identity, in EVERY environment, while the OWNER's
@@ -350,11 +352,19 @@ appt_id_b3 = appt_b3["appointment_id"]
 rc, cal = WIRE.get_json("/kiosk/salon_calendar", {}, ALICE.bearer)
 rows = Array(cal)
 own_ids     = rows.reject { |r| r["summary"] }.map { |r| r["id"] }
+# POSITIVE CONTROL, and it comes FIRST because the two assertions after it are
+# both absences: an empty calendar satisfies every absence there is, so a query
+# that answered nothing to anybody would read here as perfect isolation. Scoping
+# is two claims — the caller sees their OWN rows, and sees no one else's — and
+# without the first the second is unfalsifiable. Alice booked `appt_id_a` at the
+# top of this file; her own calendar must carry it.
+sees_own    = own_ids.include?(appt_id_a)
 own_only    = !own_ids.include?(appt_id_b3)
 no_forecast = rows.none? { |r| r["summary"] == "forecast" }
 BATTERY.record("CustomerCalendarStaysOwnScoped",
-               rc == 200 && rc_b3 == 200 && own_only && no_forecast,
-               "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
+               rc == 200 && rc_b3 == 200 && sees_own && own_only && no_forecast,
+               "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, carries her OWN " \
+               "#{appt_id_a.inspect} (sees_own=#{sees_own}), excludes B's #{appt_id_b3.inspect} " \
                "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
 
 # ── the CLAIM ceremony's roles-from-IdP beats ────────────────────────────────
@@ -469,6 +479,12 @@ _rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cu
 cust_claim_role = token_role(cust_token)["role"]
 rc_cust_cal, cust_cal = WIRE.get_json("/kiosk/salon_calendar", {}, WIRE.bearer(cust_token))
 cust_rows      = Array(cust_cal)
+# The customer half's own POSITIVE CONTROL. The owner half below asserts
+# positively and so catches a calendar that is empty for EVERYONE, but nothing
+# there catches this token's own rows going missing — that needs an assertion on
+# THIS calendar. The ceremony was approved by Alice, so it must reach Alice's
+# booking.
+cust_sees_own  = cust_rows.any? { |r| r["id"] == appt_id_a }
 cust_own_only  = cust_rows.none? { |r| r["id"] == appt_id_b3 }
 cust_noforecast = cust_rows.none? { |r| r["summary"] == "forecast" }
 
@@ -483,11 +499,12 @@ own_forecast    = own_rows.any? { |r| r["summary"] == "forecast" }
 
 BATTERY.record("DeviceGrantRoleComesFromTheApprover",
                rc_cust_poll == 200 && cust_claim_role == "customer" &&
-                 rc_cust_cal == 200 && cust_own_only && cust_noforecast &&
+                 rc_cust_cal == 200 && cust_sees_own && cust_own_only && cust_noforecast &&
                  rc_own_poll == 200 && own_claim_role == "owner" &&
                  rc_own_cal == 200 && own_sees_others && own_forecast,
                "customer-approved claim → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
-               "calendar #{rc_cust_cal} own_only=#{cust_own_only} forecast_hidden=#{cust_noforecast}; " \
+               "calendar #{rc_cust_cal} sees_own=#{cust_sees_own} own_only=#{cust_own_only} " \
+               "forecast_hidden=#{cust_noforecast}; " \
                "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
                "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \
                "forecast=#{own_forecast} (want customer/own-scoped and owner/whole-book — the role is the " \
@@ -525,16 +542,22 @@ rebind_role   = rebind_claims["role"]
 rebind_stable = rebind_claims["agent_id"] == token_role(cust_token)["agent_id"]
 rc_rebind_cal, rebind_cal = WIRE.get_json("/kiosk/salon_calendar", {}, WIRE.bearer(rebind_token))
 rebind_rows      = Array(rebind_cal)
+# POSITIVE CONTROL again, and this beat needs its own: the two absences below are
+# the ONLY calendar assertions here, so a rebound token that reached nothing at
+# all would print own-scoped. "Still the approver's role" means it still reads
+# Alice's book — not that it reads no book.
+rebind_sees_own  = rebind_rows.any? { |r| r["id"] == appt_id_a }
 rebind_own_only  = rebind_rows.none? { |r| r["id"] == appt_id_b3 }
 rebind_noforecast = rebind_rows.none? { |r| r["summary"] == "forecast" }
 BATTERY.record("DeviceGrantRebindCannotEscalate",
                rc_rebind_refused == 400 && rebind_refused_body["error"] == "invalid_request" &&
                  rc_rebind_poll == 200 && rebind_role == "customer" && rebind_stable &&
-                 rc_rebind_cal == 200 && rebind_own_only && rebind_noforecast,
+                 rc_rebind_cal == 200 && rebind_sees_own && rebind_own_only && rebind_noforecast,
                "known key re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
                "#{rebind_refused_body['error'].inspect}; the honest re-run → poll #{rc_rebind_poll}, " \
                "role #{rebind_role.inspect}, agent_id stable=#{rebind_stable}, calendar #{rc_rebind_cal} " \
-               "own_only=#{rebind_own_only} forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
+               "sees_own=#{rebind_sees_own} own_only=#{rebind_own_only} " \
+               "forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
                "the approver's role, not one ceremony later\'s escalation)")
 
 # ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────

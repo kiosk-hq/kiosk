@@ -28,6 +28,8 @@ never rewritten. The entries below the baseline are long; they stay as written.
 
 - 2026-09-12: **All seven isolation drivers now `fetch` `KIOSK_ISSUER` with no default (K-1540).** A fallback to the URL dialled guesses the `aud` a possession proof is signed for.
 
+- 2026-09-12: **stylish's three calendar-scoping beats now assert the caller sees their OWN booking, not only that they see nobody else's (K-1541).** An empty calendar used to pass.
+
 - 2026-09-12: **getgrocery's, hoteling's and skooti's schema drivers no longer pay a PoW toll to register an agent they never use (K-1539).** Both documents they read take no credential.
 
 - 2026-09-12: **atablefor, philslist and tudu now assert they READ agents.txt and agents.json, not only that no payment directive is in them (K-1538).** An emptied document used to pass.

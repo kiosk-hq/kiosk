@@ -130,7 +130,17 @@
 # nothing for its entire existence and nothing said so.
 #
 # WHAT THIS CANNOT CATCH, so nothing here is overtrusted:
-#   * Prose. The page's sentences about the verb are not derived from anything.
+#   * Prose, WITH ONE SUB-CLASS SUBTRACTED (K-1519). The page's sentences about
+#     the verb -- what it does, why an argument is optional, what a caller
+#     should do next -- are derived from nothing. Its STATUS-BESIDE-A-CODE
+#     sentences are: `kiosk.tech/bin/check-problem-pages` holds every one of
+#     them, on either side of the repository boundary, against
+#     `spec/schemas/problem.schema.json`. That bullet used to make the wider
+#     claim, and K-1501 quoted it as the evidence that the class was covered by
+#     nothing -- which it was, until K-1501's own fix. Neither script can see
+#     the other, so this clause is CHECKED and not trusted: rule STATUS_PROSE
+#     below looks the named guard up in the sibling checkout and says so when it
+#     cannot.
 #   * A verb the page teaches that has no counterpart here at all.
 #   * The page agreeing with a getgrocery that is itself wrong. Consistency,
 #     never truth.
@@ -222,6 +232,82 @@ SERVER_ERRORS        = "kiosk-server/lib/kiosk/server/errors.rb"
 
 PAGE_URL      = "https://kiosk.tech/onboarding.html"
 PAGE_BASENAME = "onboarding.html"
+
+# ── The one sub-class of the page's PROSE that IS derived (K-1519) ───────────
+#
+# The disclaimer list above opens «Prose. The page's sentences about the verb
+# are not derived from anything», and K-1501 quoted that bullet as the evidence
+# that a status written into a sentence was «known, written down, and covered by
+# nothing». It stopped being true the day K-1501 was fixed — one repository over,
+# `kiosk.tech/bin/check-problem-pages` scans every tracked page in the site
+# repository for a three-digit status ADJACENT to a vocabulary code and holds
+# each pair to `spec/schemas/problem.schema.json`, and `onboarding.html` is in
+# that file set. It exists because this page published `403` for two
+# `module_not_served` refusals while all three tables on the same site published
+# `501`.
+#
+# So a reader of THIS script, deciding whether their edit to that page's status
+# prose is held, was being told «nothing derives it» at the moment the answer
+# became «one guard in the sibling repository does». Neither script can see the
+# other, which is exactly why the clause below is CHECKED rather than trusted:
+# a pointer to a mechanism in another repository is the one kind of sentence
+# that can go false without anything in THIS repository changing at all.
+SITE_PROBLEM_GUARD = "bin/check-problem-pages"
+
+# The code vocabulary, read out of the schema mirror this repository already
+# carries — not typed here. `bin/check-spec-schemas` holds that mirror
+# byte-identical to the one kiosk.tech publishes and the sibling guard reads, so
+# the two sides cannot disagree about what a code is.
+PROBLEM_SCHEMA_MIRROR = "e2e/schemas/problem.schema.json"
+
+# [[code, status], …] out of the schema's own `if`/`then` branches — the same
+# binding the sibling guard reads, in the same file, so neither side can be
+# holding a vocabulary the other does not have.
+def problem_pairs(raw)
+  require "json"
+  branches = JSON.parse(raw)["allOf"]
+  return [] unless branches.is_a?(Array)
+
+  branches.filter_map do |b|
+    code   = b.dig("if", "properties", "code", "const")
+    status = b.dig("then", "properties", "status", "const")
+    next if code.nil? || status.nil?
+
+    [code, status]
+  end
+rescue StandardError
+  []
+end
+
+def problem_codes(raw) = problem_pairs(raw).map(&:first).uniq
+
+# A status and a code within a short run of non-alphanumeric characters, in
+# either order — the same shape the sibling guard scans for. This side only
+# needs to know the page HAS such sentences: whether each one is RIGHT is that
+# guard's answer, and duplicating it here would be a second opinion nobody
+# reconciles.
+def status_code_pairs(page, codes)
+  return 0 if codes.empty?
+
+  alt = codes.map { |c| Regexp.escape(c) }.join("|")
+  re  = /(?:\b[1-5]\d\d\b[^A-Za-z0-9]{0,16}(?:#{alt})\b)|(?:\b(?:#{alt})\b[^A-Za-z0-9]{0,16}[1-5]\d\d\b)/
+  page.scan(re).size
+end
+
+# The sibling checkout, when there is one. `resolve_page` already knows three
+# ways to reach the PAGE; this asks the narrower question of whether the
+# sibling's `bin/` is on this disk, which only the checkout branch can answer.
+# `KIOSK_TECH_DIR` wins for the same reason it does there — it names the site
+# checkout — and it is also what makes this leg PLANTABLE: an arm can point it
+# at a directory with no `bin/` and watch the rule go red, which is the only way
+# to prove a filesystem lookup is really being made.
+def site_checkout
+  env = ENV["KIOSK_TECH_DIR"]
+  return (File.directory?(env) ? env : nil) if env && !env.empty?
+
+  dir = File.expand_path("../kiosk.tech", ROOT)
+  File.directory?(dir) ? dir : nil
+end
 
 # The verb both sides declare, and the one K-1325's drift was in.
 WORKED_VERB = "delivery_slots"
@@ -754,6 +840,58 @@ def vacuous!(name, why)
   puts "         #{why}"
   FAILURES << "#{name}: VACUOUS -- #{why}"
   false
+end
+
+# R0 -- the disclaimer list's own pointer, held rather than trusted (K-1519).
+#
+# It is a POINTER rather than a derivation and the RULES table says so: nothing
+# here recomputes whether a status is RIGHT. That is the sibling guard's answer,
+# and a second opinion in this repository would be one more thing to reconcile.
+# What this holds is the two facts the clause rests on -- the page really does
+# carry such sentences, and the guard the clause names really is there.
+def rule_status_prose(page, sources)
+  codes = problem_codes(sources[:problem_schema].to_s)
+  if codes.empty?
+    return vacuous!("STATUS_PROSE",
+                    "#{PROBLEM_SCHEMA_MIRROR} yields no `const` code vocabulary, so this rule " \
+                    "cannot tell a status-beside-a-code sentence from any other sentence and " \
+                    "the disclaimer clause it holds is unverifiable")
+  end
+
+  pairs = status_code_pairs(page, codes)
+  if pairs.zero?
+    return vacuous!("STATUS_PROSE",
+                    "the page states NO status beside a vocabulary code, so the disclaimer's " \
+                    "«except its status-beside-a-code sentences» describes a sub-class this page " \
+                    "does not have. Either the page stopped teaching a refusal status -- read it " \
+                    "-- or this scan has stopped recognising the shape; do not leave the clause " \
+                    "standing over nothing")
+  end
+
+  site = site_checkout
+  if site.nil?
+    return check("STATUS_PROSE", true,
+                 "the page states #{pairs} status-beside-a-code sentence(s); the disclaimer says " \
+                 "kiosk.tech/#{SITE_PROBLEM_GUARD} holds them",
+                 "NOT CONFIRMED ON THIS RUN -- there is no ../kiosk.tech beside this checkout, so " \
+                 "the named guard could not be looked for. This is a pointer into another " \
+                 "repository and this leg can only be run where that repository is on disk; the " \
+                 "run in the umbrella workspace is the one that answers it")
+  end
+
+  guard = File.join(site, SITE_PROBLEM_GUARD)
+  ok    = File.file?(guard) && File.executable?(guard)
+  check("STATUS_PROSE", ok,
+        "the page states #{pairs} status-beside-a-code sentence(s), and kiosk.tech/" \
+        "#{SITE_PROBLEM_GUARD} -- the guard this script's disclaimer list names as holding them " \
+        "-- is present and executable in the sibling checkout",
+        ok ? "vocabulary read from #{PROBLEM_SCHEMA_MIRROR} (#{codes.size} code(s)); guard found " \
+             "at #{guard}"
+           : "#{guard} is #{File.exist?(guard) ? 'not executable' : 'ABSENT'}. The disclaimer " \
+             "list above tells a reader that this page's status prose IS held, one repository " \
+             "over, by that script. If it has been renamed or retired, the clause is now " \
+             "advertising coverage that does not exist -- which is the defect K-1519 filed, " \
+             "pointing the other way. Re-point the clause, or restore the guard")
 end
 
 # R1 -- the page's handler class names are the generator's worked example.
@@ -2243,6 +2381,7 @@ def rule_route_pattern(page, sources)
 end
 
 RULES = [
+  [:rule_status_prose,       "STATUS_PROSE",        "pointer",    "the guard one repository over that DOES hold this page's status-beside-a-code sentences, which this script's own disclaimer list says nothing derives"],
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
   [:rule_slots_required,     "SLOTS_REQUIRED",      "derivation", "getgrocery's #{WORKED_VERB} input_schema `required:` list"],
   [:rule_slots_properties,   "SLOTS_PROPERTIES",    "derivation", "getgrocery's #{WORKED_VERB} input_schema property names"],
@@ -2279,6 +2418,7 @@ delivery_slots:  repo_read(GETGROCERY_DELIVERY_SLOTS),
 operations:      repo_read_dir(GETGROCERY_OPERATIONS_DIR),
 app_routes:      repo_read(GETGROCERY_APP_ROUTES),
 wire_file:       repo_read(GETGROCERY_WIRE_ROUTES),
+    problem_schema:  repo_read(PROBLEM_SCHEMA_MIRROR),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
     readme:          repo_read(MONOREPO_README),
@@ -2505,6 +2645,9 @@ def derived_facts(sources)
     # K-1381: the publication-status claim the README states canonically, its
     # section and that section's anchor -- the fixture carries the derived copy
     # R17 holds the page to.
+    # One (code, status) binding out of the schema mirror, so the fixture page
+    # can carry the SHAPE STATUS_PROSE reads without a typed sentence (K-1519).
+    problem_pair: problem_pairs(sources[:problem_schema].to_s).first,
     publication: readme_publication_status(sources[:readme]),
     # K-1360: every verb's property ASSERTION KEYWORDS, array elements
     # included, and the constant table they resolve through. The fixture writes
@@ -2678,7 +2821,14 @@ def fixture_page(f)
   # section that states it. Both read out of README.md, so a reword there makes
   # the fixture carry the new sentence rather than a stale one.
   status_url = "https://github.com/#{f[:install][1]}##{f[:publication][2]}"
-  [%(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
+  # The one PROSE shape a rule reads (K-1519): a status beside a vocabulary
+  # code, in the binding the schema mirror declares. Derived, so a rebinding
+  # upstream moves this sentence rather than leaving the fixture teaching a
+  # pair the schema no longer holds.
+  status_prose = f[:problem_pair] ?
+    %(<p>Without one it refuses with a <code>#{f[:problem_pair][1]} #{f[:problem_pair][0]}</code> problem document.</p>) : ""
+  [status_prose,
+   %(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
    %(<p>Needs Rails #{f[:rails]} and Ruby #{f[:ruby]}.</p>),
    %(<p>#{f[:publication][0]}. Publication status is stated once, at <a href="#{status_url}">#{status_url}</a>.</p>),
    %(<p>Raise what you would raise anyway: the caller is sent "#{hint}" in place of your
@@ -3070,6 +3220,28 @@ arms << plant_arm("the :kiosk_verb catch-all taught in place of #{route_verb}'s 
                const_sources[:uuid_check] + const_sources[:wire_arguments])
   arms << vacuity_arm("#{kw_const[3]} no longer resolves to a literal",
                         page, const_sources, "PROPERTY_KEYWORDS")
+  # STATUS_PROSE (K-1519). Three arms, one per way the disclaimer clause can
+  # stop being true without anyone touching the sentence: the vocabulary it
+  # recognises drains, the page stops carrying the sub-class, and the guard it
+  # names stops being there. The third is why `site_checkout` honours
+  # KIOSK_TECH_DIR — a filesystem lookup nothing can plant into is a lookup
+  # nobody has proved is happening.
+  arms << vacuity_arm("the problem-schema mirror yields no code vocabulary", page,
+                        sources.merge(problem_schema: "{}"), "STATUS_PROSE")
+  arms << vacuity_arm("the page stops stating any status beside a code",
+                        page.gsub(/\b[1-5]\d\d\b/, "HTTP"), sources, "STATUS_PROSE")
+  empty_site = File.join(Dir.tmpdir, "onboarding-self-test-nosite-#{Process.pid}")
+  FileUtils.mkdir_p(empty_site)
+  begin
+    prev_site = ENV["KIOSK_TECH_DIR"]
+    ENV["KIOSK_TECH_DIR"] = empty_site
+    arms << vacuity_arm("the sibling checkout has no bin/check-problem-pages", page, sources,
+                          "STATUS_PROSE")
+  ensure
+    prev_site.nil? ? ENV.delete("KIOSK_TECH_DIR") : ENV["KIOSK_TECH_DIR"] = prev_site
+    FileUtils.rm_rf(empty_site)
+  end
+
   arms << vacuity_arm("generator template loses its c.handlers example", page,
                         sources.merge(generator: sources[:generator].gsub(/c\.handlers\s*=\s*%w\[[^\]]*\]/, "c.handlers = []")), "HANDLER_NAMES")
   arms << vacuity_arm("getgrocery's #{WORKED_VERB} loses required:", page,

@@ -255,10 +255,13 @@
 #       or `before <NP> existed` — PRINTED, NEVER RED, and read on the
 #       NARRATIVE SURFACES only (K-1409). Two demo READMEs carried one for
 #       nineteen days and eighteen days inside a class this repository had
-#       already swept four times. Over the four scopes the census reads, the
-#       union of the three shapes matches 78 lines and only 7 of them are on a
-#       page somebody reads end to end; a ban over the other 71 would redden
-#       «a nil hint is dropped» in every demo. See the census section below.
+#       already swept four times. THE SHAPE IS HERE AND THE SIZE IS ON THE RUN:
+#       over the four scopes the census reads, the great majority of what the
+#       three shapes match is ordinary prose about RUNTIME DATA — «a nil hint
+#       is dropped» — and only a small remainder sits on a page somebody reads
+#       end to end. Both figures are derived on every run and printed in the
+#       RESTRICTION TOTALS block; this paragraph quotes neither. See the census
+#       section below.
 #
 # ── R5 AND R6: A PUBLIC ARTEFACT DESCRIBES WHAT IS (T-195, K-1460) ──────────
 #
@@ -437,12 +440,25 @@
 # count nothing holds. It is still a reading of one day.)
 #
 # AND THE WIDER RETIREMENT VOCABULARY IS NOT EVEN A CANDIDATE, which is the
-# other half of why this is a census. Over the same file set: «once» 286,
-# «old» 244, «deprecat» 59, «no longer» 47, «legacy» 32, «originally» 9. Those
-# are ordinary English in a repository that documents its own design at length.
-# The lesson R6's header already states — «every marker in it was chosen because
-# it has no reading in which a live sentence needs it» — is what keeps that list
-# SHORT, and this census is where the rest of the vocabulary goes.
+# other half of why this is a census. `once`, `old`, `deprecat…`, `no longer`,
+# `legacy` and `originally` are ordinary English in a repository that documents
+# its own design at length, and they stand at a scale no ban survives. THE
+# SCALE IS DERIVED AND PRINTED, NOT WRITTEN HERE: the run's WIDER VOCABULARY
+# block counts each of those words over these same scopes, on every invocation,
+# and names the spelling it counted with. Read it there.
+#
+# THAT BLOCK EXISTS BECAUSE THIS PARAGRAPH ONCE CARRIED THE SIX INTEGERS AND
+# TWO OF THEM WERE NOT REPRODUCIBLE AT ANY SPELLING (K-1516, third reopen).
+# Four reproduced to the digit under a word-bounded line count, which is what
+# pinned the intended spelling; of the other two, one had drifted with the
+# corpus and one matched no spelling anybody could find — not word-bounded,
+# not case-sensitive, not unbounded, not at head and not at the commit that
+# wrote the sentence. A figure nobody can reproduce is worse than no figure: it
+# cannot be checked, so it cannot be corrected, and it teaches the next reader
+# that the numbers in this file are decoration. The lesson R6's header already
+# states — «every marker in it was chosen because it has no reading in which a
+# live sentence needs it» — is what keeps that list SHORT, and this census is
+# where the rest of the vocabulary goes.
 #
 # ── C3: THE TENSE CONTRAST — PRINTED, NEVER RED (K-1515) ──────────────────
 #
@@ -666,9 +682,11 @@ TENSE_CONTRAST_RE = /\b(?:was|were)\b.{0,160}?\b(?:it|they|this|that|which)\s+(?
 
 # THE NARRATIVE SURFACES — a page somebody READS end to end rather than a file
 # they open at a line. C4 is restricted to these and the restriction is a
-# MEASUREMENT rather than a taste; see the census section for the 78-vs-7 split
-# and for why the other 71 lines are about runtime data instead of about this
-# project's own past.
+# MEASUREMENT rather than a taste; see the census section for why the other
+# matches are about runtime data instead of about this project's own past, and
+# the run's RESTRICTION TOTALS block for the size of what the restriction sets
+# aside. No figure is written here, because a figure written here goes stale
+# and nothing says so (K-1409, third reopen).
 NARRATIVE_EXTS = %w[.md .html].freeze
 
 def narrative_file?(path) = NARRATIVE_EXTS.include?(File.extname(path))
@@ -684,24 +702,38 @@ def narrative_file?(path) = NARRATIVE_EXTS.include?(File.extname(path))
 #   (3) `before <NP> existed|arrived|landed|shipped` — «which is what this shop
 #       did before the header existed».
 #
-# WHY A CENSUS AND NOT AN EIGHTH RULE, MEASURED RATHER THAN ARGUED. Over the
-# four scopes this census reads, the union of the three shapes matches 78 lines
-# — 55 in `.rb`, 8 in `.json`, 7 in `.md`, 6 in `.sh`, 1 `.py`, 1 `.example`.
-# Effectively all of the 71 non-narrative ones are about RUNTIME DATA and are
-# correct prose: «a nil hint is dropped», «the challenge is deleted so it can
-# never be replayed», «empty-valued params are dropped», «Path C — RLS is
-# dropped from this demo». A ban over them would redden seventy sentences to
-# catch two, which is a gate somebody switches off inside a day.
+# WHY A CENSUS AND NOT AN EIGHTH RULE, MEASURED RATHER THAN ARGUED — AND THE
+# MEASUREMENT IS THE RUN'S, NOT THIS PARAGRAPH'S. Over the four scopes this
+# census reads, the union of the three shapes is dominated by Ruby: those
+# matches are about RUNTIME DATA and are correct prose — «a nil hint is
+# dropped», «the challenge is deleted so it can never be replayed»,
+# «empty-valued params are dropped», «Path C — RLS is dropped from this demo».
+# A ban would redden that whole population to catch the handful of sentences
+# that are about this project's own past, which is a gate somebody switches off
+# inside a day.
 #
 # SO THE CENSUS IS RESTRICTED TO THE NARRATIVE SURFACES, and that restriction
 # is where the two reopen sites live: a demo README is the first thing an
-# operator opens, which is the surface Phil's rule was written about. Restricted
-# that way the same union prints SEVEN rows, and adjudicating them one by one
-# gives TWO archaeology and FIVE live — the three `before-after.md` sentences
-# declaring the elision the document itself performs, getgrocery's «a slot whose
-# start has already passed *there* is dropped», and prove's «is replaced by a
-# government identity service login», which is what production will do. Two out
-# of seven is a census; it is nowhere near a ban.
+# operator opens, which is the surface Phil's rule was written about. What
+# survives the restriction is adjudicated one by one, and most of it is live —
+# the `before-after.md` sentences declaring the elision the document itself
+# performs, getgrocery's «a slot whose start has already passed *there* is
+# dropped», prove's «is replaced by a government identity service login», which
+# is what production will do. A ratio like that is a census; it is nowhere near
+# a ban.
+#
+# THIS PARAGRAPH QUOTES NO FIGURE, AND THAT IS THE THIRD REPAIR OF THE SAME
+# DEFECT (K-1409, third reopen). The version before this one answered a stale
+# hand-written count with a fresh census of hand-written counts — the union's
+# size, its split by extension, the number of narrative rows and their live/
+# archaeology ratio, nine integers in all. They drifted, and one of them was
+# ALREADY FALSE in the commit that wrote it: the narrative figure was measured
+# on the tree the same commit then repaired, so it shipped describing a state
+# that had not existed since the previous commit, at exit 0, with nothing able
+# to say so. Both sizes are now DERIVED and printed by the run — the census
+# rows above, the CENSUS TOTALS block, and the RESTRICTION TOTALS block, which
+# gives a `narrative_only:` census's reach both with and without its
+# restriction. Read those. Do not re-type them here.
 #
 # The gap this leaves is stated rather than hidden: a code comment narrating
 # this project's own history carries none of R6's markers either and is not
@@ -742,6 +774,28 @@ CENSUS = [
           "both want nothing done; «we published X until it was dropped» and «what this shop " \
           "did before the header existed» are archaeology and want the present tense" }
 ].freeze
+
+# THE WIDER RETIREMENT VOCABULARY, COUNTED RATHER THAN QUOTED (K-1516, third
+# reopen). C2's header argues that these six words are far too common in this
+# repository to ban, and for four waves it argued it with six integers typed
+# into a comment. Two of them stopped being reproducible — one drifted with the
+# corpus, one matched at no spelling at all — and nothing could say so, because
+# a comment has no exit code. The argument is now made by the run: each entry
+# is counted over the same scopes the census reads, and the SPELLING is part of
+# the answer rather than a thing the reader has to guess. `deprecat` is a STEM
+# on purpose (it has to cover `deprecated`, `deprecation`, `deprecates`); every
+# other entry is word-bounded. All of them are case-insensitive, and the unit
+# is MATCHING LINES of `rule_source` — the same reading of a file the rules and
+# the census get, so a vendored mirror contributes only the member this
+# repository actually wrote.
+WIDER_VOCABULARY = {
+  "once"       => /\bonce\b/i,
+  "old"        => /\bold\b/i,
+  "deprecat…"  => /deprecat/i,
+  "no longer"  => /\bno\s+longer\b/i,
+  "legacy"     => /\blegacy\b/i,
+  "originally" => /\boriginally\b/i,
+}.freeze
 
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
 def census_for(scope) = CENSUS.select { |r| r[:scopes].include?(scope) }
@@ -1306,6 +1360,9 @@ def run_check
   failed = false
   census_tally = Hash.new(0)
   census_scopes = Hash.new { |h, k| h[k] = [] }
+  restriction_tally = Hash.new { |h, k| h[k] = Hash.new(0) }
+  vocabulary_tally = Hash.new(0)
+  vocabulary_files = 0
   exempt_tally = []
   scoped.each do |scope, files|
     rules = rules_for(scope)
@@ -1360,6 +1417,21 @@ def run_check
       seen = read.flat_map { |path| scan(path, [rule]).first }
       census_scopes[rule[:id]] << scope
       census_tally[rule[:id]] += seen.size
+
+      # WHAT THE `narrative_only:` RESTRICTION SETS ASIDE, derived here so no
+      # comment has to carry it (K-1409, third reopen). `scan` drops the rule
+      # at the door of a non-narrative file — that IS the restriction — so the
+      # unrestricted reach is counted straight off the same `rule_source` the
+      # rules read, by matching LINES rather than by re-running the scanner.
+      if rule[:narrative_only]
+        t = restriction_tally[rule[:id]]
+        t[:kept] += seen.size
+        t[:read] += read.size
+        t[:files] += files.size
+        t[:all] += files.sum do |path|
+          rule_source(path).each_line.count { |l| l.match?(rule[:re]) }
+        end
+      end
       if seen.empty?
         puts "#{rule[:id]}/#{scope}. #{rule[:none]} in #{SCOPES[scope][:label]} — census " \
              "empty (#{read.size} files read)"
@@ -1372,6 +1444,16 @@ def run_check
         upstream = "/#{h.path}".match?(VENDORED_MIRROR_RE) ?
                      " [vendored mirror — upstream's byte, not repairable from this side]" : ""
         puts "  WARN #{h.path}:#{h.line}#{upstream} — #{WHERE[h.where]}: #{h.text}"
+      end
+    end
+
+    # ── the wider vocabulary, over the census scopes only (K-1516) ─────────
+    next if census_for(scope).empty?
+
+    vocabulary_files += files.size
+    files.each do |path|
+      rule_source(path).each_line do |l|
+        WIDER_VOCABULARY.each { |word, re| vocabulary_tally[word] += 1 if l.match?(re) }
       end
     end
   end
@@ -1392,6 +1474,42 @@ def run_check
       puts "  #{id}".ljust(6) + ": #{count} row(s) across #{scopes.size} scope(s) " \
            "(#{scopes.join(', ')})"
     end
+  end
+
+  # ── WHAT A `narrative_only:` RESTRICTION SETS ASIDE (K-1409) ──────────────
+  #
+  # C4's header argues that a BAN on the retirement clause is impossible because
+  # the same three shapes match, overwhelmingly, correct prose about runtime
+  # data — and for one wave it argued that with nine hand-typed integers, four
+  # of which were false at head and one of which was false in the commit that
+  # wrote it. The argument needs two sizes: the reach of the pattern, and the
+  # reach after the restriction. Both are here, on every run, from the same
+  # scan.
+  unless restriction_tally.empty?
+    puts
+    puts "RESTRICTION TOTALS — what a `narrative_only:` census sets aside " \
+         "(derived on this run; printed, never red)"
+    restriction_tally.each do |id, t|
+      puts "  #{id}".ljust(6) + ": the pattern matches #{t[:all]} line(s) over the " \
+           "#{t[:files]} file(s) in scope; #{t[:kept]} of them are on the #{t[:read]} " \
+           "narrative file(s) the census reads, so #{t[:all] - t[:kept]} line(s) are set " \
+           "aside as prose about runtime data rather than about this project"
+    end
+  end
+
+  # ── THE WIDER RETIREMENT VOCABULARY (K-1516) ──────────────────────────────
+  #
+  # The other half of C2's why-a-census argument, derived for the same reason:
+  # the six figures that used to sit in that paragraph drifted, and two of them
+  # were not reproducible at any spelling. Here the spelling is printed beside
+  # the count, so the number and the question it answers travel together.
+  unless vocabulary_tally.empty?
+    puts
+    puts "WIDER VOCABULARY — matching line(s) over the #{vocabulary_files} file(s) in the " \
+         "census scopes (derived on this run; printed, never red)"
+    puts "  spelling: case-insensitive, word-bounded except the `deprecat` stem; the unit is " \
+         "LINES of the same source the rules read"
+    puts "  " + WIDER_VOCABULARY.keys.map { |w| "«#{w}» #{vocabulary_tally[w]}" }.join(" · ")
   end
 
   # ── WHAT THE DECLARED EXEMPTIONS CARRY (K-1509, K-1435) ───────────────────
@@ -2199,6 +2317,43 @@ def self_test
       "(CHANGELOG.md + bin/): #{hits} file(s)",
       hits.positive?
     )
+  end
+
+  # ── VACUITY: THE WIDER-VOCABULARY SURVEY (K-1516, third reopen) ───────────
+  #
+  # C2's why-a-census argument is made by a printed count now instead of by six
+  # integers in a comment, which moves the failure mode rather than removing
+  # it: a spelling that stops matching prints a `0` that reads exactly like
+  # «this repository does not use that word». Re-run over CHANGELOG.md and
+  # bin/, where none of these six can honestly disappear.
+  check.call("the wider-vocabulary survey is non-empty — a printed argument with no entries " \
+             "argues nothing",
+             !WIDER_VOCABULARY.empty?)
+  WIDER_VOCABULARY.each do |word, re|
+    hits = corpus.count do |p|
+      File.read(p, encoding: "UTF-8", invalid: :replace, undef: :replace).match?(re)
+    end
+    check.call("«#{word}»'s spelling still matches outside the ban (CHANGELOG.md + bin/): " \
+               "#{hits} file(s)",
+               hits.positive?)
+  end
+
+  # ── THE `narrative_only:` RESTRICTION MUST ACTUALLY RESTRICT (K-1409) ─────
+  #
+  # RESTRICTION TOTALS reports what C4's narrative filter sets aside, and that
+  # report is only worth printing while there is something to set aside. A
+  # census whose scopes had become all-narrative would print two equal figures
+  # and read as a measured justification for a restriction that is doing
+  # nothing.
+  CENSUS.select { |r| r[:narrative_only] }.each do |rule|
+    scoped_files = rule[:scopes].flat_map do |s|
+      SCOPES[s][:dirs].call.flat_map { |d| SCOPES[s][:files].call(d) }
+    end
+    kept = scoped_files.count { |p| narrative_file?(p) }
+    check.call("#{rule[:id]}'s narrative restriction is a PROPER subset of its scopes " \
+               "(#{kept} narrative file(s) of #{scoped_files.size}) — otherwise its " \
+               "RESTRICTION TOTALS line is a tautology dressed as a measurement",
+               kept.positive? && kept < scoped_files.size)
   end
 
   # ── VACUITY: the census must reach the scopes it claims, and must be able

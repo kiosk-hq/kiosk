@@ -560,10 +560,14 @@ REPO = File.expand_path("..", __dir__)
 #
 # THE OBVIOUS REMEDY — drop the leading `\b` — IS REFUTED BY THIS TREE, which is
 # why the boundary is still here. `git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'`
-# over this repository finds 141 hits that are not ledger ids at all, 129 of
-# them `SK-001`, the scooter id `kiosk-demo-skooti` ships across two dozen
-# files, plus `SK-002`..`SK-007`, `SK-999` and `OK-1234`. A ban that reddens on
-# a demo's own fixture data is a ban somebody switches off.
+# over this repository finds hits that are not ledger ids at all — overwhelmingly
+# `SK-001`, the scooter id `kiosk-demo-skooti` ships across two dozen files, plus
+# `SK-002`..`SK-007`, `SK-999` and `OK-1234`. MEASURED 2026-09-12 it was 161
+# lines; that is a reading of one day, not a live figure, and re-deriving it
+# means that command in that dialect (PCRE — an ERE cannot spell `\d` or `\b`).
+# The order of magnitude is the part that carries the argument: a ban that
+# reddens on a demo's own fixture data by the hundred is a ban somebody switches
+# off.
 #
 # So the boundary HOLDS and an ESCAPE RUN is admitted beside it: a backslash
 # followed by one to five alphanumerics. That ceiling is not a taste — `\uFFFF`

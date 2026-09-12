@@ -92,12 +92,18 @@
 #                copies that agrees once comments and whitespace are normalised
 #                away must be declared in the entry's `agree:` map, as
 #                `:lockstep` (one artefact, hand-copied — and then held) or
-#                `:coincidence` (unrelated reasons, capped). Three of
-#                `script/schema_flow.rb`'s seven copies were one file at 37
-#                normalised lines under an entry that said each asserted its own
-#                demo's verbs, and nothing at either granularity could see it:
+#                `:coincidence` (unrelated reasons, capped). What set that rule
+#                going: three of `script/schema_flow.rb`'s seven copies had
+#                become ONE file under an entry saying each asserted its own
+#                demo's verbs, and nothing at either granularity could see it —
 #                the fragment rule's tripwire needed UNANIMITY, so two of three
 #                converging fired nothing, and the file level had no tripwire.
+#                HOW BIG THOSE COPIES ARE IS NOT WRITTEN DOWN ANYWHERE HERE, and
+#                that is the point: the run prints a CONVERGENCE GROUPS block
+#                giving every `:per_demo` subject's normalised sizes and the
+#                subsets that agree. Read it there. Every figure this paragraph
+#                used to carry was falsified by one refactor, silently, because
+#                a comment has no exit code (K-1542).
 #
 # `ships:` is the OTHER declaration a copy set can carry, and it answers a
 # question `except:` cannot: WHICH demos are supposed to have the file at all.
@@ -707,6 +713,13 @@ if ARGV.include?("--self-test")
       ops:  [[:prepend, "kiosk-demo-philslist/config/initializers/kiosk.rb",
               "SETTLEMENT_WEBHOOK = ENV.fetch(\"KIOSK_SETTLEMENT_WEBHOOK\", nil)\n"]],
       expect: /philslist: config\/initializers\/kiosk\.rb:1 resolves KIOSK_SETTLEMENT_WEBHOOK with ENV\.fetch/ },
+
+    { id: "vacuity-convergence-census", kind: :vacuity,
+      rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
+      what: "the derived CONVERGENCE GROUPS block records nothing, so it would print an empty tree as a clean one",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "  AGREE_CENSUS << {\n", "  [] << {\n"]],
+      expect: /the CONVERGENCE GROUPS census recorded NO compared subject/ },
 
     { id: "driver-env-defaulted", kind: :break,
       rule: "A demo DRIVER fetches KIOSK_ISSUER with NO default (K-1543)",
@@ -2068,25 +2081,33 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 # differs — was invisible at both granularities, and that is precisely the state
 # that means somebody hand-copied something.
 #
-# MEASURED at head over all 17 `:per_demo` paths, each path's copies grouped by
-# the SHA256 of its {code_norm}: exactly TWO paths have a group of two or more,
-# the same two the T-147 measurement found.
+# EVERY `:per_demo` PATH IS GROUPED BY THE SHA256 OF ITS {code_norm} ON EVERY
+# RUN, AND THE RUN PRINTS WHAT IT FOUND — the CONVERGENCE GROUPS block, which
+# names each subject, each copy's normalised size, and which subsets share a
+# digest. This paragraph deliberately quotes none of it. It used to, and the
+# figures were falsified by a single refactor that moved the HTTP helpers onto
+# `Kiosk::Redteam::Wire`: every copy shrank, the sentence did not, and nothing
+# in this repository could say so, because a comment has no exit code (K-1542).
 #
-#   * `script/schema_flow.rb` — atablefor, philslist and tudu at 37 normalised
-#     lines each, one digest. One driver, hand-copied three times, under an
-#     entry whose own words were «asserts THAT demo's declared capabilities and
-#     verb set»: true of the other four copies (46, 48, 59 and 23 normalised
-#     lines) and untrue of these three.
-#   * `app/operations/operation_result.rb` — two pairs, 9 and 3 normalised
-#     lines, whose entry had already argued them out loud as coincidences.
+# THE SHAPE, which is what a reader actually needs from prose and what does not
+# rot: two kinds of group exist in this tree. `script/schema_flow.rb` carries
+# the one that matters — subsets of its seven copies sharing a digest under an
+# entry whose own words were «asserts THAT demo's declared capabilities and verb
+# set», true of the copies that stand alone and untrue of the ones that have
+# converged; that is a driver hand-copied and then edited in one place, and it
+# is the reason this rule exists. `app/operations/operation_result.rb` carries
+# the other — small pairs its entry had already argued out loud as coincidences.
+# Which demos are in which group, and how large each is, is a question for the
+# printed block and not for this comment.
 #
-# Those two are the whole reason the declaration has TWO KINDS rather than one:
+# Those two kinds are the whole reason the declaration has TWO of them:
 #
 #   rule: :lockstep    — these copies are ONE artefact that happens to live at N
 #                        paths. They are HELD: a copy edited alone fails here,
-#                        which is what turns 37 unwatched lines (measured
-#                        2026-08-31) into watched ones. This is the answer
-#                        for a hand-copied file.
+#                        which is what turns a hand-copied driver's unwatched
+#                        lines into watched ones. How many lines that is on any
+#                        given day is in the CONVERGENCE GROUPS block, never
+#                        here. This is the answer for a hand-copied file.
 #   rule: :coincidence — they agree today for unrelated reasons, and holding
 #                        them would enshrine an accident. NOT held as a promise
 #                        — but the group's MEMBERSHIP is: a demo JOINING it, or
@@ -2098,12 +2119,14 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 # THE CAP IS THE ONE SUBSTANTIVE DIFFERENCE, and it is there because otherwise
 # `:coincidence` would be a free way to switch this rule off — which is the
 # undeclared-exclusion shape K-1262 belongs to. A `:coincidence` group may not
-# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines. MEASURED 2026-08-31 —
-# a reading of that day rather than a live figure, and the run prints a
-# group's own size whenever it breaches the cap: the live coincidences were
-# 9 and 3 normalised lines at file level and 7, 1 and 1 at unit level, and
-# the one lockstep group 37. Twelve sits above every accident
-# this tree actually contains and far below the one artefact, and above it «they
+# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines. WHERE TWELVE COMES FROM,
+# without a figure that can go stale: it sits above every group this tree calls
+# a coincidence and far below every group it calls one artefact, and the gap
+# between those two populations is wide enough that the exact cap is not
+# delicate. Both populations are printed, with their sizes, in the CONVERGENCE
+# GROUPS block on every run, so the claim can be re-checked against the tree in
+# front of you rather than against a reading somebody took once — and the run
+# prints a group's own size whenever it breaches the cap. Above twelve, «they
 # happen to agree» stops being a credible reading of hand-copied code.
 #
 # THIS IS NOT K-792's OPTION B, which the `app/operations/operation_result.rb`
@@ -2125,11 +2148,33 @@ AGREE_COINCIDENCE_MAX_LINES = 12
 # keyed by a demo list. Appends to `errors` and returns the number of declared
 # groups it CONFIRMED against the tree — which the summary prints, so a rule that
 # has stopped finding anything shows up as a number rather than as silence.
+# EVERY GROUP THIS RULE SEES, RECORDED FOR THE RUN TO PRINT (K-1542). The two
+# paragraphs above used to state which paths had a converged group and what each
+# copy came to once normalised — «one file at 37», «46, 48, 59 and 23» — and not
+# one of those figures survived the refactor that moved the HTTP helpers onto the
+# shared `Kiosk::Redteam::Wire`. A hand-restated measurement in a guard's own
+# prose has no exit code, so it goes on reading as current for as long as nobody
+# diffs seven files to check it. The remedy this repository has arrived at
+# independently, several times over, is the one taken here: DERIVE IT AND PRINT
+# IT. Each row below is one compared subject — every copy's normalised size and
+# whichever subsets agree — and the CONVERGENCE GROUPS block at the end of a run
+# is the authority. No paragraph in this file quotes one of these numbers.
+AGREE_CENSUS = []
+
 def agree_check(label, what, bodies, declared, errors)
   declared = (declared || {}).to_h { |demos, spec| [demos.sort, spec] }
   groups   = bodies.group_by { |_demo, norm| norm }
                    .values.select { |g| g.size >= 2 }
                    .to_h { |g| [g.map(&:first).sort, g.first[1]] }
+
+  AGREE_CENSUS << {
+    label:  label,
+    what:   what,
+    sizes:  bodies.to_h { |demo, norm| [demo, norm.lines.size] },
+    groups: groups.map { |demos, norm|
+      { demos: demos, lines: norm.lines.size, rule: declared[demos] && declared[demos][:rule] }
+    },
+  }
 
   declared.each do |demos, spec|
     if demos.size < 2
@@ -2529,9 +2574,14 @@ end
 # `\b`, `\0`, `\cK`, and the numeric `\101`, `\x41`, `\u0041`.
 #
 # THE OBVIOUS REMEDY -- drop the leading `\b` -- IS REFUTED BY THIS TREE:
-# `git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'` finds 141 lines that carry no
-# ledger id at all, 129 of them `SK-001`, kiosk-demo-skooti's own scooter, which
-# is exactly the corpus this script scans. So the boundary HOLDS and an ESCAPE
+# `git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'` finds a corpus of lines carrying no
+# ledger id at all, the great majority of them `SK-001`, kiosk-demo-skooti's own
+# scooter, which is exactly the corpus this script scans. MEASURED 2026-09-12 it
+# was 161 lines -- a reading of that day and not a live figure, so re-derive it
+# with that command and that dialect (PCRE; an ERE cannot spell `\d` or `\b`)
+# rather than quoting this. What does not move is the ORDER of magnitude: the
+# ban would redden on a demo's own fixture data by the hundred. So the boundary
+# HOLDS and an ESCAPE
 # RUN is admitted beside it: a backslash and one to five alphanumerics, five
 # being the longest escape Ruby spells with an all-alphanumeric body
 # (`\u0041`). Everything longer or punctuated (`\u{1F600}`, `\M-\C-x`, a
@@ -7639,10 +7689,46 @@ container_ignores.each do |rel|
             "it sits in a context something actually builds from."
 end
 
+# THE CENSUS ITSELF IS SUBJECT TO THE VACUITY RULE (K-1542). A block that prints
+# nothing reads exactly like a tree with nothing in it, which is the failure the
+# derived figures replaced hand-typed ones to avoid.
+if AGREE_CENSUS.empty? && errors.empty?
+  errors << "check-demo-copies: the CONVERGENCE GROUPS census recorded NO compared subject, so the " \
+            "block below would print an empty tree as a clean one. {agree_check} runs over every " \
+            "`:per_demo` file and every `:per_demo` fragment unit, so an empty census means neither " \
+            "pass reached it (K-1542)."
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
   pair_drift  = MIGRATION_PAIRS.count { |_, e| e[:drift] }
+  # ── CONVERGENCE GROUPS (derived on this run; printed, never red) ───────────
+  #
+  # What the `:per_demo` copies actually come to once comments and whitespace
+  # are normalised away, and which subsets of them agree. This is the block the
+  # header's manifest paragraphs point at instead of quoting a figure: the
+  # numbers move whenever a driver is refactored, and a sentence cannot.
+  converged = AGREE_CENSUS.select { |row| row[:groups].any? }
+  puts "\nCONVERGENCE GROUPS (derived on this run; printed, never red)"
+  puts "  #{AGREE_CENSUS.count { |r| r[:what] == 'file' }} `:per_demo` file(s) and " \
+       "#{AGREE_CENSUS.count { |r| r[:what] == 'unit' }} `:per_demo` unit(s) grouped by the SHA256 " \
+       "of their normalised body; #{converged.size} carr#{converged.size == 1 ? 'ies' : 'y'} a " \
+       "group of two or more."
+  converged.sort_by { |row| [row[:what], row[:label]] }.each do |row|
+    row[:groups].sort_by { |g| -g[:demos].size }.each do |g|
+      kind = g[:rule] ? g[:rule].inspect : "UNDECLARED"
+      puts "  #{row[:what]}  #{row[:label]}  [#{g[:demos].join(',')}] #{kind} — " \
+           "#{g[:lines]} normalised line(s)"
+    end
+    others = row[:sizes].reject { |demo, _| row[:groups].any? { |g| g[:demos].include?(demo) } }
+    next if others.empty?
+
+    puts "        the copies OUTSIDE any group: " \
+         "#{others.sort_by { |_, n| -n }.map { |demo, n| "#{demo} #{n}" }.join(', ')}"
+  end
+  puts
+
   puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, #{guarded} kept in lockstep, " \
        "#{tpl_checked} install-generator templates byte-matched against their copies in all " \
        "#{operator_demos.size} operator demos (no exceptions available), " \

@@ -442,6 +442,38 @@ if ARGV.include?("--self-test")
               "name no registered verb, so", "name no registered VERB, so"]],
       expect: /atablefor: the wrong-door rationale above `hint:` in app\/controllers\/application_controller\.rb differs from the 6 copy/ },
 
+    { id: "wrong-door-rationale-deleted", kind: :break,
+      rule: "The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508)",
+      what: "one demo's copy of the shared rationale is DELETED WHOLE, leaving `hint:` in place — " \
+            "the completest divergence, and the one the first writing of the rule skipped",
+      ops:  [[:edit, "kiosk-demo-stylish/app/controllers/application_controller.rb",
+              /^\s*# NAME WHAT THE DOCUMENT CARRIES.*?cannot check the hint\.\n/m, ""]],
+      expect: /stylish: the wrong-door rationale above `hint:` in app\/controllers\/application_controller\.rb is GONE/ },
+
+    { id: "vacuity-archaeology-table-moved", kind: :vacuity,
+      rule: "WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520)",
+      what: "the neighbouring guard's RULES table moves, so the derived coverage sentence has " \
+            "nothing to read — and a sentence that quietly stops being derived is the typed " \
+            "list all over again",
+      ops:  [[:edit, "bin/check-shipped-archaeology", "RULES = [\n", "RULES = [] + [\n"]],
+      expect: /could not read the rule table of bin\/check-shipped-archaeology/ },
+    { id: "vacuity-archaeology-demo-scope", kind: :vacuity,
+      rule: "WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520)",
+      what: "the scope name this script matches on stops naming anything in that table, so the " \
+            "green line would report that NO ban reaches the demos and read as a fact",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "arch_demo_bans  = arch_rules.select { |(_id, scopes, _what)| scopes.include?(\"demo\") }",
+              "arch_demo_bans  = arch_rules.select { |(_id, scopes, _what)| scopes.include?(\"nope\") }"]],
+      expect: /reaches the demo tree with NO ban at all/ },
+    { id: "vacuity-archaeology-contrast", kind: :vacuity,
+      rule: "WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520)",
+      what: "the second half of the contrast drains, so the sentence reads «everything is " \
+            "covered» — which is verbatim the false clause K-1520 was filed for",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "arch_other_bans = arch_rules.reject { |(_id, scopes, _what)| scopes.include?(\"demo\") }",
+              "arch_other_bans = arch_rules.reject { |(_id, scopes, _what)| scopes.include?(\"gem\") }"]],
+      expect: /every ban in bin\/check-shipped-archaeology's rule table now reaches the demo tree/ },
+
     { id: "vacuity-wrong-door-anchor", kind: :vacuity,
       rule: "The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508)",
       what: "the anchor stops finding the block, so a lockstep rule with nothing to compare must say so",
@@ -2567,6 +2599,77 @@ unless comment_toks.size == 1 && comment_toks.first[1] == :on_comment &&
             "so it cannot be assumed."
 end
 
+# ── WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520) ───
+#
+# The green line below points a reader at `bin/check-shipped-archaeology` and
+# says which of its bans reach the DEMO tree, because this script's own ban is
+# the narrower one (code tokens only) and the reader deciding whether their
+# comment is held needs to know where the wider one stops. That sentence used to
+# be TYPED, and it said «the SAME four bans — ledger id, ADR reference, Cyrillic,
+# maintainer name — in the demos and in the gems alike». MEASURED: R4, the
+# maintainer ban, declares `scopes: %i[gem spec e2e]` and has since the commit
+# that introduced the demo scope, because one demo is NAMED after the maintainer
+# and a sentence legal in Phil's List's `app/` cannot be illegal there. So the
+# demo-side truth was three bans, not four, and the guard beside it was
+# advertising coverage that does not exist — the exact defect this script's own
+# K-1506 clause was filed for, one clause to its left.
+#
+# A number written beside a mechanism outlives the mechanism; the fix is to stop
+# writing it. The clause is now DERIVED from that script's `RULES` table — ids,
+# `scopes:` and `what:` parsed out of the source — so the day a ban gains or
+# loses the demo scope this sentence moves with it, and the day the table stops
+# being parseable this script says so instead of printing a stale summary.
+ARCHAEOLOGY_GUARD = File.join(ROOT, "bin", "check-shipped-archaeology")
+
+# [[id, scopes, what], …] read out of the neighbouring guard's own RULES table.
+# Returns [] when the table cannot be found or parsed — the caller turns that
+# into an error rather than into a quiet sentence.
+def archaeology_rules(path)
+  return [] unless File.exist?(path)
+
+  block = File.read(path)[/^RULES = \[\n(.*?)^\]\.freeze/m, 1]
+  return [] if block.nil?
+
+  block.split(/(?=\{ id: )/).filter_map do |chunk|
+    id     = chunk[/id:\s*"(R\d+)"/, 1]
+    scopes = chunk[/scopes:\s*%i\[([^\]]*)\]/, 1]
+    what   = chunk[/what:\s*"([^"]*)"/, 1]
+    next if id.nil? || scopes.nil? || what.nil?
+
+    [id, scopes.split, what]
+  end
+end
+
+arch_rules      = archaeology_rules(ARCHAEOLOGY_GUARD)
+arch_demo_bans  = arch_rules.select { |(_id, scopes, _what)| scopes.include?("demo") }
+arch_other_bans = arch_rules.reject { |(_id, scopes, _what)| scopes.include?("demo") }
+
+# VACUITY, three ways, because every one of them would leave the green line
+# saying something a reader would act on. An unparseable table, a table that
+# reaches the demos with nothing at all, and a table whose every rule reaches
+# the demos — the last one matters because the sentence's whole point is the
+# CONTRAST, and a derivation that silently lost the second half would read as
+# «everything is covered», which is what the typed version got wrong.
+if arch_rules.length < 2
+  errors << "check-demo-copies: could not read the rule table of " \
+            "bin/check-shipped-archaeology (#{arch_rules.length} rule(s) parsed). The green " \
+            "line below tells a reader which of that guard's bans reach the demo tree, and it " \
+            "is DERIVED from that table (K-1520) rather than typed. Re-point the parse at the " \
+            "table, or state the coverage there — do not let this sentence go back to being a " \
+            "remembered list."
+elsif arch_demo_bans.empty?
+  errors << "check-demo-copies: bin/check-shipped-archaeology's rule table now reaches the demo " \
+            "tree with NO ban at all (K-1520). Either that guard has stopped covering the demos " \
+            "— in which case this script's green line must stop pointing a reader at it — or the " \
+            "scope name has changed and this parse is reading the wrong column."
+elsif arch_other_bans.empty?
+  errors << "check-demo-copies: every ban in bin/check-shipped-archaeology's rule table now " \
+            "reaches the demo tree (K-1520). That may be correct, but the green line below is " \
+            "written as a CONTRAST — these reach the demos, those stop at the door — and a " \
+            "contrast with an empty second half reads as «everything is covered», which is the " \
+            "sentence this rule was filed to stop. Restate it deliberately."
+end
+
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
 
 GENERATOR_TEMPLATES.each do |name, entry|
@@ -3039,6 +3142,27 @@ end
 # e2e fixture stays out of this rule without being named in it; a file with more
 # than one is an ERROR rather than a guess, so the anchor cannot silently move.
 #
+# AND A FILE WITH THE LABEL AND NO BLOCK IS AN ERROR TOO — which the first
+# writing of this rule got wrong, and it got it wrong on the COMPLETEST form of
+# the divergence it exists to catch (K-1508, reopened). It skipped an empty run
+# alongside an absent label, on one `next if run.nil? || run.empty?`, so
+# DELETING a copy's whole rationale while leaving `hint:` in place left this
+# guard at exit 0 naming nothing: the remaining copies still agreed with each
+# other, and `WRONG_DOOR_MIN_LINES` only ever saw a block of one or two lines.
+# Up to five of the seven could have lost it. WATCHED at the head that repaired
+# it — the eleven-line block removed from `kiosk-demo-stylish`'s copy left this
+# script, `check-prose-counts`, `check-redteam-headers`, `check-shipped-archaeology`
+# and `check-demo-derivations` ALL at exit 0, so it was not that a sibling
+# covered what this rule skipped: nothing held the deletion at all.
+#
+# The two skips are DIFFERENT QUESTIONS and are now answered separately. No
+# label means the file has no wrong-door body — a true statement about the e2e
+# fixture, and one the `:code` comparison of this same path holds independently,
+# because the label is a CODE token: renaming `hint:` in one copy reddens the
+# `:code` rule, measured. A label with no block above it means the door is there
+# and the reason for it is gone, which is the divergence, not an exemption from
+# it.
+#
 # WHAT THIS RULE IS NOT. It does not say the block is CORRECT — K-1088 above
 # holds the live JSON body against the retired vocabulary and is where that
 # question lives. This one says only that the seven answers are the SAME answer,
@@ -3088,7 +3212,21 @@ wrong_door_units = prose_units.filter_map do |unit|
               "body explicitly — do not leave it guessing."
     next
   end
-  next if run.nil? || run.empty?
+  # NO LABEL: this file has no wrong-door body at all (the e2e fixture). Skip.
+  next if run.nil?
+
+  # THE LABEL WITH NO BLOCK ABOVE IT: the door is there and its reason is gone.
+  # This is the deletion case, and it is the one the first writing of the rule
+  # skipped along with the line above (K-1508, reopened) — see the header.
+  if run.empty?
+    errors << "#{unit[:label]}: the wrong-door rationale above `#{WRONG_DOOR_LABEL}` in " \
+              "#{unit[:rel]} is GONE — the key is there and the comment block explaining it " \
+              "is not (K-1508). That block is byte-identical in every copy that has it, so a " \
+              "deletion in one is a divergence in all of them; it is compared by NOTHING else, " \
+              "because this file's rule is `:code` and `:code` compares modulo comments. Restore " \
+              "it, delete it from every copy in one wave, or retire this rule deliberately."
+    next
+  end
 
   if run.length < WRONG_DOOR_MIN_LINES
     errors << "#{unit[:label]}: the comment block above `#{WRONG_DOOR_LABEL}` in #{unit[:rel]} is " \
@@ -7039,14 +7177,21 @@ if errors.empty?
        "(#{container_ignores.length} ignore file(s) against #{container_contexts.length} derived " \
        "build context(s), #{container_recipes.length} recipe(s); " \
        "detector proved on #{container_truth.length} constructed names), " \
+       "the wrong-door rationale above `hint:` held in lockstep across " \
+       "#{wrong_door_units.length} copy(ies) " \
+       "(#{wrong_door_units.map { |u| u[:block].lines.length }.max.to_i} line(s) each; a copy " \
+       "carrying the key with NO block above it is a FAILURE, not a skip — K-1508), " \
        "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
        "(pattern and lexer proved against #{DEMO_ID_FIXTURES.size} fixtures this rule owns; " \
-       "bin/check-shipped-archaeology carries the SAME four bans — ledger id, ADR " \
-       "reference, Cyrillic, maintainer name — into comments and prose, in the demos and " \
-       "in the gems alike, and THAT script is also the one that reads a SENTENCE: its " \
-       "R5/R6/R7 refuse a retired wire version, a past-state construction and a " \
-       "repository path that resolves to nothing. THIS script reads none of them, so its " \
-       "green line says nothing about narration in a compared copy — ask that one)"
+       "bin/check-shipped-archaeology reaches the demo tree with " \
+       "#{arch_demo_bans.length} of its #{arch_rules.length} bans — " \
+       "#{arch_demo_bans.map { |(id, _s, what)| "#{id} #{what}" }.join(', ')} — into comments " \
+       "and prose alike, while #{arch_other_bans.length} stop(s) at the demo door " \
+       "(#{arch_other_bans.map { |(id, _s, what)| "#{id} #{what}" }.join(', ')}); that split is " \
+       "READ OFF that script's own rule table on this run, not restated here (K-1520). THAT " \
+       "script is also the one that reads a SENTENCE rather than a token. THIS script reads " \
+       "none of them, so its green line says nothing about narration in a compared copy — ask " \
+       "that one)"
   exit 0
 end
 

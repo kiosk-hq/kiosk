@@ -47,6 +47,16 @@
 #             carries `properties:`. Its NAME and its sibling `required:` array
 #             come out of the same hash, so the membership question is answered
 #             from the declaration itself.
+#   PARAMETER an OpenAPI Parameter Object — a hash with a `description:`, an
+#             `in:` and a `required:` that is a BOOLEAN rather than an array,
+#             and NO `properties:`. It is a third kind because the first two
+#             definitions are structural and this shape falls outside BOTH by
+#             construction: the membership question is decided by a key of its
+#             own instead of by an array one level up. The engine builds its
+#             reserved query parameters that way, and until K-1521 they were in
+#             no scope at all — a bare label planted on one left this script at
+#             exit 0 while the identical label on a property in the SAME FILE
+#             reddened it.
 #
 # Nothing about the demos, the engine or the e2e fixtures is typed here. The set
 # is `git ls-files`, so an eighth demo, a new controller or a schema written
@@ -78,16 +88,21 @@
 # So the BAN is drawn where the corpus says it is safe, and everything else is
 # COUNTED:
 #
-#   LABEL   (BAN, exit code)  a PROPERTY description may not carry a bare
-#           optionality LABEL — `optional`, `optionally`, `required`,
+#   LABEL   (BAN, exit code)  a PROPERTY or PARAMETER description may not carry
+#           a bare optionality LABEL — `optional`, `optionally`, `required`,
 #           `mandatory`, `compulsory` — about itself. Bare means: not part of a
-#           hyphenated compound (`licence-required`), and not the complement of
-#           a copula (`the OFFSET IS REQUIRED`), which is the only form in this
-#           corpus that says such a word about something OTHER than the property.
-#           The verdict needs no judgement, because the sibling `required:`
-#           array has already decided the fact the label restates: whichever way
-#           the two agree, one of them is redundant and the schema is the one a
-#           machine can check.
+#           hyphenated compound (`licence-required`), not the complement of a
+#           copula (`the OFFSET IS REQUIRED`), and not taking an INFINITIVE
+#           complement (`never required TO BE declared`) — three forms that say
+#           such a word about something OTHER than this descriptor's membership.
+#           The third arrived with the parameter kind and is the same
+#           distinction from the other side: a predicate about an ACTION rather
+#           than a marker of membership, and a membership label never takes one.
+#           The verdict needs no judgement, because the declaration beside the
+#           prose has already decided the fact the label restates — a property's
+#           sibling `required:` array, a parameter's own `required:` boolean.
+#           Whichever way the two agree, one of them is redundant and the
+#           machine-checkable one is not the sentence.
 #
 #   C1      (CENSUS, printed, never red)  every OTHER optionality construction
 #           in any description, verb or property — the copula forms, `omit`,
@@ -139,7 +154,16 @@
 #             `description "…"` inside a HEREDOC is source a spec writes to a
 #             temp file, and counting it would make the arm permanently wrong
 #             for a reason that is not a defect.
-#             Each of the three is itself proved able to go red, off a corpus
+#             (d) THE PARAMETER CORPUS MUST COVER EVERY RESERVED QUERY ARGUMENT
+#             THE ENGINE DECLARES. The parameter kind is recognised by a SHAPE,
+#             and a shape is a scope that can stop matching — which is precisely
+#             how those descriptions came to be in no scope at all. The expected
+#             subject is therefore derived from a DIFFERENT file:
+#             `ArgumentDecoder::RESERVED` names the reserved arguments, and each
+#             must appear here with a description. A third reserved argument, or
+#             a rewrite of the parameter builder this reader stops recognising,
+#             costs a decision instead of shrinking the corpus quietly.
+#             Each of the four is itself proved able to go red, off a corpus
 #             emptied or quietened on purpose, in `--self-test`.
 #
 # ── WHAT IT DELIBERATELY DOES NOT DO ────────────────────────────────────────
@@ -208,6 +232,16 @@ EDGE_AFTER  = /(?![-_\p{L}\p{N}])/
 COPULA_RE   = /\b(?:is|are|am|be|been|being|was|were|isn't|aren't|wasn't|weren't|not)[ ]+\z/i
 MARKER_RE   = /#{EDGE_BEFORE}(?:#{LABEL_WORDS.join('|')})#{EDGE_AFTER}/i
 
+# The second predicate form, and it arrived with the OpenAPI parameter objects
+# (K-1521). «Reserved: always accepted, never required TO BE DECLARED» takes an
+# INFINITIVE complement: the word is a predicate about an ACTION — declaring it —
+# rather than a marker of this parameter's own membership, which is the same
+# distinction the copula test already draws from the other side. A membership
+# label never takes one: «Optional to include» is not a sentence anybody writes.
+# Two live engine descriptions turned on this the moment the parameter corpus
+# existed, and both are foils below, so widening the ban reddens THIS file first.
+INFINITIVE_AFTER_RE = /\A[ ]+to[ ]+\p{L}/
+
 # The first bare LABEL in this text, or nil. "the OFFSET IS REQUIRED" says a
 # word about the VALUE's spelling rather than about the property's membership,
 # and nothing lexical separates the two subjects, so the predicate form is
@@ -216,7 +250,10 @@ def label_marker(text)
   offset = 0
   while (m = MARKER_RE.match(text, offset))
     offset = m.end(0)
-    return m[0] unless text[0...m.begin(0)] =~ COPULA_RE
+    next if text[0...m.begin(0)] =~ COPULA_RE
+    next if text[m.end(0)..] =~ INFINITIVE_AFTER_RE
+
+    return m[0]
   end
   nil
 end
@@ -290,6 +327,50 @@ def descriptions_in_schema(rel, hash_node, out)
   end
 end
 
+# THE OpenAPI PARAMETER OBJECT — a third kind, and its membership comes from a
+# key of its OWN rather than from an array one level up (K-1521).
+#
+# `descriptions_in_schema` above defines the PROPERTY corpus by construction: a
+# `description:` inside a hash that also carries `properties:`. A hash with a
+# `description:` and a `required:` but NO `properties:` is therefore outside it,
+# and the engine builds its reserved query parameters exactly that way — each is
+# `{ name:, in: "query", required: false, description: "…", schema: {…} }`, an
+# OpenAPI Parameter Object, where `required` is a BOOLEAN about this parameter
+# instead of an array listing its siblings.
+#
+# MEASURED before this reader existed: a bare `OPTIONAL.` planted at the head of
+# the `limit` parameter's description left this script at EXIT 0, named by
+# neither the ban nor the census, while the identical label planted on
+# `example_params` in the SAME FILE — a property-shaped descriptor — drove it to
+# EXIT 1. The residue is nil today and that is the point: the next reserved
+# parameter written with a bare label was found by nobody.
+#
+# The BOOLEAN is what identifies the shape, not a file name or a key order. A
+# schema object's `required:` is an array; a parameter object's is `true` or
+# `false`, and OpenAPI requires the `in:` beside it. Both are read off the
+# syntax tree, so a parameter declared somewhere nobody expected is in scope the
+# day it lands, and a hash that merely resembles one is not.
+def descriptions_in_parameter(rel, hash_node, out)
+  pairs = assoc_pairs(hash_node)
+  return if pairs.key?("properties") # a schema object — `descriptions_in_schema` owns it
+  return unless pairs.key?("in") && pairs.key?("description")
+
+  membership =
+    case pairs["required"]
+    when Prism::TrueNode  then true
+    when Prism::FalseNode then false
+    end
+  return if membership.nil?
+
+  node = pairs["description"]
+  text = literal_string(node)
+  return unless text
+
+  name = pairs["name"] && literal_string(pairs["name"])
+  out << Desc.new(kind: :parameter, file: rel, line: node.location.start_line,
+                  prop: name || "(unnamed parameter)", required: membership, text: text)
+end
+
 # One file's descriptions. Returns [descriptions, parse_error_or_nil].
 def descriptions_in(rel, source)
   result = Prism.parse(source)
@@ -313,6 +394,7 @@ def descriptions_in(rel, source)
     case node
     when Prism::HashNode, Prism::KeywordHashNode
       descriptions_in_schema(rel, node, out)
+      descriptions_in_parameter(rel, node, out)
     when Prism::CallNode
       if %i[input_schema output_schema].include?(node.name) && node.arguments
         last = node.arguments.arguments.last
@@ -356,8 +438,14 @@ end
 
 # ── the rule and the census ─────────────────────────────────────────────────
 
+# The ban reaches BOTH kinds whose membership is declared beside the prose — a
+# property (its schema's `required:` array) and an OpenAPI parameter (its own
+# `required:` boolean). A verb description has no such declaration, which is why
+# it is counted instead; see the header.
+DECIDED_KINDS = %i[property parameter].freeze
+
 def label_hits(descriptions)
-  descriptions.select { |d| d.kind == :property && label_marker(d.text) }
+  descriptions.select { |d| DECIDED_KINDS.include?(d.kind) && label_marker(d.text) }
 end
 
 def counted_hits(descriptions)
@@ -366,10 +454,15 @@ def counted_hits(descriptions)
 end
 
 def label_remedy(desc)
-  membership = desc.required ? "IS in" : "is NOT in"
-  "`#{desc.prop}` #{membership} its schema's own `required:` array, which already " \
-    "decides this. Delete the label and keep every semantic clause — what omitting it " \
-    "MEANS, what the value must look like — which is what prose is for (ADR-0023)."
+  decided =
+    if desc.kind == :parameter
+      "`#{desc.prop}` declares `required: #{desc.required}` in the same parameter object"
+    else
+      "`#{desc.prop}` #{desc.required ? 'IS in' : 'is NOT in'} its schema's own `required:` array"
+    end
+  "#{decided}, which already decides this. Delete the label and keep every semantic clause — " \
+    "what omitting it MEANS, what the value must look like — which is what prose is for " \
+    "(ADR-0023)."
 end
 
 # ── the detector arms: probes and foils, none of them in the tree ───────────
@@ -391,6 +484,10 @@ LABEL_PROBES = [
   ["spelling: parenthetical", "The room to hold (optional)."],
   ["spelling: late in a long sentence",
    "The `date` of the chosen delivery_slots row, echoing the row you saw — optional."],
+  ["spelling: a bare label in an OpenAPI PARAMETER description (K-1521)",
+   "OPTIONAL. Maximum rows in one page. The operator MAY clamp it."],
+  ["spelling: `required` before a NOUN, not an infinitive",
+   "Required cursor for the next page."],
 ].freeze
 
 # The live sentences the ban had to be argued against. A widening of the label
@@ -411,6 +508,13 @@ LABEL_FOILS = [
    "Leave them out and the list is this hotel's full CATALOGUE."],
   ["a precondition, not a shape",
    "Cancel one of the principal's own bookings (requires the booking to belong to them)."],
+  ["infinitive complement: a guarantee about the OPERATOR's declaration, not this " \
+   "parameter's membership (K-1521)",
+   "Maximum rows in one page. The operator MAY clamp it. Reserved: always accepted, " \
+   "never required to be declared."],
+  ["infinitive complement, the second reserved parameter",
+   "The OPAQUE `next` token from the previous page, echoed back verbatim. Never parse or " \
+   "construct one. Reserved: always accepted, never required to be declared."],
 ].freeze
 
 COUNTED_PROBES = [
@@ -449,6 +553,42 @@ def detector_faults
 end
 
 # ── the structural arms: derived from the filesystem, never from a list ─────
+
+# Where the engine declares WHICH query arguments are reserved. Read for arm (d)
+# below, which is the only thing keeping the OpenAPI parameter corpus from
+# silently draining back to the empty set it was before K-1521.
+ARGUMENT_DECODER = "kiosk-server/lib/kiosk/server/argument_decoder.rb"
+
+def reserved_argument_names(root)
+  path = File.join(root, ARGUMENT_DECODER)
+  return [] unless File.file?(path)
+
+  result = Prism.parse(File.read(path, encoding: "UTF-8"))
+  return [] unless result.success?
+
+  queue = [result.value]
+  until queue.empty?
+    node = queue.shift
+    next unless node
+
+    if node.is_a?(Prism::ConstantWriteNode) && node.name == :RESERVED
+      value = node.value
+      value = value.receiver if value.is_a?(Prism::CallNode) && value.name == :freeze
+      # STRING keys, not symbols: `RESERVED = { "limit" => "integer", … }`, so
+      # `assoc_pairs` (which reads the symbol-keyed descriptor hashes) is the
+      # wrong reader here and returning its empty answer would read as «the
+      # engine reserves nothing».
+      if value.is_a?(Prism::HashNode)
+        return value.elements.filter_map { |e|
+          e.key.unescaped if e.is_a?(Prism::AssocNode) &&
+                             (e.key.is_a?(Prism::StringNode) || e.key.is_a?(Prism::SymbolNode))
+        }
+      end
+    end
+    queue.concat(node.compact_child_nodes)
+  end
+  []
+end
 
 # `Kiosk::HotelsController` -> `kiosk/hotels_controller.rb`. Rails' own
 # underscore rule, written out because this script loads no ActiveSupport —
@@ -519,6 +659,33 @@ def structural_faults(root, corpus)
               "two live violations in the engine's own description surface."
   end
 
+  # (d) THE PARAMETER CORPUS MUST COVER EVERY RESERVED ARGUMENT THE ENGINE
+  # DECLARES (K-1521). The parameter shape is recognised by a `required:`
+  # BOOLEAN beside an `in:`, and a shape recognised by a pattern is a scope that
+  # can silently stop matching — which is exactly how these descriptions came to
+  # be in no scope at all. So the expected SUBJECT is derived from a DIFFERENT
+  # file: `ArgumentDecoder::RESERVED` is where the engine says which query
+  # arguments are reserved, and every one of them must show up here with a
+  # description. A third reserved argument, or a rewrite of the parameter
+  # builder that this reader stops recognising, costs a decision instead of
+  # quietly shrinking the corpus.
+  reserved = reserved_argument_names(root)
+  if reserved.empty?
+    faults << "VACUITY: #{ARGUMENT_DECODER} yields no `RESERVED` names, so the arm that keeps " \
+              "the OpenAPI parameter corpus honest has no subject to compare against."
+  else
+    named   = corpus.descriptions.select { |d| d.kind == :parameter }.map(&:prop)
+    missing = reserved - named
+    unless missing.empty?
+      faults << "VACUITY: the engine declares reserved query argument(s) " \
+                "#{missing.map(&:inspect).join(', ')} in #{ARGUMENT_DECODER}, and the OpenAPI " \
+                "parameter corpus carries a description for #{named.map(&:inspect).join(', ')} " \
+                "— so either a reserved parameter has no published description, or this " \
+                "reader has stopped recognising the parameter-object shape. That shape was in " \
+                "NO scope at all until K-1521; it must not go quiet again."
+    end
+  end
+
   # (c) A SECOND READING OF THE SAME FILES. The verb DSL is a line of its own,
   # so a text scan and the syntax tree must agree file by file wherever the tree
   # found anything. Scoped to those files on purpose: a `description "…"` inside
@@ -545,17 +712,23 @@ def run_check(root, list: false)
   corpus = build_corpus(root)
   errors = structural_faults(root, corpus)
 
-  verbs = corpus.descriptions.count { |d| d.kind == :verb }
-  props = corpus.descriptions.count { |d| d.kind == :property }
-  files = corpus.descriptions.map(&:file).uniq.sort
+  verbs  = corpus.descriptions.count { |d| d.kind == :verb }
+  props  = corpus.descriptions.count { |d| d.kind == :property }
+  params = corpus.descriptions.count { |d| d.kind == :parameter }
+  decided = props + params
+  files  = corpus.descriptions.map(&:file).uniq.sort
 
   puts "SCOPE — `git ls-files -- '*.rb' '*.rake'`, parsed with Prism"
-  puts "  #{verbs} verb description(s) and #{props} property description(s) in " \
-       "#{files.length} file(s), across #{origins(root).length} origin(s) with a `c.handlers`"
+  puts "  #{verbs} verb description(s), #{props} property description(s) and #{params} " \
+       "OpenAPI parameter description(s) in #{files.length} file(s), across " \
+       "#{origins(root).length} origin(s) with a `c.handlers`"
+  puts "  the ban reaches the #{decided} whose membership is declared beside the prose " \
+       "(a property's sibling `required:` array, a parameter's own `required:` boolean); " \
+       "a verb description has no such declaration and is counted"
 
   if list
     corpus.descriptions.sort_by { |d| [d.file, d.line] }.each do |d|
-      tag = d.kind == :verb ? "VERB" : "#{d.prop} required=#{d.required}"
+      tag = d.kind == :verb ? "VERB" : "#{d.kind == :parameter ? 'PARAM ' : ''}#{d.prop} required=#{d.required}"
       puts format("  %-72s %s", "#{d.file}:#{d.line}", tag)
     end
   end
@@ -565,12 +738,13 @@ def run_check(root, list: false)
   hits = label_hits(corpus.descriptions)
   puts
   if hits.empty?
-    puts "LABEL. no property description carries a bare optionality label — OK " \
-         "(#{props} property description(s), detector re-proved on this run against " \
+    puts "LABEL. no property and no OpenAPI parameter description carries a bare optionality " \
+         "label — OK (#{decided} description(s) whose membership is declared beside them: " \
+         "#{props} property, #{params} parameter; detector re-proved on this run against " \
          "#{LABEL_PROBES.length} probe(s) and #{LABEL_FOILS.length} foil(s))"
   else
-    puts "LABEL. a property description restates the membership its own `required:` array " \
-         "decides — #{hits.length} occurrence(s):"
+    puts "LABEL. a description restates the membership its own declaration already decides " \
+         "— #{hits.length} occurrence(s):"
     hits.sort_by { |d| [d.file, d.line] }.each do |d|
       errors << "LABEL #{d.file}:#{d.line} — `#{d.prop}`"
       marker = label_marker(d.text)
@@ -586,10 +760,11 @@ def run_check(root, list: false)
        "spells archaeology of shape and live semantics with the same letters, so each is a " \
        "line a human adjudicates and none of it reaches the exit code:"
   puts "  C1 optionality outside the bare label — #{counted.length} line(s), " \
-       "#{counted.count { |d| d.kind == :verb }} in a verb description and " \
-       "#{counted.count { |d| d.kind == :property }} in a property's"
+       "#{counted.count { |d| d.kind == :verb }} in a verb description, " \
+       "#{counted.count { |d| d.kind == :property }} in a property's and " \
+       "#{counted.count { |d| d.kind == :parameter }} in an OpenAPI parameter's"
   counted.sort_by { |d| [d.file, d.line] }.each do |d|
-    tag = d.kind == :verb ? "VERB" : "`#{d.prop}` required=#{d.required}"
+    tag = d.kind == :verb ? "VERB" : "#{d.kind == :parameter ? 'PARAM ' : ''}`#{d.prop}` required=#{d.required}"
     puts "       #{d.file}:#{d.line} (#{tag}) — #{d.text.gsub(/\s+/, ' ')[0, 160]}"
   end
   puts "       adjudicate: what OMITTING a property MEANS, a constraint on the VALUE, a " \
@@ -635,6 +810,12 @@ PLANTS = [
     find: /description: "The verb's SEMANTICS, in prose\. Authoritative\."/,
     with: 'description: "The verb\'s SEMANTICS, in prose. Mandatory."',
     expect: %r{LABEL kiosk-server/lib/kiosk/server/open_api\.rb} },
+  { rule: "LABEL / an OpenAPI PARAMETER OBJECT, whose membership is its own `required:` " \
+          "boolean and which was in NO scope at all (K-1521)",
+    file: "kiosk-server/lib/kiosk/server/open_api.rb",
+    find: /description: "Maximum rows in one page\./,
+    with: 'description: "OPTIONAL. Maximum rows in one page.',
+    expect: %r{LABEL kiosk-server/lib/kiosk/server/open_api\.rb} },
   { rule: "LABEL / a CONTINUATION LINE, where the marker is nowhere near the key",
     file: "kiosk-demo-skooti/app/controllers/kiosk/rentals_controller.rb",
     find: /description: "The hosted setup page to hand to your human\."/,
@@ -646,6 +827,10 @@ PLANTS = [
 # Sentences that must NOT redden the ban. Each is a live shape somebody wrote on
 # purpose, planted into a real descriptor.
 FOIL_PLANTS = [
+  { what: "the reserved parameter's live guarantee, in a parameter object (K-1521)",
+    file: "kiosk-server/lib/kiosk/server/open_api.rb",
+    find: /description: "Maximum rows in one page\./,
+    with: 'description: "Never required to be declared. Maximum rows in one page.' },
   { what: "a copula form about the VALUE",
     file: "kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
     find: /description: "Hotel name\."/,
@@ -736,6 +921,22 @@ def self_test(root)
 
   if origins(root).empty?
     failures << "STRUCTURE: no origin was discovered on disk, so the per-origin arm has no subject"
+  end
+
+  # Arm (d) proved able to go red, driven off a corpus with the parameter kind
+  # removed rather than off a promise (K-1521). The empty-corpus arm above
+  # cannot stand in for this one: it empties EVERYTHING, so it would raise on
+  # the per-origin arms and say nothing about whether the parameter shape is
+  # still being recognised.
+  no_params = Corpus.new(descriptions: corpus.descriptions.reject { |d| d.kind == :parameter },
+                         files_read: corpus.files_read, parse_errors: [])
+  if structural_faults(root, no_params).none? { |f| f.include?("reserved query argument") }
+    failures << "STRUCTURE: a corpus carrying NO OpenAPI parameter description raises no fault, " \
+                "so the arm that keeps that scope from draining back to empty asserts nothing"
+  end
+  if reserved_argument_names(root).empty?
+    failures << "STRUCTURE: #{ARGUMENT_DECODER} yields no reserved argument names on disk, so " \
+                "arm (d) has no subject to compare the parameter corpus against"
   end
 
   failures

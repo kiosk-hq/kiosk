@@ -1135,9 +1135,9 @@ namespace :demo do
       • discovery capabilities == [schema, queries, actions] and do NOT include `pay`
         (atablefor takes no payments — a reservation needs none)
       • agents.json carries NO payments block; agents.txt has no ap2 / Payments
-• and that both documents were READ: agents.txt non-empty and carrying its
-  `Authorization: agent-auth auth-md` line, agents.json carrying the v1.0
-  required keys — an absence an empty document would satisfy is not a proof
+      • and that both documents were READ: agents.txt non-empty and carrying its
+        `Authorization: agent-auth auth-md` line, agents.json carrying the v1.0
+        required keys — an absence an empty document would satisfy is not a proof
       • schema.queries includes availability + my_bookings with descriptions
       • schema.actions includes book_table + cancel_booking with descriptions
 

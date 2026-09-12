@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **`rake -D demo:schema` reads straight again in atablefor and philslist (K-1549).** A flush-left clause dropped both descriptions’ `<<~` dedent; the guard now bans a zero-indent body.
+
 - 2026-09-12: **skooti's red-team suite fetches the KYC broker origin with no default (K-1546).** A hard-coded `127.0.0.1:3020` attacks whatever is listening there rather than the broker.
 
 - 2026-09-12: **A day that has ended on the caller's clock is a typed 400 from getgrocery's `delivery_slots` (K-1547).** It answered 500 whenever the shop had not yet rolled over past that day.

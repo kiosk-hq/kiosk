@@ -689,9 +689,9 @@ namespace :demo do
         proof — pay drops out with no payment_provider)
       • agents.json carries NO payments block
       • agents.txt carries NO `Protocols: ap2` / `Payments:` directives
-• and that both documents were READ: agents.txt non-empty and carrying its
-  `Authorization: agent-auth auth-md` line, agents.json carrying the v1.0
-  required keys — an absence an empty document would satisfy is not a proof
+      • and that both documents were READ: agents.txt non-empty and carrying its
+        `Authorization: agent-auth auth-md` line, agents.json carrying the v1.0
+        required keys — an absence an empty document would satisfy is not a proof
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the

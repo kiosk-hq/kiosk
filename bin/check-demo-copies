@@ -618,6 +618,23 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "bin/check-demo-copies", "    host_pair_booting += 1 if boots.positive?\n", ""]],
       expect: /the K-1413 host-pairing rule found 0 server-booting tasks/ },
 
+    { id: "desc-heredoc-flush-left", kind: :break,
+      rule: "A `desc <<~` BODY MAY NOT DEDENT TO COLUMN 0 (K-1549)",
+      what: "a clause is pasted flush left into a description — the K-1538 wave's exact shape, " \
+            "which re-indented two whole `rake -D` texts and left every gate green",
+      ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
+              "      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon\n",
+              "      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon\n" \
+              "• and that the cadence is READ rather than merely present\n"]],
+      expect: /a `desc <<~` body may not dedent to column 0.+hoteling\/lib\/tasks\/demo\.rake:\d+/m },
+    { id: "vacuity-desc-heredoc-opener", kind: :vacuity,
+      rule: "A `desc <<~` BODY MAY NOT DEDENT TO COLUMN 0 (K-1549)",
+      what: "the opener regex stops matching, so a ban with no body to measure exits 0",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "DESC_HEREDOC_OPEN  = /\\A\\s*desc <<~(\\w+)\\s*\\z/\n",
+              "DESC_HEREDOC_OPEN  = /\\A\\s*describe <<~(\\w+)\\s*\\z/\n"]],
+      expect: /the K-1549 dedent rule counted \d+ `desc <<~` openers.+parsed 0 bodies/ },
+
     { id: "unit-one-sided-edit", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "one of the six held `devise` lines gains a module — K-1263's own gate",
@@ -4052,6 +4069,94 @@ if host_pair_booting < 2
   errors << "check-demo-copies: the K-1413 host-pairing rule found #{host_pair_booting} " \
             "server-booting task#{host_pair_booting == 1 ? '' : 's'} — the boot construct has moved " \
             "out of #{HOST_BLOCK_REL}, and a pairing rule with nothing paired passes everything."
+end
+
+# ── A `desc <<~` BODY MAY NOT DEDENT TO COLUMN 0 (K-1549) ────────────────────
+#
+# `rake -D` is a SHIPPED SURFACE: it is what an operator reads to find out what
+# a beat proves, and every one of these descriptions is written as a squiggly
+# heredoc. `<<~` strips the SMALLEST indentation any of its non-blank lines
+# carries, so the dedent is a property of the WHOLE body and not of the line
+# being edited. One clause pasted flush left takes the common prefix to zero and
+# every OTHER line keeps the raw source indentation it was written with — the
+# paragraph that was added looks right and the twenty around it move.
+#
+# MEASURED (K-1549): the K-1538 wave inserted the same three-line clause into
+# three demos; in tudu it landed inside the existing indentation and in
+# atablefor and philslist it landed at column 0, which re-indented both whole
+# descriptions by four spaces and broke their bullet lists. Nothing saw it. The
+# lockstep rules above do not compare `lib/tasks/`, and the ones that do compare
+# constructs inside it (K-1046, K-1353, K-1413) read code, not description
+# prose. The bare run was green for a day on a surface an operator reads.
+#
+# WHY A MINIMUM INDENT IS THE WHOLE RULE. A zero here is not a style opinion: a
+# `desc` is nested inside `namespace :demo do`, so every line an author intends
+# is indented, and the only way the minimum reaches 0 is that a line escaped the
+# body's own indentation. The check needs no house style, no column number and
+# no per-demo declaration — it asks the parser the same question Ruby asks.
+#
+# THE VACUITY GUARD IS A SECOND, INDEPENDENT COUNTER, on purpose. The ban's
+# violations are supposed to be zero, so «the pattern matched something» is the
+# wrong liveness question for it. Instead the openers are counted TEXTUALLY —
+# a plain `include?`, no regex — and the bodies are counted by the PARSER; if
+# the parser stops finding what the file plainly contains, that is red, and a
+# corpus with no such heredoc at all is red too. kiosk-demo-prove writes its
+# three descriptions as single-line strings and so contributes nothing to
+# either counter, which is why liveness is a corpus property and not a per-demo
+# one: a per-demo rule here would be an exemption list with prove on it.
+DESC_HEREDOC_OPEN  = /\A\s*desc <<~(\w+)\s*\z/
+DESC_HEREDOC_TEXT  = "desc <<~"
+
+# One entry per `desc <<~` body: [line of the opener, minimum indent, first line].
+def desc_heredoc_bodies(path)
+  lines = File.readlines(path)
+  out   = []
+  i     = 0
+  while i < lines.size
+    if (m = DESC_HEREDOC_OPEN.match(lines[i]))
+      term = m[1]
+      j    = i + 1
+      j += 1 while j < lines.size && lines[j] !~ /\A\s*#{Regexp.escape(term)}\s*\z/
+      body = lines[(i + 1)...j].reject { |l| l.strip.empty? }
+      out << [i + 1, body.map { |l| l[/\A */].size }.min, (body.first || "").strip] unless body.empty?
+      i = j
+    end
+    i += 1
+  end
+  out
+end
+
+desc_indent_declared = 0
+desc_indent_parsed   = 0
+desc_indent_flat     = []
+demos.each do |dir|
+  demo = short.(File.basename(dir))
+  Dir[File.join(dir, "lib/tasks/*.rake")].sort.each do |path|
+    rel = path.delete_prefix("#{dir}/")
+    desc_indent_declared += File.readlines(path).count { |l| l.include?(DESC_HEREDOC_TEXT) }
+    desc_heredoc_bodies(path).each do |line, indent, first|
+      desc_indent_parsed += 1
+      next if indent.positive?
+
+      desc_indent_flat << "#{demo}/#{rel}:#{line} (first line: #{first.slice(0, 60)})"
+    end
+  end
+end
+
+unless desc_indent_flat.empty?
+  errors << "lib/tasks/*.rake: a `desc <<~` body may not dedent to column 0 — " \
+            "#{desc_indent_flat.sort.join('; ')}. `<<~` strips the SMALLEST indentation in the " \
+            "body, so ONE flush-left line takes the common prefix to zero and re-indents every " \
+            "OTHER line of the description by however much it was written with. `rake -D` is what " \
+            "an operator reads to find out what the beat proves, and it is the rendering that " \
+            "moves, not the source (K-1549)."
+end
+
+if desc_indent_declared.zero? || desc_indent_parsed < desc_indent_declared
+  errors << "check-demo-copies: the K-1549 dedent rule counted #{desc_indent_declared} " \
+            "`#{DESC_HEREDOC_TEXT}` opener#{desc_indent_declared == 1 ? '' : 's'} in the demo rake " \
+            "files and parsed #{desc_indent_parsed} bod#{desc_indent_parsed == 1 ? 'y' : 'ies'} out " \
+            "of them. A ban whose subject it can no longer find passes everything."
 end
 
 # ── A shared UNIT inside a `:per_demo` file (T-120) ──────────────────────────
@@ -7814,6 +7919,9 @@ if errors.empty?
        "#{host_block_sites} host-detection block(s) in #{host_blocks.size} demo(s) held in one form " \
        "modulo each demo's own vanity host and paired one-to-one with the " \
        "#{host_pair_booting} rake task(s) that boot a server, " \
+"#{desc_indent_parsed} `desc <<~` description bod#{desc_indent_parsed == 1 ? 'y' : 'ies'} " \
+"in the rake files of #{demos.length} demo(s) dedent to a column of their own — none is " \
+"flush left, so none re-indents the `rake -D` text around it, " \
        "#{prose_path_cites} source-path and #{prose_code_refs} `{Constant}` citation(s) in the " \
        "comments of #{prose_corpus.size} compared file(s) resolved against the tree, " \
        "#{E2E_FIXTURES.size} e2e harness fixture(s) declared " \

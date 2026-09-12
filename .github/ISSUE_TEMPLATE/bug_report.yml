@@ -5,9 +5,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Not for security flaws.** A vulnerability goes through
-        [SECURITY.md](https://github.com/kiosk-hq/kiosk/blob/main/SECURITY.md),
-        never a public issue.
+        **Reporting a security flaw?** Read
+        [SECURITY.md](https://github.com/kiosk-hq/kiosk/blob/main/SECURITY.md)
+        first — this tracker is the channel, but an issue is public from the
+        moment you file it, and a flaw in the specification rather than the
+        implementation goes to `kiosk-hq/kiosk.tech` instead.
   - type: input
     id: commit
     attributes:

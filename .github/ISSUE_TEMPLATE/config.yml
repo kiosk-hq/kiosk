@@ -1,8 +1,11 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Security vulnerability
+  - name: Security policy
     url: https://github.com/kiosk-hq/kiosk/blob/main/SECURITY.md
-    about: Do not open a public issue for a security flaw. Read the security policy first.
+    about: A security flaw is reported as an ordinary issue here — but read this first. An issue is public the moment you file it, and a flaw in the specification goes to kiosk-hq/kiosk.tech instead.
+  - name: A security flaw in the specification
+    url: https://github.com/kiosk-hq/kiosk.tech/issues
+    about: The normative specification, the formal spec and its JSON Schemas, and the assistant skill live in the other repository. File spec flaws there.
   - name: The protocol specification
     url: https://kiosk.tech/specification.html
     about: The normative spec. Code and documents conform to it, so start here when the question is "what should this do?".

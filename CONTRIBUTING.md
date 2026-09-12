@@ -7,8 +7,10 @@ The protocol itself is specified at [kiosk.tech](https://kiosk.tech) and the
 specification is normative — code and documents conform to it, not the other way
 round.
 
-**Found a security flaw? Do not open an issue.** Read
-[SECURITY.md](SECURITY.md) first.
+**Found a security flaw? Open an issue — and read [SECURITY.md](SECURITY.md)
+first**, because a GitHub issue is public from the moment you file it and that
+page says so, says which of the two repositories to file in, and says what a
+useful report carries.
 
 ## What to open, and where
 
@@ -16,7 +18,8 @@ round.
 |---|---|
 | A bug in a gem, a demo or the harness | An [issue](https://github.com/kiosk-hq/kiosk/issues) |
 | A question about the protocol, or a disagreement with the spec | An issue, and quote the section you are arguing with |
-| A security vulnerability | Nothing public — [SECURITY.md](SECURITY.md) |
+| A security vulnerability in the implementation | An [issue here](https://github.com/kiosk-hq/kiosk/issues) — read [SECURITY.md](SECURITY.md) first; it is public the moment you file it |
+| A security vulnerability in the specification | An [issue on `kiosk-hq/kiosk.tech`](https://github.com/kiosk-hq/kiosk.tech/issues) — same page, same caveat |
 | A fix you have already written | A pull request, with the gate below green |
 
 A bug report is most useful with the commit you were on, the gem or demo it is

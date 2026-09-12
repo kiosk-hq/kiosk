@@ -181,8 +181,9 @@ means adding it to that gem's `spec.files`.
 **[CONTRIBUTING.md](CONTRIBUTING.md)** is the whole of it: how to run one gem,
 one demo, the end-to-end harness and the `bin/check-*` guards; what the merge
 gate is; and what this repository expects of a changelog entry and a comment.
-**A security flaw goes through [SECURITY.md](SECURITY.md), never a public
-issue.**
+**A security flaw goes through a GitHub issue — read
+[SECURITY.md](SECURITY.md) first**, for which repository takes it and for the
+fact that filing one is public disclosure.
 
 Every gem shares the protocol's MAJOR.MINOR — the version parity the spec
 promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the protocol,

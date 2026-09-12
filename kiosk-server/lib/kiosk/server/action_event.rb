@@ -160,8 +160,8 @@ module Kiosk
       end
 
       # This event with {#args} replaced by {#arg_types} — the one-call
-      # redaction. Was the DEFAULT while the log was a table; it is now an
-      # offer, because the choice is the operator's.
+      # redaction. An OFFER and not the default: what an audit sink may keep is
+      # the operator's choice, so nothing here makes it for them.
       # @return [ActionEvent]
       def with_arg_types = with(args: arg_types)
 

@@ -215,7 +215,7 @@
 #       included. See the section below; the directory prefixes it recognises
 #       are DERIVED from the repository layout rather than typed here.
 #
-# AND TWO THINGS THAT ARE COUNTED RATHER THAN BANNED:
+# AND THREE THINGS THAT ARE COUNTED RATHER THAN BANNED:
 #
 #   C1  a bare `used to` — PRINTED, NEVER RED. It is the one construction that
 #       spells archaeology and ordinary English with the same letters, so it
@@ -226,6 +226,11 @@
 #       straight through R6's fixed word list. They are a CENSUS rather than
 #       new markers on that list because a ban on either would demand a repair
 #       that is wrong. See the census section below for the measurement.
+#   C3  the TENSE CONTRAST — a past copula answered by an explicit «it is now»
+#       — PRINTED, NEVER RED (K-1515). R6's list is lexical and this shape
+#       carries none of its words: «Was the DEFAULT while the log was a table;
+#       it is now an offer» sat in a shipped engine method for as long as it
+#       took someone to read the file. See the census section below.
 #
 # ── R5 AND R6: A PUBLIC ARTEFACT DESCRIBES WHAT IS (T-195, K-1460) ──────────
 #
@@ -318,24 +323,38 @@
 #
 # `used to be` is a rule (R6) because the copula has no live reading here. A
 # bare `used to` has two readings and no lexical fork between them, so this
-# guard prints every one it finds, in the same three scopes, and the exit code
-# never moves. A count that is printed and never enforced is the honest shape
-# for a residue with two readings: an honest number is worth more than a gate
-# somebody switches off because it reddens on correct prose.
+# guard prints every one it finds, in the scopes the census declares for itself
+# (the same set R6 runs in — an arm asserts that rather than naming it here),
+# and the exit code never moves. A count that is printed and never enforced is
+# the honest shape for a residue with two readings: an honest number is worth
+# more than a gate somebody switches off because it reddens on correct prose.
 #
 # WHY A CENSUS RATHER THAN A DECLARED GAP, decided on a measurement rather than
 # on taste. The gap was declared here in prose when R6 was written, and a
 # declared gap finds nothing — a sentence nobody greps for is a sentence nobody
-# reads. Re-measured word-bounded across these three scopes, `git grep -nP` with
-# pathspecs ending in `/*`: SIX lines. Four are the ordinary passive, one is a
-# vendored mirror this repository cannot repair (below), and the sixth is a
-# genuine archaeology paragraph in a shipped demo script that the declared gap
-# had not surfaced. Six rows is not a backlog; it is a list a human reads once.
+# reads. What the census found the day it replaced that sentence was a mixture:
+# mostly the ordinary passive, which wants nothing done, plus a genuine
+# archaeology paragraph in a shipped demo script the declared gap had never
+# surfaced. That MIXTURE is the finding and it is why the rows are printed
+# individually — a residue small enough for a human to read once, not a backlog.
+#
+# THIS PARAGRAPH STATES NO COUNT, AND THAT IS THE FIX FOR K-1516. The first
+# writing of it said «these three scopes» where the census declares four, «SIX
+# lines» where the run prints eleven, and named a vendored-mirror row the census
+# no longer has — three false statements, in the one script whose subject is
+# prose that has stopped describing what is. Nothing caught it, because C1 never
+# reddens and a comment is held by nothing. Four later waves moved those figures
+# under it: the mirror row was rewritten to the present tense, the demo row was
+# drained, the hyphen exclusion below dropped one, the gem scope became
+# `spec.files`, and a `deploy` scope was added. So the size of this census is
+# DERIVED — the run prints a CENSUS TOTALS block, per rule, per scope, from the
+# same scan that printed the rows — and it is written down here nowhere.
 #
 # WHY THE WORD BOUNDARY IS PART OF THE PATTERN AND NOT A DETAIL: unbounded,
 # `used to` also matches the tail of «ref-used to», «ab-used to», «ca-used to».
-# The first of those is live in this repository today, and counting it made the
-# gem figure four where three is right.
+# The first of those is live in this repository today, and counting it inflated
+# the gem figure by one. A self-test arm holds the exclusion; the figure itself
+# is the run's to print.
 #
 # ── C2: `retired` AND THE PLUPERFECT — PRINTED, NEVER RED (K-1510) ─────────
 #
@@ -375,7 +394,12 @@
 # does NOW, phrased in the tense the attack needs.
 #
 # THOSE NINE ARE A READING OF ONE DAY AND THE CENSUS RE-DERIVES THEM ON EVERY
-# RUN. Read the rows the script prints, not this paragraph.
+# RUN. Read the rows the script prints and the CENSUS TOTALS block beneath them,
+# not this paragraph. (Re-measured when K-1516 rewrote C1's header, the nine
+# still reproduce exactly — six `retired`, three `had been` — which is why this
+# paragraph keeps its enumeration where C1's lost its integers: an enumeration
+# a reader can check against the printed rows is not the same object as a bare
+# count nothing holds. It is still a reading of one day.)
 #
 # AND THE WIDER RETIREMENT VOCABULARY IS NOT EVEN A CANDIDATE, which is the
 # other half of why this is a census. Over the same file set: «once» 286,
@@ -384,6 +408,23 @@
 # The lesson R6's header already states — «every marker in it was chosen because
 # it has no reading in which a live sentence needs it» — is what keeps that list
 # SHORT, and this census is where the rest of the vocabulary goes.
+#
+# ── C3: THE TENSE CONTRAST — PRINTED, NEVER RED (K-1515) ──────────────────
+#
+# The third thing R6's fixed word list cannot see, found the same way C2 was:
+# by asking R6's question of the whole repository instead of trusting the list.
+# «Was the DEFAULT while the log was a table; it is now an offer» carries no
+# marker — no `formerly`, no `previously`, no `used to be` — and sat in a
+# shipped engine method's doc comment, narrating a state of this project that no
+# adopter has ever met. The live half of that sentence survives on its own,
+# which is the tell: the archaeology is deletable without loss, every time.
+#
+# The pattern, the measurement that chose it over the one that FOUND the row,
+# and the reason this is a census rather than an eighth rule are all beside
+# {TENSE_CONTRAST_RE} — with the census-versus-rule question answered the way
+# R6's own header sets it: a ban needs a construction with no live reading, and
+# «the id was claimed, so it is now spent» is a live one this tree happens not
+# to contain today.
 #
 # WHAT A CENSUS ROW DOES NOT MEAN. It is not a finding. Most rows are the
 # passive and want nothing done. And a row inside a VENDORED SCHEMA MIRROR is
@@ -559,6 +600,35 @@ BARE_USED_TO_RE = /\b(?<!-)used\s+to\b(?!\s+be\b)/i
 # narration, and a rule would demand three repairs that make the document worse.
 RETIRED_OR_PLUPERFECT_RE = /\b(?:retired|had\s+been)\b/i
 
+# THE TENSE CONTRAST (K-1515): a past copula on one line, answered on the same
+# line by an explicit «it / they / this / that / which is now». R6 is a LEXICAL
+# proxy over a fixed word list and this shape carries none of its words, which
+# is how «Was the DEFAULT while the log was a table; it is now an offer» shipped
+# inside {ActionEvent#with_arg_types} — a state of this project no adopter has
+# ever met, in the file the guard's own header says the adopter is reading.
+#
+# WHY THE PATTERN IS THE SHARP ONE AND NOT THE ONE THAT FOUND THE ROW. K-1515
+# was measured with `\b(was|were)\b.*\b(now|today|no longer)\b`, which over this
+# guard's four scopes finds SIX lines and only ONE of them is archaeology: the
+# others are a device-grant row that «was no longer approved» at the instant of
+# a race, an on-file card detached «between the pre-check and now», a token
+# «refused now, not» later, and a delivery-slot narrative about the day TODAY.
+# Requiring the explicit present-tense answer clause drops all five and keeps
+# the one — measured at head, this pattern's whole census over gem, demo, e2e
+# and deploy was the single `action_event.rb` line the row filed.
+#
+# WHY A CENSUS AND NOT AN EIGHTH RULE, which is the question K-1515 asks by
+# name. Zero live readings TODAY is not the same claim as no live reading: «the
+# challenge id was claimed, so it is now spent» is a within-request sequence and
+# perfectly live prose, and this tree simply has none at the moment. R6's
+# header sets the bar for a ban at «no reading in which a live sentence needs
+# it», and this construction does not clear it. So it is counted. The census
+# drains to zero rows the moment its one row is repaired, and that is the
+# intended outcome — what holds the pattern afterwards is the vacuity arm, which
+# re-runs it against CHANGELOG.md and bin/, where the sentence is sanctioned and
+# cannot honestly disappear.
+TENSE_CONTRAST_RE = /\b(?:was|were)\b.{0,160}?\b(?:it|they|this|that|which)\s+(?:is|are)\s+now\b/i
+
 # Counted, never banned. Same shape as a rule so `scan` can take it unchanged;
 # `read:` is the adjudication note printed beside each row, per census rather
 # than shared, because the two readings a reader has to separate are different.
@@ -573,7 +643,13 @@ CENSUS = [
     read: "a STATUS («this gem is the retired backend») and a live caveat («strips the " \
           "retired flags a box may still carry») both want nothing done; «the retired X " \
           "did Y» is archaeology and wants deleting, with one changelog line as its " \
-          "whole afterlife" }
+          "whole afterlife" },
+  { id: "C3", re: TENSE_CONTRAST_RE, scopes: %i[gem demo e2e deploy],
+    what: "a past copula answered by an explicit «it is now»",
+    none: "no past copula answered by an explicit «it is now»",
+    read: "a WITHIN-REQUEST sequence («the id was claimed, so it is now spent») describes " \
+          "what the code does and wants nothing done; «X was the default; it is now an " \
+          "offer» is archaeology about this project and wants the second half alone" }
 ].freeze
 
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
@@ -1078,6 +1154,8 @@ def run_check
   end
 
   failed = false
+  census_tally = Hash.new(0)
+  census_scopes = Hash.new { |h, k| h[k] = [] }
   scoped.each do |scope, files|
     rules = rules_for(scope)
     hits = []
@@ -1116,6 +1194,8 @@ def run_check
     # ── the census. It PRINTS and it never touches `failed`. ───────────────
     census_for(scope).each do |rule|
       seen = files.flat_map { |path| scan(path, [rule]).first }
+      census_scopes[rule[:id]] << scope
+      census_tally[rule[:id]] += seen.size
       if seen.empty?
         puts "#{rule[:id]}/#{scope}. #{rule[:none]} in #{SCOPES[scope][:label]} — census " \
              "empty (#{files.size} files)"
@@ -1128,6 +1208,24 @@ def run_check
                      " [vendored mirror — upstream's byte, not repairable from this side]" : ""
         puts "  WARN #{h.path}:#{h.line}#{upstream} — #{WHERE[h.where]}: #{h.text}"
       end
+    end
+  end
+
+  # ── THE CENSUS TOTALS, DERIVED HERE AND WRITTEN DOWN NOWHERE (K-1516) ─────
+  #
+  # C1's justification paragraph used to carry its own integers — «SIX lines»,
+  # «three scopes», and a vendored-mirror row — and four later waves moved every
+  # one of them without moving the sentence. The header now states the SHAPE and
+  # this line states the SIZE, on every run, from the same scan that printed the
+  # rows above. A number in a comment cannot be held; a number the run prints
+  # cannot go stale.
+  unless census_tally.empty?
+    puts
+    puts "CENSUS TOTALS (derived on this run; printed, never red)"
+    census_tally.each do |id, count|
+      scopes = census_scopes[id]
+      puts "  #{id}".ljust(6) + ": #{count} row(s) across #{scopes.size} scope(s) " \
+           "(#{scopes.join(', ')})"
     end
   end
 
@@ -1506,6 +1604,41 @@ def self_test
                "report, the same discipline C1 keeps against `used to be`",
                c2.call(r6_only).empty? &&
                  scan(r6_only).first.any? { |h| h.rule[:id] == "R6" })
+
+    # ── C3's own arms (K-1515): the tense contrast R6's word list cannot see ─
+    c3 = ->(p) { scan(p, CENSUS).first.select { |h| h.rule[:id] == "C3" } }
+
+    _, contrast = plant.call("c3-arch", "z5.rb",
+                             "# redaction. Was the DEFAULT while the log was a table; it is " \
+                             "now an offer.\n")
+    check.call("C3 counts the tense contrast — the FILED instance verbatim, and R6's fixed " \
+               "word list carries none of its words",
+               c3.call(contrast).size == 1 &&
+                 scan(contrast).first.none? { |h| h.rule[:id] == "R6" })
+
+    _, sequence = plant.call("c3-sequence", "z6.rb",
+                             "# The challenge id was claimed before the verify, so it is now " \
+                             "spent.\n")
+    check.call("…and it counts the WITHIN-REQUEST sequence too — that live reading is the " \
+               "whole reason this is a census and not an eighth rule",
+               c3.call(sequence).size == 1)
+
+    _, far_apart = plant.call("c3-far", "z7.rb",
+                              "# The row was locked. " + ("x " * 100) + "It is now readable.\n")
+    check.call("C3 does NOT fire when the two halves are 160-plus characters apart — a past " \
+               "copula and an unrelated `it is now` on one long line are two sentences, not " \
+               "a contrast",
+               c3.call(far_apart).empty?)
+
+    _, no_answer = plant.call("c3-no-answer", "z8.rb",
+                              "# The card was detached between the pre-check and now.\n")
+    check.call("…and it does NOT fire on a past copula with no explicit present-tense answer " \
+               "clause — the five live lines the FOUNDING pattern swept up are exactly this " \
+               "shape",
+               c3.call(no_answer).empty?)
+
+    check.call("C3 never moves the exit code — it is not in RULES at all",
+               RULES.none? { |r| r[:id] == "C3" })
   end
 
   # ── VACUITY: the guard must be looking at something real ──────────────────

@@ -22,6 +22,13 @@
 # Not a Kiosk mechanism and not shipped by the gem — an ordinary Rails concern
 # in the operator's own app, which is the whole point of the mixin design
 # — the operator owns the structure.
+#
+# THE ENVELOPE IS NOT THE OPERATOR'S TO CHOOSE, and that is the part worth
+# knowing here. `{ error: { code, message, hint } }` carrying an in-vocabulary
+# `code` that agrees with the rendered status is what the engine decodes back
+# into the caller's problem document; a status whose one code it already names
+# needs nothing from this hash, and a `kyc_required` on a 403 does, because 403
+# alone spells `forbidden`.
 module KioskRefusals
   extend ActiveSupport::Concern
 

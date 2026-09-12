@@ -24,6 +24,13 @@
 # — the operator owns the structure. A gem-level
 # `render_kiosk_error(code:, message:)` would cover `render_refusal` below and
 # nothing else, so it is not proposed here.
+#
+# THE ENVELOPE IS NOT THE OPERATOR'S TO CHOOSE, and that is the part worth
+# knowing here. `{ error: { code, message, hint } }` carrying an in-vocabulary
+# `code` that agrees with the rendered status is what the engine decodes back
+# into the caller's problem document; a status whose one code it already names
+# needs nothing from this hash, and a `kyc_required` on a 403 does, because 403
+# alone spells `forbidden`.
 module KioskRefusals
   extend ActiveSupport::Concern
 

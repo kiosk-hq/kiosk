@@ -666,7 +666,7 @@ kiosk-demo-stylish/script/descriptor_examples.rb	example_params satisfies its ow
 kiosk-demo-stylish/script/descriptor_examples.rb	example_row satisfies its own output_schema
 kiosk-demo-stylish/script/descriptor_examples.rb	exempt_names = Kiosk::Server::ArgumentDecoder::RESERVED.keys
 kiosk-demo-stylish/script/descriptor_examples.rb	published examples (the loop is not empty)
-kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
+kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerCalendarStaysOwnScoped — a customer's agent sees its OWN booking and
 kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real
 kiosk-demo-stylish/script/redteam_suite.rb	#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
 kiosk-demo-stylish/script/redteam_suite.rb	#   OwnerLinkIgnoresForgedClaimBody — a genuine OWNER link smuggles a wider

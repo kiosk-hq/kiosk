@@ -722,40 +722,54 @@ if ARGV.include?("--self-test")
       expect: /the CONVERGENCE GROUPS census recorded NO compared subject/ },
 
     { id: "driver-env-defaulted", kind: :break,
-      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545)",
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
       what: "one driver regrows the fallback the six copies carried",
       ops:  [[:edit, "kiosk-demo-skooti/script/redteam_suite.rb",
               "ISSUER     = ENV.fetch(\"KIOSK_ISSUER\")",
               "ISSUER     = ENV.fetch(\"KIOSK_ISSUER\", BASE_URL)"]],
       expect: /skooti: script\/redteam_suite\.rb:\d+ fetches KIOSK_ISSUER WITH a default/ },
     { id: "driver-env-defaulted-server-url", kind: :break,
-      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545)",
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
       what: "the SECOND name regrows the hard-coded port three suites carried",
       ops:  [[:edit, "kiosk-demo-hoteling/script/redteam_suite.rb",
               "BASE_URL = ENV.fetch(\"SERVER_URL\")",
               "BASE_URL = ENV.fetch(\"SERVER_URL\", \"http://127.0.0.1:3003\")"]],
       expect: /hoteling: script\/redteam_suite\.rb:\d+ fetches SERVER_URL WITH a default/ },
     { id: "driver-env-single-demo", kind: :break,
-      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545)",
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
       what: "the SINGLE-demo driver no copy rule can see regrows it",
       ops:  [[:edit, "kiosk-demo-atablefor/script/mint_agent_token.rb",
               "ISSUER = ENV.fetch(\"KIOSK_ISSUER\")",
               "ISSUER = ENV.fetch(\"KIOSK_ISSUER\", SERVER)"]],
       expect: /atablefor: script\/mint_agent_token\.rb:\d+ fetches KIOSK_ISSUER WITH a default/ },
     { id: "vacuity-driver-env", kind: :vacuity,
-      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545)",
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
       what: "the rule stops matching any driver's KIOSK_ISSUER fetch and must say so rather than pass",
       ops:  [[:edit, "bin/check-demo-copies",
               "  \"KIOSK_ISSUER\" => \"the `aud` a possession proof is signed for",
               "  \"KIOSK_ISSUER_RENAMED\" => \"the `aud` a possession proof is signed for"]],
       expect: /driver-env rule found NO no-default fetch of KIOSK_ISSUER_RENAMED/ },
     { id: "vacuity-driver-env-server-url", kind: :vacuity,
-      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545)",
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
       what: "the SECOND name stops matching while the first still does — a single tally would hide it",
       ops:  [[:edit, "bin/check-demo-copies",
               "  \"SERVER_URL\"   => \"the origin every request in the file is sent to",
               "  \"SERVER_URL_RENAMED\"   => \"the origin every request in the file is sent to"]],
       expect: /driver-env rule found NO no-default fetch of SERVER_URL_RENAMED/ },
+    { id: "driver-env-defaulted-broker-url", kind: :break,
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
+      what: "the THIRD name regrows the hard-coded broker port skooti's suite carried",
+      ops:  [[:edit, "kiosk-demo-skooti/script/redteam_suite.rb",
+              "BROKER_URL = ENV.fetch(\"KIOSK_PROVE_BROKER_URL\")",
+              "BROKER_URL = ENV.fetch(\"KIOSK_PROVE_BROKER_URL\", \"http://127.0.0.1:3020\")"]],
+      expect: /skooti: script\/redteam_suite\.rb:\d+ fetches KIOSK_PROVE_BROKER_URL WITH a default/ },
+    { id: "vacuity-driver-env-broker-url", kind: :vacuity,
+      rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
+      what: "the THIRD name rests on a SINGLE live fetch, so its own arm is the only thing that can see it stop",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "  \"KIOSK_PROVE_BROKER_URL\" => \"the KYC broker",
+              "  \"KIOSK_PROVE_BROKER_URL_RENAMED\" => \"the KYC broker"]],
+      expect: /driver-env rule found NO no-default fetch of KIOSK_PROVE_BROKER_URL_RENAMED/ },
 
     { id: "e2e-fixture-undeclared", kind: :break,
       rule: "The e2e fixture rule runs (T-118)",
@@ -5962,7 +5976,7 @@ if initializer_demos.zero? && errors.empty?
             "nothing passes everything."
 end
 
-# ── A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545) ──
+# ── A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546) ──
 #
 # THIS IS A PROPERTY OVER A GLOB, NOT A COMPARISON BETWEEN COPIES, and that is
 # deliberate. The seven `script/redteam_suite.rb` copies are declared
@@ -6004,6 +6018,16 @@ end
 #   silently attacks the wrong origin reports BLOCKED for a surface it never
 #   touched.
 #
+#   KIOSK_PROVE_BROKER_URL is the KYC broker the theft, cross-operator and
+#   forged-callback beats attack. Its fallback was the same hard-coded
+#   `http://127.0.0.1:3020` and fails the same way — a beat that reaches
+#   whatever is listening on 3020 reports BLOCKED for a broker it never
+#   touched — and the two tasks that run that suite both pass the name on the
+#   command line, so only a hand run ever took it. It is read by ONE driver
+#   where the two names above are read by many, which is exactly why it wants
+#   the per-name vacuity arm rather than a copy rule: nothing else's fetches
+#   can stand in for its own.
+#
 # A NAME JOINS THIS LIST WHEN ITS OWN RESIDUE IS GONE, never with an allowance
 # beside it — a standing permission excusing a known defect is the shape this
 # file refuses everywhere else. THE VACUITY ARM IS PER NAME for the same
@@ -6012,6 +6036,7 @@ end
 DRIVER_NO_DEFAULT_VARS = {
   "KIOSK_ISSUER" => "the `aud` a possession proof is signed for, and the engine crashes without it",
   "SERVER_URL"   => "the origin every request in the file is sent to",
+  "KIOSK_PROVE_BROKER_URL" => "the KYC broker the broker-flavored beats attack",
 }.freeze
 DRIVER_ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"(?<comma>\s*,)?/
 driver_env_held    = DRIVER_NO_DEFAULT_VARS.keys.to_h { |var| [var, 0] }

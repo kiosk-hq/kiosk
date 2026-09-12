@@ -106,7 +106,7 @@ BASE_URL   = ENV.fetch("SERVER_URL")
 ISSUER     = ENV.fetch("KIOSK_ISSUER")
 # The broker's base URL (set by the two-server demo:redteam harness). The
 # broker-flavored beats (theft / cross-operator / forged-callback) drive it.
-BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL", "http://127.0.0.1:3020")
+BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL")
 TRUSTED_ISSUER = ProveTrust.issuer
 
 # Wrong signing key with the TRUSTED issuer — the only adversarial property is

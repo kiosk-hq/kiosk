@@ -53,7 +53,7 @@ require "kiosk/redteam/wire"
 require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans behind the two assistants. Emails and password come from the
 # environment — db/seeds.rb owns them and the rake task passes them through, the

@@ -71,7 +71,7 @@ FUTURE_SLOT = lambda { |n, hour = 10|
 }
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans behind the two assistants (db/seeds.rb). Emails and password
 # come from the environment — db/seeds.rb owns them and the rake task passes

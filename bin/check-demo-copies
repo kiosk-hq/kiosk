@@ -4745,28 +4745,18 @@ FRAGMENTS = {
   "script/schema_flow.rb#WIRE"    => { rule: :code, ships: FLOW_DEMOS, why: SHARED_WIRE },
   "script/isolation_flow.rb#WIRE" => { rule: :code, ships: FLOW_DEMOS, why: SHARED_WIRE },
   "script/isolation_flow.rb#ISSUER" => {
-    rule:  :per_demo,
+    rule:  :code,
     ships: FLOW_DEMOS,
-    why:   "SAME NAME, TWO CONTRACTS, and the split is real rather than cosmetic: five copies " \
-           "`fetch` `KIOSK_ISSUER` with NO default, while philslist's and stylish's fall back to " \
-           "`SERVER`. A fallback here cannot be normalised away by this rule without changing " \
-           "what two drivers do when the variable is missing, so it is declared and left to the " \
-           "row that owns it. Note the same two demos spell the SAME constant with no default in " \
-           "`script/binding_flow.rb`, which is held `:code` above.",
-    agree: {
-      %w[atablefor getgrocery hoteling skooti tudu] => {
-        rule: :lockstep,
-        why:  "The no-default spelling, one line hand-copied five times, and the one this rule " \
-              "wants: an unset `KIOSK_ISSUER` must stop the driver rather than let it sign a " \
-              "possession proof for whatever origin the port happens to be serving.",
-      },
-      %w[philslist stylish] => {
-        rule: :lockstep,
-        why:  "The fallback spelling, one line hand-copied twice. Held so it stays TWO copies of " \
-              "one deliberate variant rather than becoming a third shape while nobody is " \
-              "looking; whether the fallback should exist at all is not this rule's question.",
-      },
-    },
+    why:   DRIVER_ENV + " `KIOSK_ISSUER` is also the `aud` a possession proof is signed for, " \
+           "so a copy that drifts here mints a JWS its own origin refuses — the same argument " \
+           "`script/binding_flow.rb#ISSUER` is held on. It was TWO spellings until K-1540: five " \
+           "copies with no default and philslist's and stylish's falling back to `SERVER`, while " \
+           "those same two demos spelled it with no default one file over. The fallback was " \
+           "never taken — every `demo:isolation` passes the variable on the command line — so " \
+           "the only run it could fire on is a hand run, which is the run where guessing the " \
+           "issuer from the URL dialled is wrong: the deployed origins set " \
+           "`KIOSK_ISSUER=https://<app>.demo.kiosk.tech` while the server binds 127.0.0.1, and " \
+           "the engine itself is crash-if-absent on the same variable.",
   },
   "script/isolation_flow.rb#ALICE_EMAIL" => { rule: :code, ships: %w[philslist stylish], why: SEEDED_HUMAN },
   "script/isolation_flow.rb#BOB_EMAIL"   => { rule: :code, ships: %w[philslist stylish], why: SEEDED_HUMAN },

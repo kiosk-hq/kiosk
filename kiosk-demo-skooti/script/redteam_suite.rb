@@ -102,7 +102,7 @@ require_relative "../app/services/prove_trust"
 # and is ENV-only, so it loads outside a Rails boot exactly as ProveTrust does.
 require "kiosk/pow/equihash"
 
-BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")
+BASE_URL   = ENV.fetch("SERVER_URL")
 ISSUER     = ENV.fetch("KIOSK_ISSUER")
 # The broker's base URL (set by the two-server demo:redteam harness). The
 # broker-flavored beats (theft / cross-operator / forged-callback) drive it.

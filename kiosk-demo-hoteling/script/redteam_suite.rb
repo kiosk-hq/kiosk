@@ -61,7 +61,7 @@ require "securerandom"
 require "uri"
 require "date"
 
-BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
+BASE_URL = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 
 # Dates far enough in the future to avoid conflicts with existing data.

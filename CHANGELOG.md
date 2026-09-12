@@ -32,6 +32,8 @@ never rewritten. The entries below the baseline are long; they stay as written.
 
 - 2026-09-12: **stylish's two `my_appointments` isolation beats now assert the caller sees their OWN booking too, and B books before the read (K-1544).** An empty list used to pass.
 
+- 2026-09-12: **getgrocery's, hoteling's and skooti's redteam suites now fetch `SERVER_URL` with no default, and the guard takes the name (K-1545).** A literal port ignored the configured origin.
+
 - 2026-09-12: **All seven demo drivers now fetch `KIOSK_ISSUER` with no fallback, and a guard holds it (K-1543).** A default drives whatever is on that port instead of failing.
 
 - 2026-09-12: **stylish's three calendar-scoping beats now assert the caller sees their OWN booking, not only that they see nobody else's (K-1541).** An empty calendar used to pass.

@@ -523,7 +523,24 @@ jobs:
             # (K-786). MEASURED at 4.8 s end to end including its own reseed and
             # server boot. It reseeds (`: :setup`), like every other tudu task
             # here, so its position is free.
-            tasks: demo:collab demo:link demo:isolation demo:redteam demo:schema
+            # demo:clock_spec and demo:access_spec go FIRST and are the two
+            # cheapest signals in the list: no server, no database, no toll,
+            # under a second each. Together they are the only coverage of this
+            # demo that a contributor without Postgres can run at all — every
+            # other task here reseeds and boots.
+            # demo:clock_spec runs spec/reader_clock_spec.rb under TZ=Etc/GMT-11
+            # and TZ=Etc/GMT+2, because stdlib `Time.iso8601` binds an
+            # offsetless string to the server process's zone and that class is
+            # invisible inside any single run. Watched fail: drop the
+            # `in_zone.iso8601(str)` line from ReaderClock.parse so the stdlib
+            # value is returned, and 2 assertions go red under both TZ values
+            # (exit 1).
+            # demo:access_spec covers the list-access gate: the shape check runs
+            # with Membership deliberately not loaded, so a gate that consulted
+            # the table before checking the shape raises there. Watched fail:
+            # drop the `require_owner:` forwarding and the owner-demand
+            # assertion goes red.
+            tasks: demo:clock_spec demo:access_spec demo:collab demo:link demo:isolation demo:redteam demo:schema
           # Every demo: task a demo defines must appear either in its `tasks:`
           # list above (or be demo:setup, which the "Set up demo" step runs) or
           # in its `ungated:` map with the reason it is not a gate. That is not a

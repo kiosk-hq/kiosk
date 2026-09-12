@@ -163,6 +163,56 @@ Asserts the schema catalog (queries/actions + non-empty descriptions, including
 include `pay`, `agents.json` carries no payments block, and `agents.txt` carries
 no `Protocols: ap2` / `Payments:` directives.
 
+### The DB-free unit specs (`rake demo:clock_spec`, `rake demo:access_spec`)
+
+Every other task on this page reseeds a Postgres and boots a server, and one of
+them pays an Equihash toll on the way in. Neither task here needs any of that:
+no database, no server, no python3, under a second each. They are what a
+contributor with a bare Ruby can run, and they are also the only place two of
+this demo's properties are asserted at all rather than inferred from a wire
+round trip.
+
+`spec/` here is **not** an RSpec suite — the files are standalone Ruby assertion
+scripts, run through the tasks below, which is exactly how CI runs them.
+Typing `bundle exec rspec` will find no runner.
+
+**`rake demo:clock_spec`** runs `spec/reader_clock_spec.rb` **twice**, under
+`TZ=Etc/GMT-11` and `TZ=Etc/GMT+2`, because that is the only way the class of
+defect it holds is visible: stdlib `Time.iso8601` binds a string carrying no
+offset to whatever zone the **server process** happens to run in, and inside a
+single run the process zone and the intended zone agree and everything passes.
+It checks that `ReaderClock.zone` answers the zone the caller declared and the
+household's own only when nobody declared one, and that the declaration does not
+outlive the request; that the household fallback is a real IANA zone with a
+January and a July that differ; that five offset spellings name an instant and a
+bare `2026-09-14T14:00:00` does not; that three spellings of one instant resolve
+to one absolute epoch and stay that epoch when a housemate in another city reads
+them; that `parse` alone **completes** a zoneless value on whichever clock it is
+handed, which is the whole reason the offset check runs in front of it; that the
+shape gate still refuses `"banana"`, `"12345"` and a bare `"2026-09-14"` rather
+than turning them into plausible deadlines; that one stored instant publishes as
+two different strings for two housemates while naming one moment; that the
+spoken `due_label` names its zone; and that the published example deadline is a
+value `add_todo` would itself accept — offset-bearing, 14:00 on the household's
+clock, and still in the future.
+
+**`rake demo:access_spec`** runs `spec/list_access_spec.rb` over the gate every
+list-scoped caller shares. Its first section runs with `Membership` deliberately
+**not loaded**, so a gate that consulted the table before checking the shape
+would raise there and be reported by name — the property the module hangs on,
+because ActiveRecord casts a malformed uuid to NULL rather than refusing it, and
+a typo reported as an access refusal sends the caller hunting for a permission
+problem that is not there. Every malformed spelling comes back **400
+(`bad_request`)** naming the value with a hint pointing at `my_lists`. The rest
+of the file stands in for the membership decision so the refusals it earns can be
+asserted: a member is refused nothing, a non-member gets **403 (`forbidden`)**
+rather than a 404 (so ids cannot be enumerated by asking), a malformed id is
+still a 400 even when nothing at all would be reachable, `require_owner` reaches
+the decision, and the owner refusal is a **different sentence** from the member
+one. Finally the `STATUSES` map: exactly the two codes tudu refuses with, frozen,
+and an unmapped code raising a `KeyError` at the seam instead of guessing a
+status.
+
 ## AI-assistant surface
 
 Every verb gets its own endpoint. A query is a `GET` whose arguments are the
@@ -198,6 +248,8 @@ assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
+| `demo:clock_spec` | yes |  |
+| `demo:access_spec` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:collab` | yes |  |
 | `demo:link` | yes |  |
@@ -218,7 +270,9 @@ assertions cannot go ungated and unexplained.
 | `app/models/membership.rb`, `app/controllers/concerns/kiosk_membership_gate.rb` | The membership check both wire halves need: `Membership.reachable?` is the access decision (a predicate, no request in it), the concern is the 400/403 refusal around it |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, running the SAME registered actions as the wire (one shared world) |
 | `script/collab_flow.rb` / `script/link_flow.rb` / `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
-| `lib/tasks/demo.rake` | `rake demo:setup`, `:collab`, `:link`, `:isolation`, `:redteam`, `:schema`, `demo` |
+| `spec/reader_clock_spec.rb` | The DB-free proof of the reader-clock deadline handling, run under two `TZ` values by `rake demo:clock_spec` |
+| `spec/list_access_spec.rb` | The DB-free proof of the list-access gate — the shape check, the two membership refusals and the owner demand — run by `rake demo:access_spec` |
+| `lib/tasks/demo.rake` | `rake demo:clock_spec`, `:access_spec`, `demo:setup`, `:collab`, `:link`, `:isolation`, `:redteam`, `:schema`, `demo` |
 
 ## Make it real
 

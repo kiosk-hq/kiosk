@@ -7,6 +7,10 @@ require "resolv"
 # tudu demo orchestration (MULTI-USER COLLABORATIVE todo app, NO payments).
 # Sub-tasks:
 #
+#   rake demo:clock_spec  DB-free unit spec for the reader clock a todo's
+#                        deadline is read on, run under two TZ values
+#   rake demo:access_spec DB-free unit spec for the list-access gate — the
+#                        shape check, the membership refusals, the owner demand
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
 #   rake demo:collab     happy path: two agents, shared list via invite,
 #                        attribution asserted
@@ -100,6 +104,27 @@ def tudu_run_flow(flow_rb, server_url, extra_env = {})
 end
 
 namespace :demo do
+  desc "DB-free unit spec for the reader clock a todo's deadline is read on, run under two TZ values."
+  task :clock_spec do
+    spec = File.expand_path("../../spec/reader_clock_spec.rb", __dir__)
+    # TWO INVOCATIONS, NOT ONE, AND THE TZ VALUES ARE THE POINT. Stdlib
+    # `Time.iso8601` binds a string carrying no offset to the SERVER PROCESS's
+    # zone, and a helper that leaks that zone into its answer is invisible from
+    # inside a single run: on the machine that wrote the code the process zone
+    # and the intended zone are the same and everything passes. Etc/GMT-11 and
+    # Etc/GMT+2 are thirteen hours apart and sit on either side of the
+    # household's own clock.
+    puts "\n── reader-clock deadline handling (no boot, no DB), under two process zones ──"
+    %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
+  end
+
+  desc "DB-free unit spec for the list-access gate — the shape check, the membership refusals and the owner demand."
+  task :access_spec do
+    spec = File.expand_path("../../spec/list_access_spec.rb", __dir__)
+    puts "\n── list-access gate (no boot, no DB) ──"
+    sh "ruby #{spec}"
+  end
+
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \

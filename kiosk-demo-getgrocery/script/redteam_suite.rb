@@ -76,6 +76,18 @@
 #                            the write never runs
 #   PastDeliveryDate       — a delivery date in the past is a named 400, never
 #                            an ambiguous 200 with an empty list
+#   CallerZoneIsNotInferred — the caller's clock is DECLARED and never guessed:
+#                            with no `Kiosk-Timezone` the answer is the same
+#                            whatever locale, geolocation hint or proxy IP the
+#                            request also carries, on an origin that
+#                            demonstrably reads the header when it is sent
+#   OneRenderingPerRow     — a row is rendered at the delivery address's clock
+#                            and once: two callers on clocks 25 hours apart get
+#                            byte-identical windows, and neither answer names
+#                            the caller's own zone anywhere in its bytes
+#   MachineTimestampsIgnoreTheCallerClock — an auth challenge's `exp` is an
+#                            instant, not a service time: it does not move with
+#                            the caller's declared clock
 #   KycBrokerUnwired       — with no KYC broker configured (which is how the
 #                            demo task boots this origin, and how a plain
 #                            `rails s` does), request_kyc answers 501 with a
@@ -95,8 +107,10 @@
 #   bundle exec ruby script/redteam_suite.rb
 
 require "date"
+require "json"
 require "kiosk/redteam"
 require "net/http"
+require "openssl"
 require "securerandom"
 require "uri"
 
@@ -804,6 +818,291 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
   end
 end
 
+# ── THE THREE TIME-ZONE RULES NOTHING PROBED (spec §3.8.5, §3.8.9, §3.8.11) ──
+#
+# A caller's clock is a declared header and an answer's clock is a property of
+# the serviced resource. Three of the rules that follow from that are ABSENCES —
+# things an operator must not do — and an absence is true of this shop because
+# of how it happens to be built, with nothing that would go red if it were built
+# the other way. These three beats are the probes for them, and they share one
+# shape: SEND THE SAME REQUEST ON TWO CLOCKS TWENTY-FIVE HOURS APART AND SEE
+# WHAT MOVES.
+#
+# Two zones, chosen for two reasons. Neither observes DST, so a local date is a
+# fixed offset from UTC and this script needs no tzinfo — it runs outside a
+# Rails boot. And they are 25 hours apart, which is more than a day, so their
+# calendar dates DIFFER at every instant there is; a probe built on them has no
+# time-of-day branch and no window where it proves nothing.
+CLOCK_EAST = "Pacific/Kiritimati" # UTC+14, no DST
+CLOCK_WEST = "Pacific/Niue"       # UTC-11, no DST
+
+# READ THE DAY FROM AN INSTANT SLIGHTLY AHEAD OF NOW. The control below needs a
+# day the WEST clock is still inside when the LAST of its requests lands, and
+# without the lead there is one second a day — the instant Niue's midnight
+# passes — where the day is computed as current and is over by the time it is
+# asked about. Five minutes is far longer than the whole battery.
+CLOCK_PROBE_LEAD = 300
+
+# The local calendar day in a zone whose offset never changes, as `YYYY-MM-DD`.
+def clock_probe_day(offset_hours)
+  (Time.now.utc + CLOCK_PROBE_LEAD + (offset_hours * 3600)).to_date.iso8601
+end
+
+# ── CallerZoneIsNotInferred — §3.8.5's MUST NOT ──────────────────────────────
+#
+# «It MUST NOT source the caller's zone from the token, `Accept-Language`, IP
+# geolocation or the TCP peer.» That is an ABSENCE, and an absence is what this
+# workspace has learned to distrust: the fleet obeys it because the engine reads
+# ONE env key and no demo consults a second source, which is a fact about how
+# this code happens to be written rather than anything a gate could catch
+# changing.
+#
+# SO THE PROBE IS A DIFFERENTIAL, not an inspection. One `delivery_slots` call
+# is repeated three times with the SAME arguments and NO `Kiosk-Timezone`:
+# once bare, once carrying a Kiribati locale with Kiribati geolocation hints,
+# once carrying Niue's. The two baits point at clocks a day apart on either side
+# of this shop's own, so an operator that inferred a zone from ANY of those
+# headers would answer one of them differently from the other — and both are
+# asserted byte-identical to the bare answer.
+#
+# WHAT MAKES IT NON-VACUOUS is the control, and it runs FIRST: on this very
+# verb, an unreadable `Kiosk-Timezone` is a 400 naming the header and a
+# well-formed one is answered. So the origin under test demonstrably READS the
+# declared clock, and "the baits changed nothing" cannot be the answer of an
+# origin that reads no clock at all.
+#
+# WHAT THE CONTROL DOES NOT ASSERT, because it currently cannot: that a declared
+# zone MOVES this verb's answer. That needs two zones more than a calendar day
+# apart — anything closer has a time-of-day branch where their dates agree and
+# the probe proves nothing — and driving this verb across that span makes it
+# answer a 500 rather than the typed refusal §9.1 requires. The defect is
+# recorded, and until it is repaired the stronger control would be asserting
+# against a known fault instead of against the rule.
+#
+# WHAT THE PROBE DOES NOT REACH, said out loud rather than left to be assumed:
+# the TCP PEER, which a client cannot forge from the outside (`X-Forwarded-For`
+# and its proxy siblings are the closest a request can come and are what is sent
+# here), and the TOKEN, because nothing in this engine's claim set carries a
+# zone, so there is no value for an operator to read off one. Those two halves
+# remain construction.
+class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
+  ADDRESS = "1 Redteam St, Dublin 1"
+
+  # Every source §3.8.5 forbids, in the spellings a request can actually carry:
+  # the locale a country maps to, and the three header shapes a reverse proxy
+  # writes a geolocated address into.
+  BAIT_EAST = { "Accept-Language" => "gil-KI, gil;q=0.9",
+                "X-Forwarded-For" => "202.6.96.1",
+                "CF-IPCountry"    => "KI",
+                "True-Client-IP"  => "202.6.96.1" }.freeze
+  BAIT_WEST = { "Accept-Language" => "niu-NU, niu;q=0.9",
+                "X-Forwarded-For" => "202.9.20.1",
+                "CF-IPCountry"    => "NU",
+                "True-Client-IP"  => "202.9.20.1" }.freeze
+
+  def initialize
+    super(
+      name:        "CallerZoneIsNotInferred",
+      category:    "surface",
+      description: "With no Kiosk-Timezone the answer is the same whatever locale or geolocation hint the request also carries — while the header itself still moves it",
+    )
+  end
+
+  # A shape the wire cannot read. It is refused BY NAME rather than fallen back
+  # on, which is what makes it usable as a control: the refusal names the header
+  # and so can only have come from reading it.
+  UNREADABLE = "+03:00"
+
+  def call(client, profile)
+    a   = register_principal(client, name: "redteam-inferzone-a", profile:)
+    day = clock_probe_day(-11)
+
+    ask = lambda do |headers|
+      client.query(a, name: "delivery_slots", date: day, delivery_address: ADDRESS, headers: headers)
+    end
+
+    # THE CONTROL, FIRST — this origin reads the declared clock.
+    declared = ask.call("Kiosk-Timezone" => CLOCK_WEST)
+    garbled  = ask.call("Kiosk-Timezone" => UNREADABLE)
+    detail   = garbled.body.is_a?(Hash) ? garbled.body["detail"].to_s : ""
+    control  = declared.status == 200 && declared.body.is_a?(Array) && declared.body.any? &&
+               garbled.status == 400 && error_code(garbled) == "bad_request" &&
+               detail.include?("Kiosk-Timezone")
+
+    bare       = ask.call({})
+    baited_e   = ask.call(BAIT_EAST)
+    baited_w   = ask.call(BAIT_WEST)
+    same       = ->(r) { r.status == bare.status && r.body == bare.body }
+    unmoved_e  = same.call(baited_e)
+    unmoved_w  = same.call(baited_w)
+
+    ok = control && unmoved_e && unmoved_w
+    Kiosk::Redteam::Verdict.new(
+      blocked: ok,
+      skipped: false,
+      status:  bare.status,
+      detail:  ok ? "" :
+                 "CONTROL date=#{day} declared #{CLOCK_WEST} → #{declared.status}/" \
+                 "#{declared.body.is_a?(Array) ? declared.body.size : 0} rows, declared " \
+                 "#{UNREADABLE} → #{garbled.status}/#{error_code(garbled).inspect} " \
+                 "detail=#{detail[0, 80].inspect} (want 200 with rows, and a 400 bad_request " \
+                 "naming the header); bare → #{bare.status}, Kiribati-baited → " \
+                 "#{baited_e.status} (same=#{unmoved_e}), Niue-baited → #{baited_w.status} " \
+                 "(same=#{unmoved_w}) " \
+                 "(want both baits byte-identical to bare — a declared clock, never an inferred one)",
+    )
+  end
+end
+
+# ── OneRenderingPerRow — §3.8.9's second sentence ────────────────────────────
+#
+# «An operator publishes ONE rendering per row and not two — a second wall clock
+# in the caller's zone is a field pair that can disagree.» The first sentence of
+# that rule is asserted everywhere (every time-bearing row carries `timezone`,
+# and `demo:schema` fails a row without one); the second was an absence — no row
+# publishes a second wall clock, and nothing looked.
+#
+# THE PROBE READS THE SAME WINDOWS ON TWO CLOCKS. `delivery_slots` is called with
+# no `date`, so both calls ask for the soonest windows this shop has and the
+# ONLY difference between them is the caller's declared zone. Two things are
+# then asserted, and the second is the one the rule is actually about:
+#
+#   the shared windows are BYTE-IDENTICAL — a second rendering in the caller's
+#   zone would move with it;
+#
+#   and neither answer names the caller's zone ANYWHERE in its bytes — which
+#   catches a second rendering that happens not to differ today, and catches it
+#   in a field this beat never had to know the name of.
+#
+# The comparison is per shared `delivery_slot_id` rather than array-to-array,
+# because a window can begin between the two calls and drop out of the second
+# answer; that is this shop's own clock advancing, not the caller's zone moving
+# anything. The shared set being non-empty is asserted, so the loop cannot pass
+# by comparing nothing.
+#
+# NON-VACUITY: every row must carry a `timezone` whose name is NEITHER caller
+# zone and whose value appears in the row's own `label`. So the answer really is
+# publishing a wall clock and naming its zone — it is simply never the caller's.
+class OneRenderingPerRow < Kiosk::Redteam::Scenario
+  ADDRESS   = "1 Redteam St, Dublin 1"
+  RENDERING = %w[date slot_at label timezone].freeze
+
+  def initialize
+    super(
+      name:        "OneRenderingPerRow",
+      category:    "surface",
+      description: "Two callers on clocks 25 hours apart get byte-identical windows, and neither answer names the caller's own zone",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-onerender-a", profile:)
+
+    ask = lambda do |zone|
+      client.query(a, name: "delivery_slots", delivery_address: ADDRESS,
+                      headers: { "Kiosk-Timezone" => zone })
+    end
+
+    west = ask.call(CLOCK_WEST)
+    east = ask.call(CLOCK_EAST)
+    answered = [west, east].all? { |r| r.status == 200 && r.body.is_a?(Array) && r.body.any? }
+
+    rows_w = answered ? west.body.to_h { |r| [r["delivery_slot_id"], r] } : {}
+    rows_e = answered ? east.body.to_h { |r| [r["delivery_slot_id"], r] } : {}
+    shared = rows_w.keys & rows_e.keys
+    agree  = shared.any? &&
+             shared.all? { |id| RENDERING.all? { |f| rows_w[id][f] == rows_e[id][f] } }
+
+    # The caller's zone must not appear in EITHER answer, in any field.
+    bytes    = [west, east].map { |r| JSON.generate(r.body) }
+    no_caller_zone = bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
+
+    # …and the answers DO publish a wall clock and DO name its zone, or the
+    # clause above would be true of a row that renders nothing at all.
+    renders = answered && (rows_w.values + rows_e.values).all? { |r|
+      zone = r["timezone"].to_s
+      !zone.empty? && zone != CLOCK_WEST && zone != CLOCK_EAST && r["label"].to_s.include?(zone)
+    }
+
+    ok = answered && agree && no_caller_zone && renders
+    Kiosk::Redteam::Verdict.new(
+      blocked: ok,
+      skipped: false,
+      status:  west.status,
+      detail:  ok ? "" :
+                 "delivery_slots on #{CLOCK_WEST} → #{west.status}/#{rows_w.size} rows, on " \
+                 "#{CLOCK_EAST} → #{east.status}/#{rows_e.size} rows; #{shared.size} shared " \
+                 "window(s) agree=#{agree}, caller's zone absent from both answers=" \
+                 "#{no_caller_zone}, every row names its own rendering zone in its label=" \
+                 "#{renders} (want one rendering per row, at the delivery address's clock)",
+    )
+  end
+end
+
+# ── MachineTimestampsIgnoreTheCallerClock — §3.8.11 ──────────────────────────
+#
+# «Machine timestamps are not service times and are unaffected.» An `exp` is an
+# INSTANT — a moment a credential stops working — and no clock anybody declares
+# changes when that moment is. Nothing here renders one on a caller's clock, and
+# until this beat nothing said so.
+#
+# THE PROBE IS THE SAME DIFFERENTIAL AT A DIFFERENT ENDPOINT. Two auth
+# challenges, seconds apart, on clocks 25 hours apart: their `exp` values must
+# be within a minute of each other. The number that separates the two answers is
+# not close — a value rendered on the caller's clock would be 90,000 seconds
+# away, and a run cannot take 90,000 seconds — so the assertion has no tuning in
+# it.
+#
+# NON-VACUITY: both `exp` values must be integers in the FUTURE. A field that
+# has gone missing, or gone to zero on both sides, would otherwise satisfy
+# "these two agree" perfectly.
+#
+# THIS COVERS ONE MACHINE TIMESTAMP, the auth challenge's, and it is the engine's
+# rather than this shop's — which is why it lives beside the two beats above
+# instead of in every suite. A bearer's own `iat`/`exp`, skooti's unlock-token
+# `exp` and tudu's `expires_in` are not probed here.
+class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
+  TOLERANCE_SECONDS = 60
+
+  def initialize
+    super(
+      name:        "MachineTimestampsIgnoreTheCallerClock",
+      category:    "surface",
+      description: "An auth challenge's exp is an instant, not a service time: it does not move with the caller's declared clock",
+    )
+  end
+
+  def call(_client, _profile)
+    wire = Kiosk::Redteam::Wire.new(base_url: BASE_URL)
+    pem  = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
+    path = "/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}"
+
+    west_status, west_body = wire.get_json(path, {}, { "Kiosk-Timezone" => CLOCK_WEST })
+    east_status, east_body = wire.get_json(path, {}, { "Kiosk-Timezone" => CLOCK_EAST })
+
+    exp_w = west_body.is_a?(Hash) ? west_body["exp"] : nil
+    exp_e = east_body.is_a?(Hash) ? east_body["exp"] : nil
+
+    numeric  = exp_w.is_a?(Integer) && exp_e.is_a?(Integer)
+    apart    = numeric ? (exp_w - exp_e).abs : nil
+    answered = west_status == 200 && east_status == 200 && numeric &&
+               exp_w > Time.now.utc.to_i && exp_e > Time.now.utc.to_i
+    unmoved  = answered && apart <= TOLERANCE_SECONDS
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: unmoved,
+      skipped: false,
+      status:  west_status,
+      detail:  unmoved ? "" :
+                 "auth/challenge on #{CLOCK_WEST} → #{west_status}/exp=#{exp_w.inspect}, on " \
+                 "#{CLOCK_EAST} → #{east_status}/exp=#{exp_e.inspect}, apart by " \
+                 "#{apart || "n/a"}s (want two live future instants " \
+                 "within #{TOLERANCE_SECONDS}s — the two clocks are 90000s apart)",
+    )
+  end
+end
+
+
 # THE KYC BROKER IS A SECOND SERVICE AND THIS ORIGIN IS BOOTED WITHOUT IT — which
 # is why this battery is where the beat belongs rather than the age-gate flow.
 # `demo:agecheck` boots the broker AND sets the intake secret, so no gate in this
@@ -905,6 +1204,12 @@ scenarios = [
   UnregisteredVerbIsOrdinaryRefusal.new, # a path naming no verb → the ordinary refusal
   MethodMismatch.new,       # a GET at an action draws no route → a plain 404, no write
   PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
+  # The three §3.8 time-zone rules that were held by construction until they
+  # were probed: a clock is DECLARED and never inferred, a row is rendered
+  # once, and a machine timestamp is not a service time.
+  CallerZoneIsNotInferred.new,
+  OneRenderingPerRow.new,
+  MachineTimestampsIgnoreTheCallerClock.new,
   KycBrokerUnwired.new,     # no broker configured is a typed 501, never a Ruby exception in a 500
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).

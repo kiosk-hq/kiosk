@@ -1286,6 +1286,16 @@ namespace :demo do
                                         never runs
       BLOCKED  PastDeliveryDate       — a delivery date in the past is a named 400,
                                         never an ambiguous 200 []
+      BLOCKED  CallerZoneIsNotInferred — with no Kiosk-Timezone the answer is the same
+                                        whatever locale, geolocation hint or proxy IP
+                                        the request also carries, on an origin that
+                                        demonstrably reads the header when it is sent
+      BLOCKED  OneRenderingPerRow     — two callers on clocks 25 hours apart get
+                                        byte-identical windows, and neither answer
+                                        names the caller's own zone
+      BLOCKED  MachineTimestampsIgnoreTheCallerClock — an auth challenge's exp is an
+                                        instant, not a service time: it does not move
+                                        with the caller's declared clock
       BLOCKED  KycBrokerUnwired       — with no KYC broker configured (which is how THIS
                                         task boots the origin, and how a plain `rails s`
                                         does), request_kyc answers 501 module_not_served

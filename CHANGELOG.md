@@ -34,6 +34,8 @@ never rewritten. The entries below the baseline are long; they stay as written.
 
 - 2026-09-12: **getgrocery's, hoteling's and skooti's redteam suites now fetch `SERVER_URL` with no default, and the guard takes the name (K-1545).** A literal port ignored the configured origin.
 
+- 2026-09-12: **Three timezone rules that were held by construction are now probed by getgrocery's redteam battery (T-197).** An absence nothing can catch you breaking is not a rule.
+
 - 2026-09-12: **All seven demo drivers now fetch `KIOSK_ISSUER` with no fallback, and a guard holds it (K-1543).** A default drives whatever is on that port instead of failing.
 
 - 2026-09-12: **stylish's three calendar-scoping beats now assert the caller sees their OWN booking, not only that they see nobody else's (K-1541).** An empty calendar used to pass.

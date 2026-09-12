@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- **`Client#query` and `#run` take `headers:`.** A beat that attacks with a request header — a declared clock, or a source an operator must not read one from — could not send one.
 - **`Scenarios::TokenTampering` probes a verb the origin actually ROUTES.** It used to dial a made-up name, which an origin drawing one explicit route per verb answers with a routing 404 — decided before any credential is read — so the beat scored a refusal the auth check never made. It now dials the profile's `per_user_query`, and SKIPS with a sentence when a profile declares none rather than certifying a check that did not run.
 - **`Scenarios::WrongCurrencyCart` — the cashier check that was hand-copied into three demos.** `kiosk-server` verifies that intent, cart and payment agree with each other; it has no opinion about what those agreeing numbers MEAN, because the catalogue is the operator's. So a cart whose every link says the same foreign currency is internally perfect and still has to be refused at capture, or a caller sets the unit of account. The three commerce demos each carried a byte-identical local scenario asserting it, with the currencies written into the source; the gem's version reads the operator's own from the new `Profile#currency` and probes with a currency that is NOT it, so an origin that prices in dollars is not probed with dollars and cannot print BLOCKED for a cart that was never foreign.
 

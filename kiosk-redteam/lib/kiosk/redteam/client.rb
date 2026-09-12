@@ -144,15 +144,25 @@ module Kiosk
       # A tolled query is ATTACKED, not stalled around: a `pow_required` 402 is
       # answered with one solve-and-resend ({#with_pow_retry}).
       #
+      # `headers:` IS FOR THE BEAT THAT ATTACKS WITH A HEADER RATHER THAN AN
+      # ARGUMENT. Some of what an origin must NOT do is about what it reads off
+      # the request — `Kiosk-Timezone` is the one the protocol names, and the
+      # sources it forbids an operator to infer a clock from (`Accept-Language`,
+      # an IP-geolocation hint, the peer) are headers too. A beat that cannot
+      # set one cannot probe any of that, and the alternative is hand-rolled
+      # Net::HTTP in a demo suite, beside the driver this gem exists to be.
+      #
       # @param principal [Principal]
       # @param name      [String]  query name registered by the provider
+      # @param headers   [Hash{String=>String}] extra request headers, merged
+      #   LAST so a beat can also overwrite what this client would have sent
       # @param params    [Hash]    additional query parameters
       # @return [Response]
-      def query(principal, name:, **params)
+      def query(principal, name:, headers: {}, **params)
         path     = "/kiosk/#{name}"
-        response = get_json(path, params: params, bearer: principal.token)
+        response = get_json(path, params: params, bearer: principal.token, headers: headers)
         with_pow_retry(response) do |pow|
-          get_json(path, params: params, bearer: principal.token, pow: pow)
+          get_json(path, params: params, bearer: principal.token, pow: pow, headers: headers)
         end
       end
 
@@ -166,13 +176,15 @@ module Kiosk
       #
       # @param principal [Principal]
       # @param name      [String] action name registered by the provider
+      # @param headers   [Hash{String=>String}] extra request headers — see
+      #   {#query} for what this is for
       # @param args      [Hash]   action arguments
       # @return [Response]
-      def run(principal, name:, **args)
+      def run(principal, name:, headers: {}, **args)
         path     = "/kiosk/#{name}"
-        response = post_json(path, args, bearer: principal.token)
+        response = post_json(path, args, bearer: principal.token, headers: headers)
         with_pow_retry(response) do |pow|
-          post_json(path, args, bearer: principal.token, pow: pow)
+          post_json(path, args, bearer: principal.token, pow: pow, headers: headers)
         end
       end
 
@@ -419,14 +431,16 @@ module Kiosk
       # @param bearer [String, nil] Bearer token for Authorization header
       # @param pow    [String, nil] raw Kiosk-PoW header value (the proof(s) as
       #   raw JSON) — used by the register + wire-verb PoW retries
+      # @param headers [Hash{String=>String}] extra request headers, merged LAST
       # @return [Response]
-      def post_json(path, body, bearer: nil, pow: nil)
+      def post_json(path, body, bearer: nil, pow: nil, headers: {})
         uri = URI("#{@base_url}#{path}")
-        headers = { "Content-Type" => "application/json" }
-        headers["Authorization"] = "Bearer #{bearer}" if bearer
-        headers["Kiosk-PoW"] = pow if pow
+        hdrs = { "Content-Type" => "application/json" }
+        hdrs["Authorization"] = "Bearer #{bearer}" if bearer
+        hdrs["Kiosk-PoW"] = pow if pow
+        hdrs = hdrs.merge(headers)
 
-        req = Net::HTTP::Post.new(uri, headers)
+        req = Net::HTTP::Post.new(uri, hdrs)
         req.body = JSON.generate(body)
 
         http = Net::HTTP.new(uri.host, uri.port)
@@ -453,13 +467,15 @@ module Kiosk
       #   passes it on the one bounded retry {#with_pow_retry} performs: a toll
       #   DEFERS a request rather than refusing it, and a deferred attack that is
       #   never re-sent is an attack that was never run.
-      def get_json(path, params: {}, bearer: nil, pow: nil)
+      # @param headers [Hash{String=>String}] extra request headers, merged LAST
+      def get_json(path, params: {}, bearer: nil, pow: nil, headers: {})
         uri = URI("#{@base_url}#{path}")
         uri.query = URI.encode_www_form(params) unless params.nil? || params.empty?
-        headers = {}
-        headers["Authorization"] = "Bearer #{bearer}" if bearer
-        headers["Kiosk-PoW"] = pow if pow
-        res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+        hdrs = {}
+        hdrs["Authorization"] = "Bearer #{bearer}" if bearer
+        hdrs["Kiosk-PoW"] = pow if pow
+        hdrs = hdrs.merge(headers)
+        res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, hdrs))
 
         parsed = begin
           JSON.parse(res.body)

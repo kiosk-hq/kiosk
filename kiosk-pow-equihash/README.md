@@ -10,6 +10,38 @@ memory-bandwidth-bound). What it buys the provider is a few-KB, ~18 ms
 `N×PoW` count knob. Abuse resistance comes from reputation and caps
 (PoW = metered pricing, not a hardware wall).
 
+## Install
+
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
+Default does not mean bundled: neither `kiosk-server` nor `kiosk-all` depends
+on a PoW backend, so an origin that gates on PoW adds this gem itself.
+
+```ruby
+gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"
+```
+
+The verifier is pure Ruby with **no runtime dependencies** — not `kiosk-core`,
+not Rails, no native extension. Requiring it defines the backend; registering
+it is a separate, explicit step, because no PoW gem self-registers on require.
+The registry lives in `kiosk-reputation`, which an origin adds to its Gemfile
+the same way:
+
+```ruby
+require "kiosk/pow/equihash"
+
+# Kiosk::Pow::Equihash::NAME == "equihash"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+```
+
+That is the whole install for an **operator**, and it is deliberately this
+small: verifying is what a served request does. **Solving is the caller's
+side**, and it is the only part with a prerequisite outside Ruby — `solve.py`
+ships inside the package and needs **`python3` with `numpy`**
+(`pip install numpy`). Ask the gem for the file's installed location rather
+than hardcoding a path, and read the Solver section below first: numpy is not
+optional there, and the default parameters cost real time and memory to solve.
+
 ## Why Equihash is the shipped default
 
 |  | Argon2id | Cuckatoo29 | **Equihash (default)** |

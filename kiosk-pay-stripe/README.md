@@ -3,6 +3,27 @@
 Stripe PSP adapter for [Kiosk](https://kiosk.tech). Implements
 `Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 
+## Install
+
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
+There is no default PSP — `Kiosk::Configuration#payment_provider` starts `nil`
+— and neither `kiosk-server` nor `kiosk-all` pulls an adapter in, so taking
+payments means adding this one yourself:
+
+```ruby
+gem "kiosk-pay-stripe", github: "kiosk-hq/kiosk"
+```
+
+Bundler brings the two runtime dependencies with it: `kiosk-core` and Stripe's
+own `stripe` gem. Nothing loads until you require the adapter, and the adapter
+does nothing until it is assigned to `payment_provider` — both in the block
+below.
+
+You also need a secret key for the **provider's own** Stripe account
+(`sk_test_…` for the PoC; test mode only, see below). The buyer's card is
+saved on that account, so there is no Kiosk-side Stripe account to configure.
+
 ## Model: card-on-file + off_session (SetupIntent)
 
 The headline flow saves the buyer's card ONCE on the *provider's* Stripe

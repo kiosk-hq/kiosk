@@ -22,6 +22,36 @@ validated against Grin's Cuckatoo29 L=42 known-answer test vector.
 The included Python solver (`solve_cuckoo.py`) is a **REFERENCE/TOY solver**
 for small edgebits and reduced proofsize only — see Solver section below.
 
+## Install
+
+> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
+
+This backend is shelved and opt-in (see the note at the top): nothing installs
+it for you.
+
+```ruby
+gem "kiosk-pow-cuckoo", github: "kiosk-hq/kiosk"
+```
+
+The verifier is pure Ruby with **no runtime dependencies** — not `kiosk-core`,
+not Rails, no native extension. Requiring it defines the backend; registering
+it is a separate, explicit step, because no PoW gem self-registers on require.
+The registry lives in `kiosk-reputation`, which an origin adds to its Gemfile
+the same way:
+
+```ruby
+require "kiosk/pow/cuckoo"
+
+# Kiosk::Pow::Cuckoo::NAME == "cuckatoo"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Cuckoo::NAME, Kiosk::Pow::Cuckoo)
+```
+
+The reference solver `solve_cuckoo.py` ships inside the package and is the one
+part with a prerequisite outside Ruby: **`python3` with `numpy`**
+(`pip install -r requirements.txt`, which ships beside it). A provider only
+ever verifies, so a provider never needs it — read the Solver section below
+for what that solver can and cannot do before you reach for it.
+
 ## Algorithm: Cuckatoo Cycle
 
 - Graph size: `N = 2^edgebits` edges in a random bipartite graph

@@ -26,9 +26,12 @@
 #     drained the ninth, and concluded that "the same command over the whole
 #     repository returns nothing". True, and the wrong question: that pattern is
 #     CASE-SENSITIVE. Adding `-i` to it, at the head that sentence was written
-#     on, returns FOUR more live sites in THREE files — two demo properties
-#     spelled `OPTIONAL`, and two in the engine's own OpenAPI description
-#     surface, which no `kiosk-demo-*` pathspec would have reached anyway.
+#     on (2026-09-12 — every count in these three bullets is a reading of the
+#     day its pass ran, and none of them is a live figure: what is live is the
+#     structural walk below, which prints what it finds), returns FOUR more
+#     live sites in THREE files — two demo properties spelled `OPTIONAL`, and
+#     two in the engine's own OpenAPI description surface, which no
+#     `kiosk-demo-*` pathspec would have reached anyway.
 #
 # Three passes, three patterns, three misses: an anchor, a case, and a pathspec.
 # That is what a class held by nobody looks like, and it is why this reads the

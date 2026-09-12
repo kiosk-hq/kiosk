@@ -426,8 +426,11 @@ end
 # heredoc (every `description` here), plus adjacent-string continuation, because
 # a gemspec that grows a `"..." \` continuation must not silently drop out of
 # the corpus. The heredoc BODY is dedented and joined the way Markdown
-# paragraphs are, so a sentence wrapped over five lines is one string when it is
-# judged -- which is the wrapped-sentence trap K-1202 and K-1217 both fell into.
+# paragraphs are, so a sentence wrapped over several lines is one string when it
+# is judged -- which is the wrapped-sentence trap K-1202 and K-1217 both fell
+# into. (The «five» that stood here was an illustration, not a measurement, and
+# it read as one to the K-1531 census; a hypothetical quantity is written in
+# words that cannot be mistaken for a count.)
 #
 # Returns [gated, reported] exactly like `code_units`, and the reported half IS
 # `code_units`' comment half: a `#` line in a gemspec is a note to the next

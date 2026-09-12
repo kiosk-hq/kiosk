@@ -1989,8 +1989,9 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 #
 #   rule: :lockstep    — these copies are ONE artefact that happens to live at N
 #                        paths. They are HELD: a copy edited alone fails here,
-#                        which is what turns 37 unwatched lines into watched
-#                        ones. This is the answer for a hand-copied file.
+#                        which is what turns 37 unwatched lines (measured
+#                        2026-08-31) into watched ones. This is the answer
+#                        for a hand-copied file.
 #   rule: :coincidence — they agree today for unrelated reasons, and holding
 #                        them would enshrine an accident. NOT held as a promise
 #                        — but the group's MEMBERSHIP is: a demo JOINING it, or
@@ -2002,9 +2003,11 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 # THE CAP IS THE ONE SUBSTANTIVE DIFFERENCE, and it is there because otherwise
 # `:coincidence` would be a free way to switch this rule off — which is the
 # undeclared-exclusion shape K-1262 belongs to. A `:coincidence` group may not
-# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines. MEASURED at head: the
-# live coincidences are 9 and 3 normalised lines at file level and 7, 1 and 1 at
-# unit level; the one lockstep group is 37. Twelve sits above every accident
+# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines. MEASURED 2026-08-31 —
+# a reading of that day rather than a live figure, and the run prints a
+# group's own size whenever it breaches the cap: the live coincidences were
+# 9 and 3 normalised lines at file level and 7, 1 and 1 at unit level, and
+# the one lockstep group 37. Twelve sits above every accident
 # this tree actually contains and far below the one artefact, and above it «they
 # happen to agree» stops being a credible reading of hand-copied code.
 #
@@ -2457,16 +2460,19 @@ end
 # NONE, by design. Phil's standing exemption -- `bin/`, `CHANGELOG.md`,
 # `CLAUDE.md` -- is unchanged in both guards.
 #
-# WHY IT EXISTS AT ALL, MEASURED. K-1323's sweep finished; nothing held it
-# afterwards. Its own two measurements are 568 occurrences immediately after an
+# WHY IT EXISTS AT ALL, MEASURED -- and every figure in this paragraph is a
+# reading of a PAST day, kept because the RATE is the argument, not because
+# any of the totals is current. K-1323's sweep finished; nothing held it
+# afterwards. Its own two measurements were 568 occurrences immediately after an
 # earlier wave and 759 when the fix started -- 51 occurrences of 12 distinct ids
 # re-introduced in about a day, ALL of it by ordinary fix waves rather than by
-# anyone deciding to. Re-measured when this rule was written: **24 occurrences
-# under `kiosk-demo-*` (git grep -P, PCRE -- an ERE `\b` here matches NOTHING and
-# exits 1), 19 of them in Ruby this rule scans and every one of those in a
-# COMMENT, zero in code.** So the ban starts at zero survivors and needs no
-# exemption list at all; the day it needs one, the entry goes here with its
-# reason, exactly like every other manifest in this file.
+# anyone deciding to. Re-measured 2026-09-07, when this rule was written:
+# **24 occurrences under `kiosk-demo-*` (git grep -P, PCRE -- an ERE `\b` here
+# matches NOTHING and exits 1), 19 of them in Ruby this rule scans and every
+# one of those in a COMMENT, zero in code.** So the ban starts at zero
+# survivors and needs no exemption list at all; the day it needs one, the
+# entry goes here with its reason, exactly like every other manifest in this
+# file.
 #
 # COMMENT versus CODE IS ASKED OF RIPPER, NOT OF A REGEX. `^\s*#` misses a
 # trailing comment and a `#` inside a string literal or a heredoc is not a
@@ -3630,18 +3636,21 @@ end
 #     swept «all twenty-five blocks» and neither asked about the demos with none.
 #
 # THE DECISION, taken because the `why:` above could name no reason for the line
-# it drew: the block is now in all seven operator demos, sixteen further sites,
-# and `HOST_BLOCK_SHIPS` is the seven. WHAT AN OPERATOR'S RUN PRINTS CHANGED, and
-# that is the whole visible effect: a task in philslist, stylish or tudu that used
-# to say nothing now prints, once, «(using 127.0.0.1 — to reach
-# <demo>.demo.kiosk.tech instead, add it to /etc/hosts as 127.0.0.1 and set
-# KIOSK_DEMO_HOST_LOOKUP=1)», and with that env var AND an /etc/hosts entry it
-# dials the vanity name instead of loopback. Nothing else moves: the lookup stays
-# opt-in so no run gains an outbound DNS query, the server is still BOUND to
-# 127.0.0.1 in every demo, and only the URL the harness dials (hence the `Host`
-# header) follows the name. The three demos' `config/environments/development.rb`
-# gained the `config.hosts <<` entry the block's own comment requires, without
-# which the printed /etc/hosts line would earn a Rails 8 HostAuthorization 403.
+# it drew: the block is now in EVERY operator demo — `HOST_BLOCK_SHIPS` is that
+# set, declared below and derived from nothing else — plus sixteen further
+# sites when the decision was taken (2026-09-07; a reading of that day, and the
+# only half of it this script holds is the demo set). WHAT AN OPERATOR'S RUN
+# PRINTS CHANGED, and that is the whole visible effect: a task in philslist,
+# stylish or tudu that used to say nothing now prints, once, «(using
+# 127.0.0.1 — to reach <demo>.demo.kiosk.tech instead, add it to /etc/hosts as
+# 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)», and with that env var AND an
+# /etc/hosts entry it dials the vanity name instead of loopback. Nothing else
+# moves: the lookup stays opt-in so no run gains an outbound DNS query, the
+# server is still BOUND to 127.0.0.1 in every demo, and only the URL the
+# harness dials (hence the `Host` header) follows the name. The three demos'
+# `config/environments/development.rb` gained the `config.hosts <<` entry the
+# block's own comment requires, without which the printed /etc/hosts line would
+# earn a Rails 8 HostAuthorization 403.
 # `kiosk-demo-prove` is deliberately NOT in the set: it is an ISSUER, not a Kiosk
 # operator, its rake file boots no server of its own, and a sibling boots it.
 HOST_BLOCK_REL   = "lib/tasks/demo.rake"
@@ -3921,7 +3930,13 @@ end
 # dozen re-declarations.
 #
 # TAKEN — every `:per_demo` path that passes it, which is FOURTEEN of the
-# seventeen and 88 of the 124 shared names. Shared/identical at head:
+# seventeen and 88 of the 124 shared names. EVERY FIGURE FROM HERE TO THE END
+# OF THIS PARAGRAPH IS THIS SCRIPT'S OWN READING OF 2026-08-28 — the
+# `:per_demo` unit comparison over the tracked tree, no hand-run grep in it —
+# and it is kept as the ARGUMENT FOR THE RULE, not as a live figure. What the
+# fleet shares TODAY is what a bare run answers, and it answers it by failing
+# on the pair that drifted rather than by printing a total. Shared/identical
+# on that day:
 # `script/binding_flow.rb` 16/16, `script/pay_window.rb` 19/15 (the four that
 # differ are `reserve!`, `payment_state`, `cart_for` and `settlements_for` —
 # booking_id against reservation_id, a room-night against a scooter-minute),

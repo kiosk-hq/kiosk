@@ -403,8 +403,10 @@
 #
 # THE INSTRUMENT WAS CHOSEN BY MEASUREMENT, NOT BY TASTE, and the measurement
 # says a ban would be wrong. Read by THIS SCRIPT over its own four scopes at the
-# head that added it — which is the file set that matters, and it is wider than
-# a hand-run pathspec: `retired` stands at SIX lines and every one of them is
+# head that added it, 2026-09-12 — which is the file set that matters, and it
+# is wider than a hand-run pathspec. That reading is a claim about that day and
+# not a live count; what is live is the run's own census, which prints what it
+# finds. On that day `retired` stood at SIX lines and every one of them was
 # LIVE —
 #
 #   * `kiosk-pow/README.md` and `kiosk-pow/kiosk-pow.gemspec` call that gem the
@@ -658,9 +660,11 @@ RETIRED_OR_PLUPERFECT_RE = /\b(?:retired|had\s+been)\b/i
 # inside {ActionEvent#with_arg_types} — a state of this project no adopter has
 # ever met, in the file the guard's own header says the adopter is reading.
 #
-# WHY THE PATTERN IS THE SHARP ONE AND NOT THE ONE THAT FOUND THE ROW. K-1515
+# WHY THE PATTERN IS THE SHARP ONE AND NOT THE ONE THAT FOUND THE ROW (both
+# counts in this paragraph are a reading of 2026-09-12, kept because the RATIO
+# is the argument; the live number is whatever the run prints). K-1515
 # was measured with `\b(was|were)\b.*\b(now|today|no longer)\b`, which over this
-# guard's four scopes finds SIX lines and only ONE of them is archaeology: the
+# guard's four scopes found SIX lines and only ONE of them archaeology: the
 # others are a device-grant row that «was no longer approved» at the instant of
 # a race, an on-file card detached «between the pre-check and now», a token
 # «refused now, not» later, and a delivery-slot narrative about the day TODAY.

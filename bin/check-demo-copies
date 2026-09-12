@@ -675,13 +675,18 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
               "    \"quota_exceeded\"    => :too_many_requests,\n", ""]],
       expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,skooti\] as a `:coincidence` and the coincidence has ended/ },
+    # The agreed SIZE is matched as `\d+` rather than restated: it moves every
+    # time one of the three drivers is edited, and a restated measurement that
+    # rots turns this arm red for a reason that has nothing to do with the rule
+    # it guards. What the arm is FOR is the refusal and the cap, and both are
+    # still pinned.
     { id: "coincidence-over-the-cap", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a lockstep group relabelled `:coincidence` — the free way to switch the rule off, capped",
       ops:  [[:edit, "bin/check-demo-copies",
               "      %w[atablefor philslist tudu] => {\n        rule: :lockstep,\n",
               "      %w[atablefor philslist tudu] => {\n        rule: :coincidence,\n"]],
-      expect: /`agree:` calls \[atablefor,philslist,tudu\] a `:coincidence`, but what they agree on is 28 normalised lines and the cap is 12/ },
+      expect: /`agree:` calls \[atablefor,philslist,tudu\] a `:coincidence`, but what they agree on is \d+ normalised lines and the cap is 12/ },
     { id: "vacuity-agree-confirmation", kind: :vacuity,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "the grouping pass stops running, so the ban passes silently and confirms nothing",

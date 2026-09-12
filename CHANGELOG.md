@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-12: **atablefor, philslist and tudu now assert they READ agents.txt and agents.json, not only that no payment directive is in them (K-1538).** An emptied document used to pass.
+
 - 2026-09-12: **The seven demos' schema and isolation drivers now share one `Kiosk::Redteam::Wire` (T-100).** Five hand-rolled argument orders became one, held in lockstep.
 - 2026-09-12: **Security reports are public GitHub issues until 1.0: implementation here, specification to `kiosk-hq/kiosk.tech` (K-1535).** Filing one discloses it, and SECURITY.md says so.
 

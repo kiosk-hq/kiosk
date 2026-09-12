@@ -538,7 +538,9 @@ namespace :demo do
     Asserts the schema catalog (queries/actions + non-empty descriptions,
     including invite/accept_invite) AND that the advertised capabilities do NOT
     include `pay`, agents.json carries no payments block, and agents.txt carries
-    no `Protocols: ap2` / `Payments:` directives.
+    no `Protocols: ap2` / `Payments:` directives — each absence asserted
+    beside a directive the document DOES carry, so a document that failed to
+    read fails the beat rather than satisfying it.
 
     Also asserts the discovery SIGNAL over HTTP: the `<link rel="kiosk">` tag and
     the `Link: <…>; rel="kiosk"` header both name a VERSIONED cut — never the
@@ -683,6 +685,15 @@ namespace :demo do
     %w[schema queries actions].each { |c| check.call("discovery capabilities include #{c}", capabilities.include?(c)) }
     check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
     check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
+
+    # POSITIVE CONTROL for the two absences above. An absence is satisfied by an
+    # empty document as readily as by a real one, so each is asserted beside
+    # something these documents DO carry — a run that read nothing now fails the
+    # beat instead of passing it.
+    check.call("agents.txt was READ: #{r['agents_txt_bytes']} bytes, carrying `Authorization: agent-auth auth-md`",
+               r["agents_txt_bytes"].to_i.positive? && !!r["agents_txt_has_authorization"])
+    check.call("agents.json was READ: carries the v1.0 required keys version/standard/site",
+               (%w[version standard site] - (r["agents_json_keys"] || [])).empty?)
 
     # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #

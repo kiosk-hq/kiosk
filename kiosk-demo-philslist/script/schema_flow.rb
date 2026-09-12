@@ -66,13 +66,28 @@ agents_txt = at_res.raw_body
 agents_txt_has_ap2      = agents_txt.include?("Protocols: ap2")
 agents_txt_has_payments = agents_txt.match?(/^Payments:/)
 
+# ── POSITIVE CONTROL: the two documents were actually READ ───────────────────
+#
+# Every flag above is an ABSENCE, and an absence is satisfied by an empty
+# string exactly as well as by a document that carries no payment directive —
+# on their own they cannot tell «this origin advertises no commerce» from
+# «this driver read nothing». So each absence travels beside something the
+# document DOES carry: agents.txt's byte count and its `Authorization:` line,
+# agents.json's three v1.0 required keys. A blank read FAILS the beat.
+agents_txt_bytes             = agents_txt.bytesize
+agents_txt_has_authorization = agents_txt.match?(/^Authorization: agent-auth auth-md$/)
+agents_json_keys             = agents_json.keys
+
 # ── Emit ONE JSON line for the rake task to assert ───────────────────────────
 puts JSON.generate(
-  schema_status:           rc,
-  schema_queries:          schema_value["queries"],
-  schema_actions:          schema_value["actions"],
-  discovery_capabilities:  capabilities,
-  agents_json_has_payments: agents_json_has_payments,
-  agents_txt_has_ap2:       agents_txt_has_ap2,
-  agents_txt_has_payments:  agents_txt_has_payments,
+  schema_status:                rc,
+  schema_queries:               schema_value["queries"],
+  schema_actions:               schema_value["actions"],
+  discovery_capabilities:       capabilities,
+  agents_json_has_payments:     agents_json_has_payments,
+  agents_txt_has_ap2:           agents_txt_has_ap2,
+  agents_txt_has_payments:      agents_txt_has_payments,
+  agents_txt_bytes:             agents_txt_bytes,
+  agents_txt_has_authorization: agents_txt_has_authorization,
+  agents_json_keys:             agents_json_keys,
 )

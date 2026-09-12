@@ -689,6 +689,9 @@ namespace :demo do
         proof — pay drops out with no payment_provider)
       • agents.json carries NO payments block
       • agents.txt carries NO `Protocols: ap2` / `Payments:` directives
+• and that both documents were READ: agents.txt non-empty and carrying its
+  `Authorization: agent-auth auth-md` line, agents.json carrying the v1.0
+  required keys — an absence an empty document would satisfy is not a proof
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
@@ -907,6 +910,27 @@ namespace :demo do
       puts "  ✗  agents.txt carries `Protocols: ap2` / `Payments:` directives"
     else
       puts "  ✓  agents.txt carries NO `Protocols: ap2` / `Payments:` directives"
+    end
+
+    # POSITIVE CONTROL for the two absences above. An absence is satisfied by an
+    # empty document as readily as by a real one, so each is asserted beside
+    # something these documents DO carry — a run that read nothing now fails the
+    # beat instead of passing it.
+    if result["agents_txt_bytes"].to_i.positive? && result["agents_txt_has_authorization"]
+      puts "  ✓  agents.txt was READ: #{result['agents_txt_bytes']} bytes, carrying `Authorization: agent-auth auth-md`"
+    else
+      failures << "agents.txt did not read back as a real document " \
+                  "(#{result['agents_txt_bytes'].inspect} bytes, `Authorization:` line " \
+                  "#{result['agents_txt_has_authorization'].inspect}) — the absences above prove nothing"
+      puts "  ✗  agents.txt did not read back as a real document — the absences above prove nothing"
+    end
+    agents_json_missing = %w[version standard site] - (result["agents_json_keys"] || [])
+    if agents_json_missing.empty?
+      puts "  ✓  agents.json was READ: carries the v1.0 required keys version/standard/site"
+    else
+      failures << "agents.json is missing the v1.0 required key(s) " \
+                  "#{agents_json_missing.join(', ')} — the payments-block absence above proves nothing"
+      puts "  ✗  agents.json is missing #{agents_json_missing.join(', ')} — the absence above proves nothing"
     end
 
     # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────

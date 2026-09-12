@@ -47,41 +47,38 @@
 
 require "date"
 require "json"
-require "net/http"
 require "openssl"
 require "securerandom"
 require "uri"
 require "jwt"
+require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def post_json(url, body, headers = {})
-  uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def get_json(url, headers = {})
-  uri = URI(url)
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `WIRE.get_json(path,
+# params, headers)` and `WIRE.post_json(path, body, headers)` answer `[status,
+# parsed_body]`, an unparseable body reads as `{}`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # One query call: the verb NAME is the path segment, its arguments are the
 # query string.
 def query_json(name, params = {}, headers = {})
-  uri = URI("#{SERVER}/kiosk/#{name}")
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  get_json(uri.to_s, headers)
+  WIRE.get_json("/kiosk/#{name}", params, headers)
 end
 
 require_relative "equihash_register"
 
+# `equihash_register` drives FULL URLs through the two callables it is handed —
+# it is the one helper a driver shares with e2e, where the origin is not known
+# until the harness boots it — while WIRE is bound to this origin, so the
+# adapters below hand it the path.
+#
 # Register a fresh principal through the proof-of-possession handshake, solving
 # the Equihash register PoW transparently. The private key is returned so the
 # principal can sign its own pay mandates.
@@ -89,7 +86,8 @@ require_relative "equihash_register"
 def register_principal(name:)
   key, reg = equihash_register(
     server: SERVER, issuer: ISSUER,
-    get_json: method(:get_json), post_json: method(:post_json),
+    get_json:  ->(url) { WIRE.get_json(url.delete_prefix(SERVER)) },
+    post_json: ->(url, body, headers = {}) { WIRE.post_json(url.delete_prefix(SERVER), body, headers) },
   )
   user_id  = reg.fetch("user_id")
   agent_id = reg.fetch("agent_id")
@@ -116,7 +114,7 @@ user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-hoteling")
 # ── Step 3: A queries properties and availability ─────────────────────────────
 rc_props_a, props_resp_a = query_json(
   "properties", {},
-  { "Authorization" => "Bearer #{token_a}" },
+  WIRE.bearer(token_a),
 )
 abort "A query properties failed (#{rc_props_a}): #{JSON.generate(props_resp_a)}" unless rc_props_a == 200
 
@@ -130,7 +128,7 @@ prop_id_a = prop_a["property_id"]
 rc_avail_a, avail_resp_a = query_json(
   "availability",
   { property_id: prop_id_a, check_in: CHECK_IN_A, check_out: CHECK_OUT_A },
-  { "Authorization" => "Bearer #{token_a}" },
+  WIRE.bearer(token_a),
 )
 abort "A query availability failed (#{rc_avail_a}): #{JSON.generate(avail_resp_a)}" unless rc_avail_a == 200
 
@@ -142,11 +140,11 @@ room_type_name_a = room_a["name"]
 STDERR.puts "  A will reserve #{room_type_name_a} at property #{prop_id_a}"
 
 # ── Step 4: A reserves room → booking_id rA ──────────────────────────────────
-rc_rsv_a, rsv_a_resp = post_json(
-  "#{SERVER}/kiosk/reserve_room",
+rc_rsv_a, rsv_a_resp = WIRE.post_json(
+  "/kiosk/reserve_room",
   { property_id: prop_id_a, room_type_id: room_type_id_a,
     check_in: CHECK_IN_A, check_out: CHECK_OUT_A },
-  { "Authorization" => "Bearer #{token_a}" },
+  WIRE.bearer(token_a),
 )
 abort "A reserve_room failed (#{rc_rsv_a}): #{JSON.generate(rsv_a_resp)}" unless rc_rsv_a == 200
 
@@ -208,11 +206,11 @@ intent_b_jws  = JWT.encode(intent_b_payload,  key_b, "RS256")
 cart_b_jws    = JWT.encode(cart_b_payload,    key_b, "RS256")
 payment_b_jws = JWT.encode(payment_b_payload, key_b, "RS256")
 
-rc_pay_b, pay_b_resp = post_json(
-  "#{SERVER}/kiosk/pay",
+rc_pay_b, pay_b_resp = WIRE.post_json(
+  "/kiosk/pay",
   { intent_mandate_jws: intent_b_jws, cart_mandate_jws: cart_b_jws,
     payment_mandate_jws: payment_b_jws },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
 STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — Gate-2 now passes for B"
@@ -237,7 +235,7 @@ STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — G
 # First find an available room for B's date range.
 rc_props_b, props_resp_b = query_json(
   "properties", {},
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 abort "B query properties failed (#{rc_props_b})" unless rc_props_b == 200
 
@@ -249,7 +247,7 @@ all_props_b.each do |p|
   rc_av, av_r = query_json(
     "availability",
     { property_id: p["property_id"], check_in: CHECK_IN_B, check_out: CHECK_OUT_B },
-    { "Authorization" => "Bearer #{token_b}" },
+    WIRE.bearer(token_b),
   )
   next unless rc_av == 200
   rows = Array(av_r)
@@ -262,8 +260,8 @@ end
 abort "B: no room available for #{CHECK_IN_B}..#{CHECK_OUT_B}" unless prop_b
 
 # 3a — the forged principal is REFUSED by the published input contract.
-rc_forge, forged_resp = post_json(
-  "#{SERVER}/kiosk/reserve_room",
+rc_forge, forged_resp = WIRE.post_json(
+  "/kiosk/reserve_room",
   {
     property_id:  prop_b["property_id"],
     room_type_id: room_b["room_type_id"],
@@ -271,21 +269,21 @@ rc_forge, forged_resp = post_json(
     check_out:    CHECK_OUT_B,
     user_id:      user_id_a,  # adversarial: B supplies A's user_id
   },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 STDERR.puts "  B reserve_room with a forged user_id → #{rc_forge} #{forged_resp["code"].inspect}"
 
 # 3b — and B's LEGITIMATE booking is owned by B. Same room, same nights: the
 # refusal above created nothing, so the inventory is untouched.
-rc_rsv_b, rsv_b_resp = post_json(
-  "#{SERVER}/kiosk/reserve_room",
+rc_rsv_b, rsv_b_resp = WIRE.post_json(
+  "/kiosk/reserve_room",
   {
     property_id:  prop_b["property_id"],
     room_type_id: room_b["room_type_id"],
     check_in:     CHECK_IN_B,
     check_out:    CHECK_OUT_B,
   },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 abort "B reserve_room failed (#{rc_rsv_b}): #{JSON.generate(rsv_b_resp)}" unless rc_rsv_b == 200
 
@@ -300,7 +298,7 @@ STDERR.puts "  B reserved (owner from token): booking_id=#{booking_id_b}"
 #     the exclusion is non-vacuous (the query actually returns B's own rows).
 rc_b_bookings, b_bookings_resp = query_json(
   "my_bookings", {},
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 abort "B my_bookings failed (#{rc_b_bookings}): #{JSON.generate(b_bookings_resp)}" unless rc_b_bookings == 200
 
@@ -312,10 +310,10 @@ STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 # Gate-1 WHERE id=rA AND user_id=kiosk.current_user_id() AND status='reserved'
 # finds nothing because rA.user_id = A ≠ B → 403.
 # The 403 genuinely isolates Gate-1 ownership, not a payment gap.
-rc_confirm_b, confirm_b_resp = post_json(
-  "#{SERVER}/kiosk/confirm_booking",
+rc_confirm_b, confirm_b_resp = WIRE.post_json(
+  "/kiosk/confirm_booking",
   { booking_id: booking_id_a },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 STDERR.puts "  B confirm_booking on A's rA: HTTP #{rc_confirm_b} (expected 403)"
 

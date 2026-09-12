@@ -40,36 +40,35 @@
 require "date"
 require "jwt"
 require "json"
-require "net/http"
 require "uri"
 require "openssl"
 require "securerandom"
+require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
-def post_json(url, body, headers = {})
-  uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def get_json(url, params = {}, headers = {})
-  uri = URI(url)
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `get_json(path,
+# params, headers)` and `post_json(path, body, headers)` answer `[status,
+# parsed_body]`, an unparseable body reads as `{}`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 require_relative "equihash_register"
 
 # Register a fresh agent, solving the register PoW transparently.
+#
+# `equihash_register` drives FULL URLs through the two callables it is handed —
+# it is the one helper a driver shares with e2e, where the origin is not known
+# until the harness boots it — while WIRE is bound to this origin, so the
+# adapters below hand it the path.
 def register(server, issuer)
   _key, reg = equihash_register(
     server: server, issuer: issuer,
-    get_json: method(:get_json), post_json: method(:post_json),
+    get_json:  ->(url) { WIRE.get_json(url.delete_prefix(SERVER)) },
+    post_json: ->(url, body, headers = {}) { WIRE.post_json(url.delete_prefix(SERVER), body, headers) },
   )
   { agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id"), token: reg.fetch("access_token") }
 end
@@ -78,10 +77,10 @@ end
 # aggregator, excluding any
 # already-claimed (restaurant_table_id, seating_at) pairs. Returns the full row.
 def find_open_slot(server, token, party, exclude: [])
-  rc, avail = get_json(
-    "#{server}/kiosk/availability",
+  rc, avail = WIRE.get_json(
+    "/kiosk/availability",
     { party_size: party },
-    { "Authorization" => "Bearer #{token}" },
+    WIRE.bearer(token),
   )
   abort "availability failed (#{rc}): #{JSON.generate(avail)}" unless rc == 200
   rows = Array(avail)
@@ -93,20 +92,20 @@ end
 
 # Book the given availability row as `token`, optionally injecting extra args.
 def book_slot(server, token, slot, party, extra = {})
-  post_json(
-    "#{server}/kiosk/book_table",
+  WIRE.post_json(
+    "/kiosk/book_table",
     { restaurant_id: slot.fetch("restaurant_id"),
       restaurant_table_id: slot.fetch("restaurant_table_id"),
       date: slot.fetch("seating_date"), time: slot.fetch("seating_time"),
       party_size: party }.merge(extra),
-    { "Authorization" => "Bearer #{token}" },
+    WIRE.bearer(token),
   )
 end
 
 # A my_bookings read as `token` — a query, so a GET, and the answer is the bare
 # array of rows.
 def my_booking_ids(server, token, label)
-  rc, resp = get_json("#{server}/kiosk/my_bookings", {}, { "Authorization" => "Bearer #{token}" })
+  rc, resp = WIRE.get_json("/kiosk/my_bookings", {}, WIRE.bearer(token))
   abort "#{label} my_bookings failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
   Array(resp).map { |r| r["booking_id"] }
 end
@@ -123,10 +122,10 @@ booking_id_a = book_a["booking_id"]
 abort "A's booking_id missing: #{JSON.generate(book_a)}" unless booking_id_a
 
 # ── Step 3: B tries cancel_booking on A's booking (HEADLINE — MUST be 403) ────
-b_cancel_on_a_status, _b_cancel_on_a = post_json(
-  "#{SERVER}/kiosk/cancel_booking",
+b_cancel_on_a_status, _b_cancel_on_a = WIRE.post_json(
+  "/kiosk/cancel_booking",
   { booking_id: booking_id_a },
-  { "Authorization" => "Bearer #{b[:token]}" },
+  WIRE.bearer(b[:token]),
 )
 
 # ── Step 4: B queries my_bookings BEFORE booking (Assertion 1 data) ──────────

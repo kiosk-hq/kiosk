@@ -24,47 +24,32 @@
 
 require "jwt"
 require "json"
-require "net/http"
 require "openssl"
 require "securerandom"
 require "uri"
+require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
 
-def post_json(path, body, bearer: nil, pow: nil)
-  uri = URI("#{SERVER}#{path}")
-  headers = { "Content-Type" => "application/json" }
-  headers["Authorization"] = "Bearer #{bearer}" if bearer
-  headers["Kiosk-PoW"] = pow if pow  # PoW proof rides in the header, not the body
-  req = Net::HTTP::Post.new(uri, headers)
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def get_json(path, bearer: nil)
-  uri = URI("#{SERVER}#{path}")
-  headers = {}
-  headers["Authorization"] = "Bearer #{bearer}" if bearer
-  req = Net::HTTP::Get.new(uri, headers)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `get_json`/`post_json`
+# answer `[status, parsed_body]`, an unparseable body reads as `{}` so a text
+# document can still be asserted on through `#get`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # ── Register a fresh agent (Equihash PoW gate: 1 proof) ──────────────────────
 #
 # Only `equihash_solve` is taken from the shared helper; the handshake below is
-# hand-rolled, for the reason both siblings state verbatim (K-712j): this file's
-# get_json/post_json take a `bearer:` kwarg and relative paths, not the
-# (url, body, headers) shape `equihash_register` drives. getgrocery and hoteling
-# answer that by handing the helper full-URL adapter lambdas; this copy inlines
-# the four calls instead, and either is fine — what was missing was saying so.
+# spelled out call by call, because this demo's whole subject is the toll and
+# the 402 it reports is read here rather than swallowed inside a helper.
 require_relative "equihash_register"  # for equihash_solve
 
 key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem
 
-rc_ch, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+rc_ch, ch = WIRE.get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
 abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
 pop = JWT.encode(
   { aud: SERVER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
@@ -75,7 +60,7 @@ pop = JWT.encode(
 # the 402 below reports how many challenges it actually issued.
 STDERR.puts "  Registering..."
 reg_body = { public_key: pem, signed: pop }
-rc, reg  = post_json("/kiosk/auth/register", reg_body)
+rc, reg  = WIRE.post_json("/kiosk/auth/register", reg_body)
 if rc == 402
   # The 402 is an RFC 9457 problem document since 0.4: `challenges` is a
   # TOP-LEVEL extension member, not nested under an `error` object.
@@ -96,7 +81,7 @@ if rc == 402
               "at n=#{demanded["n"]} k=#{demanded["k"]} (server-demanded)"
 
   proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-  rc, reg = post_json("/kiosk/auth/register", reg_body, pow: JSON.generate(proofs))
+  rc, reg = WIRE.post_json("/kiosk/auth/register", reg_body, { "Kiosk-PoW" => JSON.generate(proofs) })
 end
 abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
@@ -109,7 +94,7 @@ token = reg.fetch("access_token")
 # 200 with the catalogue in the body is the whole test, and a regression to a
 # gate would be a 401 the rake task reports.
 
-schema_rc, schema_body = get_json("/kiosk/schema")
+schema_rc, schema_body = WIRE.get_json("/kiosk/schema")
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
 
 # ── /.well-known/kiosk.json — where the MODULE set lives ─────────────────────
@@ -117,7 +102,7 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 # This document is the ONE place the module set is published. `schema` does not
 # carry a second copy of it: `Array(config.capabilities)` is rendered here and
 # nowhere else, so the property is asserted at its only home.
-wk_rc, wk = get_json("/.well-known/kiosk.json")
+wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
 STDERR.puts "  discovery capabilities=#{capabilities.inspect}"

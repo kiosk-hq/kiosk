@@ -14,44 +14,32 @@
 
 require "jwt"
 require "json"
-require "net/http"
 require "openssl"
 require "securerandom"
 require "uri"
+require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
 
-def get_json(path, bearer: nil)
-  uri = URI("#{SERVER}#{path}")
-  headers = {}
-  headers["Authorization"] = "Bearer #{bearer}" if bearer
-  req = Net::HTTP::Get.new(uri, headers)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `get_json`/`post_json`
+# answer `[status, parsed_body]`, an unparseable body reads as `{}` so a text
+# document can still be asserted on through `#get`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # ── Register a fresh agent (register PoW solved transparently) ───────────────
 #
-# This file defines only a `get_json`, and it takes a `bearer:` kwarg and a
-# relative path, not the (url, body, headers) shape the shared helper drives;
-# give it full-URL adapter lambdas that carry an arbitrary headers hash (the
-# register retry rides the Kiosk-PoW header).
+# `equihash_register` drives FULL URLs through the two callables it is handed —
+# it is the one helper a driver shares with e2e, where the origin is not known
+# until the harness boots it — while {WIRE} is bound to this origin, so the
+# adapters below hand it the path.
 require_relative "equihash_register"
-helper_get = ->(url) {
-  uri = URI(url)
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-}
-helper_post = ->(url, body, headers = {}) {
-  uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-}
 _key, reg = equihash_register(
   server: SERVER, issuer: SERVER,
-  get_json: helper_get, post_json: helper_post,
+  get_json:  ->(url) { WIRE.get_json(url.delete_prefix(SERVER)) },
+  post_json: ->(url, body, headers = {}) { WIRE.post_json(url.delete_prefix(SERVER), body, headers) },
 )
 token = reg.fetch("access_token")
 
@@ -63,7 +51,7 @@ token = reg.fetch("access_token")
 # 200 with the catalogue in the body is the whole test, and a regression to a
 # gate would be a 401 the rake task reports.
 
-schema_rc, schema_body = get_json("/kiosk/schema")
+schema_rc, schema_body = WIRE.get_json("/kiosk/schema")
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
 
 # ── /.well-known/kiosk.json — where the MODULE set lives ─────────────────────
@@ -71,7 +59,7 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 # This document is the ONE place the module set is published. `schema` does not
 # carry a second copy of it: `Array(config.capabilities)` is rendered here and
 # nowhere else, so the property is asserted at its only home.
-wk_rc, wk = get_json("/.well-known/kiosk.json")
+wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
 STDERR.puts "  discovery capabilities=#{capabilities.inspect}"

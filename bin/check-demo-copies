@@ -281,7 +281,7 @@ if ARGV.include?("--self-test")
 
   # The whole FRAGMENT_EXCLUDED entry for one path, removed the way a session that
   # thought the note was stale would remove it.
-  SELF_TEST_EXCLUSION_RE = /^  "script\/schema_flow\.rb" =>\n(?:^ {4}".*\n)+/
+  SELF_TEST_EXCLUSION_RE = /^  "script\/redteam_suite\.rb" =>\n(?:^ {4}".*\n)+/
   SELF_TEST_DSL_LINE     = "    dsl_names.each { |name| fragment_dsl_ids[\"\#{rel}\#\#{name}\"] = true }\n"
 
   # Banners that are DATA or a HELPER rather than an invariant. The coverage table
@@ -635,7 +635,7 @@ if ARGV.include?("--self-test")
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS (T-146)",
       ops:  [[:edit, "bin/check-demo-copies", SELF_TEST_EXCLUSION_RE, ""]],
-      expect: /script\/schema_flow\.rb: declared `:per_demo` in COPIES — compared to NOTHING — but named neither/ },
+      expect: /script\/redteam_suite\.rb: declared `:per_demo` in COPIES — compared to NOTHING — but named neither/ },
     { id: "vacuity-fragment-comparisons", kind: :vacuity,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "the fragment rule stops comparing anything and the count-based guard must say so",
@@ -661,8 +661,8 @@ if ARGV.include?("--self-test")
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a one-sided edit inside a `:lockstep` group — the Bearer token that would pass its own demo",
       ops:  [[:edit, "kiosk-demo-philslist/script/schema_flow.rb",
-              "get_json(\"\#{SERVER}/kiosk/schema\")",
-              "get_json(\"\#{SERVER}/kiosk/schema\", { \"Authorization\" => \"Bearer \#{token}\" })"]],
+              "WIRE.get_json(\"/kiosk/schema\")",
+              "WIRE.get_json(\"/kiosk/schema\", {}, WIRE.bearer(token))"]],
       expect: /script\/schema_flow\.rb: `agree:` holds \[atablefor,philslist,tudu\] in lockstep/ },
     { id: "fourth-demo-joins-group", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
@@ -681,7 +681,7 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "bin/check-demo-copies",
               "      %w[atablefor philslist tudu] => {\n        rule: :lockstep,\n",
               "      %w[atablefor philslist tudu] => {\n        rule: :coincidence,\n"]],
-      expect: /`agree:` calls \[atablefor,philslist,tudu\] a `:coincidence`, but what they agree on is 37 normalised lines and the cap is 12/ },
+      expect: /`agree:` calls \[atablefor,philslist,tudu\] a `:coincidence`, but what they agree on is 28 normalised lines and the cap is 12/ },
     { id: "vacuity-agree-confirmation", kind: :vacuity,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "the grouping pass stops running, so the ban passes silently and confirms nothing",
@@ -1720,8 +1720,11 @@ COPIES = {
     why:   "asserts THAT demo's declared capabilities and verb set — TRUE OF FOUR OF THE SEVEN " \
            "COPIES, and the other three are declared below rather than left implied (K-1262). " \
            "getgrocery, hoteling, skooti and stylish each drive their own catalogue and assert " \
-           "their own verbs, at 46, 48, 59 and 23 normalised lines; atablefor, philslist and tudu " \
-           "are ONE driver at 37 normalised lines and one digest.",
+           "their own verbs; atablefor, philslist and tudu are ONE driver and one digest. None of " \
+           "the seven carries an HTTP helper any more — all open on one `Kiosk::Redteam::Wire`, " \
+           "held by name in FRAGMENTS below (T-100) — so the length of a copy is now nearly all " \
+           "assertion, and two copies happening to normalise to the same NUMBER of lines is not " \
+           "evidence of anything. The digest is; that is what this rule compares.",
     agree: {
       %w[atablefor philslist tudu] => {
         rule: :lockstep,
@@ -1741,7 +1744,10 @@ COPIES = {
     },
   },
   "script/isolation_flow.rb" => {
-    rule: :per_demo, why: "asserts cross-agent isolation over THAT demo's own rows.",
+    rule: :per_demo,
+    why:  "asserts cross-agent isolation over THAT demo's own rows. The transport is not part of " \
+          "that: all seven open on one `Kiosk::Redteam::Wire`, held by name in FRAGMENTS below " \
+          "(T-100), so what differs between these files is which boundary each one crosses.",
   },
   "script/redteam_suite.rb" => {
     rule: :per_demo, why: "THAT demo's attack battery, against its own verbs and its own bugs.",
@@ -4065,10 +4071,14 @@ end
 # method quietly shared by the fleet — the K-792 promotion signal — has to show
 # up.
 #
-# LEFT ALONE: `script/isolation_flow.rb` (8 shared names over seven copies, 4
-# identical) and `script/schema_flow.rb` (3/2). Their `get_json` has six and
-# three distinct bodies respectively — the same helper written once per demo,
-# which is what makes a driver unportable between two of them.
+# THE TWO PATHS THIS PARAGRAPH USED TO NAME AS «LEFT ALONE» ARE IN THE RULE NOW
+# (T-100). It read that `script/isolation_flow.rb` shared 8 names over seven
+# copies with 4 identical and `script/schema_flow.rb` 3 with 2, and that their
+# `get_json` had six and three distinct bodies — the same helper written once
+# per demo, which is what made a driver unportable between two of them. Neither
+# file carries an HTTP helper any more: both open on one
+# `Kiosk::Redteam::Wire`, so what the handle finds in them is the environment
+# they read and the driver they build, and both are declared below.
 #
 # `script/redteam_suite.rb` USED TO LEAD THIS PARAGRAPH with 25 shared names and
 # a six-bodied `get_json` of its own. It no longer does: its HTTP driver, result
@@ -4111,6 +4121,8 @@ FRAGMENT_PATHS = %w[
   script/pow_flow.rb
   script/prove_broker_boot.rb
   script/register_flow.rb
+  script/isolation_flow.rb
+  script/schema_flow.rb
 ].freeze
 
 # AND THE PATHS THAT ARE NOT IN IT, DECLARED (T-146).
@@ -4140,18 +4152,6 @@ FRAGMENT_EXCLUDED = {
     "verbs, so the bodies genuinely differ and always will. Discovery is all-or-nothing per " \
     "path, so taking it would mean declaring twenty settled `:per_demo` variants to hold a " \
     "handful of units, which is a manifest nobody reads for a guarantee the gem already gives.",
-  "script/isolation_flow.rb" =>
-    "Same argument as redteam_suite.rb USED to be, and this one is still live: 8 shared names " \
-    "over seven copies, 4 identical, and its `get_json` still carries the six-body split the " \
-    "red-team files have now shed.",
-  "script/schema_flow.rb" =>
-    "Same argument again, smallest of the three: 3 shared names over seven copies, 2 identical, " \
-    "`get_json` with three distinct bodies. THE OTHER HALF OF THIS PATH IS NO LONGER UNHELD, and " \
-    "not by the fragment rule: three of the seven copies (atablefor, philslist, tudu) are " \
-    "CODE-IDENTICAL WHOLE FILES at 37 normalised lines each, which the `:per_demo` entry's own " \
-    "words did not admit, and they are now declared `:lockstep` in that entry's `agree:` map and " \
-    "held there (K-1262). This exclusion therefore costs the FOUR remaining copies' shared units, " \
-    "not seven.",
 }.freeze
 
 # The demo sets and the reasons several fragment entries share, stated once so N
@@ -4182,6 +4182,27 @@ WIRE_PAIR =
   "assertion below it reads. On its own it is four lines; what makes it worth holding is that the " \
   "pair must MEAN the same thing in each copy — a one-sided edit here does not break the demo it " \
   "lands in, it changes what a sibling demo's assertions are testing."
+
+SHARED_WIRE =
+  "The one line that puts a driver on the SHARED transport instead of a private one: " \
+  "`Kiosk::Redteam::Wire` bound to this origin, from a gem all seven demos already depend on " \
+  "(T-100). Holding it is what {WIRE_PAIR} holds one level down, and for the same reason with a " \
+  "sharper edge — a copy that reverts to its own Net::HTTP pair does not fail its own demo, it " \
+  "re-opens the argument-order split that made a beat unportable between two of these drivers " \
+  "(`get_json(url, params, headers)` in two copies against `get_json(url, headers, params)` in " \
+  "two others, with a third shape in a fifth). The base URL is the only thing that varies, and it " \
+  "is read from {SERVER}."
+
+SEEDED_HUMAN =
+  "The seeded human behind one of the two assistants, read from the environment because " \
+  "db/seeds.rb owns the value and the rake task passes it through. Both demos drive the same " \
+  "two-humans-one-board shape, so a copy that renamed the variable would silently bind both " \
+  "assistants to whatever the other name resolved to — which is the one condition these files " \
+  "abort on by hand, and only after the ceremony has already run."
+
+# The seven operator demos that ship a flow driver of every name below. prove is
+# not one of them: it is the KYC broker and adopts no engine verb surface.
+FLOW_DEMOS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 
 FRAGMENTS = {
   "app/operations/wire_arguments.rb#MAX_INT4" => {
@@ -4694,6 +4715,54 @@ FRAGMENTS = {
   "script/register_flow.rb#ISSUER"    => { rule: :code, ships: DEVICE_GRANT, why: DRIVER_ENV },
   "script/register_flow.rb#post_json" => { rule: :code, ships: DEVICE_GRANT, why: WIRE_PAIR },
   "script/register_flow.rb#get_json"  => { rule: :code, ships: DEVICE_GRANT, why: WIRE_PAIR },
+
+  # ── script/schema_flow.rb, script/isolation_flow.rb — all seven (T-100) ────
+  #
+  # These two paths carry no HTTP helper of their own any more: both open on one
+  # `Kiosk::Redteam::Wire`, so what the fragment rule now sees in them is the
+  # environment they read and the driver they build. The `WIRE` entries are the
+  # ones that matter — they are what a copy would have to keep in order to stay
+  # on the shared transport.
+  "script/schema_flow.rb#SERVER"    => { rule: :code, ships: FLOW_DEMOS, why: DRIVER_ENV },
+  "script/isolation_flow.rb#SERVER" => { rule: :code, ships: FLOW_DEMOS, why: DRIVER_ENV },
+  "script/schema_flow.rb#WIRE"    => { rule: :code, ships: FLOW_DEMOS, why: SHARED_WIRE },
+  "script/isolation_flow.rb#WIRE" => { rule: :code, ships: FLOW_DEMOS, why: SHARED_WIRE },
+  "script/isolation_flow.rb#ISSUER" => {
+    rule:  :per_demo,
+    ships: FLOW_DEMOS,
+    why:   "SAME NAME, TWO CONTRACTS, and the split is real rather than cosmetic: five copies " \
+           "`fetch` `KIOSK_ISSUER` with NO default, while philslist's and stylish's fall back to " \
+           "`SERVER`. A fallback here cannot be normalised away by this rule without changing " \
+           "what two drivers do when the variable is missing, so it is declared and left to the " \
+           "row that owns it. Note the same two demos spell the SAME constant with no default in " \
+           "`script/binding_flow.rb`, which is held `:code` above.",
+    agree: {
+      %w[atablefor getgrocery hoteling skooti tudu] => {
+        rule: :lockstep,
+        why:  "The no-default spelling, one line hand-copied five times, and the one this rule " \
+              "wants: an unset `KIOSK_ISSUER` must stop the driver rather than let it sign a " \
+              "possession proof for whatever origin the port happens to be serving.",
+      },
+      %w[philslist stylish] => {
+        rule: :lockstep,
+        why:  "The fallback spelling, one line hand-copied twice. Held so it stays TWO copies of " \
+              "one deliberate variant rather than becoming a third shape while nobody is " \
+              "looking; whether the fallback should exist at all is not this rule's question.",
+      },
+    },
+  },
+  "script/isolation_flow.rb#ALICE_EMAIL" => { rule: :code, ships: %w[philslist stylish], why: SEEDED_HUMAN },
+  "script/isolation_flow.rb#BOB_EMAIL"   => { rule: :code, ships: %w[philslist stylish], why: SEEDED_HUMAN },
+  "script/isolation_flow.rb#PASSWORD"    => { rule: :code, ships: %w[philslist stylish], why: SEEDED_HUMAN },
+  "script/isolation_flow.rb#register_principal" => {
+    rule:  :per_demo,
+    ships: %w[hoteling skooti],
+    why:   "SAME NAME, DIFFERENT CEREMONY. Both mint a principal through the Equihash-gated " \
+           "register and return the key so it can sign its own mandates, but skooti's also " \
+           "submits a KYC attestation so both of its principals look normally onboarded, while " \
+           "hoteling's stops at the token. Declared rather than converged: the extra step is " \
+           "skooti's subject, not shared scaffolding.",
+  },
 
   # ── the shipped per-demo files (T-136) ────────────────────────────────────
   #

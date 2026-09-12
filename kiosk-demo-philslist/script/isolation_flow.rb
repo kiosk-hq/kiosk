@@ -47,8 +47,8 @@
 # Prints ONE JSON line on stdout; non-zero exit on any hard transport failure.
 
 require "json"
-require "net/http"
 require "uri"
+require "kiosk/redteam/wire"
 
 require_relative "bound_assistant"
 
@@ -69,21 +69,14 @@ PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 # /run endpoint. A success body IS the result — a bare array from a
 # non-paginating query, the action's own object from an action — and an error
 # is an RFC 9457 problem document whose branch point is the top-level `code`.
-def post_json(path, body, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
 
-def get_json(path, params = {}, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  req = Net::HTTP::Get.new(uri, headers)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `WIRE.get_json(path,
+# params, headers)` and `WIRE.post_json(path, body, headers)` answer `[status,
+# parsed_body]`, an unparseable body reads as `{}`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # ── Step 0: two principals, each EARNED through the shipped ceremony ─────────
 alice = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: PASSWORD)
@@ -100,32 +93,32 @@ abort "both assistants share an agent id (#{alice.agent_id}) — registration is
   if alice.agent_id == bob.agent_id
 
 # ── Step 1: both principals post a listing so the board is cross-owner ────────
-rc, alice_post = post_json("/kiosk/post_listing",
-                           { category_slug: "furniture",
-                             title: "Alice bookshelf", body: "Pine, 5-shelf", price_text: "€80" },
-                           alice.bearer)
+rc, alice_post = WIRE.post_json("/kiosk/post_listing",
+                                { category_slug: "furniture",
+                                  title: "Alice bookshelf", body: "Pine, 5-shelf", price_text: "€80" },
+                                alice.bearer)
 abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)}" unless rc == 200
 alice_listing_id = alice_post["listing_id"]
 abort "A listing_id missing: #{JSON.generate(alice_post)}" unless alice_listing_id
 STDERR.puts "  A posted listing #{alice_listing_id}"
 
-rc, bob_post = post_json("/kiosk/post_listing",
-                         { category_slug: "bikes",
-                           title: "Bob mountain bike", body: "Hardtail, size L", price_text: "€500" },
-                         bob.bearer)
+rc, bob_post = WIRE.post_json("/kiosk/post_listing",
+                              { category_slug: "bikes",
+                                title: "Bob mountain bike", body: "Hardtail, size L", price_text: "€500" },
+                              bob.bearer)
 abort "B post_listing failed (#{rc}): #{JSON.generate(bob_post)}" unless rc == 200
 bob_listing_id = bob_post["listing_id"]
 abort "B listing_id missing: #{JSON.generate(bob_post)}" unless bob_listing_id
 STDERR.puts "  B posted listing #{bob_listing_id}"
 
 # ── Step 2: browse_listings is cross-owner (Assertion 1) ─────────────────────
-rc, browse = get_json("/kiosk/browse_listings", {}, bob.bearer)
+rc, browse = WIRE.get_json("/kiosk/browse_listings", {}, bob.bearer)
 abort "browse_listings failed (#{rc}): #{JSON.generate(browse)}" unless rc == 200
 browse_ids = Array(browse).map { |r| r["listing_id"] }
 STDERR.puts "  B browse_listings ids: #{browse_ids.inspect}"
 
 # ── Step 3: Bob's my_listings — scoped (Assertions 2a/2b) ────────────────────
-rc, bmine = get_json("/kiosk/my_listings", {}, bob.bearer)
+rc, bmine = WIRE.get_json("/kiosk/my_listings", {}, bob.bearer)
 abort "B my_listings failed (#{rc}): #{JSON.generate(bmine)}" unless rc == 200
 b_my_ids = Array(bmine).map { |r| r["listing_id"] }
 STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
@@ -148,7 +141,7 @@ STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
 #       and `browse_listings` JOINS this probe set, immediately returning
 #       Alice's row under a `principal` claim — exactly the defect this beat
 #       exists to catch, on the live wire.
-rc, catalog = get_json("/kiosk/schema")
+rc, catalog = WIRE.get_json("/kiosk/schema")
 abort "schema failed (#{rc}): #{JSON.generate(catalog)}" unless rc == 200
 reach_by_verb = (Array(catalog["queries"]) + Array(catalog["actions"]))
                 .to_h { |d| [d["name"], d["reach"]] }
@@ -158,21 +151,21 @@ principal_probe = Array(catalog["queries"]).filter_map { |d|
   next unless (d["reach"] || "principal") == "principal"
   next unless Array(d.dig("input_schema", "required")).empty?
 
-  prc, prows = get_json("/kiosk/#{d['name']}", {}, bob.bearer)
+  prc, prows = WIRE.get_json("/kiosk/#{d['name']}", {}, bob.bearer)
   STDERR.puts "  B #{d['name']} (reach=principal) → #{prc}"
   [d["name"], prc, JSON.generate(prows)]
 }
 
 # ── Step 4: Bob edit_listing on ALICE's listing → 403 (Assertion 3) ──────────
-edit_rc, edit_body = post_json("/kiosk/edit_listing",
-                               { listing_id: alice_listing_id, price_text: "€1" },
-                               bob.bearer)
+edit_rc, edit_body = WIRE.post_json("/kiosk/edit_listing",
+                                    { listing_id: alice_listing_id, price_text: "€1" },
+                                    bob.bearer)
 STDERR.puts "  B edit Alice's listing → #{edit_rc}"
 
 # ── Step 5: Bob close_listing on ALICE's listing → 403 (Assertion 4) ─────────
-close_rc, close_body = post_json("/kiosk/close_listing",
-                                 { listing_id: alice_listing_id },
-                                 bob.bearer)
+close_rc, close_body = WIRE.post_json("/kiosk/close_listing",
+                                      { listing_id: alice_listing_id },
+                                      bob.bearer)
 STDERR.puts "  B close Alice's listing → #{close_rc}"
 
 # ── Step 6: forged owner_id arg on Bob's post_listing (Assertion 5) ──────────
@@ -184,21 +177,21 @@ STDERR.puts "  B close Alice's listing → #{close_rc}"
 # `additionalProperties: false` and does not declare `owner_id` — the principal
 # is not one of its inputs — so the declared input contract answers a typed 400
 # naming the parameter, which is what the published contract requires.
-forged_rc, forged = post_json("/kiosk/post_listing",
-                              { category_slug: "electronics",
-                                title: "Forged owner test", body: "should belong to Bob",
-                                owner_id: alice.user_id },
-                              bob.bearer)
+forged_rc, forged = WIRE.post_json("/kiosk/post_listing",
+                                   { category_slug: "electronics",
+                                     title: "Forged owner test", body: "should belong to Bob",
+                                     owner_id: alice.user_id },
+                                   bob.bearer)
 STDERR.puts "  B post_listing with a forged owner_id → #{forged_rc} #{forged['code'].inspect}"
 
 # And the second half, which the refusal does not by itself prove: ownership and
 # attribution are taken from the AUTHENTICATED identity. Bob posts legitimately;
 # the rake task reads the row back and asserts owner_id == Bob's account and
 # created_by_agent_id == the agent id `/auth/register` MINTED for Bob.
-rc, legit = post_json("/kiosk/post_listing",
-                      { category_slug: "electronics",
-                        title: "Owner-from-token test", body: "must belong to Bob" },
-                      bob.bearer)
+rc, legit = WIRE.post_json("/kiosk/post_listing",
+                           { category_slug: "electronics",
+                             title: "Owner-from-token test", body: "must belong to Bob" },
+                           bob.bearer)
 abort "B post_listing failed (#{rc}): #{JSON.generate(legit)}" unless rc == 200
 owner_probe_listing_id = legit["listing_id"]
 STDERR.puts "  B posted (owner from token): #{owner_probe_listing_id}"

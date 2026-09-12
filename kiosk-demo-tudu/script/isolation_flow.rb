@@ -33,10 +33,10 @@
 
 require "json"
 require "jwt"
-require "net/http"
 require "uri"
 require "openssl"
 require "securerandom"
+require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -47,34 +47,30 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # success body IS the result — a bare array from a non-paginating query, the
 # action's own object from an action — and an error is an RFC 9457 problem
 # document whose branch point is the top-level `code`.
-def post_json(path, body, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
 
-def get_json(path, params = {}, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def bearer(token) = { "Authorization" => "Bearer #{token}" }
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `WIRE.get_json(path,
+# params, headers)` and `WIRE.post_json(path, body, headers)` answer `[status,
+# parsed_body]`, an unparseable body reads as `{}`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 require_relative "equihash_register"
 
-# The equihash_register helper injects full-URL get/post callables (tudu's own
-# post_json/get_json take a path), so wrap them to accept a full URL.
-GET_URL  = ->(url)                 { get_json(url.delete_prefix(SERVER)) }
-POST_URL = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body, hdrs) }
-
 # Register a fresh agent, solving the register PoW transparently (register is
 # uniformly tolled). The helper aborts with detail on failure.
+#
+# `equihash_register` drives FULL URLs through the two callables it is handed —
+# it is the one helper a driver shares with e2e, where the origin is not known
+# until the harness boots it — while WIRE is bound to this origin, so the
+# adapters below hand it the path.
 def register_agent(_label)
-  _key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: GET_URL, post_json: POST_URL)
+  _key, reg = equihash_register(
+    server: SERVER, issuer: ISSUER,
+    get_json:  ->(url) { WIRE.get_json(url.delete_prefix(SERVER)) },
+    post_json: ->(url, body, headers = {}) { WIRE.post_json(url.delete_prefix(SERVER), body, headers) },
+  )
   { token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
 end
 
@@ -86,26 +82,26 @@ mallory = register_agent("mallory")
 results[:mallory_user_id] = mallory[:user_id]
 
 # Owner creates a private list.
-rc, created = post_json("/kiosk/create_list", { title: "Private" }, bearer(owner[:token]))
+rc, created = WIRE.post_json("/kiosk/create_list", { title: "Private" }, WIRE.bearer(owner[:token]))
 abort "create_list failed (#{rc}): #{JSON.generate(created)}" unless rc == 200
 list_id = created["list_id"]
 results[:list_id] = list_id
 
 # Owner mints an invite; the Member (genuine) accepts it (positive control).
-rc, inv = post_json("/kiosk/invite", { list_id: list_id }, bearer(owner[:token]))
+rc, inv = WIRE.post_json("/kiosk/invite", { list_id: list_id }, WIRE.bearer(owner[:token]))
 abort "invite failed (#{rc})" unless rc == 200
 member_code = inv["code"]
-rc, acc = post_json("/kiosk/accept_invite", { code: member_code }, bearer(member[:token]))
+rc, acc = WIRE.post_json("/kiosk/accept_invite", { code: member_code }, WIRE.bearer(member[:token]))
 abort "member accept failed (#{rc}): #{JSON.generate(acc)}" unless rc == 200
 
 # ── Assertion 1: Mallory's my_lists is empty ────────────────────────────────
-rc, m_lists = get_json("/kiosk/my_lists", {}, bearer(mallory[:token]))
+rc, m_lists = WIRE.get_json("/kiosk/my_lists", {}, WIRE.bearer(mallory[:token]))
 results[:mallory_my_lists_empty] = rc == 200 && Array(m_lists).empty?
 
 # ── Assertions 2 & 3: Mallory non-member reads → 403 ────────────────────────
-rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(mallory[:token]))
+rc, = WIRE.get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(mallory[:token]))
 results[:mallory_list_todos] = rc
-rc, = get_json("/kiosk/list_members", { list_id: list_id }, bearer(mallory[:token]))
+rc, = WIRE.get_json("/kiosk/list_members", { list_id: list_id }, WIRE.bearer(mallory[:token]))
 results[:mallory_list_members] = rc
 
 # ── Assertion 4: the principal is NOT an input ──────────────────────────────
@@ -116,28 +112,28 @@ results[:mallory_list_members] = rc
 # principal is not one of its inputs — so the declared input contract answers a
 # typed 400 naming the parameter, which is what the published contract
 # requires.
-forged_rc, forged = post_json("/kiosk/create_list",
-                              { title: "Forged owner test", account_id: owner[:user_id] },
-                              bearer(mallory[:token]))
+forged_rc, forged = WIRE.post_json("/kiosk/create_list",
+                                   { title: "Forged owner test", account_id: owner[:user_id] },
+                                   WIRE.bearer(mallory[:token]))
 results[:forged_refusal] = [forged_rc, forged["code"], forged["detail"]]
 
 # And the second half, which the refusal does not by itself prove: ownership is
 # taken from the AUTHENTICATED identity. Mallory creates a list legitimately;
 # the rake task reads the row back and asserts account_id == Mallory.
-rc, legit = post_json("/kiosk/create_list", { title: "Owner-from-token test" }, bearer(mallory[:token]))
+rc, legit = WIRE.post_json("/kiosk/create_list", { title: "Owner-from-token test" }, WIRE.bearer(mallory[:token]))
 abort "mallory create_list failed (#{rc}): #{JSON.generate(legit)}" unless rc == 200
 results[:owner_probe_list_id] = legit["list_id"]
 
 # ── Assertion 5: replayed (used) invite code + garbage code → 403 ───────────
-rc, = post_json("/kiosk/accept_invite", { code: member_code }, bearer(mallory[:token]))
+rc, = WIRE.post_json("/kiosk/accept_invite", { code: member_code }, WIRE.bearer(mallory[:token]))
 results[:mallory_replay_used_code] = rc
-rc, = post_json("/kiosk/accept_invite", { code: "not-a-real-code" }, bearer(mallory[:token]))
+rc, = WIRE.post_json("/kiosk/accept_invite", { code: "not-a-real-code" }, WIRE.bearer(mallory[:token]))
 results[:mallory_garbage_code] = rc
 
 # ── Assertion 6: POSITIVE CONTROL — the Member DOES see + read the list ─────
-rc, mem_lists = get_json("/kiosk/my_lists", {}, bearer(member[:token]))
+rc, mem_lists = WIRE.get_json("/kiosk/my_lists", {}, WIRE.bearer(member[:token]))
 results[:member_sees_list] = rc == 200 && Array(mem_lists).any? { |r| r["list_id"] == list_id }
-rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
+rc, = WIRE.get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(member[:token]))
 results[:member_reads_todos] = rc
 
 # ── Assertion 8: the DECLARED reach ─────────────────────────────────────────
@@ -158,7 +154,7 @@ results[:member_reads_todos] = rc
 #       pass for the wrong reason. Delete `reach :consented` from my_lists and
 #       it joins this probe set carrying the owner's list under a `principal`
 #       claim, which is the defect this beat catches, on the live wire.
-rc, catalog = get_json("/kiosk/schema")
+rc, catalog = WIRE.get_json("/kiosk/schema")
 abort "schema failed (#{rc}): #{JSON.generate(catalog)}" unless rc == 200
 results[:reach_by_verb] = (Array(catalog["queries"]) + Array(catalog["actions"]))
                           .to_h { |d| [d["name"], d["reach"]] }
@@ -167,17 +163,17 @@ results[:principal_probe] = Array(catalog["queries"]).filter_map { |d|
   next unless (d["reach"] || "principal") == "principal"
   next unless Array(d.dig("input_schema", "required")).empty?
 
-  prc, prows = get_json("/kiosk/#{d['name']}", {}, bearer(member[:token]))
+  prc, prows = WIRE.get_json("/kiosk/#{d['name']}", {}, WIRE.bearer(member[:token]))
   [d["name"], prc, JSON.generate(prows)]
 }
 
 # ── Assertion 7: after remove_member, the Member's next read → 403 ──────────
-rc, rem = post_json("/kiosk/remove_member",
-                    { list_id: list_id, account_id: member[:user_id] },
-                    bearer(owner[:token]))
+rc, rem = WIRE.post_json("/kiosk/remove_member",
+                         { list_id: list_id, account_id: member[:user_id] },
+                         WIRE.bearer(owner[:token]))
 results[:remove_member_status] = rc
 abort "remove_member failed (#{rc}): #{JSON.generate(rem)}" unless rc == 200
-rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
+rc, = WIRE.get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(member[:token]))
 results[:member_after_removal] = rc
 
 puts JSON.generate(results)

@@ -41,11 +41,11 @@
 # Prints ONE JSON line on stdout; non-zero exit on any failure.
 
 require "json"
-require "net/http"
 require "openssl"
 require "securerandom"
 require "uri"
 require "jwt"
+require "kiosk/redteam/wire"
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 # Valid attestations are minted with the SHARED KYC broker key
@@ -58,22 +58,20 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def post_json(url, body, headers = {})
-  uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def get_json(url, headers = {}, params = {})
-  uri = URI(url)
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `WIRE.get_json(path,
+# params, headers)` and `WIRE.post_json(path, body, headers)` answer `[status,
+# parsed_body]`, an unparseable body reads as `{}`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 require_relative "equihash_register"
+
+# `equihash_register` drives FULL URLs through the two callables it is handed —
+# it is the one helper a driver shares with e2e, where the origin is not known
+# until the harness boots it — while WIRE is bound to this origin, so the
+# adapters below hand it the path.
 
 # Register a fresh principal through the Equihash-gated /auth/register, then KYC.
 # Returns [user_id, agent_id, token, key].
@@ -93,7 +91,8 @@ def register_principal(name:)
   STDERR.puts "  Registering #{name} (solving 1 Equihash PoW)..."
   key, reg = equihash_register(
     server: SERVER, issuer: ISSUER,
-    get_json: method(:get_json), post_json: method(:post_json),
+    get_json:  ->(url) { WIRE.get_json(url.delete_prefix(SERVER)) },
+    post_json: ->(url, body, headers = {}) { WIRE.post_json(url.delete_prefix(SERVER), body, headers) },
   )
 
   user_id  = reg.fetch("user_id")
@@ -101,10 +100,10 @@ def register_principal(name:)
   token    = reg.fetch("access_token")
 
   att = ProveTestIssuer.attest(user_id: user_id)
-  rc_kyc, kyc_resp = post_json(
-    "#{SERVER}/kiosk/agents/kyc",
+  rc_kyc, kyc_resp = WIRE.post_json(
+    "/kiosk/agents/kyc",
     { kyc_jws: att },
-    { "Authorization" => "Bearer #{token}" },
+    WIRE.bearer(token),
   )
   abort "kyc #{name} failed (#{rc_kyc}): #{JSON.generate(kyc_resp)}" unless rc_kyc == 200
   STDERR.puts "  #{name}: registered user_id=#{user_id} agent_id=#{agent_id} KYC=ok"
@@ -126,10 +125,10 @@ user_id_a, agent_id_a, token_a, _key_a = register_principal(name: "alice-agent")
 user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-agent")
 
 # ── Step 3: A reserves SK-001 → reservation_id rA ───────────────────────────
-rc, reserve_a_resp = post_json(
-  "#{SERVER}/kiosk/reserve",
+rc, reserve_a_resp = WIRE.post_json(
+  "/kiosk/reserve",
   { scooter_code: "SK-001" },
-  { "Authorization" => "Bearer #{token_a}" },
+  WIRE.bearer(token_a),
 )
 abort "A reserve failed (#{rc}): #{JSON.generate(reserve_a_resp)}" unless rc == 200
 
@@ -192,14 +191,14 @@ intent_b_jws  = JWT.encode(intent_b_payload,  key_b, "RS256")
 cart_b_jws    = JWT.encode(cart_b_payload,    key_b, "RS256")
 payment_b_jws = JWT.encode(payment_b_payload, key_b, "RS256")
 
-rc_pay_b, pay_b_resp = post_json(
-  "#{SERVER}/kiosk/pay",
+rc_pay_b, pay_b_resp = WIRE.post_json(
+  "/kiosk/pay",
   {
     intent_mandate_jws:  intent_b_jws,
     cart_mandate_jws:    cart_b_jws,
     payment_mandate_jws: payment_b_jws,
   },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
 STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — Gate 2 now passes for B"
@@ -211,13 +210,13 @@ STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — G
 # declared input contract answers a typed 400 naming the offending parameter.
 # The rake task asserts the status, the top-level `code` and that `detail` names
 # `user_id`; nothing here is loosened to let the forgery through.
-forged_rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/reserve",
+forged_rc, forged_resp = WIRE.post_json(
+  "/kiosk/reserve",
   {
     scooter_code: "SK-001",
     user_id:      user_id_a,  # adversarial: B supplies A's user_id
   },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 STDERR.puts "  B reserve with a forged user_id → #{forged_rc} #{forged_resp["code"].inspect}"
 
@@ -226,10 +225,10 @@ STDERR.puts "  B reserve with a forged user_id → #{forged_rc} #{forged_resp["c
 # AUTHENTICATED identity, not from anything the caller sent. B's own row is also
 # the positive control for Assertion 2b, so it is created before the
 # my_reservations query below.
-rc, legit_resp = post_json(
-  "#{SERVER}/kiosk/reserve",
+rc, legit_resp = WIRE.post_json(
+  "/kiosk/reserve",
   { scooter_code: "SK-001" },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 abort "B reserve failed (#{rc}): #{JSON.generate(legit_resp)}" unless rc == 200
 
@@ -242,9 +241,10 @@ STDERR.puts "  B reserved (owner from token): reservation_id=#{reservation_id_b}
 #   2a exclusion:       b_reservation_ids must NOT contain rA.
 #   2b positive control: b_reservation_ids MUST contain rB, proving the
 #     exclusion is non-vacuous (the query actually returns B's own rows).
-rc, b_rsv_resp = get_json(
-  "#{SERVER}/kiosk/my_reservations",
-  { "Authorization" => "Bearer #{token_b}" },
+rc, b_rsv_resp = WIRE.get_json(
+  "/kiosk/my_reservations",
+  {},
+  WIRE.bearer(token_b),
 )
 abort "B my_reservations failed (#{rc}): #{JSON.generate(b_rsv_resp)}" unless rc == 200
 
@@ -257,10 +257,10 @@ STDERR.puts "  B my_reservations: #{b_reservation_ids.inspect}"
 # Gate 1 WHERE user_id = kiosk.current_user_id() AND status='reserved' finds
 # nothing because rA.user_id = A ≠ B → 403.
 # The 403 now genuinely isolates Gate 1 ownership, not a Gate 2 payment gap.
-rc_start_b, _start_b_resp = post_json(
-  "#{SERVER}/kiosk/start_rental",
+rc_start_b, _start_b_resp = WIRE.post_json(
+  "/kiosk/start_rental",
   { reservation_id: reservation_id_a },
-  { "Authorization" => "Bearer #{token_b}" },
+  WIRE.bearer(token_b),
 )
 STDERR.puts "  B start_rental on A's rA: HTTP #{rc_start_b} (expected 403)"
 

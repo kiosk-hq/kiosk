@@ -55,9 +55,9 @@
 
 require "date"
 require "json"
-require "net/http"
 require "time"
 require "uri"
+require "kiosk/redteam/wire"
 
 require_relative "bound_assistant"
 
@@ -87,21 +87,14 @@ PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 # A success body IS the result — a bare array from a non-paginating query, the
 # action's own object from an action — and an error is an RFC 9457 problem
 # document whose branch point is the top-level `code`.
-def post_json(url, body, headers = {})
-  uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
 
-def get_json(url, params = {}, headers = {})
-  uri = URI(url)
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  req = Net::HTTP::Get.new(uri, headers)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `WIRE.get_json(path,
+# params, headers)` and `WIRE.post_json(path, body, headers)` answer `[status,
+# parsed_body]`, an unparseable body reads as `{}`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # ── Step 0: two principals, each EARNED through the shipped ceremony ─────────
 alice = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: PASSWORD)
@@ -119,10 +112,10 @@ abort "both assistants share an agent id (#{alice.agent_id}) — registration is
 
 # ── Step 1: Get salon_id from the open catalogue ─────────────────────────────
 # salons query is open-read; any authenticated principal may browse.
-rc, salons_resp = get_json(
-  "#{SERVER}/kiosk/salons",
-  {},
-  alice.bearer,
+rc, salons_resp = WIRE.get_json(
+       "/kiosk/salons",
+       {},
+       alice.bearer,
 )
 abort "salons query failed (#{rc}): #{JSON.generate(salons_resp)}" unless rc == 200
 
@@ -132,13 +125,13 @@ abort "no salons found — run bundle exec rake demo:setup first" unless salon_i
 STDERR.puts "  salon_id=#{salon_id}"
 
 # ── Step 2: A books appointment aA ───────────────────────────────────────────
-rc, appt_a_resp = post_json(
-  "#{SERVER}/kiosk/book_appointment",
-  {
-    salon_id: salon_id,
-    slot:     FUTURE_SLOT.call(1),
-  },
-  alice.bearer,
+rc, appt_a_resp = WIRE.post_json(
+       "/kiosk/book_appointment",
+       {
+         salon_id: salon_id,
+         slot:     FUTURE_SLOT.call(1),
+       },
+       alice.bearer,
 )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a_resp)}" unless rc == 200
 
@@ -148,10 +141,10 @@ abort "A's appointment_id missing from response: #{JSON.generate(appt_a_resp)}" 
 STDERR.puts "  A booked: appt_id=#{appt_id_a}"
 
 # ── Step 3: B queries my_appointments — must NOT contain aA (Assertion 1) ────
-rc, b_appts_resp = get_json(
-  "#{SERVER}/kiosk/my_appointments",
-  {},
-  bob.bearer,
+rc, b_appts_resp = WIRE.get_json(
+       "/kiosk/my_appointments",
+       {},
+       bob.bearer,
 )
 abort "B my_appointments failed (#{rc}): #{JSON.generate(b_appts_resp)}" unless rc == 200
 
@@ -168,14 +161,14 @@ STDERR.puts "  B my_appointments: #{b_appt_ids.inspect}"
 # declare `user_id` — the principal is not one of its inputs — so the declared
 # input contract answers a typed 400 naming the parameter, which is what the
 # published contract requires.
-forged_rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/book_appointment",
-  {
-    salon_id: salon_id,
-    slot:     FUTURE_SLOT.call(2, 11),
-    user_id:  alice.user_id, # adversarial: B supplies A's user_id in args
-  },
-  bob.bearer,
+forged_rc, forged_resp = WIRE.post_json(
+       "/kiosk/book_appointment",
+       {
+         salon_id: salon_id,
+         slot:     FUTURE_SLOT.call(2, 11),
+         user_id:  alice.user_id, # adversarial: B supplies A's user_id in args
+       },
+       bob.bearer,
 )
 STDERR.puts "  B book_appointment with a forged user_id → #{forged_rc} #{forged_resp["code"].inspect}"
 
@@ -183,13 +176,13 @@ STDERR.puts "  B book_appointment with a forged user_id → #{forged_rc} #{forge
 # The half the refusal does not by itself prove: ownership is taken from the
 # AUTHENTICATED identity. The rake task reads this row back and asserts
 # appointments.user_id == B.
-rc, appt_b_resp = post_json(
-  "#{SERVER}/kiosk/book_appointment",
-  {
-    salon_id: salon_id,
-    slot:     FUTURE_SLOT.call(2, 12),
-  },
-  bob.bearer,
+rc, appt_b_resp = WIRE.post_json(
+       "/kiosk/book_appointment",
+       {
+         salon_id: salon_id,
+         slot:     FUTURE_SLOT.call(2, 12),
+       },
+       bob.bearer,
 )
 abort "B book_appointment failed (#{rc}): #{JSON.generate(appt_b_resp)}" unless rc == 200
 
@@ -203,10 +196,10 @@ STDERR.puts "  B booked (owner from token): appt_id=#{appt_id_b}"
 # my_appointments. This proves that Assertion 1's exclusion is not vacuous:
 # if my_appointments always returned empty for B, the exclusion of aA would
 # pass spuriously. Seeing appt_id_b here confirms the query is live for B.
-rc, b_appts_after_resp = get_json(
-  "#{SERVER}/kiosk/my_appointments",
-  {},
-  bob.bearer,
+rc, b_appts_after_resp = WIRE.get_json(
+       "/kiosk/my_appointments",
+       {},
+       bob.bearer,
 )
 abort "B my_appointments (after) failed (#{rc}): #{JSON.generate(b_appts_after_resp)}" unless rc == 200
 
@@ -215,10 +208,10 @@ STDERR.puts "  B my_appointments (after own booking): #{b_appt_ids_after.inspect
 
 # ── Step 6: A queries my_appointments after B's booking ──────────────────────
 # A must NOT see B's appointment (cross-check for Assertion 2).
-rc, a_appts_resp = get_json(
-  "#{SERVER}/kiosk/my_appointments",
-  {},
-  alice.bearer,
+rc, a_appts_resp = WIRE.get_json(
+       "/kiosk/my_appointments",
+       {},
+       alice.bearer,
 )
 abort "A my_appointments (after) failed (#{rc}): #{JSON.generate(a_appts_resp)}" unless rc == 200
 

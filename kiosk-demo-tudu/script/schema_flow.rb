@@ -20,21 +20,17 @@
 # Prints ONE JSON line on stdout; non-zero exit on transport failure.
 
 require "json"
-require "net/http"
-require "uri"
+require "kiosk/redteam/wire"
 
 SERVER = ENV.fetch("SERVER_URL")
 
-def get(url, headers = {})
-  uri = URI(url)
-  req = Net::HTTP::Get.new(uri, headers)
-  Net::HTTP.new(uri.host, uri.port).request(req)
-end
-
-def get_json(url, headers = {})
-  res = get(url, headers)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# One JSON-over-HTTP driver for the whole file. `kiosk-redteam` ships it, every
+# demo already depends on that gem, and an adopter writing their own driver
+# against this origin gets the same object off the shelf: `get_json`/`post_json`
+# answer `[status, parsed_body]`, an unparseable body reads as `{}` so a text
+# document can still be asserted on through `#get`, and an origin that refused
+# the connection answers status 0 rather than raising.
+WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # ── The schema verb — UNAUTHENTICATED, and that IS the assertion ─────────────
 #
@@ -43,7 +39,7 @@ end
 # would buy nothing. Sending NO Authorization header is what proves it — a 200
 # with the catalogue in the body is the whole test, and a regression to a gate
 # would be a 401.
-rc, body = get_json("#{SERVER}/kiosk/schema")
+rc, body = WIRE.get_json("/kiosk/schema")
 abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
 # `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY: no
 # `{ok, kind, value}` envelope, and no `verbs` — the module set is what
@@ -51,20 +47,20 @@ abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
 schema_value = body || {}
 
 # ── /.well-known/kiosk.json — the advertised capability set ──────────────────
-wk_rc, wk = get_json("#{SERVER}/.well-known/kiosk.json")
+wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
 STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── agents.json — the payments block (must be absent) ────────────────────────
-aj_rc, agents_json = get_json("#{SERVER}/agents.json")
+aj_rc, agents_json = WIRE.get_json("/agents.json")
 abort "agents.json failed (#{aj_rc})" unless aj_rc == 200
 agents_json_has_payments = agents_json.key?("payments")
 
 # ── agents.txt — the AP2 / Payments directives (must be absent) ──────────────
-at_res = get("#{SERVER}/agents.txt")
-abort "agents.txt failed (#{at_res.code})" unless at_res.code.to_i == 200
-agents_txt = at_res.body.to_s
+at_res = WIRE.get("/agents.txt")
+abort "agents.txt failed (#{at_res.status})" unless at_res.status == 200
+agents_txt = at_res.raw_body
 agents_txt_has_ap2      = agents_txt.include?("Protocols: ap2")
 agents_txt_has_payments = agents_txt.match?(/^Payments:/)
 

@@ -178,10 +178,11 @@ means adding it to that gem's `spec.files`.
 
 ## Contributing
 
-- One `bundle install` at the gem root covers that gem
-- One `bundle exec rspec` runs that gem's specs
-- Aggregated tasks across the monorepo land later (planned)
-- See per-gem README for gem-specific dev notes
+**[CONTRIBUTING.md](CONTRIBUTING.md)** is the whole of it: how to run one gem,
+one demo, the end-to-end harness and the `bin/check-*` guards; what the merge
+gate is; and what this repository expects of a changelog entry and a comment.
+**A security flaw goes through [SECURITY.md](SECURITY.md), never a public
+issue.**
 
 Every gem shares the protocol's MAJOR.MINOR — the version parity the spec
 promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the protocol,

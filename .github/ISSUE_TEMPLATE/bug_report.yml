@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in a gem, a demo or the e2e harness does not do what it says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Not for security flaws.** A vulnerability goes through
+        [SECURITY.md](https://github.com/kiosk-hq/kiosk/blob/main/SECURITY.md),
+        never a public issue.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: The sha you were on. No release is tagged yet, so a sha is the precise answer.
+      placeholder: 1a2b3c4
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Which gem, demo or harness
+      placeholder: kiosk-server
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: The shortest thing that shows it
+      description: A failing spec, a `curl` transcript, or the exact command and its output. A failing spec is the best kind of report there is.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead, and what says so
+      description: If the specification or a README promises the other behaviour, quote it — that makes this a conformance bug rather than a preference.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Ruby, PostgreSQL and OS
+      description: "`ruby -v`, `psql --version`, and the platform. Only if the bug looks environment-dependent."
+    validations:
+      required: false

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kiosk-hq/kiosk/blob/main/SECURITY.md
+    about: Do not open a public issue for a security flaw. Read the security policy first.
+  - name: The protocol specification
+    url: https://kiosk.tech/specification.html
+    about: The normative spec. Code and documents conform to it, so start here when the question is "what should this do?".

@@ -79,8 +79,9 @@
 #   CallerZoneIsNotInferred — the caller's clock is DECLARED and never guessed:
 #                            with no `Kiosk-Timezone` the answer is the same
 #                            whatever locale, geolocation hint or proxy IP the
-#                            request also carries, on an origin that
-#                            demonstrably reads the header when it is sent
+#                            request also carries, on an origin where the same
+#                            day declared on two clocks 25 hours apart is
+#                            answered by one and refused by the other
 #   OneRenderingPerRow     — a row is rendered at the delivery address's clock
 #                            and once: two callers on clocks 25 hours apart get
 #                            byte-identical windows, and neither answer names
@@ -865,19 +866,22 @@ end
 # headers would answer one of them differently from the other — and both are
 # asserted byte-identical to the bare answer.
 #
-# WHAT MAKES IT NON-VACUOUS is the control, and it runs FIRST: on this very
-# verb, an unreadable `Kiosk-Timezone` is a 400 naming the header and a
-# well-formed one is answered. So the origin under test demonstrably READS the
-# declared clock, and "the baits changed nothing" cannot be the answer of an
-# origin that reads no clock at all.
+# WHAT MAKES IT NON-VACUOUS is the control, and it runs FIRST. Three clauses,
+# on this very verb and this very day:
 #
-# WHAT THE CONTROL DOES NOT ASSERT, because it currently cannot: that a declared
-# zone MOVES this verb's answer. That needs two zones more than a calendar day
-# apart — anything closer has a time-of-day branch where their dates agree and
-# the probe proves nothing — and driving this verb across that span makes it
-# answer a 500 rather than the typed refusal §9.1 requires. The defect is
-# recorded, and until it is repaired the stronger control would be asserting
-# against a known fault instead of against the rule.
+#   * an unreadable `Kiosk-Timezone` is a 400 naming the header, so the origin
+#     demonstrably READS the value rather than falling back on it;
+#   * the WEST clock — the one this day belongs to — is answered 200 with rows;
+#   * the EAST clock, twenty-five hours ahead, is a typed 400 naming that same
+#     day, because the day has entirely ended on that calendar.
+#
+# The third is the strong one: ONE argument, TWO declared zones, TWO different
+# answers. An origin that read no clock at all — or that read one and then
+# judged the day on its own — could not produce it, so "the baits changed
+# nothing" cannot be a vacuous pass. It needs two zones more than a calendar day
+# apart, which is why the pair at the top of this section is the pair it is:
+# anything closer has a time-of-day branch where their dates agree and the
+# clause would prove nothing.
 #
 # WHAT THE PROBE DOES NOT REACH, said out loud rather than left to be assumed:
 # the TCP PEER, which a client cannot forge from the outside (`X-Forwarded-For`
@@ -921,11 +925,18 @@ class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
       client.query(a, name: "delivery_slots", date: day, delivery_address: ADDRESS, headers: headers)
     end
 
-    # THE CONTROL, FIRST — this origin reads the declared clock.
+    # THE CONTROL, FIRST — this origin reads the declared clock, and the clock
+    # it is told MOVES the answer. `day` is the WEST clock's today, so it is a
+    # day that clock is still inside and one the EAST clock left behind hours
+    # ago: 25 hours apart, that is true at every instant rather than most of
+    # them.
     declared = ask.call("Kiosk-Timezone" => CLOCK_WEST)
+    ended    = ask.call("Kiosk-Timezone" => CLOCK_EAST)
     garbled  = ask.call("Kiosk-Timezone" => UNREADABLE)
     detail   = garbled.body.is_a?(Hash) ? garbled.body["detail"].to_s : ""
+    gone     = ended.body.is_a?(Hash) ? ended.body["detail"].to_s : ""
     control  = declared.status == 200 && declared.body.is_a?(Array) && declared.body.any? &&
+               ended.status == 400 && error_code(ended) == "bad_request" && gone.include?(day) &&
                garbled.status == 400 && error_code(garbled) == "bad_request" &&
                detail.include?("Kiosk-Timezone")
 
@@ -944,9 +955,13 @@ class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
       detail:  ok ? "" :
                  "CONTROL date=#{day} declared #{CLOCK_WEST} → #{declared.status}/" \
                  "#{declared.body.is_a?(Array) ? declared.body.size : 0} rows, declared " \
+                 "#{CLOCK_EAST} → #{ended.status}/#{error_code(ended).inspect} " \
+                 "detail=#{gone[0, 80].inspect}, declared " \
                  "#{UNREADABLE} → #{garbled.status}/#{error_code(garbled).inspect} " \
-                 "detail=#{detail[0, 80].inspect} (want 200 with rows, and a 400 bad_request " \
-                 "naming the header); bare → #{bare.status}, Kiribati-baited → " \
+                 "detail=#{detail[0, 80].inspect} (want 200 with rows on the clock that day " \
+                 "belongs to, a 400 bad_request naming the day on the clock 25 hours ahead of " \
+                 "it, and a 400 bad_request naming the header for an unreadable zone); " \
+                 "bare → #{bare.status}, Kiribati-baited → " \
                  "#{baited_e.status} (same=#{unmoved_e}), Niue-baited → #{baited_w.status} " \
                  "(same=#{unmoved_w}) " \
                  "(want both baits byte-identical to bare — a declared clock, never an inferred one)",

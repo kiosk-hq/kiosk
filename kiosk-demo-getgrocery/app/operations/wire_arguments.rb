@@ -153,8 +153,7 @@ module WireArguments
       )]
     end
     # ONE CLOCK PER DELIVERY ADDRESS. `DeliverySlots.now(zone)` and not
-    # `Date.today`, which reads the SERVER process's zone: this and {#past_date}
-    # answer the same «is this day already gone?», and around midnight a
+    # `Date.today`, which reads the SERVER process's zone: around midnight a
     # server-zone answer differs from the address's — so `delivery_slots`
     # could refuse a day `create_order` still accepts.
     return [date, nil] unless date < DeliverySlots.now(zone).to_date
@@ -172,7 +171,8 @@ module WireArguments
   # scenarios come out right. A calendar day is an INTERVAL, not an instant:
   #
   #   * If the caller's day has ENTIRELY ENDED by now at the address, it is
-  #     genuinely past — a `400` naming the earliest day this shop delivers on.
+  #     genuinely past — a `400` naming the earliest day that IS askable, read
+  #     on the same calendar the argument was read on.
   #   * Otherwise the caller is asking about a day that is still current or
   #     still ahead FOR THEM, so the shop answers from the day its own calendar
   #     is on when that day BEGINS — floored at the soonest day it can actually
@@ -196,9 +196,15 @@ module WireArguments
     # 25 hours rather than 24.
     ends  = start.advance(days: 1)
 
-    if ends <= DeliverySlots.now(zone)
-      return [nil, past_date(date, zone)]
-    end
+    # ONE CLOCK DECIDES AND THE SAME CLOCK ANSWERS. The comparison is between
+    # INSTANTS — `ends` is the caller's next midnight, `now` is one instant
+    # whichever zone renders it — so the only calendar in this decision is
+    # `from`, and the refusal is written on `from` too. Asking a SECOND clock
+    # whether it agrees is what this branch must never do: a shop that has not
+    # yet rolled over would answer «not past» for a day this line has already
+    # ruled past, the pair would come back `[nil, nil]`, and a day nobody
+    # resolved would reach the slot renderer.
+    return [nil, past_day_refusal(date, from)] if ends <= DeliverySlots.now(zone)
 
     at_shop = start.in_time_zone(zone).to_date
     [at_shop < soonest ? soonest : at_shop, nil]
@@ -258,22 +264,30 @@ module WireArguments
   # Spec §9.1's first branch: a value the verb's domain does not contain is
   # `400 bad_request` naming what is acceptable, never an empty list — `200 []`
   # for a past date is byte-identical to the honest empty answer for TODAY once
-  # the last window has begun. A guard rather than an `enum` because the domain
-  # ("today or later, at the delivery address") rolls forward every midnight.
-  # TODAY is not refused: the boundary is deliberately the DAY and not the
-  # window. A day the CALLER is still in is not past either — {#caller_day} is
-  # what decides that, and this is the sentence it answers with.
+  # the last window has begun. The domain ("today or later") rolls forward every
+  # midnight, so it is a guard rather than an `enum`, and TODAY is not outside
+  # it: the boundary is deliberately the DAY and not the window.
   #
-  # @return [OperationResult, nil] a refusal, or nil when the date is bookable
-  def past_date(date, zone = DeliverySlots.default_zone)
-    today = DeliverySlots.now(zone).to_date
-    return nil if date >= today
+  # THIS WRITES THE SENTENCE AND DECIDES NOTHING. {#caller_day} is the one place
+  # that asks whether a named day is past, on the one calendar that argument is
+  # read in; a second predicate here would be a second clock able to disagree
+  # with it. So `zone` is whichever calendar the decision was taken on — the
+  # caller's when one is declared, the delivery address's when none is — and
+  # both the floor and the zone name in the sentence come off that same clock,
+  # which is what makes the refusal actionable: the day it names is a day the
+  # caller can pass straight back.
+  #
+  # @param zone [ActiveSupport::TimeZone] the calendar the day was judged on
+  # @return [OperationResult] the refusal
+  def past_day_refusal(date, zone)
+    floor = DeliverySlots.now(zone).to_date
 
     OperationResult.refused(
       code:    "bad_request",
-      message: "date #{date.iso8601} is in the past — getgrocery delivers to this address from " \
-               "#{today.iso8601} onwards (#{zone.name})",
-      hint:    "pass #{today.iso8601} or a later date; an EMPTY list means that day's windows " \
+      message: "date #{date.iso8601} is in the past — it has entirely ended on the calendar this " \
+               "argument is read in (#{zone.name}), and the earliest day you can ask for is " \
+               "#{floor.iso8601}",
+      hint:    "pass #{floor.iso8601} or a later date; an EMPTY list means that day's windows " \
                "have all begun, which is a different answer from this one. The day is read in " \
                "YOUR calendar when you declare Kiosk-Timezone, and in the delivery address's " \
                "when you do not.",

@@ -424,10 +424,11 @@ class Kiosk::StorefrontController < ActionController::API
     # ── GUARDS ELIDED HERE (this comment is the document's, not the file's) ──
     # What follows in the shipped file is the date parse — an unparseable value
     # is a named `bad_request`, not an exception — and then
-    # `WireArguments.past_date`, which refuses a date BEFORE today by name,
-    # because `200 []` for it would be indistinguishable from the one honest
-    # empty case below. The method then ends with the lines below, which ARE the
-    # shipped ones.
+    # `WireArguments.caller_day`, which reads the day on the CALLER's own
+    # calendar and refuses by name one that has entirely ended there, because
+    # `200 []` for it would be indistinguishable from the one honest empty case
+    # below. The method then ends with the lines below, which ARE the shipped
+    # ones.
 
     # PAST-SLOT FILTER: for TODAY at the address, drop any slot whose start has
     # already passed there; future dates keep all slots. An assistant should not

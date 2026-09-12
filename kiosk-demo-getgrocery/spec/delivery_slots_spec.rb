@@ -31,12 +31,16 @@ def assert(cond, msg)
   end
 end
 
-# Freeze "now" to a specific Dublin instant for the duration of the block. The
-# stub takes the zone argument and IGNORES it: this helper freezes an instant,
-# and what the surrounding assertions vary is the zone each call is HANDED.
+# Freeze "now" to a specific Dublin instant for the duration of the block.
+#
+# THE STUB RENDERS THE FROZEN INSTANT IN THE ZONE IT IS HANDED, exactly as the
+# real `DeliverySlots.now(zone)` (`zone.now`) does. One instant, many calendars:
+# a stub that answered every zone with the shop's rendering would make a
+# caller-clock day read as the shop's and prove the opposite of what it looked
+# like.
 def at_dublin(iso)
   fixed = DeliverySlots.default_zone.parse(iso)
-  DeliverySlots.define_singleton_method(:now) { |_zone = nil| fixed }
+  DeliverySlots.define_singleton_method(:now) { |zone = nil| zone ? fixed.in_time_zone(zone) : fixed }
   yield fixed
 ensure
   DeliverySlots.singleton_class.send(:remove_method, :now)

@@ -87,11 +87,15 @@ def value_of(pair)   = pair.is_a?(Array) ? pair[0] : nil
 
 # Freeze "now" to a fixed Dublin instant, the way spec/delivery_slots_spec.rb
 # does — {WireArguments} reads a DELIVERY ADDRESS's clock and never Date.today.
-# The stub takes the zone argument and IGNORES it: it freezes an instant, and
-# what the assertions vary is the zone each call is HANDED.
+#
+# THE STUB RENDERS THE FROZEN INSTANT IN THE ZONE IT IS HANDED, exactly as the
+# real `DeliverySlots.now(zone)` (`zone.now`) does. One instant, many calendars:
+# that is the whole subject of the two sections below, and a stub that answered
+# every zone with the shop's rendering would make a caller-clock floor read as
+# the shop's and prove the opposite of what it looked like.
 def at_dublin(iso)
   fixed = DeliverySlots.default_zone.parse(iso)
-  DeliverySlots.define_singleton_method(:now) { |_zone = nil| fixed }
+  DeliverySlots.define_singleton_method(:now) { |zone = nil| zone ? fixed.in_time_zone(zone) : fixed }
   yield fixed
 ensure
   DeliverySlots.singleton_class.send(:remove_method, :now)
@@ -534,26 +538,46 @@ assert(WireArguments.iso_date("2028-02-29") == Date.new(2028, 2, 29),
          "iso_date(#{raw.inspect}) -> nil: wrong shape, or the right shape and not a day")
 end
 
-# ── 7. past_date/1 and past_slot/3 — the domain, not an empty list ───────────
+# ── 7. past_day_refusal/2 and past_slot/3 — the domain, not an empty list ────
 #
 # Spec §9.1's first branch: a value the verb's domain does not contain is a 400
 # naming what IS acceptable, never `200 []` — an empty list already means "that
 # day's windows have all begun", which is a different answer.
-puts "\n── past_date / past_slot: outside the domain is a 400, never an empty list ──"
+#
+# `past_day_refusal` WRITES THE SENTENCE AND DECIDES NOTHING: whether a named
+# day is past is {WireArguments.caller_day}'s single decision, and section 7b
+# is where it is asserted. What is asserted here is that the floor and the zone
+# in the sentence come off the clock the method is HANDED, because that is what
+# makes the refusal actionable — the day it names has to be a day the reader can
+# pass straight back.
+puts "\n── past_day_refusal / past_slot: outside the domain is a 400, never an empty list ──"
 at_dublin("2026-08-07T11:00:00") do
   today = DeliverySlots.now.to_date
-  assert(guard("past_date(today)") { WireArguments.past_date(today) }.nil?,
-         "past_date(today) → nil: TODAY is bookable, the boundary is the DAY")
-  assert(guard("past_date(tomorrow)") { WireArguments.past_date(today + 1) }.nil?,
-         "past_date(tomorrow) → nil")
 
-  refusal = guard("past_date(yesterday)") { WireArguments.past_date(today - 1) }
-  assert_typed_400(refusal, "past_date(#{today - 1})")
+  refusal = guard("past_day_refusal(yesterday)") {
+    WireArguments.past_day_refusal(today - 1, DeliverySlots.default_zone)
+  }
+  assert_typed_400(refusal, "past_day_refusal(#{today - 1})")
   if refusal.is_a?(OperationResult)
     assert(refusal.message.include?(today.iso8601) && refusal.message.include?("Europe/Dublin"),
            "  … names the floor and the zone it judged on: #{refusal.message}")
     assert(refusal.hint.to_s.include?("EMPTY list"),
            "  … and says why this is not the empty-list answer: #{refusal.hint}")
+  end
+
+  # THE SAME INSTANT ON ANOTHER CALENDAR. Niue is 12 hours behind Dublin here,
+  # so it is still on the 6th while the shop is on the 7th — and a refusal
+  # written for a Niue caller must name Niue's floor and Niue's zone, never the
+  # shop's, or the day it tells the caller to pass is a day it just refused.
+  niue = Time.find_zone!("Pacific/Niue")
+  refusal = guard("past_day_refusal(niue)") { WireArguments.past_day_refusal(today - 3, niue) }
+  assert_typed_400(refusal, "past_day_refusal(#{today - 3}, Pacific/Niue)")
+  if refusal.is_a?(OperationResult)
+    assert(refusal.message.include?(DeliverySlots.now(niue).to_date.iso8601) &&
+           refusal.message.include?("Pacific/Niue") &&
+           !refusal.message.include?("Europe/Dublin"),
+           "  … the floor and the zone are the CALLER's (#{DeliverySlots.now(niue).to_date}), " \
+           "not the shop's: #{refusal.message}")
   end
 
   # 08:00 and 10:00 have begun at 11:00 Dublin; 12:00 has not.
@@ -628,6 +652,87 @@ at_dublin("2026-09-07T00:05:00") do
                                              soonest: soonest)).is_a?(OperationResult),
          "…and the shop's yesterday is refused")
 end
+
+# ── 7c. ONE CLOCK DECIDES AND THE SAME CLOCK ANSWERS ─────────────────────────
+#
+# The failure this section exists for: the decision was taken on the CALLER's
+# calendar and the sentence was fetched from a second predicate that re-asked
+# the SHOP's. For a caller east of the shop whose own day has ended while the
+# shop is still inside it the two disagreed, the pair came back `[nil, nil]`,
+# nothing was refused and nothing was resolved, and an unresolved day reached
+# the slot renderer as a `500`. §9.1 requires a typed 400 there.
+puts "\n── caller_day: the decision and the sentence are on ONE calendar ──"
+
+# 14:30 on the 7th in Dublin. A caller eleven hours EAST is half an hour into
+# the 8th, so their 7th has entirely ended — while the shop is still on the 7th.
+at_dublin("2026-09-07T14:30:00") do
+  soonest = Date.new(2026, 9, 7)
+  caller_today = DeliverySlots.now(AHEAD).to_date
+  assert(caller_today == Date.new(2026, 9, 8),
+         "the fixture really does straddle midnight: the shop is on #{soonest}, the caller on #{caller_today}")
+
+  pair    = guard("caller_day(caller's ended day, east of the shop)") {
+    WireArguments.caller_day(Date.new(2026, 9, 7), zone: DUBLIN, caller_zone: AHEAD, soonest: soonest)
+  }
+  refusal = refusal_of(pair)
+  assert(!(value_of(pair).nil? && refusal.nil?),
+         "a day that ended for the caller while the shop is still in it is DECIDED, not [nil, nil]")
+  assert_typed_400(refusal, "caller_day(2026-09-07, caller 11h east, shop still on 2026-09-07)")
+  if refusal.is_a?(OperationResult)
+    assert(refusal.message.include?("2026-09-07") && refusal.message.include?(AHEAD.name) &&
+           refusal.message.include?(caller_today.iso8601),
+           "  … names the value, the calendar it was judged on and the caller's own next day: " \
+           "#{refusal.message}")
+  end
+end
+
+# THE PROPERTY, over a table rather than over one fixture: `caller_day` always
+# ANSWERS. Every combination of a frozen instant, a day around it and a declared
+# caller zone must come back as a resolved day or as a typed 400 — never as the
+# undecided pair — and every refusal must name a day that is itself acceptable,
+# which is the invariant a second clock breaks.
+CLOCK_TABLE = ["2026-09-06T23:59:00", "2026-09-07T00:05:00", "2026-09-07T11:00:00",
+               "2026-09-07T14:30:00", "2026-09-07T23:30:00"].freeze
+CALLER_ZONES = [nil, BEHIND, AHEAD,
+                Time.find_zone!("Pacific/Kiritimati"),   # UTC+14, the far east edge
+                Time.find_zone!("Pacific/Niue")].freeze  # UTC-11, the far west edge
+
+combinations = 0
+undecided    = []
+mistyped     = []
+unactionable = []
+CLOCK_TABLE.each do |instant|
+  at_dublin(instant) do
+    soonest = DeliverySlots.now(DUBLIN).to_date
+    (-3..3).each do |offset|
+      CALLER_ZONES.each do |caller_zone|
+        day  = soonest + offset
+        pair = guard("caller_day(#{day}, #{caller_zone&.name || "no header"}) at #{instant}") {
+          WireArguments.caller_day(day, zone: DUBLIN, caller_zone: caller_zone, soonest: soonest)
+        }
+        combinations += 1
+        label   = "#{instant} / #{day} / #{caller_zone&.name || "no header"}"
+        refusal = refusal_of(pair)
+        undecided << label if value_of(pair).nil? && refusal.nil?
+        next unless refusal
+
+        mistyped << label unless refusal.is_a?(OperationResult) && refusal.code == "bad_request"
+
+        # THE FLOOR IT NAMES MUST WORK. A refusal is only actionable if the day
+        # it points the caller at is one this same method accepts.
+        floor = DeliverySlots.now(caller_zone || DUBLIN).to_date
+        again = WireArguments.caller_day(floor, zone: DUBLIN, caller_zone: caller_zone, soonest: soonest)
+        unactionable << "#{label} → floor #{floor}" unless refusal_of(again).nil? && value_of(again)
+      end
+    end
+  end
+end
+assert(undecided.empty?,
+       "caller_day decided all #{combinations} (instant, day, caller zone) combinations — " \
+       "never [nil, nil]: #{undecided.first(3).inspect}")
+assert(mistyped.empty?, "every refusal among them is a typed bad_request: #{mistyped.first(3).inspect}")
+assert(unactionable.empty?,
+       "every refusal names a day this same guard then ACCEPTS: #{unactionable.first(3).inspect}")
 
 # ── 8. served_district/1 and missing_address/0 — ADDRESS-UPFRONT ────────────
 puts "\n── served_district / missing_address: the one served-district rule ──"

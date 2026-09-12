@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1695 anchors.
+# 1696 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -442,6 +442,7 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a pa
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
 kiosk-demo-getgrocery/script/redteam_suite.rb	TOLERANCE_SECONDS = 60
 kiosk-demo-getgrocery/script/redteam_suite.rb	The list is COMPLETE and each must be BLOCKED
+kiosk-demo-getgrocery/script/redteam_suite.rb	a 400 bad_request naming the day on the clock 25 hours ahead of 
 kiosk-demo-getgrocery/script/redteam_suite.rb	caller's zone absent from both answers=
 kiosk-demo-getgrocery/script/redteam_suite.rb	redteam-inferzone-a
 kiosk-demo-getgrocery/script/redteam_suite.rb	redteam-onerender-a

@@ -209,6 +209,18 @@ unless unknown.empty?
 end
 
 # ── the markers ─────────────────────────────────────────────────────────────
+#
+# EVERYTHING BETWEEN THE TWO MARKERS BELOW IS SHARED WITH
+# `kiosk.tech/bin/check-schema-prose`, WHICH ASKS THIS QUESTION OF JSON. The two
+# guards read two languages and must decide «is this a bare membership label»
+# the same way; a second opinion nobody reconciles is worse than none. The
+# LOCKSTEP section further down holds the two blocks EQUAL — see it for what is
+# compared, what an absent sibling means, and why the rule lives here.
+#
+# So: an edit inside these markers is an edit to BOTH FILES. Comments are not
+# compared, so each side keeps its own commentary; every line of CODE is.
+
+# >>> SHARED VOCABULARY
 
 # The bare optionality LABEL. Written as one alternation so that a marker
 # deleted from it fails its own probe rather than passing silently.
@@ -282,6 +294,154 @@ def label_marker(text)
     return m[0]
   end
   nil
+end
+
+# <<< SHARED VOCABULARY
+
+# ── the lockstep: that block, in the other repository (K-1526) ──────────────
+#
+# TWO GUARDS IN TWO REPOSITORIES ASK ONE QUESTION, AND UNTIL THIS ARM THE
+# VOCABULARY THEY ASK IT WITH WAS KEPT IDENTICAL BY HAND. `kiosk.tech/bin/
+# check-schema-prose` reads the published JSON Schemas; this file reads Ruby
+# descriptors; both decide «is this a bare membership label» with the words,
+# the boundary, the copula test, the infinitive test, the slash test and the
+# `label_marker` body between the two markers above. The cost of that arrangement
+# is measured rather than feared: the two blocks DID diverge, by exactly the
+# slash predicate, and the divergence was invisible because the residue on the
+# losing side happened to be nil — it was found by a human reading two files side
+# by side (K-1524), which is not a mechanism.
+#
+# WHAT IS COMPARED, and it is a REGION rather than a list of names. A list of
+# constants is the hand-kept inventory this workspace keeps paying for (K-863,
+# K-1213, K-1227, K-1232): it goes stale the day a ninth constant is added and
+# says nothing about it. So both files delimit the shared block with the two
+# markers, and this arm compares everything between them that is not a
+# whole-line comment or a blank line, line for line. A constant added inside the
+# markers is compared with no edit here; a constant added OUTSIDE them on one
+# side only is caught by the closure arm below rather than by this one.
+#
+# THE CLOSURE ARM IS WHAT KEEPS THE REGION FROM BEING GAMED, and it is
+# structural for the same reason. Every CONSTANT the region's own code mentions
+# must also be ASSIGNED inside the region: the block has to be closed under its
+# own references. Move `LABEL_WORDS` out from between the markers and the two
+# files can still be «identical» while the thing that decides the answer is not
+# shared any more — this arm goes red instead. It also requires the region to
+# define `label_marker`, which is the predicate the two guards exist to agree on.
+#
+# WHERE IT CAN RUN, AND WHAT AN ABSENT SIBLING MEANS. kiosk.tech is a SEPARATE
+# repository. In a developer's single-repo clone, and in this repo's own
+# descriptor-prose CI job, it is not there — a check that went red for that
+# would be red on every laptop. So the comparison SAYS SO and skips, exactly as
+# `bin/check-spec-schemas` and `bin/check-live-skill-pin` do, and the region's
+# own closure is still asserted, so the arm is not vacuous sibling-less.
+#
+# THAT IS THE WRONG ANSWER WHERE THE SIBLING WAS SUPPOSED TO BE CHECKED OUT: a
+# checkout step that quietly produced nothing would restore precisely the silence
+# this arm exists to end. `KIOSK_REQUIRE_SITE_SIBLING=1` turns the skip into a
+# FAILURE, and ci.yml's `published-bytes` job — the one job that checks kiosk.tech
+# out beside this repo — sets it. Same variable and same argument as that job's
+# vendored-schema and skill-pin steps.
+#
+# WHY THE ARM IS HERE AND NOT THERE, one direction only. A comparison written on
+# both sides is two more things kept identical by hand, which is the disease. It
+# lives in this repository because this is the side with a job that materialises
+# the two-repo layout, so the rule runs somewhere other than a developer's
+# workspace; and because the vocabulary is authored here — the other file's own
+# header says its markers are «taken from reference/bin/check-descriptor-prose».
+SITE_GUARD   = File.expand_path("../kiosk.tech/bin/check-schema-prose", ROOT)
+SHARED_OPEN  = "# >>> SHARED VOCABULARY"
+SHARED_CLOSE = "# <<< SHARED VOCABULARY"
+REQUIRE_SITE = "KIOSK_REQUIRE_SITE_SIBLING"
+
+# The code lines between the markers, or nil and why not.
+def shared_region(text, label)
+  lines  = text.lines
+  opens  = lines.each_index.select { |i| lines[i].start_with?(SHARED_OPEN) }
+  closes = lines.each_index.select { |i| lines[i].start_with?(SHARED_CLOSE) }
+
+  unless opens.length == 1 && closes.length == 1
+    return [nil, "#{label} carries #{opens.length} `#{SHARED_OPEN}` marker(s) and " \
+                 "#{closes.length} `#{SHARED_CLOSE}` — exactly one of each delimits the block " \
+                 "the two guards share, and without them there is nothing to compare"]
+  end
+  unless closes.first > opens.first
+    return [nil, "#{label}'s `#{SHARED_CLOSE}` stands before its `#{SHARED_OPEN}`, so the " \
+                 "shared block is empty"]
+  end
+
+  code = lines[(opens.first + 1)...closes.first]
+        .reject { |l| l.strip.empty? || l.lstrip.start_with?("#") }
+        .map(&:rstrip)
+  return [nil, "#{label}'s shared block holds no code at all"] if code.empty?
+
+  [code, nil]
+end
+
+CONST_REF = /(?<![\w.])[A-Z][A-Z0-9_]+/
+
+# The block must be closed under its own references — see the header.
+def closure_faults(code, label)
+  faults = []
+  unless code.any? { |l| l.include?("def label_marker") }
+    faults << "#{label}'s shared block does not define `label_marker`, the predicate the two " \
+              "guards exist to agree on. Moving it out leaves this arm comparing a vocabulary " \
+              "nothing uses"
+  end
+
+  assigned = code.filter_map { |l| l[/\A([A-Z][A-Z0-9_]+)\s*=/, 1] }
+  loose    = code.join("\n").scan(CONST_REF).uniq - assigned
+  unless loose.empty?
+    faults << "#{label}'s shared block mentions #{loose.sort.join(', ')} without assigning " \
+              "#{loose.one? ? 'it' : 'them'} inside the markers, so the two files can be " \
+              "identical between the markers while the thing that decides the answer is not " \
+              "shared. Move the assignment back in"
+  end
+  faults
+end
+
+# Returns [status, faults]. Status is :compared, :absent or :unreadable, and
+# every caller prints it — a comparison that did not happen must say so.
+def lockstep_faults(here_text, sibling_path)
+  here, why = shared_region(here_text, "this guard")
+  faults = why ? [why] : closure_faults(here, "this guard")
+
+  unless File.file?(sibling_path)
+    if ENV[REQUIRE_SITE] == "1"
+      faults << "#{sibling_path} is not here, and #{REQUIRE_SITE}=1 says that is a failure " \
+                "rather than a skip: this run was supposed to check kiosk.tech out beside this " \
+                "repo and did not"
+    end
+    return [:absent, faults]
+  end
+
+  begin
+    there_text = File.read(sibling_path, encoding: "UTF-8")
+  rescue StandardError => e
+    return [:unreadable, faults << "#{sibling_path} could not be read: #{e.message}"]
+  end
+
+  label = "kiosk.tech/bin/#{File.basename(sibling_path)}"
+  there, why = shared_region(there_text, label)
+  return [:compared, faults << why] if why
+  return [:compared, faults] if here.nil?
+
+  # Redundant while the two are identical, which is why it is asked only when
+  # they are not: a block that has diverged has to be reported for both sides.
+  faults.concat(closure_faults(there, label)) unless there == here
+  return [:compared, faults] if here == there
+
+  first = here.zip(there).each_with_index.find { |(a, b), _| a != b }
+  detail =
+    if first
+      (a, b), i = first
+      "line #{i + 1} of the block is #{a.inspect} here and #{b.inspect} there"
+    else
+      "the blocks are #{here.length} and #{there.length} code line(s) long"
+    end
+  [:compared, faults << "the shared vocabulary has DIVERGED from #{label}: #{detail}. The two " \
+                        "guards ask one question of two languages, and a second opinion nobody " \
+                        "reconciles is worse than none — put the same bytes in both, in the same " \
+                        "wave"]
 end
 
 # Everything else that spells optionality. Counted, never banned — see the
@@ -803,6 +963,36 @@ def run_check(root, list: false)
   puts "  A ZERO HERE IS NOT A PASS AND A COUNT HERE IS NOT A FAILURE — the detector behind " \
        "it is re-proved on every run against fixtures that are not in this tree."
 
+  status, lockstep = lockstep_faults(File.read(__FILE__, encoding: "UTF-8"), SITE_GUARD)
+  puts
+  case status
+  when :compared
+    if lockstep.empty?
+      here, = shared_region(File.read(__FILE__, encoding: "UTF-8"), "this guard")
+      puts "LOCKSTEP. the #{here.length} code line(s) between the shared markers are identical " \
+           "in kiosk.tech/bin/check-schema-prose, which asks this question of JSON — OK"
+    else
+      puts "LOCKSTEP. FAIL — the shared vocabulary and the JSON guard's copy of it are no " \
+           "longer one thing:"
+    end
+  when :absent
+    puts "LOCKSTEP. NOT COMPARED against kiosk.tech/bin/check-schema-prose — #{SITE_GUARD} is " \
+         "not here. kiosk.tech is a separate repo; run this from the umbrella checkout to " \
+         "compare. The shared block's own closure was still checked."
+    if ENV[REQUIRE_SITE] == "1"
+      puts "          #{REQUIRE_SITE}=1 is set, so that is a FAILURE and not a skip:"
+    else
+      puts "          Set #{REQUIRE_SITE}=1 to make this state a failure, as ci.yml's " \
+           "published-bytes job does."
+    end
+  else
+    puts "LOCKSTEP. FAIL — the sibling guard is there and could not be read:"
+  end
+  lockstep.each do |f|
+    errors << "LOCKSTEP #{f}"
+    puts "  FAIL #{f}."
+  end
+
   errors
 end
 
@@ -969,6 +1159,142 @@ def self_test(root)
                 "arm (d) has no subject to compare the parameter corpus against"
   end
 
+  failures.concat(lockstep_arms)
+  failures
+end
+
+# ── the lockstep's own arms ─────────────────────────────────────────────────
+#
+# Each one plants a FAITHFUL mutation of the real sibling — its own bytes, on
+# disk, in a throwaway directory — rather than a fixture written to be caught.
+# A fixture cannot rot without saying so: every plant asserts its pattern still
+# matches the real file before it substitutes anything.
+LOCKSTEP_PLANTS = [
+  { what: "a word dropped from the shared alternation on the other side",
+    find: "optionally optional required mandatory compulsory",
+    with: "optionally optional required compulsory",
+    expect: /DIVERGED/ },
+  { what: "the slash predicate reverted on the other side — the exact divergence K-1524 found " \
+          "by hand",
+    find: "    next if before =~ SLASH_BEFORE_RE || after =~ SLASH_AFTER_RE\n",
+    with: "",
+    expect: /DIVERGED/ },
+  { what: "the other side's opening marker deleted, so there is no block to compare",
+    find: "#{SHARED_OPEN}\n",
+    with: "",
+    expect: /marker\(s\)/ },
+  { what: "a shared constant moved OUT of the other side's markers",
+    find: "LABEL_WORDS = ",
+    with: "MOVED_OUT_LABEL_WORDS = ",
+    expect: /without assigning/ },
+].freeze
+
+def lockstep_arms
+  require "tmpdir"
+  failures = []
+  here = File.read(__FILE__, encoding: "UTF-8")
+
+  unless File.file?(SITE_GUARD)
+    # Sibling-less — which is where this guard's own CI runs it. The two arms
+    # that need no sibling still run, and the rest SAY they did not.
+    status, faults = lockstep_faults(here, SITE_GUARD)
+    failures << "LOCKSTEP: a missing sibling reported #{status.inspect}" unless status == :absent
+    failures << "LOCKSTEP: this file's own shared block is not closed: #{faults.join('; ')}" \
+      unless faults.empty?
+    failures.concat(require_site_arms(here))
+    puts "  (lockstep: #{SITE_GUARD} is not here, so the comparison arms did not run — the " \
+         "closure and #{REQUIRE_SITE} arms did)"
+    return failures
+  end
+
+  status, faults = lockstep_faults(here, SITE_GUARD)
+  failures << "LOCKSTEP: the real pair reported #{status.inspect}" unless status == :compared
+  unless faults.empty?
+    failures << "LOCKSTEP: the real pair is not in lockstep — #{faults.join('; ')}"
+  end
+
+  sibling = File.read(SITE_GUARD, encoding: "UTF-8")
+
+  Dir.mktmpdir("descriptor-prose-lockstep") do |dir|
+    path = File.join(dir, "check-schema-prose")
+    LOCKSTEP_PLANTS.each do |plant|
+      unless sibling.include?(plant[:find])
+        failures << "LOCKSTEP #{plant[:what]}: the plant no longer matches anything in " \
+                    "#{SITE_GUARD} — the fixture has rotted, so this arm proves nothing"
+        next
+      end
+      File.write(path, sibling.sub(plant[:find], plant[:with]))
+      _status, planted = lockstep_faults(here, path)
+      if planted.empty?
+        failures << "LOCKSTEP #{plant[:what]}: PLANTED AND STILL GREEN"
+      elsif planted.none? { |f| f =~ plant[:expect] }
+        failures << "LOCKSTEP #{plant[:what]}: went red but not for its own reason (wanted " \
+                    "#{plant[:expect].inspect}); got #{planted.first}"
+      end
+    end
+
+    # …and green again on the unmutated bytes, so the arms above are about the
+    # plants and not about the copy.
+    File.write(path, sibling)
+    _status, restored = lockstep_faults(here, path)
+    unless restored.empty?
+      failures << "LOCKSTEP: an unmutated copy of the sibling is not in lockstep — " \
+                  "#{restored.join('; ')}"
+    end
+
+    # The closure arm, driven off THIS file rather than the sibling: identical
+    # on both sides and still wrong, which is the hole a byte comparison alone
+    # leaves. Both texts get the same mutation, so only closure can catch it.
+    moved_here = here.sub("LABEL_WORDS = ", "MOVED_OUT_LABEL_WORDS = ")
+    File.write(path, sibling.sub("LABEL_WORDS = ", "MOVED_OUT_LABEL_WORDS = "))
+    _status, moved = lockstep_faults(moved_here, path)
+    if moved.none? { |f| f =~ /without assigning/ }
+      failures << "LOCKSTEP: a constant moved out of the markers on BOTH sides raises no " \
+                  "closure fault, so two identical blocks can share nothing"
+    end
+  end
+
+  failures.concat(require_site_arms(here))
+  if failures.empty?
+    puts "  (lockstep: #{LOCKSTEP_PLANTS.length} faithful mutation(s) of the real sibling each " \
+         "red for its own reason, the unmutated copy green, a constant moved out of the markers " \
+         "on BOTH sides still red, and #{REQUIRE_SITE} unset/1 with no sibling skipping and " \
+         "failing respectively)"
+  end
+  failures
+end
+
+# An absent sibling is a skip here and a FAILURE where the checkout was supposed
+# to happen. Both halves are asserted, because the whole value of the variable is
+# that the two answers differ.
+def require_site_arms(here)
+  failures = []
+  absent = File.join(Dir.tmpdir, "no-such-check-schema-prose-#{Process.pid}")
+  was = ENV[REQUIRE_SITE]
+
+  begin
+    ENV.delete(REQUIRE_SITE)
+    status, faults = lockstep_faults(here, absent)
+    unless status == :absent && faults.empty?
+      failures << "LOCKSTEP: with no sibling and #{REQUIRE_SITE} unset this arm is not a silent " \
+                  "skip (#{status.inspect}, #{faults.length} fault(s)) — it would be red on " \
+                  "every single-repo clone"
+    end
+
+    ENV[REQUIRE_SITE] = "1"
+    status, faults = lockstep_faults(here, absent)
+    unless status == :absent && faults.any? { |f| f.include?(REQUIRE_SITE) }
+      failures << "LOCKSTEP: #{REQUIRE_SITE}=1 with no sibling did NOT fail, so a CI checkout " \
+                  "that produced nothing would read as a pass"
+    end
+  ensure
+    if was.nil?
+      ENV.delete(REQUIRE_SITE)
+    else
+      ENV[REQUIRE_SITE] = was
+    end
+  end
+
   failures
 end
 
@@ -980,8 +1306,8 @@ if ARGV.include?("--self-test")
     puts "check-descriptor-prose --self-test: OK — #{PLANTS.length} planted break(s) each red " \
          "for its own site, #{FOIL_PLANTS.length} foil(s) each still green, " \
          "#{LABEL_PROBES.length + COUNTED_PROBES.length} detector probe(s) and " \
-         "#{LABEL_FOILS.length + COUNTED_FOILS.length} detector foil(s), and the structural " \
-         "arms proved able to go red."
+         "#{LABEL_FOILS.length + COUNTED_FOILS.length} detector foil(s), the structural " \
+         "arms proved able to go red, and the lockstep arms printed above."
     exit 0
   end
   warn "\ncheck-descriptor-prose --self-test FAILED:\n"

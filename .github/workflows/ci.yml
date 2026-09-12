@@ -1884,7 +1884,7 @@ jobs:
   # In the other order the pins name a file the world cannot fetch — which is
   # the assistant-visible break, not an artefact of the check.
   #
-  # THE THREE STEPS, and each one is dead without the sibling:
+  # THE FOUR STEPS, and each one is dead without the sibling:
   #   * skill_pin_spec.rb — the nine byte-level examples: every demo's
   #     `skill_sha256` against the SHA-256 of the file its `skill_url` names, the
   #     engine default naming that same published artefact, and the K-871
@@ -1910,6 +1910,13 @@ jobs:
   #     produced nothing is RED rather than a skip. Its --self-test runs first,
   #     because a comparison whose planted breaks no longer redden is a green
   #     line about nothing.
+  #   * bin/check-descriptor-prose — its LOCKSTEP arm only. That guard and
+  #     kiosk.tech/bin/check-schema-prose ask one question of two languages with
+  #     a vocabulary that was kept identical BY HAND until K-1526, and the two
+  #     had already diverged once by a whole predicate with nothing to say so.
+  #     The guard's own job above runs it sibling-less, where it prints NOT
+  #     COMPARED and exits 0; here the sibling is present, so the comparison is
+  #     the point and KIOSK_REQUIRE_SITE_SIBLING=1 makes an empty checkout red.
   published-bytes:
     name: pins and vendored schemas vs the published bytes (kiosk.tech sibling)
     runs-on: ubuntu-latest
@@ -1970,6 +1977,12 @@ jobs:
         env:
           KIOSK_REQUIRE_SITE_SIBLING: "1"
         run: ./bin/check-spec-schemas
+
+      - name: The two prose guards' shared vocabulary is still one thing
+        working-directory: reference
+        env:
+          KIOSK_REQUIRE_SITE_SIBLING: "1"
+        run: ./bin/check-descriptor-prose
 
   # A Keep-a-Changelog file answers each kind ONCE per release — everything
   # added since the last release under one `### Added`, everything fixed under

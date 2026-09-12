@@ -1,0 +1,775 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-descriptor-prose — a verb descriptor's PROSE may not restate the SHAPE
+# its own schema declares (ADR-0023).
+#
+# WHY THIS EXISTS, and the reason is the history rather than the rule. ADR-0023
+# re-scoped `description` to SEMANTICS ONLY: it says what a verb does, how, and
+# what its answer MEANS, and it "must never carry a field list, a type, a
+# required/optional marker, or a param name that the schema also carries."
+# Every name and shape lives in `input_schema`/`output_schema`, which is the one
+# declaration a machine can check against the handler.
+#
+# The clause has been applied to this tree by hand THREE times and each pass
+# left live instances behind, every time because the pass chose its own pattern
+# and the pattern could not see a spelling:
+#
+#   * the first swept four demos with a hand search;
+#   * the second used `git grep -F 'description: "Optional'` — a literal
+#     anchored at the START of a description string — reported SEVEN sites,
+#     noticed one more by eye and called it "an eighth". The corpus was NINE:
+#     the same sentence sat on two `delivery_date` properties in one file, MID
+#     STRING, where a start-anchored literal cannot reach it, and only one of
+#     the two was edited;
+#   * the third re-derived with `git grep -nP 'description:.*\bOptional\b'`,
+#     drained the ninth, and concluded that "the same command over the whole
+#     repository returns nothing". True, and the wrong question: that pattern is
+#     CASE-SENSITIVE. Adding `-i` to it, at the head that sentence was written
+#     on, returns FOUR more live sites in THREE files — two demo properties
+#     spelled `OPTIONAL`, and two in the engine's own OpenAPI description
+#     surface, which no `kiosk-demo-*` pathspec would have reached anyway.
+#
+# Three passes, three patterns, three misses: an anchor, a case, and a pathspec.
+# That is what a class held by nobody looks like, and it is why this reads the
+# descriptors STRUCTURALLY — with Ruby's own parser, off the tracked tree —
+# rather than grepping for a spelling somebody remembered.
+#
+# ── WHAT IT READS ───────────────────────────────────────────────────────────
+#
+# Every tracked `.rb`/`.rake` file in this repository is parsed with Prism (a
+# stdlib parse of the text — nothing boots, no bundle, no database), and two
+# kinds of description come out of the syntax tree:
+#
+#   VERB      a receiverless `description "…"` call — the descriptor DSL's verb
+#             description, whatever file or macro context it sits in.
+#   PROPERTY  a `description:` key inside a schema object, i.e. a hash that also
+#             carries `properties:`. Its NAME and its sibling `required:` array
+#             come out of the same hash, so the membership question is answered
+#             from the declaration itself.
+#
+# Nothing about the demos, the engine or the e2e fixtures is typed here. The set
+# is `git ls-files`, so an eighth demo, a new controller or a schema written
+# somewhere nobody expected is in scope the day it lands.
+#
+# ── ONE BAN AND ONE CENSUS, AND WHICH IS WHICH WAS MEASURED ─────────────────
+#
+# The obvious rule — "no optionality word in a description" — reddens correct
+# prose, and by a wide margin. MEASURED over the derived corpus with a generous
+# scan for every optionality-ish spelling, the large majority of what comes back
+# is sentences earlier passes examined and deliberately KEPT. NO COUNT IS TYPED
+# HERE and none should be: the run prints the corpus size and the census beside
+# each other, and an integer written into a comment is a measurement that stops
+# being one the day after it is typed. What does NOT decay is the SHAPES, which
+# is what the decision below actually rests on:
+#
+#   * "New in-zone Dublin delivery address; unchanged if omitted." — what
+#     omission MEANS is semantics, and is the half those passes protected;
+#   * "Omitting it books tomorrow at the address." — the same;
+#   * "Leave them out and the list is this hotel's full CATALOGUE" — the same;
+#   * "Appointment time, RFC 3339, and the OFFSET IS REQUIRED" — a constraint on
+#     the VALUE, not a statement about the property's membership;
+#   * "licence-free and licence-required alike" — a compound adjective;
+#   * "(requires the booking to belong to the principal)" — a precondition;
+#   * "a window and an address are required to place one" — a business rule that
+#     merely coincides with the required list, declared as a borderline and kept
+#     on purpose.
+#
+# So the BAN is drawn where the corpus says it is safe, and everything else is
+# COUNTED:
+#
+#   LABEL   (BAN, exit code)  a PROPERTY description may not carry a bare
+#           optionality LABEL — `optional`, `optionally`, `required`,
+#           `mandatory`, `compulsory` — about itself. Bare means: not part of a
+#           hyphenated compound (`licence-required`), and not the complement of
+#           a copula (`the OFFSET IS REQUIRED`), which is the only form in this
+#           corpus that says such a word about something OTHER than the property.
+#           The verdict needs no judgement, because the sibling `required:`
+#           array has already decided the fact the label restates: whichever way
+#           the two agree, one of them is redundant and the schema is the one a
+#           machine can check.
+#
+#   C1      (CENSUS, printed, never red)  every OTHER optionality construction
+#           in any description, verb or property — the copula forms, `omit`,
+#           `if omitted`/`if provided`, `defaults to`, `leave it out`, and every
+#           marker in a VERB description. Nearly everything the generous scan
+#           finds lands here and nearly all of it is correct prose, so a gate
+#           over them would be a gate somebody switches off. Each is printed
+#           with the property's membership beside it so a human can adjudicate
+#           the new ones; the run is where the number lives.
+#
+# WHY THE VERB DESCRIPTIONS ARE CENSUS AND NOT BAN, and it is a measurement
+# rather than caution: almost every verb-level hit is correct prose — a
+# precondition, a compound adjective, a business rule — and the one genuine
+# candidate ("Naming a service is OPTIONAL and the two forms differ in what the
+# appointment records") is a copula form carrying real semantics in the same
+# breath. A verb description also has no single `required:` array to be
+# redundant against, so the structural comparison that makes LABEL unarguable
+# does not exist there. Re-run the census and read the split rather than
+# trusting this paragraph.
+#
+# ── HOW IT KNOWS IT STILL WORKS ─────────────────────────────────────────────
+#
+# LABEL is a ban, so its count is permanently zero when it works, and "no
+# violations" and "this pattern stopped matching" print the same clean zero. Two
+# separate mechanisms answer that, and neither is a census of the tree:
+#
+#   DETECTOR  the ban and the census each declare PROBES (one per marker, plus
+#             one per historical spelling: leading, mid-string, uppercase,
+#             parenthetical) and FOILS (the seven live sentences above, written
+#             out here so that a widened pattern reddens THIS file rather than a
+#             shipped descriptor). Every run re-proves them against fixtures
+#             that are not in the tree at all.
+#   STRUCTURE three arms, every one of them DERIVED from the filesystem rather
+#             than from a list of what this file happens to know — a vacuity arm
+#             that names what it knows is a blind spot waiting for the corpus to
+#             grow, which is the failure this workspace has on record four times.
+#             (a) EVERY HANDLER CONTROLLER any origin declares — resolved from
+#             that origin's own `c.handlers`, class name to path — must yield at
+#             least one verb AND one property description, so a parser that
+#             stops reading ONE file goes red naming it, and a ninth controller
+#             or an eighth origin is covered the day it lands.
+#             (b) THE CORPUS MUST REACH PAST `kiosk-demo-*`. The third hand pass
+#             declared the class drained repository-wide from a demos-only
+#             pathspec while two survivors sat in the engine; a scope that has
+#             quietly narrowed back to the demos is a fault, by name.
+#             (c) A SECOND READING: file by file, wherever the syntax tree found
+#             a verb description, a plain text scan of the same file must find
+#             the same number. Scoped to those files deliberately — a
+#             `description "…"` inside a HEREDOC is source a spec writes to a
+#             temp file, and counting it would make the arm permanently wrong
+#             for a reason that is not a defect.
+#             Each of the three is itself proved able to go red, off a corpus
+#             emptied or quietened on purpose, in `--self-test`.
+#
+# ── WHAT IT DELIBERATELY DOES NOT DO ────────────────────────────────────────
+#
+#   * IT DOES NOT READ THE PUBLISHED DESCRIPTOR. It reads the DECLARATION. A
+#     description assembled at runtime from something this parser cannot see is
+#     invisible to it, which is what the structural arms above are for.
+#   * IT JUDGES NO OTHER ADR-0023 CLAUSE. Types, ranges, defaults and param
+#     names restated in prose are the same decision and are not this file's
+#     subject; `bin/check-spec-schemas` and the demos' own conformance specs
+#     hold neighbouring properties.
+#   * IT DOES NOT READ THE JSON SCHEMAS, and the reason is a refusal rather
+#     than an oversight. The published `spec/schemas/schema-descriptor.schema.json`
+#     carries the same class in its own `description`s, and the copy of it that
+#     lives in this repository is VENDORED — held byte-identical to the
+#     published one by `bin/check-spec-schemas`, so it cannot be repaired from
+#     this side at all. A rule reaching it would be a permanently red tree with
+#     no legal move here, which is the wrong shape for a gate. Those instances
+#     are filed as a ledger row against the published schema instead.
+#   * IT NEVER REWRITES. The repair is a human sentence, because what a
+#     description is FOR cannot be derived.
+#
+# Usage:  bin/check-descriptor-prose [--list] [--self-test]
+# Exit:   0 clean, 1 on any LABEL violation, on a detector that cannot prove
+#         itself, or on a structural arm that says the corpus went quiet.
+
+require "prism"
+require "json"
+
+ROOT = File.expand_path("..", __dir__)
+
+# ── an argument this script does not implement is REFUSED, not ignored ──────
+#
+# A flag that is accepted, ignored and answered with the ordinary success line
+# lets a session type it, read exit 0 and honestly record a run that never
+# happened (K-1462, one repository over).
+KNOWN_FLAGS = ["--list", "--self-test"].freeze
+unknown = ARGV.reject { |a| KNOWN_FLAGS.include?(a) }
+unless unknown.empty?
+  warn "check-descriptor-prose: unknown argument(s) #{unknown.join(' ')}; " \
+       "known: #{KNOWN_FLAGS.join(' ')}"
+  exit 2
+end
+
+# ── the markers ─────────────────────────────────────────────────────────────
+
+# The bare optionality LABEL. Written as one alternation so that a marker
+# deleted from it fails its own probe rather than passing silently.
+#
+# `EDGE` is a word boundary that a HYPHEN, an UNDERSCORE or a digit does not
+# satisfy, and each of the three was measured rather than guessed. Ruby's `\b`
+# counts all of them as boundaries, which is the wrong answer three times over
+# here: `licence-required` is a compound adjective, and `setup_required` and
+# `pow_required` are WIRE VALUES a description quotes — the first writing of
+# this rule used `\b` and reddened four correct descriptions whose whole text
+# was the literal `setup_required.`, which is a value and not a sentence.
+#
+# The COPULA test is a separate step rather than a lookbehind, and not by
+# preference: Ruby's look-behind must be fixed-width, so `(?<!\bis )` and
+# `(?<!\bwere )` cannot share one group. Written as two halves — find the
+# marker, then read what stands immediately before it — the two questions stay
+# legible and `label_marker` is what every caller asks.
+LABEL_WORDS = %w[optionally optional required mandatory compulsory].freeze
+EDGE_BEFORE = /(?<![-_\p{L}\p{N}])/
+EDGE_AFTER  = /(?![-_\p{L}\p{N}])/
+COPULA_RE   = /\b(?:is|are|am|be|been|being|was|were|isn't|aren't|wasn't|weren't|not)[ ]+\z/i
+MARKER_RE   = /#{EDGE_BEFORE}(?:#{LABEL_WORDS.join('|')})#{EDGE_AFTER}/i
+
+# The first bare LABEL in this text, or nil. "the OFFSET IS REQUIRED" says a
+# word about the VALUE's spelling rather than about the property's membership,
+# and nothing lexical separates the two subjects, so the predicate form is
+# COUNTED instead of banned.
+def label_marker(text)
+  offset = 0
+  while (m = MARKER_RE.match(text, offset))
+    offset = m.end(0)
+    return m[0] unless text[0...m.begin(0)] =~ COPULA_RE
+  end
+  nil
+end
+
+# Everything else that spells optionality. Counted, never banned — see the
+# header's measurement.
+COUNTED_RE = /
+  #{EDGE_BEFORE}(?:#{LABEL_WORDS.join('|')})#{EDGE_AFTER}
+  | \bomit(?:s|ted|ting|ission)?\b
+  | \brequires?\b
+  | \b(?:if|when|unless)[ ](?:provided|given|present|supplied|absent|missing|omitted|set|unset)\b
+  | \bdefaults?[ ](?:to|is)\b
+  | \bleave[ ](?:it[ ]|them[ ]|this[ ])?(?:out|blank|off|empty|unset)\b
+  | \b(?:may|can)[ ]be[ ](?:omitted|left[ ]out|skipped|absent)\b
+/xi.freeze
+
+# ── the corpus, read structurally ───────────────────────────────────────────
+
+Desc = Struct.new(:kind, :file, :line, :prop, :required, :text, keyword_init: true)
+
+def tracked_ruby(root)
+  out = IO.popen(["git", "-C", root, "ls-files", "--", "*.rb", "*.rake"], &:read)
+  out.split("\n")
+end
+
+def literal_string(node)
+  case node
+  when Prism::StringNode
+    node.unescaped
+  when Prism::InterpolatedStringNode
+    # An interpolation is a hole this parser cannot fill; the literal parts
+    # around it are still prose and are still read.
+    node.parts.map { |p| p.is_a?(Prism::StringNode) ? p.unescaped : " " }.join
+  end
+end
+
+def assoc_pairs(node)
+  return {} unless node.is_a?(Prism::HashNode) || node.is_a?(Prism::KeywordHashNode)
+
+  node.elements.each_with_object({}) do |element, acc|
+    next unless element.is_a?(Prism::AssocNode) && element.key.is_a?(Prism::SymbolNode)
+
+    acc[element.key.unescaped] = element.value
+  end
+end
+
+def string_array(node)
+  return [] unless node.is_a?(Prism::ArrayNode)
+
+  node.elements.filter_map do |element|
+    case element
+    when Prism::StringNode, Prism::SymbolNode then element.unescaped
+    end
+  end
+end
+
+# Every description one schema object declares, with the membership its own
+# `required:` array gives each property.
+def descriptions_in_schema(rel, hash_node, out)
+  pairs = assoc_pairs(hash_node)
+  return unless pairs.key?("properties")
+
+  required = string_array(pairs["required"])
+  assoc_pairs(pairs["properties"]).each do |name, schema|
+    node = assoc_pairs(schema)["description"]
+    text = node && literal_string(node)
+    next unless text
+
+    out << Desc.new(kind: :property, file: rel, line: node.location.start_line,
+                    prop: name, required: required.include?(name), text: text)
+  end
+end
+
+# One file's descriptions. Returns [descriptions, parse_error_or_nil].
+def descriptions_in(rel, source)
+  result = Prism.parse(source)
+  return [[], "#{rel}: Prism cannot parse it"] unless result.success?
+
+  out   = []
+  queue = [result.value]
+  until queue.empty?
+    node = queue.shift
+    next unless node
+
+    if node.is_a?(Prism::CallNode) && node.name == :description && node.receiver.nil? && node.arguments
+      args = node.arguments.arguments
+      text = args.size == 1 ? literal_string(args[0]) : nil
+      if text
+        out << Desc.new(kind: :verb, file: rel, line: node.location.start_line,
+                        prop: nil, required: nil, text: text)
+      end
+    end
+
+    case node
+    when Prism::HashNode, Prism::KeywordHashNode
+      descriptions_in_schema(rel, node, out)
+    when Prism::CallNode
+      if %i[input_schema output_schema].include?(node.name) && node.arguments
+        last = node.arguments.arguments.last
+        descriptions_in_schema(rel, last, out) if last.is_a?(Prism::KeywordHashNode)
+      end
+    end
+
+    queue.concat(node.compact_child_nodes)
+  end
+  [out.uniq, nil]
+end
+
+Corpus = Struct.new(:descriptions, :files_read, :parse_errors, keyword_init: true)
+
+def build_corpus(root)
+  descriptions = []
+  parse_errors = []
+  files_read   = []
+
+  tracked_ruby(root).each do |rel|
+    path = File.join(root, rel)
+    next unless File.file?(path)
+
+    source = begin
+      File.read(path, encoding: "UTF-8")
+    rescue StandardError
+      next
+    end
+    next unless source.include?("description")
+
+    files_read << rel
+
+    found, error = descriptions_in(rel, source)
+    parse_errors << error if error
+    descriptions.concat(found)
+  end
+
+  Corpus.new(descriptions: descriptions.uniq, files_read: files_read,
+             parse_errors: parse_errors)
+end
+
+# ── the rule and the census ─────────────────────────────────────────────────
+
+def label_hits(descriptions)
+  descriptions.select { |d| d.kind == :property && label_marker(d.text) }
+end
+
+def counted_hits(descriptions)
+  labels = label_hits(descriptions)
+  descriptions.select { |d| d.text =~ COUNTED_RE }.reject { |d| labels.include?(d) }
+end
+
+def label_remedy(desc)
+  membership = desc.required ? "IS in" : "is NOT in"
+  "`#{desc.prop}` #{membership} its schema's own `required:` array, which already " \
+    "decides this. Delete the label and keep every semantic clause — what omitting it " \
+    "MEANS, what the value must look like — which is what prose is for (ADR-0023)."
+end
+
+# ── the detector arms: probes and foils, none of them in the tree ───────────
+#
+# One probe PER MARKER and one per historical spelling, because a single probe
+# against a five-way alternation proves one branch and reports a clean pass for
+# the other four — which is how the three hand passes each missed a spelling.
+
+LABEL_PROBES = [
+  ["marker `optional`",   "Optional. The delivery date."],
+  ["marker `optionally`", "Optionally names a second guest."],
+  ["marker `required`",   "Required: the sku from the catalog."],
+  ["marker `mandatory`",  "Mandatory for a licence-bearing vehicle."],
+  ["marker `compulsory`", "Compulsory when the salon charges a deposit."],
+  ["spelling: leading",   "Optional deadline, RFC 3339."],
+  ["spelling: MID-STRING",
+   "The date of the chosen row. Optional; omitting it books tomorrow."],
+  ["spelling: UPPERCASE", "OPTIONAL example inputs."],
+  ["spelling: parenthetical", "The room to hold (optional)."],
+  ["spelling: late in a long sentence",
+   "The `date` of the chosen delivery_slots row, echoing the row you saw — optional."],
+].freeze
+
+# The live sentences the ban had to be argued against. A widening of the label
+# reddens this file before it reddens a shipped descriptor.
+LABEL_FOILS = [
+  ["copula: a constraint on the VALUE",
+   "Appointment time, RFC 3339 timestamp, and the OFFSET IS REQUIRED (\"…Z\", \"…+02:00\")."],
+  ["copula: a business rule",
+   "This origin will not take an order it cannot deliver, so a window and an address " \
+   "are required to place one."],
+  ["hyphenated compound",
+   "Reserving is open to EVERY vehicle, licence-free and licence-required alike."],
+  ["the consequence of omitting",
+   "New in-zone Dublin delivery address; unchanged if omitted."],
+  ["the consequence of omitting, again",
+   "Omitting it books tomorrow at the address."],
+  ["leave-it-out, spelled out",
+   "Leave them out and the list is this hotel's full CATALOGUE."],
+  ["a precondition, not a shape",
+   "Cancel one of the principal's own bookings (requires the booking to belong to them)."],
+].freeze
+
+COUNTED_PROBES = [
+  ["copula form",      "The offset is required."],
+  ["omit family",      "Omitting it books tomorrow."],
+  ["requires",         "Requires the booking to belong to the principal."],
+  ["if-omitted",       "Unchanged if omitted."],
+  ["defaults to",      "Page size defaults to 20."],
+  ["leave it out",     "Leave them out and the list is the full catalogue."],
+  ["may be omitted",   "The room id may be omitted."],
+  ["a bare label too", "Optional deadline."],
+].freeze
+
+COUNTED_FOILS = [
+  ["no optionality at all", "The Stripe-hosted card-entry page to hand to your human."],
+  ["a requirement of the OPERATOR, differently worded",
+   "The cashier re-counts every line against its own catalogue before it charges."],
+].freeze
+
+def detector_faults
+  faults = []
+  LABEL_PROBES.each do |what, text|
+    faults << "LABEL cannot see its own probe (#{what}): #{text.inspect}" unless label_marker(text)
+  end
+  LABEL_FOILS.each do |what, text|
+    faults << "LABEL fires on a FOIL (#{what}) — the ban has widened onto correct " \
+              "prose: #{text.inspect}" if label_marker(text)
+  end
+  COUNTED_PROBES.each do |what, text|
+    faults << "C1 cannot see its own probe (#{what}): #{text.inspect}" unless text =~ COUNTED_RE
+  end
+  COUNTED_FOILS.each do |what, text|
+    faults << "C1 fires on a FOIL (#{what}): #{text.inspect}" if text =~ COUNTED_RE
+  end
+  faults
+end
+
+# ── the structural arms: derived from the filesystem, never from a list ─────
+
+# `Kiosk::HotelsController` -> `kiosk/hotels_controller.rb`. Rails' own
+# underscore rule, written out because this script loads no ActiveSupport —
+# the same derivation bin/check-verb-routes makes, for the same reason.
+def controller_file(class_name)
+  "#{class_name.split('::').map { |part| part.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }.join('/')}.rb"
+end
+
+# The HANDLER CONTROLLERS this repository ships, as [origin, relative path] —
+# resolved from each origin's own `config/initializers/kiosk.rb`, which is the
+# list the registry reads at boot. Nothing here is a demo name, a controller
+# name or a count: an eighth origin, or a ninth controller inside one, is
+# covered the day it lands, and a file that stops parsing is named.
+def handler_controllers(root)
+  Dir[File.join(root, "kiosk-demo-*/config/initializers/kiosk.rb")].sort.flat_map do |initializer|
+    dir    = File.expand_path("../../..", initializer)
+    origin = File.basename(dir)
+    names  = File.read(initializer)[/c\.handlers\s*=\s*%w\[([^\]]*)\]/m].to_s.scan(/[A-Z][\w:]*/)
+    names.filter_map do |class_name|
+      rel = File.join(origin, "app/controllers", controller_file(class_name))
+      File.file?(File.join(root, rel)) ? [origin, rel] : nil
+    end
+  end
+end
+
+def origins(root)
+  handler_controllers(root).map(&:first).uniq
+end
+
+def structural_faults(root, corpus)
+  faults = corpus.parse_errors.dup
+
+  if corpus.descriptions.empty?
+    faults << "VACUITY: the corpus is EMPTY — nothing in this repository parsed as a " \
+              "descriptor description, so every rule below is a statement about nothing."
+    return faults
+  end
+
+  # (a) EVERY handler controller an origin declares must still be readable. This
+  # is the arm that goes red when the parser's shape assumption breaks on one
+  # file rather than on all of them.
+  controllers = handler_controllers(root)
+  if controllers.empty?
+    faults << "VACUITY: no handler controller was resolved from any " \
+              "`kiosk-demo-*/config/initializers/kiosk.rb` — the derivation that decides this " \
+              "check's subject has stopped answering, so every arm below is vacuous."
+  end
+  controllers.each do |origin, rel|
+    mine = corpus.descriptions.select { |d| d.file == rel }
+    if mine.none? { |d| d.kind == :verb }
+      faults << "VACUITY: #{rel} is named in #{origin}'s `c.handlers` and yielded NO verb " \
+                "description — the parser has stopped reading it."
+    end
+    if mine.none? { |d| d.kind == :property }
+      faults << "VACUITY: #{rel} is named in #{origin}'s `c.handlers` and yielded NO property " \
+                "description — the parser has stopped reading its schemas."
+    end
+  end
+
+  # (b) THE SCOPE MUST REACH PAST THE DEMOS. The third hand pass concluded the
+  # class was drained repository-wide from a `kiosk-demo-*` pathspec, and two of
+  # the four survivors were in the engine's own description surface. A corpus
+  # that has quietly become demos-only cannot make that mistake silently again.
+  outside = corpus.descriptions.reject { |d| d.file.start_with?("kiosk-demo-") }
+  if outside.none? { |d| d.kind == :property }
+    faults << "VACUITY: every property description in the corpus is inside a `kiosk-demo-*` " \
+              "directory. The scope has narrowed to the demos, which is the pathspec that hid " \
+              "two live violations in the engine's own description surface."
+  end
+
+  # (c) A SECOND READING OF THE SAME FILES. The verb DSL is a line of its own,
+  # so a text scan and the syntax tree must agree file by file wherever the tree
+  # found anything. Scoped to those files on purpose: a `description "…"` inside
+  # a HEREDOC is source text a spec writes to a temp file, and counting it would
+  # make this arm permanently wrong for a reason that is not a defect.
+  corpus.descriptions.map(&:file).uniq.each do |rel|
+    ast  = corpus.descriptions.count { |d| d.file == rel && d.kind == :verb }
+    next if ast.zero?
+
+    text = File.read(File.join(root, rel), encoding: "UTF-8")
+               .scan(/^[ \t]*description[ \t]+"/).length
+    next if text == ast
+
+    faults << "VACUITY: #{rel} — a text scan finds #{text} verb `description \"…\"` line(s) " \
+              "and the syntax tree finds #{ast}. The two readings of one file have come apart."
+  end
+
+  faults
+end
+
+# ── the run ─────────────────────────────────────────────────────────────────
+
+def run_check(root, list: false)
+  corpus = build_corpus(root)
+  errors = structural_faults(root, corpus)
+
+  verbs = corpus.descriptions.count { |d| d.kind == :verb }
+  props = corpus.descriptions.count { |d| d.kind == :property }
+  files = corpus.descriptions.map(&:file).uniq.sort
+
+  puts "SCOPE — `git ls-files -- '*.rb' '*.rake'`, parsed with Prism"
+  puts "  #{verbs} verb description(s) and #{props} property description(s) in " \
+       "#{files.length} file(s), across #{origins(root).length} origin(s) with a `c.handlers`"
+
+  if list
+    corpus.descriptions.sort_by { |d| [d.file, d.line] }.each do |d|
+      tag = d.kind == :verb ? "VERB" : "#{d.prop} required=#{d.required}"
+      puts format("  %-72s %s", "#{d.file}:#{d.line}", tag)
+    end
+  end
+
+  errors.concat(detector_faults)
+
+  hits = label_hits(corpus.descriptions)
+  puts
+  if hits.empty?
+    puts "LABEL. no property description carries a bare optionality label — OK " \
+         "(#{props} property description(s), detector re-proved on this run against " \
+         "#{LABEL_PROBES.length} probe(s) and #{LABEL_FOILS.length} foil(s))"
+  else
+    puts "LABEL. a property description restates the membership its own `required:` array " \
+         "decides — #{hits.length} occurrence(s):"
+    hits.sort_by { |d| [d.file, d.line] }.each do |d|
+      errors << "LABEL #{d.file}:#{d.line} — `#{d.prop}`"
+      marker = label_marker(d.text)
+      puts "  FAIL #{d.file}:#{d.line} — «#{marker}» in `#{d.prop}`'s description. " \
+           "#{label_remedy(d)}"
+      puts "       #{d.text.gsub(/\s+/, ' ')[0, 220]}"
+    end
+  end
+
+  counted = counted_hits(corpus.descriptions)
+  puts
+  puts "COUNTED, NEVER BANNED — every other optionality construction in a description. Each " \
+       "spells archaeology of shape and live semantics with the same letters, so each is a " \
+       "line a human adjudicates and none of it reaches the exit code:"
+  puts "  C1 optionality outside the bare label — #{counted.length} line(s), " \
+       "#{counted.count { |d| d.kind == :verb }} in a verb description and " \
+       "#{counted.count { |d| d.kind == :property }} in a property's"
+  counted.sort_by { |d| [d.file, d.line] }.each do |d|
+    tag = d.kind == :verb ? "VERB" : "`#{d.prop}` required=#{d.required}"
+    puts "       #{d.file}:#{d.line} (#{tag}) — #{d.text.gsub(/\s+/, ' ')[0, 160]}"
+  end
+  puts "       adjudicate: what OMITTING a property MEANS, a constraint on the VALUE, a " \
+       "precondition and a business rule are all SEMANTICS and stay. A word that only " \
+       "restates the `required:` array is the label the rule above bans."
+  puts "  A ZERO HERE IS NOT A PASS AND A COUNT HERE IS NOT A FAILURE — the detector behind " \
+       "it is re-proved on every run against fixtures that are not in this tree."
+
+  errors
+end
+
+# ── the self-test ───────────────────────────────────────────────────────────
+#
+# A plant is a REAL tracked file, a faithful mutation of it, and the real
+# parser: the fixture cannot rot without saying so, because each plant asserts
+# its pattern still matches the file before it substitutes anything. Nothing is
+# written to disk — the mutation is applied to the source in memory, which is
+# the same text the run reads.
+
+PLANTS = [
+  { rule: "LABEL / leading, mixed case — the spelling the first sweep found",
+    file: "kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+    find: /description: "Hotel name\."/,
+    with: 'description: "Optional. Hotel name."',
+    expect: /LABEL kiosk-demo-hoteling/ },
+  { rule: "LABEL / MID-STRING — the spelling a start-anchored literal cannot see",
+    file: "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
+    find: /description: "uuid of an unpaid order to replace\."/,
+    with: 'description: "uuid of an unpaid order to replace. Optional; pass it to amend."',
+    expect: %r{LABEL kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller\.rb} },
+  { rule: "LABEL / UPPERCASE — the spelling a case-sensitive pattern cannot see",
+    file: "kiosk-demo-tudu/app/controllers/kiosk/todo_lists_controller.rb",
+    find: /description: "The todo text/,
+    with: 'description: "REQUIRED. The todo text',
+    expect: %r{LABEL kiosk-demo-tudu} },
+  { rule: "LABEL / parenthetical",
+    file: "kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb",
+    find: /description: "Appointment time, RFC 3339 timestamp/,
+    with: 'description: "Appointment time (optional), RFC 3339 timestamp',
+    expect: %r{LABEL kiosk-demo-stylish} },
+  { rule: "LABEL / outside the demos — the engine's own description surface",
+    file: "kiosk-server/lib/kiosk/server/open_api.rb",
+    find: /description: "The verb's SEMANTICS, in prose\. Authoritative\."/,
+    with: 'description: "The verb\'s SEMANTICS, in prose. Mandatory."',
+    expect: %r{LABEL kiosk-server/lib/kiosk/server/open_api\.rb} },
+  { rule: "LABEL / a CONTINUATION LINE, where the marker is nowhere near the key",
+    file: "kiosk-demo-skooti/app/controllers/kiosk/rentals_controller.rb",
+    find: /description: "The hosted setup page to hand to your human\."/,
+    with: "description: \"The hosted setup page to hand to your human. \" \\\n" \
+          "                            \"Optional.\"",
+    expect: %r{LABEL kiosk-demo-skooti} },
+].freeze
+
+# Sentences that must NOT redden the ban. Each is a live shape somebody wrote on
+# purpose, planted into a real descriptor.
+FOIL_PLANTS = [
+  { what: "a copula form about the VALUE",
+    file: "kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+    find: /description: "Hotel name\."/,
+    with: 'description: "The offset is required. Hotel name."' },
+  { what: "a hyphenated compound",
+    file: "kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+    find: /description: "Hotel name\."/,
+    with: 'description: "Licence-required rooms included. Hotel name."' },
+  { what: "the consequence of omitting",
+    file: "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
+    find: /description: "uuid of an unpaid order to replace\."/,
+    with: 'description: "uuid of an unpaid order to replace. Unchanged if omitted."' },
+  { what: "a precondition",
+    file: "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
+    find: /description: "uuid of an unpaid order to replace\."/,
+    with: 'description: "uuid of an order (requires the order to be unpaid) to replace."' },
+].freeze
+
+def plant_and_run(root, plant)
+  rel  = plant[:file]
+  path = File.join(root, rel)
+  return [nil, "#{rel} is not in the tree, so this arm proves nothing"] unless File.file?(path)
+
+  source = File.read(path, encoding: "UTF-8")
+  unless source.match?(plant[:find])
+    return [nil, "the plant no longer matches anything in #{rel} (#{plant[:find].inspect}) — " \
+                 "the fixture has rotted, so this arm proves nothing"]
+  end
+
+  # The BLOCK form of `sub`, so a backslash in the replacement is a backslash
+  # and not a backreference — the continuation-line plant below is a real Ruby
+  # line continuation and has one.
+  found, error = descriptions_in(rel, source.sub(plant[:find]) { plant[:with] })
+  return [nil, "the planted source no longer parses: #{error}"] if error
+
+  [label_hits(found), nil]
+end
+
+def self_test(root)
+  failures = []
+
+  detector_faults.each { |f| failures << "DETECTOR: #{f}" }
+
+  corpus = build_corpus(root)
+  structural_faults(root, corpus).each { |f| failures << "STRUCTURE: #{f}" }
+
+  PLANTS.each do |plant|
+    hits, error = plant_and_run(root, plant)
+    if error
+      failures << "#{plant[:rule]}: #{error}"
+      next
+    end
+    lines = hits.map { |d| "LABEL #{d.file}:#{d.line} — `#{d.prop}`" }
+    if lines.empty?
+      failures << "#{plant[:rule]}: PLANTED AND STILL GREEN"
+    elsif lines.none? { |l| l =~ plant[:expect] }
+      failures << "#{plant[:rule]}: went red but not for its own site (wanted " \
+                  "#{plant[:expect].inspect}); got #{lines.first}"
+    end
+  end
+
+  FOIL_PLANTS.each do |plant|
+    hits, error = plant_and_run(root, plant)
+    if error
+      failures << "FOIL #{plant[:what]}: #{error}"
+      next
+    end
+    unless hits.empty?
+      failures << "FOIL #{plant[:what]}: the ban REDDENED on correct prose at " \
+                  "#{hits.first.file}:#{hits.first.line} — it has widened onto the sentences " \
+                  "three hand passes deliberately kept"
+    end
+  end
+
+  # The structural arms must be able to go red, or they are decoration. Each is
+  # driven off a corpus that has been emptied rather than off a promise.
+  empty = Corpus.new(descriptions: [], files_read: [], parse_errors: [])
+  if structural_faults(root, empty).empty?
+    failures << "STRUCTURE: an EMPTY corpus raises no fault, so the vacuity arms assert nothing"
+  end
+
+  quiet = Corpus.new(descriptions: corpus.descriptions.reject { |d| d.kind == :verb },
+                     files_read: corpus.files_read, parse_errors: [])
+  if structural_faults(root, quiet).none? { |f| f.include?("NO verb description") }
+    failures << "STRUCTURE: an origin contributing no verb description raises no fault, so the " \
+                "per-origin arm is a statement about nothing"
+  end
+
+  if origins(root).empty?
+    failures << "STRUCTURE: no origin was discovered on disk, so the per-origin arm has no subject"
+  end
+
+  failures
+end
+
+# ── main ────────────────────────────────────────────────────────────────────
+
+if ARGV.include?("--self-test")
+  failures = self_test(ROOT)
+  if failures.empty?
+    puts "check-descriptor-prose --self-test: OK — #{PLANTS.length} planted break(s) each red " \
+         "for its own site, #{FOIL_PLANTS.length} foil(s) each still green, " \
+         "#{LABEL_PROBES.length + COUNTED_PROBES.length} detector probe(s) and " \
+         "#{LABEL_FOILS.length + COUNTED_FOILS.length} detector foil(s), and the structural " \
+         "arms proved able to go red."
+    exit 0
+  end
+  warn "\ncheck-descriptor-prose --self-test FAILED:\n"
+  failures.each { |f| warn "  x #{f}" }
+  exit 1
+end
+
+errors = run_check(ROOT, list: ARGV.include?("--list"))
+
+puts
+if errors.empty?
+  puts "check-descriptor-prose: OK — every descriptor description read from the syntax tree, " \
+       "and none of them restates the membership its own `required:` array decides."
+  exit 0
+end
+
+warn "\ncheck-descriptor-prose FAILED:\n"
+errors.each { |e| warn "  x #{e}" }
+warn "\nADR-0023: a description carries SEMANTICS — what the verb does, what a value means, " \
+     "what omitting it does. Names, types and required/optional live in the schema beside it, " \
+     "which is the one declaration a machine can check against the handler."
+exit 1

@@ -111,7 +111,7 @@ class Kiosk::StorefrontController < ActionController::API
                additionalProperties: false,
                properties: {
                  date:             { type: "string", format: "date",
-                                     description: "OPTIONAL. Delivery date, YYYY-MM-DD, read in YOUR " \
+                                     description: "Delivery date, YYYY-MM-DD, read in YOUR " \
                                                   "OWN calendar -- declare it in the `Kiosk-Timezone` " \
                                                   "request header and \"today\" means your human's " \
                                                   "today, not the shop's. Declare none and it is read " \

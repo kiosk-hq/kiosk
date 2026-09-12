@@ -67,7 +67,7 @@ class Kiosk::TodoListsController < ApplicationController
                             description: "The list to add to — a `list_id` from my_lists, verbatim." },
                  title:   { type: "string", minLength: 1, description: "The todo text." },
                  due_at:  { type: "string", format: "date-time",
-                            description: "OPTIONAL deadline, RFC 3339, and the OFFSET IS REQUIRED: a " \
+                            description: "Deadline, RFC 3339, and the OFFSET IS REQUIRED: a " \
                                          "deadline is an INSTANT, so a value without one is refused " \
                                          "rather than completed on anybody's clock. Resolve «tomorrow " \
                                          "at two» YOURSELF, on the clock of the human who said it — " \

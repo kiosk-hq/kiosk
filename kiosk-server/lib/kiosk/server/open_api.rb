@@ -592,8 +592,14 @@ module Kiosk
                                              "The authoritative input contract." },
               output_schema:  { type: "object",
                                 description: "JSON Schema (draft 2020-12) for what this verb returns." },
-              example_params: { description: "OPTIONAL example inputs." },
-              example_row:    { description: "OPTIONAL example of one result element." },
+              example_params: { description: "Example inputs an assistant can copy as a " \
+                                             "starting call. It ILLUSTRATES `input_schema` " \
+                                             "and is not the contract: where the two " \
+                                             "disagree, the schema is right." },
+              example_row:    { description: "Example of one result element — a " \
+                                             "representative row for a query, or the return " \
+                                             "value for an action. It ILLUSTRATES " \
+                                             "`output_schema` and is not the contract." },
             },
             required:   %w[name description reach input_schema output_schema],
           },

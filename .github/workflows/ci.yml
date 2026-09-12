@@ -1302,6 +1302,47 @@ jobs:
       - name: No ledger id and no ADR reference in what a gem ships
         run: ./bin/check-shipped-archaeology
 
+  # ADR-0023 re-scoped a verb `description` to SEMANTICS ONLY: names, types and
+  # required/optional live in the schema beside it, which is the one declaration
+  # a machine can check against the handler. That clause was drained BY HAND
+  # three times and each pass left live instances behind — an anchored literal
+  # could not see a mid-string spelling, a case-sensitive pattern could not see
+  # an uppercase one, and a `kiosk-demo-*` pathspec could not see the engine's
+  # own description surface. bin/check-descriptor-prose reads the descriptors
+  # STRUCTURALLY instead: every tracked .rb/.rake file parsed with Prism, each
+  # property description compared with the membership its own sibling
+  # `required:` array decides. No demo, controller or spelling is typed in it.
+  #
+  # It BANS one thing and COUNTS the rest, and which is which was measured: the
+  # bare optionality LABEL is the only form in this corpus that never says
+  # anything the schema does not, while `omit`, `if omitted`, `defaults to` and
+  # the copula forms are overwhelmingly correct prose earlier passes kept on
+  # purpose. Those are printed for a human and never reach the exit code.
+  #
+  # Its own job rather than a step beside check-verb-routes, on that script's
+  # own argument: two invariants about the same controllers should fail with
+  # their own names. Stdlib Ruby only: no bundle, no services, no database.
+  descriptor-prose:
+    name: no descriptor prose restates its schema's shape (bin/check-descriptor-prose)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on every spelling of the break, and non-vacuous here
+        run: ./bin/check-descriptor-prose --self-test
+
+      - name: No property description restates its own `required:` array
+        run: ./bin/check-descriptor-prose
+
   # Since T-183 an operator draws ONE EXPLICIT ROUTE PER VERB, so "declared but
   # unrouted / routed but undeclared" is a real bug class here again — it was
   # impossible while the engine resolved names at request time from one

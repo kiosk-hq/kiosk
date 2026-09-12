@@ -113,15 +113,16 @@ to find out locally.
 Two things CI does *not* do, and they are yours:
 
 - **The changelog.** A significant change — anything that alters behaviour, spec
-  text, skill instructions, or a claim this project makes — gets an entry. Which
-  file depends on the register: a **per-gem `CHANGELOG.md` ships inside the
-  package** and its reader has no repository around them, so those are release
-  notes, written short and about intent; the **repository-root `CHANGELOG.md` is
-  a dated engineering journal**, one entry per significant change, written for
-  someone who was not there, as long as that takes. Its own header says so.
-  Tests-only changes, refactors and typos do not qualify. Nothing already written
-  is edited: history is append-only, and an entry that turns out to be wrong is
-  superseded by a new one that names it.
+  text, skill instructions, or a claim this project makes — gets an entry: the
+  root `CHANGELOG.md` for a repository-wide change, `<gem>/CHANGELOG.md` for a
+  change to that package. **Keep the entries short, always under 200 characters
+  and one-two sentences; only keep the essence of the change.** The commit
+  message keeps the details. That rule binds every `CHANGELOG.md` here, and
+  `bin/check-changelog` holds it on entries that are new against its declared
+  baseline commit — the standing backlog is printed as a census and never
+  reddens. Tests-only changes, refactors and typos do not qualify. Nothing
+  already written is edited: history is append-only, and an entry that turns out
+  to be wrong is superseded by a new one that names it.
 - **Shared code across demos.** The demos are separate applications, so shared
   code is hand-copied on purpose. `bin/check-demo-copies` declares every file
   that exists in two or more of them and holds the copies in lockstep. If you

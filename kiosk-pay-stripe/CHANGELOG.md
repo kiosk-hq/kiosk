@@ -1,5 +1,12 @@
 # Changelog
 
+**Keep the entries short, always under 200 characters and one-two sentences.
+Only keep the essence of the change. git commit messages will keep the details.
+In the CHANGELOG, only keep the essence.** (Phil, 2026-09-11.) The rule binds
+every `CHANGELOG.md` in this repository; `bin/check-changelog` holds it on
+entries that are new against its declared baseline commit, and never on the
+entries already below.
+
 ## [Unreleased]
 - The two operator log lines that report a degraded `setup_url` now end in the
   condition itself rather than in an internal tracker id nobody outside this

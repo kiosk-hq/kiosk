@@ -1,7 +1,11 @@
 # Changelog
 
-Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
-sentences — essence and intent, not content.
+**Keep the entries short, always under 200 characters and one-two sentences.
+Only keep the essence of the change. git commit messages will keep the details.
+In the CHANGELOG, only keep the essence.** (Phil, 2026-09-11.) The rule binds
+every `CHANGELOG.md` in this repository; `bin/check-changelog` holds it on
+entries that are new against its declared baseline commit, and never on the
+entries already below.
 
 - 2026-08-04: new anonymizing KYC broker demo — a standalone issuer
   (not a Kiosk operator; mounts none of the four verbs) that generalizes

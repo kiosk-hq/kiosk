@@ -1,5 +1,12 @@
 # Changelog — kiosk-demo-atablefor
 
+**Keep the entries short, always under 200 characters and one-two sentences.
+Only keep the essence of the change. git commit messages will keep the details.
+In the CHANGELOG, only keep the essence.** (Phil, 2026-09-11.) The rule binds
+every `CHANGELOG.md` in this repository; `bin/check-changelog` holds it on
+entries that are new against its declared baseline commit, and never on the
+entries already below.
+
 ## Unreleased
 
 - `book_table` takes one spelling of a date. Its `date` argument is

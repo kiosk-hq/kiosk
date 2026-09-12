@@ -1,37 +1,32 @@
 # Changelog
 
-**What this file is: the repository's dated engineering journal, newest entry
-first.** One entry per significant change anywhere in this repository — engine,
-gem, demo, deploy runbook — saying what was wrong, what changed, and the intent,
-written for someone who was not there. Entries are as long as that takes.
-MEASURED 2026-09-06 over the 461 top-level entries then in the file: median 776
-characters, p90 1,329, longest 4,350, and **20 of them — four per cent — short
-enough (≤250 characters) to be the «one line per change, 1–2 sentences» the header
-used to ask for.** A header its own file contradicts on ninety-six per cent of its
-lines teaches a reader to skip headers, so it says what is true instead.
+**THE RULE FOR EVERY NEW ENTRY, first on this page on purpose (Phil,
+2026-09-11, his words):**
+
+> **Keep the entries short, always under 200 characters and one-two sentences.
+> Only keep the essence of the change. git commit messages will keep the
+> details. In the CHANGELOG, only keep the essence.**
+
+It binds every `CHANGELOG.md` in this repository — this root record and every
+per-gem package record alike. The details belong in the commit message and in
+the ledger row. `bin/check-changelog` holds the rule (arms CL-8 length, CL-9
+sentences) on entries that are NEW against its declared baseline commit, and
+prints everything older as a census that never reddens.
 
 **Every top-level entry opens with its ISO date, and that is held.** It is this
 file's only ordering affordance — nothing else here says when — so
-`bin/check-changelog` fails on an entry that omits one (arm CL-7). Two entries
-had lost theirs when the arm was written; they were dated from the commits that
-introduced them, and nothing else about either entry was touched.
+`bin/check-changelog` fails on an entry that omits one (arm CL-7).
 
-**The short per-release record lives with the package it describes.** Each gem's
-own `<gem>/CHANGELOG.md` is Keep-a-Changelog, one line per change under the
-release it shipped in; it is inside the published `.gem` and is what a reader who
-installed the gem and never saw this repository has. A change to a gem's
-published surface gets its release note there as well as its entry here. **That
-short form is the INTENT those files are written to, not a claim about every
-entry already in them (K-1382)** — measured across all 14 tracked gem changelogs,
-189 entries, half of them are at or under 250 characters, but
-`kiosk-server/CHANGELOG.md` is 70 of those entries on its own and keeps it on 12,
-at median 629, which is this file's register rather than a release note's. It is
-not repaired by rewriting them: a changelog is append-only. The next entry is
-where the form is kept.
+**What this file is:** the repository record, newest entry first. One entry per
+significant change anywhere here — engine, gem, demo, deploy runbook. A change
+to a gem's published surface gets its release note in that gem's own
+`<gem>/CHANGELOG.md` as well, under the same rule.
 
 **Nothing already written is edited.** History is append-only: an entry that has
 turned out to be wrong is superseded by a new entry that says so and names it,
-never rewritten. Several entries below are corrections of exactly that kind.
+never rewritten. The entries below the baseline are long; they stay as written.
+
+- 2026-09-12: **Changelog entries are capped at 200 characters and two sentences (Phil), for every `CHANGELOG.md` here.** `bin/check-changelog` holds it on new entries only; the backlog is a census.
 
 - 2026-09-12: **a demo's spec/ trees are now held by UNIT NAME, not by path (K-1536).** No two share a path, so the hand-copied assertion harness was compared by nothing; two drifted units converged.
 

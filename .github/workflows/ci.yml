@@ -2036,6 +2036,13 @@ jobs:
   # gem directory without one fails. That is where "which file does a changelog
   # line go in" is written down (K-1159): the root record, always.
   #
+  # Since Phil's strong rule (2026-09-11) it also holds ENTRY LENGTH and the
+  # sentence count — but only on entries that are NEW against the baseline
+  # commit named in the script, because the standing corpus is long, is
+  # append-only and cannot be repaired, and a gate red on a backlog nobody may
+  # drain is a gate somebody switches off (K-1097). The backlog is printed as a
+  # census instead, derived on every run.
+  #
   # Its --self-test is a step of its own, for the reason the publication-paths
   # job gives: a corpus scan that came out empty exits 0 and reads exactly like
   # a clean tree, so the guard proves it is red on a plant of every arm before
@@ -2048,7 +2055,13 @@ jobs:
     if: github.event_name != 'schedule'
 
     steps:
+      # fetch-depth: 0 is required, not tidiness — the guard reads the baseline
+      # commit's changelogs to tell a new entry from the standing backlog, and a
+      # shallow clone does not have it. It FAILS rather than skipping when the
+      # commit is absent, so a missing history is red here, not silently green.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1

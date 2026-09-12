@@ -139,14 +139,27 @@
 #   resolve what they are reading. R5, R6 and R7 do reach it, because their
 #   harm is different in kind — a document that describes something which does
 #   not exist is broken for EVERY reader, the maintainer included, and that is
-#   exactly what was measured here. MEASURED at head when the scope was added,
-#   `git grep -cP` over `-- 'deploy/*'`: R1 would fail on 168 lines in 12 files,
-#   R3 on 11 lines in 4, R4 on 5 lines in 4. Those numbers are NOT a judgement
-#   that the four are acceptable here — the R3/R4 residue is filed as K-1505 —
-#   they are the measurement behind not turning this guard red on a standing
-#   backlog nobody has agreed to drain.
+#   exactly what was measured here. HOW MUCH those four exemptions are holding
+#   back is NOT written here: the run prints it, per rule and per scope, in the
+#   EXEMPTION TOTALS block at the foot of the output. That is not a formatting
+#   preference — the figure this sentence used to carry (a hand-run `git grep
+#   -cP` over `-- 'deploy/*'`) had already drifted from the guard's own reading
+#   of the same tree by the time the block existed to compare it with, which is
+#   the identical drift K-1516 records one section down and K-1509/K-1435
+#   record in two ledger rows. The size is not a judgement that the four are
+#   acceptable here — the R3/R4 residue is filed as K-1505 — it is the price of
+#   not turning this guard red on a standing backlog nobody has agreed to drain.
 #
-# ── WHAT IS EXEMPT, DECLARED WITH ITS REASON ─────────────────────────────────
+# ── WHAT IS EXEMPT, DECLARED WITH ITS REASON — AND SIZED BY THE RUN ─────────
+#
+# Each exemption below is a decision, and every decision has a price. The price
+# is the number of lines the door is holding back, and it is PRINTED rather
+# than written down: the EXEMPTION TOTALS block at the foot of every run walks
+# the complement of the rule table — every (rule, scope) pair `RULES` does not
+# carry — and states, in the guard's own units, what stops there. Nobody has to
+# quote it, which is the point (K-1509, K-1435: two ledger rows quoted one such
+# figure by hand, with no pathspec, and it reproduced at no spelling anyone
+# tried afterwards).
 #
 #   * `bin/`, `CHANGELOG.md`, `CLAUDE.md` — Phil's standing exemption. The
 #     first is maintainer tooling, the second is append-only history that is
@@ -338,17 +351,24 @@
 # surfaced. That MIXTURE is the finding and it is why the rows are printed
 # individually — a residue small enough for a human to read once, not a backlog.
 #
-# THIS PARAGRAPH STATES NO COUNT, AND THAT IS THE FIX FOR K-1516. The first
-# writing of it said «these three scopes» where the census declares four, «SIX
-# lines» where the run prints eleven, and named a vendored-mirror row the census
-# no longer has — three false statements, in the one script whose subject is
-# prose that has stopped describing what is. Nothing caught it, because C1 never
-# reddens and a comment is held by nothing. Four later waves moved those figures
-# under it: the mirror row was rewritten to the present tense, the demo row was
-# drained, the hyphen exclusion below dropped one, the gem scope became
-# `spec.files`, and a `deploy` scope was added. So the size of this census is
-# DERIVED — the run prints a CENSUS TOTALS block, per rule, per scope, from the
-# same scan that printed the rows — and it is written down here nowhere.
+# THIS PARAGRAPH QUOTES NO FIGURE FROM THE LIVE CENSUS, AND THAT IS THE FIX FOR
+# K-1516 — reopened once, on this very sentence. The first writing of it stated
+# the census's scope total, stated its row total, and named a vendored-mirror
+# row: every one of them a claim about the live census, every one already false
+# by the time anyone read it, in the one script whose subject is prose that has
+# stopped describing what is. Nothing caught it, because C1 never reddens and a
+# comment is held by nothing. The waves that moved those figures under it did
+# nothing unusual — the mirror row was rewritten to the present tense, the demo
+# row was drained, the hyphen exclusion below dropped a row, the gem scope
+# became `spec.files`, and a `deploy` scope was added.
+#
+# THE FIRST REPAIR FAILED THE SAME WAY, and that is why the headline is spelled
+# as it is. It kept the superseded figures as a CONTRAST — «X, where the census
+# declares Y» — which is still quoting the live census inside the sentence that
+# promises not to, and one appended `used to` anywhere in scope falsifies it at
+# exit code 0. So the size of this census is DERIVED and lives in the OUTPUT:
+# the run prints a CENSUS TOTALS block, per rule, per scope, from the same scan
+# that printed the rows. Read that block, not this paragraph.
 #
 # WHY THE WORD BOUNDARY IS PART OF THE PATTERN AND NOT A DETAIL: unbounded,
 # `used to` also matches the tail of «ref-used to», «ab-used to», «ca-used to».
@@ -654,6 +674,26 @@ CENSUS = [
 
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
 def census_for(scope) = CENSUS.select { |r| r[:scopes].include?(scope) }
+
+# THE COMPLEMENT OF `rules_for`, AND IT IS PRINTED (K-1509, K-1435). Every
+# (rule, scope) pair the table does NOT carry is a declared exemption, and an
+# exemption's SIZE is the thing nobody can see: R1 and R2 stop at the door of
+# `spec/` on T-186's developer-surface footing, and how much that door is
+# holding back was, until this line existed, a figure people wrote into ledger
+# rows by hand. Two of them did, with the same unreproducible number — «the gem
+# spec trees carry 520 ledger ids and 55 ADR references» — stated with no
+# pathspec, no tool and no dialect, in rows whose own subject was a guard
+# carrying a figure that had stopped being true. Neither half was recoverable
+# afterwards: the ADR half happens to reproduce and the ledger half does not
+# reproduce at ANY spelling anyone has tried, and there is no way to tell from
+# the sentence which question it was answering.
+#
+# So the pairs are DERIVED from the two tables rather than listed, and the run
+# prints what each one carries, under this guard's own reading of the file —
+# same scan, same scopes, same TODO and `spec.authors` carve-outs, unit stated.
+# A number the run prints cannot be quoted wrong, because the way to quote it
+# is to re-run the guard.
+def exempt_rules_for(scope) = RULES.reject { |r| r[:scopes].include?(scope) }
 
 # `spec.authors` is where a gem states its author, and RubyGems reads it. It is
 # the one place R4 does not reach; every other mention is prose.
@@ -1156,8 +1196,18 @@ def run_check
   failed = false
   census_tally = Hash.new(0)
   census_scopes = Hash.new { |h, k| h[k] = [] }
+  exempt_tally = []
   scoped.each do |scope, files|
     rules = rules_for(scope)
+
+    # ── what the DECLARED EXEMPTIONS are carrying. A separate pass, on
+    # purpose: folding these rules into the scan above would widen which files
+    # count as "carries a hit" for the Ripper-unlexed FAIL, so a file holding
+    # nothing but an exempt citation could redden a guard that exempts it.
+    exempt_rules_for(scope).each do |rule|
+      lines = files.sum { |path| scan(path, [rule]).first.size }
+      exempt_tally << [rule[:id], scope, lines, files.size, rule[:what]]
+    end
     hits = []
     unlexed = []
     files.each do |path|
@@ -1226,6 +1276,25 @@ def run_check
       scopes = census_scopes[id]
       puts "  #{id}".ljust(6) + ": #{count} row(s) across #{scopes.size} scope(s) " \
            "(#{scopes.join(', ')})"
+    end
+  end
+
+  # ── WHAT THE DECLARED EXEMPTIONS CARRY (K-1509, K-1435) ───────────────────
+  #
+  # Every (rule, scope) pair the RULES table does not carry, with the size of
+  # what stops at that door. Printed, never red — an exemption is a decision
+  # already taken and this is its price tag, not a backlog. The UNIT is stated
+  # because it is the half of a citation that gets dropped: these are LINES
+  # matched by this guard's own scan of its own scope, after its TODO and
+  # `spec.authors` carve-outs, which is neither `git grep -c` (files) nor
+  # `git grep -o | wc -l` (occurrences) and does not have to be.
+  unless exempt_tally.empty?
+    puts
+    puts "EXEMPTION TOTALS — what each declared exemption carries " \
+         "(derived on this run; printed, never red)"
+    exempt_tally.each do |id, scope, lines, nfiles, what|
+      puts "  #{id}/#{scope}".ljust(18) +
+           ": #{lines} line(s) over #{nfiles} file(s) — #{what} is EXEMPT here"
     end
   end
 
@@ -1952,6 +2021,44 @@ def self_test
   end
   puts "  note the census stands at #{census_rows} row(s) at head (informational — a census " \
        "row count is never an assertion)"
+
+  # ── VACUITY: the EXEMPTION TOTALS block is the COMPLEMENT of the rule table
+  #    and must stay that way (K-1509, K-1435). If `exempt_rules_for` ever
+  #    stopped being the exact complement, the block would print a subset and
+  #    read as a full accounting — the same silent-undercount shape as a
+  #    pattern that matches nothing ─────────────────────────────────────────
+  all_ids = RULES.map { |r| r[:id] }.sort
+  check.call("every rule is either live or exempt in every scope, and never both — the " \
+             "exemption block is the exact complement of the rule table",
+             SCOPES.keys.all? do |scope|
+               live   = rules_for(scope).map { |r| r[:id] }
+               exempt = exempt_rules_for(scope).map { |r| r[:id] }
+               (live & exempt).empty? && (live + exempt).sort == all_ids
+             end)
+  exempt_pairs = SCOPES.keys.flat_map { |s| exempt_rules_for(s).map { |r| [r[:id], s] } }
+  check.call("there ARE declared exemptions to size (#{exempt_pairs.size} rule/scope pair(s)) " \
+             "— an empty complement would print no block at all and read as «nothing is " \
+             "exempt»",
+             !exempt_pairs.empty?)
+  check.call("every exempt pair is over a NON-EMPTY file set — a printed 0 must mean «no " \
+             "residue», never «no files»",
+             exempt_pairs.all? do |(_id, scope)|
+               SCOPES[scope][:dirs].call.sum { |d| SCOPES[scope][:files].call(d).size }.positive?
+             end)
+  # The SIZES themselves are deliberately NOT asserted, on the census's footing
+  # one arm up: an exemption draining to zero is a repair, not a regression, and
+  # what holds these patterns against rotting is the vacuity-corpus arm above,
+  # which runs every rule against CHANGELOG.md and bin/ where they cannot
+  # honestly disappear.
+  exempt_rows = exempt_pairs.sum do |(id, scope)|
+    rule = RULES.find { |r| r[:id] == id }
+    SCOPES[scope][:dirs].call
+                        .flat_map { |d| SCOPES[scope][:files].call(d) }
+                        .sum { |p| scan(p, [rule]).first.size }
+  end
+  puts "  note the declared exemptions carry #{exempt_rows} line(s) at head across " \
+       "#{exempt_pairs.size} rule/scope pair(s) (informational — read the run's EXEMPTION " \
+       "TOTALS block, never this number)"
 
   if failures.empty?
     puts "SELF-TEST OK"

@@ -481,7 +481,22 @@ jobs:
             # has no prerequisite and lives off the job-level demo:setup.
             # Watched fail: set registration_pow_count to 0 and the unproven
             # register returns 201 instead of 402.
-            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema demo:register
+            # demo:clock_spec and demo:access_spec go FIRST and are the two
+            # cheapest signals in the list: no server, no database, no toll,
+            # under a second each. Together they are the only coverage of this
+            # demo that a contributor without Postgres can run at all — every
+            # other task here needs a seeded origin.
+            # demo:clock_spec runs spec/board_clock_spec.rb under TZ=Etc/GMT-11
+            # and TZ=Etc/GMT+2, because a helper that leaked the server
+            # process's zone into a published `posted_at` is invisible inside
+            # any single run. Watched fail: make BoardClock.zone answer
+            # default_zone unconditionally and 3 assertions go red under both
+            # TZ values (exit 1).
+            # demo:access_spec covers the owner-scoped refusal surface — the
+            # listing_id shape guard and the one sentence a miss earns. Watched
+            # fail: give ListingAccess.not_owner a different message per verb
+            # and the no-enumeration assertion goes red.
+            tasks: demo:clock_spec demo:access_spec demo:walkthrough demo:isolation demo:redteam demo:schema demo:register
             ungated:
               demo:binding: >-
                 timing-sensitive: the account-binding ceremony polls on the

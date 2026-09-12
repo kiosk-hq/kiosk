@@ -6,6 +6,11 @@ require "resolv"
 
 # philslist demo orchestration (NON-COMMERCE classifieds board). Sub-tasks:
 #
+#   rake demo:clock_spec   DB-free unit spec for the board clock a listing's
+#                          publication time is read on, run under two TZ values
+#   rake demo:access_spec  DB-free unit spec for the owner-scoped refusal
+#                          surface — the listing_id shape guard and the
+#                          not-owner sentence both write verbs share
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs the browse→post→edit→close
 #                          curl showcase (NO payment step), tears down
@@ -110,6 +115,26 @@ def philslist_boot_server(log:, port:, host: "127.0.0.1", extra_env: {})
 end
 
 namespace :demo do
+  desc "DB-free unit spec for the board clock a listing's publication time is read on, run under two TZ values."
+  task :clock_spec do
+    spec = File.expand_path("../../spec/board_clock_spec.rb", __dir__)
+    # TWO INVOCATIONS, NOT ONE, AND THE TZ VALUES ARE THE POINT. A helper that
+    # leaked the SERVER PROCESS's zone into a published `posted_at` cannot be
+    # seen from inside a single run: on the machine that wrote the code the
+    # process zone and the intended zone are the same and everything passes.
+    # Etc/GMT-11 and Etc/GMT+2 are thirteen hours apart and sit on either side
+    # of the board's own clock.
+    puts "\n── board-clock rendering (no boot, no DB), under two process zones ──"
+    %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
+  end
+
+  desc "DB-free unit spec for the owner-scoped refusal surface — the listing_id shape guard and the not-owner sentence."
+  task :access_spec do
+    spec = File.expand_path("../../spec/listing_access_spec.rb", __dir__)
+    puts "\n── owner-scoped refusal surface (no boot, no DB) ──"
+    sh "ruby #{spec}"
+  end
+
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \

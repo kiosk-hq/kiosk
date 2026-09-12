@@ -207,8 +207,11 @@
 #
 # ── WHAT IS ASSERTED ─────────────────────────────────────────────────────────
 #
-#   R1  no ledger id — /\b[KT]-\d{3,4}\b/ — anywhere in either scope.
-#   R2  no ADR reference — /\bADR-\d{4}\b/ — anywhere in either scope.
+#   R1  no ledger id — `[KT]-\d{3,4}` — anywhere in either scope. Its leading
+#       boundary is NOT `\b`; see {WORD_START} for the escape sequence that
+#       walked through one, and for the measurement that refused to drop it.
+#   R2  no ADR reference — `ADR-\d{4}`, same boundary — anywhere in either
+#       scope.
 #   R3  no Cyrillic — /[Ѐ-ӿ]/ — anywhere in either scope. This
 #       repository's working language is Russian and its published language is
 #       English, and twelve lines of quoted Russian shipped inside five
@@ -217,7 +220,8 @@
 #       whether the sentence binds them. Guillemets, em dashes and § are Latin
 #       and stay; only the Cyrillic block is banned, so the rule cannot argue
 #       with the house punctuation.
-#   R4  no maintainer named in prose — /\bPhil\b/ — everywhere but the demos.
+#   R4  no maintainer named in prose — `Phil`, same boundary — everywhere but
+#       the demos.
 #       «Phil accepted this control's weakness openly» tells an adopter to trust
 #       a person they have never met instead of stating the property. Say what
 #       the code does and why; the name belongs in `spec.authors` and in git.
@@ -541,12 +545,43 @@ require "ripper"
 
 REPO = File.expand_path("..", __dir__)
 
+# ── THE LEADING BOUNDARY IS NOT `\b`, AND THAT IS A MEASUREMENT (K-1537) ─────
+#
+# Every ban here scans SOURCE TEXT, and in source text a word boundary is not
+# where a reader's eye puts one. Inside a Ruby string literal `\n` is TWO
+# characters — a backslash and the LETTER `n` — so `puts "\nK-724 …"` places a
+# word character immediately before the `K` and a leading `\b` cannot match.
+# WATCHED TWICE, on a file the demo scope does reach: the line planted WITH the
+# `\n` left this guard and `bin/check-demo-copies` at exit 0, and the identical
+# line without it reddened this guard at exit 1 — so the PATTERN, not the scope,
+# was what decided. The class is every escape whose body is a word character:
+# `\t`, `\r`, `\e`, `\s`, `\a`, `\f`, `\v`, `\b`, `\0`, `\cK`, and the numeric
+# forms `\101`, `\x41`, `\u0041`.
+#
+# THE OBVIOUS REMEDY — drop the leading `\b` — IS REFUTED BY THIS TREE, which is
+# why the boundary is still here. `git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'`
+# over this repository finds 141 hits that are not ledger ids at all, 129 of
+# them `SK-001`, the scooter id `kiosk-demo-skooti` ships across two dozen
+# files, plus `SK-002`..`SK-007`, `SK-999` and `OK-1234`. A ban that reddens on
+# a demo's own fixture data is a ban somebody switches off.
+#
+# So the boundary HOLDS and an ESCAPE RUN is admitted beside it: a backslash
+# followed by one to five alphanumerics. That ceiling is not a taste — `\uFFFF`
+# is the longest escape Ruby spells with an all-alphanumeric body, and every
+# longer or punctuated form (`\u{1F600}`, `\M-\C-x`, a doubled `\\`) ends in a
+# character that is not a word character, so the ordinary boundary already
+# answers those. The alternation of FIXED-length lookbehinds is deliberate:
+# Onigmo rejects a variable-length one, and a `RegexpError` raised while this
+# file loads would take the whole guard out rather than one rule.
+ESCAPE_RUN_ALTS = (1..5).map { |n| "(?<=\\\\[A-Za-z0-9]{#{n}})" }.freeze
+WORD_START      = "(?:#{ESCAPE_RUN_ALTS.join('|')}|(?<![A-Za-z0-9_]))"
+
 # One spelling of each shape, shared by the check and by the vacuity arms, so
 # there is a single thing to be wrong about rather than two that rot apart.
-LEDGER_ID_RE = /\b[KT]-\d{3,4}\b/
-ADR_RE       = /\bADR-\d{4}\b/
+LEDGER_ID_RE = /#{WORD_START}[KT]-\d{3,4}\b/
+ADR_RE       = /#{WORD_START}ADR-\d{4}\b/
 CYRILLIC_RE  = /[Ѐ-ӿ]/
-MAINTAINER_RE = /\bPhil\b/
+MAINTAINER_RE = /#{WORD_START}Phil\b/
 
 # The wire this repository speaks TODAY, read out of the tree. Anything strictly
 # below it is a wire nobody reading this has used.
@@ -1628,6 +1663,84 @@ def self_test
 
     _, short = plant.call("short", "short.rb", "# K-12 and T-9 and ADR-12 are not ledger ids.\n")
     check.call("does NOT flag too-few-digit lookalikes", scan(short).first.empty?)
+
+    # ── THE ESCAPE THAT WALKED THROUGH THE LEADING BOUNDARY (K-1537) ────────
+    #
+    # DERIVED, NOT LISTED. The four escape letters somebody thinks of are the
+    # four that get tested, and `\n` was invisible for as long as this guard
+    # existed because nobody thought of it either. So the arm asks for EVERY
+    # single-character escape the boundary's own character class can spell —
+    # a..z, A..Z, 0..9 — and it asks in a `.md` file, where no rule of Ruby
+    # syntax narrows the question to the escapes Ruby happens to define.
+    escape_bodies = [*"a".."z", *"A".."Z", *"0".."9"]
+    missed_text = escape_bodies.reject do |c|
+      _, path = plant.call("esc-md-#{c}", "esc_#{c}.md", %(A line reading "\\#{c}K-724 refused".\n))
+      !scan(path).first.empty?
+    end
+    check.call("R1 fires on a ledger id behind EVERY single-character escape " \
+               "(#{escape_bodies.size} of them; `\\nK-724` is the one that was watched " \
+               "in the tree at exit 0)" +
+               (missed_text.empty? ? "" : " — missed #{missed_text.join(', ')}"),
+               missed_text.empty?)
+
+    # The same question of a Ruby STRING, where the answer must also be :code
+    # rather than :comment — the remedy differs. Which escapes are askable is
+    # asked of the PARSER rather than remembered: `"\qK-724"` is a warning and
+    # `"\uK-724"` is a syntax error, and a fixture that cannot be lexed would
+    # test the lexer's tolerance instead of this pattern.
+    ruby_escapes = escape_bodies.select do |c|
+      parser = Ripper.new(%(MSG = "\\#{c}K-724"\n))
+      parser.parse
+      !parser.error?
+    end
+    missed_code = ruby_escapes.reject do |c|
+      _, path = plant.call("esc-rb-#{c}", "esc_#{c}.rb", %(MSG = "\\#{c}K-724 refused"\n))
+      hits, lexed = scan(path)
+      lexed && !hits.empty? && hits.first.where == :code
+    end
+    check.call("…and classifies each as :code inside a Ruby string literal " \
+               "(#{ruby_escapes.size} of the #{escape_bodies.size} parse)" +
+               (missed_code.empty? ? "" : " — missed #{missed_code.join(', ')}"),
+               missed_code.empty?)
+
+    # THE CEILING IS READ OFF THE CONSTANT, so the arm moves with it. A run of
+    # one to N alphanumerics after a backslash is an escape (`\101`, `\x41`,
+    # `\u0041` are 3, 3 and 5); one longer is not, and this arm states that
+    # limit out loud rather than leaving it to be discovered.
+    run_max = ESCAPE_RUN_ALTS.size
+    missed_run = (1..run_max).reject do |k|
+      _, path = plant.call("run-#{k}", "run_#{k}.md", %(a literal "\\#{'a' * k}K-724" here\n))
+      !scan(path).first.empty?
+    end
+    check.call("R1 fires through an escape run of 1..#{run_max} alphanumerics " \
+               "(the numeric forms \\101, \\x41 and \\u0041 are 3, 3 and 5)" +
+               (missed_run.empty? ? "" : " — missed #{missed_run.join(', ')}"),
+               missed_run.empty?)
+    _, over_run = plant.call("run-over", "run_over.md",
+                             %(a literal "\\#{'a' * (run_max + 1)}K-724" here\n))
+    check.call("…and does NOT past that — the ceiling is declared, not accidental",
+               scan(over_run).first.empty?)
+
+    # THE OTHER HALF OF K-1537, and the reason the boundary was taught about
+    # escapes instead of being deleted. The row proposed dropping the leading
+    # `\b` outright; measured over this repository, that admits 141 lines that
+    # carry no ledger id at all — 129 of them `SK-001`, kiosk-demo-skooti's own
+    # scooter. A ban that reddens on a demo's fixture data is a ban somebody
+    # switches off, so this arm is the refutation kept executable.
+    _, boundary = plant.call("boundary", "boundary.md", <<~MD)
+      The scooter is SK-001, its twin is SK-999, OK-1234 is a fixture id, and
+      unK-724 is a word with a K in the middle of it.
+    MD
+    check.call("does NOT flag SK-001 / SK-999 / OK-1234 / unK-724 — the leading " \
+               "boundary still holds where no backslash introduces it",
+               scan(boundary).first.empty?)
+
+    _, esc_adr = plant.call("esc-adr", "esc_adr.rb", %(MSG = "\\nADR-0018 refused"\n))
+    check.call("R2 fires on an ADR reference behind a `\\n` escape",
+               !scan(esc_adr).first.empty?)
+    _, esc_phil = plant.call("esc-phil", "esc_phil.rb", %(MSG = "\\nPhil accepted this"\n))
+    check.call("R4 fires on the maintainer named behind a `\\n` escape, in the gem scope",
+               !scan(esc_phil, rules_for(:gem)).first.empty?)
 
     _, authors = plant.call("authors", "m.gemspec", "  spec.authors       = [\"Phil Pirozhkov\"]\n")
     check.call("does NOT flag R4 on the `spec.authors` line a gemspec is REQUIRED to carry",

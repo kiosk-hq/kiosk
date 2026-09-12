@@ -133,10 +133,10 @@ assert(Scooter.new(needs_licence: false).licence_free?,    "a real FALSE column 
 end
 
 if FAILURES.empty?
-  puts "\nK-724 licence-flag spec: ALL PASS (#{TRUTHY.size} truthy, #{FALSY.size} falsy, 2 ambiguous)"
+  puts "\nlicence-flag spec: ALL PASS (#{TRUTHY.size} truthy, #{FALSY.size} falsy, 2 ambiguous)"
   exit 0
 else
-  puts "\nK-724 licence-flag spec: #{FAILURES.size} FAILURE(S)"
+  puts "\nlicence-flag spec: #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

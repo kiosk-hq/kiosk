@@ -393,6 +393,28 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "bin/check-demo-copies",
               "  \"# The past-slot filter, K-480.\",\n", "  \"# The past-slot filter, 480.\",\n"]],
       expect: /the K-1383 ledger-id pattern no longer matches its own fixture/ },
+
+    { id: "ledger-id-behind-an-escape", kind: :break,
+      rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
+      what: "the id follows a `\\n` inside the string, so a leading `\\b` never matched it (K-1537)",
+      ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
+              "desc \"DB-free unit spec for the WireArguments shape guards",
+              "desc \"\\nK-1099 DB-free unit spec for the WireArguments shape guards"]],
+      expect: /lib\/tasks\/demo\.rake:\d+: a ledger id OUTSIDE a comment, in code this demo RUNS/ },
+    { id: "vacuity-demo-ledger-escape-blind", kind: :vacuity,
+      rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
+      what: "the leading boundary goes back to a bare `\\b`, which is blind to every escape (K-1537)",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "LEDGER_WORD_START      = \"(?:\#{LEDGER_ESCAPE_RUN_ALTS.join('|')}|(?<![A-Za-z0-9_]))\"\n",
+              "LEDGER_WORD_START      = \"\\\\b\"\n"]],
+      expect: /misses an id behind the escape\(s\)/ },
+    { id: "vacuity-demo-ledger-boundary-dropped", kind: :vacuity,
+      rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
+      what: "the boundary is DELETED instead of taught about escapes, so `SK-001` becomes a ledger id",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "LEDGER_WORD_START      = \"(?:\#{LEDGER_ESCAPE_RUN_ALTS.join('|')}|(?<![A-Za-z0-9_]))\"\n",
+              "LEDGER_WORD_START      = \"\"\n"]],
+      expect: /now matches a shape that is NOT a ledger id/ },
     { id: "vacuity-demo-ledger-lexer", kind: :vacuity,
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
       what: "the comment-versus-code distinction the whole ban rests on must be proved, not assumed",
@@ -2422,7 +2444,29 @@ end
 # below it, because two copies of one pattern is two things to be wrong in
 # different ways -- and the second one to rot would rot silently, since both
 # rules are BANS whose obedience and whose blindness print the same zero.
-LEDGER_ID_RE = /\b[KT]-\d{3,4}\b/
+#
+# ITS LEADING BOUNDARY IS NOT `\b`, AND THAT IS A MEASUREMENT (K-1537). Inside
+# a Ruby string literal `\n` is TWO characters -- a backslash and the LETTER
+# `n` -- so `puts "\nK-724 ..."` puts a word character immediately before the
+# `K` and a leading `\b` cannot match. WATCHED: the line planted WITH the `\n`
+# in a demo's `app/` left this script AND `bin/check-shipped-archaeology` at
+# exit 0; the identical line without it reddened the second at exit 1, so the
+# PATTERN, not the scope, was what decided. The class is every escape whose
+# body is a word character -- `\t`, `\r`, `\e`, `\s`, `\a`, `\f`, `\v`,
+# `\b`, `\0`, `\cK`, and the numeric `\101`, `\x41`, `\u0041`.
+#
+# THE OBVIOUS REMEDY -- drop the leading `\b` -- IS REFUTED BY THIS TREE:
+# `git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'` finds 141 lines that carry no
+# ledger id at all, 129 of them `SK-001`, kiosk-demo-skooti's own scooter, which
+# is exactly the corpus this script scans. So the boundary HOLDS and an ESCAPE
+# RUN is admitted beside it: a backslash and one to five alphanumerics, five
+# being the longest escape Ruby spells with an all-alphanumeric body
+# (`\u0041`). Everything longer or punctuated (`\u{1F600}`, `\M-\C-x`, a
+# doubled `\\`) already ends in a non-word character. The alternation of
+# FIXED-length lookbehinds is forced: Onigmo rejects a variable-length one.
+LEDGER_ESCAPE_RUN_ALTS = (1..5).map { |n| "(?<=\\\\[A-Za-z0-9]{#{n}})" }.freeze
+LEDGER_WORD_START      = "(?:#{LEDGER_ESCAPE_RUN_ALTS.join('|')}|(?<![A-Za-z0-9_]))"
+LEDGER_ID_RE = /#{LEDGER_WORD_START}[KT]-\d{3,4}\b/
 
 tpl_files.sort.each do |name|
   path = File.join(GENERATOR_TEMPLATES_DIR, name)
@@ -2524,7 +2568,21 @@ DEMO_ID_FIXTURES = [
   "# The past-slot filter, K-480.",
   "# widened by T-158",
   "  desc \"reset the demo\" # K-1099",
-  "abort(\"see K-1099\")"
+  "abort(\"see K-1099\")",
+  # K-1537: the shape that was INVISIBLE to this pattern for the whole of its
+  # existence. A `\\n` inside a string literal is a backslash and the letter
+  # `n`, so the id follows a word character and a leading `\\b` never matches.
+  "  puts \"\\nK-480 past-slot filter: ALL PASS\""
+].freeze
+
+# THE OTHER HALF OF K-1537, kept executable because the wrong remedy is the
+# tempting one. Deleting the leading boundary would catch the escape and would
+# also match 141 lines of the corpus this script scans that carry no ledger id
+# at all -- 129 of them `SK-001`, kiosk-demo-skooti's own scooter.
+DEMO_ID_ANTI_FIXTURES = [
+  "  SCOOTER = \"SK-001\"",
+  "  raise \"OK-1234\"",
+  "  # K-12345 has one digit too many"
 ].freeze
 DEMO_ID_IN_COMMENT = "# The past-slot filter, K-480.\n"
 DEMO_ID_IN_STRING  = "MSG = \"blocked by K-480\"\n"
@@ -2590,6 +2648,29 @@ unless dead_fixtures.empty?
   errors << "check-demo-copies: the K-1383 ledger-id pattern no longer matches its own fixture " \
             "(#{dead_fixtures.map(&:inspect).join(', ')}). LEDGER_ID_RE has stopped matching a " \
             "shape people write, so this ban is holding nothing and its clean zero means nothing."
+end
+
+live_anti = DEMO_ID_ANTI_FIXTURES.select { _1.match?(LEDGER_ID_RE) }
+unless live_anti.empty?
+  errors << "check-demo-copies: the K-1383 ledger-id pattern now matches a shape that is NOT a " \
+            "ledger id (#{live_anti.map(&:inspect).join(', ')}). Its leading boundary has been " \
+            "dropped rather than taught about escape sequences, and `SK-001` alone is 129 live " \
+            "lines of kiosk-demo-skooti -- a ban that reddens on a demo's fixture data is a ban " \
+            "somebody switches off."
+end
+
+# DERIVED, NOT LISTED (K-1537). The four escape letters somebody thinks of are
+# the four that get tested, and `\n` was invisible for the life of this pattern
+# because nobody thought of it either. So the arm asks for EVERY single-character
+# escape the boundary's own character class can spell.
+escape_blind = [*"a".."z", *"A".."Z", *"0".."9"].reject do |c|
+  "  MSG = \"\\#{c}K-480 refused\"".match?(LEDGER_ID_RE)
+end
+unless escape_blind.empty?
+  errors << "check-demo-copies: the K-1383 ledger-id pattern misses an id behind the escape(s) " \
+            "#{escape_blind.map { "\\#{_1}" }.join(', ')} -- the K-1537 class, where a backslash " \
+            "plus a word character stands between the boundary and the id. A ban blind to a " \
+            "spelling prints the same clean zero as an obeyed one."
 end
 
 fixture_tokens = ->(src) {

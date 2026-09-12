@@ -188,8 +188,7 @@ class Kiosk::StorefrontController < ActionController::API
     # OUT: the window is offered at the DELIVERY ADDRESS, so its zone comes off
     # the district the address routed to.
     # IN: a `date` the caller NAMES is a day on the CALLER's calendar, which the
-    # caller states in `Kiosk-Timezone`. Silence means the address's own clock,
-    # which is byte-identical to what this shop did before the header existed.
+    # caller states in `Kiosk-Timezone`. Silence means the address's own clock.
     zone        = DeliverySlots.zone_for(district)
     caller_zone = Kiosk::Server::CurrentRequest.timezone
 

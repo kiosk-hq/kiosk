@@ -620,14 +620,13 @@ at_dublin("2026-09-07T00:05:00") do
   assert(value_of(pair) == Date.new(2026, 9, 20),
          "a future day maps to the shop's own #{Date.new(2026, 9, 20)}, got #{value_of(pair)}")
 
-  # NO HEADER ⇒ THE ADDRESS'S OWN CLOCK, and that is byte-identical to what this
-  # shop did before the header existed: `date < today` and nothing else.
+  # NO HEADER ⇒ THE ADDRESS'S OWN CLOCK: `date < today` and nothing else.
   assert(refusal_of(WireArguments.caller_day(Date.new(2026, 9, 7), zone: DUBLIN, caller_zone: nil,
                                              soonest: soonest)).nil?,
          "with no declared zone, the shop's today is accepted")
   assert(refusal_of(WireArguments.caller_day(Date.new(2026, 9, 6), zone: DUBLIN, caller_zone: nil,
                                              soonest: soonest)).is_a?(OperationResult),
-         "…and the shop's yesterday is refused — the previous behaviour, now declared")
+         "…and the shop's yesterday is refused")
 end
 
 # ── 8. served_district/1 and missing_address/0 — ADDRESS-UPFRONT ────────────

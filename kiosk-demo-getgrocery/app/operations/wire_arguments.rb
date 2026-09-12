@@ -166,8 +166,7 @@ module WireArguments
   #
   # `delivery_slots`' `date` is a day the CALLER names — «tonight», «Friday» —
   # so it is read in the caller's calendar, which the caller states in
-  # `Kiosk-Timezone`. Silence means the address's own clock, which is
-  # byte-identical to what this shop did before the header existed.
+  # `Kiosk-Timezone`. Silence means the address's own clock.
   #
   # THE SHAPE OF THE ANSWER, and it is what makes both of the midnight
   # scenarios come out right. A calendar day is an INTERVAL, not an instant:
@@ -182,8 +181,7 @@ module WireArguments
   #     every row, rather than as a refusal for a day the customer is still in.
   #
   # With no header the caller's zone IS the address's, the interval is the
-  # shop's own day, and «has it ended» is exactly `date < today` — the previous
-  # behaviour, now declared rather than assumed.
+  # shop's own day, and «has it ended» is exactly `date < today`.
   #
   # @param date [Date] the day the caller named, already shape-checked
   # @param zone [ActiveSupport::TimeZone] the DELIVERY ADDRESS's clock

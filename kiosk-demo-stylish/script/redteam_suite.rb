@@ -10,9 +10,11 @@
 # surface cannot exhibit.
 #
 # Scenarios (each must be BLOCKED):
-#   CrossTenantRead    — B's my_appointments must NOT contain A's appointment
+#   CrossTenantRead    — B's my_appointments carries B's OWN booking and must
+#     NOT contain A's; the positive half is what stops an empty list passing
 #   ForgedUserId       — an agent-supplied user_id in book_appointment args is
-#     REFUSED (400 bad_request naming it) and B's own booking never lands under A
+#     REFUSED (400 bad_request naming it), and A's list carries A's OWN booking
+#     while B's own booking never lands under A
 #   MissingAuth        — a request with no Authorization → 401
 #   GarbageToken       — an unparseable bearer token → 401
 #   UnknownQuery       — an unregistered query name → 404
@@ -198,12 +200,31 @@ rc, appt_a = WIRE.post_json(
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a)}" unless rc == 200
 appt_id_a = appt_a["appointment_id"]
 
+# ── Fixture: B books an appointment of their OWN ─────────────────────────────
+#
+# THIS BOOKING COMES BEFORE THE TWO BEATS BELOW, and the order is the whole
+# point. Both beats assert an ABSENCE — A's row is not under B, B's row is not
+# under A — and an absence over an EMPTY list is satisfied by a
+# `my_appointments` that answers `[]` to everybody. So each beat needs a
+# POSITIVE CONTROL: the caller must see their OWN row in the same answer that
+# lacks the other's. B has one only if B has booked, and that has to happen
+# before B's list is read.
+rc_b, bobs = WIRE.post_json(
+       "/kiosk/book_appointment",
+       { salon_id: salon_id, slot: FUTURE_SLOT.call(2, 10) },
+       BOB.bearer,
+     )
+abort "B book_appointment failed (#{rc_b}): #{JSON.generate(bobs)}" unless rc_b == 200
+appt_id_bob = bobs["appointment_id"]
+
 # ── CrossTenantRead — B must not see A's appointment ─────────────────────────
 rc, b_appts = WIRE.get_json("/kiosk/my_appointments", {}, BOB.bearer)
 b_ids = Array(b_appts).map { |r| r["id"] }
+b_sees_own = b_ids.include?(appt_id_bob)
 BATTERY.record("CrossTenantRead",
-               rc == 200 && !b_ids.include?(appt_id_a),
-               "B's my_appointments #{b_ids.inspect} excludes A's #{appt_id_a}")
+               rc == 200 && b_sees_own && !b_ids.include?(appt_id_a),
+               "B's my_appointments #{b_ids.inspect} carries B's OWN #{appt_id_bob.inspect} " \
+               "(sees_own=#{b_sees_own}) and excludes A's #{appt_id_a}")
 
 # ── ForgedUserId — B books with A's user_id in the args ──────────────────────
 #
@@ -220,19 +241,18 @@ rc, forged = WIRE.post_json(
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("user_id")
 
 # And the principal really does come from the token, not from anything the
-# caller sent: B's LEGITIMATE booking lands under B and never under A.
-rc_b, bobs = WIRE.post_json(
-       "/kiosk/book_appointment",
-       { salon_id: salon_id, slot: FUTURE_SLOT.call(2, 10) },
-       BOB.bearer,
-     )
-appt_id_bob = bobs["appointment_id"]
+# caller sent: B's LEGITIMATE booking, made above, never lands under A. That
+# absence carries its own POSITIVE CONTROL for the reason given at the fixture —
+# A's OWN booking must be in the very list B's is missing from, or an endpoint
+# gone dark would read here as perfect isolation.
 rc_a, a_appts = WIRE.get_json("/kiosk/my_appointments", {}, ALICE.bearer)
 a_ids = Array(a_appts).map { |r| r["id"] }
+a_sees_own = a_ids.include?(appt_id_a)
 BATTERY.record("ForgedUserId",
-               refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(appt_id_bob),
+               refused && rc_a == 200 && a_sees_own && !a_ids.include?(appt_id_bob),
                "forged user_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming user_id); " \
-               "A's list #{a_ids.inspect} excludes B's #{appt_id_bob.inspect}")
+               "A's list #{a_ids.inspect} carries her OWN #{appt_id_a.inspect} " \
+               "(sees_own=#{a_sees_own}) and excludes B's #{appt_id_bob.inspect}")
 
 # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
 rc, _ = WIRE.get_json("/kiosk/salons")

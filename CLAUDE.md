@@ -81,7 +81,11 @@ universal agent skill is `skill.md` on the same site.
   holds it. Saying «none» here was wrong for a day, K-1536.) So the same
   script's `SPEC_UNITS` manifest keys on the UNIT NAME over the whole tracked
   spec corpus, and a helper copied into a second spec file — in another demo or
-  in the same one — fails the build until it is declared (K-1536). Which rule
+  in the same one — fails the build until it is declared (K-1536). The FILE is
+  held too: a relative path that two or more of those spec files share must be
+  declared in `EXTRA_SCANNED`, which is what hands it to the file-level manifest
+  and its COPIES entry — without that the unit rule compares the names it knows
+  and everything else in the copy is compared against nothing (K-1550). Which rule
   reaches how many copies is COUNTED on every run and printed in the green line;
   read it there rather than restating it here.
   The `db/migrate` copies are ALSO held against the engine's install-generator

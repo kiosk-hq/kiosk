@@ -432,6 +432,22 @@ if ARGV.include?("--self-test")
               "DEMO_SPEC_SUBDIRS = %w[spec test].freeze",
               "DEMO_SPEC_SUBDIRS = %w[spec_gone].freeze"]],
       expect: /the demo-spec harness rule read 0 Ruby file\(s\)/ },
+    { id: "spec-whole-file-copied-at-one-path", kind: :break,
+      rule: "A SPEC PATH TWO DEMOS SHARE MUST REACH THE FILE MANIFEST (K-1550)",
+      what: "a whole spec file copied into a second demo at the SAME relative path, whose every " \
+            "unit name is ALREADY declared — so the name-keyed rule compares them, they agree, " \
+            "and the file itself is held by nothing (measured: bare guard exit 0)",
+      ops:  [[:copy, "kiosk-demo-philslist/spec/board_clock_spec.rb",
+              "kiosk-demo-tudu/spec/board_clock_spec.rb"]],
+      expect: %r{spec/board_clock_spec\.rb: 2 demos ship a file at this SAME relative path} },
+    { id: "vacuity-spec-shared-path-key", kind: :vacuity,
+      rule: "A SPEC PATH TWO DEMOS SHARE MUST REACH THE FILE MANIFEST (K-1550)",
+      what: "the group key keeps its demo directory, so every path is unique by construction and " \
+            "no duplicate can ever be found",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "spec_by_relpath   = spec_corpus.group_by { |rel| rel.split(\"/\", 2).last }",
+              "spec_by_relpath   = spec_corpus.group_by { |rel| rel }"]],
+      expect: /the K-1550 shared-path rule grouped \d+ key\(s\) and \d+ of them are not a path/ },
     { id: "vacuity-spec-harness-stale-entry", kind: :vacuity,
       rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
       what: "a declared unit name that the corpus no longer shares reads as coverage",
@@ -5883,6 +5899,72 @@ if SPEC_UNITS.any? && spec_compared.zero?
             "(K-1536)."
 end
 
+# ── A SPEC PATH TWO DEMOS SHARE MUST REACH THE FILE MANIFEST (K-1550) ───────
+#
+# THE HOLE THE RULE ABOVE LEAVES, AND IT IS THE RULE ABOVE RUN BACKWARDS.
+# K-1536's header says: «`:per_demo` says the FILE is not compared; it does not
+# exempt what is inside it.» Here the units are held and the FILE is not. The
+# unit rule keys on a NAME, so it compares the units it can see and everything
+# else in a copied file — the fixtures, the assertions, the tail, the prose —
+# is compared against nothing at all.
+#
+# MEASURED at head by planting exactly that, twice, and the second plant is the
+# one that matters because the FIRST was misleading. `spec/salon_clock_spec.rb`
+# copied byte-for-byte from stylish into skooti and left UNTRACKED: bare guard
+# exit 0, the path not mentioned once — but only because the corpus is
+# `git ls-files` first, so an untracked file is not in it at all. `git add`ed,
+# the same copy goes RED, and for an INCIDENTAL reason: it defines `PARIS`,
+# which is not in SPEC_UNITS, so the NAME rule catches it. That catch is luck.
+# `spec/board_clock_spec.rb` copied from philslist into tudu and tracked defines
+# `FAILURES`, `MONTREAL`, `TOKYO` and `assert` — every one of them already
+# declared, every copy byte-identical, so all four agreed and produced silence:
+# **bare guard exit 0, zero mentions of the path.** A whole file, duplicated at
+# one relative path, held by nothing.
+#
+# WHAT CLOSES IT, and it is two lines over a corpus that is already derived:
+# every relative path that two or more files of this corpus share must be
+# declared in EXTRA_SCANNED. That is not a formality — EXTRA_SCANNED is what
+# puts a path outside SCAN_ROOTS into the file-level `found` map, which then
+# REQUIRES a COPIES entry with a rule (`:code`, `:lockstep`, `:per_demo`, …),
+# which is where a `:per_demo` path in turn meets FRAGMENT_PATHS. One
+# declaration hands the path to every file-level rule at once.
+#
+# It is scoped to THIS corpus on purpose: a duplicate under `lib`, `app`,
+# `script` or `db/migrate` is already seen, because SCAN_ROOTS walks those. The
+# reject below asks that question rather than assuming it, so widening
+# DEMO_SPEC_SUBDIRS into a scan root tomorrow does not produce a demand that is
+# already met.
+spec_undeclared_paths = spec_shared_paths.keys.reject do |sub|
+  EXTRA_SCANNED.include?(sub) || SCAN_ROOTS.any? { |root| sub == root || sub.start_with?("#{root}/") }
+end
+spec_undeclared_paths.sort.each do |sub|
+  where = spec_shared_paths[sub].sort
+  errors << "#{sub}: #{where.size} demos ship a file at this SAME relative path " \
+            "(#{where.join(', ')}) and the path is not in EXTRA_SCANNED, so the FILE-level " \
+            "manifest cannot see it. The unit rule above holds the NAMES it recognises inside " \
+            "these files and nothing else in them — the fixtures, the assertions and the tail " \
+            "are compared against nothing. Add #{sub.inspect} to EXTRA_SCANNED and give it a " \
+            "COPIES entry with the reason the copies exist (K-1550)."
+end
+
+# THE VACUITY ARM IS ABOUT THE KEY, because that is the one way this rule goes
+# silently blind: the group key is the path with its demo directory stripped, and
+# a key that kept the demo prefix would be unique to its demo BY CONSTRUCTION —
+# every group would hold exactly one file, nothing would ever be «shared», and
+# the rule would pass forever over a tree full of duplicates. Zero shared paths
+# is a legitimate clean state and is NOT asserted on; a key that is not a path
+# relative to the demo is a broken measurement and is.
+spec_malformed_keys = spec_by_relpath.keys.reject do |sub|
+  DEMO_SPEC_SUBDIRS.any? { |dir| sub == dir || sub.start_with?("#{dir}/") }
+end
+if spec_by_relpath.any? && spec_malformed_keys.any?
+  errors << "check-demo-copies: the K-1550 shared-path rule grouped #{spec_by_relpath.size} key(s) " \
+            "and #{spec_malformed_keys.size} of them are not a path under " \
+            "kiosk-demo-*/{#{DEMO_SPEC_SUBDIRS.join(',')}} (#{spec_malformed_keys.sort.first(3).join(', ')}). " \
+            "The demo directory is no longer being stripped, so every key is unique to its own demo " \
+            "and no duplicate can ever be found. A rule that cannot match is not a rule."
+end
+
 # -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
 #
 # `Gemfile.lock` is declared NOT COMPARED, and for its resolved-versions half
@@ -8026,7 +8108,9 @@ if errors.empty?
        "above; #{spec_on_shared} of those files sit at the #{spec_shared_paths.size} relative " \
        "path(s) that two or more of them share — which that rule CAN be pointed at, and is — " \
        "while the other #{spec_corpus.size - spec_on_shared} are reachable at no granularity but " \
-       "the unit name — K-1536)"
+       "the unit name — K-1536), and every one of those #{spec_shared_paths.size} shared path(s) " \
+       "is declared in the FILE-level manifest, so the whole file is compared and not merely the " \
+       "unit names inside it (K-1550)"
   exit 0
 end
 

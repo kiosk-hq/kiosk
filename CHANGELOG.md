@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **A whole spec file copied into a second demo at the same relative path now fails the build (K-1550).** The unit rule held the names inside it; the file itself was held by nothing.
+
 - 2026-09-13: **The demo-spec rule now COUNTS the path-keyed rule’s reach instead of claiming it is zero (K-1536).** Three corpus files do share a path, and four places said none did.
 
 - 2026-09-13: **`rake -D demo:schema` reads straight again in atablefor and philslist (K-1549).** A flush-left clause dropped both descriptions’ `<<~` dedent; the guard now bans a zero-indent body.

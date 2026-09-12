@@ -415,6 +415,16 @@ if ARGV.include?("--self-test")
              [:edit, "kiosk-demo-skooti/spec/licence_flag_spec.rb",
               "FAILURES = []", "FAILURES = []\n\ndef probe_shared_helper = :ok"]],
       expect: /probe_shared_helper: defined in 2 demo spec\/test file\(s\).*declared NOWHERE/ },
+    { id: "spec-harness-undeclared-unit-half-path-keyed", kind: :break,
+      rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
+      what: "the same helper lands in ONE copy of the shared path AND in a demo-unique spec — the " \
+            "case the old justification said could not exist, and the message must COUNT the " \
+            "reach of the path-keyed rule rather than claim it is zero",
+      ops:  [[:edit, "kiosk-demo-atablefor/spec/wire_arguments_spec.rb",
+              "FAILURES = []", "FAILURES = []\n\ndef probe_reach_helper = :ok"],
+             [:edit, "kiosk-demo-stylish/spec/salon_clock_spec.rb",
+              "FAILURES = []", "FAILURES = []\n\ndef probe_reach_helper = :ok"]],
+      expect: /probe_reach_helper: defined in 2 .*1 of them sits at a relative path FRAGMENTS walks and 1 does not/ },
     { id: "vacuity-spec-harness-corpus", kind: :vacuity,
       rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
       what: "the corpus glob stops matching, so a lockstep rule over nothing exits 0",
@@ -5618,14 +5628,27 @@ end
 # until it is declared» was not being broken at FILE level here; it was never
 # reaching the level the duplication is actually at.
 #
-# WHERE IT IS ACTUALLY AT: THE UNIT. `assert` is hand-copied into eleven of
-# those files across seven demos and `guard` into six across five, and no two of
-# them share a path. FRAGMENTS holds units too, and cannot help: its key is
-# `path#unit`, so it only ever compares copies of the SAME file. This rule keys
-# on the NAME over the whole corpus, which is the only granularity at which
-# these copies are visible — and it is how `at_dublin`, shared by two spec files
-# INSIDE getgrocery, turns out to be a copy as well. No rule keyed on a path, or
-# on a demo, could have seen that one.
+# WHERE IT IS ACTUALLY AT: THE UNIT. `assert` and `guard` are hand-copied
+# across these files in numbers this script's own run prints. FRAGMENTS holds
+# units too, and holds SOME of these rather than none: its key is `path#unit`,
+# so it reaches exactly those copies whose own relative path is declared in
+# FRAGMENT_PATHS, and `spec/wire_arguments_spec.rb` is — three demos ship it and
+# all three define `FAILURES`, `assert` and `guard`. What no path-keyed rule can
+# do is hold a unit whose copies live at DIFFERENT paths, which is most of them
+# here; this rule keys on the NAME over the whole corpus, so the reach of each
+# rule is a number rather than a claim, and the run prints both. It is also how
+# `at_dublin`, shared by two spec files INSIDE getgrocery, turns out to be a copy
+# as well — no rule keyed on a path, or on a demo, could have seen that one.
+#
+# THE REACH IS COUNTED AND NOT ASSERTED BECAUSE ASSERTING IT WAS WRONG (K-1536,
+# reopened 2026-09-13). The first writing of this rule compressed a true
+# measurement — «exactly ONE relative path in that corpus exists in two or more
+# demos, and it is already declared» — into «no two of them share a path», and
+# put that in four places: here, in the error a violator reads, in the green line
+# of every passing run, and in reference/CLAUDE.md. The script's own planted
+# failure message refuted it, listing atablefor's, getgrocery's and hoteling's
+# copies of that one path side by side in a single bracket. A justification that
+# the run can derive should never be a sentence somebody keeps.
 #
 # WHAT THE FIRST RUN FOUND, before a line of this manifest was written:
 # `assert` in TWO bodies (skooti padded `OK` with two extra spaces so it lines
@@ -5736,20 +5759,37 @@ spec_corpus.each do |rel|
   units.each { |name, src| spec_unit_sources[name][rel] = code_norm(src) }
 end
 
-# A name every one of whose copies is already held by the path-keyed fragment
-# rule is DELEGATED, not undeclared. Derived from that rule's own manifest, so
-# the two cannot disagree about who owns a unit.
-spec_delegated = lambda do |name, rels|
-  rels.all? do |rel|
-    sub = rel.split("/", 2).last
-    FRAGMENT_PATHS.include?(sub) && FRAGMENTS.key?("#{sub}##{name}")
-  end
+# TWO SEPARATE QUESTIONS ABOUT ONE COPY, both counted rather than claimed
+# (K-1536). FRAGMENTS' key is `path#unit`, so «could a path-keyed rule be
+# pointed at this copy» and «does it already hold this copy» are not the same
+# question, and the first one is the one the old justification got wrong: it
+# said the answer was always no, when three of these files sit at
+# `spec/wire_arguments_spec.rb`, which FRAGMENT_PATHS walks.
+spec_path_walked = lambda { |rel| FRAGMENT_PATHS.include?(rel.split("/", 2).last) }
+
+spec_held_by_fragments = lambda do |name, rel|
+  sub = rel.split("/", 2).last
+  FRAGMENT_PATHS.include?(sub) && FRAGMENTS.key?("#{sub}##{name}")
 end
+
+# A name EVERY one of whose copies FRAGMENTS already holds is DELEGATED, not
+# undeclared. Derived from that rule's own manifest, so the two cannot disagree
+# about who owns a unit.
+spec_delegated = lambda { |name, rels| rels.all? { |rel| spec_held_by_fragments.call(name, rel) } }
 
 spec_shared     = spec_unit_sources.select { |_name, byfile| byfile.size >= 2 }
 spec_delegated_names = spec_shared.select { |name, byfile| spec_delegated.call(name, byfile.keys) }.keys
 spec_owned      = spec_shared.reject { |name, _| spec_delegated_names.include?(name) }
 spec_compared   = 0
+
+# The corpus's OWN split, derived on this run so the green line can report the
+# reach of each rule instead of asserting it (K-1536). A relative path — the
+# part after the demo directory — that two or more corpus files share is a path
+# the FRAGMENTS rule above CAN be pointed at; a path unique to its demo is
+# reachable at no granularity but the unit name.
+spec_by_relpath   = spec_corpus.group_by { |rel| rel.split("/", 2).last }
+spec_shared_paths = spec_by_relpath.select { |_sub, group| group.size >= 2 }
+spec_on_shared    = spec_shared_paths.values.sum(&:size)
 
 # DISCOVERY: a unit name in two or more files of this corpus must be declared.
 # The same property the file-level manifest has, at the granularity these copies
@@ -5757,11 +5797,21 @@ spec_compared   = 0
 spec_owned.each do |name, byfile|
   next if SPEC_UNITS.key?(name)
 
+  reach = byfile.keys.count { |rel| spec_path_walked.call(rel) }
+  rest  = byfile.size - reach
+  reach_says =
+    if reach.zero?
+      "not one of them sits at a relative path FRAGMENTS walks, so no path-keyed rule can see " \
+        "this at all"
+    else
+      "#{reach} of them #{reach == 1 ? 'sits' : 'sit'} at a relative path FRAGMENTS walks and " \
+        "#{rest} #{rest == 1 ? 'does' : 'do'} not, so a path-keyed rule can hold part of this " \
+        "and never the whole of it"
+    end
   errors << "#{name}: defined in #{byfile.size} demo spec/test file(s) " \
             "(#{byfile.keys.join(', ')}) and declared NOWHERE. These files are hand-copied and " \
-            "no two of them share a path, so neither the file manifest nor FRAGMENTS can see " \
-            "this — declare it in SPEC_UNITS in bin/check-demo-copies with the reason the copies " \
-            "exist, or give the second copy its own name (K-1536)."
+            "#{reach_says} — declare it in SPEC_UNITS in bin/check-demo-copies with the reason " \
+            "the copies exist, or give the second copy its own name (K-1536)."
 end
 
 SPEC_UNITS.each do |name, entry|
@@ -7973,8 +8023,10 @@ if errors.empty?
        "across #{spec_corpus.size} demo spec/test file(s) in " \
        "#{spec_corpus.map { |rel| rel.split('/').first }.uniq.size} demo(s) " \
        "(#{spec_delegated_names.size} further name(s) delegated to the path-keyed fragment rule " \
-       "above; this is the only granularity at which these copies are visible, since no two of " \
-       "those files share a path — K-1536)"
+       "above; #{spec_on_shared} of those files sit at the #{spec_shared_paths.size} relative " \
+       "path(s) that two or more of them share — which that rule CAN be pointed at, and is — " \
+       "while the other #{spec_corpus.size - spec_on_shared} are reachable at no granularity but " \
+       "the unit name — K-1536)"
   exit 0
 end
 

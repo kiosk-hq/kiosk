@@ -73,11 +73,17 @@ universal agent skill is `skill.md` on the same site.
   `:code` semantics (T-120), and a unit name appearing in two or more copies of
   a declared path fails the build until it is declared — so copy a METHOD
   between demos → declare it there, or give the second copy its own name.
-  A demo's `spec/` and `test/` trees are held one step differently, because no
-  two of those files share a path and a path-keyed rule cannot see them at all:
-  the same script's `SPEC_UNITS` manifest keys on the UNIT NAME over the whole
-  tracked spec corpus, so a helper copied into a second spec file — in another
-  demo or in the same one — fails the build until it is declared (K-1536).
+  A demo's `spec/` and `test/` trees are held one step differently, because the
+  duplication there is at UNIT granularity: a path-keyed rule reaches only the
+  copies that sit at a relative path two or more of those files share, and
+  almost all of them sit at a path unique to their own demo. (Not none — the
+  demos that ship `spec/wire_arguments_spec.rb` do share one, and `FRAGMENTS`
+  holds it. Saying «none» here was wrong for a day, K-1536.) So the same
+  script's `SPEC_UNITS` manifest keys on the UNIT NAME over the whole tracked
+  spec corpus, and a helper copied into a second spec file — in another demo or
+  in the same one — fails the build until it is declared (K-1536). Which rule
+  reaches how many copies is COUNTED on every run and printed in the green line;
+  read it there rather than restating it here.
   The `db/migrate` copies are ALSO held against the engine's install-generator
   `.rb.tt` templates (rendered with the generator's defaults, byte-matched), so
   editing a template in kiosk-server without regenerating the demos — or

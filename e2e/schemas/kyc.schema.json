@@ -34,11 +34,11 @@
         },
         "iat": {
           "type": "integer",
-          "description": "Optional; issued-at timestamp. Not enforced by the verifier."
+          "description": "Issued-at timestamp. Not enforced by the verifier."
         },
         "exp": {
           "type": "integer",
-          "description": "REQUIRED; an expired attestation is rejected."
+          "description": "An expired attestation is rejected."
         },
         "attributes": {
           "$ref": "#/$defs/attributes"

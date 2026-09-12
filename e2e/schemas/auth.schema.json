@@ -40,11 +40,11 @@
         },
         "pub": {
           "type": "string",
-          "description": "OPTIONAL. RFC 7638 thumbprint of the public key; verified only when present."
+          "description": "RFC 7638 thumbprint of the public key; verified only when present."
         },
         "iat": {
           "type": "integer",
-          "description": "OPTIONAL and informational only -- the server-issued `nonce` is the authoritative freshness bound, so an operator MUST NOT rely on this claim for freshness."
+          "description": "Informational only -- the server-issued `nonce` is the authoritative freshness bound, so an operator MUST NOT rely on this claim for freshness."
         }
       }
     },
@@ -112,7 +112,7 @@
         },
         "role": {
           "type": "string",
-          "description": "OPTIONAL operator-assigned role, and the type is the rule: Section 5.4 requires it to be OMITTED rather than null when absent, so `null` is not a permitted value here. NO endpoint accepts a client-requested role -- not registration, not the claim body, not the device-authorization request (Section 6.1) -- and where an operator sources it from a configured identity provider it comes INDIRECTLY, from the approving human's role at either binding ceremony (Section 6)."
+          "description": "Operator-assigned role, and the type is the rule: Section 5.4 requires it to be OMITTED rather than null when absent, so `null` is not a permitted value here. NO endpoint accepts a client-requested role -- not registration, not the claim body, not the device-authorization request (Section 6.1) -- and where an operator sources it from a configured identity provider it comes INDIRECTLY, from the approving human's role at either binding ceremony (Section 6)."
         },
         "iss": {
           "type": "string",

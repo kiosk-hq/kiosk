@@ -51,11 +51,11 @@
         },
         "min_client": {
           "type": "string",
-          "description": "Advisory minimum client version (optional)."
+          "description": "Advisory minimum client version."
         },
         "owner": {
           "type": "object",
-          "description": "Provider-chosen contact info (optional); SHOULD include at least an email."
+          "description": "Provider-chosen contact info; SHOULD include at least an email."
         },
         "auth": {
           "type": "object",
@@ -95,7 +95,7 @@
         },
         "skill": {
           "type": "object",
-          "description": "Optional pinned skill reference. Omitted entirely when no skill is pinned.",
+          "description": "Pinned skill reference. Omitted entirely when no skill is pinned.",
           "required": [
             "url",
             "sha256"

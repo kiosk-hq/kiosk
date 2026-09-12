@@ -88,7 +88,7 @@
         },
         "error_description": {
           "type": "string",
-          "description": "OPTIONAL human-readable detail. An AI assistant branches on `error` and never on this string."
+          "description": "Human-readable detail. An AI assistant branches on `error` and never on this string."
         }
       }
     },

@@ -9,7 +9,7 @@ round.
 
 **Found a security flaw? Open an issue — and read [SECURITY.md](SECURITY.md)
 first**, because a GitHub issue is public from the moment you file it and that
-page says so, says which of the two repositories to file in, and says what a
+page says so, names the repository each kind of report goes to, and says what a
 useful report carries.
 
 ## What to open, and where

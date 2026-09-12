@@ -169,7 +169,13 @@
 #   * `spec/`, `test/` — developer surfaces, absent from every `spec.files`,
 #     and the constitution REQUIRES an inline TODO/FIXME to carry a ledger id,
 #     which is a rule these directories have to be able to obey. So R1 and R2
-#     do not reach them, and neither do R5 and R6. R3 AND R4 DO: a gem's
+#     do not reach them, and neither do R5 and R6. R3 AND R4 DO — and so does
+#     R7, on its own footing one section down. WHICH RULES REACH WHICH SCOPE IS
+#     NOT SETTLED BY THIS PARAGRAPH: the run derives it from the rule table and
+#     prints it per scope, because the version of this file that added R7 left
+#     the `spec` scope's own table string saying «R3 and R4 only» while the run
+#     executed three rules over its 167 files, and a self-test arm now fails if
+#     any hand-written scope string names a rule id at all (K-1409). A gem's
 #     `spec/` is not shipped but it IS
 #     published, and neither a Russian sentence nor an attributed decision is
 #     readable to a stranger who clones this repository, whether or not it
@@ -228,7 +234,8 @@
 #       included. See the section below; the directory prefixes it recognises
 #       are DERIVED from the repository layout rather than typed here.
 #
-# AND THREE THINGS THAT ARE COUNTED RATHER THAN BANNED:
+# AND THE THINGS THAT ARE COUNTED RATHER THAN BANNED — the run prints which of
+# them reaches which scope, so this list is a description and never the answer:
 #
 #   C1  a bare `used to` — PRINTED, NEVER RED. It is the one construction that
 #       spells archaeology and ordinary English with the same letters, so it
@@ -244,6 +251,14 @@
 #       carries none of its words: «Was the DEFAULT while the log was a table;
 #       it is now an offer» sat in a shipped engine method for as long as it
 #       took someone to read the file. See the census section below.
+#   C4  the RETIREMENT CLAUSE — a passive removal verb, `until it was <-ed>`,
+#       or `before <NP> existed` — PRINTED, NEVER RED, and read on the
+#       NARRATIVE SURFACES only (K-1409). Two demo READMEs carried one for
+#       nineteen days and eighteen days inside a class this repository had
+#       already swept four times. Over the four scopes the census reads, the
+#       union of the three shapes matches 78 lines and only 7 of them are on a
+#       page somebody reads end to end; a ban over the other 71 would redden
+#       «a nil hint is dropped» in every demo. See the census section below.
 #
 # ── R5 AND R6: A PUBLIC ARTEFACT DESCRIBES WHAT IS (T-195, K-1460) ──────────
 #
@@ -649,6 +664,55 @@ RETIRED_OR_PLUPERFECT_RE = /\b(?:retired|had\s+been)\b/i
 # cannot honestly disappear.
 TENSE_CONTRAST_RE = /\b(?:was|were)\b.{0,160}?\b(?:it|they|this|that|which)\s+(?:is|are)\s+now\b/i
 
+# THE NARRATIVE SURFACES — a page somebody READS end to end rather than a file
+# they open at a line. C4 is restricted to these and the restriction is a
+# MEASUREMENT rather than a taste; see the census section for the 78-vs-7 split
+# and for why the other 71 lines are about runtime data instead of about this
+# project's own past.
+NARRATIVE_EXTS = %w[.md .html].freeze
+
+def narrative_file?(path) = NARRATIVE_EXTS.include?(File.extname(path))
+
+# THE RETIREMENT CLAUSE (K-1409, the fourth and fifth reopen sites). Three
+# shapes that all say «this thing of ours stopped existing», and NONE of them
+# carries an R6 marker:
+#
+#   (1) a REMOVAL VERB in the passive — «published a copy … as `verbs` until it
+#       was dropped», «the field was renamed»;
+#   (2) `until <it|they|this|that> was <-ed>`, the subordinate clause that ends
+#       a thing;
+#   (3) `before <NP> existed|arrived|landed|shipped` — «which is what this shop
+#       did before the header existed».
+#
+# WHY A CENSUS AND NOT AN EIGHTH RULE, MEASURED RATHER THAN ARGUED. Over the
+# four scopes this census reads, the union of the three shapes matches 78 lines
+# — 55 in `.rb`, 8 in `.json`, 7 in `.md`, 6 in `.sh`, 1 `.py`, 1 `.example`.
+# Effectively all of the 71 non-narrative ones are about RUNTIME DATA and are
+# correct prose: «a nil hint is dropped», «the challenge is deleted so it can
+# never be replayed», «empty-valued params are dropped», «Path C — RLS is
+# dropped from this demo». A ban over them would redden seventy sentences to
+# catch two, which is a gate somebody switches off inside a day.
+#
+# SO THE CENSUS IS RESTRICTED TO THE NARRATIVE SURFACES, and that restriction
+# is where the two reopen sites live: a demo README is the first thing an
+# operator opens, which is the surface Phil's rule was written about. Restricted
+# that way the same union prints SEVEN rows, and adjudicating them one by one
+# gives TWO archaeology and FIVE live — the three `before-after.md` sentences
+# declaring the elision the document itself performs, getgrocery's «a slot whose
+# start has already passed *there* is dropped», and prove's «is replaced by a
+# government identity service login», which is what production will do. Two out
+# of seven is a census; it is nowhere near a ban.
+#
+# The gap this leaves is stated rather than hidden: a code comment narrating
+# this project's own history carries none of R6's markers either and is not
+# printed here. That is the same door C1 and C2 stop at, for the same reason —
+# a census is worth its cost only while every row it prints is worth reading.
+RETIREMENT_CLAUSE_RE =
+  /\b(?:was|were|has\s+been|have\s+been|is|are)\s+
+     (?:dropped|removed|deleted|retired|renamed|replaced|superseded|gone)\b
+   |\buntil\s+(?:it|they|that|this)\s+(?:was|were)\s+\w+ed\b
+   |\bbefore\s+[^.;:]{0,40}?\b(?:existed|arrived|landed|shipped)\b/ix
+
 # Counted, never banned. Same shape as a rule so `scan` can take it unchanged;
 # `read:` is the adjudication note printed beside each row, per census rather
 # than shared, because the two readings a reader has to separate are different.
@@ -669,7 +733,14 @@ CENSUS = [
     none: "no past copula answered by an explicit «it is now»",
     read: "a WITHIN-REQUEST sequence («the id was claimed, so it is now spent») describes " \
           "what the code does and wants nothing done; «X was the default; it is now an " \
-          "offer» is archaeology about this project and wants the second half alone" }
+          "offer» is archaeology about this project and wants the second half alone" },
+  { id: "C4", re: RETIREMENT_CLAUSE_RE, scopes: %i[gem demo e2e deploy], narrative_only: true,
+    what: "a retirement clause on a narrative surface (#{NARRATIVE_EXTS.join(', ')})",
+    none: "no retirement clause on a narrative surface (#{NARRATIVE_EXTS.join(', ')})",
+    read: "a removal that happens to RUNTIME DATA («a nil hint is dropped», «a passed slot " \
+          "is dropped») and a document declaring its own elision («Two things were deleted») " \
+          "both want nothing done; «we published X until it was dropped» and «what this shop " \
+          "did before the header existed» are archaeology and want the present tense" }
 ].freeze
 
 def rules_for(scope) = RULES.select { |r| r[:scopes].include?(scope) }
@@ -965,6 +1036,7 @@ HASH_COMMENT_EXTS = %w[.sh .py].freeze
 
 def hash_comment_file?(path) = HASH_COMMENT_EXTS.include?(File.extname(path))
 
+
 # ── A MARKDOWN TABLE PUTS THE UNIT IN THE COLUMN HEADER (K-1511) ────────────
 #
 # R5 already exempts `~0.3 ms` and `~0.2 s`: a token carrying a unit is a
@@ -1034,6 +1106,11 @@ Hit = Struct.new(:path, :line, :rule, :where, :text)
 # Ruby, carries a hit, and Ripper could not read it.
 def scan(path, rules = RULES)
   src = rule_source(path)
+  # A rule declared `narrative_only:` reads the pages somebody reads end to end
+  # and nothing else. Filtered HERE rather than at the call sites so the file
+  # set is a property of the rule, and so every caller — the check, the census
+  # totals and the EXEMPTION TOTALS block — asks the same question.
+  rules = rules.reject { |r| r[:narrative_only] && !narrative_file?(path) }
   return [[], true] unless rules.any? { |r| src.match?(r[:re]) }
 
   # PER RULE, not per line: two rules can both match a line while only one of
@@ -1128,29 +1205,79 @@ REMEDY = {
           "drop the reference and state the property"
 }.freeze
 
+# `per:` STATES THE FILE SET AND NOTHING ELSE, and `door:` states WHY a scope
+# turns rules away — in prose, without naming one. WHICH rules reach a scope is
+# read off `RULES` at run time and printed beside these strings, because the
+# hand-written half of this table had already gone false about the rule the
+# wave that added it wrote: `spec` said «R3 and R4 only» while the run executed
+# R3, R4 AND R7 over its 167 files (K-1409, the second reopen ground). A
+# self-test arm holds every string here to name no rule id at all, so the
+# question can only be answered by the derivation.
 SCOPES = {
   gem: { label: "a shipped gem", dirs: -> { shipped_gems }, files: ->(d) { shipped_files(d) },
          per: "everything the gem's own `spec.files` names, plus <gem>.gemspec, " \
               "minus CHANGELOG.md and LICENSE.txt" },
   demo: { label: "a demo", dirs: -> { demo_dirs }, files: ->(d) { demo_files(d) },
           per: "app/**, lib/**, script/**, config/**, db/** (text extensions), " \
-               "Rakefile, config.ru, README.md, before-after.md" },
+               "Rakefile, config.ru, README.md, before-after.md",
+          door: "one demo is NAMED after the maintainer and the word is its subject " \
+                "matter, so the maintainer-named rule stops at the door" },
   spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
           files: ->(d) { spec_files(d) },
-          per: "spec/** (text extensions) — R3 and R4 only" },
+          per: "spec/** (text extensions)",
+          door: "a developer surface, absent from every spec.files, and the constitution " \
+                "REQUIRES an inline TODO/FIXME to cite a row — a rule these directories " \
+                "have to be able to obey" },
   demo_spec: { label: "a demo's spec/ and test/ (published, not shipped)",
                dirs: -> { demo_spec_dirs }, files: ->(d) { demo_spec_files(d) },
-               per: "spec/**, test/** (text extensions) — R3 only, plus R7; R4 stops at " \
-                    "the door on the demo scope's own footing (one demo is NAMED after " \
-                    "the maintainer, and it is the same app in both subtrees)" },
+               per: "spec/**, test/** (text extensions)",
+               door: "a developer surface, as a gem's spec/ is; and the maintainer-named " \
+                     "rule stops here on the demo scope's own footing — it is the same app " \
+                     "in both subtrees" },
   e2e: { label: "the e2e harness", dirs: -> { e2e_dirs }, files: ->(d) { e2e_files(d) },
          per: "e2e/** (.md .sh .rb .json), minus .gems/ and tmp/; a vendored " \
               "schema mirror is read for its TOP-LEVEL `$comment` only" },
   deploy: { label: "the deploy runbook", dirs: -> { deploy_dirs },
             files: ->(d) { deploy_files(d) },
-            per: "deploy/** (every tracked file) — R5, R6 and R7 only; R1–R4 stop " \
-                 "at the door on `bin/`'s footing (maintainer tooling for one fleet)" }
+            per: "deploy/** (every tracked file)",
+            door: "maintainer tooling for one fleet, on `bin/`'s footing: its reader holds " \
+                  "the ssh key, so the four unresolvable-reader rules stop at the door " \
+                  "while the three about a document describing something that does not " \
+                  "exist do not" }
 }.freeze
+
+# The rule ids a scope carries, DERIVED. Printed beside `per:` so the two
+# halves of the scope table cannot say different things.
+def scope_rule_line(scope)
+  live   = rules_for(scope).map { |r| r[:id] }
+  census = census_for(scope).map { |r| r[:id] }
+  gone   = exempt_rules_for(scope).map { |r| r[:id] }
+  parts = ["asserts #{live.join(', ')}"]
+  parts << "counts #{census.join(', ')}" unless census.empty?
+  parts << "exempt here: #{gone.join(', ')}" unless gone.empty?
+  parts.join(" · ")
+end
+
+# The exemptions that are NOT a (rule, scope) cell — a path this guard never
+# opens, or a carve-out INSIDE one rule. The rule-table half of this banner used
+# to live here too, in a hand-typed sentence, and it went false (K-1409): which
+# rules reach which scope is printed per scope above, derived from `RULES`. A
+# self-test arm holds every line below to name no rule id, so nobody can restate
+# the derivation here a second time and let the two rot apart.
+EXEMPT_BANNER = [
+  "bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption);",
+  "Gemfile/Gemfile.lock/mise.toml and the rest of a directory root (not packaged, not browsed);",
+  "a demo's public/, log/, tmp/, storage/ and its non-text config (credentials keys, *.enc);",
+  "any line carrying a live TODO/FIXME (the constitution requires that marker to cite a row);",
+  "e2e/.gems (the installed bundle) and e2e/tmp (the generated app);",
+  "the BODY of a vendored schema mirror in EITHER home (everything but the TOP-LEVEL",
+  "$comment bin/check-spec-schemas exempts);",
+  "`spec.authors`, the one line RubyGems reads, for the maintainer-named rule only;",
+  "for the retired-wire rule only, a version token that is CODE rather than prose (a float",
+  "literal, a dependency constraint), and a bare number under a table column that names its unit;",
+  "and anything under bin/ for the dangling-path rule (every `bin/<x>` in this tree is a DEMO's",
+  "binstub, not a repo-root path)"
+].freeze
 
 def run_check
   puts "SCOPE (derived from the layout and from each gem's own `spec.files`, not listed)"
@@ -1161,30 +1288,13 @@ def run_check
     puts "  #{name}s".ljust(17) + ": #{dirs.size} — #{dirs.map { |d| File.basename(d) }.join(', ')}"
     puts "    files        : #{files.size} (#{ruby} Ruby, #{files.size - ruby} other)"
     puts "    per directory: #{spec[:per]}"
+    puts "    rules        : #{scope_rule_line(name)}   [derived from the rule table]"
+    puts "    door         : #{spec[:door]}" if spec[:door]
     [name, files]
   end
-  puts "  exempt         : bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption); " \
-       "spec/, test/ for R1/R2/R5/R6 (developer surfaces; R3 and R7 reach"
-  puts "                   BOTH a gem's spec/ and a demo's spec/ and test/, and R4 reaches " \
-       "the gem's only);"
-  puts "                   Gemfile/Gemfile.lock/mise.toml and the rest of a directory root " \
-       "(not packaged, not browsed);"
-  puts "                   a demo's public/, log/, tmp/, storage/ and its non-text config " \
-       "(credentials keys, *.enc);"
-  puts "                   any line carrying a live TODO/FIXME (the constitution requires " \
-       "that marker to cite a row);"
-  puts "                   e2e/.gems (the installed bundle) and e2e/tmp (the generated app); " \
-       "the BODY of a vendored"
-  puts "                   schema mirror in EITHER home (everything but the TOP-LEVEL " \
-       "$comment bin/check-spec-schemas exempts);"
-  puts "                   `spec.authors` for R4 only; and, for R5 only, a version token that " \
-       "is CODE rather than prose"
-  puts "                   (a float literal, a dependency constraint) — R5 and R6 do not " \
-       "reach spec/ at all;"
-  puts "                   deploy/ for R1-R4 on bin/'s footing (maintainer tooling for one " \
-       "fleet), and anything under"
-  puts "                   bin/ for R7 (every `bin/<x>` in this tree is a DEMO's binstub, " \
-       "not a repo-root path)"
+  EXEMPT_BANNER.each_with_index do |line, i|
+    puts(i.zero? ? "  exempt         : #{line}" : "                   #{line}")
+  end
   puts
 
   if scoped.any? { |_, files| files.empty? }
@@ -1243,16 +1353,21 @@ def run_check
 
     # ── the census. It PRINTS and it never touches `failed`. ───────────────
     census_for(scope).each do |rule|
-      seen = files.flat_map { |path| scan(path, [rule]).first }
+      # The file count is the set the census actually READ, not the scope's —
+      # a `narrative_only:` census over 207 files that reports 207 is claiming
+      # a reach it does not have, which is the shape this whole file is about.
+      read = rule[:narrative_only] ? files.select { |p| narrative_file?(p) } : files
+      seen = read.flat_map { |path| scan(path, [rule]).first }
       census_scopes[rule[:id]] << scope
       census_tally[rule[:id]] += seen.size
       if seen.empty?
         puts "#{rule[:id]}/#{scope}. #{rule[:none]} in #{SCOPES[scope][:label]} — census " \
-             "empty (#{files.size} files)"
+             "empty (#{read.size} files read)"
         next
       end
       puts "#{rule[:id]}/#{scope}. #{rule[:what]} in #{SCOPES[scope][:label]} — " \
-           "#{seen.size} occurrence(s), CENSUS ONLY, never red. Read it: #{rule[:read]}."
+           "#{seen.size} occurrence(s) over #{read.size} file(s) read, CENSUS ONLY, never " \
+           "red. Read it: #{rule[:read]}."
       seen.each do |h|
         upstream = "/#{h.path}".match?(VENDORED_MIRROR_RE) ?
                      " [vendored mirror — upstream's byte, not repairable from this side]" : ""
@@ -1708,7 +1823,95 @@ def self_test
 
     check.call("C3 never moves the exit code — it is not in RULES at all",
                RULES.none? { |r| r[:id] == "C3" })
+
+    # ── C4's own arms (K-1409): the retirement clause, and the NARRATIVE-ONLY
+    #    file set that is the whole reason it can exist at all ──────────────
+    c4 = ->(pth) { scan(pth, CENSUS).first.select { |h| h.rule[:id] == "C4" } }
+
+    _, until_dropped = plant.call("c4-until", "z9.md",
+                                  "The `schema` verb published a byte-identical copy of that " \
+                                  "set as `verbs` until it was dropped.\n")
+    check.call("C4 counts `until it was <-ed>` — the FOURTH reopen site verbatim, and R6's " \
+               "fixed word list carries none of its words",
+               c4.call(until_dropped).size == 1 &&
+                 scan(until_dropped).first.none? { |h| h.rule[:id] == "R6" })
+
+    _, before_existed = plant.call("c4-before", "z10.md",
+                                   "Declare nothing and it is read at the delivery address, " \
+                                   "which is what this shop did before the header existed.\n")
+    check.call("…and `before <NP> existed` — the FIFTH site, found by re-deriving the class " \
+               "instead of re-reading the row",
+               c4.call(before_existed).size == 1 &&
+                 scan(before_existed).first.none? { |h| h.rule[:id] == "R6" })
+
+    _, was_renamed = plant.call("c4-renamed", "z11.md",
+                                "The published field was renamed after the first cut.\n")
+    check.call("…and a passive REMOVAL VERB, which is the third shape",
+               c4.call(was_renamed).size == 1)
+
+    _, runtime = plant.call("c4-runtime", "z12.md",
+                            "A nil hint is dropped, so a refusal with nothing to add carries " \
+                            "no empty key.\n")
+    check.call("…and it counts the RUNTIME-DATA reading too — «a nil hint is dropped» is " \
+               "correct prose, and the fact that a ban would redden it is exactly why this " \
+               "is a census",
+               c4.call(runtime).size == 1)
+
+    _, in_code = plant.call("c4-narrative-only", "z13.rb",
+                            "# A nil hint is dropped, so a refusal carries no empty key.\n")
+    check.call("C4 does NOT read a Ruby file — the census is NARRATIVE-ONLY, and the same " \
+               "sentence that counts in a README is silent in a controller comment",
+               c4.call(in_code).empty?)
+
+    _, in_shell = plant.call("c4-narrative-only-sh", "z14.sh",
+                             "#!/usr/bin/env bash\n# The zone was renamed at the cutover.\n")
+    check.call("…nor a shell file, for the same reason",
+               c4.call(in_shell).none? { |h| h.rule[:id] == "C4" })
+
+    check.call("C4 never moves the exit code — it is not in RULES at all",
+               RULES.none? { |r| r[:id] == "C4" })
+
+    check.call("the narrative extension set is non-empty and every entry is a leading-dot " \
+               "extension — a `narrative_only:` census over an empty set is the same green " \
+               "nothing as a rotted ban",
+               !NARRATIVE_EXTS.empty? && NARRATIVE_EXTS.all? { |e| e.start_with?(".") })
   end
+
+  # ── THE SCOPE TABLE MAY NOT RESTATE THE RULE TABLE (K-1409, second reopen
+  #    ground). `spec`'s `per:` said «R3 and R4 only» while the run executed
+  #    R3, R4 AND R7 over its 167 files, and the wave that added R7 is the wave
+  #    that left the sentence. The repair is not a better sentence: the rule
+  #    coverage is DERIVED and printed per scope, and nothing hand-written may
+  #    answer the same question a second time. ────────────────────────────────
+  rule_id_re = /\b[RC]\d+\b/
+  hand_written = SCOPES.flat_map { |name, spec| [spec[:per], spec[:door], spec[:label]].compact
+                                                    .map { |t| ["SCOPES[:#{name}]", t] } } +
+                 EXEMPT_BANNER.map { |t| ["EXEMPT_BANNER", t] }
+  offenders = hand_written.select { |_, text| text.match?(rule_id_re) }
+  check.call("no hand-written scope string names a rule id — which rules reach a scope is " \
+             "derived from the rule table and printed by the run " \
+             "(#{hand_written.size} strings checked)#{offenders.empty? ? '' : ": #{offenders.map(&:first).uniq.join(', ')}"}",
+             offenders.empty?)
+
+  # …and the DERIVATION itself must be the whole answer: every rule is named in
+  # exactly one of the three lists the scope line prints, for every scope.
+  coverage_ok = SCOPES.keys.all? do |scope|
+    line = scope_rule_line(scope)
+    seg = ->(re) { line[re].to_s }
+    asserts = seg.call(/asserts [^·]*/)
+    counts  = seg.call(/counts [^·]*/)
+    exempt  = seg.call(/exempt here: [^·]*/)
+    named   = line.scan(/\b[RC]\d+\b/).sort
+    expected = (rules_for(scope) + census_for(scope) + exempt_rules_for(scope))
+               .map { |r| r[:id] }.sort
+    named == expected &&
+      rules_for(scope).all? { |r| asserts.include?(r[:id]) } &&
+      census_for(scope).all? { |r| counts.include?(r[:id]) } &&
+      exempt_rules_for(scope).all? { |r| exempt.include?(r[:id]) }
+  end
+  check.call("the derived per-scope rule line names every rule and census this scope carries, " \
+             "each in the segment the tables put it in, and nothing it does not carry, in " \
+             "all #{SCOPES.size} scopes", coverage_ok)
 
   # ── VACUITY: the guard must be looking at something real ──────────────────
   gems  = shipped_gems

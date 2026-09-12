@@ -185,10 +185,10 @@ it actually ran; that number is the length of this list.
 Asserts the schema catalog (queries/actions + descriptions) **and** that the
 advertised `capabilities` do **not** include `pay`, `agents.json` carries no
 payments block, and `agents.txt` carries no `Protocols: ap2` / `Payments:`
-directives. The `schema` verb published a byte-identical copy of that set as
-`verbs` until it was dropped — the two fields were rendered by the same
-call, so the module set now has exactly one home. The same beat also asserts
-that `GET /kiosk/schema` answers **with no Authorization header at all**: the
+directives. The module set has exactly one home in the descriptor,
+`capabilities`, so that is the only member this beat reads it from. The same
+beat also asserts that `GET /kiosk/schema` answers **with no Authorization
+header at all**: the
 catalogue is public.
 
 ### Registration PoW (`rake demo:register`)

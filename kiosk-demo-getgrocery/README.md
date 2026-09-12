@@ -171,8 +171,8 @@ used — not a fixed offset — so DST is handled automatically
 **A `date` YOU send is read in YOUR calendar.** Declare it in the
 `Kiosk-Timezone` request header, as an IANA name, and `delivery_slots` reads a
 day you name on your human's calendar rather than on the shop's. Declare
-nothing and it is read at the delivery address, which is what this shop did
-before the header existed. A calendar day is an INTERVAL, so a day you are
+nothing and it is read at the delivery address. A calendar day is an
+INTERVAL, so a day you are
 still IN is never "in the past" even when the shop has already rolled over —
 that is the 23:05 case the rule exists for — and the rows then come back on the
 **shop's** calendar, which is how you learn that your tonight became its

@@ -95,7 +95,6 @@ kiosk-demo-hoteling/before-after.md ¦ two initializers ¦ same generator senten
 kiosk-demo-hoteling/before-after.md ¦ three beats ¦ how many beats this demo's rake task runs; the task prints them and the document quotes the run.
 kiosk-demo-hoteling/before-after.md ¦ five queries ¦ from: cat kiosk-demo-hoteling/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
 kiosk-demo-philslist/README.md ¦ four tables ¦ the tables the install generator's schema creates; the migrations are counted elsewhere in this file and the tables are named in the paragraph.
-kiosk-demo-philslist/README.md ¦ two fields ¦ the two descriptor fields are named in the same sentence, and the point being made is that one of them was dropped.
 kiosk-demo-philslist/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-philslist/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
 kiosk-demo-skooti/README.md ¦ two endpoints ¦ the two reserved endpoints of the wire are named in full in the same sentence.
 kiosk-demo-skooti/before-after.md ¦ four beats ¦ how many further beats the task runs beyond the excerpt; the task prints them and the document quotes the run.

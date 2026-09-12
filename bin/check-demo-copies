@@ -394,6 +394,34 @@ if ARGV.include?("--self-test")
               "  \"# The past-slot filter, K-480.\",\n", "  \"# The past-slot filter, 480.\",\n"]],
       expect: /the K-1383 ledger-id pattern no longer matches its own fixture/ },
 
+    { id: "spec-harness-unit-drifts", kind: :break,
+      rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
+      what: "one demo's copy of `guard` grows a rescue clause the other five do not have",
+      ops:  [[:edit, "kiosk-demo-tudu/spec/reader_clock_spec.rb",
+              "def guard(label)\n  yield\nrescue StandardError => e",
+              "def guard(label)\n  yield\nrescue StandardError, NameError => e"]],
+      expect: /guard: the demo spec copies must agree once comments and whitespace are normalised/ },
+    { id: "spec-harness-undeclared-unit", kind: :break,
+      rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
+      what: "a helper is copied into a second demo's spec, at a path no other demo has",
+      ops:  [[:edit, "kiosk-demo-stylish/spec/salon_clock_spec.rb",
+              "FAILURES = []", "FAILURES = []\n\ndef probe_shared_helper = :ok"],
+             [:edit, "kiosk-demo-skooti/spec/licence_flag_spec.rb",
+              "FAILURES = []", "FAILURES = []\n\ndef probe_shared_helper = :ok"]],
+      expect: /probe_shared_helper: defined in 2 demo spec\/test file\(s\).*declared NOWHERE/ },
+    { id: "vacuity-spec-harness-corpus", kind: :vacuity,
+      rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
+      what: "the corpus glob stops matching, so a lockstep rule over nothing exits 0",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "DEMO_SPEC_SUBDIRS = %w[spec test].freeze",
+              "DEMO_SPEC_SUBDIRS = %w[spec_gone].freeze"]],
+      expect: /the demo-spec harness rule read 0 Ruby file\(s\)/ },
+    { id: "vacuity-spec-harness-stale-entry", kind: :vacuity,
+      rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
+      what: "a declared unit name that the corpus no longer shares reads as coverage",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "  \"at_dublin\" => {\n", "  \"at_dublin_renamed\" => {\n"]],
+      expect: /SPEC_UNITS\["at_dublin_renamed"\]: declared, but it is defined in 0 file\(s\)/ },
     { id: "ledger-id-behind-an-escape", kind: :break,
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
       what: "the id follows a `\\n` inside the string, so a leading `\\b` never matched it (K-1537)",
@@ -5295,6 +5323,235 @@ if fragment_dsl_ids.empty?
             "whose pattern matches nothing must fail, not pass."
 end
 
+# ── THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536) ───
+#
+# WHAT WAS INVISIBLE, AND WHY THE OBVIOUS REPAIR WOULD HAVE BEEN A NO-OP.
+# `SCAN_ROOTS` is `lib app script db/migrate`; a demo's `spec/` reaches this
+# script only through EXTRA_SCANNED, which names ONE path. K-1536 read that as
+# «declare each new spec path in EXTRA_SCANNED as it lands», and MEASURED that
+# fixes nothing: of the tracked files under `kiosk-demo-*/spec` and
+# `kiosk-demo-*/test`, exactly ONE relative path exists in two or more demos —
+# `spec/wire_arguments_spec.rb`, already declared. Every other spec file sits at
+# a path unique to its demo, so a file-level entry for it would compare a copy
+# against nothing at all. The repository's rule «a NEW duplicate fails the build
+# until it is declared» was not being broken at FILE level here; it was never
+# reaching the level the duplication is actually at.
+#
+# WHERE IT IS ACTUALLY AT: THE UNIT. `assert` is hand-copied into eleven of
+# those files across seven demos and `guard` into six across five, and no two of
+# them share a path. FRAGMENTS holds units too, and cannot help: its key is
+# `path#unit`, so it only ever compares copies of the SAME file. This rule keys
+# on the NAME over the whole corpus, which is the only granularity at which
+# these copies are visible — and it is how `at_dublin`, shared by two spec files
+# INSIDE getgrocery, turns out to be a copy as well. No rule keyed on a path, or
+# on a demo, could have seen that one.
+#
+# WHAT THE FIRST RUN FOUND, before a line of this manifest was written:
+# `assert` in TWO bodies (skooti padded `OK` with two extra spaces so it lines
+# up under `FAIL`) and `guard` in THREE (`rescue StandardError, NoMethodError`,
+# `rescue StandardError, NameError`, and a bare `rescue StandardError` — the two
+# named classes are DESCENDANTS of StandardError, so all three rescued exactly
+# the same set while reading as though they did not). Both were CONVERGED rather
+# than declared as exceptions: an exception needs a true reason, and «nobody
+# normalised them» is not one.
+#
+# THE CORPUS IS DERIVED, never listed — `git ls-files` over the two subdirectory
+# globs, filtered to `.rb`, with a filesystem walk behind it for the throwaway
+# tree `--self-test` runs in, where `git` exits 128. A demo that grows a spec
+# directory tomorrow is in the corpus that day.
+#
+# THE DELEGATION IS DERIVED TOO. A name whose every copy sits at a path
+# FRAGMENT_PATHS walks, under an id FRAGMENTS declares, is already HELD one
+# level up; it is reported as delegated and is NOT re-declared here, so the two
+# rules compose instead of stating the same thing twice. The day such a unit is
+# copied into a file outside that path it stops being delegated and this
+# manifest has to speak for it — which is the event that matters.
+DEMO_SPEC_SUBDIRS = %w[spec test].freeze
+
+# `:code`     — every copy must agree once comments and whitespace are
+#               normalised away, the same semantics `:code` has at file level
+#               and in FRAGMENTS.
+# `:per_file` — SAME NAME, each file's own body, with the reason. A `:per_file`
+#               name whose copies have ALL converged is an error, not a pass:
+#               that is the entry describing a state the tree has left.
+SPEC_UNITS = {
+  "FAILURES" => {
+    rule: :code,
+    why:  "The accumulator that makes each of these files a SPEC rather than a script: every " \
+          "failed assertion lands here and the tail exits non-zero on a non-empty list. A copy " \
+          "that collected failures and forgot to exit on them would print FAIL lines under a " \
+          "green rake task, which is the one failure mode a DB-free proof must not have.",
+  },
+  "assert" => {
+    rule: :code,
+    why:  "The assertion primitive — one OK or FAIL line each, the failing message pushed to " \
+          "FAILURES. Seven demos' task logs are read off this format, and a copy that words or " \
+          "spaces it differently makes them stop being comparable at a glance. That is not " \
+          "hypothetical: skooti's copy padded OK by two spaces and nothing anywhere compared it.",
+  },
+  "guard" => {
+    rule: :code,
+    why:  "The reason a RAISE is a recorded failure and not a dead run: it rescues StandardError " \
+          "around one labelled assertion and files the class and message as a FAILURE, so a " \
+          "spec meets every assertion instead of aborting at the first exception. T-137 measured " \
+          "what that buys — atablefor's watched fail turned four NoMethodErrors into four named " \
+          "failures. Held here because three of these six copies used to name a DESCENDANT of " \
+          "StandardError beside it, which rescues nothing extra and reads as if it did.",
+  },
+  "assert_refusal" => {
+    rule: :code,
+    why:  "The four-part shape of an owner-scoped refusal, asserted identically in the two demos " \
+          "that have one: an OperationResult rather than a raise or a nil, not ok?, the declared " \
+          "`code`, and the declared `status` read through {guard}. The four together are the wire " \
+          "contract a caller meets, so two demos asserting it in the same words is the point " \
+          "rather than a coincidence.",
+  },
+  "at_dublin" => {
+    rule: :code,
+    why:  "getgrocery's clock fixture: freeze DeliverySlots.now to one parsed instant for the " \
+          "block and remove the singleton afterwards. Copied between two of that demo's OWN spec " \
+          "files, which is a duplication no path-keyed or demo-keyed rule can see — the copies " \
+          "are in one directory of one app. The `ensure` is the whole reason it is a unit: a copy " \
+          "that forgets it leaves a stubbed clock behind for every later assertion in the file.",
+  },
+  "TOKYO" => {
+    rule: :code,
+    why:  "`Time.find_zone!(\"Asia/Tokyo\")` — the far-side zone three per-resource clock specs " \
+          "use to prove a stored instant renders in the caller's zone rather than the server's. " \
+          "Held so the three keep asking the same question; a copy that switched to another zone " \
+          "would still pass and would stop being the same proof.",
+  },
+  "MONTREAL" => {
+    rule: :code,
+    why:  "`Time.find_zone!(\"America/Toronto\")` — the other-side-of-the-Atlantic zone the same " \
+          "three clock specs pair with {TOKYO}. Same reason, and stated separately because a " \
+          "reader meeting one of them is entitled to know the other is held too.",
+  },
+}.freeze
+
+# The corpus, derived. `git ls-files` first because the tracked set is the
+# question, a filesystem walk behind it because `--self-test` copies this tree
+# somewhere that is not a git repository (the same fallback the container rule
+# uses, and for the same reason).
+spec_pathspecs = DEMO_SPEC_SUBDIRS.map { |sub| "kiosk-demo-*/#{sub}/*" }
+spec_ls, spec_git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z", *spec_pathspecs)
+spec_corpus =
+  if spec_git.success? && !spec_ls.strip.empty?
+    spec_ls.split("\0").reject(&:empty?)
+  else
+    DEMO_SPEC_SUBDIRS.flat_map { |sub| Dir[File.join(ROOT, "kiosk-demo-*", sub, "**", "*.rb")] }
+                     .map { |abs| abs.delete_prefix("#{ROOT}/") }
+  end.select { |rel| rel.end_with?(".rb") }.sort
+
+spec_unit_sources = Hash.new { |h, k| h[k] = {} } # unit name => "demo/rel" => normalised body
+spec_corpus.each do |rel|
+  units, unreadable, = fragment_units(File.join(ROOT, rel))
+  unless unreadable.empty?
+    errors << "#{rel}: the demo-spec harness rule could not read #{unreadable.join(', ')} back as " \
+              "valid Ruby within #{FRAGMENT_MAX_LINES} lines, so it compared NOTHING for " \
+              "#{unreadable.size == 1 ? 'that unit' : 'those units'}. Fix the extraction in " \
+              "bin/check-demo-copies, do not drop the rule (K-1536)."
+  end
+  units.each { |name, src| spec_unit_sources[name][rel] = code_norm(src) }
+end
+
+# A name every one of whose copies is already held by the path-keyed fragment
+# rule is DELEGATED, not undeclared. Derived from that rule's own manifest, so
+# the two cannot disagree about who owns a unit.
+spec_delegated = lambda do |name, rels|
+  rels.all? do |rel|
+    sub = rel.split("/", 2).last
+    FRAGMENT_PATHS.include?(sub) && FRAGMENTS.key?("#{sub}##{name}")
+  end
+end
+
+spec_shared     = spec_unit_sources.select { |_name, byfile| byfile.size >= 2 }
+spec_delegated_names = spec_shared.select { |name, byfile| spec_delegated.call(name, byfile.keys) }.keys
+spec_owned      = spec_shared.reject { |name, _| spec_delegated_names.include?(name) }
+spec_compared   = 0
+
+# DISCOVERY: a unit name in two or more files of this corpus must be declared.
+# The same property the file-level manifest has, at the granularity these copies
+# actually exist at.
+spec_owned.each do |name, byfile|
+  next if SPEC_UNITS.key?(name)
+
+  errors << "#{name}: defined in #{byfile.size} demo spec/test file(s) " \
+            "(#{byfile.keys.join(', ')}) and declared NOWHERE. These files are hand-copied and " \
+            "no two of them share a path, so neither the file manifest nor FRAGMENTS can see " \
+            "this — declare it in SPEC_UNITS in bin/check-demo-copies with the reason the copies " \
+            "exist, or give the second copy its own name (K-1536)."
+end
+
+SPEC_UNITS.each do |name, entry|
+  errors << "SPEC_UNITS[#{name.inspect}]: `why:` is blank (K-1536)." if entry[:why].to_s.strip.empty?
+
+  byfile = spec_owned[name]
+  if byfile.nil?
+    reason =
+      if spec_delegated_names.include?(name)
+        "every copy of it now sits at a path FRAGMENT_PATHS walks, so FRAGMENTS holds it and this " \
+          "entry is a second declaration of one thing"
+      else
+        "it is defined in #{spec_unit_sources[name].size} file(s) of this corpus, and a lockstep " \
+          "entry for a unit that is not shared is the record turning back into an assumption"
+      end
+    errors << "SPEC_UNITS[#{name.inspect}]: declared, but #{reason}. Drop the entry (K-1536)."
+    next
+  end
+
+  spec_compared += byfile.size
+  groups = byfile.group_by { |_rel, src| src }
+  case entry[:rule]
+  when :code
+    next if groups.size == 1
+
+    listed = groups.values.map { |g| "[#{g.map { |rel, _| rel }.sort.join(',')}]" }.sort.join(" ")
+    errors << "#{name}: the demo spec copies must agree once comments and whitespace are " \
+              "normalised away, and they do not: #{listed}. This unit is hand-copied into " \
+              "#{byfile.size} spec file(s) — propagate the edit to all of them, or give the copy " \
+              "that legitimately differs a different NAME and say why, because a shared name " \
+              "with different behaviour is what makes the next reader trust the wrong copy " \
+              "(K-1536)."
+  when :per_file
+    next if groups.size > 1
+
+    errors << "#{name}: declared `:per_file` — each copy its own body — and all #{byfile.size} of " \
+              "them now agree once comments and whitespace are normalised away. The entry " \
+              "describes a state the tree has left; make it `:code` so the agreement is HELD, or " \
+              "say what still differs (K-1536)."
+  else
+    errors << "SPEC_UNITS[#{name.inspect}]: unknown `rule: #{entry[:rule].inspect}` — this rule " \
+              "understands :code and :per_file only (K-1536)."
+  end
+end
+
+# VACUITY, THREE ARMS, AND THE POLARITY MATTERS.
+#
+# The discovery half is a BAN (no undeclared shared unit), so its silence is the
+# tree being clean and cannot be asserted on. What must be alive is the
+# MEASUREMENT: the corpus, the extractor, and the comparison. Each of the three
+# fails the same clean-looking way — a glob that stops matching, a lexer that
+# stops running, a manifest that stops being read all print zero violations.
+if spec_corpus.size < 2 || spec_corpus.map { |rel| rel.split("/").first }.uniq.size < 2
+  errors << "check-demo-copies: the demo-spec harness rule read #{spec_corpus.size} Ruby file(s) " \
+            "across #{spec_corpus.map { |rel| rel.split('/').first }.uniq.size} demo(s) under " \
+            "kiosk-demo-*/{#{DEMO_SPEC_SUBDIRS.join(',')}} — the corpus has stopped matching, and " \
+            "a lockstep rule over one file or none compares nothing while exiting 0 (K-1536)."
+end
+if spec_unit_sources.empty?
+  errors << "check-demo-copies: the demo-spec harness rule extracted NO unit at all from " \
+            "#{spec_corpus.size} file(s). Every one of these specs defines at least an `assert`, " \
+            "so zero means the extractor stopped running rather than that the tree changed " \
+            "(K-1536)."
+end
+if SPEC_UNITS.any? && spec_compared.zero?
+  errors << "check-demo-copies: SPEC_UNITS declares #{SPEC_UNITS.size} unit(s) and this run " \
+            "compared NONE of them — every declared name has left the corpus, or the sharing " \
+            "pass stopped grouping. A lockstep rule with nothing to compare passes everything " \
+            "(K-1536)."
+end
+
 # -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
 #
 # `Gemfile.lock` is declared NOT COMPARED, and for its resolved-versions half
@@ -7287,7 +7544,13 @@ if errors.empty?
        "READ OFF that script's own rule table on this run, not restated here (K-1520). THAT " \
        "script is also the one that reads a SENTENCE rather than a token. THIS script reads " \
        "none of them, so its green line says nothing about narration in a compared copy — ask " \
-       "that one)"
+       "that one), " \
+       "#{spec_compared} copy(ies) of #{spec_owned.size} hand-copied harness unit(s) held by NAME " \
+       "across #{spec_corpus.size} demo spec/test file(s) in " \
+       "#{spec_corpus.map { |rel| rel.split('/').first }.uniq.size} demo(s) " \
+       "(#{spec_delegated_names.size} further name(s) delegated to the path-keyed fragment rule " \
+       "above; this is the only granularity at which these copies are visible, since no two of " \
+       "those files share a path — K-1536)"
   exit 0
 end
 

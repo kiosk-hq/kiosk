@@ -69,7 +69,7 @@ end
 # ending the run.
 def guard(label)
   yield
-rescue StandardError, NoMethodError => e
+rescue StandardError => e
   FAILURES << "#{label} RAISED #{e.class}: #{e.message}"
   puts "  FAIL  #{label} RAISED #{e.class}: #{e.message}"
   nil

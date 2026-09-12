@@ -41,7 +41,7 @@ FAILURES = []
 
 def assert(cond, msg)
   if cond
-    puts "  OK    #{msg}"
+    puts "  OK  #{msg}"
   else
     FAILURES << msg
     puts "  FAIL  #{msg}"

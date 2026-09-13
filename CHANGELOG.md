@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **kiosk-server's README event table is now derived from `ActionEvent.members`.** It sat two fields short for a week and nothing compared the two lists.
 - 2026-09-13: **R8's excuse for naming an untracked file was scoped to the whole LINE.** A parenthetical about one file silenced every pointer beside it; it is scoped to the clause now.
 - 2026-09-13: **Two redteam helper comments still said an anonymous caller gets 401 at an unregistered verb path.** The beat ten lines below asserts 404 for both callers.
 - 2026-09-13: **Three skooti sources documented the retired five-field rental-token wire.** The lock rejects that shape at its first gate; all three now give the six-field one.

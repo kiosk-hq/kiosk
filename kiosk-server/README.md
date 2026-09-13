@@ -523,7 +523,10 @@ in your app loads it. The list is the whole truth about what this origin serves.
 
 ```ruby
 require "kiosk/server"
-require "json"
+
+# The issuer is the AP2 mandate `iss` anchor; the builder refuses to answer
+# without it, booted app or not.
+Kiosk.configure { |c| c.issuer = "https://api.acme.example" }
 
 doc = Kiosk::Server::WellKnown.build_json(base_url: "https://api.acme.example")
 # => '{"kiosk":{"version":"1.0","endpoint":"https://api.acme.example/kiosk",...}}'

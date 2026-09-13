@@ -19,10 +19,11 @@
 # lexical derivation and the second assertion is what keeps it honest: a key that
 # is not a callable macro fails here rather than quietly widening the table.
 #
-# `Actions::Entry`'s members are deliberately NOT the oracle. `handler` is an
-# Entry member and is not declarable; `kind`, `reach` and `wire_name` are
-# declarable and are not Entry members. The two sets are near enough to look
-# interchangeable and are not.
+# `Actions::Entry`'s members are deliberately NOT the oracle. MEASURED: Entry has
+# seven members and the declarable set has eight; they share six. `handler` is an
+# Entry member and is not declarable, `kind` and `wire_name` are declarable and
+# are not Entry members. Six of eight agreeing is exactly what makes the two look
+# interchangeable, and a table built off Entry would be wrong in three places.
 RSpec.describe "the kiosk-server README's verb-declaration table" do
   MIXIN_SOURCE = File.expand_path("../../../lib/kiosk/server/handler_mixin.rb", __dir__)
   README_PATH  = File.expand_path("../../../README.md", __dir__)

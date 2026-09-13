@@ -1314,6 +1314,45 @@ jobs:
   # both print the same clean zero as an obeyed ban.
   #
   # Stdlib Ruby only: no bundle, no services, no database, ~1 s for both steps.
+  # A COMMAND BLOCK a reader is invited to paste was held by nothing, and the
+  # cost was measured: the deploy runbook's "poke it" block was stale in four
+  # places at once, and the row that found it had spotted one of the four
+  # because it read the block instead of running it.
+  #
+  # This job asks the STATIC half — every path, rake task and script a shell
+  # block names resolves against the directory the block's own `cd` lines
+  # establish. That directory is what a runbook has and prose does not, which is
+  # why check-shipped-archaeology's R7 must exclude the whole `bin/` prefix and
+  # this can resolve it: a planted `bin/check-publication-paths-gone` and a
+  # planted `rake demo:nonexistent` each left check-shipped-archaeology,
+  # check-publication-paths, check-ci-tasks and check-changelog at exit 0.
+  #
+  # The EXECUTING half (`--run`) is deliberately NOT here. It runs the blocks
+  # their authors marked, and one of them is ./e2e/run.sh; a push-time job that
+  # boots an origin per commit is a different trade, and a block that needs a
+  # package index or a live host would redden on someone else's outage.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~2 s for both steps.
+  runbook-blocks:
+    name: a pasted command block still names what exists (bin/check-runbook-blocks)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every shape, and non-vacuous here
+        run: ./bin/check-runbook-blocks --self-test
+
+      - name: Every path, task and script a runbook block names resolves
+        run: ./bin/check-runbook-blocks
+
   shipped-archaeology:
     name: no unresolvable citation in a shipped gem (bin/check-shipped-archaeology)
     runs-on: ubuntu-latest

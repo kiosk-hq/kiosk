@@ -29,6 +29,7 @@ The canonical install is one line — the meta-gem, from git:
 gem "kiosk-all", github: "kiosk-hq/kiosk"
 ```
 
+<!-- runbook-foreign: these three lines are pasted into the READER's Rails app, not run here -->
 ```bash
 bundle install
 bin/rails generate kiosk:install   # the initializer + the kiosk migrations

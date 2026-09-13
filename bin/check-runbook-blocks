@@ -1,0 +1,844 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-runbook-blocks — the copy-paste command blocks in this repository's
+# documentation, resolved against the tree they tell a reader to run them in
+# (T-162; the class was measured as K-1277).
+#
+# WHY THIS EXISTS, MEASURED RATHER THAN ARGUED. A NUMBER in shipped prose is
+# held here — `bin/check-prose-counts` re-derives declared counts, and the
+# umbrella's claims machinery re-runs the commands behind its rows. A COMMAND
+# BLOCK a reader is invited to paste was held by nothing at all, and the cost
+# was measured: the deploy runbook's "poke it" block was stale in FOUR places at
+# once — a 400 on its first line, a proof-of-possession nonce mistaken for a
+# proof-of-work challenge, the wrong register body shape, and `.token` where the
+# engine answers `access_token`. The row that found it had spotted ONE of the
+# four, because it read the block instead of running it.
+#
+# WHAT THIS FILE IS AND IS NOT. It is NOT an "execute the documentation" gate,
+# and the reason is a measurement rather than a preference: of the shell blocks
+# this repository ships, most cannot be executed anywhere but a provisioned box
+# or a live origin, and several are not executable AS WRITTEN by anybody,
+# because they carry a deliberate placeholder (`…`, `<base64>`, `/path/to/…`).
+# A gate that pretended otherwise would be switched off within the week. So:
+#
+#   * the DEFAULT run is STATIC. It resolves what each block NAMES — paths,
+#     scripts, rake tasks — against the directory the block itself establishes
+#     with its own `cd` lines, and fails when one of them names nothing.
+#   * the CENSUS says, per block, why it cannot be run here, in the tool's own
+#     words rather than in a sentence somebody typed. It is printed and never
+#     reddens: a reason is a fact about the block, not a defect in it.
+#   * `--run` is OPT-IN and runs the blocks the census found no reason to
+#     exclude, verbatim, in the directory the block establishes. It is not
+#     wired to a push-time job, because a gate that depends on a production
+#     origin or a package index reddens on someone else's outage.
+#
+# WHY THE STATIC HALF IS NOT ALREADY COVERED, PLANTED AND MEASURED 2026-09-13.
+# `bin/check-shipped-archaeology`'s R7 resolves repository paths in prose and it
+# DOES reach inside a fenced block: renaming `deploy/check-live-hsts.sh` to a
+# name that does not exist, inside the deploy runbook's own fence, took that
+# guard to exit 1. Two things it does not reach, each planted the same way and
+# each caught by NOTHING at head:
+#
+#   * `bin/<script>`. R7 excludes the whole `bin/` prefix, and says why: in this
+#     repository `bin/rails`, `bin/rake` and `bin/setup` are each a DEMO's
+#     binstub, so a repo-root reading of them is wrong in a hundred-plus places.
+#     That is right for prose, where nothing says which directory the reader is
+#     in. A RUNBOOK BLOCK IS THE ONE PLACE THAT DOES SAY: its own `cd` lines
+#     establish a working directory, so `bin/x` resolves without guessing.
+#     Measured: `bin/check-publication-paths --self-test` renamed to a script
+#     that does not exist left check-shipped-archaeology, check-publication-paths
+#     and check-changelog all at exit 0.
+#   * a RAKE TASK a block names. `rake demo` renamed to `rake demo:nonexistent`
+#     in a demo's own README left check-ci-tasks, check-shipped-archaeology,
+#     check-demo-derivations and check-prose-counts all at exit 0.
+#
+# WHY R2 PARSES TASKS AGAIN WHEN `bin/check-ci-tasks` ALREADY PARSES THEM, which
+# is exactly the "second parser to be wrong in a different way" this workspace
+# warns about. That parser is scoped to declarations INSIDE a column-0
+# `namespace :demo do` block — deliberately, because its question is which
+# `demo:` tasks CI runs. The first line of most demo READMEs is `rake demo`,
+# which is declared at the TOP LEVEL (`task demo: ["demo:setup",
+# "demo:walkthrough"]`) and is invisible to it. A rule that could not resolve the
+# most-pasted command in the repository would be theatre, so this file reads both
+# shapes and says so here rather than quietly disagreeing with its neighbour.
+#
+# ── THE RULES ────────────────────────────────────────────────────────────────
+#
+#   R1  Every repository-relative PATH a block names resolves, relative to the
+#       directory the block establishes. Absolute paths (`/srv/kiosk/…`) are a
+#       box's, not this tree's, and are skipped by construction.
+#   R2  Every rake / `bin/rails` TASK a block names is declared by the
+#       application whose directory the block is standing in — or is one of the
+#       framework tasks named in FRAMEWORK_TASKS below, which is a declared
+#       exemption with a reason, not an accident.
+#   R3  Every repository FILE a block invokes AS A COMMAND is executable. A
+#       shipped script that loses its `+x` bit answers "permission denied" to
+#       the one reader who does what the runbook says.
+#   R4  A block MARKED runnable (see RUN_MARKER below) carries no census reason.
+#       The marker is a claim about the block; the census is a measurement of
+#       it, and the two disagreeing means one of them is wrong. This rule found
+#       a mis-placed marker the minute it existed.
+#
+# ── THE VACUITY ARMS, WHICH ARE STRUCTURAL AND NOT A HAND-LIST ───────────────
+#
+# Every rule here is a pattern over a corpus this script discovers for itself,
+# so the failure that costs nothing to make is a pattern that stops matching:
+# the run then prints the same clean line as a repository with no defects. So
+# the run FAILS when the corpus goes empty in any of four ways — no blocks
+# discovered, no path token scanned, no task invocation scanned, no command
+# invocation scanned — and when NO block at all is classified runnable here,
+# because at that point `--run` proves nothing and the census is a list of
+# excuses. The self-test drives each of those to red on a fixture.
+#
+# Usage (stdlib only, no bundle, no database, no network):
+#   bin/check-runbook-blocks              # static rules + the census
+#   bin/check-runbook-blocks --census     # the census alone, no rules
+#   bin/check-runbook-blocks --run        # …and execute the MARKED runnable blocks
+#   bin/check-runbook-blocks --self-test  # prove the rules on planted fixtures
+#
+# Exit codes: 0 satisfied · 1 a rule failed, a vacuity arm fired, or (with
+# --run) a block exited non-zero.
+
+require "open3"
+require "tmpdir"
+require "shellwords"
+
+ROOT = File.expand_path(ENV.fetch("KIOSK_RUNBOOK_ROOT", File.expand_path("..", __dir__)))
+
+FENCE_LANGS = %w[sh bash shell console].freeze
+
+# ── THE OPT-IN MARKER, AND WHY `--run` IS NOT "everything the census allows" ──
+#
+# The census can say a block needs no network, no box and no missing tool. It
+# cannot say the block is SAFE to run unattended, and the difference is not
+# theoretical: `kiosk-demo-skooti/appclip/README.md`'s build block ends in `make
+# open`, which launches Xcode, and this machine HAS xcodegen and xcodebuild — so
+# a `--run` that took "no reason found" as consent would have opened an IDE on
+# somebody's laptop the first time it ran. Deriving safety from the command name
+# would be guessing.
+#
+# So the runbook's own author opts a block in, with an HTML comment on the line
+# above its fence (invisible in every rendered view). That is a per-block
+# declaration by the person who wrote the block, not an inventory inside this
+# guard, so it cannot rot into the hand-kept list K-863 records.
+#
+# R4 keeps the marker honest in the one direction that matters: a MARKED block
+# the census excludes is a FAILURE, because the marker then claims a runnability
+# the tool has measured to be absent. The reverse is deliberately not a rule —
+# an unmarked runnable block is simply not opted in, and forcing the marker onto
+# every block would make adding documentation a fight with a gate.
+RUN_MARKER = "runbook-runnable"
+
+# ── AND THE OTHER DIRECTION: A BLOCK THAT IS NOT ABOUT THIS TREE AT ALL ──────
+#
+# The monorepo README's install block is `bundle install` / `bin/rails generate
+# kiosk:install` — three lines a reader pastes into THEIR OWN Rails application.
+# `bin/rails` is that application's binstub and this repository has no such file,
+# so resolving it here produces a defect report about a block that is perfectly
+# correct. R7 in `bin/check-shipped-archaeology` meets the same problem and
+# answers it by excluding `bin/` everywhere; a runbook checker can do better,
+# because the author can say which tree the block is for. So: a block marked
+# foreign is exempt from R1/R2/R3 and is never run. The exemption is COUNTED in
+# the summary, so widening it is visible rather than free, and R4 forbids a block
+# from carrying both markers.
+FOREIGN_MARKER = "runbook-foreign"
+
+# Rails and Bundler ship these; no application declares them, and a runbook that
+# names one is not naming anything this repository owns. Named here so the
+# exemption is a line someone can argue with rather than a silent `next`.
+# `bin/rails <command>` is not `bin/rails <task>`: these are Rails' own
+# subcommands, and the words after them name a generator or a file, not a task.
+RAILS_COMMANDS = %w[generate g destroy new server s console c runner credentials dbconsole].freeze
+
+FRAMEWORK_TASKS = %w[
+  db:migrate db:prepare db:seed db:create db:drop db:setup db:schema:load db:test:prepare
+  assets:precompile assets:clean test spec routes middleware about zeitwerk:check
+].freeze
+
+# A block carrying one of these is not executable AS WRITTEN by anybody: the
+# author left a hole for the reader to fill. That is correct documentation and a
+# reason, never a defect.
+PLACEHOLDER_RE = /(?:…|\.\.\.|\/path\/to\b|<[a-z][a-z0-9 _-]*>)/i
+
+# A URL is only a NETWORK dependency when it leaves this machine. `e2e/run.sh`
+# boots an origin and dials `http://127.0.0.1:<port>`, which needs nothing but a
+# free port -- excluding it would have taken the one end-to-end block in this
+# repository out of the runnable set for no reason at all.
+REMOTE_URL_RE = %r{https?://(?!127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\])}
+
+# Commands that need a provisioned host, a package index, or a toolchain this
+# checkout does not carry. Each is a REASON in the census, in this order.
+BOX_CMDS       = %w[sudo systemctl journalctl caddy].freeze
+NETWORK_CMDS   = [%w[pip install], %w[pip3 install], %w[gem install], %w[bundle install],
+                  %w[arduino-cli core], %w[arduino-cli lib]].freeze
+# Commands whose ABSENCE is a reason. Whether one is absent is MEASURED against
+# PATH rather than assumed from the name, because the first writing of this list
+# assumed and was wrong the same minute: it declared `python3` "not in this
+# checkout" for two blocks that had just been executed successfully by --run, on
+# a machine that has python3. A census that states a falsehood about the machine
+# it is running on is worse than no census.
+TOOLCHAIN_CMDS = %w[make arduino-cli xcodegen xcodebuild xcrun swift python3 pip pip3].freeze
+
+def on_path?(cmd)
+  @on_path ||= {}
+  @on_path.fetch(cmd) do
+    @on_path[cmd] = ENV.fetch("PATH", "").split(File::PATH_SEPARATOR)
+                       .any? { |d| File.executable?(File.join(d, cmd)) }
+  end
+end
+
+# ── discovery ────────────────────────────────────────────────────────────────
+
+Block = Struct.new(:rel, :line, :lang, :body, :marked, :foreign, keyword_init: true)
+
+def tracked_markdown
+  out, err, st = Open3.capture3("git", "-C", ROOT, "ls-files", "-z", "*.md")
+  unless st.success?
+    warn "check-runbook-blocks: git ls-files failed in #{ROOT}: #{err.strip}"
+    exit 1
+  end
+  out.split("\0").reject(&:empty?).sort
+end
+
+def blocks
+  tracked_markdown.flat_map do |rel|
+    lines = File.readlines(File.join(ROOT, rel), chomp: true)
+    found = []
+    open_at = nil
+    lang    = nil
+    buf     = []
+    lines.each_with_index do |l, i|
+      if open_at.nil?
+        if (m = l.match(/\A```(\w*)\s*\z/))
+          open_at = i + 1
+          lang    = m[1].downcase
+          buf     = []
+        end
+      elsif l.strip == "```"
+        if FENCE_LANGS.include?(lang)
+          prev   = lines[(open_at - 2).clamp(0, lines.length)] || ""
+          found << Block.new(rel: rel, line: open_at, lang: lang, body: buf,
+                             marked: prev.include?(RUN_MARKER),
+                             foreign: prev.include?(FOREIGN_MARKER))
+        end
+        open_at = nil
+      else
+        buf << l
+      end
+    end
+    found
+  end
+end
+
+# ── a block's own words, with its prose taken out ────────────────────────────
+#
+# A `#` opening a line is a comment. A `#` later in a line is a trailing comment
+# ONLY when the quotes before it are balanced — otherwise it is inside a JSON
+# body, which several of these blocks carry.
+def command_lines(block)
+  block.body.filter_map do |raw|
+    l = raw.strip
+    next if l.empty? || l.start_with?("#")
+
+    if (i = trailing_comment_at(l))
+      l = l[0...i].strip
+      next if l.empty?
+    end
+    l
+  end
+end
+
+def trailing_comment_at(line)
+  sq = dq = 0
+  line.each_char.with_index do |c, i|
+    case c
+    when "'" then sq += 1 if dq.even?
+    when '"' then dq += 1 if sq.even?
+    when "#"
+      return i if sq.even? && dq.even? && i.positive? && line[i - 1] =~ /\s/
+    end
+  end
+  nil
+end
+
+# ── the directory a block stands in ──────────────────────────────────────────
+#
+# Candidates, in order: the document's own directory, its parent, the repository
+# root. The winner is the first under which the block's whole `cd` sequence
+# resolves AND every repository path it names resolves — which is what makes
+# `bin/x` answerable here where a prose scanner must decline it. A block whose
+# `cd` is absolute or carries a placeholder has no answerable directory at all
+# and says so.
+CdPlan = Struct.new(:base, :absolute, :placeholder, keyword_init: true)
+
+def cd_targets(block)
+  command_lines(block).filter_map do |l|
+    m = l.match(/\Acd\s+(\S+)/)
+    m && m[1].delete('"').delete("'")
+  end
+end
+
+def candidate_bases(block)
+  dir = File.dirname(block.rel)
+  dir = "" if dir == "."
+  [dir, File.dirname(dir) == "." ? "" : File.dirname(dir), ""].uniq
+end
+
+def walk_cds(base, targets)
+  cwd = base
+  targets.each do |t|
+    return nil if t.start_with?("/") || t.match?(PLACEHOLDER_RE)
+
+    nxt = File.expand_path(t, File.join(ROOT, cwd))
+    return nil unless nxt.start_with?(ROOT) && Dir.exist?(nxt)
+
+    cwd = nxt.delete_prefix(ROOT).delete_prefix("/")
+  end
+  cwd
+end
+
+def cd_plan(block)
+  targets = cd_targets(block)
+  return CdPlan.new(base: nil, absolute: true, placeholder: false) if targets.any? { |t| t.start_with?("/") }
+  return CdPlan.new(base: nil, absolute: false, placeholder: true) if targets.any? { |t| t.match?(PLACEHOLDER_RE) }
+
+  candidates = candidate_bases(block).select { |b| Dir.exist?(File.join(ROOT, b)) && !walk_cds(b, targets).nil? }
+
+  scored = candidates.map do |base|
+    paths = paths_named(block, base)
+    tasks = tasks_named(block, base)
+    misses = paths.count { |p| !File.exist?(File.join(ROOT, p[:rel])) } +
+             tasks.count { |t| !task_declared?(t[:dir], t[:task]) }
+    # A candidate is ADOPTED only when something in the block ESTABLISHES it: a
+    # `cd`, a path or task it names, or being the only candidate there is.
+    # Otherwise the block names nothing this tree can place, and saying "in
+    # deploy/" because the document happens to live there is a guess wearing the
+    # costume of a measurement -- the deploy poke block is written to be run from
+    # the repository ROOT and says so in its own prose.
+    established = targets.any? || paths.any? || tasks.any? || candidates.length == 1
+    [base, misses, established]
+  end
+
+  # The best placement wins, NOT the first perfect one -- and when none is
+  # perfect the least-bad established candidate is still adopted, so R1 and R2
+  # can NAME the path or task that does not resolve. The first writing returned
+  # "no base" in that case, which masked every R1 defect behind an unknown-cwd
+  # census line: a planted dangling `bin/x` reddened the run under R4 and never
+  # said which path was wrong.
+  best = scored.select { |_, _, est| est }.min_by { |_, misses, _| misses }
+  return CdPlan.new(base: best[0], absolute: false, placeholder: false) if best
+
+  CdPlan.new(base: nil, absolute: false, placeholder: false)
+end
+
+# The working directory in force at each command line, given a chosen base.
+def with_cwd(block, base)
+  cwd = base
+  command_lines(block).map do |l|
+    if (m = l.match(/\Acd\s+(\S+)/))
+      t = m[1].delete('"').delete("'")
+      unless t.start_with?("/") || t.match?(PLACEHOLDER_RE)
+        nxt = File.expand_path(t, File.join(ROOT, cwd))
+        cwd = nxt.delete_prefix(ROOT).delete_prefix("/") if nxt.start_with?(ROOT)
+      end
+    end
+    [l, cwd]
+  end
+end
+
+# ── R1: the paths a block names ──────────────────────────────────────────────
+#
+# A token is a repository path when it carries a `/` (or is a `./x`), is not
+# absolute, is not a URL, carries no placeholder and no shell metacharacter, and
+# looks like a file rather than a flag.
+PATH_TOKEN_RE = %r{\A\.?/?(?:[A-Za-z0-9_.][A-Za-z0-9_.@+-]*/)+[A-Za-z0-9_.][A-Za-z0-9_.@+-]*\z}
+
+def paths_named(block, base)
+  return [] if base.nil?
+
+  out = []
+  with_cwd(block, base).each do |line, cwd|
+    next if line.start_with?("cd ")
+
+    Shellwords.split(line).each do |tok|
+      t = tok.delete_prefix("./")
+      next unless tok.match?(PATH_TOKEN_RE)
+      next if tok.start_with?("/") || tok.match?(%r{\Ahttps?://}) || tok.match?(PLACEHOLDER_RE)
+
+      rel = File.expand_path(t, File.join(ROOT, cwd))
+      next unless rel.start_with?(ROOT)
+
+      out << { rel: rel.delete_prefix(ROOT).delete_prefix("/"), token: tok, cwd: cwd, line: line }
+    end
+  rescue ArgumentError
+    next # an unbalanced quote is prose, not a path
+  end
+  out
+end
+
+# ── R2: the tasks a block names ──────────────────────────────────────────────
+
+def tasks_named(block, base)
+  return [] if base.nil?
+
+  out = []
+  with_cwd(block, base).each do |line, cwd|
+    words = begin
+      Shellwords.split(line)
+    rescue ArgumentError
+      next
+    end
+    words.shift while words.first && (words.first.include?("=") && !words.first.start_with?("-"))
+    words.shift(2) if words.first == "bundle" && words[1] == "exec"
+    runner = words.shift
+    next unless ["rake", "bin/rake", "bin/rails", "rails", "./bin/rails", "./bin/rake"].include?(runner)
+
+    words.each do |w|
+      break if w.start_with?("-")
+      break if RAILS_COMMANDS.include?(w)
+      next if w.match?(PLACEHOLDER_RE)
+      next unless w.match?(/\A[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)*\z/)
+
+      out << { dir: cwd, task: w, line: line }
+    end
+  end
+  out
+end
+
+def rakefile_sources(dir)
+  base = File.join(ROOT, dir)
+  files = Dir[File.join(base, "lib", "tasks", "**", "*.rake")].sort
+  rf = File.join(base, "Rakefile")
+  files << rf if File.file?(rf)
+  files
+end
+
+# Both shapes, and the header says why both are needed:
+# `task :name` / `task name: …` / `task "name"` at any indentation, plus the
+# `namespace :ns do` that qualifies them.
+def declared_tasks(dir)
+  @declared_tasks ||= {}
+  @declared_tasks[dir] ||= begin
+    names = []
+    rakefile_sources(dir).each do |file|
+      ns = []
+      File.readlines(file, chomp: true).each do |line|
+        indent = line[/\A\s*/].length
+        ns.pop while ns.any? && indent <= ns.last[:indent] && line.strip.start_with?("end")
+        if (m = line.match(/\A\s*namespace\s+[:"']?(\w+)["']?\s+do/))
+          ns << { name: m[1], indent: indent }
+          next
+        end
+        next unless (m = line.match(/\A\s*task[\s(]+(?::(\w+)|(\w+):|["'](\w+)["'])/))
+
+        leaf = m[1] || m[2] || m[3]
+        names << (ns.map { |n| n[:name] } + [leaf]).join(":")
+      end
+    end
+    names.uniq
+  end
+end
+
+def task_declared?(dir, task)
+  return true if FRAMEWORK_TASKS.include?(task)
+
+  declared_tasks(dir).include?(task)
+end
+
+# The file that declares a task, so the census can read ONE LEVEL DEEP into what
+# the reader is actually about to run. Symmetric with the script case above, and
+# for the same measured reason: `bundle exec rake parity` says nothing about
+# Python on its own line, and the task it names shells out to `python3` -- so a
+# clean checkout is told RUNNABLE about a block that cannot run here. Measured on
+# the first `--run` of this file.
+def task_source(dir, task)
+  rakefile_sources(dir).find do |file|
+    File.readlines(file, chomp: true).any? do |line|
+      leaf = task.split(":").last
+      line.match?(/\A\s*task[\s(]+(?::#{Regexp.escape(leaf)}\b|#{Regexp.escape(leaf)}:|["']#{Regexp.escape(leaf)}["'])/)
+    end
+  end
+end
+
+# ── the census: why a block cannot be run here ───────────────────────────────
+
+def reasons_for(block, plan)
+  reasons = []
+  lines = command_lines(block)
+  reasons << "unknown-cwd: the block's `cd` names a box path" if plan.absolute
+  reasons << "placeholder: a token is left for the reader to fill" if plan.placeholder ||
+                                                                      block.body.any? { |l| l.match?(PLACEHOLDER_RE) }
+  if plan.base.nil? && !plan.absolute && !plan.placeholder
+    reasons << "unknown-cwd: nothing in the block places it in this tree (no `cd`, no path, no task)"
+  end
+  lines.each do |l|
+    words = l.split(/\s+/)
+    words.shift while words.first && words.first.include?("=") && !words.first.start_with?("-")
+    next if words.empty?
+
+    reasons << "box: `#{words.first}` needs a provisioned host" if BOX_CMDS.include?(words.first)
+    reasons << "network: `#{l[0, 40]}` dials out" if l.match?(REMOTE_URL_RE)
+    NETWORK_CMDS.each { |pair| reasons << "network: `#{pair.join(' ')}` needs a package index" if words[0, 2] == pair }
+    if TOOLCHAIN_CMDS.include?(words.first) && !on_path?(words.first)
+      reasons << "toolchain: `#{words.first}` is not on PATH here"
+    end
+  end
+  # ONE LEVEL DEEP, and it is the same question three times: a block's own line
+  # says nothing about what the thing it invokes needs. `deploy/check-live-hsts.sh`
+  # dials eight hosts; `rake parity` shells out to Python; `make project` shells
+  # out to xcodegen. Each was measured on this repository, and the third and
+  # first were both found by running the blocks rather than by reading them.
+  commands_of(block, plan.base).each do |c|
+    reasons.concat(invoked_reasons(File.join(ROOT, c[:rel]), "the script `#{c[:token]}` invokes"))
+  end
+  tasks_named(block, plan.base).each do |t|
+    src = task_source(t[:dir], t[:task])
+    reasons.concat(invoked_reasons(src, "the `#{t[:task]}` task")) unless src.nil?
+  end
+  make_targets(block, plan.base).each do |m|
+    reasons.concat(invoked_reasons(m[:makefile], "the Makefile `make #{m[:target]}` reads"))
+  end
+  reasons.uniq
+end
+
+# What a file this block invokes will itself need. Read once, asked twice: does
+# it dial out, and does it shell out to something this machine does not have.
+def invoked_reasons(path, label)
+  return [] if path.nil? || !File.file?(path)
+
+  text = File.read(path)
+  out  = []
+  out << "network: #{label} dials out" if text.match?(REMOTE_URL_RE)
+  TOOLCHAIN_CMDS.each do |cmd|
+    next unless text.match?(/\b#{Regexp.escape(cmd)}\b/)
+    next if on_path?(cmd)
+
+    out << "toolchain: `#{cmd}` is not on PATH here (#{label} shells out to it)"
+  end
+  out
+end
+
+def make_targets(block, base)
+  return [] if base.nil?
+
+  with_cwd(block, base).filter_map do |line, cwd|
+    words = begin
+      Shellwords.split(line)
+    rescue ArgumentError
+      next
+    end
+    words.shift while words.first && words.first.include?("=") && !words.first.start_with?("-")
+    next unless words.first == "make"
+
+    mk = File.join(ROOT, cwd, "Makefile")
+    next unless File.file?(mk)
+
+    { makefile: mk, target: words[1] || "(default)" }
+  end
+end
+
+# ── the run ──────────────────────────────────────────────────────────────────
+
+def main
+  census   = ARGV.include?("--census")
+  run_them = ARGV.include?("--run")
+
+  all = blocks
+  failures      = []
+  scanned       = { paths: 0, tasks: 0, commands: 0 }
+  runnable      = []
+  foreign_count = 0
+
+  rows = all.map do |b|
+    plan    = cd_plan(b)
+    reasons = reasons_for(b, plan)
+    paths   = b.foreign ? [] : paths_named(b, plan.base)
+    tasks   = b.foreign ? [] : tasks_named(b, plan.base)
+    scanned[:paths] += paths.length
+    scanned[:tasks] += tasks.length
+
+    if b.foreign
+      reasons << "foreign: the block runs in the reader's own tree, not this one"
+      foreign_count += 1
+      if b.marked && !census
+        failures << ["R4", "#{b.rel}:#{b.line}", "#{RUN_MARKER} + #{FOREIGN_MARKER}",
+                     "a block cannot be both runnable here and foreign to this tree"]
+      end
+    end
+
+    if !census && !b.foreign
+      paths.each do |p|
+        failures << ["R1", "#{b.rel}:#{b.line}", p[:token],
+                     "names nothing: #{p[:rel]} does not exist, and the block is standing in " \
+                     "#{p[:cwd].empty? ? '<repo root>' : p[:cwd]}"] unless File.exist?(File.join(ROOT, p[:rel]))
+      end
+      tasks.each do |t|
+        next if task_declared?(t[:dir], t[:task])
+
+        failures << ["R2", "#{b.rel}:#{b.line}", t[:task],
+                     "no such task in #{t[:dir].empty? ? '<repo root>' : t[:dir]} — " \
+                     "#{declared_tasks(t[:dir]).length} declared there, and it is not one of them"]
+      end
+      commands_of(b, plan.base).each do |c|
+        scanned[:commands] += 1
+        full = File.join(ROOT, c[:rel])
+        next unless File.exist?(full)
+        next if File.executable?(full)
+
+        failures << ["R3", "#{b.rel}:#{b.line}", c[:token],
+                     "is invoked as a command and is not executable — a reader who pastes this " \
+                     "line gets `permission denied`"]
+      end
+    elsif !b.foreign
+      scanned[:commands] += commands_of(b, plan.base).length
+    end
+
+    unless census
+      if b.marked && reasons.any?
+        failures << ["R4", "#{b.rel}:#{b.line}", RUN_MARKER,
+                     "the block is marked runnable and the census excludes it: " \
+                     "#{reasons.join('; ')}. Drop the marker, or remove what blocks it"]
+      end
+    end
+    runnable << [b, plan] if reasons.empty? && b.marked
+    [b, plan, reasons]
+  end
+
+  print_census(rows)
+
+  unless census
+    vacuity(all, scanned, runnable).each { |v| failures << v }
+    failures.concat(run_blocks(runnable)) if run_them
+  end
+
+  report(all, rows, runnable, scanned, failures, census: census, ran: run_them, foreign: foreign_count)
+end
+
+# A repository file INVOKED as a command: the first word of a line, or the word
+# after `sudo`/`bundle exec`, when it resolves to a path in this tree.
+def commands_of(block, base)
+  return [] if base.nil?
+
+  out = []
+  with_cwd(block, base).each do |line, cwd|
+    words = begin
+      Shellwords.split(line)
+    rescue ArgumentError
+      next
+    end
+    words.shift while words.first && words.first.include?("=") && !words.first.start_with?("-")
+    words.shift if words.first == "sudo"
+    words.shift(2) if words.first == "bundle" && words[1] == "exec"
+    tok = words.first
+    next if tok.nil? || !tok.match?(PATH_TOKEN_RE) || tok.start_with?("/") || tok.match?(PLACEHOLDER_RE)
+
+    rel = File.expand_path(tok.delete_prefix("./"), File.join(ROOT, cwd))
+    next unless rel.start_with?(ROOT)
+
+    out << { rel: rel.delete_prefix(ROOT).delete_prefix("/"), token: tok, cwd: cwd }
+  end
+  out
+end
+
+def print_census(rows)
+  puts "check-runbook-blocks: #{rows.length} shell block(s) in tracked markdown under #{File.basename(ROOT)}/"
+  puts
+  puts "CENSUS — one row per block; a REASON is a fact about the block, never a defect:"
+  rows.sort_by { |b, _, _| [b.rel, b.line] }.each do |b, plan, reasons|
+    where = plan.base.nil? ? "?" : (plan.base.empty? ? "." : plan.base)
+    if reasons.empty?
+      puts format("  %-10s %-44s in %s", b.marked ? "RUN" : "runnable", "#{b.rel}:#{b.line}", where)
+      puts "               not marked #{RUN_MARKER}, so --run leaves it alone" unless b.marked
+    else
+      puts format("  %-10s %-44s in %s", "blocked", "#{b.rel}:#{b.line}", where)
+      reasons.each { |r| puts "               #{r}" }
+    end
+  end
+  puts
+end
+
+def vacuity(all, scanned, runnable)
+  out = []
+  if all.empty?
+    out << ["VACUITY", "corpus", "0 blocks",
+            "no fenced shell block was discovered in tracked markdown. Either the fence " \
+            "convention changed or the discovery pattern stopped matching; either way every " \
+            "rule below is now vacuous and would print a clean run over nothing"]
+  end
+  { paths: "R1", tasks: "R2", commands: "R3" }.each do |key, rule|
+    next if scanned[key].positive?
+
+    out << ["VACUITY", rule, "0 scanned",
+            "#{rule} examined nothing in the whole corpus. A rule with no subject cannot fail, " \
+            "and a clean run over no subjects reads exactly like a clean repository"]
+  end
+  if runnable.empty? && !all.empty?
+    out << ["VACUITY", "--run", "0 marked-and-runnable",
+            "no block is both marked `#{RUN_MARKER}` and clear of the census, so `--run` " \
+            "executes nothing and this whole file degrades to a static path check. Mark a " \
+            "block that runs here, or say in the header why none can"]
+  end
+  out
+end
+
+def run_blocks(runnable)
+  failures = []
+  puts "RUN — each block executed verbatim, in the directory it establishes:"
+  runnable.each do |b, plan|
+    script = command_lines(b).join("\n")
+    dir    = File.join(ROOT, plan.base)
+    t0     = Time.now
+    _, st  = Open3.capture2e("bash", "-eo", "pipefail", "-c", script, chdir: dir)
+    took   = format("%.1f s", Time.now - t0)
+    puts format("  %-6s %-44s %s", st.exitstatus.zero? ? "OK" : "FAIL", "#{b.rel}:#{b.line}", took)
+    next if st.exitstatus.zero?
+
+    failures << ["RUN", "#{b.rel}:#{b.line}", "exit #{st.exitstatus}",
+                 "the block did not run as written from #{plan.base.empty? ? '<repo root>' : plan.base}"]
+  end
+  puts
+  failures
+end
+
+def report(all, rows, runnable, scanned, failures, census:, ran:, foreign: 0)
+  if census
+    puts "(--census: the rules were not run.)"
+    exit 0
+  end
+
+  if failures.empty?
+    puts "check-runbook-blocks: OK — #{all.length} block(s); #{scanned[:paths]} path(s), " \
+         "#{scanned[:tasks]} task(s) and #{scanned[:commands]} command invocation(s) resolved; " \
+         "#{runnable.length} marked runnable#{ran ? ' and all of them ran' : ' (pass --run to execute them)'}, " \
+         "#{foreign} marked foreign to this tree."
+    puts "(This proves the blocks NAME things that exist. Without --run it does not prove they WORK.)"
+    exit 0
+  end
+
+  warn "check-runbook-blocks: FAIL — #{failures.length} defect(s)."
+  failures.each do |rule, where, token, why|
+    warn "  x #{rule}  #{where}  #{token}"
+    warn "      #{why}"
+  end
+  exit 1
+end
+
+# ── --self-test ──────────────────────────────────────────────────────────────
+#
+# Runs THIS SCRIPT, unmodified, over throwaway fixture repositories: one clean
+# tree that must be green, one planted tree per rule that must be red under that
+# rule's name, and one per vacuity arm.
+def self_test
+  ok = true
+  check = lambda do |name, files, expect, needle|
+    Dir.mktmpdir("runbook-selftest") do |dir|
+      files.each do |rel, content|
+        path = File.join(dir, rel)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, content)
+        File.chmod(0o755, path) if rel.start_with?("bin/") || rel.end_with?(".sh")
+      end
+      Open3.capture2e("git", "-C", dir, "init", "-q")
+      Open3.capture2e("git", "-C", dir, "add", "-A")
+      out, st = Open3.capture2e({ "KIOSK_RUNBOOK_ROOT" => dir }, RbConfig.ruby, __FILE__)
+      red  = !st.exitstatus.zero?
+      good = (expect == :red ? red : !red) && (needle.nil? || out.include?(needle))
+      ok &&= good
+      puts format("  %-4s %s", good ? "ok" : "FAIL", name)
+      unless good
+        puts "       expected #{expect}#{needle ? " containing #{needle.inspect}" : ''}, got exit #{st.exitstatus}"
+        puts out.lines.last(12).map { |l| "       #{l}" }.join
+      end
+    end
+  end
+
+  clean = {
+    "bin/thing"    => "#!/bin/sh\necho hi\n",
+    "app/Rakefile" => "task :demo do\nend\nnamespace :demo do\n  task :setup do\n  end\nend\n",
+    "doc.md"       => <<~MD,
+      # a runbook
+
+      <!-- runbook-runnable -->
+      ```sh
+      bin/thing
+      ```
+
+      ```sh
+      cd app
+      rake demo
+      rake demo:setup
+      ```
+
+      ```sh
+      sudo systemctl restart nothing
+      ```
+    MD
+  }
+
+  puts "check-runbook-blocks --self-test"
+  check.call("a clean fixture tree is green", clean, :green, "1 marked runnable")
+
+  r1 = clean.merge("doc.md" => clean["doc.md"].sub("bin/thing\n```", "bin/gone\n```"))
+  check.call("R1 reddens on a path the block names and the tree does not have", r1, :red, "R1")
+
+  r2 = clean.merge("doc.md" => clean["doc.md"].sub("rake demo:setup", "rake demo:nope"))
+  check.call("R2 reddens on a rake task the app does not declare", r2, :red, "R2")
+
+  r2ok = clean.merge("app/Rakefile" => "namespace :demo do\n  task :setup do\n  end\nend\ntask demo: [\"demo:setup\"]\n")
+  check.call("R2 accepts a TOP-LEVEL task, the shape check-ci-tasks cannot see", r2ok, :green, "1 marked runnable")
+
+  r2fw = clean.merge("doc.md" => clean["doc.md"].sub("rake demo:setup", "rake db:migrate"))
+  check.call("R2 accepts a framework task no application declares", r2fw, :green, nil)
+
+  # A path OUTSIDE bin/ and not ending .sh, so the fixture writer leaves its mode
+  # alone: a shipped script that lost its +x bit is what R3 is for, and an arm
+  # that asserted GREEN here would have proved nothing about it.
+  r3 = clean.merge(
+    "tool/run" => "#!/bin/sh\necho hi\n",
+    "doc.md"   => clean["doc.md"].sub("bin/thing\n```", "bin/thing\ntool/run\n```")
+  )
+  check.call("R3 reddens on a repository file invoked as a command with no +x bit", r3, :red, "R3")
+
+  foreign_ok = clean.merge("doc.md" => clean["doc.md"] +
+    "\n<!-- runbook-foreign -->\n```sh\nbin/nothing-in-this-tree\n```\n")
+  check.call("a FOREIGN block is exempt from R1 — its paths are the reader's, not ours",
+             foreign_ok, :green, "1 marked foreign")
+
+  both = clean.merge("doc.md" => clean["doc.md"] +
+    "\n<!-- runbook-runnable runbook-foreign -->\n```sh\nbin/thing\n```\n")
+  check.call("R4 reddens on a block claiming BOTH markers", both, :red, "cannot be both")
+
+  vac1 = { "bin/thing" => "#!/bin/sh\n", "doc.md" => "# no fenced block here\n" }
+  check.call("VACUITY reddens when the corpus discovers no block at all", vac1, :red, "VACUITY")
+
+  r4 = clean.merge("doc.md" => clean["doc.md"].sub("```sh\nsudo systemctl", "<!-- runbook-runnable -->\n```sh\nsudo systemctl"))
+  check.call("R4 reddens on a block MARKED runnable that the census excludes", r4, :red, "R4")
+
+  unmarked = clean.merge("doc.md" => clean["doc.md"].sub("<!-- runbook-runnable -->\n", ""))
+  check.call("VACUITY reddens when no block carries the marker, so --run runs nothing",
+             unmarked, :red, "0 marked-and-runnable")
+
+  vac2 = {
+    "doc.md" => "<!-- runbook-runnable -->\n```sh\nsudo systemctl restart nothing\n```\n"
+  }
+  check.call("VACUITY reddens when every block is excluded and --run proves nothing", vac2, :red, "--run")
+
+  vac3 = {
+    "app/Rakefile" => "task :demo do\nend\n",
+    "doc.md"       => "<!-- runbook-runnable -->\n```sh\ncd app\nrake demo\n```\n"
+  }
+  check.call("VACUITY reddens when no path token is scanned anywhere", vac3, :red, "0 scanned")
+
+  puts(ok ? "check-runbook-blocks --self-test: OK" : "check-runbook-blocks --self-test: FAIL")
+  exit(ok ? 0 : 1)
+end
+
+require "fileutils"
+require "rbconfig"
+
+if ARGV.include?("--self-test")
+  self_test
+else
+  main
+end

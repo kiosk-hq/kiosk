@@ -244,6 +244,28 @@ ac=$(curl -sf "$SERVER_URL/.well-known/agent-configuration")
 assert "agent-configuration → 200"        "$ac_status" "200"
 assert "agent-configuration endpoints.register" "$(echo "$ac" | jq -r '.endpoints.register | length > 0')" "true"
 
+# ─── /auth.md is not a cold-start dead end ───────────────────────────────
+#
+# An assistant that discovers through auth.md reads this file BEFORE it holds
+# a token, learns from it that registration may be tolled, and then has to
+# produce an Equihash proof. The solve is the one step of the handshake it
+# cannot derive from prose, so the document has to hand over both halves: the
+# wire skill (the instructions, carrying the solver's content-addressed pin)
+# and the published solver itself. Asserted on the WIRE, over the served
+# bytes, because that is where an assistant meets them.
+printf "\n\033[1m=== /auth.md (cold-start pointers) ===\033[0m\n"
+
+authmd_body=$(curl -sf "$SERVER_URL/auth.md")
+assert "auth.md names the wire skill" \
+  "$(printf '%s' "$authmd_body" | grep -c 'Wire skill for AI assistants: `https://kiosk.tech/skill-v')" "1"
+assert "auth.md names the published solver" \
+  "$(printf '%s' "$authmd_body" | grep -c 'https://kiosk.tech/pow/solve.py')" "1"
+assert "auth.md forbids a hand-rolled solver" \
+  "$(printf '%s' "$authmd_body" | grep -c 'Do not write your own Equihash solver')" "1"
+# Non-vacuity control: this grep really is reading the served document.
+assert "auth.md is really being read (control token)" \
+  "$(printf '%s' "$authmd_body" | grep -c '^## Discover$')" "1"
+
 printf "\n\033[1m=== /.well-known/api-catalog (RFC 9727 linkset) ===\033[0m\n"
 
 apc_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/.well-known/api-catalog")

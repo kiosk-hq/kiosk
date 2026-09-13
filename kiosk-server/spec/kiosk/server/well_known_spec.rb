@@ -473,6 +473,59 @@ RSpec.describe Kiosk::Server::WellKnown do
       end
     end
 
+    # ── T-069: the cold-start dead end ──────────────────────────────────────
+    #
+    # This document is what an assistant that discovers via auth.md reads
+    # before it has a token. It told that assistant it must solve Equihash and
+    # then pointed it at nothing executable — not the skill, not the solver —
+    # while `skill_url` was already rendered into all three sibling surfaces.
+    # A prose spec section is not a solver, and the solve is the one step of
+    # the handshake an assistant cannot derive.
+    describe "the Discover list (cold-start pointers)" do
+      subject(:discover) { body[/^## Discover$.*?(?=^## )/m] }
+
+      it "names the wire skill, the same URL agents.txt advertises" do
+        expect(discover).to include(Kiosk.configuration.skill_url)
+        expect(described_class.agents_txt(base_url: "https://api.acme.example"))
+          .to include(Kiosk.configuration.skill_url)
+      end
+
+      it "carries the skill digest when the operator configured one" do
+        Kiosk.configure { |c| c.skill_sha256 = "deadbeef" }
+        expect(body[/^## Discover$.*?(?=^## )/m]).to include("sha256 `deadbeef`")
+      end
+
+      it "omits the digest — not the pointer — when none is configured" do
+        expect(Kiosk.configuration.skill_sha256).to be_nil
+        expect(discover).to include(Kiosk.configuration.skill_url)
+        expect(discover).not_to include("sha256")
+      end
+
+      it "drops the bullet entirely at an origin advertising no skill" do
+        Kiosk.configure { |c| c.skill_url = "" }
+        expect(body[/^## Discover$.*?(?=^## )/m]).not_to include("Wire skill")
+      end
+    end
+
+    describe "the Register step (where the solver is)" do
+      subject(:register) { body[/^## Register$.*?(?=^## )/m] }
+
+      # ONE literal, in PowGate — the 403 hint and this document render the
+      # same constant, so the document cannot come to point somewhere the
+      # error message does not. `bin/check-solver-pin` holds that literal
+      # against the URL the published skill names.
+      it "points at the published reference solver, the URL the 403 hint names" do
+        expect(register).to include(Kiosk::Server::PowGate::POW_SOLVER_URL)
+        expect(Kiosk::Server::PowGate::POW_INVALID_HINT)
+          .to include(Kiosk::Server::PowGate::POW_SOLVER_URL)
+      end
+
+      it "tells the reader not to hand-roll a solver and to check the digest first" do
+        expect(register).to match(/Do not write your own Equihash solver/)
+        expect(register).to match(/SHA-256.*pin/m)
+      end
+    end
+
     it "advertises the ceremony endpoints as absolute URLs under the mount" do
       expect(body).to include("https://api.acme.example/kiosk/oauth/device_authorization")
       expect(body).to include("https://api.acme.example/kiosk/auth/claim")

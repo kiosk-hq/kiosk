@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **`/auth.md` now names the wire skill and the published Equihash solver.** It told a cold assistant it must pay a toll and pointed at nothing executable to pay it with.
 - 2026-09-13: **A whole spec file copied into a second demo at the same relative path now fails the build (K-1550).** The unit rule held the names inside it; the file itself was held by nothing.
 
 - 2026-09-13: **The demo-spec rule now COUNTS the path-keyed rule’s reach instead of claiming it is zero (K-1536).** Three corpus files do share a path, and four places said none did.

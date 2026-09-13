@@ -356,17 +356,25 @@ module Kiosk
         "work. Solve every challenge issued in the pow_required 402 and echo it " \
         "back verbatim."
 
+      # The published reference solver, unversioned. First-party (kiosk.tech)
+      # so skill and solver come from ONE origin we control, and deliberately
+      # NOT the content-addressed URL the skill pins: a server naming a solver
+      # does not know which skill cut its caller read, so it names the copy
+      # that is allowed to move and lets the skill supply the digest.
+      # `bin/check-solver-pin` holds this value; it is the ONE place in this
+      # gem the URL is written, because {WellKnown} renders it into `/auth.md`
+      # too and a second literal is a second thing to keep in step.
+      POW_SOLVER_URL = "https://kiosk.tech/pow/solve.py"
+
       # Hint on the 403 raised for a cryptographically WRONG proof.
       # Sibling of POW_HEADER_HINT: that one names the SHAPE a malformed proof
       # must take (400), this one names the TOOL a wrong proof must be produced
       # with (403). Deliberately says nothing about the Equihash construction,
       # the parameters, or which of the verifier's checks failed — the only
       # actionable fact is «use the shipped solver», and the solver itself is
-      # the executable spec. The URL is first-party (kiosk.tech) so skill and
-      # solver come from ONE origin we control; it MUST stay identical to the
-      # URL the skill pins, or the two drift.
+      # the executable spec.
       POW_INVALID_HINT =
-        "solve with the reference solver at https://kiosk.tech/pow/solve.py — " \
+        "solve with the reference solver at #{POW_SOLVER_URL} — " \
         "a hand-written Equihash solver will not match this verifier"
 
       # ── Internal helpers (all module_function so they're callable from above) ──

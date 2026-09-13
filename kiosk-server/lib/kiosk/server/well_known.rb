@@ -3,6 +3,7 @@
 require "json"
 require "kiosk/server/actions"
 require "kiosk/server/queries"
+require "kiosk/server/pow_gate"
 require "kiosk/server/schema_document"
 
 module Kiosk
@@ -367,6 +368,14 @@ module Kiosk
       #   - `identity_assertion` (ID-JAG) — not supported, planned
       #     (the `issue()` seam).
       #
+      # It also has to be USABLE COLD. An assistant discovering here
+      # holds no token, learns from this file that registration may be tolled,
+      # and then has to produce an Equihash proof — the one step of the
+      # handshake prose cannot teach. So `## Discover` names the wire skill
+      # (the same `skill_url` the other three envelopes carry) and `## Register`
+      # names the published solver, which is {PowGate::POW_SOLVER_URL} rather
+      # than a second literal.
+      #
       # Rendered from the same model as the other five surfaces, so it
       # cannot drift; a change in the young auth.md format is one renderer
       # edit.
@@ -392,6 +401,7 @@ module Kiosk
           - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
           - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
           - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
+          #{skill_discover_line(config)}
 
           ## Pick a method
 
@@ -438,6 +448,15 @@ module Kiosk
           to carry a proof. The ONE endpoint under `#{endpoint}` that is never
           tolled is `GET #{endpoint}/schema`: it is public, it is served from
           memory, and a toll needs an identity to charge.
+
+          Do not write your own Equihash solver. The verifier is exact about
+          the seed construction, the index width and the tree ordering, and a
+          mismatch comes back `403 forbidden` with no indication of which check
+          failed. Fetch the reference solver from
+          `#{PowGate::POW_SOLVER_URL}` — the same file that 403's `hint` names.
+          That URL is unversioned and always serves the CURRENT solver, so
+          check its SHA-256 against the content-addressed pin the wire skill
+          above publishes before you execute it.
 
           ## Claim ceremony
 
@@ -586,6 +605,26 @@ module Kiosk
         issuer.to_s
       end
       private_class_method :host_of
+
+      # The `## Discover` bullet pointing at the wire skill, or an empty string
+      # when this origin advertises none. Gated on `skill_url` exactly as
+      # {.agents_txt}'s `Skills:` directive is, so the two envelopes say the
+      # same thing about the same origin; the digest rides along only when the
+      # operator configured one, which is the same condition `kiosk.json`'s
+      # `skill` block is emitted under. Assistants meet the PoW toll on their
+      # very first call, and the skill is where the solver's pin lives — a
+      # discovery document that names the ceremony but not the instructions is
+      # a dead end at exactly the step that cannot be guessed.
+      def self.skill_discover_line(config)
+        url = config.skill_url
+        return "" if url.nil? || url.to_s.empty?
+
+        sha = config.skill_sha256
+        line = "- Wire skill for AI assistants: `#{url}`"
+        line += " (sha256 `#{sha}`)" if sha && !sha.to_s.empty?
+        line
+      end
+      private_class_method :skill_discover_line
 
       # skills[] for agents.json: one entry when a skill URL is configured,
       # else an empty array (unknown skill → advertise none).

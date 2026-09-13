@@ -9,6 +9,7 @@ This directory contains:
 | `jti_store.h/c` | `jti_seen_or_insert()` — durable one-shot `jti` store; in-memory on the host, NVS-backed on the board |
 | `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
 | `crosscheck_main.c` | Ruby-signed token → C verify helper (invoked by `make crosscheck`) |
+| `crosscheck_fields.rb` | Field-count boundary through BOTH verifiers — the shipped `RentalTokenIssuer.verify` and the C one (invoked by `make crosscheck`) |
 | `Makefile` | `make test` = C assertions + Ruby↔C crosscheck |
 | `ed25519/` | Vendored orlp/ed25519 (zlib license, public-domain-style) — portable Ed25519 with detached verify |
 
@@ -30,10 +31,12 @@ wire token      = "<message>.<base64url(sig)>"
 
 lock verifies:
   1. Ed25519-verify(sig, message, skooti_pubkey)
-  2. field[0] == "kiosk-rental-v1"  (domain-separation tag, constant-time compare)
-  3. scooter_code (field[1]) == SCOOTER_CODE
-  4. exp (field[4]) > now
-  5. jti not yet consumed — jti_seen_or_insert(jti, exp, now) == 0
+  2. the message splits into EXACTLY 6 pipe fields — fewer or more is refused,
+     so field[4] is always the expiry and never a shifted field
+  3. field[0] == "kiosk-rental-v1"  (domain-separation tag, constant-time compare)
+  4. scooter_code (field[1]) == SCOOTER_CODE
+  5. exp (field[4]) > now
+  6. jti not yet consumed — jti_seen_or_insert(jti, exp, now) == 0
      (NVS-backed durable store; entries retained until exp; survives reboot)
 ```
 
@@ -44,7 +47,7 @@ cd firmware
 make test
 ```
 
-Expected output (22 assertions pass, crosscheck MATCH):
+Expected output (26 assertions pass, crosscheck MATCH):
 
 ```
 --- C host test ---
@@ -52,13 +55,19 @@ Expected output (22 assertions pass, crosscheck MATCH):
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 22 passed, 0 failed ===
+=== Results: 26 passed, 0 failed ===
 ALL PASS
 
 --- Ruby ↔ C crosscheck ---
   Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
+  Field-count boundary — Ruby issuer verify vs C verify, same live key:
+    5 fields  (jti absent)                   Ruby reject  C reject  MATCH ✓
+    6 fields  (well-formed)                  Ruby accept  C accept  MATCH ✓
+    7 fields  (one appended after the jti)   Ruby reject  C reject  MATCH ✓
+    8 fields  (pipe-input shift, exp faked)  Ruby reject  C reject  MATCH ✓
+  MATCH — both verifiers accept the 6-field message and refuse every other count ✓
 ```
 
 This proves the C Ed25519 verifier correctly verifies tokens signed by the Kiosk
@@ -81,7 +90,8 @@ is `ed25519/` + `verify.c` + `jti_store.c` + the test harness.
 2. App Clip connects to `skooti-SK-001` BLE peripheral.
 3. App Clip **writes** the wire rental token to the Unlock characteristic.
 4. Lock runs `skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)`:
-   checks Ed25519 sig, domain tag (`kiosk-rental-v1`), scooter_code match, exp > now.
+   checks Ed25519 sig, a six-field message, domain tag (`kiosk-rental-v1`),
+   scooter_code match, exp > now.
 5. Lock calls `jti_seen_or_insert(jti, exp, now)` — rejects if jti already consumed
    (durable NVS-backed store; survives reboot; entries retained until their exp).
 6. On all-pass: records jti, drives GPIO HIGH for 3 s = unlocked.
@@ -244,7 +254,10 @@ so, and the table below is where that status is tracked.
 | Flipped sig byte rejected | **PROVEN** (`make test`) |
 | Oversized sig field (400 base64url chars) → 0, no stack overflow | **PROVEN** (`make test`; `make test-asan` for ASan confirmation) |
 | Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test`) |
+| Field count is exactly 6 — a 5-, 7- or 8-field message with a VALID dev-key signature is rejected | **PROVEN** (`make test`) |
+| A pipe in an issuer input shifts fields so `field[4]` reads a caller-chosen expiry — rejected by the count gate | **PROVEN** (`make test`) |
 | C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
+| C verifier and the shipped `RentalTokenIssuer.verify` agree on all four field counts | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
 | Durable replay prevention across reboot (NVS backend, host-tested semantics) | **PROVEN** on host (in-memory backend); NVS wiring documented in `jti_store.c`, activates on board |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board (`../bin/ble-unlock` is the no-Apple harness for this row) |

@@ -10,7 +10,7 @@
  *   message = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  *   wire    = "<message>.<base64url(sig)>"
  *
- * Field indices (0-based):
+ * Field indices (0-based) — EXACTLY six, no more and no fewer:
  *   [0] domain tag      "kiosk-rental-v1"
  *   [1] scooter_code    e.g. "SK-001"
  *   [2] reservation_id  e.g. "resv-1"
@@ -201,6 +201,14 @@ int skooti_verify_token(const uint8_t pubkey[32],
      * We check field[0] (domain tag), field[1] (scooter_code), and field[4] (exp).
      * We do NOT need iat, reservation_id, or jti here, but we must confirm exactly
      * 6 fields are present, so a message with any other field count is rejected.
+     * FEWER than six is refused by the missing-'|' return in the loop below; MORE
+     * than six by the last field refusing to contain one. Both halves are
+     * load-bearing, and the second is the one that carries weight: extra pipes
+     * arriving EARLY — which is what the issuer mints if a '|' ever reaches
+     * scooter_code or reservation_id — shift every field left, so field[4] stops
+     * being the expiry and Gate 2 below reads a caller-supplied number instead.
+     * The Ruby issuer's own verifier splits on '|' and demands 6; this is the
+     * same answer, reached without allocating.
      */
     field_idx = 0;
     p         = msg;
@@ -220,7 +228,12 @@ int skooti_verify_token(const uint8_t pubkey[32],
             if (!pipe) return 0; /* fewer than 6 fields */
             flen = (size_t)(pipe - p);
         } else {
-            /* Last field: everything remaining */
+            /* Last field: everything remaining — and it may hold no further '|',
+             * which is what refuses a message of MORE than 6 fields. */
+            size_t j;
+            for (j = 0; j < remaining; j++) {
+                if (p[j] == '|') return 0; /* more than 6 fields */
+            }
             flen = remaining;
         }
 
@@ -267,7 +280,12 @@ int skooti_verify_token(const uint8_t pubkey[32],
  *
  * message: "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  * field indices: [0]=tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
- * We skip the first 5 pipe-delimited fields to reach jti at field[5].
+ * We skip the first 5 pipe-delimited fields to reach jti at field[5], and what
+ * is left must be the jti ALONE — a further '|' means the message is not six
+ * fields, so this reports failure rather than handing the replay store a key
+ * with someone else's bytes glued to it. Same contract as
+ * skooti_verify_token, stated in the same terms, because a caller that reached
+ * here through some other path must not get a laxer answer than that one gives.
  * -------------------------------------------------------------------------- */
 
 int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
@@ -314,6 +332,15 @@ int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
 
     /* remaining is the jti length */
     if (remaining == 0 || remaining >= jti_out_sz) return 0;
+
+    /* ...and it must be the last field: no further '|' */
+    {
+        size_t j;
+        for (j = 0; j < remaining; j++) {
+            if (p[j] == '|') return 0; /* more than 6 fields */
+        }
+    }
+
     memcpy(jti_out, p, remaining);
     jti_out[remaining] = '\0';
     return 1;

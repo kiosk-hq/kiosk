@@ -15,7 +15,8 @@
  *   wire token = "<message>.<base64url(sig)>"
  *
  *   message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
- *                (UTF-8; 6 pipe-delimited fields)
+ *                (UTF-8; EXACTLY 6 pipe-delimited fields — a message with
+ *                 any other count is refused, whatever its signature)
  *                iat/exp = unix seconds decimal; jti = 32 hex chars
  *
  *   Field indices (0-based):
@@ -95,13 +96,18 @@ extern "C" {
  *   - The Ed25519 verify (orlp/ed25519) is internally constant-time.
  *   - Scooter-code comparison is constant-time (ct_memeq).
  *   - All field accesses are bounds-checked; no OOB on a malformed token.
+ *   - The field COUNT is a gate, not an assumption: fewer than six fields and
+ *     more than six are both refused, so the claim read as `exp` is always the
+ *     fifth field of a six-field message and never something a shifted field
+ *     put there. This is the same answer the server's own Ruby verifier gives.
  *   - b64url_decode takes a dst_cap argument and hard-stops at the buffer
  *     boundary; an oversized sig field is rejected before any stack write.
  *     An early sig_b64_len > 88 guard rejects implausibly long sig fields
  *     before decoding (64 decoded bytes → 86 base64url chars, ±2 slack).
  *
  * After a return of 1 the caller can retrieve the jti for anti-replay by
- * re-parsing token (split on last '.', split message on '|', field[5]).
+ * re-parsing token (split on last '.', split message on '|', field[5] of
+ * exactly six).
  * For convenience skooti_parse_jti() is provided below.
  */
 int skooti_verify_token(const uint8_t pubkey[32],

@@ -310,24 +310,89 @@ static void test_wrong_domain_tag(void)
 }
 
 /*
- * Test 8 — jti_store: insert, replay detection, expiry pruning, table-full eviction
+ * Test 8 — field-count boundary, every vector carrying a VALID signature
+ *
+ * The signed message is exactly six pipe-delimited fields, and both directions
+ * of that boundary belong to the PARSER. Only a token whose Ed25519 signature
+ * verifies can prove the parser closes them: a wrong-count message carrying a
+ * junk signature is refused by the signature gate first — case [6]/5c above is
+ * that shape — so it says nothing about the count. Every vector below is signed
+ * with the dev key in ../config/dev_unlock_key.pem, the same key the KAT vector
+ * at the top of this file comes from, so the count is the only gate left to
+ * answer. The vectors sit in the KAT window (exp=1750000900, NOW_FRESH).
+ *
+ * The eight-field vector is the one that carries weight. It is what the issuer
+ * mints when a '|' reaches scooter_code or reservation_id — the charset
+ * contract on RentalTokenIssuer.issue names that input precondition — and the
+ * damage is not the extra field but the SHIFT: field[4] stops being `exp` and
+ * becomes whatever the caller wrote, here 9999999999, a far-future expiry. A
+ * verifier that does not count fields honours it and the 15-minute window is
+ * gone. The Ruby issuer's own verifier refuses all three wrong-count messages;
+ * `make crosscheck` runs the same four shapes through both halves.
+ */
+static void test_field_count_boundary(void)
+{
+    int result;
+
+    /* 5 fields — jti absent. Signed with the dev key. */
+    static const char TOKEN_5_FIELDS[] =
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900"
+        "."
+        "I7JI1fj0t5cg56pJ9NGSJIplXbw3ue5SHSGfxLJnsUAYld8mkmwSpiwq-0S4_PD-YQ0f8XFN_N2JZk2441LUCA";
+
+    /* 7 fields — one extra field appended after the jti. Signed with the dev key. */
+    static const char TOKEN_7_FIELDS[] =
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899|EXTRA"
+        "."
+        "AWMTaB9dSUOYDrzU57pUdM8d6-qi_V_Wnr8mSTSIf1BnwihkBPBQrW6Y9EO34eycd3Pl8LOlUcueJubChPCpAQ";
+
+    /* 8 fields — reservation_id "r|1750000000|9999999999" shifts every field
+     * left, so field[4] reads 9999999999 instead of the real exp. Signed with
+     * the dev key, correct scooter_code in field[1]: count is the only gate
+     * that can refuse it. */
+    static const char TOKEN_8_FIELDS_SHIFTED[] =
+        "kiosk-rental-v1|SK-001|r|1750000000|9999999999|1750000000|1750000900|aabbccddeeff00112233445566778899"
+        "."
+        "Uw3Kh9_cBCbjcjaCB0sFOd8v9RqSvX7o4iDarQ62ljFxE6tB2wiPL1GliDzxnfXdVZvApmR8oUasc0NMzyQOAg";
+
+    printf("\n[8] Field-count boundary, valid signature on every vector → 5:0  6:1  7:0  8:0\n");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_5_FIELDS, SCOOTER_CODE, NOW_FRESH);
+    printf("  5 fields, valid sig → result: %d\n", result);
+    check(result == 0, "5-field message, valid sig → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, WIRE_TOKEN, SCOOTER_CODE, NOW_FRESH);
+    printf("  6 fields, valid sig → result: %d\n", result);
+    check(result == 1, "6-field message, valid sig → 1");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_7_FIELDS, SCOOTER_CODE, NOW_FRESH);
+    printf("  7 fields, valid sig → result: %d\n", result);
+    check(result == 0, "7-field message, valid sig → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_8_FIELDS_SHIFTED, SCOOTER_CODE, NOW_FRESH);
+    printf("  8 fields (field-shift, field[4]=9999999999), valid sig → result: %d\n", result);
+    check(result == 0, "8-field field-shift, valid sig → 0");
+}
+
+/*
+ * Test 9 — jti_store: insert, replay detection, expiry pruning, table-full eviction
  */
 static void test_jti_store(void)
 {
     int r;
 
-    printf("\n[8] jti_store: insert, replay, prune, table-full eviction\n");
+    printf("\n[9] jti_store: insert, replay, prune, table-full eviction\n");
 
-    /* 8a — fresh insert: first time → 0 (new) */
+    /* 9a — fresh insert: first time → 0 (new) */
     jti_store_reset();
     r = jti_seen_or_insert("aabbccddeeff00112233445566778899", 1750000900ULL, 1750000800ULL);
     check(r == 0, "jti_store: first insert → 0 (new)");
 
-    /* 8b — replay: same jti, exp > now → 1 (seen, reject) */
+    /* 9b — replay: same jti, exp > now → 1 (seen, reject) */
     r = jti_seen_or_insert("aabbccddeeff00112233445566778899", 1750000900ULL, 1750000800ULL);
     check(r == 1, "jti_store: second insert same jti (exp>now) → 1 (replay rejected)");
 
-    /* 8c — expired entry pruned: insert jti1 with exp <= now → pruned;
+    /* 9c — expired entry pruned: insert jti1 with exp <= now → pruned;
      * re-inserting the same jti1 returns 0 (new, not replay) */
     jti_store_reset();
     /* Insert with exp already in the past */
@@ -343,7 +408,7 @@ static void test_jti_store(void)
                             1750000500ULL  /* now is well past exp */);
     check(r == 0, "jti_store: expired entry pruned → re-insert → 0 (not replay)");
 
-    /* 8d — table-full: fill JTI_STORE_SIZE slots with distinct jtis, then add one more.
+    /* 9d — table-full: fill JTI_STORE_SIZE slots with distinct jtis, then add one more.
      * The oldest / smallest-exp entry is evicted; overall call returns 0 (not -1). */
     jti_store_reset();
     {
@@ -375,15 +440,15 @@ static void test_jti_store(void)
         check(r == 0, "jti_store: table-full + evict oldest → 0 (new, not error)");
     }
 
-    /* 8e — invalid argument: NULL jti → -1 */
+    /* 9e — invalid argument: NULL jti → -1 */
     r = jti_seen_or_insert(NULL, 1750000900ULL, 1750000800ULL);
     check(r == -1, "jti_store: NULL jti → -1 (invalid arg)");
 
-    /* 8f — invalid argument: empty jti → -1 */
+    /* 9f — invalid argument: empty jti → -1 */
     r = jti_seen_or_insert("", 1750000900ULL, 1750000800ULL);
     check(r == -1, "jti_store: empty jti → -1 (invalid arg)");
 
-    /* 8g — invalid argument: jti too long (>= JTI_MAX_LEN chars) → -1 */
+    /* 9g — invalid argument: jti too long (>= JTI_MAX_LEN chars) → -1 */
     r = jti_seen_or_insert("aabbccddeeff00112233445566778899X" /* 33 chars */,
                             1750000900ULL, 1750000800ULL);
     check(r == -1, "jti_store: jti too long (33 chars) → -1 (invalid arg)");
@@ -406,6 +471,7 @@ int main(void)
     test_oversized_sig();
     test_malformed_tokens();
     test_wrong_domain_tag();
+    test_field_count_boundary();
     test_jti_store();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

@@ -42,9 +42,13 @@ module RentalTokenIssuer
     # field delimiter `|`. The message packs six pipe-delimited fields and
     # {.verify} rejects any split that does not yield exactly 6, so a `|` in
     # either input mints a validly SIGNED token this issuer's own verifier
-    # rejects — a field-shift hazard for a laxer external verifier. skooti only
-    # ever passes `SK-###` codes and pipe-free ids, so this is a documented
-    # input precondition rather than an enforced guard.
+    # rejects — a field-shift hazard for a laxer external verifier. The two
+    # verifiers skooti ships are not lax: `script/lock_sim.rb` and the lock
+    # firmware's `skooti_verify_token` both count fields and refuse any message
+    # that is not six, and `make crosscheck` runs that boundary through the C
+    # verifier and this one together. skooti only ever passes `SK-###` codes and
+    # pipe-free ids, so this is a documented input precondition rather than an
+    # enforced guard.
     #
     # @param scooter_code   [String]  e.g. "SK-001" (no `|`)
     # @param reservation_id [String]  UUID or other opaque ID (no `|`)

@@ -62,6 +62,12 @@ test: build
 # signing with the old one. Signs a fresh message and passes the wire
 # token to the C verifier, proving C verifies a LIVE server-issued token, not
 # just the static vector. Relative path: make runs recipes in this directory.
+#
+# Then crosscheck_fields.rb runs the other half of the same question — what
+# the two verifiers REFUSE — over the field-count boundary, calling the
+# shipped RentalTokenIssuer.verify for the Ruby answer and this same helper
+# for the C one. Its header says why every case there carries a valid
+# signature.
 # --------------------------------------------------------------------------
 crosscheck: $(TARGET)_crosscheck
 	@echo "--- Ruby ↔ C crosscheck ---"
@@ -74,9 +80,12 @@ crosscheck: $(TARGET)_crosscheck
 	') && \
 	echo "  Ruby-signed token: $$CROSSCHECK_RESULT" && \
 	./$(TARGET)_crosscheck "$$CROSSCHECK_RESULT"
+	@ruby crosscheck_fields.rb ./$(TARGET)_crosscheck
 
 # The crosscheck helper binary verifies a single token passed as argv[1]
 # using now=1750001800 (inside the live-window), SCOOTER_CODE="SK-001".
+# Exit 0 means the C verifier accepted it, 1 means it refused — which is how
+# crosscheck_fields.rb reads the C answer for the cases it expects refused.
 # Built separately so the main host_test is self-contained.
 $(TARGET)_crosscheck: crosscheck_main.c verify.c $(ED25519_SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ crosscheck_main.c verify.c $(ED25519_SRCS)

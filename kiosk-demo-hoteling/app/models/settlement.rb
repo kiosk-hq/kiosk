@@ -12,6 +12,9 @@ class Settlement < ApplicationRecord
   # from the transaction GUC rather than from Ruby, so the app-layer assertion and
   # an RLS policy stay the same expression. Frozen literal, no caller value.
   scope :of_current_principal, lambda {
+    # Off the wire there is no principal, so this predicate would be `= NULL`
+    # and answer nothing at all; refuse instead of returning a plausible zero.
+    Kiosk::Server::SessionContext.require_open!
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 end

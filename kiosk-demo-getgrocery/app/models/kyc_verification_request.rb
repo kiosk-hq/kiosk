@@ -49,6 +49,9 @@ class KycVerificationRequest < ApplicationRecord
   # match instead. That is why the two surfaces share this MODEL and no
   # behaviour: they answer to different authorities.
   scope :owned_by_current_principal, lambda {
+    # Off the wire there is no principal, so this predicate would be `= NULL`
+    # and answer nothing at all; refuse instead of returning a plausible zero.
+    Kiosk::Server::SessionContext.require_open!
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 end

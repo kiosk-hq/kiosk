@@ -186,10 +186,54 @@ namespace :demo do
         `reach :published` moves browse_listings into that probe set and fails
         here with Alice's row in hand.
 
+    Off the wire, before any server starts: the owner scope with no Kiosk
+    session open REFUSES (401 unauthenticated) rather than answering an empty
+    relation — which is what a NULL identity predicate silently looks like,
+    and it reads exactly like isolation working.
+
     Exits 0 if all assertions hold; exits 1 on failure. A red assertion = a real
     isolation hole: fix the app, not the test.
   DESC
   task isolation: :setup do
+    # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
+    # Everything below proves B cannot read A's rows. This proves the scope all
+    # of it rests on REFUSES when there is no principal at all, instead of
+    # answering the empty relation a NULL identity predicate silently produces —
+    # which reads exactly like isolation working, so every negative assertion
+    # over it passes.
+    #
+    # The scope set is DERIVED from the loaded models, not named here, so a new
+    # owner-scoped model is probed the day it is written and an app that has
+    # lost them all fails as VACUOUS rather than passing on nothing. `:setup`
+    # shells out and this task holds no Rails environment of its own, so the
+    # probe runs in its own `rails runner` — which is exactly the caller it is
+    # about.
+    probe = <<~'RUBY'
+      Rails.application.eager_load!
+      scopes = ActiveRecord::Base.descendants.flat_map do |model|
+        model.singleton_class.instance_methods(false)
+             .grep(/_current_principal\z/).map { |name| [model, name] }
+      end
+      abort "VACUOUS — this app declares no *_current_principal scope at all" if scopes.empty?
+      answered = scopes.reject do |model, name|
+        begin
+          model.public_send(name).count
+          false
+        rescue Kiosk::Server::Errors::Unauthenticated
+          true
+        end
+      end
+      unless answered.empty?
+        abort "ANSWERED instead of refusing: " +
+              answered.map { |m, n| "#{m}.#{n}" }.join(", ") +
+              " — a silent empty relation is not isolation"
+      end
+      puts scopes.map { |m, n| "#{m}.#{n}" }.sort.join(", ") + " → all refused, 401 unauthenticated ✓"
+    RUBY
+    puts "\n── Off the wire: the identity-scoped scopes refuse with no session ──"
+    abort "FAIL — an identity-scoped scope answered instead of refusing" \
+      unless system("bundle", "exec", "rails", "runner", probe)
+
     require "json"
     require "shellwords"
     port = ENV.fetch("PORT", "3006")

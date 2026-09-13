@@ -151,6 +151,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- `SessionContext.require_open!`, `.current` and `.open?` — the guard an identity-scoped scope calls, so a call with no session raises `401 unauthenticated` rather than answering an empty relation.
 - `Kiosk::Server::ConformanceOrigin` — the origin the `kiosk-test-support` conformance checks run against in a real Rails app. It reads verbs from the `Queries`/`Actions` registries, routes from `Rails.application.routes`, dispatches a verb inside a GUC-scoped `SessionContext`, and reports schema failures through the engine's own validators — `RequestValidation` for arguments (so the reserved `limit`/`cursor` names stay exempt exactly as on the wire) and `ResponseValidation` for answers — so a conformance test and a running server cannot disagree. Not auto-loaded — require it from your test helper, like `test_executor.rb` beside it.
 - `Kiosk::Server::TestExecutor#run_query(name, args)` — invokes a Query verb by name inside the active identity scope, answering a paginated query with its rows. `query` takes SQL and `run_action` resolves against the Action registry, so a declared `kind :query` verb was previously reachable through neither.
 

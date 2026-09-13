@@ -35,6 +35,9 @@ class Membership < ApplicationRecord
   # is no caller-controlled value anywhere in this fragment. That is what makes
   # it exempt from the no-raw-SQL rule rather than an exception to it.
   scope :of_current_principal, lambda {
+    # Off the wire there is no principal, so this predicate would be `= NULL`
+    # and answer nothing at all; refuse instead of returning a plausible zero.
+    Kiosk::Server::SessionContext.require_open!
     where(arel_table[:account_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 

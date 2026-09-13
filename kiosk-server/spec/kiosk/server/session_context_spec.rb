@@ -123,6 +123,81 @@ RSpec.describe Kiosk::Server::SessionContext do
     end
   end
 
+  # ── The off-wire guard: silent-empty is the dangerous answer ─────────────
+  #
+  # `where(user_id: kiosk.current_user_id())` over an unset GUC is
+  # `user_id = NULL`, which matches nothing and raises nothing. MEASURED in
+  # kiosk-demo-hoteling before this guard existed: a table holding 12 bookings
+  # answered `owned_by_current_principal.count` => 0 from `rails runner`, with
+  # no exception and no log line. That reads exactly like correct isolation,
+  # which is why every negative-only assertion over it passes.
+  describe ".require_open! (the guard an identity-scoped scope calls)" do
+    it "refuses with a TYPED wire error when no session is open" do
+      expect(described_class).not_to be_open
+      expect { described_class.require_open! }
+        .to raise_error(Kiosk::Server::Errors::Unauthenticated, /no Kiosk session is open/)
+    end
+
+    # 401 `unauthenticated`, already in the spec's closed `code` vocabulary —
+    # no served path can reach this guard, but if one ever does the wire must
+    # answer a problem document and not a 500.
+    it "raises a code from the closed vocabulary, not a bare exception" do
+      described_class.require_open!
+    rescue Kiosk::Server::Errors::Base => e
+      expect(e.code).to eq("unauthenticated")
+      expect(e.http_status).to eq(401)
+    end
+
+    it "names the remedy an off-wire caller has to apply" do
+      described_class.require_open!
+    rescue Kiosk::Server::Errors::Unauthenticated => e
+      expect(e.message).to include("Kiosk::Server::SessionContext.open(connection:, identity:)")
+      expect(e.message).to include("take the principal as an argument")
+    end
+
+    it "passes inside an open session" do
+      described_class.open(connection: connection, identity: build_identity) do
+        expect(described_class).to be_open
+        expect { described_class.require_open! }.not_to raise_error
+      end
+    end
+
+    it "exposes the open session itself, so a caller can read its identity" do
+      identity = build_identity(user_id: "u-7")
+      described_class.open(connection: connection, identity: identity) do |ctx|
+        expect(described_class.current).to be(ctx)
+        expect(described_class.current.identity.user_id).to eq("u-7")
+      end
+    end
+
+    # The marker is block-scoped and restores on the way out — including out of
+    # an exception, which is the path a rolled-back wire request takes. A marker
+    # that leaked would make the guard answer «open» for every later caller on
+    # this thread, which is worse than not having it: it would be a guard that
+    # goes quiet exactly once something has gone wrong.
+    it "clears on the way out, and on the way out of a raise" do
+      described_class.open(connection: connection, identity: build_identity) { }
+      expect(described_class.current).to be_nil
+
+      expect do
+        described_class.open(connection: connection, identity: build_identity) { raise "boom" }
+      end.to raise_error("boom")
+      expect(described_class.current).to be_nil
+    end
+
+    it "nests without the inner exit blanking the outer session" do
+      outer_seen = nil
+      described_class.open(connection: connection, identity: build_identity(user_id: "u-out")) do |outer|
+        described_class.open(connection: connection, identity: build_identity(user_id: "u-in")) do
+          expect(described_class.current.identity.user_id).to eq("u-in")
+        end
+        outer_seen = described_class.current
+        expect(outer_seen).to be(outer)
+      end
+      expect(described_class.current).to be_nil
+    end
+  end
+
   # ── The equivalence claim, against a database that can disagree ──────────
   #
   # `set_config(name, value, true)` replaces `SET LOCAL name = 'value'`

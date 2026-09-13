@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "kiosk/server/errors"
+
 module Kiosk
   module Server
     # Wraps a database connection + {Kiosk::Identity}, opens a transaction,
@@ -39,11 +41,72 @@ module Kiosk
       # free diagnostic for a connection double whose `#transaction` does not
       # open one is gone.
       SET_GUC_SQL = "SELECT set_config($1, $2, true)"
+
+      # Where {.current} is parked for the duration of one open session.
+      #
+      # `Thread.current[]` is FIBER-local and the set/restore is block-scoped —
+      # the same carrier and the same reasoning as {CurrentRequest}, and for the
+      # same reason it is not an `ActiveSupport::CurrentAttributes`: this class
+      # is also used from a plain rake task, from the RLS journey DSL and from
+      # unit specs, none of which runs the Rails executor that would reset one.
+      KEY = :kiosk_server_session_context
+
       # Open a session, yield self, clean up.
       #
       # @yield [SessionContext]
       def self.open(connection:, identity:, &block)
         new(connection: connection, identity: identity).open(&block)
+      end
+
+      # The session open on this thread, or nil.
+      #
+      # @return [SessionContext, nil]
+      def self.current = Thread.current[KEY]
+
+      # @return [Boolean] whether a Kiosk session — and therefore the
+      #   `<guc_namespace>.current_user_id` GUC — is in effect right here.
+      def self.open? = !Thread.current[KEY].nil?
+
+      # ── THE GUARD AN IDENTITY-SCOPED SCOPE CALLS BEFORE IT BUILDS ITS WHERE ─
+      #
+      # `where(user_id: kiosk.current_user_id())` is the one predicate an
+      # operator writes in the terms an RLS policy is written in, and the
+      # database function behind it is a `current_setting(…, true)` read:
+      # `missing_ok`, so with no GUC set it is NULL, `user_id = NULL` matches
+      # nothing, and the caller gets an EMPTY RELATION with no exception and no
+      # log line. Empty is the dangerous answer — it reads exactly like correct
+      # isolation, and every negative assertion over it passes.
+      #
+      # No served request can reach that state ({Executor} refuses to build
+      # without an identity and this class sets the GUC from it), so what this
+      # guard is for is the caller OFF the wire: a console, a rake task, a seed,
+      # a copy of the pattern into a background job later. Those get an
+      # exception naming the remedy instead of a plausible zero.
+      #
+      # IT ASKS RUBY, NOT POSTGRES, AND THAT IS DELIBERATE. A `SELECT
+      # <schema>.current_user_id()` here would be a second round trip on every
+      # owner-scoped read, on a path that runs tens of times per request, to
+      # re-derive a fact this process already knows. The database function keeps
+      # its NULL semantics untouched, which is not a detail: an RLS policy
+      # returning no rows is how RLS HIDES rows, and a function that raised
+      # instead would turn every hidden row into a 500.
+      #
+      # The class is {Errors::Unauthenticated} — 401, `unauthenticated`, already
+      # in the spec's closed `code` vocabulary — so that if a request path ever
+      # does reach it the wire answers a typed problem document rather than a
+      # 500, and fails closed. No new code is minted for it.
+      #
+      # @raise [Errors::Unauthenticated] when no session is open
+      # @return [void]
+      def self.require_open!
+        return if open?
+
+        raise Errors::Unauthenticated,
+              "no Kiosk session is open, so the current-principal predicate would be " \
+              "`= NULL` and this relation would answer nothing at all. On the wire the " \
+              "engine opens one for you; off it — a console, a rake task, a seed — wrap " \
+              "the call in Kiosk::Server::SessionContext.open(connection:, identity:), " \
+              "or take the principal as an argument instead of reading it from the session."
       end
 
       attr_reader :connection, :identity
@@ -56,7 +119,13 @@ module Kiosk
       def open
         connection.transaction do
           apply_gucs
-          yield self
+          previous = Thread.current[KEY]
+          Thread.current[KEY] = self
+          begin
+            yield self
+          ensure
+            Thread.current[KEY] = previous
+          end
         end
       end
 

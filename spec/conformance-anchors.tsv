@@ -1391,7 +1391,7 @@ kiosk-server/spec/kiosk/server/headers_spec.rb	does not duplicate a token alread
 kiosk-server/spec/kiosk/server/headers_spec.rb	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
 kiosk-server/spec/kiosk/server/headers_spec.rb	mutates a Rack headers hash with the three Kiosk headers
 kiosk-server/spec/kiosk/server/headers_spec.rb	produces a fresh headers hash with the three Kiosk headers set
-kiosk-server/spec/kiosk/server/headers_spec.rb	varies on the two request headers that change the answer
+kiosk-server/spec/kiosk/server/headers_spec.rb	varies on every request header that changes the answer
 kiosk-server/spec/kiosk/server/identity_resolution_spec.rb	returns nil when nothing resolves (caller raises 401 — fail closed)
 kiosk-server/spec/kiosk/server/jwks_spec.rb	preserves order for multi-key rotation overlap
 kiosk-server/spec/kiosk/server/jwks_spec.rb	produces JSON that's parseable and contains only the public JWK fields

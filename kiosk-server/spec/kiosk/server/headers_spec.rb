@@ -58,7 +58,7 @@ RSpec.describe Kiosk::Server::Headers do
   # jwks.json`, where `Vary: Authorization` would be both a lie and a
   # performance regression.
   describe ".add_cache_policy" do
-    it "varies on the two request headers that change the answer" do
+    it "varies on every request header that changes the answer" do
       headers = described_class.add_cache_policy({}, status: 200)
       expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW, Kiosk-Timezone")
     end

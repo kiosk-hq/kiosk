@@ -127,7 +127,7 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
   # the RULE, and the tree is (correctly) free of violations — an example that
   # only ever sees a clean tree cannot show which of the three kinds it would
   # have caught.
-  describe "the shape it forbids, and the two it does not" do
+  describe "the shapes it forbids, and the shapes it does not" do
     # `xapp_violations` reads each file through File.read, so a stubbed read is
     # the whole probe — no temp tree, and the resolver still does the real
     # path arithmetic against the real repo root.

@@ -29,10 +29,17 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 ## Prerequisites
 
-- **Ruby 4.0+** with Bundler
+- **Ruby**, with Bundler — `e2e/mise.toml` pins the version this harness is
+  actually run and gated on (`4.0.1` today), and the CI `e2e` job installs that
+  same one. `run.sh` checks that `ruby` is on the PATH and not which version it
+  is, so an older interpreter will start the run; nothing here exercises the
+  harness below the pin. The gems' own floor, which CI does test both ends of,
+  is `>= 3.2.0`.
 - **PostgreSQL** reachable (default: `localhost` with the running user as superuser; e.g. `brew services start postgresql`)
 - **`rails` gem** — the script installs it automatically if missing
 - **`curl`** and **`jq`** on the PATH
+- **`python3` with `numpy`** — the golden path registers by paying a real
+  register-time Equihash toll, and the bundled solver needs both
 
 ## Run locally
 

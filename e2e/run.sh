@@ -8,7 +8,7 @@
 # tears down.
 #
 # Prereqs:
-#   - Ruby 4.0+ with bundler
+#   - Ruby with bundler (mise.toml beside this script pins the one CI runs)
 #   - Postgres reachable (default host: $PGHOST or localhost)
 #   - rails gem (the script will install if missing)
 #

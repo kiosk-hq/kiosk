@@ -1785,7 +1785,7 @@ REMEDY = {
 SCOPES = {
   gem: { label: "a shipped gem", dirs: -> { shipped_gems }, files: ->(d) { shipped_files(d) },
          per: "everything the gem's own `spec.files` names, plus <gem>.gemspec, " \
-              "minus CHANGELOG.md and LICENSE.txt" },
+              "minus #{GEM_NOT_READ.join(' and ')}" },
   demo: { label: "a demo", dirs: -> { demo_dirs }, files: ->(d) { demo_files(d) },
           # DERIVED FROM THE SAME CONSTANTS `demo_files` READS (K-1580). The
           # hand-typed version of this line ended «Rakefile, config.ru,
@@ -1796,28 +1796,41 @@ SCOPES = {
           # and quotes; it may not be an inventory kept beside a derivation.
           per: "#{DEMO_ROOTS.map { |r| "#{r}/**" }.join(', ')} " \
                "(#{DEMO_EXTS.join(' ')}), #{DEMO_TOP.join(', ')}, and every tracked .md " \
-               "anywhere under the demo except #{DEMO_DOC_SKIP.join(' and ')} " \
+               "anywhere under the demo, except #{DEMO_DOC_SKIP.join(', ')} " \
                "and the #{DEMO_RUNTIME.join('/')} trees",
           door: "one demo is NAMED after the maintainer and the word is its subject " \
                 "matter, so the maintainer-named rule stops at the door" },
   spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
           files: ->(d) { spec_files(d) },
-          per: "spec/** (text extensions)",
+          # DERIVED, and it was WRONG before it was (K-1580, the same class as
+          # the demo line above). It said «spec/**» while `spec_files` globs
+          # GEM_SPEC_ROOTS, which is `spec` AND `test` — so the five files under
+          # `kiosk-rls-minitest/test/` were read by this scope and described by
+          # nothing. This is the SECOND half of the same string to go stale: the
+          # rule half said «R3 and R4 only» while the run executed R7 as well
+          # (K-1409, second reopen), and that half is derived now too.
+          per: "#{GEM_SPEC_ROOTS.map { |r| "#{r}/**" }.join(', ')} " \
+               "(#{DEMO_EXTS.join(' ')})",
           door: "a developer surface, absent from every spec.files, and the constitution " \
                 "REQUIRES an inline TODO/FIXME to cite a row — a rule these directories " \
                 "have to be able to obey" },
   demo_spec: { label: "a demo's spec/ and test/ (published, not shipped)",
                dirs: -> { demo_spec_dirs }, files: ->(d) { demo_spec_files(d) },
-               per: "spec/**, test/** (text extensions)",
+               per: "#{DEMO_SPEC_ROOTS.map { |r| "#{r}/**" }.join(', ')} " \
+                    "(#{DEMO_EXTS.join(' ')})",
                door: "a developer surface, as a gem's spec/ is; and the maintainer-named " \
                      "rule stops here on the demo scope's own footing — it is the same app " \
                      "in both subtrees" },
   e2e: { label: "the e2e harness", dirs: -> { e2e_dirs }, files: ->(d) { e2e_files(d) },
-         per: "e2e/** (.md .sh .rb .json), minus .gems/ and tmp/; a vendored " \
+         per: "e2e/** (#{E2E_EXTS.join(' ')}), minus .gems/ and tmp/; a vendored " \
               "schema mirror is read for its TOP-LEVEL `$comment` only" },
   deploy: { label: "the deploy runbook", dirs: -> { deploy_dirs },
             files: ->(d) { deploy_files(d) },
-            per: "deploy/** (every tracked file)",
+            # The extension list is a statement about what is THERE rather than
+            # a filter against binaries — see `deploy_files` — and a self-test
+            # arm re-derives the tracked set from git and reddens when something
+            # falls outside it. The list is printed because the filter is real.
+            per: "deploy/** (#{DEPLOY_EXTS.join(' ')}, and any file with no extension)",
             door: "maintainer tooling for one fleet, so the two opaque-token rules stop at " \
                   "the door on `bin/`'s footing — its reader holds the ssh key and an id " \
                   "they cannot look up costs them a lookup. The rest reach it: this " \
@@ -1826,7 +1839,8 @@ SCOPES = {
                   "unreadable to them" },
   firmware: { label: "the lock firmware and App Clip sources", dirs: -> { firmware_dirs },
               files: ->(d) { firmware_files(d) },
-              per: "firmware/** and appclip/** (.c .h .ino .swift), COMMENTS ONLY, " \
+              per: "#{FIRMWARE_ROOTS.map { |r| "#{r.split('/').last}/**" }.join(' and ')} " \
+                   "(#{CFAMILY_EXTS.join(' ')}), COMMENTS ONLY, " \
                    "minus the vendored ed25519 mirror",
               door: "the code is not read, only what a person wrote beside it: a struct " \
                     "field or a keyword default is not prose, and reporting one as prose is " \
@@ -1836,8 +1850,13 @@ SCOPES = {
                     "sentence narrating something this project used to do" },
   root: { label: "the repository's front door", dirs: -> { root_dirs },
           files: ->(d) { root_files(d) },
-          per: "every tracked file at the repository root except the five in ROOT_NOT_READ " \
-               "(the two under the standing exemption, the licence, the two dot-files)" }
+          # «the five in ROOT_NOT_READ» is what stood here: a hand-typed count
+          # beside a derived list, which is K-1516's shape exactly and goes
+          # false the day a sixth exemption is typed. The names are printed
+          # instead of counted (K-1580).
+          per: "every tracked file at the repository root except " \
+               "#{ROOT_NOT_READ.join(', ')} — the standing exemption, the licence " \
+               "and the dot-files that carry no prose" }
 }.freeze
 
 # The rule ids a scope carries, DERIVED. Printed beside `per:` so the two
@@ -2868,6 +2887,37 @@ def self_test
   check.call("…and it names every skip list the derivation applies, so a page that leaves the " \
              "scope leaves the printed sentence with it",
              (DEMO_DOC_SKIP + DEMO_RUNTIME).all? { |n| SCOPES[:demo][:per].include?(n) })
+
+  # …AND THE SAME QUESTION OF EVERY OTHER SCOPE, because the demo line was not
+  # the only one. Re-derived when this arm was written: `spec`'s `per:` said
+  # «spec/**» while `spec_files` globs GEM_SPEC_ROOTS, which is `spec` AND
+  # `test`, so the files under `kiosk-rls-minitest/test/` were read and
+  # described by nothing; and `root`'s counted «the five in ROOT_NOT_READ»,
+  # which is K-1516's hand-typed figure beside a derived list.
+  #
+  # WHAT THIS TABLE IS NOT: an inventory of every constant a scope's file
+  # function reads. It is the constants whose members must be VISIBLE in the
+  # printed sentence, and a scope that grows a new one is not covered until
+  # somebody adds it here. That residue is stated rather than claimed away —
+  # this file's own history says a list claiming completeness is measured wrong
+  # within the week.
+  {
+    gem:       [GEM_NOT_READ],
+    demo:      [DEMO_ROOTS, DEMO_EXTS, DEMO_TOP, DEMO_DOC_SKIP, DEMO_RUNTIME],
+    spec:      [GEM_SPEC_ROOTS, DEMO_EXTS],
+    demo_spec: [DEMO_SPEC_ROOTS, DEMO_EXTS],
+    e2e:       [E2E_EXTS],
+    deploy:    [DEPLOY_EXTS],
+    firmware:  [CFAMILY_EXTS, FIRMWARE_ROOTS.map { |r| r.split("/").last }],
+    root:      [ROOT_NOT_READ]
+  }.each do |scope, constants|
+    members = constants.flatten
+    missing = members.reject { |m| SCOPES[scope][:per].include?(m) }
+    check.call("the #{scope} scope's `per:` names every member of the constants its file set is " \
+               "built from (#{members.length} name(s))" \
+               "#{missing.empty? ? '' : " — missing: #{missing.join(', ')}"}",
+               missing.empty?)
+  end
 
   # ── VACUITY: the guard must be looking at something real ──────────────────
   gems  = shipped_gems

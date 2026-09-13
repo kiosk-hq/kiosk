@@ -215,9 +215,12 @@
 #     sentence that is legal in its `app/` cannot be illegal in its `spec/` —
 #     it is the same app and the same subject matter. The cost is stated rather
 #     than hidden: «the maintainer ruled X» in a demo's spec is held by nothing,
-#     exactly as it is in a demo's `app/`. No gem here has a `test/` and at
-#     least one demo does, which is why the directory is globbed in the demo
-#     half and not in the gem half — and a self-test arm re-derives the TRACKED
+#     exactly as it is in a demo's `app/`. BOTH halves glob BOTH directory
+#     names, and the gem half did not until the coverage partition was first
+#     taken: this paragraph asserted «no gem here has a test/», which was false
+#     — `kiosk-rls-minitest` has one, five Ruby files deep, and it was in no
+#     scope at all. A sentence about the tree is a measurement, and this one had
+#     stopped being one — and a self-test arm re-derives the TRACKED
 #     set from git and fails when a file falls outside the scope, so the
 #     question «which directory is it this week» is answered by the tree.
 #   * `Gemfile`, `Rakefile`, `.rubocop.yml` and the rest of a gem's root —
@@ -970,14 +973,24 @@ end
 # sentence is unreadable to most of the people this repository is published
 # for and an attributed ruling asks them to trust a stranger's judgement in
 # place of the property the example pins.
+# A GEM's developer surface is `spec/` OR `test/`, and the second half was
+# missing while the header two hundred lines up asserted «no gem here has a
+# test/». MEASURED when the coverage partition was first taken:
+# `kiosk-rls-minitest` has one, five Ruby files deep, and it was in no scope at
+# all — the demo half globbed both directory names and the gem half globbed one.
+# The rule is the same rule either way: it is a published developer surface,
+# read by a stranger who wants to know what the control actually promises.
+GEM_SPEC_ROOTS = %w[spec test].freeze
+
 def spec_dirs
   (Dir.glob(File.join(REPO, "kiosk-*")) - Dir.glob(File.join(REPO, "kiosk-demo-*")))
-    .select { |d| File.directory?(File.join(d, "spec")) }
+    .select { |d| GEM_SPEC_ROOTS.any? { |r| File.directory?(File.join(d, r)) } }
     .sort
 end
 
 def spec_files(gem_dir)
-  Dir.glob(File.join(gem_dir, "spec", "**", "*"))
+  GEM_SPEC_ROOTS
+    .flat_map { |r| Dir.glob(File.join(gem_dir, r, "**", "*")) }
     .select { |p| File.file?(p) && DEMO_EXTS.include?(File.extname(p)) }
     .sort
 end
@@ -1157,13 +1170,42 @@ end
 # Text only: `config/` also holds `credentials.yml.enc` and `*.key`, and a
 # byte-scan of those answers a question nobody asked.
 DEMO_ROOTS = %w[app lib script config db].freeze
-DEMO_TOP   = %w[Rakefile config.ru README.md before-after.md].freeze
+DEMO_TOP   = %w[Rakefile config.ru].freeze
 DEMO_EXTS  = %w[.rb .rake .ru .erb .yml .sql .md .json .tt .txt .html].freeze
+
+# EVERY MARKDOWN PAGE A READER CAN OPEN, wherever in the demo it sits.
+#
+# `DEMO_ROOTS` reaches the code directories and `DEMO_TOP` used to name
+# `README.md` and `before-after.md` by hand — which between them left three
+# reader-facing pages in no scope at all: `kiosk-demo-skooti/RENTAL_TOKEN.md`,
+# `firmware/README.md` and `appclip/README.md`. They were found by partitioning
+# the tracked tree against this guard's own `--list`, not by reading, which is
+# the whole reason that mode exists. A page is a page wherever the subdirectory
+# happens to be, so the two named files became a derivation.
+#
+# The SOURCES beside those pages — C, Swift, a `.ino` — are deliberately still
+# out. This guard reads Ruby through Ripper and treats a `#` line as a comment
+# in shell and Python; it has no lexer for either of those languages, and
+# reading one whole would report a keyword default or a struct field as prose,
+# which is exactly the false positive R5's header says must never happen.
+DEMO_RUNTIME = %w[public log tmp storage vendor node_modules].freeze
+DEMO_DOC_SKIP = %w[CHANGELOG.md CLAUDE.md].freeze
+
+def demo_docs(demo_dir)
+  IO.popen(["git", "-C", REPO, "ls-files", demo_dir.delete_prefix("#{REPO}/")], &:read)
+    .lines(chomp: true)
+    .select { |rel| rel.end_with?(".md") }
+    .reject { |rel| DEMO_RUNTIME.include?(rel.split("/")[1].to_s) }
+    .reject { |rel| DEMO_DOC_SKIP.include?(File.basename(rel)) }
+    .map { |rel| File.join(REPO, rel) }
+end
 
 def demo_files(demo_dir)
   (DEMO_ROOTS.flat_map { |r| Dir.glob(File.join(demo_dir, r, "**", "*")) }
      .select { |p| DEMO_EXTS.include?(File.extname(p)) } +
-   DEMO_TOP.map { |n| File.join(demo_dir, n) })
+   DEMO_TOP.map { |n| File.join(demo_dir, n) } +
+   demo_docs(demo_dir))
+    .uniq
     .select { |p| File.file?(p) }
     .sort
 end
@@ -2307,6 +2349,22 @@ def self_test
     demo_paths.none? { |p| p.end_with?(".key", ".pem", ".enc") }
   )
   check.call("a gem is NOT in the demo scope", demo_paths.none? { |p| p.include?("/kiosk-server/") })
+  # The Markdown half, DERIVED rather than sampled: every page git tracks under
+  # a demo — outside the runtime directories and outside the two basenames the
+  # standing exemption covers — must be in this scope. A hand-written pair of
+  # filenames is what left three pages unread, so the arm asks git, not a list.
+  demo_md_tracked = demos.flat_map { |d| demo_docs(d) }
+  unread_md = demo_md_tracked - demo_paths
+  check.call("every tracked Markdown page under a demo is read (#{demo_md_tracked.size})" \
+             "#{unread_md.empty? ? '' : " — unread: #{unread_md.map do |p|
+               p.delete_prefix("#{REPO}/")
+             end.join(', ')}"}",
+             !demo_md_tracked.empty? && unread_md.empty?)
+  nested_md = demo_md_tracked.count { |p| p.delete_prefix("#{REPO}/").count("/") > 1 }
+  check.call("…and some of them sit BELOW the demo root, which is what the hand-written pair " \
+             "of filenames could never reach (#{nested_md} nested)", nested_md.positive?)
+  check.call("a demo's CHANGELOG.md is NOT read — the standing exemption reaches every depth",
+             demo_paths.none? { |p| File.basename(p) == "CHANGELOG.md" })
 
   # ── VACUITY: a demo's spec/ and test/ (K-1509) ───────────────────────────
   #
@@ -2645,4 +2703,30 @@ def self_test
   end
 end
 
-exit(ARGV.include?("--self-test") ? self_test : run_check)
+# `--list` — THE SCOPE AS PATHS RATHER THAN AS COUNTS.
+#
+# The banner at the top of a normal run answers «is a scope empty», which is a
+# vacuity question. It cannot answer «is this tracked file in NO scope», and
+# that is the question that let `deploy/` sit outside every scope until a
+# sentence in it was found describing a file that does not exist, and let the
+# repository's own front door — the page a stranger lands on — be held by
+# nothing at all. Only the PATHS can answer it, and only from outside: a guard
+# derives its scope, so it is the wrong place to ask what its scope MISSES.
+#
+# The output is spelled exactly as `kiosk.tech/bin/check-published-archaeology
+# --list` spells it — the literal line `FILES IN SCOPE`, then one indented
+# repository-relative path per line — so the two published repositories answer
+# the partition question in one format and a reader needs one parser.
+def run_list
+  files = SCOPES.keys.flat_map do |name|
+    SCOPES[name][:dirs].call.flat_map { |d| SCOPES[name][:files].call(d) }
+  end
+  puts "FILES IN SCOPE"
+  files.map { |p| p.delete_prefix("#{REPO}/") }.uniq.sort.each { |rel| puts "  #{rel}" }
+  0
+end
+
+exit(if ARGV.include?("--self-test") then self_test
+     elsif ARGV.include?("--list")   then run_list
+     else run_check
+     end)

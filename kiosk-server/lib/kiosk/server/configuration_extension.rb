@@ -571,10 +571,6 @@ module Kiosk
 
       # Compute the advertised module list from the live registry, in the
       # canonical order schema, queries, actions, pay. See {#capabilities}.
-      #
-      # The COMPUTATION is unchanged from the verb-name era — same three
-      # questions of the same registry — only the names it emits moved from
-      # verbs to modules.
       def computed_capabilities
         has_queries = Kiosk::Server::Queries.known.any?
         has_actions = Kiosk::Server::Actions.known.any?

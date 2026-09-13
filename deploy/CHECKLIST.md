@@ -176,9 +176,9 @@ For EACH of the 7 apps:
       running, or an absent limiter and a drained window read identically. `deploy-caddy.sh --apply`
       does exactly that, inside its verify step.
 ## 7. Deploy new code (push-to-deploy) + housekeeping
-- [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
-      (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
-      `bundle install`, `db:prepare`, **`db:seed`**, and restarts each app's service.
+- [ ] **git push-to-deploy**: a bare repo per box with its own `post-receive` hook — its own work-tree,
+      service names and deploy user, so it touches nothing else the box happens to host — that checks
+      out `main`, `bundle install`, `db:prepare`, **`db:seed`**, and restarts each app's service.
 - [ ] ⚠ **THE HOOK IS NOT IN THIS REPO AND NOTHING BACKS IT UP.** On the live box it is
       `/srv/kiosk.git/hooks/post-receive` — executable, ~1.2 KB, untracked, present in no repository —
       and it is the ONLY thing that turns a push into a deploy. Two consequences to act on:
@@ -197,29 +197,23 @@ For EACH of the 7 apps:
       `db:prepare` alone. Seeding on every push is safe — every demo's seeds are idempotent-additive (zero
       `delete_all`, verified live on all seven), so a push tops the catalog up and deletes nothing. This is
       also the only thing that re-seeds the catalog; see `deploy/README.md` step 5.
-- [ ] ⚠ **ONE-TIME, AND IT IS THE REPAIR FOR THE LIVE 500s (K-1074, K-1083). `db:migrate` CANNOT FIX THIS —
-      `deploy/demo-reset.sh` CAN.** The boxes' databases were built on 2026-08-11 and migrated forward ever since,
-      and two things happened to them that the migrate path can never deliver:
-      (a) `add_column :users, :display_name` was APPENDED on 2026-08-23 to `20260719000001_create_tudu_domain.rb`,
-      a migration already recorded in every box's `schema_migrations`, so the column reached `db/structure.sql`
-      and every from-zero database and **could not reach the running one** — tudu answers 500 on `/`, `/lists`,
-      `/shared` and `/users/sign_up` because the housemate board SELECTs `owner_u.display_name`;
-      (b) the 2026-08-20 rebuild renumbered every kiosk-owned migration, so all six read as PENDING on those
-      boxes and `db:migrate` **aborts one step in** at `20260820130113` with `PG::DuplicateTable` — measured, by
-      replaying the tudu structure.sql of `267e67b3^`. So the hook's migrate step has been half-completing in
-      silence since 2026-08-20, and no corrective migration numbered after that version can be reached.
-      Head now fixes both in the tree (a new migration file for the column; guarded DDL in
-      `Kiosk::Server::SchemaDefinitions`), but the boxes need their schema rebuilt once:
+- [ ] ⚠ **A SCHEMA THAT HAS DIVERGED IS REBUILT BY `deploy/demo-reset.sh`. `db:migrate` CANNOT DO IT.**
+      A long-lived box runs a migration exactly once and never again, so anything that reaches
+      `db/structure.sql` by a route other than a NEW migration file — an edit to a migration the box has
+      already recorded, a renumbering — lands on every from-zero database and on no running one. The
+      renumbering case is worse than silent: `db:migrate` aborts at the first re-created object with
+      `PG::DuplicateTable`, so the steps after it never run and the exit is buried in hook output. Symptom
+      is a 500 on a page whose SELECT names the missing column. The rebuild:
       ```
-      ssh ubuntu@kyc.demo.kiosk.tech 'bash /srv/kiosk/deploy/demo-reset.sh'   # AFTER deploying head
+      ssh <deploy-user>@<box> 'bash /srv/kiosk/deploy/demo-reset.sh'   # AFTER deploying head
       ```
-      It `db:schema:load db:seed`s exactly the six affected demos and re-seeds getgrocery ADDITIVELY, so the real
-      third-party orders it holds survive (pass `--all` only if you mean to destroy them). Verify with
-      `deploy/production-smoke.sh` plus a plain `curl -sI https://tudu.demo.kiosk.tech/shared` → 200, and get
-      skooti's missing object NAMED from the box (`\d users`) rather than inferred.
-      **Then move `FLEET_SCHEMA_BASELINE` in `bin/check-migration-replay` to today's date in the same change** —
-      that constant is the one fact the gate cannot measure for itself, and a reset is exactly the event that
-      moves it.
+      It `db:schema:load db:seed`s the six non-getgrocery demos and re-seeds getgrocery ADDITIVELY, so the
+      real third-party orders it holds survive (pass `--all` only if you mean to destroy them). Verify with
+      `deploy/production-smoke.sh` plus a plain `curl -sI https://<app>.demo.kiosk.tech/` → 200, and name any
+      missing object from the box (`\d users`) rather than inferring it.
+      **Then move `FLEET_SCHEMA_BASELINE` in `bin/check-migration-replay` to the reset's date in the same
+      change** — that constant is the one fact the gate cannot measure for itself, a reset is exactly the
+      event that moves it, and its current value is when the reference fleet was last rebuilt.
 - [ ] ~~Prune cron~~ — **SKIPPED** (K-593/K-630) and there is nothing to install: this repo ships no
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog
@@ -227,7 +221,8 @@ For EACH of the 7 apps:
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).
-- [ ] The demo **root page** loads (what it is + a curl one-liner + the live activity counters).
+- [ ] The demo **root page** loads (what it is + the live activity counters). The copy-paste curl
+      flow lives in `deploy/README.md` §"Poke it"; no landing page carries one.
 - [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
 - [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
 

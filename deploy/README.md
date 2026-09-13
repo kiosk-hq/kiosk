@@ -86,8 +86,12 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 2. **Provision the VPS** (2–4 GB; all 8 apps at the shipped `WEB_CONCURRENCY=1`
    × ~250 MB RSS ≈ 2 GB Puma, so 4 GB is comfortable once Postgres and Caddy
    take their share). Install Postgres 17, a **stock** Caddy (no module: there
-   is no default edge throttle — see "Edge rate-limit" below), Ruby
-   (`.mise.toml` pins the version), and a non-login `kiosk` service user.
+   is no default edge throttle — see "Edge rate-limit" below), Ruby, and a
+   non-login `kiosk` service user. **No toolchain pin ships**: `mise.toml`,
+   `.mise.toml` and `.ruby-version` are gitignored repository-wide, so a clone
+   carries none and the interpreter is yours to pick. What the apps are built
+   and gated on is the version `.github/workflows/ci.yml` names at its
+   `setup-ruby` steps — `4.0.1` today, typed in the workflow.
 
    **What the box we actually run IS, measured over ssh 2026-09-06 and written
    down because until now nothing anywhere recorded it:** an **OVH** VPS (the
@@ -325,8 +329,10 @@ created yet, and if one is ever added it must serve TLS.
 
 **Why a script and not a checklist line, said plainly.** The other half of this
 class -- the edge rate limit -- got a script and it landed; HSTS got a line in
-`CHECKLIST.md`, which is 0 ticked of 45, so its tick state carried no
-information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
+<!-- count: 41 ¦ from: grep -c '^ *- \[ \]' deploy/CHECKLIST.md -->
+`CHECKLIST.md`, whose 41 boxes are unticked in the repository and always
+will be — the tracked copy is a template and an operator ticks their own —
+so its tick state carried no information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
 because a config check run against this template would have said OK for the
 whole month the box was serving without the header -- and a deploy proves the
 header arrived at the moment it ran, which is a different question from whether
@@ -480,8 +486,9 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 ```
 
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
-> returns and `solve.py` consumes — publish the copy-paste-exact snippet on each
-> demo landing once the hosted challenge format is pinned. atablefor shows the
+> returns and `solve.py` consumes, and the block above is the copy-paste form of
+> it. It is the only one: no demo landing page carries a curl one-liner.
+> atablefor shows the
 > "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s
 > (measured on an M-series laptop core; other hardware differs).
 

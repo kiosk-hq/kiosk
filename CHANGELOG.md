@@ -26,6 +26,11 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **The deploy runbook pinned Ruby to `.mise.toml`, which is gitignored.** Fourth site of the class R8 was built for, and R8's recogniser could not see a root-level name.
+- 2026-09-13: **R8 now reads root-level filenames, and yields to a sentence that says the file does not ship.** The three honest «is gitignored» citations stay green.
+- 2026-09-13: **The deploy checklist carried a one-time schema repair that was already done.** The fleet was rebuilt on the date `FLEET_SCHEMA_BASELINE` records; the mechanism stays, the incident goes.
+- 2026-09-13: **The checklist promised a curl one-liner on every demo landing; no landing has one.** Measured on the wire and in the views; the runbook's block is the only copy-paste flow.
+- 2026-09-13: **A public runbook named an unrelated private project.** The push-to-deploy item now describes the isolation it needs without naming what it is isolated from.
 - 2026-09-13: **`check-shipped-archaeology` gains R8: a path that resolves only on the author's machine.** R7 asks whether a path exists; gitignored ones exist here and in no clone.
 - 2026-09-13: **Three shipped surfaces pinned Ruby to a file that does not ship.** `e2e/mise.toml` and `.mise.toml` are gitignored; the pin a clone gets is the CI workflow's.
 - 2026-09-13: **`kiosk-server`'s well-known snippet raised when run verbatim.** The builder refuses without `c.issuer`; the snippet now sets it, and its printed output is re-measured.

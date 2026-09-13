@@ -721,6 +721,45 @@ REPO_PATH_RE =
   Regexp.new("(?<![\\w/.@-])(?:#{REPO_PATH_PREFIXES.map { |p| Regexp.escape(p) }.join('|')})" \
              "/[A-Za-z0-9._@/-]*[A-Za-z0-9_@-]")
 
+# A ROOT-LEVEL entry, by bare name. `REPO_PATH_RE` above needs a `<dir>/` prefix,
+# so a file that lives at the repository root is invisible to it — and the class
+# R8 exists for shipped one more time in the FIRST file read after R8 was built:
+# `deploy/README.md` told an operator that «Ruby (`.mise.toml` pins the version)»
+# while `git check-ignore -v .mise.toml` answers `.gitignore:26:.mise.toml`. The
+# wave that wrote R8 had repaired the three sentences it knew about and its own
+# rule could not see the fourth. Derived from what is at the root today, longest
+# name first so the alternation cannot stop at a prefix of a longer one; only
+# FILES, because `author_only?` already refuses a directory and a root directory
+# is a place rather than a document.
+def repo_root_files
+  Dir.children(REPO)
+     .reject { |n| n == ".git" }
+     .select { |n| File.file?(File.join(REPO, n)) }
+     .sort_by { |n| [-n.length, n] }
+end
+
+REPO_ROOT_FILES = repo_root_files.freeze
+
+ROOT_FILE_RE =
+  Regexp.new("(?<![\w/.@-])(?:#{REPO_ROOT_FILES.map { |n| Regexp.escape(n) }.join('|')})" \
+             "(?![\w@/-])")
+
+# R8 asks a question R7 does not, so it reads a wider token set than R7's.
+AUTHOR_ONLY_RE = Regexp.union(REPO_PATH_RE, ROOT_FILE_RE)
+
+# A sentence may NAME a file git does not carry in order to say so, and that
+# sentence is the REMEDY this rule asks for rather than a breach of it: all
+# three live citations of `.mise.toml` in this tree read «… are gitignored», and
+# a rule that reddened on them would demand the repairs be un-written. The
+# vocabulary is a hand-list and that is safe HERE, unlike the hand-lists this
+# file keeps filing rows about, because of the direction it fails in: a phrasing
+# it does not know reads as a POINTER and goes RED, which costs somebody a
+# rewording — it can never let a pointer through.
+DISCLAIMS_SHIPPING_RE =
+  /gitignored|untracked|
+   git\s+does\s+not\s+carry|(?:is|are|it)\s+not\s+tracked|
+   does\s+not\s+ship|ships?\s+no\s+\w|carries\s+none|in\s+no\s+clone/ix
+
 # The tokens on one line that name nothing. `File.exist?` and not `git ls-files`
 # on purpose: a path this repository generates but does not track (`e2e/.gems`,
 # a demo's `tmp/`) is still a path a reader can follow. R8 below takes the case
@@ -750,7 +789,9 @@ end
 
 # The tokens on one line that resolve HERE and nowhere else.
 def author_only_paths(line)
-  line.scan(REPO_PATH_RE).uniq.select do |t|
+  return [] if line.match?(DISCLAIMS_SHIPPING_RE)
+
+  line.scan(AUTHOR_ONLY_RE).uniq.select do |t|
     full = File.join(REPO, t)
     author_only?(exists: File.exist?(full), tracked: tracked_paths.include?(t),
                  directory: File.directory?(full))
@@ -776,7 +817,7 @@ RULES = [
   { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
     resolve: :missing,
     what: "a repository path that does not exist", none: "no dangling repository path" },
-  { id: "R8", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
+  { id: "R8", re: AUTHOR_ONLY_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
     resolve: :author_only,
     what: "a repository path git does not carry",
     none: "no path that resolves only on the author's machine" }
@@ -2273,6 +2314,51 @@ def self_test
       check.call("R8 reaches the #{scope} scope — a path only the author can follow is " \
                  "equally unfollowable for every reader",
                  rules_for(scope).any? { |r| r[:id] == "R8" })
+    end
+
+    # ── R8's RECOGNISER, which is where the rule missed its fourth site ─────
+    #
+    # The predicate arms above were green on the day `deploy/README.md` said
+    # «Ruby (`.mise.toml` pins the version)», because the token never reached
+    # them: `REPO_PATH_RE` needs a `<dir>/` prefix and that name has none. So
+    # these arms are about the SET OF TOKENS the rule is willing to look at, and
+    # they are separate from the arms about what it decides once it looks.
+    root_untracked = REPO_ROOT_FILES.reject { |n| tracked_paths.include?(n) }
+    check.call("the root-level file set is derived and populated " \
+               "(#{REPO_ROOT_FILES.size} name(s), #{root_untracked.size} of them untracked)",
+               !REPO_ROOT_FILES.empty?)
+    check.call("…and the recogniser matches a name from that set, LEADING DOT AND ALL — the " \
+               "shape `REPO_PATH_RE` cannot see",
+               REPO_ROOT_FILES.any? { |n| n.start_with?(".") && ("`#{n}` pins it" =~ ROOT_FILE_RE) })
+    check.call("…and it does NOT match a root name that is the tail of a longer path: " \
+               "`e2e/README.md` is one token, reported once, by R7 or R8 and never by both",
+               ("See e2e/README.md." =~ ROOT_FILE_RE).nil?)
+
+    if root_untracked.empty?
+      check.call("R8's root-level leg has nothing to fire on in this tree today — the arm " \
+                 "below is skipped rather than faked", true)
+    else
+      n = root_untracked.first
+      _, rootpin = plant.call("r8-rootfile", "rootfile.md", "The version is pinned in `#{n}`.\n")
+      check.call("R8 fires on a BARE root-level file git does not carry (#{n}) — the site " \
+                 "that shipped after R8 was written",
+                 r8.call(rootpin).size == 1)
+
+      _, disclaim = plant.call("r8-disclaim", "disclaim.md",
+                               "No toolchain pin ships: `#{n}` is gitignored, so a clone has none.\n")
+      check.call("…and NOT on the sentence that names it in order to say it does not ship — " \
+                 "that sentence is this rule's REMEDY, and all three live citations of it " \
+                 "in this tree have that shape",
+                 r8.call(disclaim).empty?)
+    end
+
+    tracked_root = REPO_ROOT_FILES.select { |n| tracked_paths.include?(n) }
+    unless tracked_root.empty?
+      _, rootok = plant.call("r8-rootok", "rootok.md",
+                             "Read `#{tracked_root.first}` before you start.\n")
+      check.call("…and NOT on a root-level file git DOES carry (#{tracked_root.first}) — the " \
+                 "tracked set is what makes this a rule and not a ban on every filename",
+                 r8.call(rootok).empty?)
     end
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.

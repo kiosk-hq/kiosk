@@ -2919,6 +2919,35 @@ def self_test
                missing.empty?)
   end
 
+  # ── AND THE PRINTED EXEMPTION BLOCK IS HELD THE SAME WAY (K-1583) ─────────
+  #
+  # `EXEMPT_BANNER` restates all five `ROOT_NOT_READ` members, and it is the
+  # block a reader quotes when asking what this guard does not read. A sixth
+  # exemption typed into the constant and not into the banner understates the
+  # blind spot by exactly the exemption somebody just added.
+  #
+  # AN ARM AND NOT A DERIVATION, and the choice is the point. The banner is not
+  # a list of names: it carries three DIFFERENT reasons over those five — the
+  # standing exemption, verbatim third-party text, dot-files that hold no prose
+  # — and the whole argument of this file is that an exemption is a DECISION and
+  # must be declared with its reason. `ROOT_NOT_READ.join(', ')` can print the
+  # names and cannot print why, so generating the sentence would delete the only
+  # part of it a reader needs. The arm buys the property that the constant
+  # cannot outgrow the block, and leaves the reasons hand-written.
+  #
+  # ONE DIRECTION ONLY, and that asymmetry is not an oversight: the banner also
+  # names exemptions that are not root files at all (bin/, .github/, a demo's
+  # public/), so the converse — every name in the banner is in `ROOT_NOT_READ` —
+  # is false by construction, and asserting it would redden the tree for
+  # declaring them.
+  banner_text = EXEMPT_BANNER.join(" ")
+  unbanned = ROOT_NOT_READ.reject { |n| banner_text.include?(n) }
+  check.call("every ROOT_NOT_READ member is named in the printed exemption block — the block a " \
+             "reader quotes to learn what this guard does not read " \
+             "(#{ROOT_NOT_READ.length} name(s))" \
+             "#{unbanned.empty? ? '' : " — missing: #{unbanned.join(', ')}"}",
+             unbanned.empty?)
+
   # ── VACUITY: the guard must be looking at something real ──────────────────
   gems  = shipped_gems
   files = gems.flat_map { |g| shipped_files(g) }

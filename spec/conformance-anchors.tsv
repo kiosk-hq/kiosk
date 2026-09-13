@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1696 anchors.
+# 1697 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -58,6 +58,7 @@ deploy/README.md	| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not 
 deploy/demo-reset.sh	# ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants
 deploy/demo-reset.sh	# Those rows are evidence of a run that happened, and seeding cannot reproduce
 deploy/demo-reset.sh	# placed against this origin — the Hermes-verified order f8bc3efb among them.
+deploy/demo-reset.sh	additive db:seed (no drop — the Hermes rows are evidence)
 deploy/env/atablefor.env.example	KIOSK_POW_DIFFICULTY=high
 deploy/env/getgrocery.env.example	KIOSK_POW_DIFFICULTY=low
 e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink

@@ -44,17 +44,16 @@
 #   tudu     — the housemate board (`/shared`) and the fleet's ONLY open
 #              sign-up. See below for why it is here.
 #
-# WHAT `validate_responses` COSTS HERE: NOTHING, AND IT WAS MEASURED (K-1332)
+# WHAT `validate_responses` COSTS HERE: NOTHING, AND IT IS MEASURED (K-1332)
 # ----------------------------------------------------------------------------
-# The seven demos used to set `c.validate_responses = true` unconditionally, and
-# they now set `!Rails.env.production?` — so this script, which is the only
-# thing in CI that boots a demo in production mode, is the one place that could
-# have lost the per-verb output-schema assertion. It did not, because it never
-# had it. MEASURED at the change: this file makes exactly ONE request carrying
+# The seven demos set `c.validate_responses = !Rails.env.production?`, so this
+# script, which is the only thing in CI that boots a demo in production mode, is
+# the one place that could carry the per-verb output-schema assertion. It does
+# not. MEASURED: this file makes exactly ONE request carrying
 # an `Authorization:` header, and it is the FORGED bearer asserted to answer
 # 401. No assertion anywhere below drives a query or an action to a SUCCESS
 # body, so the Executor never renders a payload here and the response validator
-# never ran, in production mode or any other.
+# never runs, in production mode or any other.
 #
 # That is not a gap this script should close by growing a registration: the
 # per-verb conformance proof is each demo's own task list, which runs in
@@ -65,11 +64,11 @@
 # a 200, note that it is doing so with response validation OFF — the same
 # posture the deployed fleet runs.
 #
-# WHY THE ROSTER GREW, AND THE PREMISE IT COST (K-1085)
+# WHY THE ROSTER RULE ABOVE CARRIES A SECOND CLAUSE (K-1085)
 # ----------------------------------------------------
-# The rule above used to read «one demo per unique human-facing HTML surface»
-# alone, resting on «the prod-only classes are per-surface, not per-app». That
-# premise has a measured counterexample and it is the surface that broke.
+# «One demo per unique human-facing HTML surface» alone would rest on «the
+# prod-only classes are per-surface, not per-app», and that premise has a
+# measured counterexample — which is the surface the second clause covers.
 #
 # It holds for THREE of the four classes this script gates — a Zeitwerk
 # eager-load crash (K-422), the assume_ssl/CSRF-Origin rejection (K-439) and the
@@ -399,18 +398,13 @@ smoke_stylish() {
   fi
 
   echo "── Assertion 6: forged human X-Staff-Session → 401 in production (K-555) ──"
-  # stylish USED to map a self-asserted `X-Staff-Session: <user_id>` header to a
-  # role-carrying HUMAN identity — the salon's SSO/Okta stand-in, one arm of a
-  # composite user_idp — so on the wire that header SELF-GRANTED a staff role
-  # (before K-555 this returned 201: a self-granted owner link, and the assistant
-  # redeeming it would INHERIT owner scope).
-  #
-  # T-066 deleted the stand-in outright: `c.user_idp` is the Devise adapter alone,
-  # in every environment, and nothing reads that header any more. The assertion is
-  # kept — and it is now stronger than a gate on an env check, because the arm it
-  # guarded does not exist to be re-enabled. It stays here rather than moving into
-  # the redteam battery because this is the PRODUCTION box: the one place that can
-  # say the deployed config, not a local one, refuses.
+  # `c.user_idp` is the Devise adapter alone, in every environment, and nothing
+  # in stylish reads an `X-Staff-Session` header: no self-asserted header maps to
+  # a role-carrying HUMAN identity, so none can hand an assistant an owner-scoped
+  # link. This asserts that from the outside, which is stronger than a gate on an
+  # env check because there is no arm here to re-enable. It stays here rather than
+  # in the redteam battery because this is the PRODUCTION box: the one place that
+  # can say the deployed config, not a local one, refuses.
   SEEDED_OWNER_ID="00000000-0000-0000-0000-0000000000a0"
   staff_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
     "${PROXY_HEADERS[@]}" -H "Content-Type: application/json" \

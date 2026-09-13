@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **The deploy runbooks narrated five past states of their own tooling and one retired request header.** Every clause now states the live property instead.
 - 2026-09-13: **skooti labelled its rental token «v2» across the firmware, the simulator and the READMEs while the wire's only version string is `kiosk-rental-v1`.** One format, one name.
 - 2026-09-13: **The archaeology guard's printed exemption block is now held to name every root-file exemption.** A sixth could be typed into the constant and not the block.
 - 2026-09-13: **kiosk-server's README macro table is now derived from the mixin's declarable keys.** The second hand-kept table on that page was held by nothing.

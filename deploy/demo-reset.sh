@@ -11,8 +11,8 @@
 # placed against this origin — the Hermes-verified order f8bc3efb among them.
 # Those rows are evidence of a run that happened, and seeding cannot reproduce
 # one: a wipe destroys the record permanently rather than refreshing it. No page
-# kiosk.tech serves cites any of these order ids, and this note used to say one
-# did (K-986) -- the reason is the evidence, not a link.
+# kiosk.tech serves cites any of these order ids -- the reason to keep them is
+# the evidence itself, not a link.
 #
 #   bash demo-reset.sh          # reset the 6; getgrocery additive (keeps the real runs)
 #   bash demo-reset.sh --all    # ALSO wipe+reseed getgrocery (destroys them)
@@ -33,9 +33,9 @@
 # after deploying head, and then move that gate's FLEET_SCHEMA_BASELINE forward
 # to the day you ran it.
 #
-# IT PRINTS WHAT WENT WRONG, AND THAT IS NOT TIDINESS (K-1084). Every command
-# below used to run `>/dev/null 2>&1` with only its exit code read, so the four
-# failure branches said WHICH step failed and never WHAT the box said. The
+# IT PRINTS WHAT WENT WRONG, AND THAT IS NOT TIDINESS (K-1084). A command run
+# `>/dev/null 2>&1` with only its exit code read leaves its failure branch saying
+# WHICH step failed and never WHAT the box said. The
 # failures this script can actually meet are the ones no local run reproduces —
 # a role without CREATE, a `structure.sql` that will not load into the box's
 # Postgres, a seed tripping a constraint only the live data has — and it runs
@@ -121,8 +121,7 @@ else
     echo "  getgrocery: additive re-seed (Hermes order preserved; pass --all to wipe)"
   else
     # This is the branch guarding the irreplaceable rows, so it gets the SAME
-    # re-run command and the same diagnosis as the other two (K-1084 — it used
-    # to be the least informative of the three, naming no command at all).
+    # re-run command and the same diagnosis as the other two (K-1084).
     echo "  getgrocery: SEED FAILED — re-run by hand with:"
     echo "       cd $PWD && set -a && . /etc/kiosk-demo/getgrocery.env && set +a && bundle exec rails db:seed"
     diagnose

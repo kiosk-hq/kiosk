@@ -40,7 +40,7 @@
  * any other lock's identity — the lock only holds a PUBLIC key.
  *
  * =========================================================================
- * TOKEN WIRE FORMAT v2 (CRITICAL — DO NOT CHANGE)
+ * TOKEN WIRE FORMAT (CRITICAL — DO NOT CHANGE)
  * =========================================================================
  * wire token = "<message>.<base64url(sig)>"  — split on the LAST '.'
  * message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
@@ -256,9 +256,9 @@ static void do_unlock(void)
 class UnlockCallbacks : public NimBLECharacteristicCallbacks {
 public:
     /*
-     * On write: receive the wire rental token (v2), verify it, unlock or reject.
+     * On write: receive the wire rental token, verify it, unlock or reject.
      *
-     * Wire token format (v2):
+     * Wire token format:
      *   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
      *
      * A typical token is ~200-240 bytes.  MTU is negotiated to 256 in setup().
@@ -283,7 +283,7 @@ public:
             return;
         }
 
-        /* 2. Extract jti (field[5] in v2 message) */
+        /* 2. Extract jti (field[5] of the message) */
         char jti[JTI_LEN];
         if (!skooti_parse_jti(token, jti, sizeof(jti))) {
             Serial.println("[BLE] REJECT — could not parse jti");

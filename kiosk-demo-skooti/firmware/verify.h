@@ -1,5 +1,5 @@
 /*
- * verify.h — skooti BLE lock offline rental-token verification (offline Ed25519, token v2)
+ * verify.h — skooti BLE lock offline rental-token verification (offline Ed25519)
  *
  * Shared between:
  *   - skooti_lock.ino  (ESP32-C3 Arduino firmware)
@@ -9,7 +9,7 @@
  * Requires only ed25519/ (vendored orlp/ed25519) + C standard library.
  *
  * =========================================================================
- * TOKEN WIRE FORMAT v2 (offline Ed25519, domain-separated)
+ * TOKEN WIRE FORMAT (offline Ed25519, domain-separated)
  * =========================================================================
  *
  *   wire token = "<message>.<base64url(sig)>"
@@ -32,7 +32,7 @@
  *   Split: find the LAST '.' in the wire token — everything to the left is
  *   the message (signed verbatim), everything to the right is the sig.
  *
- * Example (known-answer vector v2):
+ * Example (known-answer vector):
  *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
  *   sig     = "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
  *

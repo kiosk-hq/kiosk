@@ -22,7 +22,7 @@
  *   exp            = 1750000900
  *   jti            = "aabbccddeeff00112233445566778899"
  *
- * message (signed bytes) v2 — with domain-separation tag:
+ * message (signed bytes) — with domain-separation tag:
  *   "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
  *
  * signature (base64url, no padding):
@@ -70,7 +70,7 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 
 #define SCOOTER_CODE "SK-001"
 
-/* v2 wire token: domain-separation tag + 6 pipe fields */
+/* wire token: domain-separation tag + 6 pipe fields */
 #define WIRE_TOKEN \
     "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" \
     "." \
@@ -190,7 +190,7 @@ static void test_flipped_sig(void)
  */
 static void test_oversized_sig(void)
 {
-    /* Build: "<valid v2 message>." + 400 'A' chars */
+    /* Build: "<valid message>." + 400 'A' chars */
     static const char msg[] =
         "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899";
     /* 400 valid base64url 'A' chars decode to 300 bytes — must be rejected */
@@ -238,7 +238,7 @@ static void test_malformed_tokens(void)
     result = skooti_verify_token(SKOOTI_PUBKEY, "", SCOOTER_CODE, NOW_FRESH);
     check(result == 0, "empty token → 0");
 
-    /* 5b — no dot at all (v2 message without sig portion) */
+    /* 5b — no dot at all (message without sig portion) */
     result = skooti_verify_token(SKOOTI_PUBKEY,
         "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899",
         SCOOTER_CODE, NOW_FRESH);
@@ -395,7 +395,7 @@ static void test_jti_store(void)
 
 int main(void)
 {
-    printf("=== skooti firmware Ed25519 host test (offline Ed25519, token v2) ===\n");
+    printf("=== skooti firmware Ed25519 host test (offline Ed25519 rental token) ===\n");
     printf("Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4\n");
     printf("Scooter    : %s\n", SCOOTER_CODE);
 

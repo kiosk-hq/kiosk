@@ -17,7 +17,7 @@ validated when the ESP32-C3 board is available.
 
 ---
 
-## Crypto contract (offline Ed25519, token v2)
+## Crypto contract (offline Ed25519 rental token)
 
 ```
 skooti_pubkey   = <32 bytes, baked into every lock>
@@ -48,7 +48,7 @@ Expected output (22 assertions pass, crosscheck MATCH):
 
 ```
 --- C host test ---
-=== skooti firmware Ed25519 host test (offline Ed25519, token v2) ===
+=== skooti firmware Ed25519 host test (offline Ed25519 rental token) ===
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
@@ -197,7 +197,7 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 
 ---
 
-## Replay prevention (token v2)
+## Replay prevention
 
 The lock uses a durable jti store (`jti_store.c` / `jti_store.h`) that retains each
 consumed jti until its `exp` passes, then prunes it.  Two properties do the work,
@@ -237,14 +237,14 @@ so, and the table below is where that status is tracked.
 
 | Claim | Status |
 |-------|--------|
-| Ed25519-verify in C accepts the v2 known-answer token vector (with domain tag) | **PROVEN** (`make test`) |
+| Ed25519-verify in C accepts the known-answer token vector (with domain tag) | **PROVEN** (`make test`) |
 | Domain-separation tag check — token with wrong/missing tag rejected | **PROVEN** (`make test`) |
 | Expired token (now > exp) rejected | **PROVEN** (`make test`) |
 | Wrong scooter_code rejected | **PROVEN** (`make test`) |
 | Flipped sig byte rejected | **PROVEN** (`make test`) |
 | Oversized sig field (400 base64url chars) → 0, no stack overflow | **PROVEN** (`make test`; `make test-asan` for ASan confirmation) |
 | Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test`) |
-| C verifier accepts a freshly Ruby/OpenSSL-signed v2 token | **PROVEN** (`make crosscheck`) |
+| C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
 | Durable replay prevention across reboot (NVS backend, host-tested semantics) | **PROVEN** on host (in-memory backend); NVS wiring documented in `jti_store.c`, activates on board |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board (`../bin/ble-unlock` is the no-Apple harness for this row) |

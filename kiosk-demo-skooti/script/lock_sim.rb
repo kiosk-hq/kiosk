@@ -3,13 +3,13 @@
 require "openssl"
 require "base64"
 
-# Software simulator of the ESP32 BLE scooter lock firmware (offline Ed25519, token v2).
+# Software simulator of the ESP32 BLE scooter lock firmware (offline Ed25519).
 #
 # The physical lock:
 #   1. Baked at provisioning with:
 #      - the skooti Ed25519 PUBLIC key (32 bytes)
 #      - its own SCOOTER_CODE
-#   2. On a BLE unlock request it receives the wire rental token (v2):
+#   2. On a BLE unlock request it receives the wire rental token:
 #        "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 #      a. Splits on the LAST "."
 #      b. Base64url-decodes the sig (64 bytes)
@@ -60,7 +60,7 @@ class LockSim
     @consumed_jtis = {}
   end
 
-  # Verify and consume a rental token (v2 — domain-separation tag + durable replay prevention).
+  # Verify and consume a rental token (domain-separation tag + durable replay prevention).
   #
   # Returns +false+ if:
   #   - token is malformed or base64url-decode fails
@@ -93,7 +93,7 @@ class LockSim
     # Ed25519-verify: OpenSSL's verify(nil, sig, msg) — nil digest = pure EdDSA.
     return false unless @pub_key.verify(nil, sig, message)
 
-    # Parse the 6 pipe-delimited fields (v2: field 0 is the domain-separation tag).
+    # Parse the 6 pipe-delimited fields (field 0 is the domain-separation tag).
     fields = message.split("|")
     return false unless fields.length == 6
 

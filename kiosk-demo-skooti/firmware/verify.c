@@ -1,12 +1,12 @@
 /*
- * verify.c — skooti offline rental-token verification (offline Ed25519, v2)
+ * verify.c — skooti offline rental-token verification (offline Ed25519)
  *
  * Portable C99.  No BLE, Arduino, or platform-specific dependencies.
  * Compiles on host (clang/gcc) and ESP32-C3 toolchain.
  *
  * See verify.h for the full token wire-format and clock documentation.
  *
- * Token v2 wire format:
+ * Token wire format:
  *   message = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  *   wire    = "<message>.<base64url(sig)>"
  *
@@ -145,7 +145,7 @@ int skooti_verify_token(const uint8_t pubkey[32],
 
     /* Message field parsing */
     const char *msg;
-    /* Fields v2: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti */
+    /* Fields: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti */
     const char *field_start[6];
     size_t      field_len[6];
     size_t      f;
@@ -196,11 +196,11 @@ int skooti_verify_token(const uint8_t pubkey[32],
                         (const unsigned char *)pubkey))
         return 0;
 
-    /* --- Parse the 6 pipe-delimited fields of the message (v2) ---
+    /* --- Parse the 6 pipe-delimited fields of the message ---
      * Fields: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
      * We check field[0] (domain tag), field[1] (scooter_code), and field[4] (exp).
      * We do NOT need iat, reservation_id, or jti here, but we must confirm exactly
-     * 6 fields are present so a v1 (5-field) token is rejected.
+     * 6 fields are present, so a message with any other field count is rejected.
      */
     field_idx = 0;
     p         = msg;
@@ -263,9 +263,9 @@ int skooti_verify_token(const uint8_t pubkey[32],
 }
 
 /* --------------------------------------------------------------------------
- * skooti_parse_jti — extract jti from a verified token (field [5] in v2)
+ * skooti_parse_jti — extract jti from a verified token (field [5])
  *
- * v2 message: "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
+ * message: "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  * field indices: [0]=tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
  * We skip the first 5 pipe-delimited fields to reach jti at field[5].
  * -------------------------------------------------------------------------- */

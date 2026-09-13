@@ -186,6 +186,7 @@ policy the framework decided for your customers' data.
 | `args` | **the arguments exactly as the handler received them** |
 | `status` | `"ok"` or `"error"` |
 | `error_class` / `error_message` | the raised error, untruncated, on the `"error"` branch |
+| `cause_class` / `cause_message` | the error's own `#cause`, when it has one distinct from itself — the handler's exception behind a wrapper |
 | `invoked_at` | when the invocation started |
 
 ### The arguments arrive unredacted, and the PII is yours

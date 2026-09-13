@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **`kiosk-server`'s «what the event carries» table was missing two of ActionEvent's twelve fields.** `cause_class`/`cause_message` shipped a week ago and the table did not move.
 - 2026-09-13: **skooti's shipped sources cited a private roadmap plan and narrated the firmware they replaced.** `Plan 4.x` names documents that ship nowhere; the replay docs now say what IS.
 - 2026-09-13: **skooti's App Clip shipped a demo rental token the lock rejects.** It is the pre-domain-tag shape, measured rejected by the shipped verifier; now the host test's own vector.
 - 2026-09-13: **`kiosk-core` documented two module accessors that do not exist.** `Kiosk.user_id_type` and `Kiosk.roles` raise NoMethodError; both live on `Kiosk.configuration`.

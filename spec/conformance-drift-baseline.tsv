@@ -29,7 +29,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-06 at ede32f70
+# recorded: 2026-09-13 at cba1eb2d -- K-1551 re-judged headers_spec.rb's 11 anchors (SPEC-008/011/012/013/016)
 # 1664 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	ede32f70	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	ede32f70	run: ./e2e/run.sh
@@ -1366,15 +1366,15 @@ kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	f3ff7c3b0546a8f2	ede32
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	97134b1d9393e799	ede32f70	passes downstream headers through unchanged on /unrelated
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	7033252a489ab198	ede32f70	respects an overridden mount_path
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	a9e5cab108248317	ede32f70	still stamps: the request's identity was decided before the app ran
-kiosk-server/spec/kiosk/server/headers_spec.rb	7bd0c508866d8600	ede32f70	ADDS to a Vary the operator already set rather than replacing it
-kiosk-server/spec/kiosk/server/headers_spec.rb	5b38b8c751b613b0	ede32f70	FORCES no-store on a 402 — a single-use challenge is never cacheable
-kiosk-server/spec/kiosk/server/headers_spec.rb	e150e26d632adab3	ede32f70	and it REFUSES a shared-cache policy (§3.7.3)
-kiosk-server/spec/kiosk/server/headers_spec.rb	7b89fbec62f118d0	ede32f70	defaults a 200 to private, no-store
-kiosk-server/spec/kiosk/server/headers_spec.rb	ddf9a04a72e15eaf	ede32f70	does not duplicate a token already present, whatever its case
-kiosk-server/spec/kiosk/server/headers_spec.rb	5fe0e7cfc984bdb8	ede32f70	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
-kiosk-server/spec/kiosk/server/headers_spec.rb	5e28c2c70e724df7	ede32f70	mutates a Rack headers hash with the three Kiosk headers
-kiosk-server/spec/kiosk/server/headers_spec.rb	4b61562ec0013891	ede32f70	produces a fresh headers hash with the three Kiosk headers set
-kiosk-server/spec/kiosk/server/headers_spec.rb	336f8cb7245deb3e	ede32f70	varies on the two request headers that change the answer
+kiosk-server/spec/kiosk/server/headers_spec.rb	0724bb72fbf46fae	cba1eb2d	ADDS to a Vary the operator already set rather than replacing it
+kiosk-server/spec/kiosk/server/headers_spec.rb	5b38b8c751b613b0	cba1eb2d	FORCES no-store on a 402 — a single-use challenge is never cacheable
+kiosk-server/spec/kiosk/server/headers_spec.rb	e150e26d632adab3	cba1eb2d	and it REFUSES a shared-cache policy (§3.7.3)
+kiosk-server/spec/kiosk/server/headers_spec.rb	7b89fbec62f118d0	cba1eb2d	defaults a 200 to private, no-store
+kiosk-server/spec/kiosk/server/headers_spec.rb	f5d53fbe9448d28f	cba1eb2d	does not duplicate a token already present, whatever its case
+kiosk-server/spec/kiosk/server/headers_spec.rb	5fe0e7cfc984bdb8	cba1eb2d	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
+kiosk-server/spec/kiosk/server/headers_spec.rb	5e28c2c70e724df7	cba1eb2d	mutates a Rack headers hash with the three Kiosk headers
+kiosk-server/spec/kiosk/server/headers_spec.rb	4b61562ec0013891	cba1eb2d	produces a fresh headers hash with the three Kiosk headers set
+kiosk-server/spec/kiosk/server/headers_spec.rb	2f786e86f826881c	cba1eb2d	varies on every request header that changes the answer
 kiosk-server/spec/kiosk/server/identity_resolution_spec.rb	cc82b6d62c68f981	ede32f70	returns nil when nothing resolves (caller raises 401 — fail closed)
 kiosk-server/spec/kiosk/server/jwks_spec.rb	cf039ca273a7b660	ede32f70	preserves order for multi-key rotation overlap
 kiosk-server/spec/kiosk/server/jwks_spec.rb	1f9381bb7ad832d6	ede32f70	produces JSON that's parseable and contains only the public JWK fields

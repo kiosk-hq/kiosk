@@ -55,7 +55,7 @@
  *   [4] exp                — unix seconds (iat + 900)
  *   [5] jti                — 32 hex chars
  *
- * Example (known-answer vector v2, Plan 4.3 T1):
+ * Example (the host test's known-answer vector):
  *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
  *   token   = "<message>.SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
  *

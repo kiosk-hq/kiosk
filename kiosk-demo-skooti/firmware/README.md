@@ -6,6 +6,7 @@ This directory contains:
 |------|---------|
 | `skooti_lock.ino` | Arduino-ESP32 firmware (ESP32-C3 + NimBLE-Arduino) |
 | `verify.h/c` | `skooti_verify_token()` — portable Ed25519 token verify; shared by firmware and host test |
+| `jti_store.h/c` | `jti_seen_or_insert()` — durable one-shot `jti` store; in-memory on the host, NVS-backed on the board |
 | `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
 | `crosscheck_main.c` | Ruby-signed token → C verify helper (invoked by `make crosscheck`) |
 | `Makefile` | `make test` = C assertions + Ruby↔C crosscheck |
@@ -62,8 +63,8 @@ ALL PASS
 
 This proves the C Ed25519 verifier correctly verifies tokens signed by the Kiosk
 Ruby server (same RFC 8032 Ed25519 semantics via OpenSSL).  The `.ino` is NOT
-compiled on the host (ESP32 Arduino toolchain required); only `ed25519/` +
-`verify.c` + test helpers are exercised here.
+compiled on the host (ESP32 Arduino toolchain required); what `make test` builds
+is `ed25519/` + `verify.c` + `jti_store.c` + the test harness.
 
 ---
 
@@ -199,13 +200,13 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 ## Replay prevention (token v2)
 
 The lock uses a durable jti store (`jti_store.c` / `jti_store.h`) that retains each
-consumed jti until its `exp` passes, then prunes it.  This closes both gaps that
-existed in earlier firmware:
+consumed jti until its `exp` passes, then prunes it.  Two properties do the work,
+and both are what a volatile or small cache would give away:
 
-| Former risk | Status in v2 |
-|-------------|--------------|
-| **Reboot replay** — a power-cycle cleared the old RAM cache, making consumed jtis replayable within their exp window. | **Closed.** The NVS-backed store (`nvs_set_blob` / `nvs_get_blob`) survives reboots; a consumed jti is remembered until its exp expires regardless of power-cycles. |
-| **Cache-eviction replay** — the old 16-entry circular buffer could be wrapped in normal operation (≥ 16 unlocks within one 15-min window), evicting a still-valid jti. | **Closed.** The store holds 64 entries (`JTI_STORE_SIZE = 64`), prunes expired entries on every call, and — if the table is genuinely full — evicts the entry soonest to expire (minimising replay risk), not a random or oldest entry. |
+| Property | Why it closes a replay path |
+|----------|-----------------------------|
+| **Durable across power-cycles.** The store is NVS-backed (`nvs_set_blob` / `nvs_get_blob`), so a consumed jti is remembered until its exp passes whatever the lock does in between. | A lock a thief can power-cycle is a lock whose replay window is «until someone pulls the battery», not «until exp». |
+| **Sized past the window, and evicts by expiry.** 64 entries (`JTI_STORE_SIZE = 64`), expired entries pruned on every call, and — if the table is genuinely full — the entry soonest to expire is the one evicted, never a random or arbitrary one. | The 15-min TTL bounds the table at one entry per token accepted in that window, so 64 is headroom rather than a limit; and if it were ever reached, dropping the shortest-lived record is the choice that leaves the least replay time on the table. |
 
 **Host test:** the in-memory backend is used for `make test` / `make test-asan`; the
 NVS wiring (`nvs_set_blob` / `nvs_get_blob`) is documented in `jti_store.c` and

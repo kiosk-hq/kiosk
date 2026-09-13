@@ -9,7 +9,7 @@
  * (Ruby/OpenSSL) without any hardware.
  *
  * =========================================================================
- * KNOWN-ANSWER VECTOR v2 (from Plan 4.3 T1 — DO NOT CHANGE)
+ * KNOWN-ANSWER VECTOR — DO NOT CHANGE
  * =========================================================================
  *
  * Dev public key (32 bytes hex):

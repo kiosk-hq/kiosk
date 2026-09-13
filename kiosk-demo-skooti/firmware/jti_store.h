@@ -8,10 +8,10 @@
  * PURPOSE
  * =========================================================================
  * The rental-token lock must reject a replayed jti within its exp window,
- * even across a reboot (power-cycle) of the ESP32.  The RAM-only circular
- * cache used in the previous firmware was insufficient:
- *   - Cleared on reboot → entire validity window re-openable.
- *   - Fixed 16 entries → eviction replay after ≥ 16 unlocks per window.
+ * even across a reboot (power-cycle) of the ESP32.  Two properties are
+ * load-bearing, and a RAM-only or under-sized cache gives away one each: a
+ * store cleared on reboot re-opens the whole validity window, and a store
+ * small enough to wrap in normal use evicts a jti that is still live.
  *
  * This module provides a fixed-size table of {jti, exp} entries:
  *   - Entries are retained until their exp passes.

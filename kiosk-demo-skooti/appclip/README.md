@@ -208,9 +208,9 @@ Same encoding requirement as QR: the `rt=` value must be percent-encoded.
 
 | Claim | Status |
 |-------|--------|
-| Server Ed25519 rental-token issue + verify chain (register → reserve → pay → start_rental) | **PROVEN** (`rake demo`, Plan 4.3 T1) |
-| Firmware Ed25519 offline verify (v2: domain tag + 6-field parse) + Ruby↔C interop | **PROVEN** (`make test`, Plan 4.3 T2) |
-| Durable jti replay prevention (NVS-backed jti_store, 64 entries) | **PROVEN** (`make test` jti-store tests, Plan 4.3 T2) |
+| Server Ed25519 rental-token issue + verify chain (register → reserve → pay → start_rental) | **PROVEN** (`rake demo`) |
+| Firmware Ed25519 offline verify (v2: domain tag + 6-field parse) + Ruby↔C interop | **PROVEN** (`make test`) |
+| Durable jti replay prevention (NVS-backed jti_store, 64 entries) | **PROVEN** (`make test` jti-store tests) |
 | App Clip Swift source compiles (`make build-sim`) | **PROVEN** (xcodebuild, iOS Simulator SDK, 2026-06-25) |
 | BLE device-name filtering (scan finds `skooti-SK-001`, not other scooters) | **Code correct; not yet tested on hardware** |
 | BLE scan → connect → unlock char discover → write token on ESP32-C3 | **Not yet** — needs board + real iPhone + paid team |

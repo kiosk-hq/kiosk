@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Demo-specific schema: a scooter-rental-shape provider (skooti per Plan 4).
+# Demo-specific schema for skooti, a scooter-rental-shape provider.
 #
 # `scooters` is open-read (any authenticated principal browses the fleet).
 # `reservations` is owner-scoped — RLS keys off `kiosk.current_user_id()`.

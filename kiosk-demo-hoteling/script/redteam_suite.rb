@@ -539,9 +539,10 @@ module RawWire
   # One raw request under the given principal's bearer.
   #
   # A NIL principal is the ANONYMOUS probe and is a different question,
-  # not a degenerate case of the same one: the wire resolves the caller BEFORE it
-  # looks the verb up, so what an unauthenticated request gets at a path naming
-  # no registered verb is 401, never the 404 an authenticated one gets.
+  # not a degenerate case of the same one: it asks whether a credential changes
+  # the answer. At a path naming no registered verb it must not — the routing
+  # miss is decided before any credential is read — so the anonymous caller and
+  # the authenticated one get the same plain 404.
   # @return [Array(Net::HTTPResponse, Hash)] the response and its parsed body
   def raw(principal, method, path, body = nil)
     uri     = URI("#{BASE_URL}#{path}")

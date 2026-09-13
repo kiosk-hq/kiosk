@@ -578,7 +578,7 @@ if ARGV.include?("--self-test")
       rule: "The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508)",
       what: "one demo's copy of the shared rationale is edited and the other six are not",
       ops:  [[:edit, "kiosk-demo-atablefor/app/controllers/application_controller.rb",
-              "name no registered verb, so", "name no registered VERB, so"]],
+              "publishes no verb names", "publishes no VERB names"]],
       expect: /atablefor: the wrong-door rationale above `hint:` in app\/controllers\/application_controller\.rb differs from the 6 copy/ },
 
     { id: "wrong-door-rationale-deleted", kind: :break,

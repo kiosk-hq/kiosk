@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **Two redteam helper comments still said an anonymous caller gets 401 at an unregistered verb path.** The beat ten lines below asserts 404 for both callers.
 - 2026-09-13: **Three skooti sources documented the retired five-field rental-token wire.** The lock rejects that shape at its first gate; all three now give the six-field one.
 - 2026-09-13: **e2e's file-layout tree still listed `mise.toml`, which is gitignored.** R8 now reads a bare filename the reading document's own directory scopes.
 - 2026-09-13: **Eight shipped sites said an unregistered verb path answers 401 without a bearer.** The redteam beat they cite asserts 404 for both callers; measured by running it.

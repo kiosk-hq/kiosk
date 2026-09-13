@@ -1083,9 +1083,10 @@ wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 # paths and methods the Client will not construct.
 #
 # `bearer: false` is the ANONYMOUS probe and asks a different question,
-# not a weaker version of the same one: the wire resolves the caller BEFORE it
-# looks the verb up, so an unauthenticated request at an unregistered path is
-# answered 401 and never reaches the registry lookup that produces the 404.
+# not a weaker version of the same one: it asks whether a credential changes
+# the answer. At a path no route draws it must not — the routing miss is
+# decided before any credential is read — so both callers get the same plain
+# 404 and neither is handed a problem document to read anything out of.
 raw_wire = lambda do |method, path, body = nil, bearer: true|
   uri     = URI("#{BASE_URL}#{path}")
   headers = { "Content-Type" => "application/json" }

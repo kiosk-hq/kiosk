@@ -46,8 +46,8 @@ lock verifies:
 ```
 
 The whole grammar — every field's charset, the delimiter rule and the wire cap
-— is written out once in `../RENTAL_TOKEN.md`, and `make crosscheck` holds all
-three readers of this token to it.
+— is stated in `../RENTAL_TOKEN.md`, the canonical page for this token, and
+`make crosscheck` holds all three readers to it.
 
 Run:
 
@@ -104,8 +104,9 @@ is `ed25519/` + `verify.c` + `jti_store.c` + the test harness.
 2. App Clip connects to `skooti-SK-001` BLE peripheral.
 3. App Clip **writes** the wire rental token to the Unlock characteristic.
 4. Lock runs `skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)`:
-   checks Ed25519 sig, a six-field message, domain tag (`kiosk-rental-v1`),
-   scooter_code match, exp > now.
+   checks the wire cap, the Ed25519 sig, a six-field message with no empty
+   field, domain tag (`kiosk-rental-v1`), scooter_code match, plain-digit iat
+   and exp, exp > now, and a 32-lowercase-hex jti.
 5. Lock calls `jti_seen_or_insert(jti, exp, now)` — rejects if jti already consumed
    (durable NVS-backed store; survives reboot; entries retained until their exp).
 6. On all-pass: records jti, drives GPIO HIGH for 3 s = unlocked.
@@ -272,7 +273,7 @@ so, and the table below is where that status is tracked.
 | A trailing `|` is a seventh field, not punctuation — validly signed, still rejected | **PROVEN** (`make test`) |
 | A pipe in an issuer input shifts fields so `field[4]` reads a caller-chosen expiry — rejected by the count gate | **PROVEN** (`make test`) |
 | Field charsets — an empty field, a non-numeric `iat`, a signed or overflowing `exp`, a jti in the wrong alphabet: all rejected with a VALID signature | **PROVEN** (`make test`) |
-| `skooti_parse_jti` refuses what `skooti_verify_token` refuses, so the replay store is never keyed on rejected bytes | **PROVEN** (`make test`) |
+| `skooti_parse_jti` applies the same field-count and jti-charset gates as `skooti_verify_token`, so the replay store is never keyed on bytes those gates refused | **PROVEN** (`make test`) |
 | C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
 | The C verifier, `RentalTokenIssuer.verify` and `LockSim#unlock` give the declared answer on every vector in `token_vectors.rb` | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |

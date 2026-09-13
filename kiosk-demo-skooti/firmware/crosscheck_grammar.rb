@@ -23,9 +23,10 @@
 #   * A field nothing parses is a field each reader may read differently, and
 #     `iat` is the field nothing acts on.
 #
-# None of that is reachable through the shipped issuer, which mints the fields
-# itself, and the lock fails closed either way. It would still be three answers
-# to one question, in a reference implementation people copy.
+# None of that is reachable through the shipped flow — the issuer mints iat,
+# exp and jti itself, and the one caller-supplied field that reaches the message
+# is UUID-checked first — and the lock fails closed either way. It would still
+# be three answers to one question, in a reference implementation people copy.
 #
 # So this script does not review the parsers. It runs every reader against ONE
 # vector set — token_vectors.rb, whose header states the grammar and what it

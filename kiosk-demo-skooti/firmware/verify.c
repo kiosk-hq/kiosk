@@ -341,8 +341,8 @@ int skooti_verify_token(const uint8_t pubkey[32],
  * is left must be the jti ALONE — a further '|' means the message is not six
  * fields, so this reports failure rather than handing the replay store a key
  * with someone else's bytes glued to it — and it must be 32 lowercase hex, the
- * same charset skooti_verify_token's Gate 4 demands. Same contract as
- * skooti_verify_token, stated in the same terms, because a caller that reached
+ * same charset skooti_verify_token's Gate 4 demands. Those two gates are stated
+ * here in the same terms that one states them in, because a caller that reached
  * here through some other path must not get a laxer answer than that one gives.
  * -------------------------------------------------------------------------- */
 

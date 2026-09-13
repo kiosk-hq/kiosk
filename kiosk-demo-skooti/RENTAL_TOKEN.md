@@ -43,11 +43,12 @@ The left side (everything before the last `.`) is the signed message — UTF-8 b
 Three programs read this token, and they are independent implementations: the
 lock firmware's `skooti_verify_token` (`firmware/verify.c`, linked by
 `skooti_lock.ino`), the server's `RentalTokenIssuer.verify`, and the software
-lock `script/lock_sim.rb`. This section is the grammar all three implement.
-It is stated once, here, because three independent parsers with no single
-statement of what they parse is a divergence anyone who attacks the parse can
-find — and the widest of the three is the one that decides what a fleet
-accepts.
+lock `script/lock_sim.rb`. This section is the grammar all three implement,
+and it is where that grammar is DECIDED: each reader's own header restates what
+that reader enforces, and a disagreement between them is settled against this
+page. Three independent parsers with no single statement of what they parse is
+a divergence anyone who attacks the parse can find, and the widest of the three
+is the one that decides what a fleet accepts.
 
 What holds them to it is not this page but `cd firmware && make crosscheck`,
 which signs one shared vector set (`firmware/token_vectors.rb`) with the live
@@ -82,8 +83,8 @@ gives an answer the set did not declare.
 |---|---|---|
 | 0 | tag | the bytes `kiosk-rental-v1` and nothing else, compared in constant time |
 | 1 | `scooter_code` | opaque, non-empty. The lock additionally requires it to equal its own provisioned code; `RentalTokenIssuer.verify` is not a lock and has no code to compare against, so it holds this field to the grammar only. |
-| 2 | `reservation_id` | opaque, non-empty; no reader interprets it |
-| 3 | `iat` | 1 to 20 ASCII digits `0`–`9`, value at most 2^64−1. No sign, no `_` separators, no surrounding whitespace, no `0x`. No reader ACTS on `iat` — `exp` alone bounds the window — but all three hold it to the grammar, because a field nobody parses is a field each reader may read differently. |
+| 2 | `reservation_id` | opaque, non-empty; no reader constrains it further and none gates on it |
+| 3 | `iat` | 1 to 20 ASCII digits `0`–`9`, value at most 2^64−1. No sign, no `_` separators, no surrounding whitespace, no `0x`. No reader gates on `iat` — `exp` alone bounds the window — but all three hold it to the grammar, because a field nobody parses is a field each reader may read differently. |
 | 4 | `exp` | the same syntax as `iat`. The lock then requires `exp > now`. |
 | 5 | `jti` | exactly 32 lowercase hex characters `[0-9a-f]`, which is what `SecureRandom.hex(16)` mints. It is the key the replay store is written under, so a reader that returned success on other bytes would be handing that store a key it refuses. |
 

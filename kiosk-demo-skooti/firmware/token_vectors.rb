@@ -37,13 +37,17 @@
 #   * Signature handling — a flipped byte, an oversized sig field, a missing
 #     ".", a short sig. Those are host_test.c's cases on the C side and the
 #     KAT's on the Ruby side, and they are refused before the parse runs.
-#   * The scooter-code binding as a NEGATIVE. Every vector here carries
-#     SCOOTER_CODE in field 1, because `RentalTokenIssuer.verify` is not a lock
-#     and has no provisioned code to compare against — a wrong-code vector
-#     would be asking the three readers a question only two of them are given
-#     the input to answer.
+#   * The scooter-code binding as a NEGATIVE. No vector holds a well-formed
+#     message with a scooter code OTHER than SCOOTER_CODE, because
+#     `RentalTokenIssuer.verify` is not a lock and has no provisioned code to
+#     compare against — a wrong-code vector would be asking the three readers a
+#     question only two of them are given the input to answer. Two vectors DO
+#     carry something else in field 1 (an empty one, and the tag itself pushed
+#     along by a leading delimiter), and both are refused on the grammar before
+#     any code comparison is reached.
 #   * The exp==now boundary. Every vector sits strictly inside or strictly
-#     outside the window.
+#     outside the window: measured over this table, no vector's field 4 is the
+#     plain integer NOW.
 #   * Replay. The jti store is per-reader state, not a property of the token.
 
 module SkootiTokenVectors
@@ -51,7 +55,8 @@ module SkootiTokenVectors
   # into CROSSCHECK_NOW; changing one without the other makes the set lie.
   NOW = 1_750_001_800
 
-  # The code the C helper is provisioned with, in field 1 of every vector.
+  # The code the C helper is provisioned with. It is field 1 of every vector
+  # except the two the header names, which put something else there on purpose.
   SCOOTER_CODE = "SK-001"
 
   # A well-formed jti: 32 lowercase hex, exactly what SecureRandom.hex(16) mints.

@@ -12,7 +12,7 @@ module Kiosk
   #   be a synthetic placeholder, service account, group, or parent agent
   #   depending on the user-IdP adapter.
   # @!attribute [r] role
-  #   The active role for this token — one of the configured `Kiosk.roles`,
+  #   The active role for this token — one of the configured `Kiosk.configuration.roles`,
   #   or +nil+ for a role-less principal (roles are hook-or-absent;
   #   single-role providers need no role at all).
   # @!attribute [r] actor
@@ -28,7 +28,7 @@ module Kiosk
   #   `agent_id` on `agent_tokens`, `agent_mappings`, `reservations`, the
   #   three AP2 mandate tables, `kyc_attributes`, and the
   #   `kiosk.current_agent_id()` SQL helper are all typed `uuid`. Unlike
-  #   {#user_id}, whose type follows `Kiosk.user_id_type`, `agent_id` has NO
+  #   {#user_id}, whose type follows `Kiosk.configuration.user_id_type`, `agent_id` has NO
   #   configuration knob. An agent-IdP adapter that returns an Okta-shaped or
   #   otherwise opaque agent id therefore builds a valid Identity that fails
   #   later and further down: `pay` cannot settle, the account-binding

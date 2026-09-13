@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README and `Identity` doc: the accessors are `Kiosk.configuration.user_id_type` / `.roles` — `Kiosk.user_id_type` and `Kiosk.roles` do not exist.
 - `Kiosk::Protocol` gains `HEADER_TIMEZONE` (`Kiosk-Timezone`), the request header a caller declares its own clock in.
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - `Kiosk::AgentIdentityProviders::Base` doc now states plainly that the

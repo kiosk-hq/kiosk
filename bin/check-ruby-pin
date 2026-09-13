@@ -1,0 +1,381 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-ruby-pin — ONE harness Ruby version, named the same in every tracked
+# place that names it (K-1558).
+#
+# WHY THIS EXISTS. No toolchain pin ships: `mise.toml`, `.mise.toml` and
+# `.ruby-version` are gitignored repository-wide, so a clone carries none and the
+# interpreter is the developer's to pick. What the repository DOES carry is a
+# version typed into `.github/workflows/ci.yml`'s `setup-ruby` steps — that is
+# what every gem job, every demo job and the e2e job actually install — and SEVEN
+# other tracked places that restate it: the container image's build argument, the
+# deploy reset script's `PATH`, the deploy checklist's install list, this repo's
+# own `CLAUDE.md`, two READMEs that tell a reader what the harness is gated on,
+# and a gemspec comment naming the combination its `~> 8.1` floor was measured
+# on. `e2e/run.sh` checks only that `ruby` is ON THE PATH and never its version,
+# so a bump to one of the eight and not the others is invisible until something
+# version-specific breaks — on a box, or in a public README a reader is following.
+#
+# WHAT WAS ALREADY HELD, because an over-claimed guard is worse than none and the
+# row this closes was WRONG about this at first. `bin/check-demo-copies` has
+# compared the Dockerfile's `ARG RUBY_VERSION` against ci.yml since T-192, and
+# against the gemspec floor. That is ONE of the eight, and it compares by
+# MEMBERSHIP — `ci_ruby.include?(arg)` over the `.uniq` of the workflow's
+# literals — so it is satisfied by an image that names any one of several
+# disagreeing workflow values, and it says nothing at all about the other six
+# restatements or about whether the workflow agrees with ITSELF. Nothing else in
+# the tree compares any of them.
+#
+# THE SHAPE: COMPARE, NEVER DERIVE FROM A FILE A CLONE DOES NOT HAVE. The first
+# writing of this finding proposed reading `[tools] ruby` out of `e2e/mise.toml`.
+# That file is gitignored (`.gitignore:27`) and is in no clone, so a guard reading
+# it would SKIP on every clone and in CI — green because it asked nothing, which
+# is the failure mode this repository keeps filing rows about. So the version is
+# read out of the workflow, which is tracked and is the thing that actually
+# installs an interpreter, and every other site is COMPARED to it. This script
+# only ever READS ci.yml.
+#
+# THE RULES:
+#   R1 SOURCE — every `ruby-version: "X"` literal in the workflow names the same
+#      X. A `setup-ruby` step whose version is an expression (the declared-floor
+#      leg reads a gemspec at job time) carries no literal and is not a pin, so it
+#      is out of scope by construction rather than by an exemption.
+#   R2 SITES — every declared site names that same X.
+#   R3 VACUITY — every declared site's pattern matches at least one line in its
+#      file. A rule that has quietly stopped having a subject reads as coverage
+#      and is not, which is how three relink classes stayed open one repo over.
+#   R4 CENSUS — the tracked files that name X are EXACTLY the declared sites plus
+#      the declared exemptions. This is the arm that makes the manifest complete
+#      rather than remembered: a NEW file that restates the version fails until
+#      it is declared, and that is the only reason the list above can be trusted.
+#   R5 EXEMPTIONS — each one carries a reason and must still contain X. An
+#      exemption whose subject has gone is deleted, not carried.
+#
+# Usage (stdlib only, no bundle, no database, no network):
+#   bin/check-ruby-pin
+#   bin/check-ruby-pin --self-test
+#
+# Exit codes: 0 = every site agrees, 1 = they do not (or the question could not
+# be asked). `--self-test`: 0 green, 1 red, and it names the arms.
+
+require "English"
+
+ROOT = File.expand_path("..", __dir__)
+
+# The workflow is the SOURCE: the version it names is what CI installs.
+SOURCE       = ".github/workflows/ci.yml"
+SOURCE_RE    = /^\s+ruby-version:\s*"([0-9][0-9.]*)"\s*$/
+
+# path => [pattern capturing the version, why this file names it]
+SITES = {
+  SOURCE => [SOURCE_RE,
+             "the operative pin — what every gem, demo and e2e job installs"],
+  "Dockerfile" => [/^ARG\s+RUBY_VERSION=([0-9][0-9.]*)\s*$/,
+                   "the container image's base tag; also held by bin/check-demo-copies (T-192)"],
+  "deploy/demo-reset.sh" => [%r{/mise/installs/ruby/([0-9][0-9.]*)/bin},
+                             "the PATH the reset script prepends on the box"],
+  "deploy/CHECKLIST.md" => [/\*\*Ruby ([0-9][0-9.]*)\*\* via \*\*mise\*\*/,
+                            "the provisioning install list an operator follows by hand"],
+  "CLAUDE.md" => [/^- Ruby ([0-9][0-9.]*) — what/,
+                  "this repository's own statement of what it is built on"],
+  "e2e/README.md" => [/\(`([0-9][0-9.]*)` today, typed in the/,
+                      "what the harness tells a reader it is gated on"],
+  "deploy/README.md" => [/— `([0-9][0-9.]*)` today, typed in the workflow/,
+                         "what the deploy guide tells a reader the apps are built on"],
+  "kiosk-server/kiosk-server.gemspec" => [/on Ruby ([0-9][0-9.]*)\)/,
+                                          "the combination the `~> 8.1` Rails floor was measured on"],
+}.freeze
+
+# Tracked files that CONTAIN the version and are not pins. Each must still
+# contain it (R5), so a stale exemption says so instead of sitting there.
+EXEMPT = {
+  "CHANGELOG.md" => "append-only history — an entry says what was true when it was written",
+  "bin/check-demo-copies" => "a synthetic demo Dockerfile inside its own --self-test, planted to " \
+                             "prove the SECOND-image rule; the version in it is scenery",
+  "bin/check-shipped-archaeology" => "one prose line quoting a retired CLAUDE.md sentence, plus two " \
+                                     "--self-test fixture files",
+}.freeze
+
+def git(*args)
+  out = IO.popen(["git", "-C", ROOT, *args], &:read)
+  [out, $CHILD_STATUS.success?]
+end
+
+# Tracked files naming `version` as a version rather than as a substring of a
+# longer number. `git grep -l -F` narrows the corpus cheaply and the boundary is
+# applied here, because BSD grep has no -P and an ERE `\b` is a silent zero.
+def files_naming(version)
+  out, _ok = git("grep", "-l", "-F", "--", version)
+  bounded  = /(?<![0-9.])#{Regexp.escape(version)}(?![0-9.])/
+  out.lines(chomp: true).reject(&:empty?).select do |rel|
+    path = File.join(ROOT, rel)
+    File.file?(path) && File.read(path).match?(bounded)
+  rescue ArgumentError, Errno::ENOENT
+    false
+  end.sort
+end
+
+def run_check
+  failures = []
+  notes    = []
+
+  source_path = File.join(ROOT, SOURCE)
+  unless File.file?(source_path)
+    return [["#{SOURCE}: missing — this is where the version is READ, so nothing can be compared " \
+             "against anything"], notes, nil]
+  end
+
+  # ── R1: the source agrees with itself ──────────────────────────────────────
+  literals = File.read(source_path).scan(SOURCE_RE).flatten
+  if literals.empty?
+    return [["#{SOURCE}: no `ruby-version: \"<version>\"` line. Either CI stopped pinning an " \
+             "interpreter or the shape this reads changed; either way every rule below would pass " \
+             "by asking nothing."], notes, nil]
+  end
+
+  by_value = literals.tally
+  version  = by_value.max_by { |_v, n| n }.first
+  if by_value.size > 1
+    failures << "#{SOURCE}: its own `setup-ruby` steps name #{by_value.size} different versions " \
+                "(#{by_value.sort_by { |_v, n| -n }.map { |v, n| "#{v}×#{n}" }.join(', ')}). The " \
+                "workflow is the source every other site is compared to, so it has to agree with " \
+                "itself first."
+  end
+  notes << "#{SOURCE}: #{literals.length} `ruby-version:` literal(s), all #{version}" if by_value.size == 1
+
+  # ── R2 + R3: every declared site names it, and every pattern has a subject ─
+  SITES.each do |rel, (re, why)|
+    next if rel == SOURCE
+
+    path = File.join(ROOT, rel)
+    unless File.file?(path)
+      failures << "#{rel}: missing, but it is declared here as naming the harness Ruby (#{why}). " \
+                  "A site that moved is declared at its new path or dropped from this manifest."
+      next
+    end
+
+    found = File.read(path).scan(re).flatten
+    if found.empty?
+      failures << "#{rel}: the declared pattern #{re.inspect} matches NOTHING (R3). It named the " \
+                  "harness Ruby (#{why}); either the sentence was reworded — re-point the pattern — " \
+                  "or the site is gone and this entry goes with it. A rule with no subject reads as " \
+                  "coverage and is not."
+      next
+    end
+
+    wrong = found.uniq.reject { |v| v == version }
+    next if wrong.empty?
+
+    failures << "#{rel}: names Ruby #{wrong.join(', ')} where #{SOURCE} installs #{version} (#{why}). " \
+                "A bump that moves one of these and not the others is invisible until something " \
+                "version-specific breaks — `e2e/run.sh` checks only that ruby is on the PATH."
+  end
+
+  # ── R4: the manifest is COMPLETE, measured rather than remembered ──────────
+  naming   = files_naming(version)
+  declared = (SITES.keys + EXEMPT.keys).sort
+  undeclared = naming - declared
+  unless undeclared.empty?
+    failures << "#{undeclared.length} tracked file(s) name Ruby #{version} and are declared neither a " \
+                "SITE nor an EXEMPTION (R4): #{undeclared.join(', ')}. Add each to SITES with the " \
+                "pattern that reads its version, or to EXEMPT with the reason it is not a pin — the " \
+                "manifest above is only trustworthy because this arm refuses to let it go stale."
+  end
+
+  # ── R5: an exemption whose subject has gone is deleted, not carried ────────
+  stale = EXEMPT.keys.sort - naming
+  unless stale.empty?
+    failures << "#{stale.length} declared exemption(s) no longer name Ruby #{version} (R5): " \
+                "#{stale.join(', ')}. Delete the entry; a standing exemption for something that is " \
+                "not there is a door left open for whatever lands at that path next."
+  end
+
+  notes << "#{naming.length} tracked file(s) name #{version}: #{SITES.size} site(s) + #{EXEMPT.size} " \
+           "declared exemption(s)"
+  [failures, notes, version]
+end
+
+# ── --self-test ──────────────────────────────────────────────────────────────
+#
+# Every arm builds a THROWAWAY GIT REPOSITORY carrying a copy of this script and
+# one fixture file per declared site, then runs the copy inside it — because R4
+# asks `git grep` a question about a tracked tree, and there is no honest way to
+# ask that of a fixture that is not one.
+#
+# THE MOTIVATING DEFECT IS ARM P<n>: one site bumped and the rest left behind,
+# planted in EVERY declared site in turn. That is the whole of K-1558 — «a bump
+# to one and not the others is invisible» — and before this script nothing in the
+# tree went red on seven of the eight.
+if ARGV.include?("--self-test")
+  require "tmpdir"
+  require "fileutils"
+
+  SCRIPT = File.expand_path(__FILE__)
+  # Assembled from parts, never typed: the arms run a COPY of this script inside
+  # the fixture repository, so a literal fixture version in this source would be
+  # a tracked file naming the version R4 is censusing — and R4 would (correctly)
+  # redden on the guard itself. Measured: it did, on the first run.
+  FIXTURE_V = [9, 9, 9].join(".")
+  FIXTURE_W = [9, 9, 8].join(".")
+
+  # One fixture line per site, each matching that site's declared pattern. Kept
+  # here rather than copied from the real files so a reworded sentence in the
+  # tree cannot quietly disarm an arm — and so the version in the arms is never
+  # this repository's own, which would make the script a site of itself.
+  def st_body(rel, version)
+    case rel
+    when ".github/workflows/ci.yml"
+      "jobs:\n  a:\n    steps:\n      - uses: ruby/setup-ruby@v1\n        with:\n" \
+        "          ruby-version: \"#{version}\"\n      - uses: ruby/setup-ruby@v1\n        with:\n" \
+        "          ruby-version: \"#{version}\"\n"
+    when "Dockerfile"                          then "ARG RUBY_VERSION=#{version}\n"
+    when "deploy/demo-reset.sh"                then "export PATH=\"/x/mise/installs/ruby/#{version}/bin:$PATH\"\n"
+    when "deploy/CHECKLIST.md"                 then "- [ ] Install: **Ruby #{version}** via **mise**, git.\n"
+    when "CLAUDE.md"                           then "- Ruby #{version} — what the workflow installs\n"
+    when "e2e/README.md"                       then "gated on the version the job names (`#{version}` today, typed in the workflow)\n"
+    when "deploy/README.md"                    then "built on the version the workflow names — `#{version}` today, typed in the workflow.\n"
+    when "kiosk-server/kiosk-server.gemspec"   then "# (Rails 8.1.3 on Ruby #{version}). Older lines are untested.\n"
+    else raise "st_body: no fixture for #{rel}"
+    end
+  end
+
+  def st_repo(dir, version, overrides = {})
+    FileUtils.mkdir_p(File.join(dir, "bin"))
+    FileUtils.cp(SCRIPT, File.join(dir, "bin", "check-ruby-pin"))
+    File.chmod(0o755, File.join(dir, "bin", "check-ruby-pin"))
+    SITES.each_key do |rel|
+      next if overrides.key?(rel) && overrides[rel].nil? # a deliberately absent site
+
+      path = File.join(dir, rel)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, overrides.fetch(rel) { st_body(rel, version) })
+    end
+    EXEMPT.each_key do |rel|
+      next if overrides.key?(rel) && overrides[rel].nil?
+
+      path = File.join(dir, rel)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, overrides.fetch(rel) { "an exempt mention of #{version}\n" })
+    end
+    overrides.each do |rel, body|
+      next if SITES.key?(rel) || EXEMPT.key?(rel) || body.nil?
+
+      path = File.join(dir, rel)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, body)
+    end
+    env = { "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_CONFIG_SYSTEM" => "/dev/null",
+            "GIT_AUTHOR_NAME" => "t", "GIT_AUTHOR_EMAIL" => "t@t",
+            "GIT_COMMITTER_NAME" => "t", "GIT_COMMITTER_EMAIL" => "t@t" }
+    IO.popen(env, ["git", "-C", dir, "init", "--quiet", "--initial-branch=main"], err: %i[child out], &:read)
+    IO.popen(env, ["git", "-C", dir, "add", "-A"], err: %i[child out], &:read)
+    IO.popen(env, ["git", "-C", dir, "commit", "--quiet", "-m", "fixture"], err: %i[child out], &:read)
+    dir
+  end
+
+  def st_run(dir)
+    out = IO.popen({ "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_CONFIG_SYSTEM" => "/dev/null" },
+                   [File.join(dir, "bin", "check-ruby-pin")], err: %i[child out], &:read)
+    [out, $CHILD_STATUS.exitstatus]
+  end
+
+  failures = []
+  arms     = 0
+  n        = 0
+  arm = lambda do |name, ok, detail|
+    arms += 1
+    failures << "#{name}: #{detail}" unless ok
+  end
+
+  Dir.mktmpdir("ruby-pin-selftest") do |tmp|
+    out, rc = st_run(st_repo(File.join(tmp, "clean"), FIXTURE_V))
+    arm.call("S1 a fixture in which every site agrees is GREEN", rc.zero?, "exit #{rc}: #{out}")
+
+    # P: THE MOTIVATING DEFECT — one site bumped, the rest left behind.
+    SITES.each_key do |rel|
+      n += 1
+      dir = File.join(tmp, "plant#{n}")
+      out, rc = st_run(st_repo(dir, FIXTURE_V, rel => st_body(rel, FIXTURE_W)))
+      arm.call("P#{n} THE MOTIVATING DEFECT in #{rel}: bumped alone",
+               rc == 1 && out.include?(rel), "exit #{rc}: #{out}")
+    end
+
+    # R1: the workflow disagreeing with ITSELF, which membership-style checks miss.
+    split = st_body(".github/workflows/ci.yml", FIXTURE_V)
+            .sub("\"#{FIXTURE_V}\"\n      - uses", "\"#{FIXTURE_W}\"\n      - uses")
+    out, rc = st_run(st_repo(File.join(tmp, "split"), FIXTURE_V,
+                             ".github/workflows/ci.yml" => split))
+    arm.call("S2 the workflow disagreeing with itself is red",
+             rc == 1 && out.include?("agree with itself"), "exit #{rc}: #{out}")
+
+    # R4: a NEW tracked file that names the version and is declared nowhere.
+    out, rc = st_run(st_repo(File.join(tmp, "undeclared"), FIXTURE_V,
+                             "deploy/NEWNOTE.md" => "we run Ruby #{FIXTURE_V} on the box\n"))
+    arm.call("S3 an UNDECLARED tracked file naming the version is red",
+             rc == 1 && out.include?("deploy/NEWNOTE.md"), "exit #{rc}: #{out}")
+
+    # …and the boundary: a longer number that merely CONTAINS it is not a hit.
+    out, rc = st_run(st_repo(File.join(tmp, "boundary"), FIXTURE_V,
+                             "deploy/NEWNOTE.md" => "build 1#{FIXTURE_V}.4 and #{FIXTURE_V}0 are other things\n"))
+    arm.call("S4 a version that merely contains it as a substring is NOT a hit",
+             rc.zero?, "exit #{rc}: #{out}")
+
+    # R3: a site whose sentence was reworded so its pattern matches nothing.
+    out, rc = st_run(st_repo(File.join(tmp, "vacuous"), FIXTURE_V,
+                             "deploy/CHECKLIST.md" => "- [ ] Install Ruby (see the workflow) #{FIXTURE_V}\n"))
+    arm.call("S5 a site pattern that matches NOTHING is red, not silently green",
+             rc == 1 && out.include?("matches NOTHING"), "exit #{rc}: #{out}")
+
+    # R2 + R3 boundary: a site file that is gone entirely.
+    out, rc = st_run(st_repo(File.join(tmp, "gone"), FIXTURE_V, "Dockerfile" => nil))
+    arm.call("S6 a declared site that is missing is red", rc == 1 && out.include?("Dockerfile"),
+             "exit #{rc}: #{out}")
+
+    # R5: an exemption whose subject has gone.
+    out, rc = st_run(st_repo(File.join(tmp, "stale"), FIXTURE_V, "CHANGELOG.md" => "no version here\n"))
+    arm.call("S7 an exemption that no longer names the version is red",
+             rc == 1 && out.include?("no longer name"), "exit #{rc}: #{out}")
+
+    # R1 boundary: no literal at all in the workflow — the vacuous-green shape.
+    out, rc = st_run(st_repo(File.join(tmp, "noliteral"), FIXTURE_V,
+                             ".github/workflows/ci.yml" => "jobs:\n  a:\n    steps: []\n"))
+    arm.call("S8 a workflow with no `ruby-version:` literal is red, not green-by-asking-nothing",
+             rc == 1 && out.include?("no `ruby-version:"), "exit #{rc}: #{out}")
+  end
+
+  if failures.empty?
+    puts "check-ruby-pin --self-test: OK — #{arms} arm(s) green."
+    puts "  P1-P#{n} are K-1558's motivating defect, planted in every declared site in turn:"
+    puts "  one place bumped, the rest left behind. Seven of the eight were held by nothing."
+    exit 0
+  end
+
+  warn "check-ruby-pin --self-test: FAIL — #{failures.length} of #{arms} arm(s) red."
+  failures.each { |f| warn "  x #{f}" }
+  exit 1
+end
+
+unless ARGV.empty?
+  warn "check-ruby-pin: unknown argument #{ARGV.first.inspect}"
+  warn "usage: bin/check-ruby-pin [--self-test]"
+  exit 1
+end
+
+failures, notes, version = run_check
+
+if failures.empty?
+  puts "check-ruby-pin: OK — every tracked place that names the harness Ruby names #{version}."
+  notes.each { |nte| puts "  #{nte}" }
+  puts "(This says the eight sites AGREE. It says nothing about whether #{version} is the right"
+  puts "version to be on, and nothing about an interpreter a developer actually runs — no toolchain"
+  puts "pin ships, by design.)"
+  exit 0
+end
+
+warn "check-ruby-pin: FAIL — #{failures.length} defect(s)."
+failures.each { |f| warn "  x #{f}" }
+warn ""
+warn "The harness Ruby is read out of #{SOURCE} and every other tracked place that names it is"
+warn "compared to that. Bumping it means moving all of them in the same change."
+exit 1

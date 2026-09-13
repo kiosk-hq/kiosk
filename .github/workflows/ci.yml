@@ -1175,6 +1175,43 @@ jobs:
       - name: Every anchor the conformance matrix cites occurs exactly once
         run: ./bin/check-conformance-anchors
 
+  # The harness Ruby version is typed into this workflow 27 times and restated in
+  # seven other tracked places — the container build argument, the deploy reset
+  # script's PATH, the deploy checklist, CLAUDE.md, the e2e and deploy READMEs,
+  # and a gemspec comment. `e2e/run.sh` checks only that ruby is ON THE PATH and
+  # never its version, so a bump that moves one of them and not the others is
+  # invisible until something version-specific breaks — on a box, or in a public
+  # README somebody is following (K-1558).
+  #
+  # `bin/check-demo-copies` already held ONE of the eight (the Dockerfile, T-192)
+  # and it holds it by MEMBERSHIP, so it is satisfied by an image naming any one
+  # of several disagreeing workflow values and says nothing about whether this
+  # file agrees with itself. This job asks the whole question, and its census arm
+  # fails on a NEW tracked file that names the version and is declared nowhere,
+  # which is what keeps the site list from becoming a remembered one.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.
+  ruby-pin:
+    name: one harness Ruby, named the same everywhere (bin/check-ruby-pin)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every tracked place that names the harness Ruby names the same one
+        run: ./bin/check-ruby-pin
+
+      - name: …and the guard is a guard (planted divergence in every site)
+        run: ./bin/check-ruby-pin --self-test
+
   # `spec/conformance-drift-baseline.tsv` is the anchors manifest's sibling: a
   # GENERATED file recording each anchored region's fingerprint, so a conformance
   # sweep can re-judge what MOVED instead of walking ~185 rows blind. It had no

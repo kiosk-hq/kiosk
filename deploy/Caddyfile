@@ -59,17 +59,19 @@
 # Reusable snippet: shared proxy + the per-IP edge rate-limit, which is OFF.
 #
 # ── THERE IS NO DEFAULT THROTTLE, AND THAT IS A DECISION (T-171) ─────────────
-# Phil, 2026-09-05: «Наш PoW проверяется за миллисекунды. Ну, пускай сыплют
-# мусором. Посмотрим, как реагировать. Делать по дефолту throttle - не надо.»
+# The reason it is off: a Kiosk proof verifies in milliseconds, so a flood of
+# junk proofs costs the sender far more than it costs the origin. The fleet
+# would rather see what actually arrives and then react than ship a bound
+# nobody has measured and pay its false positives from day one.
 # The `import ratelimit` line and the (ratelimit) snippet below are commented
 # out, this whole file is what the box runs (deploy/deploy-caddy.sh installs it
 # entire), and the deploy's own wire check bursts an origin 75 times and fails
 # if a 429 comes back. So the commented lines are the DEPLOYED posture, not an
 # unfinished step.
 #
-# THEY ARE KEPT RATHER THAN DELETED. «Посмотрим, как реагировать» is removing
-# the default, not forswearing protection: leaving the block here, commented,
-# with the analysis beside it is what makes the next decision cheap.
+# THEY ARE KEPT RATHER THAN DELETED. Reacting to what arrives is removing the
+# default, not forswearing protection: leaving the block here, commented, with
+# the analysis beside it is what makes the next decision cheap.
 #
 # ── The exposure the limiter was for, which has not gone away (K-540) ────────
 # `POST /kiosk/auth/register` runs the PoW gate UNAUTHENTICATED, ahead of any

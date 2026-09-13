@@ -145,8 +145,9 @@ For EACH of the 7 apps:
       **8** vhosts → loopback ports (getgrocery/atablefor/hoteling/skooti/stylish/philslist/
       tudu + `kyc` for the KYC broker); certs issue automatically on first request.
 - [ ] **There is NO edge rate-limit module to install, and no snippet to uncomment.** The per-IP
-      throttle is deliberately not a default (Phil, 2026-09-05: «Делать по дефолту throttle - не
-      надо»). `deploy/Caddyfile` ships `import ratelimit` and the whole `(ratelimit)` snippet
+      throttle is deliberately not a default: a Kiosk proof verifies in milliseconds, so a flood of
+      junk proofs costs the sender more than the origin.
+      `deploy/Caddyfile` ships `import ratelimit` and the whole `(ratelimit)` snippet
       COMMENTED, that file is what the box runs, and `--apply`'s wire check bursts an origin 75 times
       and fails if a 429 comes back. Do not tick this as a skipped step — there is no step.
       The exposure the snippet covers has not gone away and the analysis is kept beside the commented
@@ -219,7 +220,7 @@ For EACH of the 7 apps:
       **Then move `FLEET_SCHEMA_BASELINE` in `bin/check-migration-replay` to today's date in the same change** —
       that constant is the one fact the gate cannot measure for itself, and a reset is exactly the event that
       moves it.
-- [ ] ~~Prune cron~~ — **SKIPPED** (Phil, K-593/K-630) and there is nothing to install: this repo ships no
+- [ ] ~~Prune cron~~ — **SKIPPED** (K-593/K-630) and there is nothing to install: this repo ships no
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog
       re-seed instead, see `deploy/README.md` step 5.

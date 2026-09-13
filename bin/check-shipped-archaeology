@@ -132,23 +132,50 @@
 #     added with an extension nobody thought of is a DECISION rather than a
 #     silent gap.
 #
-#   R1 (a ledger id), R2 (an ADR reference), R3 (Cyrillic) and R4 (the
-#   maintainer named) DO NOT REACH IT, on the same footing as `bin/`: this is
-#   maintainer tooling for one fleet, its reader is the person holding the ssh
-#   key, and the harm those four rules exist for is that a STRANGER cannot
-#   resolve what they are reading. R5, R6 and R7 do reach it, because their
-#   harm is different in kind — a document that describes something which does
-#   not exist is broken for EVERY reader, the maintainer included, and that is
-#   exactly what was measured here. HOW MUCH those four exemptions are holding
-#   back is NOT written here: the run prints it, per rule and per scope, in the
-#   EXEMPTION TOTALS block at the foot of the output. That is not a formatting
-#   preference — the figure this sentence used to carry (a hand-run `git grep
-#   -cP` over `-- 'deploy/*'`) had already drifted from the guard's own reading
-#   of the same tree by the time the block existed to compare it with, which is
-#   the identical drift K-1516 records one section down and K-1509/K-1435
-#   record in two ledger rows. The size is not a judgement that the four are
-#   acceptable here — the R3/R4 residue is filed as K-1505 — it is the price of
-#   not turning this guard red on a standing backlog nobody has agreed to drain.
+#   R1 (a ledger id) and R2 (an ADR reference) DO NOT REACH IT, on the same
+#   footing as `bin/`: this is maintainer tooling for one fleet, its reader is
+#   the person holding the ssh key, and an opaque token they cannot look up
+#   costs them a lookup rather than a misreading. R5, R6 and R7 reach it
+#   because their harm is different in kind — a document that describes
+#   something which does not exist is broken for EVERY reader, the maintainer
+#   included, and that is exactly what was measured here.
+#
+#   R3 (Cyrillic) AND R4 (the maintainer named) NOW REACH IT TOO, and that is a
+#   REVERSAL of the boundary the paragraph above used to draw. The ssh-key
+#   argument holds for an unresolvable id and does not hold for these two: this
+#   repository is published, so `deploy/` is a runbook a stranger reads whether
+#   or not they can deploy it, a Russian sentence is unreadable to them
+#   whatever key they hold, and «the maintainer ruled X» tells them to trust a
+#   person instead of stating the property. The residue that boundary was
+#   holding back — 11 Cyrillic lines in 4 files and 5 attributions in 4, every
+#   one of them a quoted decision — was drained rather than exempted, and the
+#   two rules were extended over the drained directory so it cannot regrow.
+#   HOW MUCH the two remaining exemptions hold back is NOT written here: the
+#   run prints it, per rule and per scope, in the EXEMPTION TOTALS block at the
+#   foot of the output. That is not a formatting preference — the figure this
+#   sentence used to carry (a hand-run `git grep -cP` over `-- 'deploy/*'`) had
+#   already drifted from the guard's own reading of the same tree by the time
+#   the block existed to compare it with, which is the identical drift K-1516
+#   records one section down and K-1509/K-1435 record in two ledger rows.
+#
+# And the repository ROOT documents — `README.md`, `SECURITY.md`,
+# `CONTRIBUTING.md`, `ROADMAP.md`, `Dockerfile` — which were in NO scope at all
+# until T-011's pre-publication scrub asked what a stranger meets FIRST. The
+# gems, the demos, the harness and the runbook were all held while the page a
+# GitHub visitor actually lands on was held by nothing. MEASURED before this
+# scope existed: a Russian sentence carrying an attributed decision, appended
+# to `README.md`, left this guard at exit 0 and `bin/check-publication-paths`
+# at exit 0.
+#
+#   * every tracked file at the repository root, minus the five named in
+#     `ROOT_NOT_READ` — `CHANGELOG.md` and `CLAUDE.md` (the standing exemption
+#     above), `LICENSE` (verbatim third-party text nobody here may reword) and
+#     the two dot-files, which carry no prose. A self-test arm re-derives the
+#     tracked root set from git and fails when a file lands there that this
+#     scope neither reads nor names, so a new front-door document costs a
+#     decision rather than becoming a silent gap.
+#   * all seven rules. Nothing about this reader differs from the gem reader:
+#     they hold the repository and nothing else.
 #
 # ── WHAT IS EXEMPT, DECLARED WITH ITS REASON — AND SIZED BY THE RUN ─────────
 #
@@ -660,19 +687,19 @@ end
 # scope but the demos, for the reason given in the header: one demo is NAMED
 # after the maintainer.
 RULES = [
-  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo e2e], what: "a ledger id",
+  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo e2e root], what: "a ledger id",
     none: "no ledger id" },
-  { id: "R2", re: ADR_RE,        scopes: %i[gem demo e2e], what: "an ADR reference",
+  { id: "R2", re: ADR_RE,        scopes: %i[gem demo e2e root], what: "an ADR reference",
     none: "no ADR reference" },
-  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec demo_spec e2e], what: "Cyrillic prose",
-    none: "no Cyrillic" },
-  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e], what: "the maintainer named in prose",
-    none: "no maintainer named in prose" },
-  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e deploy], what: "a retired wire version",
-    none: "no retired wire version", prose_only: true },
-  { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy],
+  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec demo_spec e2e deploy root],
+    what: "Cyrillic prose", none: "no Cyrillic" },
+  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e deploy root],
+    what: "the maintainer named in prose", none: "no maintainer named in prose" },
+  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e deploy root],
+    what: "a retired wire version", none: "no retired wire version", prose_only: true },
+  { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy root],
     what: "a sentence narrating a past state", none: "no narration of a past state" },
-  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy], resolve: true,
+  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root], resolve: true,
     what: "a repository path that does not exist", none: "no dangling repository path" }
 ].freeze
 
@@ -792,24 +819,24 @@ RETIREMENT_CLAUSE_RE =
 # `read:` is the adjudication note printed beside each row, per census rather
 # than shared, because the two readings a reader has to separate are different.
 CENSUS = [
-  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e deploy],
+  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e deploy root],
     what: "a bare `used to`", none: "no bare `used to`",
     read: "the passive «employed in order to» wants nothing done; «X used to Y» is " \
           "archaeology and wants the present tense" },
-  { id: "C2", re: RETIRED_OR_PLUPERFECT_RE, scopes: %i[gem demo e2e deploy],
+  { id: "C2", re: RETIRED_OR_PLUPERFECT_RE, scopes: %i[gem demo e2e deploy root],
     what: "`retired` or the pluperfect `had been`",
     none: "no `retired` and no pluperfect `had been`",
     read: "a STATUS («this gem is the retired backend») and a live caveat («strips the " \
           "retired flags a box may still carry») both want nothing done; «the retired X " \
           "did Y» is archaeology and wants deleting, with one changelog line as its " \
           "whole afterlife" },
-  { id: "C3", re: TENSE_CONTRAST_RE, scopes: %i[gem demo e2e deploy],
+  { id: "C3", re: TENSE_CONTRAST_RE, scopes: %i[gem demo e2e deploy root],
     what: "a past copula answered by an explicit «it is now»",
     none: "no past copula answered by an explicit «it is now»",
     read: "a WITHIN-REQUEST sequence («the id was claimed, so it is now spent») describes " \
           "what the code does and wants nothing done; «X was the default; it is now an " \
           "offer» is archaeology about this project and wants the second half alone" },
-  { id: "C4", re: RETIREMENT_CLAUSE_RE, scopes: %i[gem demo e2e deploy], narrative_only: true,
+  { id: "C4", re: RETIREMENT_CLAUSE_RE, scopes: %i[gem demo e2e deploy root], narrative_only: true,
     what: "a retirement clause on a narrative surface (#{NARRATIVE_EXTS.join(', ')})",
     none: "no retirement clause on a narrative surface (#{NARRATIVE_EXTS.join(', ')})",
     read: "a removal that happens to RUNTIME DATA («a nil hint is dropped», «a passed slot " \
@@ -1014,6 +1041,35 @@ def deploy_files(root)
   Dir.glob(File.join(root, "**", "*"))
     .select { |p| File.file?(p) && (DEPLOY_EXTS.include?(File.extname(p)) ||
                                     File.extname(p).empty?) }
+    .sort
+end
+
+# The repository's front door. Every tracked file AT THE ROOT is read except
+# these five, and each absence is a decision recorded in the header: two under
+# the standing exemption, one verbatim third-party text, two dot-files with no
+# prose in them. The list is NAMED rather than filtered by extension so a new
+# root document is read by default and a new EXEMPTION has to be typed here.
+ROOT_NOT_READ = %w[CHANGELOG.md CLAUDE.md LICENSE .gitignore .dockerignore].freeze
+
+def root_dirs
+  [REPO]
+end
+
+# `git ls-files` and not `Dir.glob`: what a stranger receives is what git
+# carries, and a stray untracked scratch file at the root is not a published
+# surface. Depth one only — every deeper path belongs to another scope or to a
+# declared exemption.
+def root_tracked
+  IO.popen(["git", "-C", REPO, "ls-files"], &:read)
+    .lines(chomp: true)
+    .reject { |rel| rel.include?("/") }
+end
+
+def root_files(root)
+  root_tracked
+    .reject { |rel| ROOT_NOT_READ.include?(rel) }
+    .map { |rel| File.join(root, rel) }
+    .select { |p| File.file?(p) }
     .sort
 end
 
@@ -1337,10 +1393,16 @@ SCOPES = {
   deploy: { label: "the deploy runbook", dirs: -> { deploy_dirs },
             files: ->(d) { deploy_files(d) },
             per: "deploy/** (every tracked file)",
-            door: "maintainer tooling for one fleet, on `bin/`'s footing: its reader holds " \
-                  "the ssh key, so the four unresolvable-reader rules stop at the door " \
-                  "while the three about a document describing something that does not " \
-                  "exist do not" }
+            door: "maintainer tooling for one fleet, so the two opaque-token rules stop at " \
+                  "the door on `bin/`'s footing — its reader holds the ssh key and an id " \
+                  "they cannot look up costs them a lookup. The rest reach it: this " \
+                  "repository is published, so a stranger reads this runbook whatever key " \
+                  "they hold, and a foreign-language sentence or an attributed decision is " \
+                  "unreadable to them" },
+  root: { label: "the repository's front door", dirs: -> { root_dirs },
+          files: ->(d) { root_files(d) },
+          per: "every tracked file at the repository root except the five in ROOT_NOT_READ " \
+               "(the two under the standing exemption, the licence, the two dot-files)" }
 }.freeze
 
 # The rule ids a scope carries, DERIVED. Printed beside `per:` so the two
@@ -1363,6 +1425,10 @@ end
 # the derivation here a second time and let the two rot apart.
 EXEMPT_BANNER = [
   "bin/, CHANGELOG.md, CLAUDE.md (Phil's standing exemption);",
+  ".github/ — the build's own configuration, on bin/'s footing: it is read by the people who",
+  "run the build and by GitHub, and a reader who cannot resolve a token in it loses nothing",
+  "the workflow does not already tell them. Named here so the boundary is a decision;",
+  "LICENSE (verbatim third-party text) and .gitignore/.dockerignore (no prose) at the root;",
   "Gemfile/Gemfile.lock/mise.toml and the rest of a directory root (not packaged, not browsed);",
   "a demo's public/, log/, tmp/, storage/ and its non-text config (credentials keys, *.enc);",
   "any line carrying a live TODO/FIXME (the constitution requires that marker to cite a row);",
@@ -2348,14 +2414,45 @@ def self_test
                deploy_paths.any? { |p| p.end_with?("/deploy/Caddyfile") } &&
                deploy_paths.any? { |p| p.end_with?(".service") } &&
                deploy_paths.any? { |p| p.include?("/deploy/env/") })
-  check.call("R1-R4 do NOT reach the deploy runbook — it is maintainer tooling for one " \
-             "fleet, on bin/'s footing",
-             (rules_for(:deploy).map { |r| r[:id] } & %w[R1 R2 R3 R4]).empty?)
-  check.call("R5, R6 and R7 DO — a document describing something that does not exist is " \
-             "broken for the maintainer too",
-             (%w[R5 R6 R7] - rules_for(:deploy).map { |r| r[:id] }).empty?)
+  check.call("R1-R2 do NOT reach the deploy runbook — an opaque token costs its ssh-key " \
+             "reader a lookup, not a misreading",
+             (rules_for(:deploy).map { |r| r[:id] } & %w[R1 R2]).empty?)
+  check.call("R3-R7 DO — this repository is published, so a stranger reads the runbook " \
+             "whatever key they hold",
+             (%w[R3 R4 R5 R6 R7] - rules_for(:deploy).map { |r| r[:id] }).empty?)
   check.call("a gem is NOT in the deploy scope",
              deploy_paths.none? { |p| p.include?("/kiosk-server/") })
+
+  # ── VACUITY: the repository's front door ─────────────────────────────────
+  #
+  # The scope is a git question, not a glob, and the arm that matters partitions
+  # the TRACKED root against the scope plus `ROOT_NOT_READ`: every root file is
+  # in exactly one of the two, so a new front-door document is READ by default
+  # and a new exemption has to be typed. The second arm is the other direction —
+  # an entry in `ROOT_NOT_READ` naming a file git no longer carries is a stale
+  # exemption, and a stale exemption is how a list stops describing the tree.
+  root_paths = root_dirs.flat_map { |d| root_files(d) }
+  tracked_root = root_tracked
+  check.call("the front-door scope reads files (#{root_paths.size})", !root_paths.empty?)
+  unread = tracked_root - ROOT_NOT_READ - root_paths.map { |p| p.delete_prefix("#{REPO}/") }
+  check.call("every TRACKED root file is either read or named in ROOT_NOT_READ " \
+             "(#{tracked_root.size} tracked)" \
+             "#{unread.empty? ? '' : " — neither: #{unread.join(', ')}"}",
+             !tracked_root.empty? && unread.empty?)
+  stale = ROOT_NOT_READ - tracked_root
+  check.call("ROOT_NOT_READ names no file git has stopped carrying" \
+             "#{stale.empty? ? '' : " — stale: #{stale.join(', ')}"}", stale.empty?)
+  check.call("it reaches the page a stranger lands on and the one a reporter reads",
+             root_paths.any? { |p| p.end_with?("/README.md") } &&
+               root_paths.any? { |p| p.end_with?("/SECURITY.md") })
+  check.call("it does NOT reach the two files under the standing exemption",
+             root_paths.none? { |p| p.end_with?("/CHANGELOG.md") || p.end_with?("/CLAUDE.md") })
+  check.call("every rule reaches the front door — nothing about this reader differs from " \
+             "the gem reader",
+             (RULES.map { |r| r[:id] } - rules_for(:root).map { |r| r[:id] }).empty?)
+  check.call("a gem, a demo and the runbook are NOT in the front-door scope",
+             root_paths.none? { |p| p.include?("/kiosk-server/") || p.include?("/kiosk-demo-") ||
+                                    p.include?("/deploy/") })
 
   # ── VACUITY: R7's prefixes are DERIVED, and its pattern must still RESOLVE
   #    paths. A regex that stopped matching prints the same clean line as a

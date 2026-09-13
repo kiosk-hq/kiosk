@@ -225,14 +225,15 @@ deploy/deploy-caddy.sh --apply    # install, reload, verify the wire, roll back 
 
 ## Edge rate-limit -- NOT a default, and that is a decision (T-171)
 
-**There is no per-IP throttle on this fleet.** Phil, 2026-09-05: «Наш PoW
-проверяется за миллисекунды. Ну, пускай сыплют мусором. Посмотрим, как
-реагировать. Делать по дефолту throttle - не надо.» `deploy/Caddyfile` ships the
+**There is no per-IP throttle on this fleet.** A Kiosk proof verifies in
+milliseconds, so a flood of junk proofs costs the sender far more than it costs
+the origin; the fleet would rather see what actually arrives and react than ship
+a bound nobody has measured. `deploy/Caddyfile` ships the
 `(ratelimit)` snippet and its `import` line **commented out**, the box runs
 exactly that file, and `deploy-caddy.sh --apply` verifies on the wire that no
 429 comes back during a 75-request burst.
 
-The snippet is **kept, not deleted** -- «посмотрим, как реагировать» is removing
+The snippet is **kept, not deleted** -- reacting to what arrives is removing
 the default, not forswearing protection. What follows is the analysis you need
 to decide whether to reach for it, and the numbers that say why the default came
 off. None of it is a runbook step any more.

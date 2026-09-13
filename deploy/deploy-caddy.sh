@@ -6,8 +6,9 @@
 #        deploy/deploy-caddy.sh --self-test
 #        KIOSK_CADDY_HOST=… to override the host
 #
-# WHY THIS EXISTS (Phil, 2026-09-06: «предпочтительнее caddy раскатывать через
-# какой-то декларативный скрипт. Вот ты сам это и сделай. Это часть демок.»).
+# WHY THIS EXISTS: the edge is part of the demo fleet, so it belongs in the
+# repository like everything else the demos run, rolled out by a declarative
+# script rather than hand-edited on the box.
 #
 # Until now /etc/caddy/Caddyfile was HAND-MAINTAINED and deploy/Caddyfile was a
 # template nobody applied. That split is not a filing detail — it is the reason

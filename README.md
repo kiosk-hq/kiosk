@@ -194,8 +194,8 @@ PATCH stays per-gem, so one gem can ship `0.4.4` while its sibling sits at
 `0.4.0`. `bin/check-version-parity` — its own CI job — enforces exactly that
 against `Kiosk::Protocol::API_VERSION`, including the `~> 0.4.0` inter-gem
 constraints in the gemspecs and the pinned `skill_url`. Releases are cut as
-path-scoped git tags (e.g. `kiosk-core/v0.4.0`) off each subdir's authoritative
-`*.gemspec`.
+path-scoped git tags — the gem's directory name, then `/v` and the version —
+off each subdir's authoritative `*.gemspec`.
 
 ## The two development keypairs this repo tracks on purpose
 

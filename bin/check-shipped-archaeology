@@ -285,6 +285,13 @@
 #       bare name the reading document's OWN DIRECTORY scopes. See the section
 #       below; R7 and R8 fork on existence and never both fire.
 #
+# EVERY RULE IS READ TWICE: once per line, and once per PAIR of lines with the
+# continuation's indent and comment marker stripped, for the rules that declare
+# `wrap: true` — R6 and the four censuses, the only patterns here that can match
+# across whitespace. A three-word marker split by a reflowed comment reads as one
+# sentence to a person and must read as one here; see the two-line reading beside
+# `wrap_pairs`, and K-1587 for the instance that bought it.
+#
 # AND THE THINGS THAT ARE COUNTED RATHER THAN BANNED — the run prints which of
 # them reaches which scope, so this list is a description and never the answer:
 #
@@ -977,7 +984,7 @@ RULES = [
   { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e deploy root firmware],
     what: "a retired wire version", none: "no retired wire version", prose_only: true },
   { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy root],
-    what: "a sentence narrating a past state", none: "no narration of a past state" },
+    what: "a sentence narrating a past state", none: "no narration of a past state", wrap: true },
   { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
     resolve: :missing,
     what: "a repository path that does not exist", none: "no dangling repository path" },
@@ -1103,24 +1110,25 @@ RETIREMENT_CLAUSE_RE =
 # `read:` is the adjudication note printed beside each row, per census rather
 # than shared, because the two readings a reader has to separate are different.
 CENSUS = [
-  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e deploy root],
+  { id: "C1", re: BARE_USED_TO_RE, scopes: %i[gem demo e2e deploy root], wrap: true,
     what: "a bare `used to`", none: "no bare `used to`",
     read: "the passive «employed in order to» wants nothing done; «X used to Y» is " \
           "archaeology and wants the present tense" },
-  { id: "C2", re: RETIRED_OR_PLUPERFECT_RE, scopes: %i[gem demo e2e deploy root],
+  { id: "C2", re: RETIRED_OR_PLUPERFECT_RE, scopes: %i[gem demo e2e deploy root], wrap: true,
     what: "`retired` or the pluperfect `had been`",
     none: "no `retired` and no pluperfect `had been`",
     read: "a STATUS («this gem is the retired backend») and a live caveat («strips the " \
           "retired flags a box may still carry») both want nothing done; «the retired X " \
           "did Y» is archaeology and wants deleting, with one changelog line as its " \
           "whole afterlife" },
-  { id: "C3", re: TENSE_CONTRAST_RE, scopes: %i[gem demo e2e deploy root],
+  { id: "C3", re: TENSE_CONTRAST_RE, scopes: %i[gem demo e2e deploy root], wrap: true,
     what: "a past copula answered by an explicit «it is now»",
     none: "no past copula answered by an explicit «it is now»",
     read: "a WITHIN-REQUEST sequence («the id was claimed, so it is now spent») describes " \
           "what the code does and wants nothing done; «X was the default; it is now an " \
           "offer» is archaeology about this project and wants the second half alone" },
   { id: "C4", re: RETIREMENT_CLAUSE_RE, scopes: %i[gem demo e2e deploy root], narrative_only: true,
+    wrap: true,
     what: "a retirement clause on a narrative surface (#{NARRATIVE_EXTS.join(', ')})",
     none: "no retirement clause on a narrative surface (#{NARRATIVE_EXTS.join(', ')})",
     read: "a removal that happens to RUNTIME DATA («a nil hint is dropped», «a passed slot " \
@@ -1669,6 +1677,51 @@ end
 
 # ── the scan ────────────────────────────────────────────────────────────────
 
+# ── THE TWO-LINE READING (K-1587) ────────────────────────────────────────────
+#
+# The ordinary pass matches every rule against ONE LINE AT A TIME, and a line is
+# blind to a marker of two or three words the moment a wrap falls inside it. That
+# is why there is a second pass. `deploy/demo-reset.sh`
+# carried «(K-1084 — it used» at the end of one comment line and «to be the least
+# informative of the three…» at the start of the next, and C1 printed 11 rows
+# where the defect shape gives 12. C1 is a census and never reddens, so that
+# instance cost nothing — but R6 reads the same way and R6 ASSERTS, and the two
+# constructions it bans that can wrap are exactly the ones a reflowed comment
+# splits: `used to be` and `has since been`.
+#
+# WHICH RULES GET IT, AND WHY THE OTHERS DO NOT. A wrap is only possible for a
+# pattern that can match ACROSS whitespace, and joining two lines for a pattern
+# that cannot is not caution — it is a way to fabricate a hit out of two
+# unrelated lines. R5's alternatives are single version tokens, derived from
+# `API_VERSION`; R1, R2 and R4 are single tokens; R3 is a character class; R7
+# and R8 match a path, and a path joined across a line break is a path nobody
+# wrote. So the two-line reading is declared per rule with `wrap: true`, and it
+# is on for R6 and for the four censuses and off for everything else.
+#
+# WHAT A CONTINUATION LINE IS. Its leading indentation and its comment marker
+# are furniture the reader's eye skips, so they are stripped before the join:
+# `# used` + `# to be` reads `used to be` to a person and must read that way
+# here. Only a match that STARTS before the break and ENDS after it is a wrap;
+# a match lying wholly inside either line was already reported by the ordinary
+# pass and is dropped, so no sentence is counted twice.
+CONTINUATION_PREFIX_RE = %r{\A[ 	]*(?:\#+|//+|\*+|--|%|<!--)?[ 	]*}
+
+def wrap_pairs(src)
+  return enum_for(:wrap_pairs, src) unless block_given?
+
+  prev = nil
+  prev_no = 0
+  src.each_line.with_index(1) do |line, lineno|
+    if prev
+      head = prev.chomp.rstrip
+      tail = line.chomp.sub(CONTINUATION_PREFIX_RE, "")
+      yield prev_no, "#{head} #{tail}", head.length + 1 unless head.empty? || tail.empty?
+    end
+    prev = line
+    prev_no = lineno
+  end
+end
+
 Hit = Struct.new(:path, :line, :rule, :where, :text)
 
 # Every rule violation in one file, with a Ruby file's hits classified as
@@ -1686,7 +1739,17 @@ def scan(path, rules = RULES)
   # declared one. A prefilter narrower than the decision is how K-1565's site
   # stayed invisible with every R8 arm green — see `author_only_re_for`.
   rule_re = ->(r) { r[:resolve] == :author_only ? author_only_re_for(path) : r[:re] }
-  return [[], true] unless rules.any? { |r| src.match?(rule_re.call(r)) }
+  # THE PREFILTER MUST BE AS WIDE AS THE DECISION, and for a wrap-capable rule
+  # the decision is made on a JOINED pair that `src` does not contain — the
+  # newline and the next line's `#` sit inside the marker. A prefilter narrower
+  # than the decision is exactly how K-1565's site stayed invisible with every
+  # arm green, so the joined text is built once and asked too.
+  wrap_rules = rules.select { |r| r[:wrap] }
+  joined_src = wrap_rules.empty? ? nil : wrap_pairs(src).map { |_no, j, _b| j }.join("\n")
+  unless rules.any? { |r| src.match?(rule_re.call(r)) } ||
+         wrap_rules.any? { |r| joined_src&.match?(rule_re.call(r)) }
+    return [[], true]
+  end
 
   # PER RULE, not per line: two rules can both match a line while only one of
   # them matches a code TOKEN on it, and a shared flag would report the other
@@ -1755,6 +1818,56 @@ def scan(path, rules = RULES)
       hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, where, text)
     end
   end
+
+  # ── the WRAPPED pass (K-1587) ──────────────────────────────────────────────
+  #
+  # Only for rules that declared it, and only for a match that STRADDLES the
+  # break: anything lying wholly inside either line was already reported above,
+  # and reporting it twice would make the census a worse thing to read. The hit
+  # is attributed to the FIRST line, which is where a reader repairing it starts,
+  # and its text carries both lines joined so the row is legible without opening
+  # the file.
+  unless wrap_rules.empty?
+    src_lines = src.lines
+    wrap_pairs(src) do |lineno, joined, boundary|
+      a = src_lines[lineno - 1].to_s
+      b = src_lines[lineno].to_s
+      next if a.match?(TODO_RE) || b.match?(TODO_RE)
+
+      wrap_rules.each do |rule|
+        re = rule_re.call(rule)
+        md = joined.match(re)
+        next if md.nil?
+        # TWO conditions, and they are not the same one twice. The second is
+        # what stops a sentence being reported twice: a marker either half
+        # already carries was reported by the line-at-a-time pass above. The
+        # FIRST keeps this pass to its declared subject — a match created by
+        # stripping a continuation line's comment marker (`<!--used to be`) lies
+        # wholly inside that line, is invisible to the ordinary pass for its own
+        # reason, and is not a wrap; attributing it to the line ABOVE would put
+        # a row on a line whose text does not contain it.
+        next if md.begin(0) >= boundary || md.end(0) <= boundary
+        next if a.match?(re) || b.match?(re)
+
+        # A wrapped marker matches no single TOKEN, so Ripper's per-rule code
+        # map cannot classify it. The honest answer is the reader's: whether the
+        # FIRST line is a comment. Stated here rather than left as a default —
+        # every wrap-capable rule today is prose or a census, so nothing turns
+        # on it, and the day one does this line is where to look.
+        where =
+          if ruby_file?(path) || hash_comment_file?(path)
+            a.match?(/^\s*#/) ? :comment : :code
+          else
+            :text
+          end
+        next if rule[:prose_only] && where == :code
+
+        hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, where,
+                        "WRAPS lines #{lineno}-#{lineno + 1}: #{joined.strip[0, 120]}")
+      end
+    end
+  end
+
   [hits, lexed]
 end
 
@@ -2724,6 +2837,100 @@ def self_test
                "sentence, one report",
                scan(copula, CENSUS).first.none? { |h| h.rule[:id] == "C1" } &&
                  scan(copula).first.any? { |h| h.rule[:id] == "R6" })
+
+    # ── THE TWO-LINE READING (K-1587) ───────────────────────────────────────
+    #
+    # THE FIRST ARM IS THE MOTIVATING INSTANCE, VERBATIM: the comment
+    # `deploy/demo-reset.sh` carried, split exactly where it was split. It is an
+    # R6 violation — joined, the words are `used to be` — and the guard as it
+    # stood read the two halves one at a time and answered EXIT 0. Measured:
+    # HEAD's script over this plant in its own file, exit 0; this script over
+    # the identical plant, exit 1.
+    _, wrapped_r6 = plant.call("wrap-r6", "w1.rb", <<~RUBY)
+      # re-run command and the same diagnosis as the other two (K-1084 — it used
+      # to be the least informative of the three, naming no command at all).
+      def f = 1
+    RUBY
+    wrapped_hits = scan(wrapped_r6).first.select { |h| h.rule[:id] == "R6" }
+    check.call("R6 sees a marker that WRAPS a line — the motivating instance, verbatim",
+               wrapped_hits.length == 1)
+    check.call("…attributed to the FIRST of the two lines, where the repair starts",
+               wrapped_hits.first&.line == 1)
+    check.call("…and the row says so, joined, so it is legible without opening the file",
+               wrapped_hits.first&.text.to_s.start_with?("WRAPS lines 1-2:"))
+
+    # The PREFILTER is the half that makes this real: the joined text exists in
+    # no line of the file, so a prefilter reading `src` alone skips the file and
+    # every arm above passes on a guard that looked at nothing. Same shape as
+    # K-1565, one rule over.
+    check.call("…and the file is not skipped by the prefilter, which `src` alone would do",
+               !File.read(wrapped_r6).match?(PAST_NARRATION_RE))
+
+    _, wrapped_c1 = plant.call("wrap-c1", "w2.rb", <<~RUBY)
+      # The engine used
+      # to read the role off the wire, which is the shape this refuses.
+      def f = 1
+    RUBY
+    check.call("C1's census sees a wrapped bare `used to` too — the undercount half",
+               scan(wrapped_c1, CENSUS).first.any? { |h| h.rule[:id] == "C1" })
+
+    _, wrap_once = plant.call("wrap-once", "w3.rb", <<~RUBY)
+      # The published field was formerly named `zone`, and the
+      # formerly-named spelling is gone.
+      def f = 1
+    RUBY
+    check.call("one sentence, one row — the wrapped pass never re-reports a marker either " \
+               "line already carries",
+               scan(wrap_once).first.count { |h| h.rule[:id] == "R6" } == 2)
+
+    # The other half of the pair, and the one the STRADDLE test alone holds: a
+    # match that exists only because the continuation marker was stripped lies
+    # wholly inside the SECOND line, so it is not a wrap and does not get a row
+    # on the first line.
+    _, wrap_second = plant.call("wrap-second", "w6.md", <<~MD)
+      <!-- The published field is `zone`, and the reader needs nothing else.
+      <!--used to be `tz`, which nothing here says. -->
+    MD
+    check.call("a match that exists only inside the SECOND line is not attributed to the first",
+               scan(wrap_second).first.none? { |h| h.text.to_s.start_with?("WRAPS ") })
+
+    _, wrap_nonstraddle = plant.call("wrap-nonstraddle", "w4.rb", <<~RUBY)
+      # A line that ends in an ordinary word.
+      # The engine used to be told the role, and now derives it.
+      def f = 1
+    RUBY
+    check.call("a match that does not STRADDLE the break is not counted twice",
+               scan(wrap_nonstraddle).first.count { |h| h.rule[:id] == "R6" } == 1)
+
+    _, wrap_blank = plant.call("wrap-blank", "w5.rb", <<~RUBY)
+      # The engine used
+
+      # to read the role off the wire.
+      def f = 1
+    RUBY
+    check.call("a BLANK line ends the join — two paragraphs are not one sentence",
+               scan(wrap_blank, CENSUS).first.none? { |h| h.rule[:id] == "C1" })
+
+    # ── VACUITY: the two-line reading must be READING something ──────────────
+    #
+    # It found ZERO in-scope hits at head, which is the correct answer and also
+    # the shape that lets a pass quietly stop working. So it is re-run over the
+    # vacuity corpus — `bin/` and the append-only CHANGELOG, where narration is
+    # sanctioned and cannot honestly drain — and a wrap reading that finds
+    # nothing THERE is broken rather than satisfied.
+    wrap_corpus_hits = vacuity_corpus.sum do |pth|
+      scan(pth, (RULES + CENSUS).select { |r| r[:wrap] }).first
+        .count { |h| h.text.to_s.start_with?("WRAPS ") }
+    end
+    check.call("the two-line reading finds wrapped markers in the vacuity corpus " \
+               "(#{wrap_corpus_hits} row(s) across #{vacuity_corpus.length} file(s)) — a pass " \
+               "that has stopped joining lines says so here rather than reading as clean",
+               wrap_corpus_hits.positive?)
+
+    check.call("…and every rule that declares the two-line reading can actually match across " \
+               "whitespace — joining lines for a single-token pattern fabricates hits",
+               (RULES + CENSUS).select { |r| r[:wrap] }
+                               .all? { |r| r[:re].source.match?(/\\s|\s\+|\.\{/) })
 
     # ── C2's own arms (K-1510): the two idioms that walked through R6 ───────
     c2 = ->(p) { scan(p, CENSUS).first.select { |h| h.rule[:id] == "C2" } }

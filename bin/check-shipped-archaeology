@@ -267,6 +267,10 @@
 #   R7  no REPOSITORY PATH THAT DOES NOT EXIST — in EVERY scope, `spec/`
 #       included. See the section below; the directory prefixes it recognises
 #       are DERIVED from the repository layout rather than typed here.
+#   R8  no REPOSITORY PATH GIT DOES NOT CARRY — the same pattern, the same
+#       scopes, the opposite half of the question: a file that is HERE because
+#       it is gitignored resolves for the author and for nobody else. See the
+#       section below; R7 and R8 fork on existence and never both fire.
 #
 # AND THE THINGS THAT ARE COUNTED RATHER THAN BANNED — the run prints which of
 # them reaches which scope, so this list is a description and never the answer:
@@ -383,6 +387,44 @@
 # false positives. Its vacuity arm asserts the RESOLVING count is non-zero,
 # because a pattern that stopped matching paths would print the same clean line
 # as a repository with no dangling ones.
+#
+# ── R8: A PATH THAT RESOLVES ONLY ON THE AUTHOR'S MACHINE ───────────────────
+#
+# R7 asks whether a path EXISTS and its header says why: «`File.exist?` and not
+# `git ls-files` on purpose: a path this repository generates but does not track
+# (`e2e/.gems`, a demo's `tmp/`) is still a path a reader can follow.» That is
+# right about GENERATED paths and silent about a third case, which is the one
+# that shipped: a path that exists here because it is GITIGNORED — a personal
+# file nothing in this repository produces. It resolves for the author, for the
+# author only, and R7 reads it as clean.
+#
+# It is not hypothetical. `e2e/README.md` and `e2e/run.sh` told a reader that
+# «`e2e/mise.toml` pins the version this harness is actually run and gated on»,
+# and `CLAUDE.md` said «Ruby 4.0.1 (`.mise.toml`)». MEASURED: `git ls-files
+# reference/e2e` carries no `mise.toml`, and `git check-ignore -v e2e/mise.toml`
+# answers `.gitignore:27:mise.toml`. The file is on this laptop and in no clone.
+# R7 was green on all three sentences the whole time, and `reference/README.md`
+# two directories over already said the opposite («No toolchain pin ships in this
+# repository … are gitignored so each developer manages their own»), so the tree
+# disagreed with itself and nothing said so.
+#
+# THE FORK BETWEEN R7 AND R8 IS EXISTENCE, AND THEY NEVER BOTH FIRE. A token the
+# working tree does not have at all is R7's (the reader cannot follow it here
+# either). A token the working tree HAS and git does not is R8's, and its remedy
+# is the opposite one: not «point at what is there now» but «say what a reader
+# actually has, or track the file».
+#
+# A GENERATED path is deliberately NOT exempted, and that is the whole of the
+# difference from R7's reasoning. `e2e/.gems` and a demo's `tmp/` are DIRECTORIES
+# and R8 asks about files; a generated FILE named in shipped prose is a file the
+# reader gets by running something, and the sentence that names it should say so
+# — which is a sentence R8 makes somebody write. MEASURED at head before the rule
+# existed, over every tracked file in this repository (not just the scopes): the
+# residue is TWO distinct tokens — `e2e/mise.toml`, cited only by the CHANGELOG
+# entry recording this very fix, and `kiosk-server/Gemfile.lock` inside
+# `bin/check-gem-packaging`. Neither is in a scope this guard reads (the
+# changelog is `ROOT_NOT_READ`, `bin/` is Phil's standing exemption), so the rule
+# lands on a clean tree with no exemption of its own and nothing excused.
 #
 # ── C1: THE `used to` CENSUS — PRINTED, NEVER RED ──────────────────────────
 #
@@ -681,9 +723,38 @@ REPO_PATH_RE =
 
 # The tokens on one line that name nothing. `File.exist?` and not `git ls-files`
 # on purpose: a path this repository generates but does not track (`e2e/.gems`,
-# a demo's `tmp/`) is still a path a reader can follow.
+# a demo's `tmp/`) is still a path a reader can follow. R8 below takes the case
+# this sentence does not cover — a path that exists ONLY because it is ignored.
 def unresolved_paths(line)
   line.scan(REPO_PATH_RE).uniq.reject { |t| File.exist?(File.join(REPO, t)) }
+end
+
+# What git carries. Read once, from the repository this script is checking, so
+# the answer is the same here and in CI.
+def tracked_paths
+  @tracked_paths ||=
+    IO.popen(["git", "-C", REPO, "ls-files", "-z"], &:read).split("\0").reject(&:empty?).to_set
+end
+
+# R8's decision, as a PURE predicate over three facts, so the self-test can walk
+# every branch without planting a gitignored file inside this repository —
+# which is the one plant this guard must never make, because a plant that is
+# invisible to `git status` is a plant a restore step cannot find.
+#
+# `exists` and `tracked` are the two questions; the third is that a DIRECTORY is
+# not this rule's business (`e2e/.gems`, `tmp/`, `log/` are the generated trees
+# R7's header names, and naming one is naming a place rather than a document).
+def author_only?(exists:, tracked:, directory:)
+  exists && !tracked && !directory
+end
+
+# The tokens on one line that resolve HERE and nowhere else.
+def author_only_paths(line)
+  line.scan(REPO_PATH_RE).uniq.select do |t|
+    full = File.join(REPO, t)
+    author_only?(exists: File.exist?(full), tracked: tracked_paths.include?(t),
+                 directory: File.directory?(full))
+  end
 end
 
 # `scopes` is which published surface each rule speaks for. R4 reaches every
@@ -702,8 +773,13 @@ RULES = [
     what: "a retired wire version", none: "no retired wire version", prose_only: true },
   { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy root],
     what: "a sentence narrating a past state", none: "no narration of a past state" },
-  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware], resolve: true,
-    what: "a repository path that does not exist", none: "no dangling repository path" }
+  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
+    resolve: :missing,
+    what: "a repository path that does not exist", none: "no dangling repository path" },
+  { id: "R8", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
+    resolve: :author_only,
+    what: "a repository path git does not carry",
+    none: "no path that resolves only on the author's machine" }
 ].freeze
 
 # A bare `used to`, with the copula excluded because R6 already fails on it and
@@ -1445,7 +1521,11 @@ def scan(path, rules = RULES)
 
       # A resolving rule matches a SHAPE and is only a violation when the thing
       # the shape names is absent, so the pattern alone decides nothing.
-      dangling = rule[:resolve] ? unresolved_paths(line) : nil
+      dangling =
+        case rule[:resolve]
+        when :missing     then unresolved_paths(line)
+        when :author_only then author_only_paths(line)
+        end
       next if dangling&.empty?
 
       # A citation line the lexer never reached cannot be classified, and
@@ -1491,7 +1571,9 @@ REMEDY = {
   "R6" => "a reader arriving today has no memory to correct. State the property in the present; if " \
           "it is a caveat they can still meet, say what they will meet",
   "R7" => "the path names nothing — a reader cannot follow it. Point at what is there now, or " \
-          "drop the reference and state the property"
+          "drop the reference and state the property",
+  "R8" => "the file is on YOUR disk and in nobody's clone — git does not carry it. Say what a " \
+          "reader actually has, or track the file"
 }.freeze
 
 # `per:` STATES THE FILE SET AND NOTHING ELSE, and `door:` states WHY a scope
@@ -2161,6 +2243,38 @@ def self_test
                  scan(gone, rules_for(scope)).first.any? { |h| h.rule[:id] == "R7" })
     end
 
+    # ── R8: a path that resolves ONLY here ──────────────────────────────────
+    #
+    # The DECISION is exercised as a pure predicate rather than by planting a
+    # gitignored file inside this repository. That plant is the one this guard
+    # must never make: a file git does not see is a file `git status` cannot
+    # show, so a restore step has nothing to find it by — which is the same
+    # invisibility the rule itself is about.
+    check.call("R8 fires on a path that EXISTS and git does not carry",
+               author_only?(exists: true, tracked: false, directory: false))
+    check.call("…and NOT on a path git carries — the tracked set is what makes it a rule " \
+               "and not a ban on every path",
+               !author_only?(exists: true, tracked: true, directory: false))
+    check.call("…and NOT on a path that is absent altogether: that is R7's, and the two " \
+               "must never both fire on one token",
+               !author_only?(exists: false, tracked: false, directory: false))
+    check.call("…and NOT on a DIRECTORY — `e2e/.gems` and a demo's `tmp/` are the generated " \
+               "trees R7's header names, and naming a place is not naming a document",
+               !author_only?(exists: true, tracked: false, directory: true))
+
+    r8 = ->(pth) { scan(pth).first.select { |h| h.rule[:id] == "R8" } }
+    check.call("R8 does NOT flag a TRACKED path, over the real repository",
+               r8.call(live).empty?)
+    check.call("R8 does NOT flag an ABSENT path, over the real repository — R7 owns that " \
+               "token and reports it exactly once",
+               r8.call(gone).empty? && r7.call(gone).size == 1)
+
+    rule_scopes.call("R8").each do |scope|
+      check.call("R8 reaches the #{scope} scope — a path only the author can follow is " \
+                 "equally unfollowable for every reader",
+                 rules_for(scope).any? { |r| r[:id] == "R8" })
+    end
+
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.
     _, unlexable = plant.call("unlexable", "broken.rb", "\0\0# K-1035\n")
@@ -2579,9 +2693,9 @@ def self_test
   check.call("R1-R2 do NOT reach the deploy runbook — an opaque token costs its ssh-key " \
              "reader a lookup, not a misreading",
              (rules_for(:deploy).map { |r| r[:id] } & %w[R1 R2]).empty?)
-  check.call("R3-R7 DO — this repository is published, so a stranger reads the runbook " \
+  check.call("R3-R8 DO — this repository is published, so a stranger reads the runbook " \
              "whatever key they hold",
-             (%w[R3 R4 R5 R6 R7] - rules_for(:deploy).map { |r| r[:id] }).empty?)
+             (%w[R3 R4 R5 R6 R7 R8] - rules_for(:deploy).map { |r| r[:id] }).empty?)
   check.call("a gem is NOT in the deploy scope",
              deploy_paths.none? { |p| p.include?("/kiosk-server/") })
 
@@ -2635,6 +2749,18 @@ def self_test
   check.call("R7's pattern still RESOLVES repository paths in scope (#{resolving} token(s)) " \
              "— a pattern that matched nothing would read as a clean tree",
              resolving.positive?)
+
+  # ── VACUITY: R8's tracked set must be a REAL answer. An empty one makes every
+  #    path in the tree a violation; a universal one makes the rule cover
+  #    nothing and print the same clean line either way. ──────────────────────
+  check.call("R8's tracked set is populated (#{tracked_paths.size} path(s))",
+             tracked_paths.size > 500)
+  check.call("…and it contains files this guard reads, so the lookup is answering about " \
+             "the same tree the scan walks",
+             %w[README.md e2e/README.md kiosk-server/README.md].all? { |f| tracked_paths.include?(f) })
+  check.call("…and it does NOT contain an ignored path, so `git ls-files` is being read " \
+             "rather than a directory listing",
+             !tracked_paths.include?("e2e/.gems") && !tracked_paths.include?("kiosk-server/Gemfile.lock"))
 
   # ── the C-family and Swift comment reader (K-1554) ───────────────────────
   #

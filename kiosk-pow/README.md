@@ -7,7 +7,7 @@ Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) f
 > Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
 > so a flood of bad proofs is a DoS on the *verifier* — the exact failure the
 > asymmetric-verify goal exists to prevent. This gem stays in the repo as an
-> opt-in backend and reference; it is no longer wired into demos or docs.
+> opt-in backend and reference; no demo, harness or deploy runbook wires it.
 
 ## What it is
 

@@ -48,7 +48,7 @@ at all. Same machine, same tool, same 5 samples:
 
 Reproduce with `python3 bench/bench.py --grid 96,5 168,7 --samples 5 --markdown`.
 Two orders of magnitude separate the levels, in time and in memory both, and
-that gap is the reason the deploy documents no longer put a seconds figure on
+that gap is the reason the deploy documents put no seconds figure on
 `low`: it is sub-second on anything, and a number would only pretend to a
 precision the hardware does not have. The 168/7 p95 above is noisier than the
 grid's ~10.3 s (one sample in five ran long on a busy laptop); the p50 is the

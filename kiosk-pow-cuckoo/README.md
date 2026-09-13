@@ -7,7 +7,7 @@ Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 > Cuckatoo meets the asymmetric-verify bar, but needs
 > ~4 GiB solves and heavier solver tooling (this gem ships only a toy solver),
 > so it is not the default. It stays in the repo as an opt-in backend and may
-> return as a first-class extension; it is no longer wired into demos or docs.
+> return as a first-class extension; no demo, harness or deploy runbook wires it.
 
 ## What this is
 
@@ -184,7 +184,7 @@ blake2b-256(sorted_cycle_edges_as_LE_u64) < target
 
 **TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
 
-Cuckatoo is no longer wired into any demo app. The solve → verify loop at the
+No demo app wires Cuckatoo. The solve → verify loop at the
 toy params is exercised by this gem's cross-impl parity gate (see the Solver
 section above):
 

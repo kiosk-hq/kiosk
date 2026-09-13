@@ -124,7 +124,7 @@ Kiosk::Reputation::Challenge.verify(
 
 Two things this buys: a challenge minted just before a difficulty raise stops
 being solvable at the old cheap parameters for the rest of its TTL, and a leaked
-HMAC secret no longer lets a self-signed `{n: 8, k: 1}` challenge turn the toll
+HMAC secret cannot let a self-signed `{n: 8, k: 1}` challenge turn the toll
 off — the toll degrades rather than vanishing. `kiosk-server`'s gate always
 passes `expect:`; it is optional here so an existing embedder keeps working.
 
@@ -219,7 +219,7 @@ class MyPolicy < Kiosk::Reputation::Policy
   #   is the worked example that EXERCISES a :run branch (rake demo:browse) —
   #   because branching on :action would otherwise be silent: it matches
   #   nothing, so the toll never applies to a write and no error, log line or
-  #   test says so. kiosk-server no longer lets it be silent: assigning a
+  #   test says so. kiosk-server does not let it be silent: assigning a
   #   policy whose #challenge_for compares the verb against :action (or a
   #   reputation_factors callable that does) raises
   #   Kiosk::Server::Errors::ConfigurationError from

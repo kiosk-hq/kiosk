@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **Eight shipped sites said an unregistered verb path answers 401 without a bearer.** The redteam beat they cite asserts 404 for both callers; measured by running it.
 - 2026-09-13: **The deploy runbook pinned Ruby to `.mise.toml`, which is gitignored.** Fourth site of the class R8 was built for, and R8's recogniser could not see a root-level name.
 - 2026-09-13: **R8 now reads root-level filenames, and yields to a sentence that says the file does not ship.** The three honest «is gitignored» citations stay green.
 - 2026-09-13: **The deploy checklist carried a one-time schema repair that was already done.** The fleet was rebuilt on the date `FLEET_SCHEMA_BASELINE` records; the mechanism stays, the incident goes.

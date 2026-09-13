@@ -45,17 +45,14 @@ class ApplicationController < ActionController::Base
         code:    "invalid_authenticity_token",
         message: "this is the human sign-in page, not the Kiosk wire — it needs a " \
                  "browser session and a CSRF token from its own form",
-        # NAME WHAT THE DOCUMENT CARRIES, NEVER A VERB LIST. A hint naming «the
-        # register/login and schema/query/run/pay endpoints» would be false on
-        # both readings: `query` and `run` name no registered verb, so `POST
-        # /kiosk/query` and `POST /kiosk/run` answer the ordinary 404 an
-        # AUTHENTICATED caller gets, and 401 without a bearer, since auth
-        # precedes verb dispatch (this app's own redteam beat asserts both);
-        # and `capabilities` publishes MODULE names (schema/queries/actions/pay).
-        # A list here is a third copy of the catalog — kiosk.json deliberately
-        # publishes no verb names — so it would rot the same way. The reader of
-        # this body is a JSON-dialing assistant that has just hit the human
-        # sign-in page: it cannot check the hint.
+        # NAME WHAT THE DOCUMENT CARRIES, NEVER A VERB LIST. A hint that
+        # enumerated verbs would be a third copy of the catalog: `GET
+        # /kiosk/schema` is the contract, `/.well-known/kiosk.json` deliberately
+        # publishes no verb names, and `capabilities` publishes MODULE names
+        # (schema/queries/actions/pay) rather than verbs — so a list here would
+        # rot the way every duplicate does. The reader of this body is a
+        # JSON-dialing assistant that has just hit the human sign-in page: it
+        # cannot check the hint.
         hint:    "assistants authenticate with their own keypair: GET " \
                  "#{request.base_url}/.well-known/kiosk.json for the register/login " \
                  "endpoints, the catalog link and the modules this origin serves",

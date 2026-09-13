@@ -14,7 +14,7 @@
  *
  *   UNLOCK (write):
  *     On WRITE of the wire rental token
- *       "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+ *       "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
  *     the lock:
  *       1. Calls skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)
  *          which checks: Ed25519 sig valid, scooter_code matches, exp > now.

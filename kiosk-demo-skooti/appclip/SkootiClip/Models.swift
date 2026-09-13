@@ -101,10 +101,11 @@ enum Configuration {
 
     // ── DEMO STUB ─────────────────────────────────────────────
     // A hard-coded rental token used when the launch URL does not carry rt=.
-    // It is the firmware host test's known-answer vector (SCOOTER_CODE=SK-001),
-    // the same bytes `firmware/host_test.c` and `firmware/skooti_lock.ino`
-    // print — so the lock accepts it only while its clock reads under
-    // 1750000900 (the exp), which the sketch's DEMO_NOW constant satisfies.
+    // It is the firmware host test's known-answer vector (SCOOTER_CODE=SK-001):
+    // the same bytes `firmware/host_test.c` verifies as its WIRE_TOKEN and
+    // `firmware/skooti_lock.ino` quotes in its wire-format block — so the lock
+    // accepts it only while its clock reads under 1750000900 (the exp), which
+    // the sketch's DEMO_NOW constant satisfies.
     //
     // REPLACE with a freshly-issued token before any on-device test.
     static func demoHandoff(scooterCode: String) -> AgentHandoff {

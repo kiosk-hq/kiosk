@@ -115,7 +115,7 @@ final class LockBLE: NSObject, ObservableObject {
     /// Call this once `state == .discovered`.
     ///
     /// The token is the raw `rt` string from the launch URL:
-    ///   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+    ///   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
     ///
     /// This is written as UTF-8 bytes — identical to what verify.c and
     /// LockSim#unlock receive.

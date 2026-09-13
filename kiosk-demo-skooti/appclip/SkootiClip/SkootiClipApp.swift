@@ -10,7 +10,7 @@
 //        b. Shows UnlockView and starts the BLE flow.
 //
 // The rt= parameter carries the provider-signed rental token:
-//   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+//   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 // The assistant's personal-agent app obtains this token after pay/start_rental
 // and encodes it into the NFC tag URL / App Clip Code deep-link.  The App Clip
 // writes it verbatim to the lock over BLE; the lock verifies it offline (Ed25519).

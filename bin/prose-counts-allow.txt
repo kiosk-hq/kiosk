@@ -22,6 +22,13 @@
 # name, a quantity the sentence itself enumerates in full, or a constant that
 # belongs to a different artefact.
 
+CLAUDE.md ¦ eight apps ¦ from: git ls-files 'kiosk-demo-*/config/application.rb' | wc -l ¦ the demo Rails apps the opening paragraph enumerates — seven operators plus the KYC broker, one Rails application each.
+CLAUDE.md ¦ seven operators ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the demos that mount the Kiosk wire; the broker mounts none and has no initializer, which is the distinction the sentence draws.
+CLAUDE.md ¦ 14 gems ¦ from: git ls-files '*.gemspec' | wc -l ¦ what bin/check-gem-packaging builds, one gemspec each; the sentence is about that guard's corpus.
+CLAUDE.md ¦ two demos ¦ not a count: "a file that exists in two or more demos" is a threshold on a rule, not a population the tree can be asked for.
+CLAUDE.md ¦ two copies ¦ not a count: "a unit name appearing in two or more copies" is the same threshold one sentence later, said of units instead of files.
+CLAUDE.md ¦ one documents ¦ not a count: the numeral belongs to "one of those documents" — a pronoun for a single member of a set named earlier, not a size.
+
 README.md ¦ four demos ¦ from: git ls-files 'kiosk-demo-*/before-after.md' | wc -l ¦ the demos carrying the long-form contrast document; the sentence names all four.
 
 deploy/CHECKLIST.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, i.e. every demo that mounts the Kiosk wire; the KYC broker mounts none and has no initializer.

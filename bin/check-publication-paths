@@ -120,7 +120,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "82ea3eba16a21f499e26144222d0ee659e216e05e1753f9cfdc24aadd39df65c"
+TWIN_DIGEST = "e48a45a4009ee6b93b93ab2949af08f0860e0ca2804c5009ada9d86533cb36d8"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -259,16 +259,18 @@ end
 # an exemption nobody can audit is how a gate gets switched off within a week.
 # Every run prints how many findings each entry suppressed, so an entry that has
 # stopped carrying weight is visible rather than assumed.
+#
+# THE LIST STARTS AT AL-2 AND THAT IS NOT A TYPO. `AL-1` exempted `CLAUDE.md`
+# at any depth, on the stated ground that these files "are removed WHOLE when
+# the repository is published, so their contents are not shipped content".
+# MEASURED 2026-09-13 (K-1556): both repositories are ALREADY public and each
+# serves its own `CLAUDE.md` anonymously at HTTP 200, so the ground was false
+# and the door was holding back live findings -- one of them the last surviving
+# instance of K-1049. The entry is gone, `CLAUDE.md` is held like every other
+# shipped file, and RED_EXTRA plants PM-1's own text in one so the exemption
+# cannot grow back unnoticed. The ids of the entries below are NOT renumbered:
+# they are printed on every run and quoted in the ledger.
 ALLOW = [
-  {
-    id: "AL-1",
-    scope: "CLAUDE.md, at any depth",
-    arms: :all,
-    why: "these files are development-time instructions for the working copy and are removed WHOLE " \
-         "when the repository is published, so their contents are not shipped content. Rewording a " \
-         "line inside one lowers a count and changes what ships by zero bytes.",
-    match: ->(path, _line) { File.basename(path) == "CLAUDE.md" },
-  },
   {
     id: "AL-2",
     scope: "CHANGELOG.md, at any depth",
@@ -847,17 +849,16 @@ GREEN_FIXTURES = {
     "# The normative text is kiosk.tech/specification.html and kiosk.tech/spec/protocol.md §8.3;",
     "# the harness lives at reference/e2e/run.sh.",
   ],
-  # The two blanket-exempt files carry EVERY forbidden shape at once, and they
-  # take them from the table rather than re-spelling them: a fixture that
-  # re-types a pattern's text drifts from it, and re-typing is also what puts a
-  # second copy of each forbidden token in this file for a cross-repository
-  # inventory to report. `§99.9` resolves to nothing, so each of these two is
-  # green only because its entry suppressed both the pattern arms AND the
-  # section arm.
+  # The blanket-exempt file carries EVERY forbidden shape at once, and it takes
+  # them from the table rather than re-spelling them: a fixture that re-types a
+  # pattern's text drifts from it, and re-typing is also what puts a second copy
+  # of each forbidden token in this file for a cross-repository inventory to
+  # report. `§99.9` resolves to nothing, so it is green only because AL-2
+  # suppressed both the pattern arms AND the section arm. (`CLAUDE.md` stood
+  # here too until K-1556 measured its exemption's premise false; it is a RED
+  # fixture now.)
   "CHANGELOG.md" => ["- an entry recording, in §99.9 of a vintage since renumbered, that:"] +
                     PATTERNS.flat_map { |pat| pat[:example] },
-  "CLAUDE.md" => ["Stripped whole at publish; also cites §99.9. Everything below goes with it:"] +
-                 PATTERNS.flat_map { |pat| pat[:example] },
 }.freeze
 
 # Shapes that MUST fire, beyond the one example each table entry carries. A list
@@ -865,6 +866,12 @@ GREEN_FIXTURES = {
 # and none of them implies the others.
 RED_EXTRA = [
   ["SEC-1", "lib/dangling.rb", ["# per §99.9 the wire is additive"]],
+  # `CLAUDE.md` IS SHIPPED CONTENT AND THIS IS WHAT HOLDS IT THAT WAY (K-1556).
+  # It was blanket-exempt here until its exemption's premise -- "removed WHOLE
+  # when the repository is published" -- was measured false against two already
+  # public repositories. The plant takes PM-1's own example rather than a retyped
+  # copy, so it cannot drift from the pattern it proves.
+  ["PM-1", "CLAUDE.md", PATTERNS.find { |pat| pat[:id] == "PM-1" }[:example]],
   # AL-4 NARROWED (K-1158). An id used as an adjective DATES a citation of OUR
   # section; it does not name the document being cited, so the citation has to be
   # resolved like any other. Before the narrowing both of these were exempt and
@@ -1021,7 +1028,7 @@ def run_self_test
     # exemption stopped firing the tree would redden -- and reading the
     # per-entry suppression counts back says WHICH entry did the work.
     counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
-    { "AL-1" => 1, "AL-2" => 1, "AL-3" => 3, "AL-4" => 2,
+    { "AL-2" => 1, "AL-3" => 3, "AL-4" => 2,
       "AL-7" => DECLARED_DEV_KEYS.size }.each do |id, want|
       got = counted[id].to_i
       if got < want

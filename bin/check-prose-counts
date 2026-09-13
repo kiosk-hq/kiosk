@@ -232,6 +232,14 @@ BARE_MARKER = /\Acount:\s*(\d+)\s*¦\s*from:\s*(.+?)\s*\z/.freeze
 # it is" stays a measurement.
 #
 #   :prose     Markdown -- what a reader of this repository is shown. GATED.
+#              `CLAUDE.md` IS IN THIS CLASS AND USED TO BE OUT OF IT, on the
+#              stated ground that it is "removed whole at publication; not
+#              shipped content". MEASURED FALSE 2026-09-13 (K-1556): this
+#              repository is public and serves its own CLAUDE.md at HTTP 200.
+#              Bringing it in surfaced six counts, three of them re-derivable
+#              (the demo apps, the operator demos, the gems this repo builds)
+#              and now MEASURED from bin/prose-counts-allow.txt rather than
+#              invisible. `CHANGELOG.md` stays out, on a reason of its own.
 #   :env       An environment template's `#` commentary -- what a deployer reads
 #              before switching a knob on, which is the reader K-1217 was about.
 #              GATED, and read as comment prose rather than as Markdown.
@@ -249,7 +257,6 @@ BARE_MARKER = /\Acount:\s*(\d+)\s*¦\s*from:\s*(.+?)\s*\z/.freeze
 def classify(rel)
   base = File.basename(rel)
   return nil if base == "CHANGELOG.md"   # append-only: an old entry records the tree AS IT WAS
-  return nil if base == "CLAUDE.md"      # removed whole at publication; not shipped content
   return :prose   if rel.end_with?(".md")
   return :env     if base.end_with?(".env.example")
   return :gemspec if rel.end_with?(".gemspec")

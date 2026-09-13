@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **`CLAUDE.md` is shipped content and is now guarded as such.** It was exempt on the claim it is stripped at publication; this repository is already public.
 - 2026-09-13: **`check-shipped-archaeology` gains `--list`, a gem's `test/`, and every Markdown page under a demo.** Its scope could not say what it MISSED, and four surfaces were unread.
 - 2026-09-13: **`deploy/` and the repo root stop quoting decisions in Russian and naming a maintainer.** `bin/check-shipped-archaeology` now reaches both surfaces.
 - 2026-09-13: **A vacuity guard in check-demo-copies must now be proven by an arm, and the run says which are not.** A detector nobody detects is the failure it watches for.

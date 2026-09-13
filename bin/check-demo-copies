@@ -204,10 +204,17 @@ ROOT = File.expand_path("..", __dir__)
 #     deleted; not one was reproducible by the next session. Each arm below is one
 #     of those nine, or a sibling of one, kept.
 #
-# The five VACUITY guards this file already runs on every invocation answer a
+# The IN-BAND VACUITY GUARDS this file runs on every invocation answer a
 # DIFFERENT question and are not replaced here: «does this rule still have a live
 # subject in the tree in front of you». No fixture can answer that, and no vacuity
 # guard can answer «does the rule still fail on a violation».
+#
+# HOW MANY OF THEM THERE ARE IS NOT WRITTEN HERE, and that is the T-155 fix. This
+# sentence used to say «the five», and it said five for as long as the file grew
+# past eight thousand lines — a figure in a comment being the one thing nothing
+# checks. The count is now DERIVED by `--self-test` from this file's own source
+# and printed in its `note:` line, together with how many of those guards have an
+# arm proving they fire. Read that line, not this paragraph.
 #
 # HOW IT RUNS. `git ls-files --cached --others --exclude-standard` in ROOT, copied
 # into throwaway trees under a mktmpdir; one is checked green as a BASELINE; then
@@ -246,13 +253,16 @@ ROOT = File.expand_path("..", __dir__)
 #     because of it.
 #   * The `:vacuity` arms prove the GUARD fires when its counter reads zero. They
 #     do NOT prove the counter tracks what its name says.
-#   * Most rules carry an in-band vacuity guard and only some of those guards
-#     have an arm here; neither count is typed, for K-1340's reason — `--list`
-#     marks a vacuity arm `V` and a break arm `B`, so both are read off the
-#     table. `--self-test --list` prints the coverage
-#     table — which rules have an arm, of which kind — derived from this file's
-#     own `# ── … ──` banners rather than from a list, so a rule added later reads
-#     as UNCOVERED rather than as absent.
+#   * Many rules carry an in-band vacuity guard; SINCE T-155 every one of them
+#     must carry a `:vacuity` arm too, and the run fails naming the rule when one
+#     does not. That coverage is derived from the source — a section is "guarded"
+#     when it raises an error whose own words say a measurement stopped measuring
+#     — so a guard added later reads as UNPROVEN rather than as absent. The test
+#     is a LEXICAL proxy over those sentences, declared as one: its floor is
+#     asserted, and the two sections it reads wrongly are exempted by name with a
+#     reason that itself goes red when it stops applying. Neither count is typed
+#     into this comment, for K-1340's reason — `--list` marks a vacuity arm `V`
+#     and a break arm `B`, and the `note:` line prints the guard census.
 #   * The fixture is a copy of the WORKING tree, so an arm is only as meaningful
 #     as the baseline: a red bare run makes this red too, by design, and says so
 #     before it runs anything else.
@@ -307,9 +317,56 @@ if ARGV.include?("--self-test")
     "The e2e harness's fixtures, paired with the demo files they came from",
   ].freeze
 
+  # ── T-155: THE IN-BAND VACUITY GUARDS, AND WHICH OF THEM IS PROVEN ────────
+  #
+  # A `:vacuity` arm proves that ONE in-band guard fires. Nothing said how many
+  # in-band guards there are, so the ones with no arm were invisible: the header
+  # said only that "most rules carry one and only some of those have an arm
+  # here", and the number behind "some" was never derived. That is the same
+  # shape as every failure this file exists for — a detector nobody detects.
+  #
+  # So the coverage question is asked of the SOURCE. A rule's section is
+  # "guarded" when it raises an error whose own words say a MEASUREMENT stopped
+  # measuring, and every guarded section must carry a `:vacuity` arm.
+  #
+  # THIS IS A LEXICAL PROXY AND IT IS DECLARED AS ONE. There is no syntax that
+  # distinguishes an in-band vacuity guard from any other `errors <<`; what
+  # distinguishes it is what its sentence says. So the vocabulary below is the
+  # instrument, its FLOOR is asserted (a vocabulary that stops matching would
+  # print the same clean coverage as a fully-armed file), and the two sections
+  # it reads wrongly are exempted BY NAME with the reason — an exemption that
+  # goes stale reddens, exactly like SELF_TEST_NOT_A_RULE above.
+  SELF_TEST_VACUITY_VOCAB = Regexp.union(
+    /stopped matching/i, /stops matching/i, /no longer match/i, /clean zero/i,
+    /reads as coverage/i, /vacuou/i, /read 0 /i, /reads 0 /i, /came back empty/i,
+    /matched nothing/i, /matches nothing/i, /holding nothing/i, /compares nothing/i,
+    /has stopped/i, /no live subject/i, /means nothing/i, /switched off/i,
+    /cannot read is not/i, /over an empty/i, /empty corpus/i, /did not check them/i,
+    /stopped being/i, /reads exactly like/i, /no rule read/i
+  )
+
+  # Sections the vocabulary reads as guarded that are NOT: a per-item complaint
+  # that happens to contain one of these phrases. Each must still be matched by
+  # the proxy, or the exemption is stale and says so.
+  SELF_TEST_VACUITY_PROXY_EXEMPT = {
+    "The one comparison this whole file exists for" =>
+      "its two hits are the stale-`except:` and misplaced-`agree:` complaints, which say a MAP " \
+      "records nothing — a declaration being wrong, not a measurement having stopped",
+    "The e2e fixture rule runs (T-118)" =>
+      "its hit is the per-fixture `silently compares nothing` message, raised for ONE unpaired " \
+      "fixture; the rule's corpus is E2E_FIXTURES itself, which cannot go empty without the " \
+      "undeclared-entry arm firing first"
+  }.freeze
+
+  # The floor is the number of guarded sections measured when this was written.
+  # It is a MEASUREMENT, not a target: it may rise freely, and a fall means
+  # either a guard was deleted or the vocabulary above stopped reading one.
+  SELF_TEST_VACUITY_FLOOR = 14
+
   # The one rule with no `# ── … ──` banner, declared so the check below can tell
   # «an arm for an unbannered rule» from «an arm for a banner that has moved».
-  # It is the twentieth invariant; see the note on the header's count.
+  # Its position in the count is not written down: `--self-test --list` prints
+  # the invariant total, derived from this file's banners plus this one line.
   SELF_TEST_UNBANNERED = ["every demo lockfile resolves for the SAME platforms (K-962)"].freeze
 
   # THE PLANT TABLE. `rule:` is the banner the arm aims at, verbatim, so coverage
@@ -1010,6 +1067,56 @@ if ARGV.include?("--self-test")
             "compose files against nothing and any major at all reads as clean",
       ops:  [[:edit, ".github/workflows/ci.yml", "image: postgres:17", "image: pg-service:17"]],
       expect: /no `image: postgres:<major>` in \.github\/workflows\/ci\.yml/ },
+
+    # ── T-155: SIX ARMS FOR IN-BAND VACUITY GUARDS THAT HAD NONE ─────────────
+    #
+    # The five rules below each carry a guard that fires when the rule's own
+    # measurement stops measuring, and not one of those guards was proven by
+    # anything until now — which put the detector in exactly the position of the
+    # thing it detects. `st_unproven` below derives the gap from this file rather
+    # than trusting this comment to stay true.
+    { id: "vacuity-prose-superclass", kind: :vacuity,
+      rule: "application_controller.rb's PROSE must stay true (K-1021)",
+      what: "the superclass scan stops reading `class Kiosk::…Controller < …`, so every demo's " \
+            "prose is compared against nothing it could contradict",
+      ops:  [[:edit, "bin/check-demo-copies", "class\\s+(Kiosk::[A-Za-z0-9_:]+)", "class\\s+(KioskGone::[A-Za-z0-9_:]+)"]],
+      expect: /the K-1021 prose rule would pass vacuously here/ },
+
+    { id: "vacuity-env-template-corpus", kind: :vacuity,
+      rule: "A deploy/env template may not cite a path that is not there (K-1093)",
+      what: "the template directory moves, so the cite rule inspects nothing and every template " \
+            "citation reads as resolved",
+      ops:  [[:edit, "bin/check-demo-copies", 'ENV_TEMPLATE_DIR  = "deploy/env"', 'ENV_TEMPLATE_DIR  = "deploy/env-moved"']],
+      expect: /the K-1093 template-cite rule read 0 template\(s\)/ },
+
+    { id: "vacuity-prose-path-cite", kind: :vacuity,
+      rule: "A comment in a compared file may not cite something that is not there",
+      what: "PROSE_PATH_CITE stops matching, so no header is read as pointing at a file and the " \
+            "dead-path ban holds nothing — the block's own header asks for one arm per pattern",
+      ops:  [[:edit, "bin/check-demo-copies", "(?:rb|yml|yaml|erb|sql|py|json|md|txt)\\b", "(?:zzznosuchsuffix)\\b"]],
+      expect: /found NO source-path citation in any of/ },
+
+    { id: "vacuity-prose-code-ref", kind: :vacuity,
+      rule: "A comment in a compared file may not cite something that is not there",
+      what: "PROSE_CODE_REF stops matching, so no `{Constant}` reference is read and the dead-constant " \
+            "half of the same ban holds nothing while the path half still does",
+      ops:  [[:edit, "bin/check-demo-copies", "PROSE_CODE_REF  = /\\{(", "PROSE_CODE_REF  = /\\{ZZZ("]],
+      expect: /found NO `\{Constant\}` reference in any/ },
+
+    { id: "vacuity-framework-corpus", kind: :vacuity,
+      rule: "Cross-demo PROSE about the FRAMEWORK (K-1069)",
+      what: "the corpus stops reading config/routes/kiosk.rb, where T-183 put every framework " \
+            "sentence about the wire — so the rule agrees with itself across nothing",
+      ops:  [[:edit, "bin/check-demo-copies", 'wire_read   = corpus.count { |_, d| d.key?("config/routes/kiosk.rb") }',
+              'wire_read   = corpus.count { |_, d| d.key?("config/routes/kiosk-gone.rb") }']],
+      expect: /the K-1069 corpus read 0 config\/routes\/kiosk\.rb/ },
+
+    { id: "vacuity-bin-ref-pattern", kind: :vacuity,
+      rule: "Every `bin/` script a demo names EXISTS and is runnable (K-1315)",
+      what: "BIN_REF_RE stops matching, so no README or script is read as naming a bin/ script and " \
+            "the whole exists-and-is-runnable rule resolves nothing",
+      ops:  [[:edit, "bin/check-demo-copies", "(?:\\./)?bin/([a-z0-9_][a-z0-9_-]*)", "(?:\\./)?bin-gone/([a-z0-9_][a-z0-9_-]*)"]],
+      expect: /resolved NO reference to a demo's own bin\/ script/ },
   ].freeze
 
   # ── coverage, derived from this file's own banners ────────────────────────
@@ -1021,6 +1128,46 @@ if ARGV.include?("--self-test")
 
   st_bad   = []
   st_notes = []
+
+  # ── T-155: every section with an in-band vacuity guard carries an arm ──────
+  st_src      = File.readlines(__FILE__, chomp: true)
+  st_section  = "(preamble)"
+  st_guarded  = []
+  st_src.each_with_index do |line, i|
+    if (b = line[/\A# ── (.+?)\s*─*\s*\z/, 1])
+      st_section = b
+      next
+    end
+    next unless line =~ /(errors|failures)\s*<</
+    next unless st_src[i, 10].join(" ").match?(SELF_TEST_VACUITY_VOCAB)
+
+    st_guarded << st_section
+  end
+  st_guarded  = (st_guarded.uniq & st_invariants)
+  st_v_armed  = SELF_TEST_PLANTS.select { |p| p[:kind] == :vacuity }.map { |p| p[:rule] }.uniq
+  st_unproven = st_guarded - st_v_armed - SELF_TEST_VACUITY_PROXY_EXEMPT.keys
+
+  unless st_unproven.empty?
+    st_bad << "#{st_unproven.length} rule(s) raise an in-band vacuity guard and no `:vacuity` arm " \
+              "proves it fires: #{st_unproven.map(&:inspect).join(', ')}. A guard that exists to " \
+              "notice a rule being switched off, and is itself proven by nothing, is in exactly " \
+              "the position of the thing it watches (T-155). Add an arm that switches that rule's " \
+              "own MEASUREMENT off — never a violation count (K-1262)."
+  end
+  if st_guarded.length < SELF_TEST_VACUITY_FLOOR
+    st_bad << "the in-band vacuity vocabulary reads #{st_guarded.length} guarded rule(s) where " \
+              "#{SELF_TEST_VACUITY_FLOOR} were measured. Either a guard was deleted, or the " \
+              "vocabulary stopped recognising one — and a proxy that matches nothing prints the " \
+              "same clean coverage as a fully-armed file, which is the failure this whole check is."
+  end
+  if (stale = SELF_TEST_VACUITY_PROXY_EXEMPT.keys - st_guarded).any?
+    st_bad << "SELF_TEST_VACUITY_PROXY_EXEMPT names #{stale.map(&:inspect).join(', ')}, which the " \
+              "vocabulary no longer reads as guarded. The exemption is describing a file that has " \
+              "moved on: drop it, or say what it exempts now."
+  end
+  st_notes << "in-band vacuity guards: #{st_guarded.length} rule(s) raise one, " \
+              "#{(st_guarded & st_v_armed).length} of them have an arm, " \
+              "#{SELF_TEST_VACUITY_PROXY_EXEMPT.length} exempted by name (T-155)"
 
   unless st_orphans.empty?
     st_bad << "#{st_orphans.length} arm(s) name a `rule:` that is neither a banner in this file nor a " \

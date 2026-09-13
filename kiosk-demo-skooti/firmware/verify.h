@@ -15,23 +15,30 @@
  *   wire token = "<message>.<base64url(sig)>"
  *
  *   message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
- *                (UTF-8; EXACTLY 6 pipe-delimited fields — a message with
- *                 any other count is refused, whatever its signature)
- *                iat/exp = unix seconds decimal; jti = 32 hex chars
+ *                (EXACTLY 6 pipe-delimited fields — a message with any other
+ *                 count is refused, whatever its signature — and every field
+ *                 non-empty)
  *
- *   Field indices (0-based):
+ *   Field indices (0-based), with the charset each one is held to:
  *     [0] "kiosk-rental-v1"  — domain-separation tag (REQUIRED; checked first)
- *     [1] scooter_code       — e.g. "SK-001"
- *     [2] reservation_id     — e.g. "resv-1"
- *     [3] iat                — issued-at unix seconds
- *     [4] exp                — expiry unix seconds (iat + 900)
- *     [5] jti                — 32 hex chars (anti-replay token ID)
+ *     [1] scooter_code       — e.g. "SK-001"; must equal this lock's own code
+ *     [2] reservation_id     — e.g. "resv-1"; opaque here, non-empty
+ *     [3] iat                — 1-20 ASCII digits, issued-at unix seconds
+ *     [4] exp                — 1-20 ASCII digits, expiry unix seconds (iat + 900)
+ *     [5] jti                — 32 lowercase hex chars (anti-replay token ID)
  *
  *   sig        = Ed25519 signature over the message bytes (64 bytes)
  *                base64url-encoded, NO padding characters
  *
  *   Split: find the LAST '.' in the wire token — everything to the left is
  *   the message (signed verbatim), everything to the right is the sig.
+ *
+ *   THE CANONICAL STATEMENT OF THIS GRAMMAR IS ../RENTAL_TOKEN.md, and two
+ *   Ruby readers implement it beside this one: RentalTokenIssuer.verify
+ *   (server-side) and script/lock_sim.rb (the software lock). `make crosscheck`
+ *   runs one shared vector set — firmware/token_vectors.rb — through all three
+ *   and fails when any of them answers a vector differently from the other two
+ *   or from the answer the set declares.
  *
  * Example (known-answer vector):
  *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
@@ -100,6 +107,11 @@ extern "C" {
  *     more than six are both refused, so the claim read as `exp` is always the
  *     fifth field of a six-field message and never something a shifted field
  *     put there. This is the same answer the server's own Ruby verifier gives.
+ *   - So is every field's CHARSET. An empty field, an `iat` or `exp` that is
+ *     not 1-20 plain digits, and a `jti` that is not 32 lowercase hex are each
+ *     refused. This is narrower than a permissive integer parse deliberately:
+ *     the three readers of this token must refuse the same bytes, and the
+ *     widest reader is the one that decides what an adopter's fleet accepts.
  *   - b64url_decode takes a dst_cap argument and hard-stops at the buffer
  *     boundary; an oversized sig field is rejected before any stack write.
  *     An early sig_b64_len > 88 guard rejects implausibly long sig fields
@@ -107,7 +119,7 @@ extern "C" {
  *
  * After a return of 1 the caller can retrieve the jti for anti-replay by
  * re-parsing token (split on last '.', split message on '|', field[5] of
- * exactly six).
+ * exactly six, 32 lowercase hex).
  * For convenience skooti_parse_jti() is provided below.
  */
 int skooti_verify_token(const uint8_t pubkey[32],
@@ -120,7 +132,9 @@ int skooti_verify_token(const uint8_t pubkey[32],
  *
  * Call only AFTER skooti_verify_token() returns 1.
  * Copies the jti into jti_out (caller-supplied buffer of at least jti_out_sz
- * bytes, NUL-terminated).
+ * bytes, NUL-terminated). It applies the same field-count and jti-charset
+ * gates skooti_verify_token applies, so the replay store is never keyed on
+ * bytes that verifier would have refused.
  *
  * Returns 1 on success, 0 on parse error.
  */

@@ -14,9 +14,16 @@
  *   [0] domain tag      "kiosk-rental-v1"
  *   [1] scooter_code    e.g. "SK-001"
  *   [2] reservation_id  e.g. "resv-1"
- *   [3] iat             Unix seconds decimal
- *   [4] exp             Unix seconds decimal
- *   [5] jti             32 hex chars
+ *   [3] iat             1-20 ASCII digits
+ *   [4] exp             1-20 ASCII digits
+ *   [5] jti             32 lowercase hex chars
+ *
+ * The full grammar this file implements — every field's charset, the
+ * delimiter rule and the wire-length cap — is written out in
+ * ../RENTAL_TOKEN.md, which is the canonical page for this token, and the
+ * same grammar is implemented by RentalTokenIssuer.verify and by
+ * script/lock_sim.rb. `make crosscheck` runs one shared vector set
+ * (token_vectors.rb) through all three and fails on any disagreement.
  *
  * Depends on: ed25519/ (vendored orlp/ed25519, zlib license)
  */
@@ -125,6 +132,36 @@ static int parse_uint64(const char *s, size_t len, uint64_t *out)
 }
 
 /* --------------------------------------------------------------------------
+ * jti charset — exactly 32 lowercase hex characters.
+ *
+ * The issuer mints the jti as SecureRandom.hex(16), so 32 lowercase hex is
+ * what a genuine token carries and anything else is a message this lock was
+ * never meant to see. Checking it here rather than trusting it matters for one
+ * concrete reason: the jti is the KEY the replay store is written under, and
+ * jti_store's own buffer is JTI_MAX_LEN. A verifier that returns 1 on a jti the
+ * store then refuses splits the lock's answer in two — verify says yes, the
+ * unlock path says no — and a lock that answers a question two ways is a lock
+ * whose behaviour nobody can state.
+ * Returns 1 when s[0..len) is 32 characters drawn from [0-9a-f], 0 otherwise.
+ * -------------------------------------------------------------------------- */
+
+static int is_jti(const char *s, size_t len)
+{
+    size_t i;
+
+    if (len != 32) return 0;
+
+    for (i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        int digit = (c >= '0' && c <= '9');
+        int lower = (c >= 'a' && c <= 'f');
+        if (!digit && !lower) return 0;
+    }
+
+    return 1;
+}
+
+/* --------------------------------------------------------------------------
  * skooti_verify_token
  * -------------------------------------------------------------------------- */
 
@@ -153,6 +190,7 @@ int skooti_verify_token(const uint8_t pubkey[32],
     size_t      remaining;
     int         field_idx;
 
+    uint64_t iat_val;
     uint64_t exp_val;
     size_t   code_len;
 
@@ -198,9 +236,10 @@ int skooti_verify_token(const uint8_t pubkey[32],
 
     /* --- Parse the 6 pipe-delimited fields of the message ---
      * Fields: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
-     * We check field[0] (domain tag), field[1] (scooter_code), and field[4] (exp).
-     * We do NOT need iat, reservation_id, or jti here, but we must confirm exactly
-     * 6 fields are present, so a message with any other field count is rejected.
+     * Every field is checked below except reservation_id, which is opaque to the
+     * lock and constrained only to being non-empty and delimiter-free. We must
+     * confirm exactly 6 fields are present, so a message with any other field
+     * count is rejected.
      * FEWER than six is refused by the missing-'|' return in the loop below; MORE
      * than six by the last field refusing to contain one. Both halves are
      * load-bearing, and the second is the one that carries weight: extra pipes
@@ -267,9 +306,27 @@ int skooti_verify_token(const uint8_t pubkey[32],
     if (field_len[1] != code_len) return 0;
     if (!ct_memeq(field_start[1], my_scooter_code, code_len)) return 0;
 
-    /* --- Gate 2: exp (field[4]) must be > now_unix --- */
+    /* --- Gate 2: iat (field[3]) must be 1-20 ASCII digits ---
+     * The lock does not ACT on iat — exp alone bounds the window — but it does
+     * insist the field is the decimal integer the grammar says it is. The
+     * alternative is a field nobody parses, and a field nobody parses is a
+     * field every reader may read differently: this gate is what stops the
+     * lock accepting an `iat` the server's own verifier refuses.
+     */
+    if (!parse_uint64(field_start[3], field_len[3], &iat_val)) return 0;
+    (void)iat_val; /* syntax is the whole of the check */
+
+    /* --- Gate 3: exp (field[4]) must be 1-20 ASCII digits AND > now_unix ---
+     * parse_uint64 takes digits only: no sign, no separator, no surrounding
+     * space, and no value past UINT64_MAX. That is narrower than a permissive
+     * integer parse on purpose — see ../RENTAL_TOKEN.md for why the three
+     * readers spell this the same way.
+     */
     if (!parse_uint64(field_start[4], field_len[4], &exp_val)) return 0;
     if (exp_val <= now_unix) return 0;
+
+    /* --- Gate 4: jti (field[5]) must be 32 lowercase hex characters --- */
+    if (!is_jti(field_start[5], field_len[5])) return 0;
 
     /* --- All checks passed --- */
     return 1;
@@ -283,7 +340,8 @@ int skooti_verify_token(const uint8_t pubkey[32],
  * We skip the first 5 pipe-delimited fields to reach jti at field[5], and what
  * is left must be the jti ALONE — a further '|' means the message is not six
  * fields, so this reports failure rather than handing the replay store a key
- * with someone else's bytes glued to it. Same contract as
+ * with someone else's bytes glued to it — and it must be 32 lowercase hex, the
+ * same charset skooti_verify_token's Gate 4 demands. Same contract as
  * skooti_verify_token, stated in the same terms, because a caller that reached
  * here through some other path must not get a laxer answer than that one gives.
  * -------------------------------------------------------------------------- */
@@ -340,6 +398,9 @@ int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
             if (p[j] == '|') return 0; /* more than 6 fields */
         }
     }
+
+    /* ...and it must be the jti charset the grammar declares */
+    if (!is_jti(p, remaining)) return 0;
 
     memcpy(jti_out, p, remaining);
     jti_out[remaining] = '\0';

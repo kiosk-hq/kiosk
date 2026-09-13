@@ -375,13 +375,115 @@ static void test_field_count_boundary(void)
 }
 
 /*
- * Test 9 — jti_store: insert, replay detection, expiry pruning, table-full eviction
+ * Test 9 — field CONTENT boundary, every vector carrying a VALID signature
+ *
+ * Test 8 above closes the field COUNT. This one closes what the fields may
+ * CONTAIN, and it exists for the same reason: a count gate alone leaves the
+ * lock and the server's own verifier free to answer differently on bytes an
+ * adopter can put on the wire. Each vector is signed with the dev key in
+ * ../config/dev_unlock_key.pem and sits in the KAT window (exp=1750000900,
+ * NOW_FRESH), so the parse is the only gate left to answer.
+ *
+ * The trailing-delimiter vector is the one worth reading twice. It is the
+ * canonical six-field message with ONE '|' appended, and it is the shape a
+ * count gate written in Ruby does not see: String#split("|") drops trailing
+ * empty fields, so seven segments read back as six. The lock refuses it here,
+ * and crosscheck_grammar.rb runs the same bytes through both Ruby readers.
+ *
+ * The rest are the charsets: an empty field, an `iat` that is not a number, an
+ * `exp` spelled with a sign or overflowing uint64, and a jti in the wrong
+ * case. Each is a spelling a permissive integer or string parse admits and
+ * this verifier must not.
+ */
+static void test_field_content_boundary(void)
+{
+    int result;
+
+    /* Six fields with ONE delimiter appended — seven segments, the last empty. */
+    static const char TOKEN_TRAILING_DELIM[] =
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899|"
+        "."
+        "j6zKGe-EB1o44dW1TQqGTNE4Z6CWkyPP9SZbzTeHu2ic8xiThaQwzFA3fYY2jPM7RAGbhF2L_bYGKaz5GOCNAg";
+
+    /* Six fields, but reservation_id has no bytes. */
+    static const char TOKEN_EMPTY_RESV[] =
+        "kiosk-rental-v1|SK-001||1750000000|1750000900|aabbccddeeff00112233445566778899"
+        "."
+        "7dtVID5zxAiS7re1uIs-NVnySv3-teND1JZih5mh9Ja8bpu-3z1deE5s20l4GoMsY9JF5iJMRTtMM0_UxOKIAQ";
+
+    /* iat is not a decimal integer at all. */
+    static const char TOKEN_IAT_JUNK[] =
+        "kiosk-rental-v1|SK-001|resv-1|abc|1750000900|aabbccddeeff00112233445566778899"
+        "."
+        "DO1cGV7SQsOEwhzVQ5J_AOUV-URLPn2utbm51QcNn9k8D1DEDfSPHmCJLWToHHX6gBiDlcEuuQAG396L5z75Ag";
+
+    /* exp carries a leading '+' — an integer to Ruby's Integer(), not to us. */
+    static const char TOKEN_EXP_SIGNED[] =
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|+1750000900|aabbccddeeff00112233445566778899"
+        "."
+        "Km-69RjggQc_JWDpKdqu8EAj4x2afPWTRHtogDGxIGx_hOYdXf2nXVDm4ybmT5IPiTA3U1wb39VKm2BijfA2Aw";
+
+    /* exp is twenty digits and past UINT64_MAX — a far-future expiry if honoured. */
+    static const char TOKEN_EXP_OVERFLOW[] =
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|99999999999999999999|aabbccddeeff00112233445566778899"
+        "."
+        "Wm-_DEGBu1eURAfYDAUig-kO1PEdQuyTEmWGQ2d3d9QPuerhwHAuO0xSTLG0m7OrJUwSK_7u2SSn-WtlRyI3CA";
+
+    /* jti in uppercase hex — 32 characters, wrong alphabet. */
+    static const char TOKEN_JTI_UPPER[] =
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|AABBCCDDEEFF00112233445566778899"
+        "."
+        "1olaodhhNIl_KdnFqPGCM6pRyRiameicL3qtBQLJ_cky8nm8VS51SetXoiHfvvsIL4KstqrV3HRFwrJ2XGC-DQ";
+
+    printf("\n[9] Field-content boundary, valid signature on every vector → all 0\n");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_TRAILING_DELIM, SCOOTER_CODE, NOW_FRESH);
+    printf("  six fields plus one trailing delimiter → result: %d\n", result);
+    check(result == 0, "trailing delimiter (seven segments, last empty) → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_EMPTY_RESV, SCOOTER_CODE, NOW_FRESH);
+    printf("  empty reservation_id → result: %d\n", result);
+    check(result == 0, "empty field → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_IAT_JUNK, SCOOTER_CODE, NOW_FRESH);
+    printf("  iat = \"abc\" → result: %d\n", result);
+    check(result == 0, "iat that is not a number → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_EXP_SIGNED, SCOOTER_CODE, NOW_FRESH);
+    printf("  exp = \"+1750000900\" → result: %d\n", result);
+    check(result == 0, "exp with a leading plus → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_EXP_OVERFLOW, SCOOTER_CODE, NOW_FRESH);
+    printf("  exp = twenty digits past UINT64_MAX → result: %d\n", result);
+    check(result == 0, "exp past UINT64_MAX → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, TOKEN_JTI_UPPER, SCOOTER_CODE, NOW_FRESH);
+    printf("  jti in uppercase hex → result: %d\n", result);
+    check(result == 0, "jti in the wrong alphabet → 0");
+
+    /* And the jti the replay store would be keyed on is parsed under the same
+     * contract: the good token yields its jti, the trailing-delimiter one does
+     * not, so no path reaches jti_store with bytes the verifier refused. */
+    {
+        char jti[JTI_MAX_LEN];
+        result = skooti_parse_jti(WIRE_TOKEN, jti, sizeof(jti));
+        check(result == 1 && strcmp(jti, "aabbccddeeff00112233445566778899") == 0,
+              "skooti_parse_jti: six-field token → the jti");
+        result = skooti_parse_jti(TOKEN_TRAILING_DELIM, jti, sizeof(jti));
+        check(result == 0, "skooti_parse_jti: trailing delimiter → 0");
+        result = skooti_parse_jti(TOKEN_JTI_UPPER, jti, sizeof(jti));
+        check(result == 0, "skooti_parse_jti: jti in the wrong alphabet → 0");
+    }
+}
+
+/*
+ * Test 10 — jti_store: insert, replay detection, expiry pruning, table-full eviction
  */
 static void test_jti_store(void)
 {
     int r;
 
-    printf("\n[9] jti_store: insert, replay, prune, table-full eviction\n");
+    printf("\n[10] jti_store: insert, replay, prune, table-full eviction\n");
 
     /* 9a — fresh insert: first time → 0 (new) */
     jti_store_reset();
@@ -472,6 +574,7 @@ int main(void)
     test_malformed_tokens();
     test_wrong_domain_tag();
     test_field_count_boundary();
+    test_field_content_boundary();
     test_jti_store();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

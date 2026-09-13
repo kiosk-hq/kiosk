@@ -14,11 +14,20 @@ require "base64"
 #      a. Splits on the LAST "."
 #      b. Base64url-decodes the sig (64 bytes)
 #      c. Ed25519-verifies the sig over the message bytes
-#      d. Parses the 6 pipe-separated fields
+#      d. Parses the 6 pipe-separated fields, every one of them non-empty
 #      e. Checks: field 0 == "kiosk-rental-v1" (domain-separation tag)
-#      f. Checks: scooter_code == own code, exp > now (injected clock)
-#      g. Checks jti NOT in the consumed store (durable replay prevention)
-#      h. On all checks passing: records jti → exp in the consumed store, unlocks
+#      f. Checks: iat and exp are 1-20 plain digits, jti is 32 lowercase hex
+#      g. Checks: scooter_code == own code, exp > now (injected clock)
+#      h. Checks jti NOT in the consumed store (durable replay prevention)
+#      i. On all checks passing: records jti → exp in the consumed store, unlocks
+#
+# The grammar step (d/f) is the firmware's, byte for byte: the lock's C parser
+# walks pipes and refuses an empty field, a non-digit timestamp or a jti that is
+# not 32 lowercase hex, and this simulator would be worthless if it were more
+# permissive than the thing it simulates. RENTAL_TOKEN.md states that grammar
+# once; `cd firmware && make crosscheck` runs one shared vector set through this
+# reader, RentalTokenIssuer.verify and the C verifier, and fails on any
+# disagreement.
 #
 # Durable jti store: @consumed_jtis is a { jti => exp } map.
 #   - Replay check: reject if jti present AND stored_exp >= now (still in window).
@@ -32,6 +41,17 @@ require "base64"
 # NO HMAC, no nonce/challenge — this is a pure offline verify path.
 
 LOCK_SIM_CONTEXT_TAG = "kiosk-rental-v1"
+
+# The grammar the firmware enforces, mirrored here. Each limit is the lock's
+# own: SKOOTI_TOKEN_MAX, the sig-length guard, parse_uint64 and is_jti in
+# firmware/verify.c. RENTAL_TOKEN.md states them in prose.
+LOCK_SIM_TOKEN_MAX_BYTES  = 512
+LOCK_SIM_SIG_B64_MAX      = 88
+LOCK_SIM_FIELD_COUNT      = 6
+LOCK_SIM_DELIMITER        = "|"
+LOCK_SIM_TIMESTAMP_FORMAT = /\A[0-9]{1,20}\z/
+LOCK_SIM_TIMESTAMP_MAX    = (1 << 64) - 1
+LOCK_SIM_JTI_FORMAT       = /\A[0-9a-f]{32}\z/
 
 class LockSim
   # @param scooter_code     [String]              the code this lock is provisioned with
@@ -63,9 +83,11 @@ class LockSim
   # Verify and consume a rental token (domain-separation tag + durable replay prevention).
   #
   # Returns +false+ if:
-  #   - token is malformed or base64url-decode fails
+  #   - token is malformed, over 512 bytes, or base64url-decode fails
   #   - Ed25519 signature is invalid
+  #   - the message is not exactly 6 pipe-delimited non-empty fields
   #   - field 0 != "kiosk-rental-v1" (wrong or missing domain-separation tag)
+  #   - iat or exp is not 1-20 plain digits, or jti is not 32 lowercase hex
   #   - scooter_code in the token does not match this lock's code
   #   - exp <= now  (expired)
   #   - jti was already consumed within its exp window (durable replay prevention)
@@ -77,6 +99,9 @@ class LockSim
   def unlock(token:, now:)
     return false if token.nil? || token.empty?
 
+    # Gate: wire length — the lock's own SKOOTI_TOKEN_MAX.
+    return false if token.bytesize > LOCK_SIM_TOKEN_MAX_BYTES
+
     # Split on the LAST "." — the message itself contains "|" but no ".".
     dot_idx = token.rindex(".")
     return false if dot_idx.nil?
@@ -85,6 +110,7 @@ class LockSim
     sig_b64 = token[(dot_idx + 1)..]
 
     return false if message.empty? || sig_b64.empty?
+    return false if sig_b64.bytesize > LOCK_SIM_SIG_B64_MAX
 
     # Decode sig — base64url, no padding.
     sig = Base64.urlsafe_decode64(sig_b64)
@@ -94,16 +120,28 @@ class LockSim
     return false unless @pub_key.verify(nil, sig, message)
 
     # Parse the 6 pipe-delimited fields (field 0 is the domain-separation tag).
-    fields = message.split("|")
-    return false unless fields.length == 6
+    # The NEGATIVE limit is load-bearing: plain String#split("|") drops trailing
+    # empty fields, so a signed message with a delimiter appended would read
+    # back as six here and be accepted, where the lock's C parser — which walks
+    # pipes and finds one in the last field — refuses it.
+    fields = message.split(LOCK_SIM_DELIMITER, -1)
+    return false unless fields.length == LOCK_SIM_FIELD_COUNT
+    return false if fields.any?(&:empty?)
 
-    context_tag, token_scooter, _reservation_id, _iat_s, exp_s, jti = fields
+    context_tag, token_scooter, _reservation_id, iat_s, exp_s, jti = fields
 
     # Gate: domain-separation — field 0 must be the known context tag.
     return false unless context_tag == LOCK_SIM_CONTEXT_TAG
 
     # Gate: scooter code must match what this lock is provisioned with.
     return false unless token_scooter == @scooter_code
+
+    # Gate: field charsets. iat is not acted on — exp alone bounds the window —
+    # but it is held to the grammar all the same, because a field nobody parses
+    # is a field each reader may read differently.
+    return false unless lock_sim_timestamp?(iat_s)
+    return false unless lock_sim_timestamp?(exp_s)
+    return false unless jti.match?(LOCK_SIM_JTI_FORMAT)
 
     # Gate: freshness — exp must be strictly greater than now.
     exp = Integer(exp_s, 10)
@@ -123,5 +161,20 @@ class LockSim
     true
   rescue ArgumentError, OpenSSL::PKey::PKeyError
     false
+  end
+
+  private
+
+  # True when +s+ is the decimal integer the grammar admits for iat and exp:
+  # 1-20 plain ASCII digits and no value past UINT64_MAX — what the firmware's
+  # parse_uint64 accepts, and narrower than Integer(s, 10), which also takes a
+  # sign, underscore separators and surrounding whitespace.
+  #
+  # @param s [String]
+  # @return [Boolean]
+  def lock_sim_timestamp?(s)
+    return false unless s.match?(LOCK_SIM_TIMESTAMP_FORMAT)
+
+    Integer(s, 10) <= LOCK_SIM_TIMESTAMP_MAX
   end
 end

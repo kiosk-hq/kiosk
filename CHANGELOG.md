@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-14: **skooti's three rental-token readers disagreed on trailing delimiters, integer syntax and `iat`.** One grammar, one shared vector set, and `make crosscheck` runs all three against it.
 - 2026-09-13: **The archaeology guard read one line at a time, so a two-word marker split by a wrap was invisible — including to the rules that fail the build.** It reads pairs of lines now.
 - 2026-09-13: **The harness Ruby version is typed into eight tracked places and only one was compared to another.** `bin/check-ruby-pin` holds all eight, and censuses for a ninth.
 - 2026-09-13: **The drift baseline could not record a PARTIAL re-judgement, so its triage list only grew.** Provenance is per row now, and `--record --only` stamps just the scope a sweep read.

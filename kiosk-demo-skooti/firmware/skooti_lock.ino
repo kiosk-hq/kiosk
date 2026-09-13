@@ -47,13 +47,18 @@
  * sig        = Ed25519 signature (64 bytes) over the message UTF-8 bytes
  *              → base64url-encoded, no padding
  *
- * Field indices (0-based):
+ * Field indices (0-based), with the charset each one is held to. EXACTLY six
+ * fields, none of them empty — a trailing '|' is a seventh field, not
+ * punctuation, and is refused:
  *   [0] "kiosk-rental-v1"  — domain-separation tag (REQUIRED)
  *   [1] scooter_code       — e.g. "SK-001"
  *   [2] reservation_id     — e.g. "resv-1"
- *   [3] iat                — unix seconds
- *   [4] exp                — unix seconds (iat + 900)
- *   [5] jti                — 32 hex chars
+ *   [3] iat                — 1-20 ASCII digits, unix seconds
+ *   [4] exp                — 1-20 ASCII digits, unix seconds (iat + 900)
+ *   [5] jti                — 32 lowercase hex chars
+ *
+ * The whole grammar is stated once in ../RENTAL_TOKEN.md and `make crosscheck`
+ * holds every reader of this token to it.
  *
  * Example (the host test's known-answer vector):
  *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"

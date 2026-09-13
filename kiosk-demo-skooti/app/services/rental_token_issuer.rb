@@ -23,6 +23,13 @@ require "securerandom"
 #   being cross-used to mint anything else a lock would accept.
 #   iat/exp are unix seconds as decimal strings; jti = SecureRandom.hex(16).
 #
+# The GRAMMAR — how many fields, what each field may contain, and how the
+# delimiter behaves — is written out in RENTAL_TOKEN.md, the canonical page for
+# this token. {.verify} below implements exactly that grammar, and so do the
+# two other readers this token has: script/lock_sim.rb and the firmware's
+# skooti_verify_token. `cd firmware && make crosscheck` runs one shared vector
+# set through all three and fails on any disagreement.
+#
 # Signature: Ed25519 over the message bytes (64 bytes, deterministic).
 # Crypto: OpenSSL::PKey Ed25519 — key.sign(nil, message) / key.verify(nil, sig, msg).
 #
@@ -35,20 +42,47 @@ module RentalTokenIssuer
   # Field 0 of every signed message; the lock accepts nothing else.
   CONTEXT_TAG = "kiosk-rental-v1"
 
+  # ── The grammar {.verify} enforces, spelled the way the C lock spells it ──
+  #
+  # Each constant below is a limit the lock enforces, restated here so this
+  # verifier answers as the lock does on every byte sequence an adopter can put
+  # on the wire. RENTAL_TOKEN.md states the same grammar in prose.
+
+  # Longest wire token accepted, in bytes — SKOOTI_TOKEN_MAX in firmware/verify.h.
+  TOKEN_MAX_BYTES = 512
+
+  # Longest base64url signature field accepted — 64 bytes encode to 86
+  # characters unpadded, and the lock allows a little slack over that.
+  SIG_B64_MAX = 88
+
+  # Number of fields in the signed message, and the delimiter between them.
+  FIELD_COUNT = 6
+  DELIMITER   = "|"
+
+  # iat and exp: 1-20 plain ASCII digits and no more than UINT64_MAX, which is
+  # what the lock's parse_uint64 accepts. Deliberately narrower than
+  # Integer(s, 10), which also takes a sign, underscore separators and
+  # surrounding whitespace — none of which the lock would honour.
+  TIMESTAMP_FORMAT = /\A[0-9]{1,20}\z/
+  TIMESTAMP_MAX    = (1 << 64) - 1
+
+  # jti: exactly what SecureRandom.hex(16) produces.
+  JTI_FORMAT = /\A[0-9a-f]{32}\z/
+
   class << self
     # Issue a signed rental token.
     #
-    # Charset contract: `scooter_code` and `reservation_id` MUST NOT contain the
-    # field delimiter `|`. The message packs six pipe-delimited fields and
-    # {.verify} rejects any split that does not yield exactly 6, so a `|` in
-    # either input mints a validly SIGNED token this issuer's own verifier
-    # rejects — a field-shift hazard for a laxer external verifier. The two
-    # verifiers skooti ships are not lax: `script/lock_sim.rb` and the lock
-    # firmware's `skooti_verify_token` both count fields and refuse any message
-    # that is not six, and `make crosscheck` runs that boundary through the C
-    # verifier and this one together. skooti only ever passes `SK-###` codes and
-    # pipe-free ids, so this is a documented input precondition rather than an
-    # enforced guard.
+    # Charset contract: `scooter_code` and `reservation_id` MUST be non-empty
+    # and MUST NOT contain the field delimiter `|`. The message packs six
+    # pipe-delimited fields and {.verify} rejects any split that does not yield
+    # exactly 6 non-empty ones, so a `|` in either input mints a validly SIGNED
+    # token this issuer's own verifier rejects — a field-shift hazard for a
+    # laxer external verifier. The two other verifiers skooti ships are not
+    # lax: `script/lock_sim.rb` and the lock firmware's `skooti_verify_token`
+    # hold the same grammar, and `make crosscheck` runs one shared vector set
+    # through all three. skooti only ever passes `SK-###` codes and pipe-free
+    # ids, so this is a documented input precondition rather than an enforced
+    # guard.
     #
     # @param scooter_code   [String]  e.g. "SK-001" (no `|`)
     # @param reservation_id [String]  UUID or other opaque ID (no `|`)
@@ -68,7 +102,8 @@ module RentalTokenIssuer
     end
 
     # Verify a wire token against the configured signing key: split on the LAST
-    # ".", base64url-decode the signature, Ed25519-verify the message, check exp.
+    # ".", base64url-decode the signature, Ed25519-verify the message, hold the
+    # message to the grammar above, check exp.
     #
     # Reference-verifier surface — the production unlock path never calls this;
     # the scooter lock (script/lock_sim.rb / the firmware) does the verifying.
@@ -81,6 +116,7 @@ module RentalTokenIssuer
     # @return [Hash|nil] parsed claims hash, or nil on any failure
     def verify(token:, now:)
       return nil if token.nil? || token.empty?
+      return nil if token.bytesize > TOKEN_MAX_BYTES
 
       dot_idx = token.rindex(".")
       return nil if dot_idx.nil?
@@ -89,19 +125,31 @@ module RentalTokenIssuer
       sig_b64 = token[(dot_idx + 1)..]
 
       return nil if message.empty? || sig_b64.empty?
+      return nil if sig_b64.bytesize > SIG_B64_MAX
 
       sig = Base64.urlsafe_decode64(sig_b64)
+      return nil unless sig.bytesize == 64
 
       pub = public_key
       return nil if pub.nil?
 
       return nil unless pub.verify(nil, sig, message)
 
-      fields = message.split("|")
-      return nil unless fields.length == 6
+      # Split with a NEGATIVE limit. Plain String#split("|") DROPS trailing
+      # empty fields, so a message with a delimiter appended to it — seven
+      # fields, the last one empty — would read back as six and be accepted
+      # here while the lock refused it. The limit is what makes this count the
+      # delimiters the way the C parser walks them.
+      fields = message.split(DELIMITER, -1)
+      return nil unless fields.length == FIELD_COUNT
+      return nil if fields.any?(&:empty?)
       return nil unless fields[0] == CONTEXT_TAG
 
       _tag, scooter_code, reservation_id, iat_s, exp_s, jti = fields
+
+      return nil unless timestamp?(iat_s)
+      return nil unless timestamp?(exp_s)
+      return nil unless jti.match?(JTI_FORMAT)
 
       iat = Integer(iat_s, 10)
       exp = Integer(exp_s, 10)
@@ -145,6 +193,19 @@ module RentalTokenIssuer
     end
 
     private
+
+    # True when +s+ is the decimal integer the grammar admits for iat and exp:
+    # 1-20 plain ASCII digits, no sign, no separator, no surrounding space, and
+    # no value past UINT64_MAX. The regexp alone is not enough — twenty digits
+    # can still exceed UINT64_MAX, and the lock's parse_uint64 refuses that.
+    #
+    # @param s [String]
+    # @return [Boolean]
+    def timestamp?(s)
+      return false unless s.match?(TIMESTAMP_FORMAT)
+
+      Integer(s, 10) <= TIMESTAMP_MAX
+    end
 
     def signing_key
       Kiosk.configuration.unlock_signing_key

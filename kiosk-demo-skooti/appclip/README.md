@@ -50,7 +50,10 @@ kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(Ed2
 ```
 
 Field 0 (`kiosk-rental-v1`) is a fixed domain-separation tag — the lock rejects
-any token whose field 0 does not exactly match.
+any token whose field 0 does not exactly match. The App Clip does not parse the
+token; it forwards the bytes it was launched with. The grammar the lock holds
+them to — field count, delimiter, and each field's charset — is stated in
+`../RENTAL_TOKEN.md`.
 
 ---
 

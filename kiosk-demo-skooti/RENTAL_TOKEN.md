@@ -38,6 +38,64 @@ The left side (everything before the last `.`) is the signed message — UTF-8 b
 
 ---
 
+## Rental token: the exact grammar
+
+Three programs read this token, and they are independent implementations: the
+lock firmware's `skooti_verify_token` (`firmware/verify.c`, linked by
+`skooti_lock.ino`), the server's `RentalTokenIssuer.verify`, and the software
+lock `script/lock_sim.rb`. This section is the grammar all three implement.
+It is stated once, here, because three independent parsers with no single
+statement of what they parse is a divergence anyone who attacks the parse can
+find — and the widest of the three is the one that decides what a fleet
+accepts.
+
+What holds them to it is not this page but `cd firmware && make crosscheck`,
+which signs one shared vector set (`firmware/token_vectors.rb`) with the live
+dev key, runs every vector through all three readers, and fails when any reader
+gives an answer the set did not declare.
+
+**Wire token**
+
+- At most 512 bytes (`SKOOTI_TOKEN_MAX`). A longer token is refused before the
+  message is parsed.
+- Split at the **last** `.`: everything to its left is the signed message,
+  everything to its right is the signature. No `.` at all is a refusal.
+- The signature is base64url over the alphabet `A-Za-z0-9-_`, **unpadded**, at
+  most 88 characters, and must decode to exactly 64 bytes — the Ed25519
+  signature over the message bytes.
+- Neither half may be empty.
+
+**Message**
+
+- Exactly six pipe-separated fields, which is exactly five `|` bytes. <!-- count: 6 ¦ from: sed -n 's/.*FIELD_COUNT = //p' kiosk-demo-skooti/app/services/rental_token_issuer.rb -->
+- **No field may be empty**, and no field may contain `|`.
+- **A trailing `|` is another field, not punctuation.** `kiosk-rental-v1|…|<jti>|`
+  is a seven-field message and is refused. That deserves saying out loud
+  because Ruby's `String#split("|")` silently DROPS trailing empty fields, so a
+  reader written as `message.split("|").length == 6` sees six where the C
+  parser, walking the pipes, sees seven. Both Ruby readers here split with a
+  negative limit for exactly that reason.
+
+**Fields**
+
+| # | Field | What is accepted |
+|---|---|---|
+| 0 | tag | the bytes `kiosk-rental-v1` and nothing else, compared in constant time |
+| 1 | `scooter_code` | opaque, non-empty. The lock additionally requires it to equal its own provisioned code; `RentalTokenIssuer.verify` is not a lock and has no code to compare against, so it holds this field to the grammar only. |
+| 2 | `reservation_id` | opaque, non-empty; no reader interprets it |
+| 3 | `iat` | 1 to 20 ASCII digits `0`–`9`, value at most 2^64−1. No sign, no `_` separators, no surrounding whitespace, no `0x`. No reader ACTS on `iat` — `exp` alone bounds the window — but all three hold it to the grammar, because a field nobody parses is a field each reader may read differently. |
+| 4 | `exp` | the same syntax as `iat`. The lock then requires `exp > now`. |
+| 5 | `jti` | exactly 32 lowercase hex characters `[0-9a-f]`, which is what `SecureRandom.hex(16)` mints. It is the key the replay store is written under, so a reader that returned success on other bytes would be handing that store a key it refuses. |
+
+`iat` and `exp` are deliberately narrower than a permissive integer parse.
+Ruby's `Integer(s, 10)` accepts `+1750000900`, `1_750_000_900` and
+`" 1750000900"`; the firmware's `parse_uint64` accepts none of them. Where two
+readers of one credential differ, the WIDEST is the one that decides what a
+fleet accepts, so the narrow reading is the contract and the Ruby readers
+implement it.
+
+---
+
 ## Issuance and handoff flow
 
 ```
@@ -73,14 +131,17 @@ Assistant (agent token → Kiosk API)
        │
        ▼
   Lock verifies offline:
-    1. Split on last '.' → message + sig
-    2. Base64url-decode sig (must be 64 bytes)
-    3. Ed25519-verify sig over message bytes with provisioned pubkey
-    4. Parse 6 pipe-fields; require exactly 6
-    5. field[0] == "kiosk-rental-v1"  (domain-separation tag)
-    6. field[1] == own SCOOTER_CODE
-    7. field[4] (exp) > now
-    8. jti_seen_or_insert(jti, exp, now) == 0  (not a replay)
+    1. Wire token is at most 512 bytes
+    2. Split on last '.' → message + sig
+    3. Base64url-decode sig (must be 64 bytes)
+    4. Ed25519-verify sig over message bytes with provisioned pubkey
+    5. Parse the pipe-fields; require exactly six, none of them empty
+    6. field[0] == "kiosk-rental-v1"  (domain-separation tag)
+    7. field[1] == own SCOOTER_CODE
+    8. field[3] (iat) and field[4] (exp) are 1-20 plain digits
+    9. field[4] (exp) > now
+   10. field[5] (jti) is 32 lowercase hex
+   11. jti_seen_or_insert(jti, exp, now) == 0  (not a replay)
     All pass → GPIO HIGH 3 s → scooter unlocked
 ```
 

@@ -690,19 +690,19 @@ end
 # scope but the demos, for the reason given in the header: one demo is NAMED
 # after the maintainer.
 RULES = [
-  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo e2e root], what: "a ledger id",
+  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo e2e root firmware], what: "a ledger id",
     none: "no ledger id" },
-  { id: "R2", re: ADR_RE,        scopes: %i[gem demo e2e root], what: "an ADR reference",
+  { id: "R2", re: ADR_RE,        scopes: %i[gem demo e2e root firmware], what: "an ADR reference",
     none: "no ADR reference" },
-  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec demo_spec e2e deploy root],
+  { id: "R3", re: CYRILLIC_RE,   scopes: %i[gem demo spec demo_spec e2e deploy root firmware],
     what: "Cyrillic prose", none: "no Cyrillic" },
-  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e deploy root],
+  { id: "R4", re: MAINTAINER_RE, scopes: %i[gem spec e2e deploy root firmware],
     what: "the maintainer named in prose", none: "no maintainer named in prose" },
-  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e deploy root],
+  { id: "R5", re: RETIRED_WIRE_RE, scopes: %i[gem demo e2e deploy root firmware],
     what: "a retired wire version", none: "no retired wire version", prose_only: true },
   { id: "R6", re: PAST_NARRATION_RE, scopes: %i[gem demo e2e deploy root],
     what: "a sentence narrating a past state", none: "no narration of a past state" },
-  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root], resolve: true,
+  { id: "R7", re: REPO_PATH_RE, scopes: %i[gem demo spec demo_spec e2e deploy root firmware], resolve: true,
     what: "a repository path that does not exist", none: "no dangling repository path" }
 ].freeze
 
@@ -1057,6 +1057,40 @@ def deploy_files(root)
     .sort
 end
 
+# ── the firmware and App Clip sources (K-1554) ──────────────────────────────
+#
+# `kiosk-demo-skooti` ships a lock firmware in C, an Arduino sketch and a Swift
+# App Clip. They are read through `cfamily_comment_source` -- comments only --
+# and the pages beside them are read by the demo scope like any other Markdown.
+#
+# THE VENDORED ED25519 MIRROR IS OUT, on `LICENSE`'s footing rather than on the
+# old "no lexer" one. `firmware/ed25519/` is a third-party implementation
+# carried verbatim with its own licence file; this repository may not reword a
+# comment in it, so a rule reaching it could only ever produce a red tree with
+# no legal repair. MEASURED when the scope was built: those twelve files are
+# clean on every rule anyway, so the door costs nothing today and exists for
+# the day the mirror is refreshed from upstream.
+FIRMWARE_ROOTS = ["kiosk-demo-skooti/firmware", "kiosk-demo-skooti/appclip"].freeze
+VENDORED_C_RE  = %r{/firmware/ed25519/}
+
+def firmware_dirs
+  FIRMWARE_ROOTS.map { |r| File.join(REPO, r) }.select { |d| File.directory?(d) }
+end
+
+# `git ls-files` and not `Dir.glob`: `appclip/build/` holds six generated
+# `*-Swift.h` bridging headers in any working copy that has opened Xcode, and a
+# glob reads them. They are not tracked, so a stranger never sees them and the
+# coverage partition would fail on a scope naming a path git does not carry.
+def firmware_files(root)
+  rel = root.delete_prefix("#{REPO}/")
+  IO.popen(["git", "-C", REPO, "ls-files", rel], &:read)
+    .lines(chomp: true)
+    .select { |f| CFAMILY_EXTS.include?(File.extname(f)) }
+    .reject { |f| f.match?(VENDORED_C_RE) }
+    .map { |f| File.join(REPO, f) }
+    .sort
+end
+
 # The repository's front door. Every tracked file AT THE ROOT is read except
 # these five, and each absence is a decision recorded in the header: two under
 # the standing exemption, one verbatim third-party text, two dot-files with no
@@ -1156,8 +1190,68 @@ def json_line_depths(src)
   end
 end
 
+# ── the C-family and Swift comment reader (K-1554) ──────────────────────────
+#
+# C, its `.h` headers, an Arduino `.ino` and Swift all spell a comment the same
+# two ways -- `//` to end of line, `/* ... */` across lines -- so ONE reader
+# serves every source under `kiosk-demo-skooti/firmware/` and `appclip/`.
+#
+# THIS SCOPE EXISTED AS AN EXEMPTION FIRST, and the exemption's reason was that
+# "no lexer for either of those languages" makes reading them a false-positive
+# machine. That reason was right about the CODE and wrong about the conclusion:
+# a comment in these languages is trivially recognisable, and every rule here is
+# lexical anyway. The measurement that settled it (K-1554): over the 1382
+# comment lines in these sources, R1, R2, R3, R4 and R5 find NOTHING -- and R7
+# finds a shipped `.ino` pointing at `kiosk-demo-skooti/lib/rental_token_issuer.rb`,
+# a file that does not exist and has not for as long as the comment has. The
+# exemption was hiding a live defect of exactly the kind the guard is for.
+#
+# WHY IT BLANKS RATHER THAN EXTRACTS. Every consumer downstream -- the hit's
+# line number, the TODO carve-out, the census -- reads a source whose line
+# numbering is the file's own. So a non-comment line becomes "\n" and a comment
+# keeps its text, exactly as the vendored-JSON mirror above already does.
+#
+# The string-literal tracking is not decoration: `"https://…"` and a `'/'` char
+# literal both carry the `//` a naive scanner would read as the start of a
+# comment, and both occur in these files.
+CFAMILY_EXTS = %w[.c .h .ino .swift].freeze
+
+def cfamily_file?(path) = CFAMILY_EXTS.include?(File.extname(path))
+
+def cfamily_comment_source(src)
+  out = String.new
+  i = 0
+  len = src.length
+  while i < len
+    ch = src[i]
+    if ch == '"' || ch == "'"
+      quote = ch
+      i += 1
+      while i < len && src[i] != quote
+        out << "\n" if src[i] == "\n"
+        i += (src[i] == "\\" ? 2 : 1)
+      end
+      i += 1
+    elsif ch == "/" && src[i + 1] == "/"
+      j = src.index("\n", i) || len
+      out << src[i...j]
+      i = j
+    elsif ch == "/" && src[i + 1] == "*"
+      j = src.index("*/", i + 2)
+      j = j ? j + 2 : len
+      out << src[i...j]
+      i = j
+    else
+      out << "\n" if ch == "\n"
+      i += 1
+    end
+  end
+  out
+end
+
 def rule_source(path)
   src = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+  return cfamily_comment_source(src) if cfamily_file?(path)
   return src unless path.match?(VENDORED_MIRROR_RE)
 
   keys   = EXEMPT_MIRROR_MEMBERS.map { |m| /\A\s*"#{Regexp.escape(m)}"\s*:/ }
@@ -1183,11 +1277,11 @@ DEMO_EXTS  = %w[.rb .rake .ru .erb .yml .sql .md .json .tt .txt .html].freeze
 # the whole reason that mode exists. A page is a page wherever the subdirectory
 # happens to be, so the two named files became a derivation.
 #
-# The SOURCES beside those pages — C, Swift, a `.ino` — are deliberately still
-# out. This guard reads Ruby through Ripper and treats a `#` line as a comment
-# in shell and Python; it has no lexer for either of those languages, and
-# reading one whole would report a keyword default or a struct field as prose,
-# which is exactly the false positive R5's header says must never happen.
+# The SOURCES beside those pages — C, Swift, a `.ino` — used to be out for want
+# of a lexer, and they are IN now: they have a scope of their own, read through
+# `cfamily_comment_source` so the code is never seen and the comments always
+# are. This scope stays Markdown-only regardless; a demo page and a firmware
+# comment are different readers.
 DEMO_RUNTIME = %w[public log tmp storage vendor node_modules].freeze
 DEMO_DOC_SKIP = %w[CHANGELOG.md CLAUDE.md].freeze
 
@@ -1441,6 +1535,16 @@ SCOPES = {
                   "repository is published, so a stranger reads this runbook whatever key " \
                   "they hold, and a foreign-language sentence or an attributed decision is " \
                   "unreadable to them" },
+  firmware: { label: "the lock firmware and App Clip sources", dirs: -> { firmware_dirs },
+              files: ->(d) { firmware_files(d) },
+              per: "firmware/** and appclip/** (.c .h .ino .swift), COMMENTS ONLY, " \
+                   "minus the vendored ed25519 mirror",
+              door: "the code is not read, only what a person wrote beside it: a struct " \
+                    "field or a keyword default is not prose, and reporting one as prose is " \
+                    "the false positive these rules exist to avoid. The past-state rule " \
+                    "stops at this door as well -- its lexical proxy cannot separate «jti " \
+                    "not previously seen», which is a status a caller tests for, from a " \
+                    "sentence narrating something this project used to do" },
   root: { label: "the repository's front door", dirs: -> { root_dirs },
           files: ->(d) { root_files(d) },
           per: "every tracked file at the repository root except the five in ROOT_NOT_READ " \
@@ -2531,6 +2635,55 @@ def self_test
   check.call("R7's pattern still RESOLVES repository paths in scope (#{resolving} token(s)) " \
              "— a pattern that matched nothing would read as a clean tree",
              resolving.positive?)
+
+  # ── the C-family and Swift comment reader (K-1554) ───────────────────────
+  #
+  # The reader is a LEXER, and a lexer that reads the wrong half of a file is
+  # the whole reason the exemption it replaced existed. Every arm below is
+  # about the mechanism rather than about today's firmware: what it must SEE,
+  # what it must NOT see, and that the line numbering a hit is reported at is
+  # still the file's own.
+  cf = ->(src) { cfamily_comment_source(src) }
+  check.call("the reader takes a `//` comment",
+             cf.call("int x = 1; // K-1035 lives here\n").include?("K-1035"))
+  check.call("…and a `/* … */` block, across lines",
+             cf.call("/* first\n * K-1035\n */\nint x;\n").include?("K-1035"))
+  check.call("…and does NOT take the CODE beside it — a struct field or a keyword default " \
+             "read as prose is the false positive the old exemption was granted for",
+             !cf.call("int K_1035 = 3; // note\n").include?("K_1035"))
+  check.call("…and does NOT read a `//` inside a STRING literal as the start of one — " \
+             "`https://…` is live in these sources",
+             !cf.call(%(const char *u = "https://x/K-1035";\n)).include?("K-1035"))
+  check.call("…nor one inside a CHAR literal",
+             !cf.call(%(char c = '/'; int K_1035;\n)).include?("K_1035"))
+  check.call("…and a `/*` inside a string does not swallow the rest of the file",
+             cf.call(%(const char *u = "/*"; \n// K-1035\n)).include?("K-1035"))
+  numbering = "a\nb // K-1035\nc\n"
+  check.call("LINE NUMBERING is the file's own — a blanked line is still a line, so a hit " \
+             "is reported where a reader will find it",
+             cf.call(numbering).lines.length == numbering.lines.length &&
+               cf.call(numbering).lines[1].include?("K-1035"))
+
+  # ── VACUITY over the REAL scope: a reader returning nothing is a green
+  #    nothing, and that is precisely how 32 files went unread for months. ───
+  fw_paths = firmware_dirs.flat_map { |d| firmware_files(d) }
+  check.call("the firmware scope reads tracked sources (#{fw_paths.size})", fw_paths.size >= 10)
+  check.call("…every one of them TRACKED — `appclip/build/` holds generated `*-Swift.h` " \
+             "bridging headers that a glob reads and git does not carry",
+             begin
+               tracked = IO.popen(["git", "-C", REPO, "ls-files"], &:read).lines(chomp: true).to_set
+               fw_paths.all? { |f| tracked.include?(f.delete_prefix("#{REPO}/")) }
+             end)
+  check.call("…and it reaches both the C side and the Swift side",
+             fw_paths.any? { |f| f.end_with?(".ino") || f.end_with?(".c") } &&
+               fw_paths.any? { |f| f.end_with?(".swift") })
+  check.call("…and NOT the vendored ed25519 mirror, which this repository may not reword",
+             fw_paths.none? { |f| f.match?(VENDORED_C_RE) })
+  fw_comment_lines = fw_paths.sum { |f| rule_source(f).lines.count { |l| !l.strip.empty? } }
+  check.call("…and the reader actually returns COMMENT PROSE over them " \
+             "(#{fw_comment_lines} line(s)) — a lexer that silently returned nothing " \
+             "reads exactly like a subtree with nothing in it",
+             fw_comment_lines > 100)
 
   # ── VACUITY: R5's ban is DERIVED, so prove the derivation, not a list ────
   #

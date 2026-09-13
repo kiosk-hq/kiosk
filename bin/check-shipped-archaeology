@@ -267,10 +267,12 @@
 #   R7  no REPOSITORY PATH THAT DOES NOT EXIST — in EVERY scope, `spec/`
 #       included. See the section below; the directory prefixes it recognises
 #       are DERIVED from the repository layout rather than typed here.
-#   R8  no REPOSITORY PATH GIT DOES NOT CARRY — the same pattern, the same
-#       scopes, the opposite half of the question: a file that is HERE because
-#       it is gitignored resolves for the author and for nobody else. See the
-#       section below; R7 and R8 fork on existence and never both fire.
+#   R8  no REPOSITORY PATH GIT DOES NOT CARRY — a WIDER pattern than R7's, the
+#       same scopes, the opposite half of the question: a file that is HERE
+#       because it is gitignored resolves for the author and for nobody else.
+#       Three legs — a `<dir>/` path, a bare name at the repository ROOT, and a
+#       bare name the reading document's OWN DIRECTORY scopes. See the section
+#       below; R7 and R8 fork on existence and never both fire.
 #
 # AND THE THINGS THAT ARE COUNTED RATHER THAN BANNED — the run prints which of
 # them reaches which scope, so this list is a description and never the answer:
@@ -425,6 +427,22 @@
 # `bin/check-gem-packaging`. Neither is in a scope this guard reads (the
 # changelog is `ROOT_NOT_READ`, `bin/` is Phil's standing exemption), so the rule
 # lands on a clean tree with no exemption of its own and nothing excused.
+#
+# AND THE RECOGNISER MISSED A THIRD SHAPE, WHICH IS WHY IT NOW HAS A THIRD LEG
+# (K-1565, reopened). The two patterns above read a `<dir>/` path and a bare
+# name that is a file AT THE ROOT. `e2e/README.md`'s file-layout tree said
+# `mise.toml` — no prefix, no root file of that name — meaning `e2e/mise.toml`,
+# which is gitignored at `.gitignore:27` and in no clone. It sat 55 lines below
+# that document's own «No toolchain pin ships», in the SAME FILE the wave that
+# built R8 had just repaired, and every predicate arm below was green on it.
+# So `sibling_file_re` derives, per directory, the bare names that actually sit
+# there, and BOTH of `scan`'s prefilters ask `author_only_re_for(path)` rather
+# than the declared pattern — a prefilter narrower than the decision is a rule
+# that never reaches its own predicate, and that, not the predicate, is what
+# was wrong twice. MEASURED with the third leg live over the eight scopes this
+# guard reads (975 files: gem 207, demo 508, spec 172, demo_spec 18, e2e 34,
+# deploy 18, firmware 13, root 5): exactly ONE hit, the K-1565 line, and every
+# other scope OK — so the widening lands with no new exemption either.
 #
 # ── C1: THE `used to` CENSUS — PRINTED, NEVER RED ──────────────────────────
 #
@@ -747,6 +765,58 @@ ROOT_FILE_RE =
 # R8 asks a question R7 does not, so it reads a wider token set than R7's.
 AUTHOR_ONLY_RE = Regexp.union(REPO_PATH_RE, ROOT_FILE_RE)
 
+# ── THE THIRD LEG: A BARE NAME THE DOCUMENT'S OWN DIRECTORY SCOPES ──────────
+#
+# The two patterns above between them read a `<dir>/` path and a bare name that
+# is a file AT THE REPOSITORY ROOT. Neither can see the shape that shipped
+# next: `e2e/README.md`'s file-layout tree listing `mise.toml` — a bare name,
+# with no `<dir>/` prefix for `REPO_PATH_RE` and no root file of that name for
+# `ROOT_FILE_RE`, describing `e2e/mise.toml`, which exists here and which
+# `git check-ignore -v` answers `.gitignore:27:mise.toml` (K-1565). It sat 55
+# lines below the same document's own «No toolchain pin ships», so the file
+# contradicted itself and R8 was green on it.
+#
+# A bare filename in a document is scoped by the DOCUMENT'S OWN DIRECTORY —
+# that is what a file-layout tree, a «copy X to Y» line and a sibling-script
+# reference all mean — so the recogniser is derived per directory from the
+# names that actually sit there. Derived, never typed: a file added beside a
+# README tomorrow is read the day it lands. Longest name first so the
+# alternation cannot stop at a prefix of a longer one; FILES only, because
+# `author_only?` refuses a directory anyway. Memoised per directory, because a
+# scan reads many documents out of the same one.
+def sibling_file_re(dir)
+  @sibling_file_re ||= {}
+  return @sibling_file_re[dir] if @sibling_file_re.key?(dir)
+
+  names =
+    begin
+      Dir.children(dir).select { |n| File.file?(File.join(dir, n)) }
+    rescue SystemCallError
+      []
+    end.sort_by { |n| [-n.length, n] }
+
+  @sibling_file_re[dir] =
+    if names.empty?
+      nil
+    else
+      Regexp.new("(?<![\\w/.@-])(?:#{names.map { |n| Regexp.escape(n) }.join('|')})(?![\\w@/-])")
+    end
+end
+
+# The recogniser R8 reads IN ONE FILE: the static union plus that file's own
+# siblings. Both of `scan`'s prefilters must ask this rather than `rule[:re]`,
+# or the rule looks at a narrower token set than it decides on — which is
+# exactly how the bare name above stayed invisible while every predicate arm
+# below it was green.
+def author_only_re_for(path)
+  @author_only_re_for ||= {}
+  @author_only_re_for[path] ||=
+    begin
+      sib = sibling_file_re(File.dirname(path))
+      sib ? Regexp.union(AUTHOR_ONLY_RE, sib) : AUTHOR_ONLY_RE
+    end
+end
+
 # A sentence may NAME a file git does not carry in order to say so, and that
 # sentence is the REMEDY this rule asks for rather than a breach of it: all
 # three live citations of `.mise.toml` in this tree read «… are gitignored», and
@@ -787,15 +857,25 @@ def author_only?(exists:, tracked:, directory:)
   exists && !tracked && !directory
 end
 
-# The tokens on one line that resolve HERE and nowhere else.
-def author_only_paths(line)
+# The tokens on one line that resolve HERE and nowhere else. `doc_dir` is the
+# directory of the DOCUMENT the line came from, and it is half the recogniser
+# rather than a convenience — see `sibling_file_re` above. Returns the
+# REPOSITORY-RELATIVE path each token resolves to, so a bare `mise.toml` is
+# reported as the `e2e/mise.toml` a reader has to go and look at.
+def author_only_paths(line, doc_dir = REPO)
   return [] if line.match?(DISCLAIMS_SHIPPING_RE)
 
-  line.scan(AUTHOR_ONLY_RE).uniq.select do |t|
-    full = File.join(REPO, t)
-    author_only?(exists: File.exist?(full), tracked: tracked_paths.include?(t),
-                 directory: File.directory?(full))
-  end
+  candidates = line.scan(AUTHOR_ONLY_RE).map { |t| File.join(REPO, t) }
+  sib = sibling_file_re(doc_dir)
+  candidates += line.scan(sib).map { |t| File.join(doc_dir, t) } if sib
+
+  candidates.uniq.filter_map do |full|
+    rel = full.start_with?("#{REPO}/") ? full.delete_prefix("#{REPO}/") : full
+    next unless author_only?(exists: File.exist?(full), tracked: tracked_paths.include?(rel),
+                             directory: File.directory?(full))
+
+    rel
+  end.uniq
 end
 
 # `scopes` is which published surface each rule speaks for. R4 reaches every
@@ -1517,7 +1597,12 @@ def scan(path, rules = RULES)
   # set is a property of the rule, and so every caller — the check, the census
   # totals and the EXEMPTION TOTALS block — asks the same question.
   rules = rules.reject { |r| r[:narrative_only] && !narrative_file?(path) }
-  return [[], true] unless rules.any? { |r| src.match?(r[:re]) }
+  # R8's token set is PER FILE (its third leg is the names beside this very
+  # document), so both prefilters ask for the effective pattern rather than the
+  # declared one. A prefilter narrower than the decision is how K-1565's site
+  # stayed invisible with every R8 arm green — see `author_only_re_for`.
+  rule_re = ->(r) { r[:resolve] == :author_only ? author_only_re_for(path) : r[:re] }
+  return [[], true] unless rules.any? { |r| src.match?(rule_re.call(r)) }
 
   # PER RULE, not per line: two rules can both match a line while only one of
   # them matches a code TOKEN on it, and a shared flag would report the other
@@ -1540,7 +1625,7 @@ def scan(path, rules = RULES)
         token_lines[pos[0]] = true
         next if type == :on_comment
 
-        rules.each { |r| code_lines[r[:id]][pos[0]] = true if tok.to_s.match?(r[:re]) }
+        rules.each { |r| code_lines[r[:id]][pos[0]] = true if tok.to_s.match?(rule_re.call(r)) }
       end
     end
   end
@@ -1554,7 +1639,7 @@ def scan(path, rules = RULES)
     next if line.match?(TODO_RE)
 
     rules.each do |rule|
-      next unless line.match?(rule[:re])
+      next unless line.match?(rule_re.call(rule))
       # The one place a gem states its author, and RubyGems reads it.
       next if rule[:id] == "R4" && line.match?(AUTHORS_RE)
       # A number under a column header that names its unit is a measurement.
@@ -1565,7 +1650,7 @@ def scan(path, rules = RULES)
       dangling =
         case rule[:resolve]
         when :missing     then unresolved_paths(line)
-        when :author_only then author_only_paths(line)
+        when :author_only then author_only_paths(line, File.dirname(path))
         end
       next if dangling&.empty?
 
@@ -2359,6 +2444,55 @@ def self_test
       check.call("…and NOT on a root-level file git DOES carry (#{tracked_root.first}) — the " \
                  "tracked set is what makes this a rule and not a ban on every filename",
                  r8.call(rootok).empty?)
+    end
+
+    # ── R8's THIRD LEG: the bare name a document's own directory scopes ─────
+    #
+    # The two legs above were both green on `e2e/README.md`'s file-layout tree
+    # listing `mise.toml` (K-1565): no `<dir>/` prefix for `REPO_PATH_RE`, and no
+    # root file of that name for `ROOT_FILE_RE`. So these arms are about the
+    # THIRD token set, and — the part that matters — about the PREFILTER agreeing
+    # with the decision, because a prefilter narrower than `author_only_paths` is
+    # a rule that never reaches its own predicate.
+    #
+    # The fixtures live in a sub-directory of their own so the sibling set is
+    # exactly these three files and cannot drift with every other plant above.
+    sibdir = File.join(dir, "sibling-leg")
+    FileUtils.mkdir_p(sibdir)
+    File.write(File.join(sibdir, "local.toml"), "ruby = \"4.0.1\"\n")
+    sibdoc = File.join(sibdir, "LAYOUT.md")
+    File.write(sibdoc, "```\n├── local.toml    # pins the Ruby the harness runs on\n```\n")
+    sibok = File.join(sibdir, "DISCLAIMED.md")
+    File.write(sibok, "No toolchain pin ships: `local.toml` is gitignored, so a clone has none.\n")
+
+    check.call("the static union CANNOT see a bare sibling name — the blind spot both legs " \
+               "above shared, stated as an assertion rather than as a story",
+               ("`local.toml` pins it" =~ AUTHOR_ONLY_RE).nil?)
+    check.call("…and the per-file recogniser CAN, derived from what sits beside the document",
+               !(("`local.toml` pins it" =~ author_only_re_for(sibdoc)).nil?))
+    check.call("R8 fires end to end on a bare name naming an untracked sibling — the arm that " \
+               "proves the PREFILTER and the decision read the same token set",
+               r8.call(sibdoc).size == 1)
+    check.call("…and NOT on the sentence that names the same sibling in order to say it does " \
+               "not ship",
+               r8.call(sibok).empty?)
+    check.call("…and NOT on a bare sibling git DOES carry — `run.sh` beside e2e/README.md, " \
+               "asked over the real repository",
+               author_only_paths("then run.sh does the rest", File.join(REPO, "e2e")).empty?)
+    check.call("…and NOT on a bare name that resolves to nothing beside the document",
+               author_only_paths("see nosuchfile.toml", File.join(REPO, "e2e")).empty?)
+
+    ignored_sibling = Dir.children(File.join(REPO, "e2e"))
+                         .select { |n| File.file?(File.join(REPO, "e2e", n)) }
+                         .reject { |n| tracked_paths.include?("e2e/#{n}") }
+    if ignored_sibling.empty?
+      check.call("R8's sibling leg has nothing to fire on in e2e/ today — the arm below is " \
+                 "skipped rather than faked", true)
+    else
+      n = ignored_sibling.first
+      check.call("R8 reports the RESOLVED repository path for a bare sibling (#{n} → e2e/#{n}), " \
+                 "because `#{n}` alone is not a thing a reader can go and look at",
+                 author_only_paths("├── #{n}   # pins it", File.join(REPO, "e2e")) == ["e2e/#{n}"])
     end
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.

@@ -8,7 +8,8 @@
 # tears down.
 #
 # Prereqs:
-#   - Ruby with bundler (mise.toml beside this script pins the one CI runs)
+#   - Ruby with bundler (no version is checked; ci.yml's e2e job names the
+#     one CI runs)
 #   - Postgres reachable (default host: $PGHOST or localhost)
 #   - rails gem (the script will install if missing)
 #

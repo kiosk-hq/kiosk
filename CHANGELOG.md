@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **Three shipped surfaces pinned Ruby to a file that does not ship.** `e2e/mise.toml` and `.mise.toml` are gitignored; the pin a clone gets is the CI workflow's.
 - 2026-09-13: **`kiosk-server`'s well-known snippet raised when run verbatim.** The builder refuses without `c.issuer`; the snippet now sets it, and its printed output is re-measured.
 - 2026-09-13: **`kiosk-server`'s «what the event carries» table was missing two of ActionEvent's twelve fields.** `cause_class`/`cause_message` shipped a week ago and the table did not move.
 - 2026-09-13: **skooti's shipped sources cited a private roadmap plan and narrated the firmware they replaced.** `Plan 4.x` names documents that ship nowhere; the replay docs now say what IS.

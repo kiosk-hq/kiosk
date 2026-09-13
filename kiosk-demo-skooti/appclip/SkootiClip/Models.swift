@@ -15,7 +15,7 @@ import Foundation
 //   scooterCode   — identifies which lock to BLE-connect to (also embedded in
 //                   the token, but used for scanning / UI before writing).
 //   rentalToken   — the provider-signed wire token:
-//                   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+//                   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 //                   issued by RentalTokenIssuer (server) and carried in the rt= URL param.
 //                   The clip writes this string verbatim over BLE; the lock verifies it
 //                   offline (Ed25519 + own scooter_code + exp + jti).
@@ -101,16 +101,19 @@ enum Configuration {
 
     // ── DEMO STUB ─────────────────────────────────────────────
     // A hard-coded rental token used when the launch URL does not carry rt=.
-    // This is the test-vector token from Plan 4.2 T1 (SCOOTER_CODE=SK-001).
-    // It will only verify on the lock if DEMO_NOW < 1750000900 (the exp).
+    // It is the firmware host test's known-answer vector (SCOOTER_CODE=SK-001),
+    // the same bytes `firmware/host_test.c` and `firmware/skooti_lock.ino`
+    // print — so the lock accepts it only while its clock reads under
+    // 1750000900 (the exp), which the sketch's DEMO_NOW constant satisfies.
     //
     // REPLACE with a freshly-issued token before any on-device test.
     static func demoHandoff(scooterCode: String) -> AgentHandoff {
         AgentHandoff(
             scooterCode: scooterCode,
-            rentalToken: "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" +
-                         ".b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElC" +
-                         "HSwnEGGYbNGiEWRCZD_yBw"
+            rentalToken: "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900" +
+                         "|aabbccddeeff00112233445566778899" +
+                         ".SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBu" +
+                         "L4A15xlupYqlGMfCnROCg"
         )
     }
 }

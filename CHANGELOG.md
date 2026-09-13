@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **skooti's App Clip shipped a demo rental token the lock rejects.** It is the pre-domain-tag shape, measured rejected by the shipped verifier; now the host test's own vector.
 - 2026-09-13: **`kiosk-core` documented two module accessors that do not exist.** `Kiosk.user_id_type` and `Kiosk.roles` raise NoMethodError; both live on `Kiosk.configuration`.
 - 2026-09-13: **The two shelved PoW backends and the bench note said what CHANGED, not what IS.** They now state plainly that nothing wires them, with no «no longer».
 - 2026-09-13: **The lock firmware and App Clip sources are read for prose.** A comment reader for C and Swift replaced the no-lexer exemption and found a dangling path.

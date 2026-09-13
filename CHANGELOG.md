@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-13: **The drift baseline could not record a PARTIAL re-judgement, so its triage list only grew.** Provenance is per row now, and `--record --only` stamps just the scope a sweep read.
 - 2026-09-13: **The skooti lock firmware accepted a rental token of more than six pipe fields, which the issuer rejects.** It refuses any other count now, so no shifted field is read as the expiry.
 - 2026-09-13: **The archaeology guard exempted the deploy runbook from the ADR-reference rule, and that exemption was measured to hold back nothing.** The rule reaches it now.
 - 2026-09-13: **The deploy runbooks narrated five past states of their own tooling and one retired request header.** Every clause now states the live property instead.

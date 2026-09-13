@@ -99,22 +99,50 @@
 # paragraph above rejects. The lag IS the signal. So --check asks about FORM and
 # PROVENANCE, and never about head:
 #
-#   * every row is three tab-separated fields, the fingerprint 16 lowercase hex
-#     — which is what `Digest::SHA256.hexdigest(...)[0, 16]` produces — with no
-#     duplicated path+anchor pair, no blank line and no comment below the header,
-#     because --record emits none of those;
+#   * every row is four tab-separated fields, the fingerprint 16 lowercase hex
+#     — which is what `Digest::SHA256.hexdigest(...)[0, 16]` produces — and the
+#     ref a short sha or one of the two sentinels, with no duplicated path+anchor
+#     pair, no blank line and no comment below the header, because --record emits
+#     none of those;
 #   * the rows are in `pairs.sort` order, the only order --record can emit;
 #   * the header is BYTE-EQUAL to what `baseline_header` renders from the file's
 #     OWN recorded stamp, ref, label and count — the same method --record writes
 #     it with, so prose drift cannot survive a single run;
-#   * the ref named in `recorded:` is a commit in this repository, and every
-#     fingerprint RE-MEASURES to its recorded value AT THAT COMMIT, using this
-#     file's own `region_at` and `fingerprint`.
+#   * every fingerprint RE-MEASURES to its recorded value AT THE COMMIT ITS OWN
+#     ROW NAMES, using this file's own `region_at` and `fingerprint`.
 #
 # That last clause is what catches a hand-edited fingerprint, and it is what makes
 # «could THIS generator have written THIS file» a measurement rather than a shape
 # test. It pins the baseline to its own recorded PAST, never to head, so a
 # baseline three hundred commits behind passes exactly as well as a fresh one.
+#
+# A PARTIAL RE-JUDGEMENT IS RECORDABLE, AND UNTIL K-1552 IT WAS NOT. The baseline
+# used to carry ONE header stamp over ALL of its rows, so a sweep that had
+# honestly re-judged part of the triage list had two moves and both were wrong:
+# --record everything, which certifies the part nobody read and erases the
+# standing list, or record nothing, which hands the next sweep a longer one. It
+# only ever grew — MEASURED on this file's own baseline, seven anchors pending on
+# 2026-09-06, eight on 09-07, 138 on 09-08, 235 on 09-12, 244 on 09-13. That is
+# the FILE FORMAT and not anyone's diligence, and the gate above is what held the
+# obvious workaround shut: a hand-mixed file with some rows at head and the rest
+# at the header's ref is exactly the file --check exists to refuse.
+#
+# So provenance moved onto the ROW. Each row carries the ref its fingerprint was
+# measured at, as a third field, and --check re-measures each one AT ITS OWN REF.
+# `--record --only <scope>` then re-measures the scope, stamps those rows at head,
+# and leaves every other row byte-identical — fingerprint AND ref. The file can
+# now say «these N were re-judged at this commit, the rest are still pending», and
+# the report says which is which. Two sentinels are not commits: `unknown` (git
+# could not answer) and `dirty` (the cited file differed from HEAD when the row was
+# recorded, so its bytes are in no commit); both are NOTICES and never failures,
+# per-row, where the whole file used to be downgraded by one dirty file.
+#
+# WHAT `--only` MUST NOT BECOME. It is a way to record a re-judgement that
+# HAPPENED, never a way to quiet a run: recording a scope nobody read certifies it
+# just as falsely as a wholesale --record does, and more quietly, because the
+# summary still shows a long pending list. The tool cannot tell the two apart and
+# does not pretend to — what it can do is stop forcing an honest partial sweep to
+# choose between lying and doing nothing.
 #
 # ITS LIMITS, because an over-claimed guard is worse than none:
 #   (a) A baseline recorded while a cited file was modified in the working tree
@@ -161,17 +189,25 @@
 #   bin/check-conformance-drift --matrix PATH       # …naming the matrix rows affected
 #   bin/check-conformance-drift --exit-on-drift     # …and exit 2 when regions moved
 #   bin/check-conformance-drift --record            # re-record the baseline at the current tree
+#   bin/check-conformance-drift --record --only P   # …only the rows whose path matches P
 #   bin/check-conformance-drift --record --label T  # …with a free-text label in its header
 #   bin/check-conformance-drift --check             # is the baseline one THIS generator wrote?
 #   bin/check-conformance-drift --reheader          # re-render its header, touching no fingerprint
+#   bin/check-conformance-drift --baseline PATH     # …against a baseline file other than the default
+#   bin/check-conformance-drift --self-test         # prove this script is the gate it claims to be
+#
+# `--only P` is repeatable. A row is in scope when its path equals P, sits under
+# it as a directory (`P/…`), or matches it as an `File.fnmatch` glob — so
+# `--only kiosk-server/spec` and `--only 'ks*/**/headers_spec.rb'` both work. It
+# requires an existing baseline, because a partial re-record is an UPDATE.
 #
 # Exit codes. The REPORT has two, like every other `bin/check-*` here:
 #   0 — it answered. Drift or no drift; the count is on the summary line.
 #   1 — the question could not be answered (missing manifest/baseline/file)
 # `--exit-on-drift` adds a third for a caller that asks for it: 2 when regions
 # moved. `--check` has two, because it IS a gate: 0 the baseline is
-# self-consistent, 1 it is not — 2 is never returned. `--record` and
-# `--reheader`: 0 written, 1 refused, and they say why.
+# self-consistent, 1 it is not — 2 is never returned. `--record`,
+# `--reheader` and `--self-test`: 0 written/green, 1 refused/red, and they say why.
 
 require "digest"
 require "English"
@@ -179,11 +215,12 @@ require "shellwords"
 
 ROOT     = File.expand_path("..", __dir__)
 MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
-BASELINE = File.join(ROOT, "spec", "conformance-drift-baseline.tsv")
+DEFAULT_BASELINE = File.join(ROOT, "spec", "conformance-drift-baseline.tsv")
 
 USAGE = <<~TEXT
-  usage: bin/check-conformance-drift [--matrix PATH] [--exit-on-drift] [--record [--label TEXT]]
-         bin/check-conformance-drift --check | --reheader
+  usage: bin/check-conformance-drift [--matrix PATH] [--exit-on-drift] [--record [--only P] [--label TEXT]]
+         bin/check-conformance-drift --check | --reheader | --self-test
+         common:   --baseline PATH  read/write a baseline other than spec/conformance-drift-baseline.tsv
          report:   0 = answered (drift is counted on the summary line, not in the exit code),
                    1 = cannot answer; add --exit-on-drift for 2 = regions moved (triage)
          --check:  0 = the baseline is one this generator could have written, 1 = it is not
@@ -192,9 +229,12 @@ TEXT
 record        = false
 check         = false
 reheader      = false
+self_test     = false
 exit_on_drift = false
 matrix        = nil
 label         = nil
+only          = []
+baseline_path = nil
 
 argv = ARGV.dup
 until argv.empty?
@@ -203,9 +243,12 @@ until argv.empty?
   when "--record"        then record        = true
   when "--check"         then check         = true
   when "--reheader"      then reheader      = true
+  when "--self-test"     then self_test     = true
   when "--exit-on-drift" then exit_on_drift = true
   when "--matrix"        then matrix        = argv.shift
   when "--label"         then label         = argv.shift
+  when "--only"          then only         << argv.shift
+  when "--baseline"      then baseline_path = argv.shift
   when "-h", "--help"
     puts USAGE
     exit 0
@@ -216,11 +259,21 @@ until argv.empty?
   end
 end
 
-if [record, check, reheader].count(true) > 1
-  warn "check-conformance-drift: --record, --check and --reheader are three different questions; pass one"
+if [record, check, reheader, self_test].count(true) > 1
+  warn "check-conformance-drift: --record, --check, --reheader and --self-test are four different " \
+       "questions; pass one"
   warn USAGE
   exit 1
 end
+
+only = only.compact.reject(&:empty?)
+if !only.empty? && !record
+  warn "check-conformance-drift: --only scopes a --record; it means nothing on its own"
+  warn USAGE
+  exit 1
+end
+
+BASELINE = baseline_path ? File.expand_path(baseline_path) : DEFAULT_BASELINE
 
 if matrix && !File.file?(matrix)
   warn "check-conformance-drift: --matrix #{matrix}: no such file"
@@ -312,6 +365,12 @@ RECORDED_RE = /
 /x
 COUNT_RE       = /\A\# (?<count>\d+) anchors\.\z/
 FINGERPRINT_RE = /\A[0-9a-f]{16}\z/
+# The per-row provenance field: a git ref, or one of the two sentinels that are
+# not commits and say so — `unknown` (git could not answer at record time) and
+# `dirty` (the cited file differed from HEAD, so the fingerprinted bytes are in
+# no commit). Both are notices in --check, never failures.
+REF_RE         = /\A(?:unknown|dirty|[0-9a-f]{7,40})\z/
+UNVERIFIABLE   = %w[unknown dirty].freeze
 
 def recorded_line(stamp, head, dirty, label)
   dirty_clause = dirty.to_i.positive? ? " (working tree: #{dirty} cited file(s) modified)" : ""
@@ -323,13 +382,22 @@ def baseline_header(count, stamp, head, dirty, label)
     # conformance-drift-baseline.tsv -- GENERATED by bin/check-conformance-drift --record.
     # Do not edit by hand.
     #
-    # One `path<TAB>fingerprint<TAB>anchor` row per anchor in
+    # One `path<TAB>fingerprint<TAB>ref<TAB>anchor` row per anchor in
     # spec/conformance-anchors.tsv. The fingerprint is the first 16 hex of
     # SHA-256 over the ANCHORED REGION -- the line the anchor sits on plus every
     # following line indented more deeply than it, which is the block that label
     # opens. `bin/check-conformance-drift` re-measures and lists what moved, so a
     # conformance sweep can re-judge the rows whose evidence changed instead of
     # sampling the matrix blind.
+    #
+    # PROVENANCE IS PER ROW, which is what makes a PARTIAL re-judgement
+    # recordable (K-1552). `ref` is the commit that row's fingerprint was
+    # measured at -- or `dirty` when the cited file differed from HEAD then, or
+    # `unknown` when git could not answer. `--record --only <scope>` re-measures
+    # the scope, stamps those rows at head and leaves every other row
+    # byte-identical, so this file can say «these were re-judged then, the rest
+    # are still pending» instead of forcing all-or-nothing. The stamp below is
+    # the LAST record operation, not a claim about every row.
     #
     # THIS FILE IS A SWEEP'S WATERMARK, NOT A LOCK. Re-record it when a sweep has
     # RE-JUDGED the drifted rows -- never to make a run quiet. Nothing in CI reads
@@ -338,7 +406,7 @@ def baseline_header(count, stamp, head, dirty, label)
     # run is `bin/check-conformance-drift --check`, which asks only whether this
     # file is one its own generator could have written -- row form and order, this
     # header, and that every fingerprint re-measures to its recorded value at the
-    # commit named below. That never looks at head, so it cannot push the
+    # commit ITS OWN ROW names. That never looks at head, so it cannot push the
     # watermark forward. Repair a drifted header with --reheader, which re-renders
     # this block and touches no fingerprint.
     #
@@ -352,12 +420,244 @@ end
 # re-measured later; --record records the COUNT rather than refusing, and --check
 # downgrades provenance to a notice when it is non-zero.
 def dirty_cited(rels)
-  return 0 if rels.empty?
+  return [] if rels.empty?
 
   out, ok = git("status", "--porcelain", "--", *rels)
-  return 0 unless ok
+  return [] unless ok
 
-  out.lines.count { |l| !l.strip.empty? }
+  # `XY path` and `XY old -> new`; the path we care about is the last field, and
+  # a quoted path (git core.quotePath) is unquoted enough to compare.
+  out.lines.filter_map do |line|
+    next if line.strip.empty?
+
+    path = line[3..].to_s.strip.split(" -> ").last.to_s
+    path = path[1..-2].to_s if path.start_with?('"') && path.end_with?('"')
+    path.empty? ? nil : path
+  end.uniq
+end
+
+# Is `rel` inside at least one `--only` scope? Equality, a directory prefix, or
+# an fnmatch glob — three spellings of the same question, because a scope typed
+# by a human is as likely to be a directory as a pattern.
+def in_scope?(rel, scopes)
+  scopes.any? do |s|
+    rel == s || rel.start_with?("#{s}/") || File.fnmatch?(s, rel, File::FNM_PATHNAME)
+  end
+end
+
+# ── --self-test ──────────────────────────────────────────────────────────────
+#
+# Every arm runs THIS script as a subprocess inside a THROWAWAY GIT REPOSITORY
+# built from scratch: a copy of the script under `bin/`, a two-pair manifest, and
+# two fixture files with anchored regions. That is the only environment in which
+# per-row provenance can be proved, because the claim under test is «this
+# fingerprint re-measures at THAT commit» and the arms need two commits they own.
+#
+# THE FIRST ARM IS K-1552'S MOTIVATING DEFECT ITSELF: a baseline in which SOME
+# rows were re-recorded at head and the rest left at an older commit. Under the
+# one-stamp format that file was REFUSED — measured then, `--check` exit 1 naming
+# the row — which is why a sweep that had honestly judged part of the triage list
+# could not write down what it had done. Here it must be accepted, and the arms
+# below it prove that accepting it did not cost the accident control: a
+# hand-edited fingerprint and a hand-moved ref are each still red.
+if self_test
+  require "tmpdir"
+  require "fileutils"
+
+  SCRIPT = File.expand_path(__FILE__)
+
+  failures = []
+  arms     = 0
+
+  def st_run(root, *args)
+    out = IO.popen({ "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_CONFIG_SYSTEM" => "/dev/null" },
+                   [File.join(root, "bin", "check-conformance-drift"), *args],
+                   err: [:child, :out], &:read)
+    [out, $CHILD_STATUS.exitstatus]
+  end
+
+  def st_git(root, *args)
+    out = IO.popen({ "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_CONFIG_SYSTEM" => "/dev/null",
+                     "GIT_AUTHOR_NAME" => "t", "GIT_AUTHOR_EMAIL" => "t@t",
+                     "GIT_COMMITTER_NAME" => "t", "GIT_COMMITTER_EMAIL" => "t@t" },
+                   ["git", "-C", root, *args], err: [:child, :out], &:read)
+    [out, $CHILD_STATUS.success?]
+  end
+
+  def st_fixture(root, marker)
+    FileUtils.mkdir_p(File.join(root, "bin"))
+    FileUtils.mkdir_p(File.join(root, "spec"))
+    FileUtils.cp(SCRIPT, File.join(root, "bin", "check-conformance-drift"))
+    File.chmod(0o755, File.join(root, "bin", "check-conformance-drift"))
+    File.write(File.join(root, "spec", "conformance-anchors.tsv"), <<~TSV)
+      # a fixture manifest
+      spec/alpha_spec.rb\tthe ALPHA example
+      spec/beta_spec.rb\tthe BETA example
+    TSV
+    File.write(File.join(root, "spec", "alpha_spec.rb"), <<~RB)
+      it "the ALPHA example" do
+        expect(1).to eq(1) # #{marker}
+      end
+    RB
+    File.write(File.join(root, "spec", "beta_spec.rb"), <<~RB)
+      it "the BETA example" do
+        expect(2).to eq(2)
+      end
+    RB
+    st_git(root, "init", "--quiet", "--initial-branch=main")
+    st_git(root, "add", "-A")
+    st_git(root, "commit", "--quiet", "-m", "fixture")
+    st_git(root, "rev-parse", "--short", "HEAD").first.strip
+  end
+
+  # Missing rows answer [nil, nil] rather than nil, so an arm that finds a row
+  # DELETED reports its own name instead of crashing the run with a NoMethodError
+  # — a self-test that dies is a self-test whose output nobody can triage.
+  def st_rows(root)
+    rows = File.readlines(File.join(root, "spec", "conformance-drift-baseline.tsv"), chomp: true)
+               .reject { |l| l.start_with?("#") || l.strip.empty? }
+               .to_h { |l| f = l.split("\t", -1); [f[0], [f[1], f[2]]] }
+    Hash.new([nil, nil]).merge(rows)
+  end
+
+  arm = lambda do |name, ok, detail|
+    arms += 1
+    failures << "#{name}: #{detail}" unless ok
+  end
+
+  Dir.mktmpdir("drift-selftest") do |tmp|
+    # ── ARM 1-4: the motivating defect — a MIXED baseline is now recordable ───
+    root = File.join(tmp, "mixed")
+    c1   = st_fixture(root, "v1")
+
+    out, rc = st_run(root, "--record")
+    arm.call("A1 --record writes a baseline", rc.zero?, "exit #{rc}: #{out}")
+    rows = st_rows(root)
+    arm.call("A2 every row carries its own ref",
+               rows.values.map(&:last).uniq == [c1],
+               "refs are #{rows.values.map(&:last).inspect}, want all #{c1}")
+
+    # Move ALPHA only, and commit — so the tree has two commits and one drifted row.
+    File.write(File.join(root, "spec", "alpha_spec.rb"),
+               File.read(File.join(root, "spec", "alpha_spec.rb")).sub("v1", "v2"))
+    st_git(root, "commit", "--quiet", "-am", "move alpha")
+    c2 = st_git(root, "rev-parse", "--short", "HEAD").first.strip
+
+    out, rc = st_run(root, "--record", "--only", "spec/alpha_spec.rb")
+    arm.call("A3 --record --only re-records the scope", rc.zero? && out.include?("PARTIAL"),
+               "exit #{rc}: #{out}")
+    rows = st_rows(root)
+    arm.call("A4 THE MOTIVATING DEFECT: a MIXED baseline is what the file now records",
+               rows["spec/alpha_spec.rb"].last == c2 && rows["spec/beta_spec.rb"].last == c1,
+               "alpha at #{rows['spec/alpha_spec.rb'].inspect}, beta at #{rows['spec/beta_spec.rb'].inspect}")
+
+    out, rc = st_run(root, "--check")
+    arm.call("A5 …and --check ACCEPTS it — this is the exit 1 K-1552 was filed on",
+               rc.zero?, "exit #{rc}: #{out}")
+    arm.call("A6 --check says how many commits the rows were judged at",
+               out.include?("across 2 commit(s)"), out)
+
+    out, _rc = st_run(root, "--record", "--only", "spec/alpha_spec.rb")
+    beta_before = st_rows(root)["spec/beta_spec.rb"]
+    arm.call("A7 an out-of-scope row is carried through byte-identical",
+               beta_before.last == c1, "beta moved to #{beta_before.inspect}")
+
+    # ── ARM 8: the partial record does NOT quiet the pending list ─────────────
+    File.write(File.join(root, "spec", "beta_spec.rb"),
+               File.read(File.join(root, "spec", "beta_spec.rb")).sub("eq(2)", "eq(3)"))
+    out, rc = st_run(root)
+    arm.call("A8 the rows nobody judged are STILL reported as pending",
+               rc.zero? && out.include?("moved 1") && out.include?("beta_spec.rb"),
+               "exit #{rc}: #{out}")
+    arm.call("A9 …and the report names the ref each drifted row was last judged at",
+               out.include?("last judged at #{c1}"), out)
+
+    # ── ARM 10-11: the accident control still bites, per row ──────────────────
+    # Restored by rewriting the bytes, never `git checkout --`: this script is
+    # read-only about the repository it walks, and CLAUDE.md's plant-and-restore
+    # rule is that a restore comes from a copy of what you changed.
+    File.write(File.join(root, "spec", "beta_spec.rb"),
+               File.read(File.join(root, "spec", "beta_spec.rb")).sub("eq(3)", "eq(2)"))
+    bl  = File.join(root, "spec", "conformance-drift-baseline.tsv")
+    raw = File.read(bl)
+
+    File.write(bl, raw.sub(/^spec\/beta_spec\.rb\t([0-9a-f]{16})/) { "spec/beta_spec.rb\t#{'0' * 16}" })
+    out, rc = st_run(root, "--check")
+    arm.call("A10 a hand-edited fingerprint is still refused", rc == 1 && out.include?("re-measures"),
+               "exit #{rc}: #{out}")
+
+    # A row whose REF is moved to the other commit: its bytes do not match there.
+    File.write(bl, raw.sub(/^(spec\/alpha_spec\.rb\t[0-9a-f]{16}\t)#{Regexp.escape(c2)}\t/) {
+      "#{Regexp.last_match(1)}#{c1}\t"
+    })
+    out, rc = st_run(root, "--check")
+    arm.call("A11 a row stamped at the WRONG commit is refused — provenance is really per row",
+               rc == 1 && out.include?("re-measures"), "exit #{rc}: #{out}")
+    File.write(bl, raw)
+
+    # ── ARM 12-15: the legacy three-field shape migrates, moving no fingerprint
+    legacy = raw.lines.map { |l|
+      next l if l.start_with?("#")
+
+      f = l.chomp.split("\t", -1)
+      "#{f[0]}\t#{f[1]}\t#{f[3]}\n"
+    }.join
+    File.write(bl, legacy)
+    out, rc = st_run(root, "--check")
+    arm.call("A12 a pre-K-1552 three-field baseline is refused, naming --reheader",
+               rc == 1 && out.include?("--reheader"), "exit #{rc}: #{out}")
+
+    was_fingerprints = raw.lines.reject { |l| l.start_with?("#") }
+                          .to_h { |l| f = l.chomp.split("\t", -1); [f[0], f[1]] }
+    out, rc = st_run(root, "--reheader")
+    arm.call("A13 --reheader migrates it", rc.zero? && out.include?("three-field"), "exit #{rc}: #{out}")
+    migrated = st_rows(root)
+    arm.call("A14 …and moves no fingerprint",
+               migrated.transform_values(&:first) == was_fingerprints,
+               "#{migrated.transform_values(&:first).inspect} != #{was_fingerprints.inspect}")
+    out, rc = st_run(root, "--check")
+    arm.call("A15 …and the migrated file passes", rc.zero?, "exit #{rc}: #{out}")
+
+    # ── ARM 16-18: --only refuses the shapes that would be a lie ──────────────
+    out, rc = st_run(root, "--record", "--only", "spec/nothing_here.rb")
+    arm.call("A16 a scope matching nothing is refused, not silently written",
+               rc == 1 && out.include?("matches no path"), "exit #{rc}: #{out}")
+
+    out, rc = st_run(root, "--only", "spec/alpha_spec.rb")
+    arm.call("A17 --only without --record is refused", rc == 1 && out.include?("means nothing on its own"),
+               "exit #{rc}: #{out}")
+
+    root2 = File.join(tmp, "nobaseline")
+    st_fixture(root2, "v1")
+    out, rc = st_run(root2, "--record", "--only", "spec/alpha_spec.rb")
+    arm.call("A18 a partial record with no baseline to update is refused",
+               rc == 1 && out.include?("nothing here to update"), "exit #{rc}: #{out}")
+
+    # ── ARM 19: a dirty cited file is stamped `dirty`, per row, not per file ──
+    root3 = File.join(tmp, "dirty")
+    st_fixture(root3, "v1")
+    File.write(File.join(root3, "spec", "alpha_spec.rb"),
+               File.read(File.join(root3, "spec", "alpha_spec.rb")).sub("v1", "uncommitted"))
+    out, rc = st_run(root3, "--record")
+    arm.call("A19 --record stamps only the MODIFIED file's row `dirty`",
+               rc.zero? && st_rows(root3)["spec/alpha_spec.rb"].last == "dirty" &&
+                 st_rows(root3)["spec/beta_spec.rb"].last != "dirty",
+               "exit #{rc}: #{st_rows(root3).inspect}")
+    out, rc = st_run(root3, "--check")
+    arm.call("A20 …and --check verifies the clean row while NOTICING the dirty one",
+               rc.zero? && out.include?("NOTICE") && out.include?("1 of 2"), "exit #{rc}: #{out}")
+  end
+
+  if failures.empty?
+    puts "check-conformance-drift --self-test: OK — #{arms} arm(s) green."
+    puts "  A4/A5 are K-1552's motivating defect: a baseline mixing re-judged rows with pending ones."
+    puts "  A10/A11 are the price of accepting it — a hand-edited fingerprint and a hand-moved ref stay red."
+    exit 0
+  end
+
+  warn "check-conformance-drift --self-test: FAIL — #{failures.length} of #{arms} arm(s) red."
+  failures.each { |f| warn "  x #{f}" }
+  exit 1
 end
 
 # ── --check / --reheader ─────────────────────────────────────────────────────
@@ -374,10 +674,11 @@ if check || reheader
 
   # `parse` defects make the file unreadable as a baseline, so --reheader refuses
   # on them; `form` and `prov` are what --check adds on top.
-  parse = []
-  form  = []
-  prov  = []
-  notes = []
+  parse       = []
+  form        = []
+  prov        = []
+  notes       = []
+  legacy_rows = []
 
   parse << "the file does not end in a newline; --record always writes one" unless raw.end_with?("\n")
 
@@ -422,12 +723,23 @@ if check || reheader
     end
 
     fields = line.split("\t", -1)
-    unless fields.length == 3
-      parse << "line #{n}: #{fields.length} tab-separated field(s), want 3 (path, fingerprint, anchor)"
+    # A THREE-field row is the pre-K-1552 shape, and it is readable: its
+    # provenance is the header's ref, which is what every row shared then. It is
+    # not a parse defect (--reheader migrates it, materialising that ref per row
+    # and touching no fingerprint) but --check refuses it below, because a file
+    # left in the old shape cannot record a partial re-judgement.
+    legacy = fields.length == 3
+    unless [3, 4].include?(fields.length)
+      parse << "line #{n}: #{fields.length} tab-separated field(s), want 4 (path, fingerprint, ref, anchor)"
       next
     end
 
-    rel, fp, anchor = fields
+    if legacy
+      rel, fp, anchor = fields
+      ref = nil
+    else
+      rel, fp, ref, anchor = fields
+    end
     if rel.empty? || anchor.empty?
       parse << "line #{n}: empty #{rel.empty? ? 'path' : 'anchor'}"
       next
@@ -437,16 +749,22 @@ if check || reheader
                "is 16 lowercase hex digits and nothing else"
       next
     end
+    if ref && !REF_RE.match?(ref)
+      parse << "line #{n}: #{ref.inspect} is not a provenance ref — --record writes a short commit sha, " \
+               "or `dirty`/`unknown` when the bytes cannot be pinned to one"
+      next
+    end
     if (first = seen[[rel, anchor]])
       parse << "line #{n}: duplicates line #{first} — --record writes one row per manifest pair"
       next
     end
 
+    legacy_rows << n if legacy
     seen[[rel, anchor]] = n
-    rows << [rel, fp, anchor]
+    rows << [rel, fp, ref, anchor]
   end
 
-  keys = rows.map { |rel, _fp, anchor| [rel, anchor] }
+  keys = rows.map { |rel, _fp, _ref, anchor| [rel, anchor] }
   if keys != keys.sort
     i = (1...keys.length).find { |k| (keys[k - 1] <=> keys[k]) == 1 }
     parse << "the rows are not in `pairs.sort` order, which is the only order --record emits: " \
@@ -470,15 +788,37 @@ if check || reheader
 
     was = header.join("\n") + "\n"
     now = baseline_header(count, stamp, head, dirty, label)
-    File.write(BASELINE, now + rows.map { |rel, fp, anchor| "#{rel}\t#{fp}\t#{anchor}\n" }.join)
-    if was == now
+    # A legacy row's provenance IS the header's ref — that is what the one-stamp
+    # format meant — so materialising it per row states what the file already
+    # said, and no fingerprint moves. `dirty` overrides it: the header recorded
+    # that some cited file was modified, and nothing in the old format says
+    # WHICH, so the honest per-row answer for all of them is «not pinnable».
+    migrated = dirty.positive? ? "dirty" : (head || "unknown")
+    File.write(BASELINE,
+               now + rows.map { |rel, fp, ref, anchor|
+                 "#{rel}\t#{fp}\t#{ref || migrated}\t#{anchor}\n"
+               }.join)
+    if legacy_rows.empty? && was == now
       puts "check-conformance-drift --reheader: header was already what this generator emits; " \
            "#{rows.length} row(s) rewritten byte-for-byte."
     else
+      if legacy_rows.any?
+        puts "check-conformance-drift --reheader: #{legacy_rows.length} row(s) were the pre-K-1552 " \
+             "three-field shape; each now carries #{migrated.inspect}, which is the provenance the " \
+             "header already claimed for them. No fingerprint moved."
+      end
       puts "check-conformance-drift --reheader: header re-rendered (#{was.lines.length} -> " \
-           "#{now.lines.length} line(s)); #{rows.length} fingerprint(s) untouched, still recorded at #{head}."
+           "#{now.lines.length} line(s)); #{rows.length} fingerprint(s) untouched."
     end
     exit 0
+  end
+
+  unless legacy_rows.empty?
+    form << "#{legacy_rows.length} row(s) carry the pre-K-1552 three-field shape (first at line " \
+            "#{legacy_rows.first}). Provenance is per ROW now — a one-stamp file cannot record a " \
+            "partial re-judgement, which is the whole of K-1552. Repair with " \
+            "`bin/check-conformance-drift --reheader`: it materialises the header's own ref into " \
+            "every row and moves no fingerprint."
   end
 
   # ── the header, byte-for-byte against this generator ───────────────────────
@@ -497,56 +837,81 @@ if check || reheader
     end
   end
 
-  # ── provenance: every fingerprint re-measures AT THE COMMIT IT NAMES ───────
+  # ── provenance: every fingerprint re-measures AT THE COMMIT ITS ROW NAMES ──
+  #
+  # Per ROW since K-1552, which is the mechanism a partial re-record needs: rows
+  # stamped at three different commits are three verifiable groups, not one
+  # unverifiable file. The two sentinels are counted and never asserted, so one
+  # row recorded over a modified file no longer disarms the whole check.
+  verified_rows = 0
   if head.nil?
     notes << "provenance not checked: the recorded stamp did not parse, so there is no ref to measure at."
-  elsif head == "unknown"
-    prov << "`recorded:` names no commit (`unknown`), which --record writes when git cannot answer. " \
-            "A watermark that names no tree state cannot be verified against one; re-record inside a " \
-            "git checkout."
-  elsif !git("rev-parse", "--verify", "--quiet", "#{head}^{commit}").last
-    prov << "`recorded:` names #{head}, which is not a commit in this repository. The baseline claims " \
-            "to describe a tree that is not here, so nothing can confirm a single fingerprint in it."
-  elsif dirty.positive?
-    notes << "provenance NOT checked: the header records that #{dirty} cited file(s) were modified in the " \
-             "working tree when this baseline was recorded, so its fingerprints describe bytes that exist " \
-             "in no commit. Re-record from a clean tree if you want them verifiable."
+  elsif rows.empty? || legacy_rows.length == rows.length
+    notes << "provenance not checked: no row carries a per-row ref to measure at."
   else
-    at_ref     = {}
-    mismatched = []
-    unmeasured = []
+    at_ref      = {}
+    mismatched  = []
+    unmeasured  = []
+    unverifiable = Hash.new(0)
+    absent_refs = {}
 
-    rows.each do |rel, fp, anchor|
-      lines_at = at_ref.fetch(rel) do
-        text, ok = git("show", "#{head}:#{rel}")
-        at_ref[rel] = ok ? blob_lines(text) : nil
+    rows.each do |rel, fp, ref, anchor|
+      ref ||= "unknown"
+      if UNVERIFIABLE.include?(ref)
+        unverifiable[ref] += 1
+        next
+      end
+
+      if absent_refs.fetch(ref) { absent_refs[ref] = !git("rev-parse", "--verify", "--quiet", "#{ref}^{commit}").last }
+        unmeasured << "#{rel}  #{anchor.inspect}: #{ref} is not a commit in this repository"
+        next
+      end
+
+      lines_at = at_ref.fetch([ref, rel]) do
+        text, ok = git("show", "#{ref}:#{rel}")
+        at_ref[[ref, rel]] = ok ? blob_lines(text) : nil
       end
 
       if lines_at.nil?
-        unmeasured << "#{rel}  #{anchor.inspect}: no such path at #{head}"
+        unmeasured << "#{rel}  #{anchor.inspect}: no such path at #{ref}"
         next
       end
 
       hits = lines_at.each_index.select { |i| lines_at[i].include?(anchor) }
       unless hits.length == 1
         unmeasured << "#{rel}  #{anchor.inspect}: " \
-                      "#{hits.empty? ? "anchor absent at #{head}" : "anchor ambiguous at #{head} (#{hits.length} matches)"}"
+                      "#{hits.empty? ? "anchor absent at #{ref}" : "anchor ambiguous at #{ref} (#{hits.length} matches)"}"
         next
       end
 
       got = fingerprint(region_at(lines_at, hits.first))
-      mismatched << "#{rel}  #{anchor.inspect}: recorded #{fp}, re-measures #{got} at #{head}" if got != fp
+      if got == fp
+        verified_rows += 1
+      else
+        mismatched << "#{rel}  #{anchor.inspect}: recorded #{fp}, re-measures #{got} at #{ref}"
+      end
+    end
+
+    unverifiable.each do |sentinel, n|
+      notes << "#{n} row(s) name #{sentinel.inspect} rather than a commit, so their fingerprints cannot be " \
+               "re-measured. " +
+               (sentinel == "dirty" ?
+                 "They were recorded over a working tree that differed from HEAD; re-record those paths " \
+                 "from a clean tree if you want them verifiable." :
+                 "They were recorded where git could not answer; re-record inside a git checkout.")
     end
 
     unless mismatched.empty?
       prov << "#{mismatched.length} of #{rows.length} fingerprint(s) do NOT re-measure to their recorded " \
-              "value at #{head}. This generator cannot have produced them from that tree:\n" +
+              "value at the commit their own row names. This generator cannot have produced them from " \
+              "that tree:\n" +
               mismatched.first(12).map { |m| "      #{m}" }.join("\n") +
               (mismatched.length > 12 ? "\n      … and #{mismatched.length - 12} more" : "")
     end
     unless unmeasured.empty?
       prov << "#{unmeasured.length} of #{rows.length} row(s) name an anchor that does not resolve uniquely " \
-              "at #{head} — the baseline describes a tree in which its own rows were not measurable:\n" +
+              "at their own recorded ref — the baseline describes a tree in which its own rows were not " \
+              "measurable:\n" +
               unmeasured.first(12).map { |m| "      #{m}" }.join("\n") +
               (unmeasured.length > 12 ? "\n      … and #{unmeasured.length - 12} more" : "")
     end
@@ -570,12 +935,16 @@ if check || reheader
     exit 1
   end
 
-  puts "check-conformance-drift --check: OK — spec/#{File.basename(BASELINE)} is one this generator could have written."
-  puts "  #{rows.length} row(s), recorded #{stamp} at #{head}#{label ? " -- #{label}" : ""}"
-  puts "  rows: 3 fields each, 16-hex fingerprints, no duplicates, in `pairs.sort` order, header count agrees"
+  puts "check-conformance-drift --check: OK — #{File.basename(BASELINE)} is one this generator could have written."
+  puts "  #{rows.length} row(s), last recorded #{stamp} at #{head}#{label ? " -- #{label}" : ""}"
+  puts "  rows: 4 fields each, 16-hex fingerprints, no duplicates, in `pairs.sort` order, header count agrees"
   puts "  header: byte-identical to `baseline_header` re-rendered from this file's own values"
-  if dirty.zero? && head && head != "unknown"
-    puts "  provenance: all #{rows.length} fingerprint(s) re-measure to their recorded value at #{head}"
+  if verified_rows.positive?
+    by_ref = rows.map { |_rel, _fp, ref, _anchor| ref }.tally.reject { |r, _| UNVERIFIABLE.include?(r) }
+    puts "  provenance: #{verified_rows} of #{rows.length} fingerprint(s) re-measure at the commit their " \
+         "OWN row names, across #{by_ref.size} commit(s)"
+    by_ref.sort_by { |ref, n| [-n, ref] }.first(6).each { |ref, n| puts "    #{ref}  #{n} row(s)" }
+    puts "    … and #{by_ref.size - 6} more commit(s)" if by_ref.size > 6
   end
   puts "(This says the baseline is SELF-CONSISTENT. It deliberately says nothing about whether it is"
   puts "CURRENT — the lag is the drift signal, and a check that demanded head would destroy it.)"
@@ -607,28 +976,92 @@ if record
   head = `git -C #{Shellwords.escape(ROOT)} rev-parse --short HEAD 2>/dev/null`.strip
   head = "unknown" if head.empty?
   stamp = Time.now.strftime("%Y-%m-%d")
-  dirty = head == "unknown" ? 0 : dirty_cited(pairs.map(&:first).uniq.sort)
 
-  out = +baseline_header(pairs.length, stamp, head, dirty, label)
+  # ── the scope, and what is PRESERVED outside it ────────────────────────────
+  #
+  # Wholesale --record rewrites every row at head. `--only` re-measures the
+  # scope and carries every other baseline row through byte-identical —
+  # fingerprint AND ref — which is the whole point: a sweep that judged part of
+  # the list records that part and leaves the rest visibly pending.
+  preserved = []
+  if only.any?
+    unless File.file?(BASELINE)
+      warn "check-conformance-drift --record --only: no baseline at #{BASELINE}."
+      warn "A partial re-record is an UPDATE; there is nothing here to update. Record a whole one first."
+      exit 1
+    end
 
-  missing = []
-  pairs.sort.each do |rel, anchor|
+    bad = []
+    File.readlines(BASELINE, chomp: true).each_with_index do |line, i|
+      next if line.start_with?("#") || line.strip.empty?
+
+      fields = line.split("\t", -1)
+      unless fields.length == 4
+        bad << "line #{i + 1}: #{fields.length} field(s), want 4"
+        next
+      end
+      rel, fp, ref, anchor = fields
+      next if in_scope?(rel, only)
+
+      preserved << [rel, fp, ref, anchor]
+    end
+
+    unless bad.empty?
+      warn "check-conformance-drift --record --only: refusing — #{bad.length} row(s) are not the " \
+           "four-field shape this can carry through untouched:"
+      bad.first(6).each { |b| warn "  x #{b}" }
+      warn "Run `bin/check-conformance-drift --reheader` first; it migrates them and moves no fingerprint."
+      exit 1
+    end
+  end
+
+  scoped = only.any? ? pairs.select { |rel, _anchor| in_scope?(rel, only) } : pairs
+  if only.any? && scoped.empty?
+    warn "check-conformance-drift --record --only: #{only.map(&:inspect).join(', ')} matches no path in " \
+         "spec/#{File.basename(MANIFEST)} — a scope that selects nothing would rewrite the header and " \
+         "re-judge nothing."
+    exit 1
+  end
+
+  dirty_paths = head == "unknown" ? [] : dirty_cited(scoped.map(&:first).uniq.sort)
+  dirty = dirty_paths.length
+
+  measured = []
+  missing  = []
+  scoped.each do |rel, anchor|
     fp, why = measure(rel, anchor)
     if fp.nil?
       missing << "#{rel}: #{why} -- #{anchor.inspect}"
       next
     end
-    out << "#{rel}\t#{fp}\t#{anchor}\n"
+    ref = head == "unknown" ? "unknown" : (dirty_paths.include?(rel) ? "dirty" : head)
+    measured << [rel, fp, ref, anchor]
   end
 
+  rows = (preserved + measured).sort_by { |rel, _fp, _ref, anchor| [rel, anchor] }
+  # The header's count is what this operation INTENDED to have a row for —
+  # preserved rows plus the scope's manifest pairs — so a count that disagrees
+  # with the rows below is the signature of an unmeasurable anchor, which is
+  # what the exit 1 at the bottom is about.
+  out = +baseline_header(preserved.length + scoped.length, stamp, head, dirty, label)
+  rows.each { |rel, fp, ref, anchor| out << "#{rel}\t#{fp}\t#{ref}\t#{anchor}\n" }
+
   File.write(BASELINE, out)
-  puts "wrote spec/#{File.basename(BASELINE)} (#{pairs.length - missing.length} of #{pairs.length} anchors, #{stamp} at #{head})"
+  if only.any?
+    puts "wrote #{File.basename(BASELINE)} — PARTIAL: #{measured.length} of #{scoped.length} scoped " \
+         "anchor(s) re-recorded at #{head} (#{stamp}), #{preserved.length} row(s) left untouched at " \
+         "their own refs."
+    puts "  scope: #{only.map(&:inspect).join(', ')}"
+    puts "  The untouched rows are STILL PENDING re-judging and the report will keep saying so."
+  else
+    puts "wrote #{File.basename(BASELINE)} (#{measured.length} of #{scoped.length} anchors, #{stamp} at #{head})"
+  end
 
   if dirty.positive?
     warn ""
     warn "check-conformance-drift: NOTICE — #{dirty} cited file(s) differ from #{head} in the working tree,"
-    warn "so these fingerprints describe bytes that are in no commit and `--check` cannot verify them."
-    warn "That is recorded in the header rather than refused; commit the cited files and re-record if you"
+    warn "so those rows are stamped `dirty` rather than with a commit and `--check` cannot verify them."
+    warn "That is recorded per row rather than refused; commit the cited files and re-record if you"
     warn "want a watermark whose provenance is checkable."
   end
 
@@ -650,16 +1083,27 @@ unless File.file?(BASELINE)
   exit 1
 end
 
-baseline = {}
-recorded = nil
+baseline     = {}
+baseline_ref = {}
+recorded     = nil
 File.readlines(BASELINE, chomp: true).each do |line|
   recorded ||= line[/\A#\s*recorded:\s*(.+)\z/, 1]
   next if line.start_with?("#") || line.strip.empty?
 
-  rel, fp, anchor = line.split("\t", 3)
+  fields = line.split("\t", -1)
+  # Four fields since K-1552 (path, fingerprint, ref, anchor); a three-field row
+  # is the pre-K-1552 shape and still READS — the report is not the gate for it,
+  # `--check` is, and reading it lets a sweep triage an un-migrated file.
+  if fields.length >= 4
+    rel, fp, ref, anchor = fields[0], fields[1], fields[2], fields[3..].join("\t")
+  else
+    rel, fp, anchor = fields
+    ref = nil
+  end
   next if rel.nil? || fp.nil? || anchor.nil? || anchor.empty?
 
   baseline[[rel, anchor]] = fp
+  baseline_ref[[rel, anchor]] = ref
 end
 
 if baseline.empty?
@@ -742,14 +1186,29 @@ def report(title, entries, rows_for)
 end
 
 total = pairs.length
-puts "check-conformance-drift: #{total} anchors, baseline recorded #{recorded || '(unstamped)'}"
+puts "check-conformance-drift: #{total} anchors, baseline last recorded #{recorded || '(unstamped)'}"
 puts "  unchanged #{same}   moved #{moved.length}   new #{fresh.length}   unmeasurable #{broken.length}" \
      "#{retired.empty? ? '' : "   retired #{retired.length}"}"
 puts "  matrix rows named from #{matrix}" if matrix
 puts "  (no --matrix given: anchors only, no SPEC row ids)" unless matrix
 
+# WHEN EACH UNCHANGED ROW WAS LAST JUDGED. The header stamp is the last --record
+# operation and says nothing about a row a partial re-record left alone, so the
+# per-row refs are the only place «these N were re-judged then, the rest are
+# still pending» is written down (K-1552).
+judged = pairs.sort.filter_map { |rel, anchor| baseline_ref[[rel, anchor]] }.tally
+unless judged.empty?
+  legacy_n = judged.delete(nil).to_i
+  puts "  judged at: " + (judged.sort_by { |ref, n| [-n, ref] }.first(6)
+                                .map { |ref, n| "#{ref} #{n}" }.join("   ") +
+                          (judged.size > 6 ? "   … #{judged.size - 6} more commit(s)" : "") +
+                          (legacy_n.positive? ? "   (#{legacy_n} row(s) carry no per-row ref: run --reheader)" : ""))
+end
+
 report("MOVED — the anchored region changed since the baseline; re-judge these rows:",
-       moved.map { |rel, anchor, was, now, why| [rel, anchor, "#{was} -> #{now}", why] }, rows_for)
+       moved.map { |rel, anchor, was, now, why|
+         [rel, anchor, "#{was} -> #{now}", "last judged at #{baseline_ref[[rel, anchor]] || '(no ref)'}", why]
+       }, rows_for)
 report("NEW — cited since the baseline was recorded, never judged against it:",
        fresh.map { |rel, anchor, fp, why| [rel, anchor, fp, why] }, rows_for)
 report("UNMEASURABLE — bin/check-conformance-anchors is the gate for these:",
@@ -771,6 +1230,8 @@ end
 puts
 puts "#{moved.length + fresh.length + broken.length} anchor(s) need re-judging. This is a TRIAGE LIST, not a failure:"
 puts "walk them, then re-record the baseline with --record so the next sweep starts from here."
+puts "Judged only PART of it? `--record --only <path-or-glob>` stamps that scope at head and leaves"
+puts "every other row at its own ref, so the rest keeps showing up here instead of being certified."
 
 # K-1412: exit 0, because this is a report and not a gate — the count above is
 # where drift is reported. `--exit-on-drift` is the opt-in for a caller that

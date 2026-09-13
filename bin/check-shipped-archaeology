@@ -758,9 +758,21 @@ end
 
 REPO_ROOT_FILES = repo_root_files.freeze
 
+# THE DOUBLE BACKSLASH IS LOAD-BEARING AND IT WAS MISSING (K-1577). The two
+# boundaries below are written inside a DOUBLE-quoted Ruby string, where `\w`
+# is not a shorthand at all — it is the letter `w`. This constant shipped as
+# `Regexp.new("(?<![\w/.@-])…(?![\w@/-])")`, whose `.source` reads
+# `(?<![w/.@-])…(?![w@/-])`: two character classes that exclude ONE letter
+# where they mean to exclude every word character. `REPO_PATH_RE` twenty lines
+# up spells the same boundary `\\w` and was always right, so the two halves of
+# one recogniser disagreed about what a word character is. The direction is
+# fail-SAFE — an over-wide boundary matches MORE, so it can only add red — and
+# that is exactly why it survived: nothing it produced looked like a hole. The
+# self-test's boundary arms below now use a word character that is not one of
+# the five literals, which is the only way to tell the two spellings apart.
 ROOT_FILE_RE =
-  Regexp.new("(?<![\w/.@-])(?:#{REPO_ROOT_FILES.map { |n| Regexp.escape(n) }.join('|')})" \
-             "(?![\w@/-])")
+  Regexp.new("(?<![\\w/.@-])(?:#{REPO_ROOT_FILES.map { |n| Regexp.escape(n) }.join('|')})" \
+             "(?![\\w@/-])")
 
 # R8 asks a question R7 does not, so it reads a wider token set than R7's.
 AUTHOR_ONLY_RE = Regexp.union(REPO_PATH_RE, ROOT_FILE_RE)
@@ -820,15 +832,67 @@ end
 # A sentence may NAME a file git does not carry in order to say so, and that
 # sentence is the REMEDY this rule asks for rather than a breach of it: all
 # three live citations of `.mise.toml` in this tree read «… are gitignored», and
-# a rule that reddened on them would demand the repairs be un-written. The
-# vocabulary is a hand-list and that is safe HERE, unlike the hand-lists this
-# file keeps filing rows about, because of the direction it fails in: a phrasing
-# it does not know reads as a POINTER and goes RED, which costs somebody a
-# rewording — it can never let a pointer through.
+# a rule that reddened on them would demand the repairs be un-written.
+#
+# WHAT THIS SUPPRESSION GUARANTEES, STATED AS WHAT THE CODE DOES (K-1578). The
+# unqualified claim that used to stand here — that it «can never let a pointer
+# through» — was about the VOCABULARY being a hand-list, and it was true of
+# that and of nothing else: the suppression was scoped to the whole LINE and
+# asked no question about which file the disclaiming words were about, so ONE
+# excuse word anywhere on a line silenced EVERY author-only token on it. «`x`
+# pins the Ruby (unlike `y`, which is untracked)» passed on `x`, and an
+# unwrapped Markdown paragraph is one line, which is the ordinary shape of a
+# README bullet.
+#
+# The mechanism was narrowed rather than the promise softened, because a FALSE
+# NEGATIVE is the failure R8 exists to prevent: a pointer that survives costs a
+# reader a file they cannot open, and an over-eager red costs an author a
+# rewording. So the suppression is now scoped to the CLAUSE the token sits in
+# (`clause_spans` below), which is the smallest span that still keeps every
+# remedy sentence in this tree green — each of them names the file and excuses
+# it in the same breath.
+#
+# The residue is stated instead of being claimed away: a clause that names TWO
+# files and excuses one of them excuses both, because separating them needs a
+# parser and this is a lexical proxy. What is gone is the LINE-wide silence.
 DISCLAIMS_SHIPPING_RE =
   /gitignored|untracked|
    git\s+does\s+not\s+carry|(?:is|are|it)\s+not\s+tracked|
    does\s+not\s+ship|ships?\s+no\s+\w|carries\s+none|in\s+no\s+clone/ix
+
+# Where one clause ends and the next begins, for the suppression above. A
+# sentence terminator, a semicolon, a dash used as a break, and — the shape the
+# line-wide scope walked into — a BRACKET, because a parenthetical is a clause
+# of its own and the sentence around it is not covered by what it says. A comma
+# is deliberately NOT a break: «`x` is gitignored, so a clone has none» is one
+# clause of one sentence and splitting it would demand the remedy sentences be
+# re-punctuated.
+CLAUSE_BREAK_RE = /(?<=[.!?;])[ \t]+|[()\[\]]|[ \t]+[—–][ \t]+|[ \t]+--[ \t]+/
+
+# The [start, end) spans of `line`, one per clause. Offsets rather than strings
+# because the caller has to ask which clause a TOKEN fell in, and a split loses
+# that.
+def clause_spans(line)
+  spans = []
+  from  = 0
+  line.to_enum(:scan, CLAUSE_BREAK_RE).each do
+    m = Regexp.last_match
+    spans << [from, m.begin(0)]
+    from = m.end(0)
+  end
+  spans << [from, line.length]
+  spans.reject { |a, b| b <= a }
+end
+
+# Does the clause containing the character at `pos` disclaim shipping? A token
+# outside every span (there is none, but the span list is derived) is NOT
+# disclaimed — the direction that reports rather than hides.
+def disclaimed_at?(line, pos)
+  span = clause_spans(line).find { |a, b| pos >= a && pos < b }
+  return false if span.nil?
+
+  line[span[0]...span[1]].match?(DISCLAIMS_SHIPPING_RE)
+end
 
 # The tokens on one line that name nothing. `File.exist?` and not `git ls-files`
 # on purpose: a path this repository generates but does not track (`e2e/.gems`,
@@ -863,11 +927,19 @@ end
 # REPOSITORY-RELATIVE path each token resolves to, so a bare `mise.toml` is
 # reported as the `e2e/mise.toml` a reader has to go and look at.
 def author_only_paths(line, doc_dir = REPO)
-  return [] if line.match?(DISCLAIMS_SHIPPING_RE)
-
-  candidates = line.scan(AUTHOR_ONLY_RE).map { |t| File.join(REPO, t) }
+  # Each token is kept with WHERE it was found, because the disclaimer that
+  # excuses it has to sit in the same clause (K-1578) — a line-wide test let
+  # one excuse word silence every token beside it.
+  candidates = []
+  matches = ->(re, base) do
+    line.to_enum(:scan, re).each do
+      m = Regexp.last_match
+      candidates << File.join(base, m[0]) unless disclaimed_at?(line, m.begin(0))
+    end
+  end
+  matches.call(AUTHOR_ONLY_RE, REPO)
   sib = sibling_file_re(doc_dir)
-  candidates += line.scan(sib).map { |t| File.join(doc_dir, t) } if sib
+  matches.call(sib, doc_dir) if sib
 
   candidates.uniq.filter_map do |full|
     rel = full.start_with?("#{REPO}/") ? full.delete_prefix("#{REPO}/") : full
@@ -1715,8 +1787,17 @@ SCOPES = {
          per: "everything the gem's own `spec.files` names, plus <gem>.gemspec, " \
               "minus CHANGELOG.md and LICENSE.txt" },
   demo: { label: "a demo", dirs: -> { demo_dirs }, files: ->(d) { demo_files(d) },
-          per: "app/**, lib/**, script/**, config/**, db/** (text extensions), " \
-               "Rakefile, config.ru, README.md, before-after.md",
+          # DERIVED FROM THE SAME CONSTANTS `demo_files` READS (K-1580). The
+          # hand-typed version of this line ended «Rakefile, config.ru,
+          # README.md, before-after.md» and named two Markdown pages, while
+          # `demo_docs` had already become EVERY tracked `.md` under the demo
+          # minus two skip lists — so three shipped pages were read and
+          # described by nothing. This is the line a reader of every run sees
+          # and quotes; it may not be an inventory kept beside a derivation.
+          per: "#{DEMO_ROOTS.map { |r| "#{r}/**" }.join(', ')} " \
+               "(#{DEMO_EXTS.join(' ')}), #{DEMO_TOP.join(', ')}, and every tracked .md " \
+               "anywhere under the demo except #{DEMO_DOC_SKIP.join(' and ')} " \
+               "and the #{DEMO_RUNTIME.join('/')} trees",
           door: "one demo is NAMED after the maintainer and the word is its subject " \
                 "matter, so the maintainer-named rule stops at the door" },
   spec: { label: "a gem's spec/ (published, not shipped)", dirs: -> { spec_dirs },
@@ -2419,6 +2500,37 @@ def self_test
                "`e2e/README.md` is one token, reported once, by R7 or R8 and never by both",
                ("See e2e/README.md." =~ ROOT_FILE_RE).nil?)
 
+    # ── A LOST `\w` IS INVISIBLE TO EVERY ARM ABOVE (K-1577) ────────────────
+    #
+    # The arm directly above is the one that should have caught it and could
+    # not: its probe is `e2e/README.md`, and the character before the name is a
+    # `/`, which is a LITERAL member of the class in both spellings — so it
+    # passed whether the class read `[\w/.@-]` or the degraded `[w/.@-]`. These
+    # two probe with a word character that is NOT one of the five literals, so
+    # only the escaped spelling can satisfy them. They are behavioural rather
+    # than textual on purpose: `.source` inspection would go stale the moment
+    # the boundary is spelled some third way, while «a letter in front is not
+    # this file» is what the rule means in either spelling.
+    boundary_probe = REPO_ROOT_FILES.find { |n| !n.start_with?(".") } || REPO_ROOT_FILES.first
+    check.call("…and NOT on a name a WORD CHARACTER runs into: `X#{boundary_probe}` is not " \
+               "`#{boundary_probe}`, which is only true when the lookbehind spells `\\w` and " \
+               "not the letter `w`",
+               ("`X#{boundary_probe}` pins it" =~ ROOT_FILE_RE).nil?)
+    check.call("…and the same at the trailing end: `#{boundary_probe}1` is not " \
+               "`#{boundary_probe}`",
+               ("`#{boundary_probe}1` pins it" =~ ROOT_FILE_RE).nil?)
+    # …and the CLASS rather than the instance: every recogniser this file builds
+    # through `Regexp.new` carries the same boundary, and each is a fresh chance
+    # to write `\w` inside a double-quoted string. A degraded class is exactly
+    # the literal `w` sitting where the shorthand belongs, so it is one string
+    # test per pattern — asked of all three at once so a new one added beside
+    # them is not the only one nobody checked.
+    degraded = ->(re) { re.source.include?("[w/.@-]") || re.source.include?("[w@/-]") }
+    check.call("…and no OTHER recogniser in this file lost the same escape — the static " \
+               "union and the per-directory sibling pattern spell the class, not the letter",
+               [REPO_PATH_RE, ROOT_FILE_RE,
+                sibling_file_re(File.join(REPO, "e2e"))].compact.none?(&degraded))
+
     if root_untracked.empty?
       check.call("R8's root-level leg has nothing to fire on in this tree today — the arm " \
                  "below is skipped rather than faked", true)
@@ -2460,6 +2572,11 @@ def self_test
     sibdir = File.join(dir, "sibling-leg")
     FileUtils.mkdir_p(sibdir)
     File.write(File.join(sibdir, "local.toml"), "ruby = \"4.0.1\"\n")
+    # A SECOND untracked sibling, written here rather than later because
+    # `sibling_file_re` memoises per directory and the first call below freezes
+    # the name set. It exists so the clause-scope arms further down can put one
+    # file inside the excuse and one outside it.
+    File.write(File.join(sibdir, "other.toml"), "ruby = \"4.0.1\"\n")
     sibdoc = File.join(sibdir, "LAYOUT.md")
     File.write(sibdoc, "```\n├── local.toml    # pins the Ruby the harness runs on\n```\n")
     sibok = File.join(sibdir, "DISCLAIMED.md")
@@ -2494,6 +2611,36 @@ def self_test
                  "because `#{n}` alone is not a thing a reader can go and look at",
                  author_only_paths("├── #{n}   # pins it", File.join(REPO, "e2e")) == ["e2e/#{n}"])
     end
+
+    # ── THE EXCUSE IS SCOPED TO ITS CLAUSE, NOT TO THE LINE (K-1578) ────────
+    #
+    # The suppression used to return on the first excuse word ANYWHERE on the
+    # line, with no question about which file it was about, so a parenthetical
+    # aside silenced the whole sentence around it. These arms plant the
+    # motivating shape — one file named outside the excuse, one inside it — and
+    # require the rule to separate them. Both fixtures sit in the sibling
+    # directory because that is where two untracked names are available.
+    paren_line = "`local.toml` pins the Ruby (`other.toml` is untracked and ships in no clone)."
+    # Asked of the decision rather than of a Hit's text, because a Hit carries
+    # the whole line and both names are in it either way — the question is
+    # which of the two the rule RESOLVED.
+    check.call("the excuse covers the file named INSIDE it and NOT the one named outside — " \
+               "the parenthetical shape the line-wide scope silenced whole",
+               author_only_paths(paren_line, sibdir) == [File.join(sibdir, "local.toml")])
+    parenthetical = File.join(sibdir, "PARENTHETICAL.md")
+    File.write(parenthetical, "#{paren_line}\n")
+    check.call("…and end to end through `scan`, the line yields exactly the one pointer a " \
+               "reader cannot follow",
+               r8.call(parenthetical).size == 1)
+
+    # A comma is NOT a clause break, and that is what keeps every live remedy
+    # sentence in this tree green: they name the file and excuse it in one
+    # breath, separated by a comma.
+    comma = File.join(sibdir, "COMMA.md")
+    File.write(comma, "`local.toml` and `other.toml` are gitignored, so a clone has none.\n")
+    check.call("…and a comma does NOT break the clause — the shape every live disclaimer in " \
+               "this tree has",
+               r8.call(comma).empty?)
 
     # Ripper.lex is a LEXER, not a parser: a syntax error still yields tokens.
     # What silences it is a file it cannot tokenize at all — here, NUL bytes.
@@ -2697,6 +2844,30 @@ def self_test
   check.call("the derived per-scope rule line names every rule and census this scope carries, " \
              "each in the segment the tables put it in, and nothing it does not carry, in " \
              "all #{SCOPES.size} scopes", coverage_ok)
+
+  # ── …AND `per:` MAY NOT BE AN INVENTORY EITHER (K-1580) ────────────────────
+  #
+  # The arm above holds the RULE half of the scope table to its derivation. The
+  # FILE-SET half was hand-typed, and the demo scope's version had gone stale
+  # against the code sitting under it: it named two Markdown pages while
+  # `demo_docs` had become every tracked `.md` under the demo, so three shipped
+  # pages were read and described by nothing. The string is derived from those
+  # constants now; these two arms are what keeps the derivation honest — the
+  # first that the deep-page clause has a live subject at all, the second that
+  # the skip lists it prints are the ones the code applies.
+  deep_docs = demo_dirs.flat_map do |d|
+    demo_docs(d).reject do |p|
+      rel = p.delete_prefix("#{d}/")
+      DEMO_TOP.include?(rel) || DEMO_ROOTS.include?(rel.split("/").first)
+    end
+  end
+  check.call("the demo scope's `per:` describes pages no top-level list could name — " \
+             "#{deep_docs.size} tracked page(s) sit outside #{DEMO_ROOTS.join('/')} and outside " \
+             "#{DEMO_TOP.join(', ')}#{deep_docs.empty? ? '' : " (#{deep_docs.map { |p| p.delete_prefix("#{REPO}/") }.sort.join(', ')})"}",
+             !deep_docs.empty?)
+  check.call("…and it names every skip list the derivation applies, so a page that leaves the " \
+             "scope leaves the printed sentence with it",
+             (DEMO_DOC_SKIP + DEMO_RUNTIME).all? { |n| SCOPES[:demo][:per].include?(n) })
 
   # ── VACUITY: the guard must be looking at something real ──────────────────
   gems  = shipped_gems

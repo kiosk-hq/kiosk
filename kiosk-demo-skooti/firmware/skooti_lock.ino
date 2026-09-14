@@ -281,10 +281,15 @@ public:
         const char *token = val.c_str();
         uint64_t    now   = get_now();
 
-        /* 1. Signature + domain tag + scooter_code + expiry check */
-        int ok = skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now);
+        /* 1. Signature + domain tag + scooter_code + expiry check.
+         *    Through skooti_verify_wire, which is handed the WRITE'S OWN SIZE:
+         *    c_str() ends at the first NUL, so a write carrying one would
+         *    otherwise be verified as the prefix before it while the rest of
+         *    the writer's bytes went unread. The grammar admits no NUL in a
+         *    wire token, so such a write is refused whole. */
+        int ok = skooti_verify_wire(SKOOTI_PUBKEY, token, val.size(), SCOOTER_CODE, now);
         if (!ok) {
-            Serial.println("[BLE] REJECT — token invalid (tag/sig/code/exp)");
+            Serial.println("[BLE] REJECT — token invalid (bytes/tag/sig/code/exp)");
             return;
         }
 

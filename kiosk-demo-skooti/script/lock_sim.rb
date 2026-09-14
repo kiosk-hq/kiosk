@@ -12,7 +12,7 @@ require "base64"
 #   2. On a BLE unlock request it receives the wire rental token:
 #        "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 #      a. Splits on the LAST "."
-#      b. Base64url-decodes the sig (64 bytes)
+#      b. Base64url-decodes the sig — unpadded, canonical, exactly 64 bytes
 #      c. Ed25519-verifies the sig over the message bytes
 #      d. Parses the 6 pipe-separated fields, every one of them non-empty
 #      e. Checks: field 0 == "kiosk-rental-v1" (domain-separation tag)
@@ -47,6 +47,18 @@ LOCK_SIM_CONTEXT_TAG = "kiosk-rental-v1"
 # firmware/verify.c. RENTAL_TOKEN.md states them in prose.
 LOCK_SIM_TOKEN_MAX_BYTES  = 512
 LOCK_SIM_SIG_B64_MAX      = 88
+# base64url, RFC 4648 §5, UNPADDED — a charset gate in front of the decode.
+# Base64.urlsafe_decode64 translates "-_" to "+/" and pads a short input before
+# decoding, so without this it would accept a signature spelled in the STANDARD
+# alphabet or with "=" padding; the lock's character table gives -1 for "+",
+# "/" and "=" alike.
+LOCK_SIM_SIG_B64_FORMAT   = /\A[A-Za-z0-9\-_]+\z/
+# The lock reads the BLE write as a NUL-terminated C string, so a NUL byte does
+# not appear IN a token — it ENDS one, and everything after it is invisible to
+# the verifier that decides whether the scooter opens. A Ruby String carries the
+# byte and would read past it, which is this simulator answering a question the
+# firmware was never asked.
+LOCK_SIM_NUL_BYTE         = "\u0000".b
 LOCK_SIM_FIELD_COUNT      = 6
 LOCK_SIM_DELIMITER        = "|"
 LOCK_SIM_TIMESTAMP_FORMAT = /\A[0-9]{1,20}\z/
@@ -83,7 +95,8 @@ class LockSim
   # Verify and consume a rental token (domain-separation tag + durable replay prevention).
   #
   # Returns +false+ if:
-  #   - token is malformed, over 512 bytes, or base64url-decode fails
+  #   - token is malformed, over 512 bytes, or holds a NUL byte
+  #   - the signature field is not unpadded base64url, or does not decode to 64 bytes
   #   - Ed25519 signature is invalid
   #   - the message is not exactly 6 pipe-delimited non-empty fields
   #   - field 0 != "kiosk-rental-v1" (wrong or missing domain-separation tag)
@@ -102,6 +115,9 @@ class LockSim
     # Gate: wire length — the lock's own SKOOTI_TOKEN_MAX.
     return false if token.bytesize > LOCK_SIM_TOKEN_MAX_BYTES
 
+    # Gate: no NUL byte — the firmware would see the prefix and nothing more.
+    return false if token.b.include?(LOCK_SIM_NUL_BYTE)
+
     # Split on the LAST "." — the message itself contains "|" but no ".".
     dot_idx = token.rindex(".")
     return false if dot_idx.nil?
@@ -111,6 +127,7 @@ class LockSim
 
     return false if message.empty? || sig_b64.empty?
     return false if sig_b64.bytesize > LOCK_SIM_SIG_B64_MAX
+    return false unless sig_b64.match?(LOCK_SIM_SIG_B64_FORMAT)
 
     # Decode sig — base64url, no padding.
     sig = Base64.urlsafe_decode64(sig_b64)

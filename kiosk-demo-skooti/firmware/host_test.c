@@ -70,16 +70,24 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 
 #define SCOOTER_CODE "SK-001"
 
-/* wire token: domain-separation tag + 6 pipe fields */
-#define WIRE_TOKEN \
-    "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" \
-    "." \
+/* The two halves of the known-answer wire token, so the encoding tests can
+ * respell the signature without retyping the message. */
+#define KAT_MSG \
+    "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+#define KAT_SIG \
     "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
+
+/* wire token: domain-separation tag + 6 pipe fields */
+#define WIRE_TOKEN KAT_MSG "." KAT_SIG
 
 /* Timestamp inside the validity window (exp=1750000900, now=1750000800) */
 #define NOW_FRESH   ((uint64_t)1750000800ULL)
 /* Timestamp after expiry */
 #define NOW_EXPIRED ((uint64_t)1750000901ULL)
+/* The instant exp names — the window is now < exp, so this one is spent */
+#define NOW_AT_EXP  ((uint64_t)1750000900ULL)
+/* The last instant inside the window */
+#define NOW_LAST    ((uint64_t)1750000899ULL)
 
 /* --------------------------------------------------------------------------
  * Tests
@@ -477,13 +485,124 @@ static void test_field_content_boundary(void)
 }
 
 /*
- * Test 10 — jti_store: insert, replay detection, expiry pruning, table-full eviction
+ * Test 10 — signature ENCODING: one signature, one spelling
+ *
+ * These five tokens all carry the SAME valid 64-byte signature over the same
+ * message; only the base64url spelling of it changes. Every one of them is a
+ * refusal, and each is a spelling a Ruby reader's Base64 helper would have
+ * taken without the charset gate in front of it: `=` padding, the standard
+ * alphabet's `+`, and — the one no charset gate catches — the sixteen
+ * encodings that differ only in the leftover bits of the final character.
+ */
+static void test_sig_encoding(void)
+{
+    int result;
+    printf("\n[10] Signature encoding: padding, alphabet, canonical tail → expect 0\n");
+
+    /* 86 unpadded characters is the canonical width; padding takes it to 88,
+     * which is exactly the early length guard, so length is not what answers. */
+    result = skooti_verify_token(SKOOTI_PUBKEY, KAT_MSG "." KAT_SIG "==",
+                                 SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature padded to 88 with '=' → 0");
+
+    /* The same bytes in the STANDARD base64 alphabet: this signature's three
+     * '-' characters spelled '+'. */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM+q++ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature in the standard base64 alphabet → 0");
+
+    /* 86 characters carry 516 bits and the signature is 512, so the final
+     * character has four bits that decode to nothing. Canonical leaves them
+     * zero; this token sets them, decodes to the identical 64 bytes, and is a
+     * different string on the wire — 'g' (value 32) becomes 'v' (value 47). */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCv",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature with a non-canonical final character → 0");
+
+    /* 85 characters decode to 63 bytes, 87 to 65 — neither is a signature. */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROC",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature one character short → 0");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, KAT_MSG "." KAT_SIG "A",
+                                 SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature one character long → 0");
+}
+
+/*
+ * Test 11 — skooti_verify_wire: the byte buffer, NUL included
+ *
+ * This is the entry point the sketch calls with the BLE write's own size. The
+ * verifier below it reads a `const char *` and ends at the first NUL, so a
+ * write carrying one would be verified as the prefix before it while the rest
+ * of the writer's bytes went unread; the grammar admits no NUL in a wire
+ * token, so the whole buffer is refused.
+ */
+static void test_wire_bytes(void)
+{
+    static const char nul_inside[] =
+        "kiosk-rental-v1|SK-001|resv\0-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+        "." KAT_SIG;
+    char trailing[sizeof(WIRE_TOKEN) + 1];
+    int  result;
+
+    printf("\n[11] skooti_verify_wire: the write's own byte count → expect 0 on any NUL\n");
+
+    result = skooti_verify_wire(SKOOTI_PUBKEY, WIRE_TOKEN, strlen(WIRE_TOKEN),
+                                SCOOTER_CODE, NOW_FRESH);
+    check(result == 1, "wire: the known-answer token at its own length → 1");
+
+    /* sizeof - 1 drops the terminator the compiler appends; the NUL this
+     * buffer is testing is the one written INTO the reservation id. */
+    result = skooti_verify_wire(SKOOTI_PUBKEY, nul_inside, sizeof(nul_inside) - 1,
+                                SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "wire: a NUL inside reservation_id → 0");
+
+    memcpy(trailing, WIRE_TOKEN, sizeof(WIRE_TOKEN)); /* copies the terminator */
+    result = skooti_verify_wire(SKOOTI_PUBKEY, trailing, sizeof(WIRE_TOKEN),
+                                SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "wire: a NUL appended to a valid token → 0");
+
+    result = skooti_verify_wire(SKOOTI_PUBKEY, WIRE_TOKEN, 0, SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "wire: a zero-length write → 0");
+}
+
+/*
+ * Test 12 — the freshness boundary: the window is now < exp
+ *
+ * Test 2 above proves a token past its expiry is refused. This one pins the
+ * instant itself, because that is the second the three readers of this token
+ * have to answer identically and the only way to say which second it is.
+ */
+static void test_expiry_boundary(void)
+{
+    int result;
+    printf("\n[12] Freshness boundary at exp=1750000900 → expect 0 at exp, 1 one second before\n");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, WIRE_TOKEN, SCOOTER_CODE, NOW_AT_EXP);
+    check(result == 0, "now == exp → 0 (the window is now < exp)");
+
+    result = skooti_verify_token(SKOOTI_PUBKEY, WIRE_TOKEN, SCOOTER_CODE, NOW_LAST);
+    check(result == 1, "now == exp - 1 → 1 (last live second)");
+}
+
+/*
+ * Test 13 — jti_store: insert, replay detection, expiry pruning, table-full eviction
  */
 static void test_jti_store(void)
 {
     int r;
 
-    printf("\n[10] jti_store: insert, replay, prune, table-full eviction\n");
+    printf("\n[13] jti_store: insert, replay, prune, table-full eviction\n");
 
     /* 9a — fresh insert: first time → 0 (new) */
     jti_store_reset();
@@ -575,6 +694,9 @@ int main(void)
     test_wrong_domain_tag();
     test_field_count_boundary();
     test_field_content_boundary();
+    test_sig_encoding();
+    test_wire_bytes();
+    test_expiry_boundary();
     test_jti_store();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

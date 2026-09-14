@@ -155,8 +155,15 @@ module RentalTokenIssuerKAT
       expired = RentalTokenIssuer.issue(scooter_code: "SK-001", reservation_id: "resv-1", now: 1_750_000_000)
       assert("verify: expired (now>exp) -> nil", RentalTokenIssuer.verify(token: expired, now: 1_750_000_000 + 900 + 1).nil?)
 
+      # The window is now < exp, so the instant exp arrives the token is spent.
+      # The lock is the enforcement point and refuses that instant; this
+      # verifier answers as the lock does, and RENTAL_TOKEN.md states it once
+      # for all three readers.
       boundary = RentalTokenIssuer.verify(token: expired, now: 1_750_000_000 + 900)
-      assert("verify: now==exp inclusive -> claims", !boundary.nil?)
+      assert("verify: now==exp -> nil (the window is now < exp)", boundary.nil?)
+
+      last = RentalTokenIssuer.verify(token: expired, now: 1_750_000_000 + 900 - 1)
+      assert("verify: now==exp-1 -> claims (last live second)", !last.nil?)
 
       assert("verify: garbage -> nil", RentalTokenIssuer.verify(token: "garbage", now: 1_750_000_000).nil?)
       assert("verify: empty -> nil",   RentalTokenIssuer.verify(token: "", now: 1_750_000_000).nil?)

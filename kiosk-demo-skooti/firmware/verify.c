@@ -78,8 +78,9 @@ static int b64url_char_to_val(unsigned char c)
  *   dst_cap : capacity of dst in bytes — writes are bounded to [0, dst_cap)
  *   dst_len : on success, set to the number of decoded bytes
  *
- * Returns 1 on success, 0 if any character is invalid or output would exceed
- * dst_cap (overflow guard — rejects oversized input).
+ * Returns 1 on success, 0 if any character is invalid, if the output would
+ * exceed dst_cap (overflow guard — rejects oversized input), or if the input
+ * is not the CANONICAL encoding of the bytes it decodes to (see below).
  */
 static int b64url_decode(const char *src, size_t src_len,
                          uint8_t *dst, size_t dst_cap, size_t *dst_len)
@@ -102,6 +103,21 @@ static int b64url_decode(const char *src, size_t src_len,
             dst[out++] = (uint8_t)((accum >> bits) & 0xFF);
         }
     }
+
+    /* Canonical tail. The trailing characters that do not complete a byte
+     * carry leftover bits, and a canonical encoding leaves those bits zero.
+     * Sixteen spellings of one 64-byte Ed25519 signature differ only there —
+     * the 86-character encoding has four such bits — so a decoder that drops
+     * them lets sixteen distinct wire tokens carry one signature. The two Ruby
+     * readers decode strictly and admit only the one, and where readers of a
+     * credential differ the WIDEST decides what a fleet accepts, so this is
+     * the narrow reading: a signature has exactly one encoding.
+     *
+     * `bits` here is the leftover count: 0, 4 or 2 for an input length of 4n,
+     * 4n+2 or 4n+3. A value of 6 means the length is 4n+1, which is not a
+     * base64 length at all and encodes nothing. */
+    if (bits >= 6) return 0;
+    if (bits > 0 && (accum & ((1u << bits) - 1u)) != 0) return 0;
 
     *dst_len = out;
     return 1;
@@ -330,6 +346,33 @@ int skooti_verify_token(const uint8_t pubkey[32],
 
     /* --- All checks passed --- */
     return 1;
+}
+
+/* --------------------------------------------------------------------------
+ * skooti_verify_wire — verify a token whose LENGTH the caller knows.
+ *
+ * The caller here is whoever received bytes: the sketch's BLE onWrite handler
+ * with the write's own size, the crosscheck helper with the file's. Everything
+ * below this function reads a `const char *` and so ends at the first NUL; a
+ * buffer holding one would be verified as the prefix before it, and the bytes
+ * after it — chosen by the writer, covered by no signature — would never be
+ * read at all. The grammar in ../RENTAL_TOKEN.md admits no NUL in a wire
+ * token, so a buffer that carries one is refused whole.
+ * -------------------------------------------------------------------------- */
+
+int skooti_verify_wire(const uint8_t pubkey[32],
+                       const char   *token,
+                       size_t        token_len,
+                       const char   *my_scooter_code,
+                       uint64_t      now_unix)
+{
+    if (!token) return 0;
+    if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;
+
+    /* strnlen stops at the first NUL: a shorter answer means one is in there. */
+    if (strnlen(token, token_len) != token_len) return 0;
+
+    return skooti_verify_token(pubkey, token, my_scooter_code, now_unix);
 }
 
 /* --------------------------------------------------------------------------

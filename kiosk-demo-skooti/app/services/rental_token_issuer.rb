@@ -55,6 +55,22 @@ module RentalTokenIssuer
   # characters unpadded, and the lock allows a little slack over that.
   SIG_B64_MAX = 88
 
+  # The signature alphabet: base64url, RFC 4648 §5, UNPADDED. This is a
+  # charset gate in front of the decode, and it is load-bearing because
+  # Base64.urlsafe_decode64 is wider than the lock's decoder in two ways it
+  # does not announce — it translates "-_" to "+/" before decoding, so a
+  # signature spelled in the STANDARD alphabet decodes, and it pads a short
+  # input, so a signature spelled with "=" decodes. The lock's character table
+  # gives -1 for "+", "/" and "=" alike. One signature, one spelling.
+  SIG_B64_FORMAT = /\A[A-Za-z0-9\-_]+\z/
+
+  # The wire token holds no NUL byte. The lock reads the BLE write as a
+  # NUL-terminated C string, so a NUL does not appear IN a token — it ENDS one,
+  # and every byte after it is invisible to the verifier that decides whether a
+  # scooter opens. A Ruby String carries the byte happily and would read past
+  # it, which is a reader answering a question the lock was never asked.
+  NUL_BYTE = "\u0000".b
+
   # Number of fields in the signed message, and the delimiter between them.
   FIELD_COUNT = 6
   DELIMITER   = "|"
@@ -101,9 +117,10 @@ module RentalTokenIssuer
       "#{message}.#{Base64.urlsafe_encode64(sig, padding: false)}"
     end
 
-    # Verify a wire token against the configured signing key: split on the LAST
-    # ".", base64url-decode the signature, Ed25519-verify the message, hold the
-    # message to the grammar above, check exp.
+    # Verify a wire token against the configured signing key: refuse a NUL
+    # byte, split on the LAST ".", hold the signature to the unpadded base64url
+    # alphabet and decode it, Ed25519-verify the message, hold the message to
+    # the grammar above, and require exp > now.
     #
     # Reference-verifier surface — the production unlock path never calls this;
     # the scooter lock (script/lock_sim.rb / the firmware) does the verifying.
@@ -117,6 +134,7 @@ module RentalTokenIssuer
     def verify(token:, now:)
       return nil if token.nil? || token.empty?
       return nil if token.bytesize > TOKEN_MAX_BYTES
+      return nil if token.b.include?(NUL_BYTE)
 
       dot_idx = token.rindex(".")
       return nil if dot_idx.nil?
@@ -126,6 +144,7 @@ module RentalTokenIssuer
 
       return nil if message.empty? || sig_b64.empty?
       return nil if sig_b64.bytesize > SIG_B64_MAX
+      return nil unless sig_b64.match?(SIG_B64_FORMAT)
 
       sig = Base64.urlsafe_decode64(sig_b64)
       return nil unless sig.bytesize == 64
@@ -154,7 +173,10 @@ module RentalTokenIssuer
       iat = Integer(iat_s, 10)
       exp = Integer(exp_s, 10)
 
-      return nil if now > exp
+      # Freshness: the window is `now < exp`, so a token whose exp is exactly
+      # now is spent. The lock is the enforcement point and refuses that
+      # instant; this verifier answers as the lock does.
+      return nil unless exp > now
 
       {
         scooter_code:   scooter_code,

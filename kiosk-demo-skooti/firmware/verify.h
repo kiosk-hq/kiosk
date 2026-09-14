@@ -128,6 +128,34 @@ int skooti_verify_token(const uint8_t pubkey[32],
                         uint64_t      now_unix);
 
 /*
+ * skooti_verify_wire — verify a rental token whose LENGTH the caller knows.
+ *
+ * This is the entry point for anything that receives the token as a byte
+ * buffer — a BLE write, a file, a socket — and it is what skooti_lock.ino
+ * calls with the write's own size.
+ *
+ * WHY IT EXISTS. skooti_verify_token takes a `const char *` and therefore ends
+ * at the first NUL, whatever the caller was handed. A BLE write carrying a NUL
+ * would be verified as the PREFIX before it, and the bytes after it — which
+ * the writer chose and the signature does not cover — would never be looked
+ * at. The wire token holds no NUL (../RENTAL_TOKEN.md states this once, for
+ * all three readers of the token), so a buffer that contains one is refused
+ * here rather than truncated and verified.
+ *
+ * Parameters are skooti_verify_token's, plus:
+ *   token_len : the number of bytes the caller received, NOT counting any
+ *               terminator the caller appended.
+ *
+ * Returns 1 on the same conditions skooti_verify_token returns 1, and 0 when
+ * the buffer is empty, longer than SKOOTI_TOKEN_MAX, or holds a NUL byte.
+ */
+int skooti_verify_wire(const uint8_t pubkey[32],
+                       const char   *token,
+                       size_t        token_len,
+                       const char   *my_scooter_code,
+                       uint64_t      now_unix);
+
+/*
  * skooti_parse_jti — extract the jti field from a verified wire token.
  *
  * Call only AFTER skooti_verify_token() returns 1.

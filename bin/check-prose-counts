@@ -105,6 +105,37 @@
 # NOT declare anything in the published strings, on purpose: it is not what the
 # reader of the page sees.
 #
+# FENCED BLOCKS, AND THE HOLE THE EXCLUSION WAS (K-1606). The census below SKIPS
+# fenced blocks, deliberately: their numbers belong to whatever produced them,
+# and a guard reading them as prose would ask a document to justify its own
+# program output. That exclusion was measured to be a hole.
+# kiosk-demo-skooti/firmware/README.md quotes a `make test` run under the words
+# "Expected output"; a wave moved figures in the producers and left the
+# quotation behind, and the ONE that was caught was caught only because it also
+# appears in the PROSE sentence above the fence. The rest sat inside the block,
+# where nothing in this repository read them. The block is prose that LOOKS like
+# output, so a reader trusts it and no gate reads it.
+#
+# So a fenced block may OPT IN, with one declaration per figure on the lines
+# immediately above its opening fence -- an HTML comment, invisible to a reader
+# of the rendered page:
+#
+#   <!-- fence-count: 85 live-signed vectors ¦ from: <command> -->
+#   <!-- fence-count: 0 failed ¦ why: <one-line reason> -->
+#
+# An opted-in block is then held from both ends at once:
+#
+#   FC-1  a `from:` key's number must be what its command re-derives
+#   FC-2  the key must still occur inside the block -- so a figure that moves in
+#         the producer is red whether or not the quotation was updated with it
+#   FC-3  COMPLETENESS: every standalone digit run in the block must be carried
+#         by some declaration's key. Opting in is all-or-nothing on purpose -- a
+#         block where three figures are gated and a dozen are not is the state
+#         this arm exists to end, and it reads as coverage.
+#
+# A block with no declaration is skipped exactly as before, so nothing outside
+# the opted-in set changes, and the run prints how many blocks have opted in.
+#
 # STILL UNREACHED, so nobody reads the split as complete: `kiosk.tech/` and the
 # private repo, which would need this script run there too (and, for
 # `kiosk.tech`, the twin-digest discipline `check-publication-paths` uses).
@@ -349,6 +380,33 @@ ARMS = [
       File.write(path, File.read(path).sub("names three\n    gates", "names nine\n    gates"))
     },
   },
+  {
+    id: "FC-1",
+    what: "an opted-in fenced block whose declared figure disagrees with the command that " \
+          "re-derives it -- the producer moved and both the block and its declaration stayed",
+    plant: lambda { |dir|
+      path = File.join(dir, "docs/fenced.md")
+      File.write(path, File.read(path).sub("3 files ¦", "5 files ¦").sub("3 files scanned", "5 files scanned"))
+    },
+  },
+  {
+    id: "FC-2",
+    what: "THE K-1606 DEFECT ITSELF: a figure inside a quoted run that the producer moved and " \
+          "the quotation did not -- the declaration's key is no longer in the block",
+    plant: lambda { |dir|
+      path = File.join(dir, "docs/fenced.md")
+      File.write(path, File.read(path).sub("3 files scanned", "4 files scanned"))
+    },
+  },
+  {
+    id: "FC-3",
+    what: "a NEW figure appearing inside an opted-in fenced block that no declaration carries -- " \
+          "the way the class regrows once a block is gated",
+    plant: lambda { |dir|
+      path = File.join(dir, "docs/fenced.md")
+      File.write(path, File.read(path).sub("0 failed ===", "0 failed, 7 skipped ==="))
+    },
+  },
 ].freeze
 # <<< ARM TABLE -- END
 
@@ -394,6 +452,102 @@ def prose_units(text)
   end
   units << buf
   split_sentences(units)
+end
+
+# ── fenced blocks (K-1606) ───────────────────────────────────────────────────
+
+# A declaration line: `<!-- fence-count: <key> ¦ from: <command> -->`, or the
+# same with `why:` for a figure nothing here can re-derive. `fence-` is part of
+# the word so the marker cannot be confused with the sentence-scoped `count:`
+# one, in either direction.
+FENCE_DECL = /\A<!--\s*fence-count:\s*(.+?)\s*¦\s*(from|why):\s*(.+?)\s*-->\z/.freeze
+# The fence itself, recognised anywhere on the line for the same reason
+# prose_units does it.
+FENCE_AT   = /(`{3,}|~{3,})/.freeze
+# A digit run standing ON ITS OWN. Not part of a hex blob, an identifier, a
+# version or a dotted number: this is what keeps a quoted public key, `SK-001`,
+# `0x00-0xFF`, `Ed25519` and `v1` out of the completeness census, all of which
+# occur in the first block to opt in.
+FENCE_DIGIT = /(?<![0-9A-Za-z._-])(\d+)(?![0-9A-Za-z._-])/.freeze
+
+# Every fenced block that has opted in, with its declarations and its body.
+def fenced_blocks(text)
+  lines  = text.lines.map(&:chomp)
+  blocks = []
+  i = 0
+  while i < lines.length
+    m = lines[i].match(FENCE_AT)
+    if m.nil?
+      i += 1
+      next
+    end
+
+    marker = m[1][0]
+    decls  = []
+    j = i - 1
+    while j >= 0 && (d = lines[j].strip.match(FENCE_DECL))
+      decls.unshift({ key: d[1], kind: d[2], payload: d[3], line: j + 1 })
+      j -= 1
+    end
+    k = i + 1
+    while k < lines.length
+      c = lines[k].match(FENCE_AT)
+      break if c && c[1][0] == marker
+
+      k += 1
+    end
+    blocks << { decls: decls, body: lines[(i + 1)...k].join("\n"), line: i + 1 } unless decls.empty?
+    i = k + 1
+  end
+  blocks
+end
+
+# FC-1/FC-2/FC-3 over one file's opted-in blocks. Returns findings; the caller
+# owns the stats.
+def fence_findings(root, rel, text, stats)
+  out = []
+  fenced_blocks(text).each do |block|
+    stats[:fenced_blocks] += 1
+    block[:decls].each do |d|
+      stats[:fence_declarations] += 1
+      if block[:body].scan(Regexp.new(Regexp.escape(d[:key]), Regexp::IGNORECASE)).empty?
+        out << { path: rel, id: "FC-2",
+                 what: "line #{d[:line]} declares `#{d[:key]}` but the fenced block below no " \
+                       "longer carries that text -- the figure moved and the quotation did not" }
+      end
+      next unless d[:kind] == "from"
+
+      first = d[:key].split.first.to_s
+      unless first =~ /\A(?:\d+|#{CARD_ALT})\z/i
+        out << { path: rel, id: "FC-1",
+                 what: "line #{d[:line]}: a `from:` declaration's key must BEGIN with the number " \
+                       "its command re-derives; this one begins #{first.inspect}" }
+        next
+      end
+
+      got, why = run_command(root, d[:payload])
+      if got.nil?
+        out << { path: rel, id: "FC-1",
+                 what: "line #{d[:line]}: the declared command #{d[:payload].inspect} #{why}" }
+      elsif got != cardinal_value(first)
+        out << { path: rel, id: "FC-1",
+                 what: "line #{d[:line]}: `#{d[:key]}` but `#{d[:payload]}` says #{got}" }
+      else
+        stats[:fence_declarations_ok] += 1
+      end
+    end
+
+    covered = block[:decls].flat_map { |d| d[:key].scan(FENCE_DIGIT).flatten }
+    block[:body].scan(FENCE_DIGIT).flatten.uniq.each do |run|
+      stats[:fence_figures] += 1
+      next if covered.include?(run)
+
+      out << { path: rel, id: "FC-3",
+               what: "the figure `#{run}` inside the gated fenced block at line #{block[:line]} is " \
+                     "carried by no `fence-count:` declaration above it" }
+    end
+  end
+  out
 end
 
 # Ruby: comment runs are joined the same way, and a `desc "…"` is a unit of its
@@ -663,6 +817,7 @@ def scan(root)
     # paying for. So the arm asks each class for a subject in the real tree.
     stats[:"files_#{kind}"] += 1
     stats[:gemspec_units] += gated.length if kind == :gemspec
+    findings.concat(fence_findings(root, rel, text, stats)) if kind == :prose
 
     reported.each do |s|
       stats[:reported_hits] += hits_in(s.gsub(MARKER_FULL, " ")).length
@@ -690,7 +845,7 @@ def scan(root)
       # A marker that did not parse is a marker that declares nothing, and the
       # count beside it would then be excused by nobody -- but a half-written
       # marker reads to a human as a declaration, so it fails on its own.
-      sentence.scan(/count:\s*[^¦\n]{0,40}(?:¦|-->)/) do
+      sentence.scan(/(?<!fence-)count:\s*[^¦\n]{0,40}(?:¦|-->)/) do
         frag = Regexp.last_match(0)
         next if marks.any? { |m| frag.include?(m[:count].to_s) }
 
@@ -765,6 +920,9 @@ def report(result, quiet:)
     puts "  #{ALLOW_FILE}: #{result[:allow].length} entry(ies), " \
          "#{result[:allow].count { |a| a[:command] }} carrying a `from:` command and therefore " \
          "MEASURED rather than excused"
+    puts "  fenced blocks opted in: #{s[:fenced_blocks]} carrying #{s[:fence_declarations]} " \
+         "declaration(s) over #{s[:fence_figures]} figure(s) " \
+         "(#{s[:fence_declarations_ok]} agreed with their command)"
     puts "  REPORTED, NOT GATED: #{s[:reported_hits]} count(s) in source comments; " \
          "#{s[:broad_residue]} cardinal-plus-plural hit(s) the noun vocabulary does not reach"
   end
@@ -790,6 +948,8 @@ def report(result, quiet:)
   warn "  Repair, in order of preference: elide the count; or declare it with a marker IN ITS OWN"
   warn "  SENTENCE -- <!-- count: N ¦ from: <command> --> ; or add a line to #{ALLOW_FILE} with a"
   warn "  one-line reason, and a `from:` command if one exists."
+  warn "  Inside a FENCED block: <!-- fence-count: <N> <text from the block> ¦ from: <command> -->"
+  warn "  on the line above the fence, or the same with `why:` for a figure nothing re-derives."
   1
 end
 
@@ -834,6 +994,20 @@ GREEN = {
   # hides a site is worse than no marker, and this is the shape that does it.
   "docs/split.md" => "This tree has three <!-- count: 3 ¦ from: git ls-files 'lib/*.rb' | wc -l --> " \
                      "files in it.\n",
+  # An opted-in fenced block. Its figures are GATED rather than skipped, which is
+  # the whole of the K-1606 arm -- one declared from a command, one excused with
+  # a reason, and nothing else inside the block left uncarried.
+  "docs/fenced.md" => <<~MD,
+    # A quoted run
+
+    Expected output:
+
+    <!-- fence-count: 3 files ¦ from: git ls-files 'lib/*.rb' | wc -l -->
+    <!-- fence-count: 0 failed ¦ why: the failure tally of the same line, zero on a run that passes -->
+    ```
+    === Results: 3 files scanned, 0 failed ===
+    ```
+  MD
   # An excused count, with the entry that excuses it below.
   "docs/allowed.md" => "The upstream standard defines seven sections, which are not ours to count.\n",
   # A gemspec, carrying a count in BOTH published spellings -- the one-line
@@ -964,6 +1138,13 @@ def run_self_test
   end
   total_decl = s[:declarations] + result[:allow].count { |a| a[:command] }
   failures << "the real tree ran #{total_decl} declared command(s) -- the declaration arm is vacuous" if total_decl < 1
+  # The fence arm has the same vacuity hazard as every other: with no opted-in
+  # block in the tree it exits 0 forever and reads as coverage (K-1606).
+  if s[:fenced_blocks].to_i < 1 || s[:fence_declarations_ok].to_i < 1
+    failures << "the real tree has #{s[:fenced_blocks].to_i} opted-in fenced block(s) and " \
+                "#{s[:fence_declarations_ok].to_i} fence declaration(s) agreeing with a command -- " \
+                "the fence arm has no subject here and would exit 0 whatever a block said."
+  end
 
   # Every declared file class must have a subject here. A class whose extractor
   # returns nothing is a class that has been switched off, and it reads as
@@ -983,6 +1164,9 @@ def run_self_test
   end
   puts "  real tree: #{s[:files]} file(s), #{s[:gated_hits]} gated count(s), #{total_decl} declared " \
        "command(s) -- non-vacuous"
+  puts "  real tree: #{s[:fenced_blocks].to_i} opted-in fenced block(s), " \
+       "#{s[:fence_figures].to_i} figure(s) inside them, " \
+       "#{s[:fence_declarations_ok].to_i} re-derived by their own command"
   puts "  real tree: every file class has a subject -- prose #{s[:files_prose].to_i}, env " \
        "#{s[:files_env].to_i}, gemspec #{s[:files_gemspec].to_i} (#{s[:gemspec_units].to_i} published " \
        "sentence(s)), code #{s[:files_code].to_i}"

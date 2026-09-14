@@ -98,6 +98,23 @@ months of clean local builds.
 Expected output (84 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:
 
+<!-- fence-count: 84 passed ¦ from: grep -c '    check(' kiosk-demo-skooti/firmware/host_test.c -->
+<!-- fence-count: 0 failed ¦ why: the failure tally of the same line; zero by construction on a run that prints ALL PASS, and the run is what this block quotes -->
+<!-- fence-count: C verify result: 1 ¦ why: the C verifier's boolean return value, not a quantity -->
+<!-- fence-count: 85 live-signed vectors ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::VECTORS.length' -->
+<!-- fence-count: 3 readers of this token ¦ from: grep -c '^  \["' kiosk-demo-skooti/firmware/crosscheck_grammar.rb -->
+<!-- fence-count: 11 respell ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::VECTORS.count { |v| v.wire != :canonical }' -->
+<!-- fence-count: 10 vary ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::VECTORS.count { |v| v.tag != SkootiTokenVectors::DEFAULT_TAG }' -->
+<!-- fence-count: 256 in reservation_id ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors.sweep_coverage.fetch("reservation_id").length' -->
+<!-- fence-count: 66 accepted ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::UNRESERVED.length' -->
+<!-- fence-count: 190 refused ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts 256 - SkootiTokenVectors::UNRESERVED.length' -->
+<!-- fence-count: 190 in scooter_code ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors.sweep_coverage.fetch("scooter_code").length' -->
+<!-- fence-count: 446 of 446 agreed ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::SWEEP.length' -->
+<!-- fence-count: 531 vectors ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::VECTORS.length + SkootiTokenVectors::SWEEP.length' -->
+<!-- fence-count: 12 vector axes ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors.axes.length' -->
+<!-- fence-count: 16 rules ¦ from: ruby kiosk-demo-skooti/firmware/check_grammar_coverage.rb | sed -n 's/.*coverage — \([0-9][0-9]*\) rules.*/\1/p' -->
+<!-- fence-count: 7 stated limits ¦ from: ruby kiosk-demo-skooti/firmware/check_grammar_coverage.rb | sed -n 's/.*and \([0-9][0-9]*\) stated limits.*/\1/p' -->
+<!-- fence-count: 3 subsections ¦ from: ruby kiosk-demo-skooti/firmware/check_grammar_coverage.rb | sed -n 's/.*across \([0-9][0-9]*\) subsections.*/\1/p' -->
 ```
 --- C host test ---
 === skooti firmware Ed25519 host test (offline Ed25519 rental token) ===

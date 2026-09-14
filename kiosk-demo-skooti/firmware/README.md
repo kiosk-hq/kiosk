@@ -12,7 +12,7 @@ This directory contains:
 | `token_vectors.rb` | The rental-token conformance vectors — the grammar, and what the vectors do not cover, stated in its header |
 | `crosscheck_grammar.rb` | Runs every vector through all three readers of the token — this C verifier, the shipped `RentalTokenIssuer.verify` and `script/lock_sim.rb` (invoked by `make crosscheck`) |
 | `check_grammar_coverage.rb` | Holds `../RENTAL_TOKEN.md` and `token_vectors.rb` to each other: a stated rule with no axis, or an axis no rule names, fails the build (invoked by `make crosscheck`) |
-| `Makefile` | `make test` = C assertions + Ruby↔C crosscheck |
+| `Makefile` | `make test` = C assertions + Ruby↔C crosscheck; `make portability` = the same sources through every compiler on the machine |
 | `ed25519/` | Vendored orlp/ed25519 (zlib license, public-domain-style) — portable Ed25519 with detached verify |
 
 The crypto is **proven on the host** before flashing.  The BLE flow is
@@ -78,9 +78,18 @@ make test
 ```
 
 This is not a local-only ceremony: the repository's `skooti-firmware` CI job
-runs `check_grammar_coverage.rb --self-test`, `make test` and `make test-asan`
-on every push and pull request. It needs a C99 compiler, `make` and stdlib
-Ruby — no database, no bundle.
+runs `check_grammar_coverage.rb --self-test`, `make portability`, `make test`
+and `make test-asan` on every push and pull request. It needs a C99 compiler,
+`make` and stdlib Ruby — no database, no bundle.
+
+`make portability` is the one to run before you trust a green build here. It
+puts these sources through every C compiler installed on the machine, at the
+POSIX.1-2008 feature level the Makefile asks for explicitly — which on macOS is
+STRICTER than the default, so a name taken from a BSD or GNU extension rather
+than from POSIX fails on your laptop instead of on a Linux runner. That is not
+hypothetical: `strnlen` is POSIX.1-2008, glibc declares it only when the macro
+is set, and the firmware's first CI run failed to compile for want of it after
+months of clean local builds.
 
 Expected output (75 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:

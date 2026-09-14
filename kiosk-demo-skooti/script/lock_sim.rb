@@ -13,7 +13,10 @@ require "base64"
 #        "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 #      a. Splits on the LAST "."
 #      b. Base64url-decodes the sig — unpadded, canonical, exactly 64 bytes
-#      c. Ed25519-verifies the sig over the message bytes
+#      c. Ed25519-verifies the sig over the message bytes. OpenSSL applies RFC
+#         8032 5.1.7's range check on the signature's scalar half, so a scalar
+#         at or above the group order is refused here without this file asking
+#         — the firmware asks explicitly, because its vendored verifier does not
 #      d. Parses the 6 pipe-separated fields, every one of them non-empty
 #      e. Checks: field 0 == "kiosk-rental-v1" (domain-separation tag)
 #      f. Checks: scooter_code and reservation_id are 1+ chars of A-Za-z0-9._~-,

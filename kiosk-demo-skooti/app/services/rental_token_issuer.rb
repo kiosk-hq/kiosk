@@ -148,7 +148,10 @@ module RentalTokenIssuer
     # Verify a wire token against the configured signing key: read it AS BYTES,
     # refuse a NUL byte, split on the LAST ".", hold the signature to the
     # unpadded base64url alphabet and decode it, Ed25519-verify the message,
-    # hold the message to the grammar above, and require exp > now.
+    # hold the message to the grammar above, and require exp > now. The
+    # Ed25519 verify is OpenSSL's, which applies RFC 8032 5.1.7's range check
+    # on the signature's scalar half, so a scalar at or above the group order
+    # is refused here without this method asking for it.
     #
     # BYTES, NOT CHARACTERS, and that is the first line of the method for a
     # reason. The lock this verifier answers for is a C program reading a byte

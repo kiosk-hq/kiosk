@@ -89,6 +89,17 @@ header states the two questions it leaves open.
   `=` padding and the standard alphabet's `+` and `/`, which are the two
   spellings a permissive base64 helper takes without being
   asked. <!-- vectors: sig -->
+- The second half of those 64 bytes is a scalar, and it is below the Ed25519
+  group order — the range RFC 8032 5.1.7 decodes it in. Multiplying the base
+  point by the group order gives the identity, so a signature and that same
+  signature with the group order added to its scalar satisfy one verification
+  equation: a second 64 bytes over the same message under the same key, which
+  no rule about ENCODING can tell apart from the first. The server and the
+  software lock verify through OpenSSL, which applies the range check; the lock
+  firmware applies it itself, in constant time, before it hands the bytes to
+  its vendored verifier, whose own bound stops at 2 to the 253 and leaves
+  exactly that one multiple inside. This says which 64 bytes are a signature,
+  not what a signature proves. <!-- vectors: sig -->
 - **The answer is a function of the token's BYTES, and of nothing else.** A
   Ruby String carries an encoding tag its caller chose, and `rindex`, `split`,
   `match?` and `==` all consult it; the lock is a C program that has no such
@@ -159,7 +170,16 @@ measurement over the whole domain instead of by a promise about it.
 - Anything about signature FORGERY. Every vector in the shared set carries a
   genuine signature over its own message; a flipped byte, a signature over
   other bytes and a wrong key are `firmware/host_test.c`'s subject and the
-  KAT's.
+  KAT's. The scalar rule above starts from a signature somebody already made
+  and narrows how it may be spelled, so it is on this side of that line too.
+- That the vendored Ed25519 verifier is RFC 8032 strict in every other
+  respect. Measured at head, two of the decoder's rules are the library's
+  rather than the RFC's: a public key whose y coordinate is at or above the
+  field prime is reduced instead of refused, and the x = 0 encoding is taken
+  with either sign bit. Both are about the PUBLIC KEY, which this lock is given
+  once at provisioning and never reads off the wire, so neither is reachable
+  from a token and neither is changed here. The scalar range is the one a token
+  carries, and it is the one that moved.
 - That the readers agree on TIMING. The C reader compares the tag and the
   scooter code in constant time; the two Ruby readers use `==`. An accept-or-
   refuse answer is all a vector carries, so nothing here measures it.
@@ -206,6 +226,7 @@ Assistant (agent token → Kiosk API)
     1. Wire token is at most 512 bytes
     2. Split on last '.' → message + sig
     3. Base64url-decode sig (must be 64 bytes)
+    3b. Its scalar half is below the group order (RFC 8032 5.1.7)
     4. Ed25519-verify sig over message bytes with provisioned pubkey
     5. Parse the pipe-fields; require exactly six, none of them empty
     6. field[0] == "kiosk-rental-v1"  (domain-separation tag)

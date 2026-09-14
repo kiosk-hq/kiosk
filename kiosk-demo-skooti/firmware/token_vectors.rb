@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "base64"
+
 # token_vectors.rb — the rental-token conformance vectors, shared by every
 # reader of the token.
 #
@@ -134,6 +136,48 @@ module SkootiTokenVectors
   # final character of a signature.
   B64URL = [*"A".."Z", *"a".."z", *"0".."9", "-", "_"].freeze
 
+  # L, the order of Ed25519's prime-order subgroup. RFC 8032 5.1.7 decodes the
+  # signature's second half as a scalar S in 0 <= S < L and calls a signature
+  # outside that range invalid. [L]B is the identity, so S + L satisfies the
+  # same verification equation S does — a SECOND 64-byte signature over the
+  # same message under the same key, which is the property the two respellings
+  # below exercise.
+  ORDER = 2**252 + 27_742_317_777_372_353_535_851_937_790_883_648_493
+
+  # Rebuild a wire signature with its scalar half replaced by whatever the
+  # block returns. The R half is carried through untouched, so what changes is
+  # the one number RFC 8032 puts a range on.
+  #
+  # It ABORTS rather than returning a vector that measures the wrong gate. The
+  # vendored verifier's own bound is `signature[63] & 224`, i.e. S < 2^253, and
+  # a respelt scalar at or above that is refused by that older, coarser test
+  # before the canonicality check is reached — so such a vector would pass for
+  # the wrong reason and go on passing if the canonicality check were deleted.
+  # This is the same refusal the runner makes for a transform that returns the
+  # canonical token: a vector that cannot fail for its own reason measures
+  # nothing.
+  def self.respell_scalar(signature_b64)
+    bytes = Base64.urlsafe_decode64(signature_b64)
+    if bytes.bytesize != 64
+      abort "  VECTOR BROKEN — a wire signature decoded to #{bytes.bytesize} bytes, not 64"
+    end
+
+    scalar = bytes[32, 32].bytes.each_with_index.sum { |b, i| b << (8 * i) }
+    respelt = yield(scalar)
+    if respelt.negative? || respelt >= 2**256
+      abort "  VECTOR BROKEN — a respelt scalar does not fit in 32 bytes"
+    end
+
+    tail = (0...32).map { |i| (respelt >> (8 * i)) & 0xff }.pack("C*")
+    if (tail.bytes[31] & 224) != 0
+      abort "  VECTOR BROKEN — a respelt scalar has bits above 2^252 set, so the " \
+            "vendored verifier's own `signature[63] & 224` bound answers it and " \
+            "the canonical-scalar check is never reached"
+    end
+
+    Base64.urlsafe_encode64(bytes[0, 32] + tail, padding: false)
+  end
+
   # HOW A VECTOR'S WIRE TOKEN IS SPELLED around the signature the runner
   # computes over its message. `:canonical` is the shipped spelling; every other
   # entry deliberately respells or dismantles the token, and the runner FAILS
@@ -157,6 +201,21 @@ module SkootiTokenVectors
     noncanonical_sig: ->(m, s) { "#{m}.#{s[0..-2]}#{B64URL[B64URL.index(s[-1]) | 0x0f]}" },
 
     short_sig:        ->(m, s) { "#{m}.#{s[0..-2]}" },
+    # The same R, the scalar moved up by one group order. RFC 8032 requires
+    # this refused; the vendored C verifier used to take it, where OpenSSL —
+    # which is what both Ruby readers verify through — never did.
+    malleated_sig:    ->(m, s) {
+      "#{m}.#{SkootiTokenVectors.respell_scalar(s) { |scalar| scalar + ORDER }}"
+    },
+
+    # The bound itself. The range is half-open, so L is not a canonical scalar;
+    # the verification equation fails for it as well, which is why this vector
+    # pins WHICH side of the boundary the readers hold rather than merely that
+    # they hold one.
+    order_sig:        ->(m, s) {
+      "#{m}.#{SkootiTokenVectors.respell_scalar(s) { ORDER }}"
+    },
+
     long_sig:         ->(m, s) { "#{m}.#{s}A" },
 
     # The wire shapes that never reach the field parse.
@@ -165,6 +224,20 @@ module SkootiTokenVectors
     empty_message:    ->(_m, s) { ".#{s}" },
     trailing_nul:     ->(m, s) { "#{m}.#{s}#{NUL}" },
   }.freeze
+
+  # The WIRE spellings that respell the SIGNATURE'S SCALAR rather than its
+  # encoding. `check_grammar_coverage.rb`'s R8 lets a rule on the page state
+  # the scalar range only while naming an axis one of these is on, for R6's
+  # reason: a rule about which 64 bytes are a signature reads the same on the
+  # page whether a vector reaches it or not, and before K-1603 none did.
+  # Membership is checked below rather than trusted, so a renamed transform is
+  # a loud failure and not a quietly empty list.
+  SCALAR_WIRES = %i[malleated_sig order_sig].freeze
+
+  missing = SCALAR_WIRES - WIRE.keys
+  unless missing.empty?
+    raise "SCALAR_WIRES names #{missing.join(', ')}, which WIRE does not have"
+  end
 
   # The RFC 3986 unreserved set: the whole of what fields 1 and 2 may hold.
   # Written as an array of byte VALUES because that is the form {SWEEP} needs —
@@ -294,6 +367,8 @@ module SkootiTokenVectors
     v("sig",    "signature with a non-canonical last character", false, msg, :noncanonical_sig),
     v("sig",    "signature one character short",            false, msg, :short_sig),
     v("sig",    "signature one character long",             false, msg, :long_sig),
+    v("sig",    "signature scalar moved up by the group order", false, msg, :malleated_sig),
+    v("sig",    "signature scalar equal to the group order",  false, msg, :order_sig),
 
     # ── wire: the shape of the token around the signature ────────────────────
     v("wire",   "no dot between message and signature",     false, msg, :no_dot),
@@ -408,6 +483,16 @@ module SkootiTokenVectors
     SWEEP_ARMS.select { |_axis, _field, vectors, control|
       sweep_bytes(vectors, control) == (0..255).to_a
     }.map(&:first).uniq
+  end
+
+  # The axes carrying at least one vector that respells the signature's SCALAR.
+  # Derived from the vectors, so deleting them empties this and R8 reddens —
+  # which is the state the grammar was in when K-1603 found the lock taking a
+  # scalar at or above the group order that both Ruby readers refused.
+  #
+  # @return [Array<String>] axis names
+  def self.scalar_axes
+    VECTORS.select { |vector| SCALAR_WIRES.include?(vector.wire) }.map(&:axis).uniq
   end
 
   # The injected byte of each sweep vector, taken back out of the signed

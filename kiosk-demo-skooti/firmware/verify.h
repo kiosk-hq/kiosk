@@ -111,6 +111,14 @@ extern "C" {
  *
  * Security properties:
  *   - The Ed25519 verify (orlp/ed25519) is internally constant-time.
+ *   - The signature's SCALAR is range-checked HERE, before that call. RFC 8032
+ *     5.1.7 decodes the second 32 bytes as a number below the group order L;
+ *     the vendored verifier bounds them only by `signature[63] & 224`, which
+ *     admits S and S + L alike, and [L]B is the identity so both satisfy one
+ *     equation. OpenSSL applies the range check, so without this the physical
+ *     lock — the widest reader — would take a second spelling of a token both
+ *     Ruby readers refuse. The comparison is constant-time: 32 fixed
+ *     iterations, no branch on the bytes, no load indexed by them.
  *   - Scooter-code comparison is constant-time (ct_memeq).
  *   - All field accesses are bounds-checked; no OOB on a malformed token.
  *   - The field COUNT is a gate, not an assumption: fewer than six fields and

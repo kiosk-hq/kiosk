@@ -216,6 +216,72 @@ static int is_jti(const char *s, size_t len)
 }
 
 /* --------------------------------------------------------------------------
+ * Canonical Ed25519 scalar — RFC 8032 5.1.7 step 1, the half the vendored
+ * verifier does not implement.
+ *
+ * A signature is R || S, and S is a scalar: RFC 8032 decodes it "in the range
+ * 0 <= s < L", L = 2^252 + 27742317777372353535851937790883648493 being the
+ * order of the prime-order subgroup, and calls a signature whose S is outside
+ * that range invalid. ed25519/verify.c bounds S only by `signature[63] & 224`,
+ * which refuses S >= 2^253 and nothing finer. Between L and 2^253 there is
+ * room for exactly one more multiple of L, and [L]B is the identity, so S + L
+ * satisfies the very equation S does: a second 64-byte signature over the same
+ * message, verifying under the same key.
+ *
+ * That matters here because this lock is one of THREE readers of a rental
+ * token and the other two verify through OpenSSL, which does apply the range
+ * check. Without this the physical lock — the widest reader, and the one
+ * nothing downstream can correct — would take a token both Ruby readers
+ * refuse. ../RENTAL_TOKEN.md states the rule for all three.
+ *
+ * CONSTANT TIME. S arrives on the wire and is not a secret, but a verifier
+ * that answers in a data-dependent time tells a caller WHICH check refused it,
+ * so this one does not branch on the bytes: all 32 byte positions are always
+ * read, in a fixed order, the comparison state is carried in arithmetic rather
+ * than in control flow, and there is no early return and no memory access
+ * indexed by the input.
+ *
+ * Returns 1 when the 32 little-endian bytes at s are a scalar below L, 0
+ * otherwise. S == L is NOT canonical: the range is half-open.
+ * -------------------------------------------------------------------------- */
+
+/* L, the group order, little-endian — the same constant ed25519/sc.h names. */
+static const uint8_t SC_ORDER_LE[32] = {
+    0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58,
+    0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10
+};
+
+static int ct_scalar_is_canonical(const uint8_t s[32])
+{
+    /* `lt` and `gt` latch the verdict of the most significant byte position at
+     * which s and L differ. `undecided` is 1 until one of them latches, and
+     * masks every later position out arithmetically — which is what replaces
+     * the `break` a readable version would have. All 32 positions are visited
+     * whatever the input. */
+    uint32_t lt = 0;
+    uint32_t gt = 0;
+    int i;
+
+    for (i = 31; i >= 0; i--) {
+        uint32_t a = (uint32_t)s[i];
+        uint32_t b = (uint32_t)SC_ORDER_LE[i];
+        /* Unsigned wraparound sets bit 31 exactly when the left side is the
+         * smaller byte; both operands are below 256, so this is defined. */
+        uint32_t a_lt_b = ((a - b) >> 31) & 1u;
+        uint32_t b_lt_a = ((b - a) >> 31) & 1u;
+        uint32_t undecided = (lt | gt) ^ 1u;
+
+        lt |= undecided & a_lt_b;
+        gt |= undecided & b_lt_a;
+    }
+
+    /* Equal all the way down leaves both flags 0, and s == L is out of range. */
+    return (int)lt;
+}
+
+/* --------------------------------------------------------------------------
  * verify_bounded — the whole verification, over EXACTLY token_len bytes.
  *
  * Every byte this function reads is in [token, token + token_len); it never
@@ -291,6 +357,13 @@ static int verify_bounded(const uint8_t pubkey[32],
      * The sig_len != 64 post-check is kept as defense-in-depth. --- */
     if (!b64url_decode(sig_b64, sig_b64_len, sig, sizeof(sig), &sig_len)) return 0;
     if (sig_len != 64) return 0;
+
+    /* --- RFC 8032 5.1.7: the scalar half of the signature must be below the
+     * group order. The vendored verifier only refuses S >= 2^253, which leaves
+     * S + L verifying alongside S — one token with two wire spellings, and the
+     * lock the only reader of the three that would take the second. See
+     * ct_scalar_is_canonical above. --- */
+    if (!ct_scalar_is_canonical(sig + 32)) return 0;
 
     /* --- Ed25519 verify: sig over msg bytes with pubkey --- */
     if (!ed25519_verify(sig, (const unsigned char *)msg, msg_len,

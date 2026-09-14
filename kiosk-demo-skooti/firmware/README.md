@@ -37,6 +37,10 @@ lock verifies:
      rather than ending the token where a const char * would, and no byte at
      or past that size is read
   2. the sig field is unpadded, canonical base64url and decodes to 64 bytes
+  2b. the scalar half of those 64 bytes is below the group order L, which is
+     the range RFC 8032 5.1.7 decodes it in — the vendored verifier stops at
+     2^253 and would otherwise take S and S+L alike, where OpenSSL (and so both
+     Ruby readers of this token) takes only S
   3. Ed25519-verify(sig, message, skooti_pubkey)
   4. the message splits into EXACTLY 6 pipe fields, none of them empty —
      fewer or more is refused, so field[4] is always the expiry and never a
@@ -291,6 +295,7 @@ so, and the table below is where that status is tracked.
 | Expired token (now > exp) rejected | **PROVEN** (`make test`) |
 | Wrong scooter_code rejected | **PROVEN** (`make test`) |
 | Flipped sig byte rejected | **PROVEN** (`make test`) |
+| Non-canonical signature scalar (S at or above the group order L) rejected | **PROVEN** (`make test`, `make crosscheck`) |
 | Oversized sig field (400 base64url chars) → 0, no stack overflow | **PROVEN** (`make test`; `make test-asan` for ASan confirmation) |
 | Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test`) |
 | Field count is exactly 6 — a 5-, 7- or 8-field message with a VALID dev-key signature is rejected | **PROVEN** (`make test`) |

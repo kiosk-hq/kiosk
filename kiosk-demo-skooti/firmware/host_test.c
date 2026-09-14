@@ -504,7 +504,7 @@ static void test_field_content_boundary(void)
 static void test_sig_encoding(void)
 {
     int result;
-    printf("\n[10] Signature encoding: padding, alphabet, canonical tail → expect 0\n");
+    printf("\n[10] Signature encoding and scalar range: padding, alphabet, canonical tail, S < L\n");
 
     /* 86 unpadded characters is the canonical width; padding takes it to 88,
      * which is exactly the early length guard, so length is not what answers. */
@@ -543,6 +543,62 @@ static void test_sig_encoding(void)
     result = skooti_verify_token(SKOOTI_PUBKEY, KAT_MSG "." KAT_SIG "A",
                                  SCOOTER_CODE, NOW_FRESH);
     check(result == 0, "signature one character long → 0");
+
+    /* The four cases below respell the SCALAR rather than the encoding, and
+     * they are the reason verify.c carries its own canonicality check.
+     *
+     * A signature is R || S and RFC 8032 5.1.7 decodes S "in the range
+     * 0 <= s < L". The vendored verifier bounds S only by `signature[63] &
+     * 224` — S < 2^253 — and [L]B is the identity, so S + L satisfies the very
+     * equation S does. Between L and 2^253 exactly one more multiple of L
+     * fits, which is the whole of the window: S + 2L carries bits the coarse
+     * bound already refuses. Both Ruby readers verify through OpenSSL, which
+     * applies the range check, so before this the physical lock — the widest
+     * reader of the three — took a token neither of them would.
+     *
+     * Same R, same message, same key, same 86-character width: what moved is
+     * the one number the RFC puts a range on. */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-qrzYzpKzql8O5UyDv4w_rVuL4A15xlupYqlGMfCnROGg",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature scalar moved up by the group order → 0");
+
+    /* The bound itself. The range is half-open, so L is not a canonical
+     * scalar; this pins which side of the boundary the lock holds. */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-rt0_VcGmMSWNac96Le-d4UAAAAAAAAAAAAAAAAAAAAEA",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature scalar equal to the group order → 0");
+
+    /* L - 1 IS a canonical scalar: it passes the new check and is then refused
+     * by the verification equation, which is the case that separates "the
+     * canonicality check works" from "the canonicality check refuses
+     * everything near L". */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-rs0_VcGmMSWNac96Le-d4UAAAAAAAAAAAAAAAAAAAAEA",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature scalar one below the group order → 0");
+
+    /* S + 2L, refused by the vendored verifier's own coarse bound. Kept so a
+     * regression that deleted the canonicality check would still leave this
+     * one passing — which is exactly why it is not evidence on its own. */
+    result = skooti_verify_token(
+        SKOOTI_PUBKEY,
+        KAT_MSG "."
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-qYoYJGRp23SMXxv97WvdnquL4A15xlupYqlGMfCnROKg",
+        SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "signature scalar moved up by two group orders → 0");
+
+    /* And the control: the canonical signature still verifies, so none of the
+     * above is a check that simply refuses this message. */
+    result = skooti_verify_token(SKOOTI_PUBKEY, WIRE_TOKEN, SCOOTER_CODE, NOW_FRESH);
+    check(result == 1, "the canonical signature still verifies → 1");
 }
 
 /*

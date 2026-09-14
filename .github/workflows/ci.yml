@@ -917,6 +917,91 @@ jobs:
           bin/rails demo:setup
           env ${{ matrix.tolled_redteam }} bin/rails demo:redteam
 
+  # THE SKOOTI LOCK FIRMWARE'S TEST TARGETS RAN IN NO CI JOB AT ALL UNTIL THIS
+  # ONE (K-1599).
+  #
+  # `kiosk-demo-skooti/firmware` ships the C rental-token verifier a physical
+  # ESP32-C3 lock runs, and a `make` target set that holds it to the same answer
+  # as the two Ruby readers of the same token. MEASURED at head before this job
+  # existed, `git grep` in this repository against `HEAD`, tool and dialect
+  # named: `git grep -c -i crosscheck HEAD -- .github` exited 1 with no output,
+  # `git grep -c -i host_test HEAD -- .github` the same, and `git grep -n -w make
+  # HEAD -- .github/workflows` returned
+  # 7 lines, every one of them inside a `#` comment of the «Watched fail:» form
+  # and none of them a step. So `make test` (46 C assertions), `make crosscheck`
+  # (63 live-signed vectors through all three readers) and
+  # `check_grammar_coverage.rb` were proved only by whoever remembered to type
+  # them. bin/check-ci-tasks cannot see the gap: its subject is `demo:` rake
+  # tasks and these are `make` targets.
+  #
+  # The cost was not theoretical. K-1588, K-1590 and K-1591 were each a real
+  # divergence between the shipped C verifier and the shipped Ruby readers, each
+  # of them rode a green `main`, and the gate that now catches all three would
+  # not have reddened a single CI run.
+  #
+  # WHAT IT NEEDS, stated rather than assumed: a C99 compiler and `make`, and
+  # stdlib Ruby. No database, no bundle, no sibling checkout — the crosscheck
+  # reads `../config/dev_unlock_key.pem` out of this repository, and the three
+  # readers it drives (`firmware/verify.c`, `app/services/rental_token_issuer.rb`,
+  # `script/lock_sim.rb`) require only `openssl`, `base64`, `tempfile` and
+  # `securerandom`, all of them stdlib. The toolchain step
+  # prints `cc` and `make` versions so a runner image that stops shipping them
+  # fails here by name instead of by link error, and the ASan leg installs clang
+  # only when the image does not already carry it.
+  #
+  # ITS OWN JOB RATHER THAN A LEG OF THE DEMOS MATRIX, on that matrix's own cost:
+  # every demo entry boots Postgres and installs a Rails bundle, and this needs
+  # neither. Nor is any of it a `demo:` rake task, so joining that matrix would
+  # put it outside bin/check-ci-tasks's subject while looking like it was inside.
+  #
+  # Watched fail, MEASURED 2026-09-14 by planting it rather than by reasoning:
+  # drop the two `timestamp?` guards from `RentalTokenIssuer.verify` — K-1590's
+  # exact pre-fix state, where `Integer(s, 10)` took a sign, underscore
+  # separators and surrounding whitespace that the C parser refuses — and this
+  # job's step sequence fails, `make test` exiting **2** and naming ten `int`
+  # vectors the Ruby reader answers the other way. Two exit codes, because make
+  # wraps them: the crosscheck runner exits 1 and make reports 2.
+  #
+  # Note for whoever plants the OTHER original divergence: reverting verify.c's
+  # field-count loop alone leaves this job green. The `is_jti` gate added
+  # afterwards refuses the same seven-field message on its own, so that axis is
+  # covered twice and no single-line revert of it reddens anything.
+  skooti-firmware:
+    name: skooti lock firmware — C verifier vs. the two Ruby readers (make test)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The C toolchain this job needs, named rather than assumed
+        run: |
+          cc --version
+          make --version
+
+      - name: The coverage gate is red on a plant of every shape, and non-vacuous here
+        working-directory: kiosk-demo-skooti/firmware
+        run: ruby check_grammar_coverage.rb --self-test
+
+      - name: C host test, 3-reader grammar crosscheck, grammar coverage (make test)
+        working-directory: kiosk-demo-skooti/firmware
+        run: make test
+
+      - name: The oversized-signature path under AddressSanitizer (make test-asan)
+        working-directory: kiosk-demo-skooti/firmware
+        run: |
+          if ! command -v clang >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y clang
+          fi
+          make test-asan
+
   # Does CI actually run the tasks the demos define? (K-619)
   #
   # Five ledger rows (K-602/K-614/K-616/K-617/K-618) were spent re-deriving BY

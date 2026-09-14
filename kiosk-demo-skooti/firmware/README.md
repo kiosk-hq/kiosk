@@ -63,6 +63,11 @@ cd firmware
 make test
 ```
 
+This is not a local-only ceremony: the repository's `skooti-firmware` CI job
+runs `check_grammar_coverage.rb --self-test`, `make test` and `make test-asan`
+on every push and pull request. It needs a C99 compiler, `make` and stdlib
+Ruby — no database, no bundle.
+
 Expected output (46 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:
 

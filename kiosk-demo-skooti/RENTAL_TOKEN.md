@@ -43,57 +43,79 @@ The left side (everything before the last `.`) is the signed message — UTF-8 b
 Three programs read this token, and they are independent implementations: the
 lock firmware's `skooti_verify_token` (`firmware/verify.c`, linked by
 `skooti_lock.ino`), the server's `RentalTokenIssuer.verify`, and the software
-lock `script/lock_sim.rb`. This section is the grammar all three implement,
-and it is where that grammar is DECIDED: each reader's own header restates what
-that reader enforces, and a disagreement between them is settled against this
-page. Three independent parsers with no single statement of what they parse is
-a divergence anyone who attacks the parse can find, and the widest of the three
-is the one that decides what a fleet accepts.
+lock `script/lock_sim.rb`. This section is where their grammar is DECIDED: each
+reader's own header restates what that reader enforces, and a disagreement
+between them is settled against this page. Three independent parsers with no
+single statement of what they parse is a divergence anyone who attacks the
+parse can find, and the widest of the three is the one that decides what a
+fleet accepts.
 
-What holds them to it is not this page but `cd firmware && make crosscheck`,
-which signs one shared vector set (`firmware/token_vectors.rb`) with the live
-dev key, runs every vector through all three readers, and fails when any reader
-gives an answer the set did not declare.
+What holds the readers to this page is not the page but `cd firmware && make
+crosscheck`, which signs one shared vector set (`firmware/token_vectors.rb`)
+with the live dev key, runs every vector through all three readers, and fails
+when any reader gives an answer the set did not declare.
+
+What holds THIS PAGE to that set is `firmware/check_grammar_coverage.rb`, which
+`make crosscheck` runs beside it. Every rule below carries a
+`<!-- vectors: axis -->` marker naming the axis of the set that exercises it,
+and the gate reads both directions: a rule naming no axis, a rule naming an
+axis the set does not have, and an axis the set has that no rule names each
+fail the build. Its header states the two questions it leaves open.
 
 **Wire token**
 
 - At most 512 bytes (`SKOOTI_TOKEN_MAX`). A longer token is refused before the
-  message is parsed.
+  message is parsed. <!-- vectors: length -->
+- No NUL byte, anywhere in the token. The lock is handed the BLE write's bytes
+  and the write's own byte count, and refuses the write when a NUL is among
+  them; below that entry point every C reader takes a `const char *` and ends
+  at the first NUL, so a token carrying one would be verified as the prefix
+  before it while the rest of the writer's bytes — covered by no signature —
+  went unread. The two Ruby readers refuse the same byte rather than reading
+  past it. <!-- vectors: bytes -->
 - Split at the **last** `.`: everything to its left is the signed message,
   everything to its right is the signature. No `.` at all is a refusal.
+  Neither half may be empty. <!-- vectors: wire -->
 - The signature is base64url over the alphabet `A-Za-z0-9-_`, **unpadded**, at
   most 88 characters, and must decode to exactly 64 bytes — the Ed25519
-  signature over the message bytes.
-- Neither half may be empty.
+  signature over the message bytes. <!-- vectors: sig -->
+- One signature has one spelling. The 86 characters a 64-byte signature encodes
+  to carry four trailing bits that decode to nothing, and a canonical encoding
+  leaves those bits zero, so the sixteen strings differing only there are
+  refused — as are `=` padding and the standard alphabet's `+` and `/`, which
+  are the two spellings a permissive base64 helper takes without being
+  asked. <!-- vectors: sig -->
 
 **Message**
 
-- Exactly six pipe-separated fields, which is exactly five `|` bytes. <!-- count: 6 ¦ from: sed -n 's/.*FIELD_COUNT = //p' kiosk-demo-skooti/app/services/rental_token_issuer.rb -->
-- **No field may be empty**, and no field may contain `|`.
+- Exactly six pipe-separated fields, which is exactly five `|` bytes. <!-- count: 6 ¦ from: sed -n 's/.*FIELD_COUNT = //p' kiosk-demo-skooti/app/services/rental_token_issuer.rb --> <!-- vectors: count -->
+- **No field may be empty**, and no field may contain `|`. <!-- vectors: empty -->
 - **A trailing `|` is another field, not punctuation.** `kiosk-rental-v1|…|<jti>|`
   is a seven-field message and is refused. That deserves saying out loud
   because Ruby's `String#split("|")` silently DROPS trailing empty fields, so a
   reader written as `message.split("|").length == 6` sees six where the C
   parser, walking the pipes, sees seven. Both Ruby readers here split with a
-  negative limit for exactly that reason.
+  negative limit for exactly that reason. <!-- vectors: count -->
 
 **Fields**
 
 | # | Field | What is accepted |
 |---|---|---|
-| 0 | tag | the bytes `kiosk-rental-v1` and nothing else, compared in constant time |
-| 1 | `scooter_code` | opaque, non-empty. The lock additionally requires it to equal its own provisioned code; `RentalTokenIssuer.verify` is not a lock and has no code to compare against, so it holds this field to the grammar only. |
-| 2 | `reservation_id` | opaque, non-empty; no reader constrains it further and none gates on it |
-| 3 | `iat` | 1 to 20 ASCII digits `0`–`9`, value at most 2^64−1. No sign, no `_` separators, no surrounding whitespace, no `0x`. No reader gates on `iat` — `exp` alone bounds the window — but all three hold it to the grammar, because a field nobody parses is a field each reader may read differently. |
-| 4 | `exp` | the same syntax as `iat`. The lock then requires `exp > now`. |
-| 5 | `jti` | exactly 32 lowercase hex characters `[0-9a-f]`, which is what `SecureRandom.hex(16)` mints. It is the key the replay store is written under, so a reader that returned success on other bytes would be handing that store a key it refuses. |
+| 0 | tag | the bytes `kiosk-rental-v1` and nothing else, compared in constant time <!-- vectors: tag --> |
+| 1 | `scooter_code` | opaque, non-empty. The lock additionally requires it to equal its own provisioned code; `RentalTokenIssuer.verify` is not a lock and has no code to compare against, so it holds this field to the grammar only. <!-- vectors: empty, bytes --> |
+| 2 | `reservation_id` | opaque, non-empty, any bytes but `\|` and NUL — a newline, a tab, a control character or multibyte UTF-8 all pass. No reader constrains it further and none gates on it. <!-- vectors: empty, bytes --> |
+| 3 | `iat` | 1 to 20 ASCII digits `0`–`9`, value at most 2^64−1. No sign, no `_` separators, no surrounding whitespace, no `0x`. No reader gates on `iat` — `exp` alone bounds the window — but all three hold it to the grammar, because a field nobody parses is a field each reader may read differently. <!-- vectors: int --> |
+| 4 | `exp` | the same syntax as `iat`. The window is then `now < exp`: a lock accepts while its clock is still behind `exp` and refuses at the instant `exp` names, so the last live second is `exp - 1`. <!-- vectors: int, fresh --> |
+| 5 | `jti` | exactly 32 lowercase hex characters `[0-9a-f]`, which is what `SecureRandom.hex(16)` mints. It is the key the replay store is written under, so a reader that returned success on other bytes would be handing that store a key it refuses. <!-- vectors: jti --> |
 
-`iat` and `exp` are deliberately narrower than a permissive integer parse.
-Ruby's `Integer(s, 10)` accepts `+1750000900`, `1_750_000_900` and
-`" 1750000900"`; the firmware's `parse_uint64` accepts none of them. Where two
-readers of one credential differ, the WIDEST is the one that decides what a
-fleet accepts, so the narrow reading is the contract and the Ruby readers
-implement it.
+`iat` and `exp` are deliberately narrower than a permissive integer parse, and
+the signature is deliberately narrower than a permissive base64 decode. Ruby's
+`Integer(s, 10)` reads `+1750000900`, `1_750_000_900` and `" 1750000900"`, and
+`Base64.urlsafe_decode64` translates `-_` to `+/` and pads a short input before
+decoding, so between them they read five spellings the firmware's
+`parse_uint64` and character table read none of. Where two readers of one
+credential differ, the WIDEST is the one that decides what a fleet accepts, so
+the narrow reading is the contract and the Ruby readers implement it.
 
 ---
 

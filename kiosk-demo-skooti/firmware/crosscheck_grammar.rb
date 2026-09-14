@@ -10,23 +10,16 @@
 # side just signed. This is the other half of the same question, and the harder
 # one: the three implementations must agree on what they REFUSE. They are
 # independent parsers by design — C walks the pipes by hand, `String#split`
-# does it in Ruby twice over — and the two languages pull apart at three
-# places, each of which is a property of the language rather than a slip
-# anyone can review away:
-#
-#   * `String#split("|")` DROPS trailing empty fields. A signed message with
-#     one delimiter appended is six fields to a reader spelled that way and
-#     seven to the C parser, which finds the pipe in the last field.
-#   * `Integer(s, 10)` takes a sign, underscore separators and surrounding
-#     whitespace. `+1750001900` is a valid expiry to it and not a number at
-#     all to `parse_uint64`.
-#   * A field nothing parses is a field each reader may read differently, and
-#     `iat` is the field nothing acts on.
+# does it in Ruby twice over, and each language brings its own base64 decoder —
+# and they pull apart at places that are properties of the languages rather
+# than slips anyone can review away. token_vectors.rb's header lists them.
 #
 # None of that is reachable through the shipped flow — the issuer mints iat,
 # exp and jti itself, and the one caller-supplied field that reaches the message
-# is UUID-checked first — and the lock fails closed either way. It would still
-# be three answers to one question, in a reference implementation people copy.
+# is UUID-checked first — and the lock fails closed on most of it. It would
+# still be three answers to one question, in a reference implementation people
+# copy, and the reader that answers WIDEST is the one that decides what a fleet
+# accepts.
 #
 # So this script does not review the parsers. It runs every reader against ONE
 # vector set — token_vectors.rb, whose header states the grammar and what it
@@ -35,14 +28,21 @@
 # `RentalTokenIssuer.verify` from app/services and `LockSim#unlock` from
 # script/, exactly as the server and the flow drivers call them.
 #
-# Every vector is signed here, at run time, with the live dev key in
-# ../config/dev_unlock_key.pem — the same key the server signs with — so the
-# signature gate passes on all of them and the grammar is the only thing left
-# to answer. A wrong-shaped message carrying a junk signature is refused by the
-# signature gate first and proves nothing about the parse.
+# Every vector's signature is computed here, at run time, with the live dev key
+# in ../config/dev_unlock_key.pem — the same key the server signs with — over
+# that vector's own message. The vector then declares how the wire token is
+# SPELLED around that signature, and this script applies the spelling from the
+# set's own `WIRE` table.
+#
+# THE C READER IS ASKED THROUGH A FILE, not through argv, for every vector.
+# execve() delimits arguments with NUL, so a token holding one cannot travel in
+# argv at all — and that byte is exactly where the C reader and a Ruby reader
+# see different tokens. Handing every vector to the helper the same way keeps
+# one code path and leaves no vector the set cannot ask all three readers.
 
 require "openssl"
 require "base64"
+require "tempfile"
 
 HELPER = ARGV[0]
 if HELPER.nil? || HELPER.empty?
@@ -74,15 +74,43 @@ PUBLIC_KEY = OpenSSL::PKey.read(KEY.public_to_pem)
 
 NOW  = SkootiTokenVectors::NOW
 CODE = SkootiTokenVectors::SCOOTER_CODE
+WIRE = SkootiTokenVectors::WIRE
 
+# The canonical signature over a message: unpadded base64url, as the issuer
+# mints it.
 def sign(message)
-  "#{message}.#{Base64.urlsafe_encode64(KEY.sign(nil, message), padding: false)}"
+  Base64.urlsafe_encode64(KEY.sign(nil, message), padding: false)
 end
 
-# The C verifier, through the helper binary `make crosscheck` builds. Its exit
-# status is the verdict: 0 accepted, 1 refused.
+# The wire token a vector asks for. A vector whose spelling is NOT :canonical
+# and whose transform returns the canonical token measures nothing, so that is
+# a hard stop rather than a quiet pass.
+def wire_token(vector)
+  signature = sign(vector.message)
+  transform = WIRE.fetch(vector.wire)
+  token     = transform.call(vector.message, signature)
+
+  if vector.wire != :canonical && token == WIRE.fetch(:canonical).call(vector.message, signature)
+    abort "  VECTOR BROKEN — #{vector.axis}/#{vector.label}: the :#{vector.wire} " \
+          "spelling produced the canonical token, so this vector measures nothing"
+  end
+
+  token
+end
+
+# The C verifier, through the helper binary `make crosscheck` builds, asked via
+# --file so a token holding a NUL reaches it exactly as a BLE write would. Its
+# exit status is the verdict: 0 accepted, 1 refused.
 def c_accepts?(token)
-  system(HELPER, token, out: File::NULL)
+  file = Tempfile.new(["skooti-vector", ".tok"])
+  begin
+    file.binmode
+    file.write(token)
+    file.close
+    system(HELPER, "--file", file.path, out: File::NULL)
+  ensure
+    file.unlink
+  end
 end
 
 def issuer_accepts?(token)
@@ -102,17 +130,19 @@ READERS = [
   ["lock",   "LockSim#unlock",           method(:lock_sim_accepts?)],
 ].freeze
 
-VECTORS = SkootiTokenVectors::VECTORS
-ROW     = "    %-6s %-42s %-7s %-7s %-7s %-7s %s"
+VECTORS  = SkootiTokenVectors::VECTORS
+RESPELT  = VECTORS.count { |vector| vector.wire != :canonical }
+ROW      = "    %-6s %-46s %-7s %-7s %-7s %-7s %s"
 
 puts "  Rental-token grammar — #{VECTORS.length} live-signed vectors through " \
-     "all #{READERS.length} readers of this token:"
+     "all #{READERS.length} readers of this token " \
+     "(#{RESPELT} of them respell the wire around the signature):"
 puts format(ROW, "axis", "vector", "expect", *READERS.map(&:first), "")
 
 failures = []
 
 VECTORS.each do |vector|
-  token   = sign(vector.message)
+  token   = wire_token(vector)
   answers = READERS.map { |_head, _name, probe| probe.call(token) }
   agreed  = answers.all? { |answer| answer == vector.accept }
   failures << [vector, answers] unless agreed

@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-14: **skooti's rental-token readers disagreed on signature encoding, a NUL byte and the `exp == now` instant.** One spelling per signature, no NUL, and the window is `now < exp`.
+- 2026-09-14: **The token grammar was prose and its vectors were hand-written, so a stated rule could have no vector.** `check_grammar_coverage.rb` now binds the page and the set both ways.
 - 2026-09-14: **skooti's three rental-token readers disagreed on trailing delimiters, integer syntax and `iat`.** One grammar, one shared vector set, and `make crosscheck` runs all three against it.
 - 2026-09-13: **The archaeology guard read one line at a time, so a two-word marker split by a wrap was invisible — including to the rules that fail the build.** It reads pairs of lines now.
 - 2026-09-13: **The harness Ruby version is typed into eight tracked places and only one was compared to another.** `bin/check-ruby-pin` holds all eight, and censuses for a ninth.

@@ -5,12 +5,13 @@ This directory contains:
 | File | Purpose |
 |------|---------|
 | `skooti_lock.ino` | Arduino-ESP32 firmware (ESP32-C3 + NimBLE-Arduino) |
-| `verify.h/c` | `skooti_verify_token()` — portable Ed25519 token verify; shared by firmware and host test |
+| `verify.h/c` | `skooti_verify_token()` and `skooti_verify_wire()` — portable Ed25519 token verify; shared by firmware and host test |
 | `jti_store.h/c` | `jti_seen_or_insert()` — durable one-shot `jti` store; in-memory on the host, NVS-backed on the board |
 | `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
-| `crosscheck_main.c` | Ruby-signed token → C verify helper (invoked by `make crosscheck`) |
+| `crosscheck_main.c` | Ruby-signed token → C verify helper, taking the token as an argument or as a file's bytes (invoked by `make crosscheck`) |
 | `token_vectors.rb` | The rental-token conformance vectors — the grammar, and what the vectors do not cover, stated in its header |
 | `crosscheck_grammar.rb` | Runs every vector through all three readers of the token — this C verifier, the shipped `RentalTokenIssuer.verify` and `script/lock_sim.rb` (invoked by `make crosscheck`) |
+| `check_grammar_coverage.rb` | Holds `../RENTAL_TOKEN.md` and `token_vectors.rb` to each other: a stated rule with no axis, or an axis no rule names, fails the build (invoked by `make crosscheck`) |
 | `Makefile` | `make test` = C assertions + Ruby↔C crosscheck |
 | `ed25519/` | Vendored orlp/ed25519 (zlib license, public-domain-style) — portable Ed25519 with detached verify |
 
@@ -31,23 +32,29 @@ sig             = Ed25519(private_signing_key, message)   # server-side only
 wire token      = "<message>.<base64url(sig)>"
 
 lock verifies:
-  1. the wire token is at most 512 bytes (SKOOTI_TOKEN_MAX)
-  2. Ed25519-verify(sig, message, skooti_pubkey)
-  3. the message splits into EXACTLY 6 pipe fields, none of them empty —
+  1. the write is at most 512 bytes (SKOOTI_TOKEN_MAX) and holds no NUL byte —
+     skooti_verify_wire is handed the write's own size, so a NUL is refused
+     rather than ending the token where a const char * would
+  2. the sig field is unpadded, canonical base64url and decodes to 64 bytes
+  3. Ed25519-verify(sig, message, skooti_pubkey)
+  4. the message splits into EXACTLY 6 pipe fields, none of them empty —
      fewer or more is refused, so field[4] is always the expiry and never a
      shifted field, and a trailing '|' is a seventh field rather than punctuation
-  4. field[0] == "kiosk-rental-v1"  (domain-separation tag, constant-time compare)
-  5. scooter_code (field[1]) == SCOOTER_CODE
-  6. iat (field[3]) and exp (field[4]) are 1-20 plain ASCII digits
-  7. exp (field[4]) > now
-  8. jti (field[5]) is 32 lowercase hex characters
-  9. jti not yet consumed — jti_seen_or_insert(jti, exp, now) == 0
+  5. field[0] == "kiosk-rental-v1"  (domain-separation tag, constant-time compare)
+  6. scooter_code (field[1]) == SCOOTER_CODE
+  7. iat (field[3]) and exp (field[4]) are 1-20 plain ASCII digits
+  8. exp (field[4]) > now — the window is now < exp, so the instant exp names
+     is already spent
+  9. jti (field[5]) is 32 lowercase hex characters
+ 10. jti not yet consumed — jti_seen_or_insert(jti, exp, now) == 0
      (NVS-backed durable store; entries retained until exp; survives reboot)
 ```
 
-The whole grammar — every field's charset, the delimiter rule and the wire cap
-— is stated in `../RENTAL_TOKEN.md`, the canonical page for this token, and
-`make crosscheck` holds all three readers to it.
+The whole grammar — every field's charset, the signature's encoding, the
+delimiter rule and the wire cap — is stated in `../RENTAL_TOKEN.md`, the
+canonical page for this token. `make crosscheck` holds all three readers to
+that page's vectors, and `check_grammar_coverage.rb` holds the page and the
+vector set to each other.
 
 Run:
 
@@ -56,8 +63,8 @@ cd firmware
 make test
 ```
 
-Expected output (35 assertions pass, crosscheck MATCH). The `...` lines are
-elisions in this quotation, not in the run:
+Expected output (46 assertions pass, crosscheck MATCH, coverage clean). The
+`...` lines are elisions in this quotation, not in the run:
 
 ```
 --- C host test ---
@@ -65,23 +72,28 @@ elisions in this quotation, not in the run:
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 35 passed, 0 failed ===
+=== Results: 46 passed, 0 failed ===
 ALL PASS
 
 --- Ruby ↔ C crosscheck ---
   Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
-  Rental-token grammar — 35 live-signed vectors through all 3 readers of this token:
-    axis   vector                                     expect  C       issuer  lock
-    count  six fields, well-formed                    accept  accept  accept  accept  MATCH ✓
-    count  seven segments, one trailing delimiter     reject  reject  reject  reject  MATCH ✓
+  Rental-token grammar — 63 live-signed vectors through all 3 readers of this token (9 of them respell the wire around the signature):
+    axis   vector                                         expect  C       issuer  lock
+    count  six fields, well-formed                        accept  accept  accept  accept  MATCH ✓
+    count  seven segments, one trailing delimiter         reject  reject  reject  reject  MATCH ✓
     ...
-    int    exp with a leading plus                    reject  reject  reject  reject  MATCH ✓
+    int    exp with a leading plus                        reject  reject  reject  reject  MATCH ✓
     ...
-    jti    jti in uppercase hex                       reject  reject  reject  reject  MATCH ✓
+    fresh  exp exactly now                                reject  reject  reject  reject  MATCH ✓
     ...
-  MATCH — all 3 readers gave the declared answer on every one of these 35 vectors (axes: count, empty, tag, int, jti, length, fresh) ✓
+    sig    signature with a non-canonical last character  reject  reject  reject  reject  MATCH ✓
+    ...
+    bytes  NUL inside reservation_id                      reject  reject  reject  reject  MATCH ✓
+    ...
+  MATCH — all 3 readers gave the declared answer on every one of these 63 vectors (axes: count, empty, tag, int, jti, length, fresh, sig, wire, bytes) ✓
+  Grammar coverage — 14 rules on RENTAL_TOKEN.md across 3 subsections, naming all 10 vector axes (count, empty, tag, int, jti, length, fresh, sig, wire, bytes) ✓
 ```
 
 This proves the C Ed25519 verifier correctly verifies tokens signed by the Kiosk
@@ -275,7 +287,11 @@ so, and the table below is where that status is tracked.
 | Field charsets — an empty field, a non-numeric `iat`, a signed or overflowing `exp`, a jti in the wrong alphabet: all rejected with a VALID signature | **PROVEN** (`make test`) |
 | `skooti_parse_jti` applies the same field-count and jti-charset gates as `skooti_verify_token`, so the replay store is never keyed on bytes those gates refused | **PROVEN** (`make test`) |
 | C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
+| One signature has one spelling — `=` padding, the standard alphabet and a non-canonical final character are all refused | **PROVEN** (`make test`, `make crosscheck`) |
+| A write holding a NUL byte is refused whole rather than verified as the prefix before it | **PROVEN** (`make test`, `make crosscheck`) |
+| The freshness window is `now < exp` — the instant `exp` names is already spent, in all three readers | **PROVEN** (`make test`, `make crosscheck`) |
 | The C verifier, `RentalTokenIssuer.verify` and `LockSim#unlock` give the declared answer on every vector in `token_vectors.rb` | **PROVEN** (`make crosscheck`) |
+| Every rule `../RENTAL_TOKEN.md` states names a vector axis, and every axis is named by a rule | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
 | Durable replay prevention across reboot (NVS backend, host-tested semantics) | **PROVEN** on host (in-memory backend); NVS wiring documented in `jti_store.c`, activates on board |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board (`../bin/ble-unlock` is the no-Apple harness for this row) |

@@ -69,6 +69,13 @@ test: build
 # RentalTokenIssuer.verify, and script/lock_sim.rb. Its vectors live in
 # token_vectors.rb, whose header states the grammar and why every vector
 # carries a live signature.
+#
+# And check_grammar_coverage.rb closes the loop the other way: the grammar is
+# stated in prose in ../RENTAL_TOKEN.md and pinned in vectors here, and that
+# gate fails when the page names a rule no axis exercises, or an axis exists
+# that no rule names. A rule nobody wrote a vector for reads exactly like a
+# rule everybody implements, which is how the signature-encoding hole stayed
+# open; its header states what it cannot see.
 # --------------------------------------------------------------------------
 crosscheck: $(TARGET)_crosscheck
 	@echo "--- Ruby ↔ C crosscheck ---"
@@ -82,6 +89,7 @@ crosscheck: $(TARGET)_crosscheck
 	echo "  Ruby-signed token: $$CROSSCHECK_RESULT" && \
 	./$(TARGET)_crosscheck "$$CROSSCHECK_RESULT"
 	@ruby crosscheck_grammar.rb ./$(TARGET)_crosscheck
+	@ruby check_grammar_coverage.rb
 
 # The crosscheck helper binary verifies a single token passed as argv[1]
 # using now=1750001800 (inside the live-window), SCOOTER_CODE="SK-001".

@@ -216,15 +216,25 @@ static int is_jti(const char *s, size_t len)
 }
 
 /* --------------------------------------------------------------------------
- * skooti_verify_token
+ * verify_bounded — the whole verification, over EXACTLY token_len bytes.
+ *
+ * Every byte this function reads is in [token, token + token_len); it never
+ * looks for a terminator and never reads one. That is what makes
+ * skooti_verify_wire's length argument mean something: the wire entry point
+ * hands its caller's own byte count straight down, so a buffer that is not
+ * terminated at token_len is still never read past, and a length SHORTER than
+ * the terminated content verifies the shorter token rather than the longer one
+ * the caller did not declare. skooti_verify_token, whose contract is a
+ * NUL-terminated string, measures the length itself and calls the same body,
+ * so both entry points answer one question with one parser.
  * -------------------------------------------------------------------------- */
 
-int skooti_verify_token(const uint8_t pubkey[32],
-                        const char   *token,
-                        const char   *my_scooter_code,
-                        uint64_t      now_unix)
+static int verify_bounded(const uint8_t pubkey[32],
+                          const char   *token,
+                          size_t        token_len,
+                          const char   *my_scooter_code,
+                          uint64_t      now_unix)
 {
-    size_t  token_len;
     size_t  dot_pos;
     size_t  msg_len;
     const char *sig_b64;
@@ -252,7 +262,6 @@ int skooti_verify_token(const uint8_t pubkey[32],
     if (!pubkey || !token || !my_scooter_code) return 0;
 
     /* --- token length cap --- */
-    token_len = strnlen(token, SKOOTI_TOKEN_MAX + 1);
     if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;
 
     /* --- find the LAST '.' to split message from sig --- */
@@ -413,16 +422,65 @@ int skooti_verify_token(const uint8_t pubkey[32],
 }
 
 /* --------------------------------------------------------------------------
+ * skooti_verify_token — the NUL-terminated entry point.
+ *
+ * Its contract is a C string, so it measures the length itself and hands the
+ * same parser the same question skooti_verify_wire hands it.
+ * -------------------------------------------------------------------------- */
+
+int skooti_verify_token(const uint8_t pubkey[32],
+                        const char   *token,
+                        const char   *my_scooter_code,
+                        uint64_t      now_unix)
+{
+    if (!token) return 0;
+
+    return verify_bounded(pubkey, token, strnlen(token, SKOOTI_TOKEN_MAX + 1),
+                          my_scooter_code, now_unix);
+}
+
+/* --------------------------------------------------------------------------
  * skooti_verify_wire — verify a token whose LENGTH the caller knows.
  *
  * The caller here is whoever received bytes: the sketch's BLE onWrite handler
- * with the write's own size, the crosscheck helper with the file's. Everything
- * below this function reads a `const char *` and so ends at the first NUL; a
- * buffer holding one would be verified as the prefix before it, and the bytes
- * after it — chosen by the writer, covered by no signature — would never be
- * read at all. The grammar in ../RENTAL_TOKEN.md admits no NUL in a wire
- * token, so a buffer that carries one is refused whole.
+ * with the write's own size, the crosscheck helper with the file's. Two things
+ * a `const char *` alone cannot do are done here with that count.
+ *
+ * A NUL is refused rather than read past. skooti_verify_token ends at the
+ * first one, whatever the caller was handed, so a buffer holding one would be
+ * verified as the prefix before it and the bytes after it — chosen by the
+ * writer, covered by no signature — would never be looked at. The grammar in
+ * ../RENTAL_TOKEN.md admits no NUL in a wire token, so a buffer carrying one
+ * is refused whole.
+ *
+ * And the count BOUNDS the parse: verify_bounded is given token_len rather
+ * than a pointer to walk, so no byte at or past token_len is ever read. A
+ * caller whose buffer is not terminated at token_len — a socket, a ring
+ * buffer, a BLE reassembly — is answered without a read past its end, and a
+ * caller that declares a length shorter than the terminated content gets the
+ * SHORTER token verified rather than the longer one it did not declare. Both
+ * of those require the count to reach the parser, which is why it does.
  * -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+ * wire_bounds_ok — the precondition BOTH length-aware entry points state.
+ *
+ * A non-empty buffer, within the cap, holding no NUL inside the count the
+ * caller declared. One statement of it rather than two, because the verify
+ * path and the jti path are handed the same buffer and the same count and a
+ * pair that drifted would let the replay store be keyed off a walk the verify
+ * had refused to make.
+ * -------------------------------------------------------------------------- */
+
+static int wire_bounds_ok(const char *token, size_t token_len)
+{
+    if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;
+
+    /* strnlen stops at the first NUL: a shorter answer means one is in there. */
+    if (strnlen(token, token_len) != token_len) return 0;
+
+    return 1;
+}
 
 int skooti_verify_wire(const uint8_t pubkey[32],
                        const char   *token,
@@ -431,16 +489,14 @@ int skooti_verify_wire(const uint8_t pubkey[32],
                        uint64_t      now_unix)
 {
     if (!token) return 0;
-    if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;
+    if (!wire_bounds_ok(token, token_len)) return 0;
 
-    /* strnlen stops at the first NUL: a shorter answer means one is in there. */
-    if (strnlen(token, token_len) != token_len) return 0;
-
-    return skooti_verify_token(pubkey, token, my_scooter_code, now_unix);
+    return verify_bounded(pubkey, token, token_len, my_scooter_code, now_unix);
 }
 
 /* --------------------------------------------------------------------------
- * skooti_parse_jti — extract jti from a verified token (field [5])
+ * parse_jti_bounded — extract jti from a verified token (field [5]), over
+ * EXACTLY token_len bytes, and the two entry points below it.
  *
  * message: "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  * field indices: [0]=tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
@@ -453,9 +509,9 @@ int skooti_verify_wire(const uint8_t pubkey[32],
  * here through some other path must not get a laxer answer than that one gives.
  * -------------------------------------------------------------------------- */
 
-int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
+static int parse_jti_bounded(const char *token, size_t token_len,
+                             char *jti_out, size_t jti_out_sz)
 {
-    size_t  token_len;
     size_t  dot_pos;
     size_t  msg_len;
     const char *msg;
@@ -465,7 +521,6 @@ int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
 
     if (!token || !jti_out || jti_out_sz == 0) return 0;
 
-    token_len = strnlen(token, SKOOTI_TOKEN_MAX + 1);
     if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;
 
     /* Find last '.' */
@@ -512,4 +567,32 @@ int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
     memcpy(jti_out, p, remaining);
     jti_out[remaining] = '\0';
     return 1;
+}
+
+int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
+{
+    if (!token) return 0;
+
+    return parse_jti_bounded(token, strnlen(token, SKOOTI_TOKEN_MAX + 1),
+                             jti_out, jti_out_sz);
+}
+
+/* --------------------------------------------------------------------------
+ * skooti_parse_jti_n — the jti of a token whose LENGTH the caller knows.
+ *
+ * skooti_verify_wire exists so a length-carrying caller never has its buffer
+ * read past; a caller that then reached for the jti through the terminated
+ * entry point would give that property straight back, because the replay key
+ * would be taken with a walk this one had refused to make. The sketch calls
+ * this one with the BLE write's own size, so the whole board path — verify,
+ * then key the replay store — is bounded by the count the radio reported.
+ * -------------------------------------------------------------------------- */
+
+int skooti_parse_jti_n(const char *token, size_t token_len,
+                       char *jti_out, size_t jti_out_sz)
+{
+    if (!token) return 0;
+    if (!wire_bounds_ok(token, token_len)) return 0;
+
+    return parse_jti_bounded(token, token_len, jti_out, jti_out_sz);
 }

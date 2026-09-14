@@ -16,8 +16,10 @@
  *     On WRITE of the wire rental token
  *       "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
  *     the lock:
- *       1. Calls skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)
- *          which checks: Ed25519 sig valid, scooter_code matches, exp > now.
+ *       1. Calls skooti_verify_wire(SKOOTI_PUBKEY, token, val.size(),
+ *          SCOOTER_CODE, now), which checks: no NUL in the write, Ed25519 sig
+ *          valid, the six fields hold their charsets, scooter_code matches,
+ *          exp > now — all within the write's own byte count.
  *       2. Checks the jti has not been consumed before (one-shot anti-replay,
  *          small in-RAM set — see JTI_CACHE_SIZE).
  *       3. On all-pass: adds jti to the consumed set, drives LED_GPIO HIGH for
@@ -51,8 +53,8 @@
  * fields, none of them empty — a trailing '|' is a seventh field, not
  * punctuation, and is refused:
  *   [0] "kiosk-rental-v1"  — domain-separation tag (REQUIRED)
- *   [1] scooter_code       — e.g. "SK-001"
- *   [2] reservation_id     — e.g. "resv-1"
+ *   [1] scooter_code       — e.g. "SK-001"; 1+ chars of A-Za-z0-9-._~
+ *   [2] reservation_id     — e.g. "resv-1"; 1+ chars of A-Za-z0-9-._~
  *   [3] iat                — 1-20 ASCII digits, unix seconds
  *   [4] exp                — 1-20 ASCII digits, unix seconds (iat + 900)
  *   [5] jti                — 32 lowercase hex chars
@@ -67,7 +69,7 @@
  * This matches:
  *   Ruby server:  RentalTokenIssuer.issue  (kiosk-demo-skooti/app/services/rental_token_issuer.rb)
  *   Ruby sim:     LockSim#unlock           (kiosk-demo-skooti/script/lock_sim.rb)
- *   C shared:     skooti_verify_token      (firmware/verify.c)
+ *   C shared:     skooti_verify_wire       (firmware/verify.c)
  *   C host test:  host_test.c              (proven by `make test`)
  *
  * =========================================================================
@@ -189,7 +191,7 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 
 /* --------------------------------------------------------------------------
  * JTI_LEN — jti buffer size (32 hex chars + NUL).
- * Used when calling skooti_parse_jti.
+ * Used when calling skooti_parse_jti_n.
  * -------------------------------------------------------------------------- */
 #define JTI_LEN JTI_MAX_LEN   /* from jti_store.h: 33 (32 hex chars + NUL) */
 
@@ -293,9 +295,12 @@ public:
             return;
         }
 
-        /* 2. Extract jti (field[5] of the message) */
+        /* 2. Extract jti (field[5] of the message) — through the length-aware
+         *    entry point, with the SAME write size the verify above used, so
+         *    the whole path from radio to replay store is bounded by the count
+         *    the radio reported and nothing reads past the write's own bytes. */
         char jti[JTI_LEN];
-        if (!skooti_parse_jti(token, jti, sizeof(jti))) {
+        if (!skooti_parse_jti_n(token, val.size(), jti, sizeof(jti))) {
             Serial.println("[BLE] REJECT — could not parse jti");
             return;
         }

@@ -153,12 +153,20 @@ int skooti_verify_token(const uint8_t pubkey[32],
  * all three readers of the token), so a buffer that contains one is refused
  * here rather than truncated and verified.
  *
- * Parameters are skooti_verify_token's, plus:
- *   token_len : the number of bytes the caller received, NOT counting any
- *               terminator the caller appended.
+ * WHAT token_len MEANS, because a length argument a function ignores is worse
+ * than no length argument at all. It is the number of bytes the caller
+ * received, NOT counting any terminator the caller appended, and it BOUNDS the
+ * whole verification: no byte at or past token + token_len is read, by this
+ * function or by anything it calls. So the buffer needs NO terminator — a
+ * socket read, a ring buffer or a BLE reassembly can be handed straight in —
+ * and a caller that declares a length shorter than the terminated content gets
+ * the SHORTER token verified, never the longer one it did not declare.
  *
- * Returns 1 on the same conditions skooti_verify_token returns 1, and 0 when
- * the buffer is empty, longer than SKOOTI_TOKEN_MAX, or holds a NUL byte.
+ * Parameters are skooti_verify_token's, plus token_len.
+ *
+ * Returns 1 on the same conditions skooti_verify_token returns 1 for the first
+ * token_len bytes, and 0 when the buffer is empty, longer than
+ * SKOOTI_TOKEN_MAX, or holds a NUL byte within token_len.
  */
 int skooti_verify_wire(const uint8_t pubkey[32],
                        const char   *token,
@@ -178,6 +186,24 @@ int skooti_verify_wire(const uint8_t pubkey[32],
  * Returns 1 on success, 0 on parse error.
  */
 int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz);
+
+/*
+ * skooti_parse_jti_n — skooti_parse_jti for a caller that knows the LENGTH.
+ *
+ * The pair to skooti_verify_wire, and it exists for the same reason: a caller
+ * that verified within its own byte count and then took the replay key through
+ * the NUL-terminated entry point would hand that bound straight back, because
+ * the key would be read with a walk the verify had refused to make. token_len
+ * bounds this parse exactly as it bounds that one — no byte at or past
+ * token + token_len is read — so a buffer with no terminator is safe here too.
+ *
+ * Call only AFTER skooti_verify_wire() returns 1, with the SAME token_len.
+ *
+ * Returns 1 on success, 0 on parse error, on an empty or over-cap buffer, or
+ * when a NUL falls within token_len.
+ */
+int skooti_parse_jti_n(const char *token, size_t token_len,
+                       char *jti_out, size_t jti_out_sz);
 
 #ifdef __cplusplus
 }

@@ -584,6 +584,80 @@ static void test_wire_bytes(void)
 }
 
 /*
+ * Test 11b — skooti_verify_wire's token_len BOUNDS the verification
+ *
+ * This is the one property the shared grammar vector set structurally cannot
+ * reach: crosscheck_grammar.rb hands the helper a file and the helper passes
+ * the file's own size, so every vector there carries an HONEST length. The
+ * question here is what happens when it does not, and it is a C-level question
+ * because a wire token cannot express it.
+ *
+ * A length used only for the cap and the NUL scan, with the parse then run
+ * over a `const char *` to whatever terminator it finds, gives two answers
+ * nobody asks for: a caller reporting a shorter length than the buffer holds
+ * gets the LONGER token verified, which is an accept rather than a refusal,
+ * and a caller whose buffer is not terminated at token_len has it read past.
+ * Neither is reachable from the board, where std::string::c_str() terminates
+ * at size(); both are reachable from the socket or ring-buffer caller the
+ * header offers this function to. The arms below are what hold the count to
+ * the parse.
+ *
+ * The last arm is the one `make test-asan` earns its place on: an
+ * unterminated heap allocation of exactly the token's length. A read one byte
+ * past it is a heap-buffer-overflow ASan reports.
+ */
+static void test_wire_length_bound(void)
+{
+    size_t honest = strlen(WIRE_TOKEN);
+    char  *heap;
+    char   trailing[sizeof(WIRE_TOKEN) + 8];
+    char   jti[40];
+    int    result;
+
+    printf("\n[11b] skooti_verify_wire: token_len bounds the parse → expect 0 on a short length\n");
+
+    result = skooti_verify_wire(SKOOTI_PUBKEY, WIRE_TOKEN, honest, SCOOTER_CODE, NOW_FRESH);
+    check(result == 1, "bound: the known-answer token at its honest length → 1");
+
+    result = skooti_verify_wire(SKOOTI_PUBKEY, WIRE_TOKEN, 10, SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "bound: the same buffer declared as 10 bytes → 0");
+
+    result = skooti_verify_wire(SKOOTI_PUBKEY, WIRE_TOKEN, 1, SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "bound: the same buffer declared as 1 byte → 0");
+
+    result = skooti_verify_wire(SKOOTI_PUBKEY, WIRE_TOKEN, honest - 1,
+                                SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "bound: one byte short of honest (signature truncated) → 0");
+
+    /* Bytes AFTER the declared length, still inside a terminated buffer: the
+     * token is what the caller declared, and the trailing bytes — which no
+     * signature covers — are not part of it. */
+    memcpy(trailing, WIRE_TOKEN, honest);
+    memcpy(trailing + honest, "GARBAGE", 8); /* copies its terminator */
+    result = skooti_verify_wire(SKOOTI_PUBKEY, trailing, honest, SCOOTER_CODE, NOW_FRESH);
+    check(result == 1, "bound: trailing bytes past token_len are not verified → 1");
+
+    /* An UNTERMINATED buffer of exactly token_len bytes. Under ASan a read one
+     * past the allocation is a heap-buffer-overflow; this arm is why
+     * `make test-asan` is run on this file. */
+    heap = (char *)malloc(honest);
+    check(heap != NULL, "bound: unterminated heap buffer allocated");
+    if (heap) {
+        memcpy(heap, WIRE_TOKEN, honest);
+        result = skooti_verify_wire(SKOOTI_PUBKEY, heap, honest, SCOOTER_CODE, NOW_FRESH);
+        check(result == 1, "bound: an unterminated buffer at its own length → 1, no read past it");
+
+        result = skooti_parse_jti_n(heap, honest, jti, sizeof(jti));
+        check(result == 1 && strcmp(jti, "aabbccddeeff00112233445566778899") == 0,
+              "bound: skooti_parse_jti_n on the same unterminated buffer → the jti");
+        free(heap);
+    }
+
+    result = skooti_parse_jti_n(WIRE_TOKEN, 10, jti, sizeof(jti));
+    check(result == 0, "bound: skooti_parse_jti_n with a short length → 0");
+}
+
+/*
  * Test 12 — the freshness boundary: the window is now < exp
  *
  * Test 2 above proves a token past its expiry is refused. This one pins the
@@ -703,6 +777,7 @@ int main(void)
     test_field_content_boundary();
     test_sig_encoding();
     test_wire_bytes();
+    test_wire_length_bound();
     test_expiry_boundary();
     test_jti_store();
 

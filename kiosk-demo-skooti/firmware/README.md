@@ -34,7 +34,8 @@ wire token      = "<message>.<base64url(sig)>"
 lock verifies:
   1. the write is at most 512 bytes (SKOOTI_TOKEN_MAX) and holds no NUL byte —
      skooti_verify_wire is handed the write's own size, so a NUL is refused
-     rather than ending the token where a const char * would
+     rather than ending the token where a const char * would, and no byte at
+     or past that size is read
   2. the sig field is unpadded, canonical base64url and decodes to 64 bytes
   3. Ed25519-verify(sig, message, skooti_pubkey)
   4. the message splits into EXACTLY 6 pipe fields, none of them empty —
@@ -70,7 +71,7 @@ runs `check_grammar_coverage.rb --self-test`, `make test` and `make test-asan`
 on every push and pull request. It needs a C99 compiler, `make` and stdlib
 Ruby — no database, no bundle.
 
-Expected output (46 assertions pass, crosscheck MATCH, coverage clean). The
+Expected output (55 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:
 
 ```
@@ -79,7 +80,7 @@ Expected output (46 assertions pass, crosscheck MATCH, coverage clean). The
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 46 passed, 0 failed ===
+=== Results: 55 passed, 0 failed ===
 ALL PASS
 
 --- Ruby ↔ C crosscheck ---
@@ -298,7 +299,8 @@ so, and the table below is where that status is tracked.
 | Field charsets — an empty field, a non-numeric `iat`, a signed or overflowing `exp`, a jti in the wrong alphabet: all rejected with a VALID signature | **PROVEN** (`make test`) |
 | `scooter_code` and `reservation_id` hold the RFC 3986 unreserved set, and EVERY one of the 256 byte values is run through all three readers rather than sampled | **PROVEN** (`make crosscheck`) |
 | The verdict is a function of the token's bytes — six Ruby encoding tags over one token give one answer, and none of them raises | **PROVEN** (`make crosscheck`) |
-| `skooti_parse_jti` applies the same field-count and jti-charset gates as `skooti_verify_token`, so the replay store is never keyed on bytes those gates refused | **PROVEN** (`make test`) |
+| `skooti_verify_wire` reads no byte at or past `token_len`: a short declared length verifies the short token, and an unterminated buffer is answered without a read past its end | **PROVEN** (`make test`, `make test-asan`) |
+| `skooti_parse_jti` applies the same field-count and jti-charset gates as `skooti_verify_token`, so the replay store is never keyed on bytes those gates refused, and `skooti_parse_jti_n` does it inside the caller's own byte count | **PROVEN** (`make test`) |
 | C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
 | One signature has one spelling — `=` padding, the standard alphabet and a non-canonical final character are all refused | **PROVEN** (`make test`, `make crosscheck`) |
 | A write holding a NUL byte is refused whole rather than verified as the prefix before it | **PROVEN** (`make test`, `make crosscheck`) |

@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-15: **One PoW proof could be accepted more than once.** The configuration's store slots built a second store under a concurrent first touch; that first touch is now serialised.
 - 2026-09-15: **The skooti lock verified a signature nobody signed under a low-order public key.** The verifier now refuses the eight small-order Ed25519 keys.
 - 2026-09-15: **`box-prep` still switched on the Caddy edge throttle Phil ruled out.** That step is gone; the script and both runbooks agree there is no default per-IP limit.
 - 2026-09-15: **Three deploy-runbook sentences the archaeology drain rewrote were false.** The boot-refusal scope, the smoke-surface roster and a dangling probe reference are corrected.

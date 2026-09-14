@@ -195,3 +195,61 @@ def build_identity(actor: "agent", **overrides)
   }
   Kiosk::Identity.new(**defaults.merge(overrides))
 end
+
+# ── Forced interleaving at the lazy-store seam (K-1610) ──────────────────────
+#
+# `Kiosk::Configuration`'s store slots default lazily, and the gap between the
+# ivar read and the ivar write is where a second thread can slip in and build a
+# store of its own. On a real machine that gap is a few microseconds wide and
+# MRI almost never preempts inside it — measured, 0 double-allocations in 2000
+# trials of 20 racing threads under 8-way CPU load — so a spec that merely
+# starts threads proves nothing either way.
+#
+# This widens the gap to something a scheduler cannot miss: it makes the
+# ALLOCATION itself sleep, which releases the GVL at exactly the point the
+# defect lives. Nothing in `lib/` is stubbed or rewritten — the sleep is in
+# `Class#new` for the store classes, so the configuration method under test is
+# the shipped one, character for character.
+module SlowStoreAllocation
+  # Classes whose `.new` is the allocation inside a lazy configuration default.
+  STORE_CLASSES = [
+    Kiosk::Server::PowSpentStore,
+    Kiosk::Server::AuthChallengeStore,
+    Kiosk::Server::RevocationStore,
+    Kiosk::Server::DeviceAuthorizationStores::ActiveRecord,
+  ].freeze
+
+  # Mutable because the prepend below is permanent (a module cannot be
+  # un-prepended) while the delay must be off for every other example.
+  DELAY = { seconds: 0.0 }
+
+  module SlowNew
+    def new(*args, **kwargs, &blk)
+      seconds = SlowStoreAllocation::DELAY[:seconds]
+      sleep(seconds) if seconds > 0
+      super
+    end
+  end
+
+  def self.install!
+    STORE_CLASSES.each { |k| k.singleton_class.prepend(SlowNew) }
+  end
+end
+SlowStoreAllocation.install!
+
+# Run +block+ with store allocation slowed to +seconds+, then restore.
+def with_slow_store_allocation(seconds = 0.02)
+  SlowStoreAllocation::DELAY[:seconds] = seconds
+  yield
+ensure
+  SlowStoreAllocation::DELAY[:seconds] = 0.0
+end
+
+# Release +n+ threads at once and collect their values. The latch is what makes
+# them race: without it the first thread finishes before the last is spawned.
+def race(n, &block)
+  latch   = Queue.new
+  threads = Array.new(n) { Thread.new { latch.pop; block.call } }
+  n.times { latch.push(:go) }
+  threads.map(&:value)
+end

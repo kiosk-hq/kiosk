@@ -253,4 +253,72 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       }.to raise_error(RuntimeError, /KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required/)
     end
   end
+  # ─── K-1610: a lazy STORE default is allocated exactly once ────────────────
+  #
+  # The PoW gate's «one proof id, exactly once» assertion failed in public CI
+  # run 34815855150 — two of twenty racing threads proceeded on ONE proof. The
+  # store's compare-and-set was not the defect and never had been: inside one
+  # `PowSpentStore` a second `claim` of a live id is impossible (the check and
+  # the set share a mutex, and the only two ways an entry leaves the hash —
+  # `prune!` and `release` — cannot free a claim that is about to verify `:ok`).
+  # The defect was one level up, in this file: `@pow_spent_store ||= …` is a
+  # read, an allocation and a write with no lock between them, so racing
+  # first-touchers each got a store of their OWN and each claim won in its own.
+  #
+  # These examples force that interleaving rather than hoping for it — see
+  # `with_slow_store_allocation` in spec_helper for why hoping does not work.
+  describe "lazy store defaults under a concurrent first touch (K-1610)" do
+    # Every slot here is stateful: what the losers of the race record is lost
+    # when the last write lands, and for `pow_spent_store` what is lost is the
+    # spent-id set that makes a proof of work single-use.
+    {
+      pow_spent_store:             Kiosk::Server::PowSpentStore,
+      auth_challenge_store:        Kiosk::Server::AuthChallengeStore,
+      revocation_store:            Kiosk::Server::RevocationStore,
+      device_authorization_store:  Kiosk::Server::DeviceAuthorizationStores::ActiveRecord,
+    }.each do |slot, klass|
+      it "hands #{slot} to 20 racing threads as ONE #{klass.name.split("::").last} object" do
+        Kiosk.reset!
+        stores = with_slow_store_allocation { race(20) { Kiosk.configuration.public_send(slot) } }
+
+        expect(stores.uniq.length).to eq(1)
+        expect(stores.first).to be_a(klass)
+      end
+    end
+
+    it "does not re-default revocation_store when an operator set it to nil" do
+      Kiosk.configure { |c| c.revocation_store = nil }
+      stores = with_slow_store_allocation { race(20) { Kiosk.configuration.revocation_store } }
+
+      expect(stores.uniq).to eq([nil])
+    end
+
+    # The census, not a list: every lazy default in the shipped file that
+    # ALLOCATES a store must take the lock. A new store slot added later
+    # without it reddens here, which is the property a hand-kept list of four
+    # names cannot buy.
+    describe "the guarded set is derived from the shipped source" do
+      source_path = Kiosk::Server::ConfigurationExtension
+                    .instance_method(:pow_spent_store).source_location.first
+      source      = File.read(source_path)
+      # `def <name>` with no arguments, through its matching `end` at the same
+      # indent — the shape every lazy default in this file is written in.
+      methods     = source.scan(/^      def ([a-z_0-9]+)\n(.*?)^      end$/m).to_h
+      allocating  = methods.select { |_, body| body.match?(/Store[A-Za-z:]*\.new|Stores::[A-Za-z:]+\.new/) }
+
+      # Vacuity arm: if the scan above stops matching (a reindent, a rewrite)
+      # the census below passes on an empty set and says nothing. Fail instead.
+      it "finds the store-allocating lazy defaults at all" do
+        expect(allocating.keys).to include(
+          "pow_spent_store", "auth_challenge_store", "revocation_store", "device_authorization_store"
+        )
+      end
+
+      allocating.each_key do |name|
+        it "#{name} serialises its first touch on LAZY_STORE_MUTEX" do
+          expect(allocating.fetch(name)).to include("LAZY_STORE_MUTEX")
+        end
+      end
+    end
+  end
 end

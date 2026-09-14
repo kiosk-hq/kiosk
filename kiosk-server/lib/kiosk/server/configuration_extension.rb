@@ -11,6 +11,32 @@ module Kiosk
     #
     # See the Discovery section of the spec for the well-known shape.
     module ConfigurationExtension
+      # Serialises the FIRST touch of every lazy default below that allocates a
+      # STATEFUL object — the four store slots.
+      #
+      # `@x ||= Store.new` is a read, an allocation and a write with nothing
+      # between them, so N threads racing the first touch of a slot each read
+      # nil, each allocate, and each go on using the store THEY built; the last
+      # write wins and silently discards whatever the losers recorded in theirs.
+      # For `pow_spent_store` that is a double-spent proof of work, which is
+      # measured rather than argued: with the allocation slowed at this seam,
+      # 20 threads racing ONE valid proof through {PowGate.gate} all returned
+      # `:proceed`, every one of them. The store's own compare-and-set was never the
+      # defect — the threads were holding twenty different stores, and each
+      # claim won in its own.
+      #
+      # The read path stays lock-free: the mutex is entered only while the ivar
+      # is still unset, so a settled slot costs one ivar read and nothing else
+      # (these sit on the hot path — `pow_spent_store` on every tolled verb,
+      # `revocation_store` on every access-token check). It is held at the
+      # MODULE rather than per instance because a per-instance mutex would need
+      # a lazy default of its own and inherit the identical race.
+      #
+      # Only stateful slots take it. The value defaults in this file
+      # (`mount_path`, `pow_ttl`, `skill_url`, …) allocate immutable, equal
+      # values, so a racing duplicate is indistinguishable from the winner.
+      LAZY_STORE_MUTEX = Mutex.new
+
       # URL prefix at which kiosk-server is mounted under the provider's
       # origin. Default: `/kiosk` (the spec's suggested default mount path).
       # The well-known document advertises `endpoint = origin + mount_path`.
@@ -287,8 +313,11 @@ module Kiosk
       # @return [DeviceAuthorizationStores::Base]
       attr_writer :device_authorization_store
       def device_authorization_store
-        @device_authorization_store ||=
-          Kiosk::Server::DeviceAuthorizationStores::ActiveRecord.new
+        @device_authorization_store ||
+          LAZY_STORE_MUTEX.synchronize do
+            @device_authorization_store ||=
+              Kiosk::Server::DeviceAuthorizationStores::ActiveRecord.new
+          end
       end
 
       # Operator sign-in path the engine redirects a browser to when an
@@ -506,7 +535,8 @@ module Kiosk
       # @return [Kiosk::Server::PowSpentStore, #claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
       attr_writer :pow_spent_store
       def pow_spent_store
-        @pow_spent_store ||= Kiosk::Server::PowSpentStore.new
+        @pow_spent_store ||
+          LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStore.new }
       end
 
       # ── PoP auth handshake (challenge-response) ───────────────────────────
@@ -524,7 +554,8 @@ module Kiosk
       # @return [Kiosk::Server::AuthChallengeStore, #put, #take]
       attr_writer :auth_challenge_store
       def auth_challenge_store
-        @auth_challenge_store ||= Kiosk::Server::AuthChallengeStore.new
+        @auth_challenge_store ||
+          LAZY_STORE_MUTEX.synchronize { @auth_challenge_store ||= Kiosk::Server::AuthChallengeStore.new }
       end
 
       # Auth-challenge lifetime in seconds — the window an agent has between
@@ -562,9 +593,16 @@ module Kiosk
       # @return [Kiosk::Server::RevocationStore, #revoke_all, #revoked?, #watermark_for, nil]
       attr_writer :revocation_store
       def revocation_store
+        # `defined?` rather than a truthiness test, here and inside the lock:
+        # nil is a MEANINGFUL value for this slot (it disables revocation
+        # enforcement), so an operator's explicit `= nil` must not be re-defaulted.
         return @revocation_store if defined?(@revocation_store)
 
-        @revocation_store = Kiosk::Server::RevocationStore.new
+        LAZY_STORE_MUTEX.synchronize do
+          return @revocation_store if defined?(@revocation_store)
+
+          @revocation_store = Kiosk::Server::RevocationStore.new
+        end
       end
 
       private

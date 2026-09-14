@@ -797,6 +797,35 @@ RSpec.describe Kiosk::Server::PowGate do
       expect(results.count(:proceed)).to eq(1)
       expect(results.count(:rechallenged)).to eq(n - 1)
     end
+
+    # ── K-1610 ──────────────────────────────────────────────────────────────
+    # The example above passed 2000 consecutive times on a workstation under
+    # 8-way CPU load, and failed once on a public runner (CI 34815855150:
+    # `expected: 1 got: 2`). What it cannot reach on demand is the window in
+    # `configuration_extension.rb` where the spent store itself is lazily
+    # built: a thread that arrives while `@pow_spent_store` is still nil
+    # allocates its OWN store and claims the id there, so the id is claimed
+    # once per store rather than once. This is that failure made deterministic
+    # — the shipped gate and the shipped store, with the ALLOCATION slowed so
+    # every thread is inside the window at once. Before the fix all 20 threads
+    # proceeded on one proof; the property being asserted is single-use, so
+    # that is a toll paid once and spent twenty times.
+    it "accepts it exactly once even when the spent store is built under the race" do
+      challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+      pow       = { challenge: challenge, nonce: "n" }
+      n         = 20
+
+      results = with_slow_store_allocation do
+        race(n) do
+          described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
+        rescue Kiosk::Server::Errors::PowRequired
+          :rechallenged
+        end
+      end
+
+      expect(results.count(:proceed)).to eq(1)
+      expect(results.count(:rechallenged)).to eq(n - 1)
+    end
   end
 
   # ─── configuration extension defaults ─────────────────────────────────────

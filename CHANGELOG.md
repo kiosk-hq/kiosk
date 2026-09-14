@@ -26,6 +26,10 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-15: **The skooti lock verified a signature nobody signed under a low-order public key.** The verifier now refuses the eight small-order Ed25519 keys.
+- 2026-09-15: **`box-prep` still switched on the Caddy edge throttle Phil ruled out.** That step is gone; the script and both runbooks agree there is no default per-IP limit.
+- 2026-09-15: **Three deploy-runbook sentences the archaeology drain rewrote were false.** The boot-refusal scope, the smoke-surface roster and a dangling probe reference are corrected.
+
 - 2026-09-14: **The deploy runbook carried internal note numbers a reader cannot follow.** They are gone, the sentences stay, and the guard now asserts there.
 - 2026-09-14: **The firmware CI job used two compilers without saying which.** Both are named in the job now, and a step puts the sources through every compiler on the image.
 - 2026-09-14: **The lock firmware did not compile on Linux at all.** It now asks glibc for the POSIX level it uses, and `make portability` builds it with every compiler on the machine.

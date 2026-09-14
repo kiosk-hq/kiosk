@@ -96,9 +96,11 @@
 # `structure.sql` (see the prepare step below) — from zero, where every tracked
 # column is present — so a box whose schema has drifted from the tree is
 # invisible to it, in tudu exactly as in every other demo. That escape is closed
-# before the deploy by `bin/check-migration-replay` and after it by the live
-# post-deploy probe. Three gates, three different halves: none of them is a
-# substitute for another.
+# before the deploy by `bin/check-migration-replay` and after it by the
+# post-deploy live-page check in `deploy/CHECKLIST.md` §8 — `curl -sI
+# https://<app>.demo.kiosk.tech/` → 200 against the deployed box, which is the
+# only one of the three that reads the box's real schema. Three gates, three
+# different halves: none of them is a substitute for another.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # THIS IS NOT A SCRIPT YOU RUN AGAINST A DEPLOYMENT
@@ -128,7 +130,7 @@
 # on its own. Point this script at a real deploy database and `db:schema:load`
 # refuses — the platform control stays a control.
 #
-# Usage:  [KIOSK_SMOKE_I_AM_DISPOSABLE=1] production-smoke.sh [stylish|prove]
+# Usage:  [KIOSK_SMOKE_I_AM_DISPOSABLE=1] production-smoke.sh [stylish|prove|tudu]
 #         (default demo: stylish)
 #
 # Requires: Postgres reachable (PGHOST), a psql/pg client, and the demo's

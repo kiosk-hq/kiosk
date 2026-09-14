@@ -36,9 +36,13 @@ lock verifies:
      field prime, and x = 0 only with the sign bit clear. The vendored verifier
      applies neither rule, so the identity point alone has three spellings it
      takes — and a signature anyone can write down verifies under all three.
-     This one is a property of PROVISIONING rather than of the write, and it is
-     checked here because this is the only place every caller of verify.c
-     passes through
+     The key must ALSO not be low-order: a canonical order-1/2/4/8 point passes
+     the rule above (the RFC does not require refusing it) but lets a signature
+     nobody produced verify — R = [1]B, S = 1, jti ground so [h]A vanishes — so
+     the lock refuses the eight small-order encodings outright, which is
+     stricter than the RFC and is what libsodium does. This one is a property
+     of PROVISIONING rather than of the write, and it is checked here because
+     this is the only place every caller of verify.c passes through
   1. the write is at most 512 bytes (SKOOTI_TOKEN_MAX) and holds no NUL byte —
      skooti_verify_wire is handed the write's own size, so a NUL is refused
      rather than ending the token where a const char * would, and no byte at
@@ -91,7 +95,7 @@ hypothetical: `strnlen` is POSIX.1-2008, glibc declares it only when the macro
 is set, and the firmware's first CI run failed to compile for want of it after
 months of clean local builds.
 
-Expected output (75 assertions pass, crosscheck MATCH, coverage clean). The
+Expected output (84 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:
 
 ```
@@ -100,7 +104,7 @@ Expected output (75 assertions pass, crosscheck MATCH, coverage clean). The
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 75 passed, 0 failed ===
+=== Results: 84 passed, 0 failed ===
 ALL PASS
 
 --- Ruby ↔ C crosscheck ---

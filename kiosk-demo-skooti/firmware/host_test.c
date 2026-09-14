@@ -750,11 +750,14 @@ static void test_expiry_boundary(void)
  * three: the canonical `01 00..00`, the same y written as p + 1, and
  * `01 00..00 80`, which is the canonical y with the sign bit set.
  *
- * The canonical identity is NOT refused here and that is deliberate: RFC 8032
- * does not require a verifier to reject small-order or identity keys, and a
- * lock provisioned with one has a provisioning problem rather than a decoding
- * one. What this test pins is that the two SPELLINGS the RFC forbids are gone,
- * so a fleet that blocks a key by its bytes blocks it once and for all.
+ * skooti_pubkey_is_canonical does NOT refuse the canonical identity, and that
+ * is deliberate: RFC 8032 does not require a verifier to reject small-order or
+ * identity keys, so the predicate answers the RFC's question and answers 1 for
+ * it. What this predicate pins is that the two SPELLINGS the RFC forbids are
+ * gone, so a fleet that blocks a key by its bytes blocks it once and for all.
+ * The verify PATH, however, refuses the canonical identity too — see test 15,
+ * which pins skooti_pubkey_is_low_order and the forgery it closes — so the
+ * end-to-end pair below now answers 0 for the canonical spelling as well.
  *
  * The first half asserts the predicate directly, because most of its domain
  * cannot be reached through a token: a key that is merely wrong refuses every
@@ -817,14 +820,14 @@ static void test_pubkey_canonical(void)
 
     /* End to end. IDENTITY_SIG is a signature nobody had to hold a key to
      * write, and the three spellings below all decode to the point it verifies
-     * under. The first is the encoding RFC 8032 permits, so the lock's answer
-     * there is the vendored library's and it is 1 — a lock provisioned with
-     * the identity is broken by its provisioning, not by its decoder. The
-     * other two are the encodings 5.1.3 refuses, and they are the ones this
-     * check turns from 1 into 0. */
+     * under. All three now answer 0: the two the RFC forbids (step 1 / step 3)
+     * are turned away by the canonicality check, and the first — the canonical
+     * identity the RFC permits — is turned away by the low-order refusal in the
+     * verify path (test 15). Before that refusal existed the first answered 1,
+     * which is the forgery this test now pins closed. */
     memset(key, 0, 32); key[0] = 0x01;
     result = skooti_verify_token(key, KAT_MSG "." IDENTITY_SIG, SCOOTER_CODE, NOW_FRESH);
-    check(result == 1, "identity key, canonical spelling → 1 (the RFC permits this encoding)");
+    check(result == 0, "identity key, canonical spelling → 0 (low-order key refused by verify)");
 
     key[0] = 0xee; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
     result = skooti_verify_token(key, KAT_MSG "." IDENTITY_SIG, SCOOTER_CODE, NOW_FRESH);
@@ -840,6 +843,74 @@ static void test_pubkey_canonical(void)
     check(result == 1, "the provisioned key still verifies the known-answer token → 1");
 
 #undef IDENTITY_SIG
+}
+
+/*
+ * Test 15 — low-order public keys: the forgery, refused
+ *
+ * A low-order public key is a CANONICAL encoding — skooti_pubkey_is_canonical
+ * answers 1 for it, correctly, because RFC 8032 does not require the refusal —
+ * yet under it a signature nobody produced verifies: R = [1]B, S = 1, with the
+ * jti ground so the reduced hash is a multiple of the key's order and [h]A
+ * vanishes. skooti_pubkey_is_low_order refuses the eight canonical small-order
+ * encodings, and the verify path calls it, so the forgery is turned away.
+ *
+ * ORDER8_PUBKEY is the order-8 point encoded c7176a70…03fa; FORGED_ORDER8_TOKEN
+ * carries R = [1]B, S = 1 over a message whose jti (…0013) makes the reduced
+ * hash a multiple of 8. A monotone counter found that jti on the twentieth try
+ * (the mean over keys is eight).
+ */
+static void test_pubkey_low_order(void)
+{
+    uint8_t key[32];
+    int     result;
+    int     i;
+
+    /* order-8 point, canonical encoding c7176a70...03fa */
+    static const uint8_t ORDER8_PUBKEY[32] = {
+        0xc7, 0x17, 0x6a, 0x70, 0x3d, 0x4d, 0xd8, 0x4f,
+        0xba, 0x3c, 0x0b, 0x76, 0x0d, 0x10, 0x67, 0x0f,
+        0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6,
+        0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0xfa
+    };
+    /* message . base64url(R = [1]B || S = 1) */
+#define FORGED_ORDER8_TOKEN \
+    "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|00000000000000000000000000000013." \
+    "WGZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmYBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+    printf("\n[15] Low-order public keys: the K-1617 forgery, refused\n");
+
+    /* The order-8 key IS canonical — that is the whole trap. */
+    check(skooti_pubkey_is_canonical(ORDER8_PUBKEY) == 1,
+          "order-8 key is canonical → 1 (RFC 8032 does not refuse it)");
+
+    /* skooti_pubkey_is_low_order flags the eight small-order encodings. */
+    check(skooti_pubkey_is_low_order(ORDER8_PUBKEY) == 1, "order-8 key is low-order → 1");
+    check(skooti_pubkey_is_low_order(SKOOTI_PUBKEY) == 0,
+          "the provisioned key is not low-order → 0");
+    check(skooti_pubkey_is_low_order(NULL) == 0, "NULL key → 0");
+
+    /* The all-zero (uninitialised) key field is an order-4 point — the accident
+     * that needs no attacker at all. */
+    memset(key, 0, 32);
+    check(skooti_pubkey_is_low_order(key) == 1,
+          "all-zero key is low-order → 1 (order-4; the uninitialised-field accident)");
+
+    /* identity (order 1) and the order-2 point are low-order too. */
+    memset(key, 0, 32); key[0] = 0x01;
+    check(skooti_pubkey_is_low_order(key) == 1, "identity key is low-order → 1");
+    key[0] = 0xec; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
+    check(skooti_pubkey_is_low_order(key) == 1, "order-2 key is low-order → 1");
+
+    /* THE FORGERY, end to end. Before the low-order refusal both answered 1. */
+    result = skooti_verify_token(ORDER8_PUBKEY, FORGED_ORDER8_TOKEN, SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "order-8 forged token via skooti_verify_token → 0 (K-1617 closed)");
+
+    result = skooti_verify_wire(ORDER8_PUBKEY, FORGED_ORDER8_TOKEN,
+                                strlen(FORGED_ORDER8_TOKEN), SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "order-8 forged token via skooti_verify_wire → 0 (K-1617 closed)");
+
+#undef FORGED_ORDER8_TOKEN
 }
 
 /*
@@ -947,6 +1018,7 @@ int main(void)
     test_expiry_boundary();
     test_pubkey_canonical();
     test_jti_store();
+    test_pubkey_low_order();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
 

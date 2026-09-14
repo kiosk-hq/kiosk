@@ -392,6 +392,91 @@ int skooti_pubkey_is_canonical(const uint8_t pubkey[32])
 }
 
 /* --------------------------------------------------------------------------
+ * Small-order (low-order) public key — the eight canonical encodings of the
+ * edwards25519 torsion subgroup, and a constant-time refusal of them.
+ *
+ * skooti_pubkey_is_canonical answers the RFC 8032 5.1.3 question — is this the
+ * spelling the standard permits — and the standard does NOT require refusing a
+ * low-order point, so a canonically-encoded order-1, -2, -4 or -8 point passes
+ * it. That is not merely academic. With a low-order public key A a signature
+ * nobody produced verifies: set R = [1]B (the base-point encoding) and S = 1,
+ * so the check [S]B = R + [h]A reduces to [h]A = identity, which holds whenever
+ * the reduced hash h is a multiple of ord(A). For A of order 8 a forger grinds
+ * the one caller-visible field — the jti — until h is a multiple of 8, expected
+ * eight tries; MEASURED, a monotone counter hit it on the twentieth and a mean
+ * of eight over many keys. The identity point (order 1) needs no grinding at
+ * all: [h]·identity is always identity.
+ *
+ * This lock is handed its key once at provisioning and never reads one off the
+ * wire, so nothing an attacker WRITES to this lock reaches this rule. The rule
+ * is here for the two ways a low-order key arrives without an attacker choosing
+ * it: an adopter who copies this reference and whose key comes from a fleet
+ * message, a provisioning tag or a server push that this file cannot audit, and
+ * — the accident that needs no adversary at all — an uninitialised or truncated
+ * key field, since the all-zero encoding is itself an order-4 point. Refusing
+ * these keys is STRICTER than RFC 8032; it is the policy libsodium's
+ * ge25519_has_small_order enforces, and for the same reason.
+ *
+ * The check is a fixed-table comparison — eight ct_memeq calls, all of which
+ * run, no field arithmetic, no early exit, no data-dependent branch — so it
+ * leaves ed25519/ a verbatim drop and adds no timing signal.
+ * -------------------------------------------------------------------------- */
+
+/* The eight CANONICAL encodings of the small-order points. Non-canonical
+ * spellings of the same points (y >= p, or x = 0 with the sign bit set) are
+ * already refused by skooti_pubkey_is_canonical, so this table need only carry
+ * the spellings that pass it: identity (order 1), the order-2 point, both
+ * order-4 encodings and all four order-8 encodings. */
+static const uint8_t SMALL_ORDER_LE[8][32] = {
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80 },
+    { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+    { 0x26, 0xe8, 0x95, 0x8f, 0xc2, 0xb2, 0x27, 0xb0,
+      0x45, 0xc3, 0xf4, 0x89, 0xf2, 0xef, 0x98, 0xf0,
+      0xd5, 0xdf, 0xac, 0x05, 0xd3, 0xc6, 0x33, 0x39,
+      0xb1, 0x38, 0x02, 0x88, 0x6d, 0x53, 0xfc, 0x05 },
+    { 0x26, 0xe8, 0x95, 0x8f, 0xc2, 0xb2, 0x27, 0xb0,
+      0x45, 0xc3, 0xf4, 0x89, 0xf2, 0xef, 0x98, 0xf0,
+      0xd5, 0xdf, 0xac, 0x05, 0xd3, 0xc6, 0x33, 0x39,
+      0xb1, 0x38, 0x02, 0x88, 0x6d, 0x53, 0xfc, 0x85 },
+    { 0xc7, 0x17, 0x6a, 0x70, 0x3d, 0x4d, 0xd8, 0x4f,
+      0xba, 0x3c, 0x0b, 0x76, 0x0d, 0x10, 0x67, 0x0f,
+      0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6,
+      0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0x7a },
+    { 0xc7, 0x17, 0x6a, 0x70, 0x3d, 0x4d, 0xd8, 0x4f,
+      0xba, 0x3c, 0x0b, 0x76, 0x0d, 0x10, 0x67, 0x0f,
+      0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6,
+      0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0xfa },
+    { 0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f }
+};
+
+int skooti_pubkey_is_low_order(const uint8_t pubkey[32])
+{
+    uint32_t hit = 0;
+    int      i;
+
+    if (!pubkey) return 0;
+
+    /* Every comparison runs; no short-circuit on the key bytes. */
+    for (i = 0; i < 8; i++)
+        hit |= (uint32_t)ct_memeq(pubkey, SMALL_ORDER_LE[i], 32);
+
+    return (int)(hit & 1u);
+}
+
+/* --------------------------------------------------------------------------
  * verify_bounded — the whole verification, over EXACTLY token_len bytes.
  *
  * Every byte this function reads is in [token, token + token_len); it never
@@ -445,6 +530,13 @@ static int verify_bounded(const uint8_t pubkey[32],
      * See skooti_pubkey_is_canonical above for what the vendored decoder
      * takes without it. --- */
     if (!skooti_pubkey_is_canonical(pubkey)) return 0;
+
+    /* --- A low-order public key is refused here too. It is a canonical
+     * encoding, so the check above passes it, and under it a signature nobody
+     * produced verifies — R = [1]B, S = 1, with a jti ground so [h]A vanishes.
+     * That is stricter than RFC 8032 and matches libsodium; see
+     * skooti_pubkey_is_low_order above for the reachability that earns it. --- */
+    if (skooti_pubkey_is_low_order(pubkey)) return 0;
 
     /* --- token length cap --- */
     if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;

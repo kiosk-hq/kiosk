@@ -169,18 +169,26 @@ measurement over the whole domain instead of by a promise about it.
   locks. That asymmetry is by design and is not a disagreement about grammar.
 - Anything about signature FORGERY. Every vector in the shared set carries a
   genuine signature over its own message; a flipped byte, a signature over
-  other bytes and a wrong key are `firmware/host_test.c`'s subject and the
-  KAT's. The scalar rule above starts from a signature somebody already made
-  and narrows how it may be spelled, so it is on this side of that line too.
+  other bytes, a wrong key and a LOW-ORDER key under which a signature nobody
+  produced verifies are `firmware/host_test.c`'s subject and the KAT's. The
+  scalar rule above starts from a signature somebody already made and narrows
+  how it may be spelled, so it is on this side of that line too.
 - That the vendored Ed25519 verifier is RFC 8032 strict in every other
   respect. Measured at head, two of the decoder's rules are the library's
   rather than the RFC's: a public key whose y coordinate is at or above the
   field prime is reduced instead of refused, and the x = 0 encoding is taken
   with either sign bit. Both are about the PUBLIC KEY, which this lock is given
-  once at provisioning and never reads off the wire. The C reader now applies
-  both itself before it calls the library, so its own answer is the RFC's — the
-  library beside it is unchanged, and an adopter who calls it directly inherits
-  both. The two Ruby readers are not asked: their key is a constant of the
+  once at provisioning and never reads off the wire. The C reader applies both
+  rules itself before it calls the library, so on those two its answer is the
+  RFC's. It goes one step FURTHER than the RFC on a third: a low-order public
+  key is a canonical encoding the RFC permits, but under it a signature nobody
+  produced verifies (R = [1]B, S = 1, jti ground so the cofactor term
+  vanishes), so the C reader refuses the eight small-order encodings — the
+  policy libsodium enforces, stricter than RFC 8032. This is not a claim that
+  the crypto is otherwise complete: it is the statement of which public keys
+  this reader turns away and why. The library beside it is unchanged, and an
+  adopter who calls it directly inherits neither the two rules nor the
+  refusal. The two Ruby readers are not asked: their key is a constant of the
   server, the shared vectors vary the TOKEN, and nothing in this set carries a
   key at all. What holds the C answer is `firmware/host_test.c`.
 - That the readers agree on TIMING. The C reader compares the tag and the

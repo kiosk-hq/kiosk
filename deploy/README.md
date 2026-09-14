@@ -15,11 +15,11 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
-| `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box: strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
+| `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box: strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags — honoured now only as single-mode aliases, so an env that sets two or more of them raises at boot — and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
 | `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template says OK for as long as the box serves without the header. `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
 | `demo-reset.sh` | Run ON THE BOX to put demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (its orders are real third-party assistant runs and seeding cannot reproduce one); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
-| `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`. |
+| `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface plus the one whose HTML is rendered from a hand-written SQL projection (`stylish` \| `prove` \| `tudu`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`. |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
 | `README.md` | This runbook. |
 
@@ -50,8 +50,9 @@ a low/fast toll so a poker can register in well under a second and still SEE
 the toll; only
 **atablefor** — the designated production-grade showcase — ships the high
 memory+CPU-hard toll behind a "beware: intensive PoW" banner so the toll is
-tangible first-hand. (The toll prices abuse; it is not by itself a DoS shield —
-see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: set
+tangible first-hand. (The toll prices abuse; it is not by itself a DoS shield,
+and there is deliberately no default edge throttle — see "Edge rate-limit"
+below.) Any other demo is knob-adjustable: set
 `KIOSK_POW_DIFFICULTY=high` on it too to feel its own toll.
 
 > **How it wires (WIRED).** All seven demos'

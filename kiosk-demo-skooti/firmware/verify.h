@@ -115,8 +115,42 @@ extern "C" {
  * that wants the answer where a key is RECEIVED — a provisioning routine, a
  * fleet-key rotation — which is where a refusal can still be reported to a
  * human instead of looking like a bad token.
+ *
+ * NOTE: canonical is not the same as SAFE to provision. RFC 8032 permits a
+ * low-order public key, and this returns 1 for one; a provisioning routine
+ * that wants to refuse such keys must also call skooti_pubkey_is_low_order.
  */
 int skooti_pubkey_is_canonical(const uint8_t pubkey[32]);
+
+/*
+ * skooti_pubkey_is_low_order — is this 32-byte string one of the eight
+ * canonical encodings of the edwards25519 torsion subgroup (a point of order
+ * 1, 2, 4 or 8)?
+ *
+ * Parameters:
+ *   pubkey : 32 raw bytes — a candidate Ed25519 public key.
+ *
+ * Returns:
+ *   1  — the bytes are a canonical small-order encoding, and 0 otherwise
+ *         (including a NULL pointer).
+ *
+ * WHY IT IS PUBLIC. A low-order public key passes the canonicality check —
+ * it IS a canonical encoding — yet under it a signature nobody produced
+ * verifies: R = [1]B and S = 1 satisfy the verify equation whenever the
+ * reduced hash is a multiple of the key's order, which a forger grinds the jti
+ * to reach (identity needs no grinding; order 8 takes ~8 tries). This is
+ * stricter than RFC 8032, which does not require the refusal; it is the policy
+ * libsodium enforces, and for the same reason. skooti_verify_token and
+ * skooti_verify_wire call this before verifying, so a caller of those needs
+ * nothing further. It is declared here for a provisioning or fleet-rotation
+ * routine that wants to refuse the key where it ARRIVES — including the
+ * accident that needs no attacker, an all-zero (uninitialised) key field,
+ * which is itself an order-4 point.
+ *
+ * The comparison is constant-time: eight fixed 32-byte compares, all of which
+ * run, no branch on the key bytes.
+ */
+int skooti_pubkey_is_low_order(const uint8_t pubkey[32]);
 
 /*
  * skooti_verify_token — verify a skooti-issued Ed25519 rental token.
@@ -142,6 +176,13 @@ int skooti_pubkey_is_canonical(const uint8_t pubkey[32]);
  *     range and the x = 0 sign bit, neither of which the vendored decoder
  *     applies. Without it the identity point alone has three accepted
  *     spellings, and a signature anyone can make verifies under all three.
+ *   - The public key is ALSO refused here if it is low-order, by
+ *     skooti_pubkey_is_low_order above. A low-order key is a canonical
+ *     encoding — the check just above passes it — yet under it a signature
+ *     nobody produced verifies (R = [1]B, S = 1, jti ground so [h]A vanishes),
+ *     for the canonical identity spelling and for every order-8 key alike.
+ *     This refusal is stricter than RFC 8032 and matches libsodium; it closes
+ *     the forgery the canonical check on its own does not.
  *   - The signature's SCALAR is range-checked HERE, before that call. RFC 8032
  *     5.1.7 decodes the second 32 bytes as a number below the group order L;
  *     the vendored verifier bounds them only by `signature[63] & 224`, which

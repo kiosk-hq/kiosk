@@ -107,7 +107,7 @@ kiosk-demo-skooti/before-after.md ¦ four beats ¦ how many further beats the ta
 kiosk-demo-skooti/before-after.md ¦ 3 pins ¦ not a count: "RUN 3" is a label in a quoted run and "pins" is the verb of that sentence.
 kiosk-demo-skooti/before-after.md ¦ two verbs ¦ the two query verbs that one beat of the run exercises, which is a subset of this demo's three and is named in the sentence.
 kiosk-demo-skooti/before-after.md ¦ two initializers ¦ same generator sentence, same reason, as the getgrocery entry above.
-kiosk-demo-skooti/firmware/README.md ¦ 75 assertions ¦ from: grep -c '    check(' kiosk-demo-skooti/firmware/host_test.c ¦ the assertion total the firmware's own host test prints; it belongs to that binary's output and no file list counts it, so it is derived from the harness calls instead.
+kiosk-demo-skooti/firmware/README.md ¦ 84 assertions ¦ from: grep -c '    check(' kiosk-demo-skooti/firmware/host_test.c ¦ the assertion total the firmware's own host test prints; it belongs to that binary's output and no file list counts it, so it is derived from the harness calls instead.
 kiosk-demo-stylish/README.md ¦ four beats ¦ the four scenario classes are named one by one in the same sentence.
 kiosk-demo-stylish/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
 kiosk-demo-tudu/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-tudu/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.

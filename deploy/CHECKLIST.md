@@ -61,8 +61,9 @@ For EACH of the 7 apps:
       `KIOSK_POW_BACKOFF_DEMO`, which current code **REFUSES at boot** — deploying first takes that app down. The script
       drops those and the dead `KIOSK_POW_REGISTER_DEMO` (nothing reads it; register PoW is unconditional via
       `c.registration_pow_count = 1`). A FRESH box built from this checklist needs none of it — the examples in
-      `deploy/env/` are already clean. Nothing else instructs an operator to run this script, which is why the
-      line is here.
+      `deploy/env/` are already clean. The script edits only the `/etc/kiosk-demo/*.env` files and touches
+      nothing else on the box — it does NOT touch Caddy or any throttle (there is deliberately none; see
+      `deploy/README.md` §"Edge rate-limit"). `deploy/README.md`'s file table points at it too.
 - [ ] **PoW secret (all 7 demos):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
       without it outside dev/test (a shipped default would be world-readable in the public repo, letting anyone forge a
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.

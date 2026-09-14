@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-14: **The fleet re-pins to `skill-v0.4.14.md`.** All seven operator demos and the engine default move `skill_url` and `skill_sha256` together.
+
 - 2026-09-14: **skooti's rental-token fields 1 and 2 admitted any byte but the delimiter, a domain no vector set can exhaust.** They hold 66 characters now, checked over all 256 byte values.
 - 2026-09-14: **`skooti_verify_wire` ignored the length it was given below two gates.** The count now bounds the whole parse, so no byte past it is read.
 - 2026-09-14: **The two Ruby rental-token readers gave different answers for one byte sequence under different String encodings.** They parse bytes, so only the bytes decide.

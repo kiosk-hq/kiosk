@@ -41,6 +41,28 @@
 # argv at all — and that byte is exactly where the C reader and a Ruby reader
 # see different tokens. Handing every vector to the helper the same way keeps
 # one code path and leaves no vector the set cannot ask all three readers.
+#
+# THE RUBY READERS ARE ASKED UNDER THE VECTOR'S OWN ENCODING TAG. A Ruby String
+# carries one and every string operation consults it, so it is an input to the
+# verdict exactly as the bytes are — and it is an input the C reader does not
+# have. The `encoding` axis varies it over one set of bytes; every other vector
+# declares UTF-8, which is what a token arriving from a request parameter or a
+# File.read is tagged with here.
+#
+# A READER THAT RAISES IS REPORTED, NOT CRASHED INTO. Both Ruby readers
+# document what they return on failure — "nil on any failure", "Returns false
+# if …" — and an exception outside that list is the documentation being wrong
+# rather than a bug in this runner. So a probe that raises prints the exception
+# class in its column and counts as a disagreement, which is how a vector that
+# finds one names the reader instead of killing the run.
+#
+# THE SWEEP IS RUN AS A CENSUS. token_vectors.rb's readable VECTORS are printed
+# a row each; its SWEEP — one vector per byte value for each opaque field — is
+# run through the same three readers and reported as a count, because 446 lines
+# of MATCH hide the rows a reader came for. Any disagreement inside it is named
+# individually. The sweep's exhaustiveness is asserted here rather than assumed:
+# a run whose reservation_id arm does not reach all 256 byte values is a run
+# whose census means nothing, and it aborts.
 
 require "openssl"
 require "base64"
@@ -84,20 +106,27 @@ def sign(message)
   Base64.urlsafe_encode64(KEY.sign(nil, message), padding: false)
 end
 
-# The wire token a vector asks for. A vector whose spelling is NOT :canonical
-# and whose transform returns the canonical token measures nothing, so that is
-# a hard stop rather than a quiet pass.
+# The wire token a vector asks for, as BYTES. A vector whose spelling is NOT
+# :canonical and whose transform returns the canonical token measures nothing,
+# so that is a hard stop rather than a quiet pass.
 def wire_token(vector)
   signature = sign(vector.message)
   transform = WIRE.fetch(vector.wire)
-  token     = transform.call(vector.message, signature)
+  token     = transform.call(vector.message, signature).b
 
-  if vector.wire != :canonical && token == WIRE.fetch(:canonical).call(vector.message, signature)
+  if vector.wire != :canonical &&
+     token == WIRE.fetch(:canonical).call(vector.message, signature).b
     abort "  VECTOR BROKEN — #{vector.axis}/#{vector.label}: the :#{vector.wire} " \
           "spelling produced the canonical token, so this vector measures nothing"
   end
 
   token
+end
+
+# The same bytes under the tag the vector declares. The C reader is handed a
+# file and never sees this; the two Ruby readers see nothing else.
+def tagged_token(vector)
+  wire_token(vector).dup.force_encoding(vector.tag)
 end
 
 # The C verifier, through the helper binary `make crosscheck` builds, asked via
@@ -119,6 +148,17 @@ def issuer_accepts?(token)
   !RentalTokenIssuer.verify(token: token, now: NOW).nil?
 end
 
+# A reader that RAISES has given neither answer, and that is a result rather
+# than a crash: both Ruby readers document a list of what they return on
+# failure, so an exception outside it is the documentation being wrong. Named
+# as its own verdict so a run says which reader and which exception, instead of
+# the runner dying on the vector that found it.
+def answer(probe, token)
+  probe.call(token)
+rescue StandardError => e
+  e.class.name
+end
+
 # A fresh lock per vector, so the replay store of one vector cannot answer for
 # the next — replay is per-reader state and is not what this set measures.
 def lock_sim_accepts?(token)
@@ -133,43 +173,93 @@ READERS = [
 ].freeze
 
 VECTORS  = SkootiTokenVectors::VECTORS
+SWEEP    = SkootiTokenVectors::SWEEP
 RESPELT  = VECTORS.count { |vector| vector.wire != :canonical }
-ROW      = "    %-6s %-46s %-7s %-7s %-7s %-7s %s"
+TAGGED   = VECTORS.count { |vector| vector.tag != SkootiTokenVectors::DEFAULT_TAG }
+ROW      = "    %-8s %-46s %-7s %-7s %-7s %-7s %s"
+
+# The sweep only means something if it reaches every byte value it claims to.
+# Re-derived from the vectors' own messages, not from the range that built
+# them, and a short arm is a hard stop: a census over a sample would read
+# exactly like a census over the domain.
+COVERAGE = SkootiTokenVectors.sweep_coverage
+unless COVERAGE.fetch("reservation_id") == (0..255).to_a
+  abort "  SWEEP BROKEN — the reservation_id arm reaches " \
+        "#{COVERAGE.fetch('reservation_id').length} byte values, not all 256, " \
+        "so nothing here can say what the other bytes do"
+end
+
+# Run one vector through all three readers. Returns [answers, agreed].
+def ask(vector)
+  bytes   = wire_token(vector)
+  tagged  = bytes.dup.force_encoding(vector.tag)
+  answers = READERS.map { |head, _name, probe| answer(probe, head == "C" ? bytes : tagged) }
+  [answers, answers.all? { |a| a == vector.accept }]
+end
+
+# How one reader's answer prints: accept, reject, or the exception class it
+# raised instead of answering.
+def verdict(a)
+  case a
+  when true  then "accept"
+  when false then "reject"
+  else a.to_s.split("::").last
+  end
+end
+
+def name_disagreement(vector, answers)
+  disagreeing = READERS.zip(answers)
+                       .reject { |_reader, a| a == vector.accept }
+                       .map { |reader, a| "#{reader[1]} (#{verdict(a)})" }
+  "    #{vector.axis}/#{vector.label}: declared " \
+    "#{vector.accept ? 'accept' : 'reject'}, answered the other way by " \
+    "#{disagreeing.join(', ')}"
+end
 
 puts "  Rental-token grammar — #{VECTORS.length} live-signed vectors through " \
      "all #{READERS.length} readers of this token " \
-     "(#{RESPELT} of them respell the wire around the signature):"
+     "(#{RESPELT} respell the wire around the signature, " \
+     "#{TAGGED} vary the Ruby encoding tag):"
 puts format(ROW, "axis", "vector", "expect", *READERS.map(&:first), "")
 
 failures = []
 
 VECTORS.each do |vector|
-  token   = wire_token(vector)
-  answers = READERS.map { |_head, _name, probe| probe.call(token) }
-  agreed  = answers.all? { |answer| answer == vector.accept }
+  answers, agreed = ask(vector)
   failures << [vector, answers] unless agreed
 
   puts format(ROW, vector.axis, vector.label,
               vector.accept ? "accept" : "reject",
-              *answers.map { |answer| answer ? "accept" : "reject" },
+              *answers.map { |a| verdict(a) },
               agreed ? "MATCH ✓" : "MISMATCH ✗")
 end
 
+# ── the exhaustive charset sweep, reported as a census ──────────────────────
+sweep_failures = []
+SWEEP.each do |vector|
+  answers, agreed = ask(vector)
+  sweep_failures << [vector, answers] unless agreed
+end
+
+puts "    charset sweep — every byte value 0x00-0xFF in each opaque field: " \
+     "#{COVERAGE.fetch('reservation_id').length} in reservation_id " \
+     "(#{SkootiTokenVectors::UNRESERVED.length} accepted, " \
+     "#{256 - SkootiTokenVectors::UNRESERVED.length} refused) and " \
+     "#{COVERAGE.fetch('scooter_code').length} in scooter_code (all refused), " \
+     "#{SWEEP.length - sweep_failures.length} of #{SWEEP.length} agreed " \
+     "#{sweep_failures.empty? ? 'MATCH ✓' : 'MISMATCH ✗'}"
+
+failures.concat(sweep_failures)
+total = VECTORS.length + SWEEP.length
+
 if failures.empty?
   puts "  MATCH — all #{READERS.length} readers gave the declared answer on " \
-       "every one of these #{VECTORS.length} vectors " \
+       "every one of these #{total} vectors " \
        "(axes: #{SkootiTokenVectors.axes.join(', ')}) ✓"
   exit 0
 end
 
-puts "  MISMATCH — #{failures.length} of #{VECTORS.length} vector(s) did not get " \
+puts "  MISMATCH — #{failures.length} of #{total} vector(s) did not get " \
      "the declared answer from all #{READERS.length} readers ✗"
-failures.each do |vector, answers|
-  disagreeing = READERS.zip(answers)
-                       .reject { |_reader, answer| answer == vector.accept }
-                       .map { |reader, _answer| reader[1] }
-  puts "    #{vector.axis}/#{vector.label}: declared " \
-       "#{vector.accept ? 'accept' : 'reject'}, answered the other way by " \
-       "#{disagreeing.join(', ')}"
-end
+failures.each { |vector, answers| puts name_disagreement(vector, answers) }
 exit 1

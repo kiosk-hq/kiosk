@@ -213,19 +213,38 @@ module RentalTokenIssuerKAT
     end
 
     # The unconfigured-key raise, verify's nil-public-key return, and the
-    # pipe field-shift hazard (a `|` in an input mints a signed token this
-    # issuer's own verifier rejects — see the RentalTokenIssuer.issue charset
-    # contract). Saves/restores the configured key so it exercises the nil path.
+    # ENFORCED input charset — RentalTokenIssuer::FIELD_CHARSET, the same set
+    # all three readers of this token hold fields 1 and 2 to. The alternative
+    # to enforcing it is a validly SIGNED token every reader refuses, which is
+    # worse than a refusal because the refusal then happens nowhere near the
+    # mistake. Saves/restores the configured key so it exercises the nil path.
     def check_input_and_key_guards
-      # ── Pipe in an input: valid signature, but 8 pipe fields, so self-verify
-      #    rejects it (field-shift hazard the charset contract warns about).
-      poisoned = RentalTokenIssuer.issue(
-        scooter_code: "SK|001", reservation_id: "resv|1", now: 1_750_000_000,
+      # ── Outside the charset: issue refuses rather than signing. A pipe is
+      #    the sharpest case — it shifts the fields, so `exp` would be read out
+      #    of a caller-supplied position — and a space and a high byte are the
+      #    same guard over the rest of the domain.
+      [["SK|001", "resv-1"], ["SK-001", "resv|1"],
+       ["SK 001", "resv-1"], ["SK-001", "resv 1"],
+       ["SK-001", "resv\xFF1".dup.force_encoding(Encoding::BINARY)],
+       ["", "resv-1"], ["SK-001", ""]].each do |code, resv|
+        raised = begin
+          RentalTokenIssuer.issue(scooter_code: code, reservation_id: resv,
+                                  now: 1_750_000_000)
+          false
+        rescue ArgumentError
+          true
+        end
+        assert("charset: issue refuses #{code.inspect}/#{resv.inspect}", raised)
+      end
+
+      # ── Inside it: a canonical uuid and an SK-### code are what the shipped
+      #    path passes, and they go through.
+      accepted = RentalTokenIssuer.issue(
+        scooter_code: "SK-001", reservation_id: "ae01a0ae-336f-494f-b226-a006baee0947",
+        now: 1_750_000_000,
       )
-      poison_fields = poisoned.split(".")[..-2].join(".").split("|")
-      assert("pipe-input: message has >6 fields", poison_fields.length > 6)
-      assert("pipe-input: own verify rejects -> nil",
-        RentalTokenIssuer.verify(token: poisoned, now: 1_750_000_000).nil?)
+      assert("charset: a uuid reservation_id is issued and self-verifies",
+        !RentalTokenIssuer.verify(token: accepted, now: 1_750_000_000).nil?)
 
       # ── Unconfigured key: issue raises, verify returns nil (no key to derive).
       saved = Kiosk.configuration.unlock_signing_key

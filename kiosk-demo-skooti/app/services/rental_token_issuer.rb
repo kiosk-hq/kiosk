@@ -85,29 +85,57 @@ module RentalTokenIssuer
   # jti: exactly what SecureRandom.hex(16) produces.
   JTI_FORMAT = /\A[0-9a-f]{32}\z/
 
+  # scooter_code and reservation_id: the RFC 3986 unreserved set, and nothing
+  # else. These are the two fields no reader INTERPRETS, and an uninterpreted
+  # field is exactly where three independent parsers pull apart — "any bytes
+  # but the delimiter and NUL" is 254 values per position, a domain nobody can
+  # enumerate, so a claim about it can only ever be sampled and each reader
+  # ends up with its own answer. Sixty-six characters can be enumerated, and
+  # RENTAL_TOKEN.md's rule for these two fields is held by a vector for every
+  # one of the 256 byte values rather than by a sentence.
+  #
+  # The set is not arbitrary: it is exactly the characters that survive the App
+  # Clip launch URL unchanged, it covers every character a canonical uuid and
+  # an `SK-###` fleet code are spelled with, and it excludes `|` and NUL — so
+  # the delimiter rule and the NUL rule fall out of it instead of standing
+  # beside it. Its source is ASCII-only, so Ruby gives it the US-ASCII
+  # encoding, and a US-ASCII pattern matched against a BINARY string carrying
+  # high bytes answers false rather than raising — which is what lets the gate
+  # run on the token as bytes; see {.verify}'s first line.
+  FIELD_CHARSET = /\A[A-Za-z0-9._~-]+\z/
+
   class << self
     # Issue a signed rental token.
     #
-    # Charset contract: `scooter_code` and `reservation_id` MUST be non-empty
-    # and MUST NOT contain the field delimiter `|`. The message packs six
-    # pipe-delimited fields and {.verify} rejects any split that does not yield
-    # exactly 6 non-empty ones, so a `|` in either input mints a validly SIGNED
-    # token this issuer's own verifier rejects — a field-shift hazard for a
-    # laxer external verifier. The two other verifiers skooti ships are not
-    # lax: `script/lock_sim.rb` and the lock firmware's `skooti_verify_token`
-    # hold the same grammar, and `make crosscheck` runs one shared vector set
-    # through all three. skooti only ever passes `SK-###` codes and pipe-free
-    # ids, so this is a documented input precondition rather than an enforced
-    # guard.
+    # Charset contract, ENFORCED here: `scooter_code` and `reservation_id` are
+    # held to {FIELD_CHARSET}, the same set all three readers of this token
+    # hold them to, and an input outside it raises rather than being signed.
     #
-    # @param scooter_code   [String]  e.g. "SK-001" (no `|`)
-    # @param reservation_id [String]  UUID or other opaque ID (no `|`)
+    # It is enforced rather than documented because the alternative is minting
+    # a validly SIGNED token that every reader refuses. A `|` in either input
+    # shifts the fields, so the message packs seven or eight of them and the
+    # claim read as `exp` is a caller-supplied number — which is the hazard
+    # this guard was first written about; the same is now true of any byte
+    # outside the set, since the readers narrowed to it. A signature over bytes
+    # nothing will accept is worse than a refusal, because the refusal happens
+    # where the mistake is.
+    #
+    # @param scooter_code   [String]  e.g. "SK-001"; {FIELD_CHARSET}
+    # @param reservation_id [String]  a uuid or other opaque id; {FIELD_CHARSET}
     # @param now            [Integer] current unix timestamp (seconds)
     # @param ttl            [Integer] token lifetime in seconds (default 900 = 15 min)
+    # @raise [ArgumentError] if either field is empty or outside {FIELD_CHARSET}
     # @return [String] wire token: "<message>.<base64url_sig>"
     def issue(scooter_code:, reservation_id:, now:, ttl: 900)
       key = signing_key
       raise ArgumentError, "unlock_signing_key is not configured" if key.nil?
+
+      unless scooter_code.to_s.b.match?(FIELD_CHARSET)
+        raise ArgumentError, "scooter_code must be 1+ characters of A-Za-z0-9._~-"
+      end
+      unless reservation_id.to_s.b.match?(FIELD_CHARSET)
+        raise ArgumentError, "reservation_id must be 1+ characters of A-Za-z0-9._~-"
+      end
 
       iat     = now
       exp     = iat + ttl
@@ -117,10 +145,24 @@ module RentalTokenIssuer
       "#{message}.#{Base64.urlsafe_encode64(sig, padding: false)}"
     end
 
-    # Verify a wire token against the configured signing key: refuse a NUL
-    # byte, split on the LAST ".", hold the signature to the unpadded base64url
-    # alphabet and decode it, Ed25519-verify the message, hold the message to
-    # the grammar above, and require exp > now.
+    # Verify a wire token against the configured signing key: read it AS BYTES,
+    # refuse a NUL byte, split on the LAST ".", hold the signature to the
+    # unpadded base64url alphabet and decode it, Ed25519-verify the message,
+    # hold the message to the grammar above, and require exp > now.
+    #
+    # BYTES, NOT CHARACTERS, and that is the first line of the method for a
+    # reason. The lock this verifier answers for is a C program reading a byte
+    # buffer; a Ruby String additionally carries an ENCODING TAG that its
+    # caller chose, and every string operation below — `rindex`, `split`,
+    # `match?`, `==` — consults that tag. Without the conversion one byte
+    # sequence gets three answers: tagged ASCII-8BIT it parses, tagged UTF-8
+    # the split raises `ArgumentError: invalid byte sequence in UTF-8`, and
+    # tagged UTF-16LE every operation raises `Encoding::CompatibilityError`,
+    # which is outside the rescue below and so escapes the "or nil on any
+    # failure" this method promises. A verdict that turns on a tag is also a
+    # verdict no shared vector can carry, because a vector is bytes.
+    # `String#b` never raises, so after this line the answer is a function of
+    # the bytes alone and this reader asks the lock's question.
     #
     # Reference-verifier surface — the production unlock path never calls this;
     # the scooter lock (script/lock_sim.rb / the firmware) does the verifying.
@@ -132,7 +174,10 @@ module RentalTokenIssuer
     # @param now   [Integer] current unix timestamp (seconds)
     # @return [Hash|nil] parsed claims hash, or nil on any failure
     def verify(token:, now:)
-      return nil if token.nil? || token.empty?
+      return nil if token.nil?
+
+      token = token.to_s.b
+      return nil if token.empty?
       return nil if token.bytesize > TOKEN_MAX_BYTES
       return nil if token.b.include?(NUL_BYTE)
 
@@ -162,9 +207,16 @@ module RentalTokenIssuer
       fields = message.split(DELIMITER, -1)
       return nil unless fields.length == FIELD_COUNT
       return nil if fields.any?(&:empty?)
-      return nil unless fields[0] == CONTEXT_TAG
+      return nil unless fields[0] == CONTEXT_TAG.b
 
       _tag, scooter_code, reservation_id, iat_s, exp_s, jti = fields
+
+      # The two opaque fields. This verifier is not a lock and has no
+      # provisioned code to compare `scooter_code` against, so for field 1 the
+      # charset is the whole of what holds it here; the two locks apply the
+      # same charset AND the equality check.
+      return nil unless scooter_code.match?(FIELD_CHARSET)
+      return nil unless reservation_id.match?(FIELD_CHARSET)
 
       return nil unless timestamp?(iat_s)
       return nil unless timestamp?(exp_s)
@@ -178,12 +230,16 @@ module RentalTokenIssuer
       # instant; this verifier answers as the lock does.
       return nil unless exp > now
 
+      # Handed back as text. The parse ran on bytes; every field that reaches
+      # here is inside {FIELD_CHARSET} or {JTI_FORMAT}, both pure ASCII, so
+      # re-tagging is lossless and a caller gets ordinary Strings rather than
+      # the binary ones the parse needed.
       {
-        scooter_code:   scooter_code,
-        reservation_id: reservation_id,
+        scooter_code:   scooter_code.force_encoding(Encoding::UTF_8),
+        reservation_id: reservation_id.force_encoding(Encoding::UTF_8),
         iat:            iat,
         exp:            exp,
-        jti:            jti,
+        jti:            jti.force_encoding(Encoding::UTF_8),
       }
     rescue ArgumentError, OpenSSL::PKey::PKeyError
       nil

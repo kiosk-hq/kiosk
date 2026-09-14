@@ -23,6 +23,11 @@
 #     the single canonical spelling.
 #   * A Ruby String carries a NUL byte and reads past it; a `const char *`
 #     ends there.
+#   * A Ruby String also carries an ENCODING TAG its caller chose, and every
+#     string operation consults it: one byte sequence was accepted tagged
+#     ASCII-8BIT and refused tagged UTF-8, and raised outright tagged UTF-16LE.
+#     C has no tags. This is the axis a vector could not carry until a vector
+#     could declare one, which is why `encoding` exists below.
 #   * A field no reader parses is a field each reader may read differently.
 #
 # So what holds the three together is not three carefully-reviewed parsers. It
@@ -32,12 +37,22 @@
 #
 # THE GRAMMAR THESE VECTORS PIN is stated once, in ../RENTAL_TOKEN.md, which is
 # the canonical page for this token. In brief: the wire token is at most 512
-# bytes, holds no NUL, and splits at its LAST "." into a message and a
-# canonical unpadded base64url Ed25519 signature; the message is exactly six
-# pipe-delimited fields, none of them empty; field 0 is the literal domain tag,
-# field 1 the scooter code, field 2 an opaque reservation id, fields 3 and 4
-# are 1-20 plain ASCII digits no greater than UINT64_MAX with `exp > now`, and
-# field 5 is 32 lowercase hex characters.
+# bytes and splits at its LAST "." into a message and a canonical unpadded
+# base64url Ed25519 signature; the message is exactly six pipe-delimited
+# fields, none of them empty; field 0 is the literal domain tag, fields 1 and 2
+# are 1+ characters of the RFC 3986 unreserved set `A-Za-z0-9-._~`, fields 3
+# and 4 are 1-20 plain ASCII digits no greater than UINT64_MAX with
+# `exp > now`, and field 5 is 32 lowercase hex characters.
+#
+# WHY FIELDS 1 AND 2 ARE A CHARSET AND NOT "ANY BYTES BUT THE DELIMITER". They
+# used to be the latter, and it is a domain of 254 values per position: no
+# vector set can exhaust it, so the page could only ever make a claim about it
+# that nothing checked, and the three readers disagreed on 128 of the 256
+# single-byte cases without anything going red. A set of 66 characters CAN be
+# exhausted, and {SWEEP} below does exactly that — one vector per byte value —
+# so the page's rule for these fields is held by a measurement rather than by a
+# sentence. Every shipped and seeded value is inside it: a canonical uuid is
+# hex and hyphens, and an `SK-###` fleet code is letters, digits and a hyphen.
 #
 # THE PAGE AND THIS FILE ANSWER TO EACH OTHER, and that is checked rather than
 # intended: each rule on that page carries a `<!-- vectors: axis -->` marker
@@ -75,6 +90,17 @@
 #     three, measured rather than assumed, and no vector here can see the
 #     difference either way — a declared accept/reject answer is all a vector
 #     carries.
+#   * The scooter-code CHARSET as an ACCEPT, and the reason is structural
+#     rather than an omission. Field 1 must equal the lock's own provisioned
+#     code, so the only field-1 value the two locks accept is `SK-001` itself;
+#     an in-charset byte injected into it is accepted by the issuer (which has
+#     no code to compare against) and refused by both locks, which is the
+#     documented asymmetry and not a disagreement about the grammar. So the
+#     scooter-code half of {SWEEP} covers the 190 byte values OUTSIDE the
+#     charset, where all three readers must agree on a refusal, and the 66
+#     inside it are covered for `reservation_id` only. Measured: with the
+#     charset gates in place those 66 are the complete set of byte values on
+#     which the three readers answer field 1 differently.
 #   * Any property of the token that ../RENTAL_TOKEN.md does not state. The
 #     coverage gate binds this file to that page in both directions; neither
 #     of them can reach an axis nobody has written down.
@@ -140,12 +166,24 @@ module SkootiTokenVectors
     trailing_nul:     ->(m, s) { "#{m}.#{s}#{NUL}" },
   }.freeze
 
+  # The RFC 3986 unreserved set: the whole of what fields 1 and 2 may hold.
+  # Written as an array of byte VALUES because that is the form {SWEEP} needs —
+  # the question it asks is about bytes, not about characters. The firmware
+  # spells the same set in is_unreserved(), the two Ruby readers in
+  # FIELD_CHARSET and LOCK_SIM_FIELD_CHARSET.
+  UNRESERVED = ([*"A".."Z", *"a".."z", *"0".."9", "-", ".", "_", "~"]
+                .map(&:ord).sort.freeze)
+
   # axis    — the property the vector attacks; printed so a failure names it
   # label   — one line, human, no trailing punctuation
   # accept  — what EVERY reader must answer at NOW
   # message — the bytes to sign
   # wire    — the key in WIRE that builds the wire token from message + signature
-  Vector = Struct.new(:axis, :label, :accept, :message, :wire)
+  # tag     — the Ruby encoding the wire token is handed to the two Ruby readers
+  #           under. The C reader is given a file and sees only bytes, so this
+  #           member is what lets ONE vector ask all three the same question on
+  #           an axis that exists in one language and not the other.
+  Vector = Struct.new(:axis, :label, :accept, :message, :wire, :tag)
 
   # Build a message, overriding one field at a time. `suffix` is appended after
   # the jti, which is how the delimiter-count vectors are spelled.
@@ -154,8 +192,13 @@ module SkootiTokenVectors
     "#{tag}|#{code}|#{resv}|#{iat}|#{exp}|#{jti}#{suffix}"
   end
 
-  def self.v(axis, label, accept, message, wire = :canonical)
-    Vector.new(axis, label, accept, message, wire)
+  # The encoding a wire token carries unless a vector says otherwise. UTF-8 is
+  # what a token arriving from a request parameter or a File.read is tagged
+  # with here, so it is the default case rather than a neutral one.
+  DEFAULT_TAG = "UTF-8"
+
+  def self.v(axis, label, accept, message, wire = :canonical, tag = DEFAULT_TAG)
+    Vector.new(axis, label, accept, message, wire, tag)
   end
 
   # A reservation id long enough to put the wire token at exactly the lock's
@@ -172,6 +215,13 @@ module SkootiTokenVectors
   # identity check rather than by this comment: if the key is ever rotated and
   # this signature stops carrying either character, the run fails by name.
   RESV_ALPHABET = "resv-alt0"
+
+  # The Ruby encodings a wire token is handed over under. UTF-8 is what
+  # Encoding.default_external gives a request parameter or a File.read here;
+  # ASCII-8BIT is what a socket read gives; ISO-8859-1 is Rack's raw-byte
+  # spelling; UTF-16LE is the one that used to RAISE out of both readers'
+  # declared rescue rather than returning an answer at all.
+  ENCODING_TAGS = %w[UTF-8 ASCII-8BIT US-ASCII ISO-8859-1 Shift_JIS UTF-16LE].freeze
 
   VECTORS = [
     # ── count: how many pipe-delimited fields the message carries ────────────
@@ -254,16 +304,121 @@ module SkootiTokenVectors
     v("bytes",  "NUL inside reservation_id",                false, msg(resv: "resv#{NUL}live")),
     v("bytes",  "NUL inside scooter_code",                  false, msg(code: "#{SCOOTER_CODE}#{NUL}X")),
     v("bytes",  "NUL appended to the wire token",           false, msg, :trailing_nul),
-    v("bytes",  "newline inside reservation_id",            true,  msg(resv: "resv\nlive")),
-    v("bytes",  "tab inside reservation_id",                true,  msg(resv: "resv\tlive")),
-    v("bytes",  "0x01 inside reservation_id",               true,  msg(resv: "resv\u0001live")),
-    v("bytes",  "DEL inside reservation_id",                true,  msg(resv: "resv\u007Flive")),
-    v("bytes",  "multibyte UTF-8 inside reservation_id",    true,  msg(resv: "resv-Ω-live")),
+    v("bytes",  "newline inside reservation_id",            false, msg(resv: "resv\nlive")),
+    v("bytes",  "tab inside reservation_id",                false, msg(resv: "resv\tlive")),
+    v("bytes",  "0x01 inside reservation_id",               false, msg(resv: "resv\u0001live")),
+    v("bytes",  "DEL inside reservation_id",                false, msg(resv: "resv\u007Flive")),
+    v("bytes",  "multibyte UTF-8 inside reservation_id",    false, msg(resv: "resv-Ω-live")),
+
+    # ── charset: the 66 characters fields 1 and 2 may hold ───────────────────
+    # Named cases, readable beside the exhaustive SWEEP below. The alphabet
+    # vector is the one that proves the set is admitted WHOLE rather than
+    # approximately: every one of the 66 in a single reservation id.
+    v("charset", "reservation_id of the whole unreserved alphabet", true,
+      msg(resv: UNRESERVED.map(&:chr).join)),
+    v("charset", "reservation_id of a canonical uuid",     true,
+      msg(resv: "ae01a0ae-336f-494f-b226-a006baee0947")),
+    v("charset", "space inside reservation_id",            false, msg(resv: "resv live")),
+    v("charset", "percent sign inside reservation_id",     false, msg(resv: "resv%live")),
+    v("charset", "plus sign inside reservation_id",        false, msg(resv: "resv+live")),
+    v("charset", "slash inside reservation_id",            false, msg(resv: "resv/live")),
+    v("charset", "space inside scooter_code",              false, msg(code: "SK 001")),
+    v("charset", "0xFF inside scooter_code",               false,
+      msg(code: "SK#{255.chr(Encoding::BINARY)}-001")),
+
+    # ── encoding: the Ruby tag the token is handed over under ────────────────
+    # C sees bytes and answers the same six times; the two Ruby readers must
+    # too. This axis is the reason Vector carries a `tag` at all, and it exists
+    # because the answer to the canonical token USED to depend on it.
+    *ENCODING_TAGS.map { |tag|
+      v("encoding", "the canonical token tagged #{tag}", true, msg, :canonical, tag)
+    },
+    *ENCODING_TAGS.map { |tag|
+      v("encoding", "0xFF in reservation_id tagged #{tag}", false,
+        msg(resv: "re#{255.chr(Encoding::BINARY)}sv"), :canonical, tag)
+    },
+  ].freeze
+
+  # ── SWEEP: the charset axis, exhaustively ──────────────────────────────────
+  #
+  # One vector per BYTE VALUE, which is what turns the page's rule for fields 1
+  # and 2 from a claim into a measurement. The readable `charset` vectors above
+  # are examples; these 446 are the whole domain, and there is nothing left for
+  # an attacker to find in it — that is the entire point of having narrowed the
+  # fields to a set that can be written down.
+  #
+  # reservation_id: all 256 values, accepted exactly when the byte is in
+  # UNRESERVED. scooter_code: the 190 values OUTSIDE it, all refused — the 66
+  # inside cannot be asked here, for the structural reason the header gives.
+  #
+  # They are reported as a census rather than row by row: 446 lines of MATCH
+  # hide the seventy the reader came for. A disagreement is named individually.
+  SWEEP_RESV = (0..255).map { |b|
+    byte = b.chr(Encoding::BINARY)
+    v("charset", format("byte 0x%02X inside reservation_id", b),
+      UNRESERVED.include?(b), msg(resv: "re#{byte}sv"))
+  }.freeze
+
+  SWEEP_CODE = (0..255).reject { |b| UNRESERVED.include?(b) }.map { |b|
+    byte = b.chr(Encoding::BINARY)
+    v("charset", format("byte 0x%02X inside scooter_code", b),
+      false, msg(code: "SK#{byte}-001"))
+  }.freeze
+
+  SWEEP = (SWEEP_RESV + SWEEP_CODE).freeze
+
+  # Each sweep ARM, as [axis, field, vectors, the control message one byte was
+  # inserted into]. The coverage derivations below read THIS rather than the
+  # ranges that built the arms, so an arm trimmed to a sample stops reporting
+  # itself as the whole domain.
+  SWEEP_ARMS = [
+    ["charset", "reservation_id", SWEEP_RESV, msg(resv: "resv")],
+    ["charset", "scooter_code",   SWEEP_CODE, msg(code: "SK-001")],
   ].freeze
 
   # The axes covered, in the order they first appear. Derived from the vectors
-  # so it can never disagree with them.
+  # so it can never disagree with them, and it spans BOTH arrays — an axis that
+  # lived only in the sweep would otherwise be invisible to the coverage gate.
   def self.axes
-    VECTORS.map(&:axis).uniq
+    (VECTORS + SWEEP).map(&:axis).uniq
+  end
+
+  # Which byte values the sweep actually reaches, per field, RE-DERIVED from
+  # the vectors' own messages rather than from the ranges that built them. This
+  # is what `check_grammar_coverage.rb`'s R6 and the crosscheck runner assert
+  # against: a rule on the page may say "every other byte is refused" only
+  # while something has checked every other byte.
+  #
+  # @return [Hash{String => Array<Integer>}] field name => sorted byte values
+  def self.sweep_coverage
+    SWEEP_ARMS.to_h { |_axis, field, vectors, control|
+      [field, sweep_bytes(vectors, control)]
+    }
+  end
+
+  # The axes whose sweep reaches EVERY one of the 256 byte values in some
+  # field. `check_grammar_coverage.rb`'s R6 lets a rule on the page quantify
+  # over the byte domain only while naming one of these: a universal over a
+  # domain the set merely SAMPLES is the shape that has reopened this grammar
+  # three times, and it is indistinguishable, on the page, from one the set
+  # exhausts.
+  #
+  # @return [Array<String>] axis names
+  def self.exhaustive_axes
+    SWEEP_ARMS.select { |_axis, _field, vectors, control|
+      sweep_bytes(vectors, control) == (0..255).to_a
+    }.map(&:first).uniq
+  end
+
+  # The injected byte of each sweep vector, taken back out of the signed
+  # message. Each sweep vector is its control message with ONE byte inserted,
+  # so exactly one byte's count differs and a tally difference names it —
+  # including the delimiter itself, which a parse-based derivation could not
+  # recover because inserting it makes the message seven fields.
+  def self.sweep_bytes(vectors, control)
+    control_tally = control.b.bytes.tally.to_a
+    vectors.flat_map { |vector|
+      (vector.message.b.bytes.tally.to_a - control_tally).map(&:first)
+    }.uniq.sort
   end
 end

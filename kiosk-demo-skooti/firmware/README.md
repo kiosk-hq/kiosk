@@ -42,6 +42,8 @@ lock verifies:
      shifted field, and a trailing '|' is a seventh field rather than punctuation
   5. field[0] == "kiosk-rental-v1"  (domain-separation tag, constant-time compare)
   6. scooter_code (field[1]) == SCOOTER_CODE
+  6b. scooter_code (field[1]) and reservation_id (field[2]) are 1 or more
+     characters of A-Za-z0-9-._~ — every other byte value is refused
   7. iat (field[3]) and exp (field[4]) are 1-20 plain ASCII digits
   8. exp (field[4]) > now — the window is now < exp, so the instant exp names
      is already spent
@@ -84,21 +86,25 @@ ALL PASS
   Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
-  Rental-token grammar — 63 live-signed vectors through all 3 readers of this token (9 of them respell the wire around the signature):
-    axis   vector                                         expect  C       issuer  lock
-    count  six fields, well-formed                        accept  accept  accept  accept  MATCH ✓
-    count  seven segments, one trailing delimiter         reject  reject  reject  reject  MATCH ✓
+  Rental-token grammar — 83 live-signed vectors through all 3 readers of this token (9 respell the wire around the signature, 10 vary the Ruby encoding tag):
+    axis     vector                                         expect  C       issuer  lock
+    count    six fields, well-formed                        accept  accept  accept  accept  MATCH ✓
+    count    seven segments, one trailing delimiter         reject  reject  reject  reject  MATCH ✓
     ...
-    int    exp with a leading plus                        reject  reject  reject  reject  MATCH ✓
+    int      exp with a leading plus                        reject  reject  reject  reject  MATCH ✓
     ...
-    fresh  exp exactly now                                reject  reject  reject  reject  MATCH ✓
+    fresh    exp exactly now                                reject  reject  reject  reject  MATCH ✓
     ...
-    sig    signature with a non-canonical last character  reject  reject  reject  reject  MATCH ✓
+    sig      signature with a non-canonical last character  reject  reject  reject  reject  MATCH ✓
     ...
-    bytes  NUL inside reservation_id                      reject  reject  reject  reject  MATCH ✓
+    bytes    NUL inside reservation_id                      reject  reject  reject  reject  MATCH ✓
     ...
-  MATCH — all 3 readers gave the declared answer on every one of these 63 vectors (axes: count, empty, tag, int, jti, length, fresh, sig, wire, bytes) ✓
-  Grammar coverage — 14 rules on RENTAL_TOKEN.md across 3 subsections, naming all 10 vector axes (count, empty, tag, int, jti, length, fresh, sig, wire, bytes) ✓
+    charset  space inside reservation_id                    reject  reject  reject  reject  MATCH ✓
+    ...
+    encoding the canonical token tagged UTF-16LE            accept  accept  accept  accept  MATCH ✓
+    charset sweep — every byte value 0x00-0xFF in each opaque field: 256 in reservation_id (66 accepted, 190 refused) and 190 in scooter_code (all refused), 446 of 446 agreed MATCH ✓
+  MATCH — all 3 readers gave the declared answer on every one of these 529 vectors (axes: count, empty, tag, int, jti, length, fresh, sig, wire, bytes, charset, encoding) ✓
+  Grammar coverage — 15 rules and 6 stated limits on RENTAL_TOKEN.md across 3 subsections, naming all 12 vector axes (count, empty, tag, int, jti, length, fresh, sig, wire, bytes, charset, encoding); exhaustive over the byte domain: charset ✓
 ```
 
 This proves the C Ed25519 verifier correctly verifies tokens signed by the Kiosk
@@ -288,8 +294,10 @@ so, and the table below is where that status is tracked.
 | Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test`) |
 | Field count is exactly 6 — a 5-, 7- or 8-field message with a VALID dev-key signature is rejected | **PROVEN** (`make test`) |
 | A trailing `|` is a seventh field, not punctuation — validly signed, still rejected | **PROVEN** (`make test`) |
-| A pipe in an issuer input shifts fields so `field[4]` reads a caller-chosen expiry — rejected by the count gate | **PROVEN** (`make test`) |
+| A pipe in an issuer input shifts fields so `field[4]` reads a caller-chosen expiry — rejected by the count gate, and refused by the issuer before it signs | **PROVEN** (`make test`, `demo:kat`) |
 | Field charsets — an empty field, a non-numeric `iat`, a signed or overflowing `exp`, a jti in the wrong alphabet: all rejected with a VALID signature | **PROVEN** (`make test`) |
+| `scooter_code` and `reservation_id` hold the RFC 3986 unreserved set, and EVERY one of the 256 byte values is run through all three readers rather than sampled | **PROVEN** (`make crosscheck`) |
+| The verdict is a function of the token's bytes — six Ruby encoding tags over one token give one answer, and none of them raises | **PROVEN** (`make crosscheck`) |
 | `skooti_parse_jti` applies the same field-count and jti-charset gates as `skooti_verify_token`, so the replay store is never keyed on bytes those gates refused | **PROVEN** (`make test`) |
 | C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
 | One signature has one spelling — `=` padding, the standard alphabet and a non-canonical final character are all refused | **PROVEN** (`make test`, `make crosscheck`) |

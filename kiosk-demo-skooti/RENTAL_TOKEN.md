@@ -60,7 +60,10 @@ What holds THIS PAGE to that set is `firmware/check_grammar_coverage.rb`, which
 `<!-- vectors: axis -->` marker naming the axis of the set that exercises it,
 and the gate reads both directions: a rule naming no axis, a rule naming an
 axis the set does not have, and an axis the set has that no rule names each
-fail the build. Its header states the two questions it leaves open.
+fail the build. A rule that quantifies over the byte domain carries one further
+condition — the axis it names is one the set runs over all 256 byte values, so
+a claim about bytes the set merely samples cannot be written here at all. Its
+header states the two questions it leaves open.
 
 **Wire token**
 
@@ -86,6 +89,14 @@ fail the build. Its header states the two questions it leaves open.
   `=` padding and the standard alphabet's `+` and `/`, which are the two
   spellings a permissive base64 helper takes without being
   asked. <!-- vectors: sig -->
+- **The answer is a function of the token's BYTES, and of nothing else.** A
+  Ruby String carries an encoding tag its caller chose, and `rindex`, `split`,
+  `match?` and `==` all consult it; the lock is a C program that has no such
+  thing. So both Ruby readers convert with `String#b` before they parse, which
+  never raises and never changes a byte, and the verdict they reach is the
+  verdict the lock reaches on the same buffer. Six tags over the same token are in
+  the vector set, one of them the tag on which a reader that skipped the
+  conversion would raise rather than answer at all. <!-- vectors: encoding -->
 
 **Message**
 
@@ -103,20 +114,57 @@ fail the build. Its header states the two questions it leaves open.
 | # | Field | What is accepted |
 |---|---|---|
 | 0 | tag | the bytes `kiosk-rental-v1` and nothing else, compared in constant time <!-- vectors: tag --> |
-| 1 | `scooter_code` | opaque, non-empty. The lock additionally requires it to equal its own provisioned code; `RentalTokenIssuer.verify` is not a lock and has no code to compare against, so it holds this field to the grammar only. <!-- vectors: empty, bytes --> |
-| 2 | `reservation_id` | opaque, non-empty, any bytes but `\|` and NUL — a newline, a tab, a control character or multibyte UTF-8 all pass. No reader constrains it further and none gates on it. <!-- vectors: empty, bytes --> |
+| 1 | `scooter_code` | 1 or more characters of `A-Za-z0-9-._~`; every other byte value is refused. The lock additionally requires it to equal its own provisioned code; `RentalTokenIssuer.verify` is not a lock and has no code to compare against, so the charset is the whole of what holds this field there. <!-- vectors: charset, empty --> |
+| 2 | `reservation_id` | 1 or more characters of `A-Za-z0-9-._~` — the RFC 3986 unreserved set, which is what a canonical uuid is spelled with and what survives the App Clip launch URL unchanged. Every other byte value is refused, a newline, a tab, a control character and multibyte UTF-8 among them. No reader gates on this field's VALUE; all three hold its charset. <!-- vectors: charset --> |
 | 3 | `iat` | 1 to 20 ASCII digits `0`–`9`, value at most 2^64−1. No sign, no `_` separators, no surrounding whitespace, no `0x`. No reader gates on `iat` — `exp` alone bounds the window — but all three hold it to the grammar, because a field nobody parses is a field each reader may read differently. <!-- vectors: int --> |
 | 4 | `exp` | the same syntax as `iat`. The window is then `now < exp`: a lock accepts while its clock is still behind `exp` and refuses at the instant `exp` names, so the last live second is `exp - 1`. <!-- vectors: int, fresh --> |
 | 5 | `jti` | exactly 32 lowercase hex characters `[0-9a-f]`, which is what `SecureRandom.hex(16)` mints. It is the key the replay store is written under, so a reader that returned success on other bytes would be handing that store a key it refuses. <!-- vectors: jti --> |
 
-`iat` and `exp` are deliberately narrower than a permissive integer parse, and
-the signature is deliberately narrower than a permissive base64 decode. Ruby's
-`Integer(s, 10)` reads `+1750000900`, `1_750_000_900` and `" 1750000900"`, and
-`Base64.urlsafe_decode64` translates `-_` to `+/` and pads a short input before
-decoding, so between them they read five spellings the firmware's
-`parse_uint64` and character table read none of. Where two readers of one
+Most of the fields are narrower than the obvious parse in the language each
+reader is written in, and that is deliberate. Ruby's `Integer(s, 10)` reads
+`+1750000900`, `1_750_000_900` and `" 1750000900"`; `Base64.urlsafe_decode64`
+translates `-_` to `+/` and pads a short input before decoding; a Ruby String
+holds any byte at all and carries a tag that decides what the operations on it
+mean. Between them those read spellings the firmware's `parse_uint64`,
+character table and byte buffer read none of. Where two readers of one
 credential differ, the WIDEST is the one that decides what a fleet accepts, so
-the narrow reading is the contract and the Ruby readers implement it.
+the narrow reading is the contract — and which reader is widest varies by axis,
+measured rather than assumed: on the integer syntax and the base64 alphabet the
+Ruby pair was wider, on the base64 tail and on a byte no UTF-8 decoder accepts
+the physical lock was, which is the direction nothing downstream can catch.
+
+The opaque fields are a CHARSET rather than "any bytes but the delimiter" for
+the same reason, and it is the one that took three attempts to see. A
+domain of 254 values per position cannot be enumerated, so a sentence about it
+can only ever be sampled by a vector set, and a sampled axis is
+indistinguishable on this page from an exhausted one. A set of 66 characters can be written down: the
+shared set carries one vector for every byte value in `reservation_id` and for
+every value outside the set in `scooter_code`, so the rows above are held by a
+measurement over the whole domain instead of by a promise about it.
+
+**What this section does not claim**
+
+- That the three readers are one program. They are separate implementations in
+  two languages, which is what makes the crosscheck worth running and what
+  guarantees they can drift again.
+- That this page is complete. It is the statement of what has been written
+  down; a property of the token nobody has written down is invisible to it and
+  to the vector set alike, and the only thing that has ever found one is
+  somebody attacking the parse.
+- Anything about the `scooter_code` charset as an ACCEPT. Field 1 has to equal
+  the lock's own provisioned code, so the only value the two locks take is
+  `SK-001` itself — an in-charset byte put into it is taken by the server's
+  verifier, which has no code to compare against, and turned away by both
+  locks. That asymmetry is by design and is not a disagreement about grammar.
+- Anything about signature FORGERY. Every vector in the shared set carries a
+  genuine signature over its own message; a flipped byte, a signature over
+  other bytes and a wrong key are `firmware/host_test.c`'s subject and the
+  KAT's.
+- That the readers agree on TIMING. The C reader compares the tag and the
+  scooter code in constant time; the two Ruby readers use `==`. An accept-or-
+  refuse answer is all a vector carries, so nothing here measures it.
+- Anything about replay. The consumed-jti set is per-reader state rather than a
+  property of the token.
 
 ---
 

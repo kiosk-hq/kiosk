@@ -21,11 +21,21 @@
  *
  *   Field indices (0-based), with the charset each one is held to:
  *     [0] "kiosk-rental-v1"  — domain-separation tag (REQUIRED; checked first)
- *     [1] scooter_code       — e.g. "SK-001"; must equal this lock's own code
- *     [2] reservation_id     — e.g. "resv-1"; opaque here, non-empty
+ *     [1] scooter_code       — e.g. "SK-001"; 1+ chars of A-Za-z0-9-._~ AND
+ *                              must equal this lock's own provisioned code
+ *     [2] reservation_id     — e.g. "resv-1"; 1+ chars of A-Za-z0-9-._~,
+ *                              not interpreted further by this lock
  *     [3] iat                — 1-20 ASCII digits, issued-at unix seconds
  *     [4] exp                — 1-20 ASCII digits, expiry unix seconds (iat + 900)
  *     [5] jti                — 32 lowercase hex chars (anti-replay token ID)
+ *
+ *   A-Za-z0-9-._~ is the RFC 3986 unreserved set. Fields 1 and 2 are the two
+ *   this lock does not otherwise interpret, and holding them to a set of 66
+ *   characters rather than to "any bytes but the delimiter" is what makes the
+ *   grammar's claim about them CHECKABLE: the shared vector set carries a
+ *   vector for every one of the 256 byte values, where an unenumerable domain
+ *   could only ever be sampled. Every byte of a well-formed message is
+ *   therefore '|' or one of those 66.
  *
  *   sig        = Ed25519 signature over the message bytes (64 bytes)
  *                base64url-encoded, NO padding characters
@@ -107,8 +117,9 @@ extern "C" {
  *     more than six are both refused, so the claim read as `exp` is always the
  *     fifth field of a six-field message and never something a shifted field
  *     put there. This is the same answer the server's own Ruby verifier gives.
- *   - So is every field's CHARSET. An empty field, an `iat` or `exp` that is
- *     not 1-20 plain digits, and a `jti` that is not 32 lowercase hex are each
+ *   - So is every field's CHARSET. An empty field, a `scooter_code` or
+ *     `reservation_id` outside A-Za-z0-9-._~, an `iat` or `exp` that is not
+ *     1-20 plain digits, and a `jti` that is not 32 lowercase hex are each
  *     refused. This is narrower than a permissive integer parse deliberately:
  *     the three readers of this token must refuse the same bytes, and the
  *     widest reader is the one that decides what an adopter's fleet accepts.

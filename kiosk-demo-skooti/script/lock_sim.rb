@@ -16,7 +16,8 @@ require "base64"
 #      c. Ed25519-verifies the sig over the message bytes
 #      d. Parses the 6 pipe-separated fields, every one of them non-empty
 #      e. Checks: field 0 == "kiosk-rental-v1" (domain-separation tag)
-#      f. Checks: iat and exp are 1-20 plain digits, jti is 32 lowercase hex
+#      f. Checks: scooter_code and reservation_id are 1+ chars of A-Za-z0-9._~-,
+#         iat and exp are 1-20 plain digits, jti is 32 lowercase hex
 #      g. Checks: scooter_code == own code, exp > now (injected clock)
 #      h. Checks jti NOT in the consumed store (durable replay prevention)
 #      i. On all checks passing: records jti → exp in the consumed store, unlocks
@@ -64,6 +65,15 @@ LOCK_SIM_DELIMITER        = "|"
 LOCK_SIM_TIMESTAMP_FORMAT = /\A[0-9]{1,20}\z/
 LOCK_SIM_TIMESTAMP_MAX    = (1 << 64) - 1
 LOCK_SIM_JTI_FORMAT       = /\A[0-9a-f]{32}\z/
+# scooter_code and reservation_id: the RFC 3986 unreserved set, and nothing
+# else. These are the two fields no reader interprets, and an uninterpreted
+# field is where three independent parsers pull apart — "any bytes but the
+# delimiter and NUL" is 254 values per position, a domain that can only ever be
+# sampled, so each reader ended up with its own answer. Sixty-six characters
+# can be enumerated, and RENTAL_TOKEN.md's rule for these fields is held by a
+# vector for every one of the 256 byte values. The firmware spells the same set
+# in is_unreserved().
+LOCK_SIM_FIELD_CHARSET    = /\A[A-Za-z0-9._~-]+\z/
 
 class LockSim
   # @param scooter_code     [String]              the code this lock is provisioned with
@@ -100,6 +110,7 @@ class LockSim
   #   - Ed25519 signature is invalid
   #   - the message is not exactly 6 pipe-delimited non-empty fields
   #   - field 0 != "kiosk-rental-v1" (wrong or missing domain-separation tag)
+  #   - scooter_code or reservation_id is outside A-Za-z0-9._~-
   #   - iat or exp is not 1-20 plain digits, or jti is not 32 lowercase hex
   #   - scooter_code in the token does not match this lock's code
   #   - exp <= now  (expired)
@@ -110,7 +121,21 @@ class LockSim
   # @param now   [Integer] current unix timestamp (seconds), injected for testing
   # @return [Boolean]
   def unlock(token:, now:)
-    return false if token.nil? || token.empty?
+    return false if token.nil?
+
+    # BYTES, NOT CHARACTERS. The firmware this simulates is a C program reading
+    # a byte buffer; a Ruby String additionally carries an ENCODING TAG its
+    # caller chose, and `rindex`, `split`, `match?` and `==` all consult it.
+    # Without the conversion one byte sequence gets three answers: tagged
+    # ASCII-8BIT it parses, tagged UTF-8 the split raises `ArgumentError:
+    # invalid byte sequence in UTF-8`, and tagged UTF-16LE every operation
+    # raises `Encoding::CompatibilityError`, which is outside the rescue below
+    # and so escapes the "Returns false if" list above. A verdict that turns on
+    # a tag is also a verdict no shared vector can carry, because a vector is
+    # bytes. `String#b` never raises, so from here the answer is a function of
+    # the bytes alone and this simulator asks the firmware's question.
+    token = token.to_s.b
+    return false if token.empty?
 
     # Gate: wire length — the lock's own SKOOTI_TOKEN_MAX.
     return false if token.bytesize > LOCK_SIM_TOKEN_MAX_BYTES
@@ -145,13 +170,22 @@ class LockSim
     return false unless fields.length == LOCK_SIM_FIELD_COUNT
     return false if fields.any?(&:empty?)
 
-    context_tag, token_scooter, _reservation_id, iat_s, exp_s, jti = fields
+    context_tag, token_scooter, reservation_id, iat_s, exp_s, jti = fields
 
     # Gate: domain-separation — field 0 must be the known context tag.
-    return false unless context_tag == LOCK_SIM_CONTEXT_TAG
+    return false unless context_tag == LOCK_SIM_CONTEXT_TAG.b
 
     # Gate: scooter code must match what this lock is provisioned with.
     return false unless token_scooter == @scooter_code
+
+    # Gate: the two opaque fields are the unreserved charset. Redundant for
+    # field 1 HERE — it just passed an equality check against a provisioned
+    # code that is itself in the set — and not redundant across the three
+    # readers, which is why it is spelled: RentalTokenIssuer.verify is not a
+    # lock and has no code to compare against, so the charset is the whole of
+    # what holds field 1 there, and RENTAL_TOKEN.md states one rule for both.
+    return false unless token_scooter.match?(LOCK_SIM_FIELD_CHARSET)
+    return false unless reservation_id.match?(LOCK_SIM_FIELD_CHARSET)
 
     # Gate: field charsets. iat is not acted on — exp alone bounds the window —
     # but it is held to the grammar all the same, because a field nobody parses

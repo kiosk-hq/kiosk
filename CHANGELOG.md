@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-14: **skooti's rental-token fields 1 and 2 admitted any byte but the delimiter, a domain no vector set can exhaust.** They hold 66 characters now, checked over all 256 byte values.
+- 2026-09-14: **The two Ruby rental-token readers gave different answers for one byte sequence under different String encodings.** They parse bytes, so only the bytes decide.
 - 2026-09-14: **The skooti lock firmware's test targets ran in no CI job at all.** A `skooti-firmware` job now runs them on every push.
 - 2026-09-14: **skooti's rental-token readers disagreed on signature encoding, a NUL byte and the `exp == now` instant.** One spelling per signature, no NUL, and the window is `now < exp`.
 - 2026-09-14: **The token grammar was prose and its vectors were hand-written, so a stated rule could have no vector.** `check_grammar_coverage.rb` now binds the page and the set both ways.

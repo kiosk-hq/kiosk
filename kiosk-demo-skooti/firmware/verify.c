@@ -148,6 +148,44 @@ static int parse_uint64(const char *s, size_t len, uint64_t *out)
 }
 
 /* --------------------------------------------------------------------------
+ * Opaque-field charset — the RFC 3986 unreserved set, `A-Za-z0-9-._~`.
+ *
+ * scooter_code and reservation_id are the two fields whose CONTENT this lock
+ * does not otherwise interpret, and an uninterpreted field is where three
+ * independent readers pull apart: "any bytes but the delimiter" is a domain of
+ * 254 values per position that nobody can enumerate, so a claim about it
+ * cannot be checked and every reader ends up with its own answer. Sixty-six
+ * characters can be enumerated, and ../RENTAL_TOKEN.md's charset rule is held
+ * by a vector for every one of the 256 byte values rather than by a sentence.
+ *
+ * The set is not arbitrary: it is exactly the characters that survive the App
+ * Clip launch URL unchanged, it contains every character a canonical uuid and
+ * an `SK-###` fleet code are spelled with, and it excludes the delimiter and
+ * the NUL byte, so those two prohibitions are consequences of one positive
+ * rule rather than separate negatives.
+ *
+ * Returns 1 when s[0..len) is non-empty and drawn from that set, 0 otherwise.
+ * -------------------------------------------------------------------------- */
+
+static int is_unreserved(const char *s, size_t len)
+{
+    size_t i;
+
+    if (len == 0) return 0;
+
+    for (i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c >= 'A' && c <= 'Z') continue;
+        if (c >= 'a' && c <= 'z') continue;
+        if (c >= '0' && c <= '9') continue;
+        if (c == '-' || c == '.' || c == '_' || c == '~') continue;
+        return 0;
+    }
+
+    return 1;
+}
+
+/* --------------------------------------------------------------------------
  * jti charset — exactly 32 lowercase hex characters.
  *
  * The issuer mints the jti as SecureRandom.hex(16), so 32 lowercase hex is
@@ -252,16 +290,18 @@ int skooti_verify_token(const uint8_t pubkey[32],
 
     /* --- Parse the 6 pipe-delimited fields of the message ---
      * Fields: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
-     * Every field is checked below except reservation_id, which is opaque to the
-     * lock and constrained only to being non-empty and delimiter-free. We must
-     * confirm exactly 6 fields are present, so a message with any other field
-     * count is rejected.
+     * Every field is checked below, reservation_id included: the lock does not
+     * ACT on it, and it is still held to a charset, because a field nobody
+     * parses is a field every reader may read differently. We must confirm
+     * exactly 6 fields are present, so a message with any other field count is
+     * rejected.
      * FEWER than six is refused by the missing-'|' return in the loop below; MORE
      * than six by the last field refusing to contain one. Both halves are
      * load-bearing, and the second is the one that carries weight: extra pipes
-     * arriving EARLY — which is what the issuer mints if a '|' ever reaches
-     * scooter_code or reservation_id — shift every field left, so field[4] stops
-     * being the expiry and Gate 2 below reads a caller-supplied number instead.
+     * arriving EARLY shift every field left, so field[4] stops being the expiry
+     * and Gate 2 below reads a caller-supplied number instead. The issuer
+     * refuses a '|' in either opaque input rather than signing one, so this is
+     * the second of two answers to the same hazard.
      * The Ruby issuer's own verifier splits on '|' and demands 6; this is the
      * same answer, reached without allocating.
      */
@@ -321,6 +361,30 @@ int skooti_verify_token(const uint8_t pubkey[32],
     code_len = strlen(my_scooter_code);
     if (field_len[1] != code_len) return 0;
     if (!ct_memeq(field_start[1], my_scooter_code, code_len)) return 0;
+
+    /* --- Gate 1b: scooter_code (field[1]) is the unreserved charset ---
+     * Strictly redundant HERE — a code that equals this lock's provisioned one
+     * is already whatever that one is — and it is not redundant across the
+     * three readers, which is the only reason it exists. The server's
+     * RentalTokenIssuer.verify is not a lock and has no code to compare
+     * against, so the charset is the whole of what holds field 1 THERE; a lock
+     * that skipped it would be answering a narrower question than the reader
+     * beside it, and ../RENTAL_TOKEN.md states one rule for both. It also
+     * makes the lock's own provisioning explicit: a lock baked with a code
+     * outside this set would refuse every token, including its own.
+     */
+    if (!is_unreserved(field_start[1], field_len[1])) return 0;
+
+    /* --- Gate 1c: reservation_id (field[2]) is the unreserved charset ---
+     * The lock does not act on this field. It is held to the charset for the
+     * reason Gate 2 holds `iat`: a field nobody parses is a field every reader
+     * may read differently, and this is the field where the three can diverge
+     * most widely. Without this gate the lock takes a byte no UTF-8 decoder
+     * accepts while both Ruby readers turn it away, which makes the PHYSICAL
+     * LOCK the widest reader of the credential — the one direction that is not
+     * fail-closed at the scooter.
+     */
+    if (!is_unreserved(field_start[2], field_len[2])) return 0;
 
     /* --- Gate 2: iat (field[3]) must be 1-20 ASCII digits ---
      * The lock does not ACT on iat — exp alone bounds the window — but it does

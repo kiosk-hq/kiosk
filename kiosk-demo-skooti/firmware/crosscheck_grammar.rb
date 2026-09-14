@@ -16,10 +16,12 @@
 #
 # None of that is reachable through the shipped flow — the issuer mints iat,
 # exp and jti itself, and the one caller-supplied field that reaches the message
-# is UUID-checked first — and the lock fails closed on most of it. It would
-# still be three answers to one question, in a reference implementation people
-# copy, and the reader that answers WIDEST is the one that decides what a fleet
-# accepts.
+# is UUID-checked first. It would still be three answers to one question, in a
+# reference implementation people copy, and the reader that answers WIDEST is
+# the one that decides what a fleet accepts. Which reader that is varies by
+# axis: on the integer syntax the Ruby pair is the wide one, on the base64 tail
+# the lock is, and an adopter who reads only the reader nearest to hand cannot
+# tell. That is the whole argument for running all three against one set.
 #
 # So this script does not review the parsers. It runs every reader against ONE
 # vector set — token_vectors.rb, whose header states the grammar and what it

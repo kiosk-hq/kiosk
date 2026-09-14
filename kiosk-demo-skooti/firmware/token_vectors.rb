@@ -70,8 +70,11 @@
 #     tag itself pushed along by a leading delimiter), and all three are refused
 #     on the grammar before any code comparison is reached.
 #   * Replay. The jti store is per-reader state, not a property of the token.
-#   * Timing. Two of the three readers compare the tag in constant time; no
-#     vector here can see the difference.
+#   * Timing. The C reader compares the tag and the scooter code in constant
+#     time (`ct_memeq`); the two Ruby readers use `==`. That is ONE of the
+#     three, measured rather than assumed, and no vector here can see the
+#     difference either way — a declared accept/reject answer is all a vector
+#     carries.
 #   * Any property of the token that ../RENTAL_TOKEN.md does not state. The
 #     coverage gate binds this file to that page in both directions; neither
 #     of them can reach an axis nobody has written down.

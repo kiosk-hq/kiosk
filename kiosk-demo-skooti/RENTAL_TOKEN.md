@@ -81,9 +81,10 @@ fail the build. Its header states the two questions it leaves open.
   signature over the message bytes. <!-- vectors: sig -->
 - One signature has one spelling. The 86 characters a 64-byte signature encodes
   to carry four trailing bits that decode to nothing, and a canonical encoding
-  leaves those bits zero, so the sixteen strings differing only there are
-  refused — as are `=` padding and the standard alphabet's `+` and `/`, which
-  are the two spellings a permissive base64 helper takes without being
+  leaves those bits zero — so of the sixteen strings that decode to a given
+  signature exactly one is accepted and the other fifteen are refused, as are
+  `=` padding and the standard alphabet's `+` and `/`, which are the two
+  spellings a permissive base64 helper takes without being
   asked. <!-- vectors: sig -->
 
 **Message**

@@ -487,12 +487,19 @@ static void test_field_content_boundary(void)
 /*
  * Test 10 — signature ENCODING: one signature, one spelling
  *
- * These five tokens all carry the SAME valid 64-byte signature over the same
- * message; only the base64url spelling of it changes. Every one of them is a
- * refusal, and each is a spelling a Ruby reader's Base64 helper would have
- * taken without the charset gate in front of it: `=` padding, the standard
- * alphabet's `+`, and — the one no charset gate catches — the sixteen
- * encodings that differ only in the leftover bits of the final character.
+ * Five respellings of the known-answer token's signature field, every one of
+ * them a refusal. The first three carry the SAME valid 64 bytes as the token
+ * above and differ only in how those bytes are written down; the last two are
+ * the neighbouring lengths, which decode to 63 and 65 bytes and so are not a
+ * signature at all.
+ *
+ * The three that matter divide by WHICH reader would otherwise have taken
+ * them. `=` padding and the standard alphabet's `+` are what
+ * Base64.urlsafe_decode64 accepts on the Ruby side without a charset gate in
+ * front of it. The non-canonical final character is the other direction: Ruby
+ * decodes strictly and refuses it, and it is the C decoder that has to be told
+ * — of the sixteen strings that decode to one signature, one is canonical and
+ * the other fifteen are refused here.
  */
 static void test_sig_encoding(void)
 {

@@ -944,10 +944,24 @@ jobs:
   # reads `../config/dev_unlock_key.pem` out of this repository, and the three
   # readers it drives (`firmware/verify.c`, `app/services/rental_token_issuer.rb`,
   # `script/lock_sim.rb`) require only `openssl`, `base64`, `tempfile` and
-  # `securerandom`, all of them stdlib. The toolchain step
-  # prints `cc` and `make` versions so a runner image that stops shipping them
-  # fails here by name instead of by link error, and the ASan leg installs clang
-  # only when the image does not already carry it.
+  # `securerandom`, all of them stdlib. The toolchain step installs clang when
+  # the image lacks it and then prints every compiler's version, so a runner
+  # image that stops shipping one fails here by name instead of by link error.
+  #
+  # THE COMPILERS ARE NAMED, ONCE, IN `env:` — AND THAT IS A FIX, NOT TIDYING
+  # (K-1609). The first run this job ever had went red, and the reason was that
+  # its two build steps used DIFFERENT compilers without either of them saying
+  # so: `make test` honoured the Makefile's `CC ?= cc` (gcc on this image) while
+  # `make test-asan` hard-coded `clang`. `strnlen` was undeclared for both —
+  # glibc hides POSIX.1-2008 names under `-std=c99` where Apple's libc does not,
+  # so the omission had been invisible on the only machine this code had ever
+  # been compiled on — but gcc treats an implicit declaration as a WARNING and
+  # clang 16+ as an ERROR. So `make test` BUILT AND PASSED with a call typed
+  # `int (*)()` against a function returning `size_t`, and the next step failed
+  # to compile the same sources. One flag list in the Makefile now covers both,
+  # `-Werror=implicit-function-declaration` makes the two agree about severity,
+  # and `make portability` below puts the sources through EVERY compiler on the
+  # image rather than leaving a second one to be discovered by a failure.
   #
   # ITS OWN JOB RATHER THAN A LEG OF THE DEMOS MATRIX, on that matrix's own cost:
   # every demo entry boots Postgres and installs a Rails bundle, and this needs
@@ -972,6 +986,11 @@ jobs:
     # The daily schedule exists for solver-pin-live; don't rebuild the world.
     if: github.event_name != 'schedule'
 
+    # Both compilers named here rather than defaulted per step — see above.
+    env:
+      CC: gcc
+      ASAN_CC: clang
+
     steps:
       - uses: actions/checkout@v7
 
@@ -983,12 +1002,20 @@ jobs:
 
       - name: The C toolchain this job needs, named rather than assumed
         run: |
-          cc --version
+          if ! command -v clang >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y clang
+          fi
+          "$CC" --version
+          "$ASAN_CC" --version
           make --version
 
       - name: The coverage gate is red on a plant of every shape, and non-vacuous here
         working-directory: kiosk-demo-skooti/firmware
         run: ruby check_grammar_coverage.rb --self-test
+
+      - name: Every compiler on this image accepts these sources (make portability)
+        working-directory: kiosk-demo-skooti/firmware
+        run: make portability
 
       - name: C host test, 3-reader grammar crosscheck, grammar coverage (make test)
         working-directory: kiosk-demo-skooti/firmware
@@ -996,11 +1023,7 @@ jobs:
 
       - name: The oversized-signature path under AddressSanitizer (make test-asan)
         working-directory: kiosk-demo-skooti/firmware
-        run: |
-          if ! command -v clang >/dev/null 2>&1; then
-            sudo apt-get update && sudo apt-get install -y clang
-          fi
-          make test-asan
+        run: make test-asan
 
   # Does CI actually run the tasks the demos define? (K-619)
   #

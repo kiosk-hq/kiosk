@@ -6,7 +6,7 @@
 #
 # By default the six NON-getgrocery demos are DROPPED and freshly seeded (they
 # hold only ephemeral "poker" data, so a clean reset is safe and gives the
-# current realistic content with no stale rows — K-464). getgrocery is instead
+# current realistic content with no stale rows). getgrocery is instead
 # ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants
 # placed against this origin — the Hermes-verified order f8bc3efb among them.
 # Those rows are evidence of a run that happened, and seeding cannot reproduce
@@ -19,28 +19,28 @@
 #
 # The KYC broker (kyc.demo) has no demo content and is left untouched.
 #
-# IT IS ALSO THE SCHEMA REPAIR, NOT ONLY A DATA ONE (K-1074, K-1083), AND THAT
+# IT IS ALSO THE SCHEMA REPAIR, NOT ONLY A DATA ONE, AND THAT
 # IS WHY `db:schema:load` BELOW MATTERS MORE THAN IT LOOKS. A box's database is
 # built once and migrated forward forever, so anything the migrate path cannot
 # deliver is stuck there permanently: a column APPENDED to a migration already
-# recorded in `schema_migrations` never arrives (that is K-1074 — the live tudu
-# 500s), and a renumbered migration set aborts `db:migrate` outright on a
-# database that already holds those tables (K-1083 — measured, PG::DuplicateTable
-# at 20260820130113, one step in, since 2026-08-20). Loading `db/structure.sql`
+# recorded in `schema_migrations` never arrives (that is what a live 500 on a
+# page reading the new column means), and a renumbered migration set aborts
+# `db:migrate` outright on a database that already holds those tables
+# (PG::DuplicateTable, one step in). Loading `db/structure.sql`
 # sidesteps both by construction: it rebuilds the schema the tree states rather
 # than replaying the path that cannot reach it. So when `bin/check-migration-
 # replay` names an object the deploy cannot deliver, THIS is the tool — run it
 # after deploying head, and then move that gate's FLEET_SCHEMA_BASELINE forward
 # to the day you ran it.
 #
-# IT PRINTS WHAT WENT WRONG, AND THAT IS NOT TIDINESS (K-1084). A command run
+# IT PRINTS WHAT WENT WRONG, AND THAT IS NOT TIDINESS. A command run
 # `>/dev/null 2>&1` with only its exit code read leaves its failure branch saying
 # WHICH step failed and never WHAT the box said. The
 # failures this script can actually meet are the ones no local run reproduces —
 # a role without CREATE, a `structure.sql` that will not load into the box's
 # Postgres, a seed tripping a constraint only the live data has — and it runs
-# over `ssh`, so "run it manually" costs a box round-trip a session may not get
-# (a verifier has twice been DENIED even a read-only box probe, K-509). Both
+# over `ssh`, so "run it manually" costs a box round-trip a session may not get.
+# Both
 # streams therefore go to ONE per-invocation log; stdout stays quiet so the
 # per-app summary lines remain the output, and a failing branch prints the tail
 # of that log plus the exact command to re-run. Same shape production-smoke.sh
@@ -121,7 +121,7 @@ else
     echo "  getgrocery: additive re-seed (Hermes order preserved; pass --all to wipe)"
   else
     # This is the branch guarding the irreplaceable rows, so it gets the SAME
-    # re-run command and the same diagnosis as the other two (K-1084).
+    # re-run command and the same diagnosis as the other two.
     echo "  getgrocery: SEED FAILED — re-run by hand with:"
     echo "       cd $PWD && set -a && . /etc/kiosk-demo/getgrocery.env && set +a && bundle exec rails db:seed"
     diagnose

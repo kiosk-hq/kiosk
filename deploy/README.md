@@ -15,11 +15,11 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
-| `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box (K-509/K-540): strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
+| `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box: strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
-| `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template would have said OK for as long as the box was serving without the header — which is exactly what happened (K-1295). `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
+| `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template says OK for as long as the box serves without the header. `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
 | `demo-reset.sh` | Run ON THE BOX to put demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (its orders are real third-party assistant runs and seeding cannot reproduce one); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
-| `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1` (K-594). |
+| `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`. |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
 | `README.md` | This runbook. |
 
@@ -216,7 +216,7 @@ deploy/deploy-caddy.sh --apply    # install, reload, verify the wire, roll back 
 #    are each already covered by something you run or already ran:
 #
 #      * RE-SEEDING the shared catalog — the push-to-deploy hook does it, running
-#        `db:seed` on every push (K-464). Every demo's seeds are idempotent and
+#        `db:seed` on every push. Every demo's seeds are idempotent and
 #        additive (zero delete_all, verified live on all seven), so a push tops
 #        the catalog up and deletes nothing.
 #
@@ -227,7 +227,7 @@ deploy/deploy-caddy.sh --apply    # install, reload, verify the wire, roll back 
 ```
 
 
-## Edge rate-limit -- NOT a default, and that is a decision (T-171)
+## Edge rate-limit -- NOT a default, and that is a decision
 
 **There is no per-IP throttle on this fleet.** A Kiosk proof verifies in
 milliseconds, so a flood of junk proofs costs the sender far more than it costs
@@ -239,24 +239,25 @@ exactly that file, and `deploy-caddy.sh --apply` verifies on the wire that no
 
 The snippet is **kept, not deleted** -- reacting to what arrives is removing
 the default, not forswearing protection. What follows is the analysis you need
-to decide whether to reach for it, and the numbers that say why the default came
-off. None of it is a runbook step any more.
+to decide whether to reach for it, and the numbers that say why there is no
+default. None of it is a runbook step.
 
-**Why it was there.** `POST /kiosk/auth/register` runs the PoW gate
+**What the limiter would be for.** `POST /kiosk/auth/register` runs the PoW gate
 **unauthenticated**, before any key verification: anyone can take a free 402
 challenge and resubmit it with a valid HMAC sig and garbage indices. PoW prices
 the attacker's **solve**; it never prices our **verify**. And at the shipped
 `WEB_CONCURRENCY=1` a plain flood of *any* endpoint -- a 404, the 402 issue path
 itself -- saturates the single worker just as well, so only something in FRONT
-of the app bounds the request RATE (K-540).
+of the app bounds the request RATE.
 
-**Why it came off anyway, measured.** A proof verifies in **4.46 ms** at the
+**Why it is off anyway, measured.** A proof verifies in **4.46 ms** at the
 params the fleet runs. One worker completes a full registration **60 times a
 second** and a plain read **1075 times a second**. The snippet as shipped is
 **one request a second** (60 events a minute), keyed per-IP in a single zone
 shared by every vhost -- so bursting one demo refuses the other seven, which is
-a self-inflicted outage on the traffic these demos exist to receive. The app-side half of K-540 is what
-changed the arithmetic: an issued challenge drives at most one verify, and the
+a self-inflicted outage on the traffic these demos exist to receive. The app-side
+half of the exposure is what changes the arithmetic: an issued challenge drives
+at most one verify, and the
 verifier checks cheapest-first and hashes lazily, so a garbage proof costs
 **0.30 ms** -- 0.012 ms if the attacker did not even order the indices --
 instead of the **18.7 ms** it cost when every proof paid the full 128-hash loop.
@@ -293,20 +294,18 @@ WHOLE file against the box and probes the live wire, so a divergence in either
 direction shows up as a diff. Its `--self-test` holds the repo posture (HSTS
 declared, limiter not enabled) and runs in CI.
 
-## HSTS -- live on all eight origins (K-1295)
+## HSTS -- live on all eight origins
 
 **Measured 2026-09-06, every origin `deploy/Caddyfile` declares: all 8 answer
 `strict-transport-security: max-age=31536000; includeSubDomains`.**
 `deploy/check-live-hsts.sh` exits 0, 8 of 8.
 
-**It got there by the deploy, not by a checklist tick, and that distinction is
-the whole finding.** `deploy/Caddyfile`'s `(kioskproxy)` snippet has emitted the
-header, enabled and needing no module, since K-916 -- and for a month the fleet
-sent none of it, because `/etc/caddy/Caddyfile` was hand-maintained and nothing
-applied the template. What closed it was `deploy-caddy.sh` installing this file
-whole. So the mechanism is: **the repo is the source of truth and a deploy is
-what makes the box match it**; the header cannot be pasted onto the box, because
-the next `--apply` overwrites the file it was pasted into.
+**It gets there by the deploy, not by a checklist tick, and that distinction is
+the mechanism.** `deploy/Caddyfile`'s `(kioskproxy)` snippet emits the header,
+enabled and needing no module, and `deploy-caddy.sh` installs this file whole:
+**the repo is the source of truth and a deploy is what makes the box match
+it**. The header cannot be pasted onto the box, because the next `--apply`
+overwrites the file it was pasted into.
 
 What the header buys is one request: `config.force_ssl` is deliberately OFF in
 every app behind this proxy (Caddy already terminates TLS and redirects
@@ -344,7 +343,7 @@ directory can fix it, and `check-live-hsts.sh` only reports it if you pass the
 hostname explicitly.
 
 
-## Scaling past one worker — shared stores REQUIRED (K-738)
+## Scaling past one worker — shared stores REQUIRED
 
 Everything above assumes the shipped `WEB_CONCURRENCY=1`. Raising it (or putting
 a second app host behind the balancer) changes one security property: the PoW
@@ -373,7 +372,7 @@ Publish the test card on getgrocery's landing:
 > **Test card:** `4242 4242 4242 4242` — any future expiry, any CVC, any ZIP.
 > More cards: <https://docs.stripe.com/testing>
 
-> **Card-setup Checkout can show "Something went wrong" if a relaying agent truncates the link (K-473).**
+> **Card-setup Checkout can show "Something went wrong" if a relaying agent truncates the link.**
 > `payment_setup` returns a valid Stripe `mode:setup` `setup_url` — a long
 > `checkout.stripe.com/c/pay/<id>#fid…` whose ~500-char `#fid…` fragment Stripe REQUIRES to
 > render. The failure is an AGENT relaying that url to the human and DROPPING the fragment (an
@@ -381,7 +380,7 @@ Publish the test card on getgrocery's landing:
 > the session, or the Stripe account (deploy and local dev share one account; the session is a
 > valid `status:open`). Mitigation: the agent skill instructs assistants to relay the `setup_url`
 > VERBATIM and in full, never truncating the part after `#`. If truncation still recurs, the
-> robust escalation is an operator-hosted short redirect link (a ready alternative — see K-473).
+> robust escalation is an operator-hosted short redirect link.
 
 ## Poke it — the "curl one-liner"
 
@@ -411,8 +410,7 @@ curl -s https://getgrocery.demo.kiosk.tech/.well-known/kiosk.json | jq .
 #    Needs curl, jq, openssl, uuidgen and python3+numpy; run it from the repo
 #    root, since the solver is referenced by a repo-relative path. Everything
 #    down to and including (e) was EXECUTED against the hosted origin exactly
-#    as written before being published here — the block it replaced had never
-#    been, and failed on its first line (K-1277).
+#    as written before being published here.
 BASE=https://getgrocery.demo.kiosk.tech
 
 #    Two helpers. `b64url` is JWS base64url; `proofs_for` turns a 402 problem

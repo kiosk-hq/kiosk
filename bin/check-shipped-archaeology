@@ -132,17 +132,18 @@
 #     added with an extension nobody thought of is a DECISION rather than a
 #     silent gap.
 #
-#   R1 (a ledger id) DOES NOT REACH IT, on the same footing as `bin/`: this is
-#   maintainer tooling for one fleet, its INTENDED reader is the operator who
-#   holds the ssh key, and an opaque token costs ANY reader a lookup rather
-#   than a misreading. Read that as a claim about HARM and never as one about
-#   who can open the file: this repository is published, so a stranger reads
-#   the runbook whatever key they hold, and the rules whose harm is worse for
-#   that stranger all reach it. R5, R6 and R7 do, because a document that
-#   describes something which does not exist is broken for EVERY reader, the
-#   maintainer included, and that is exactly what was measured here. Whether
-#   R1's own door should stand at all is open as K-1575, and it is a judgement
-#   about the public surface rather than anything this script can settle.
+#   R1 (a ledger id) REACHES IT, and the door it used to stand behind is GONE.
+#   The exemption's reason was that this is maintainer tooling whose intended
+#   reader holds the ssh key, so an opaque token costs that reader a lookup
+#   rather than a misreading. The scope judgement it rested on was answered the
+#   other way: a shipped runbook documents what the script IS, what it does,
+#   and how and when to run it, and why a line once changed belongs in the
+#   commit history and nowhere else. MEASURED 2026-09-14, the directory was
+#   drained in the same wave that opened this rule over it — 191 occurrences of
+#   50 distinct ids over 162 lines in 12 tracked files, 40 of those lines inside
+#   a string the deploy PRINTS to an operator's terminal rather than a comment
+#   only a maintainer reads. The rule asserts here so the class cannot regrow.
+#   Nothing stops at this door now; every rule reaches this scope.
 #
 #   R2 (an ADR reference) REACHES IT, and it did not until K-1575 asked what
 #   the paired exemption was carrying. The EXEMPTION TOTALS block answered:
@@ -972,7 +973,7 @@ end
 # scope but the demos, for the reason given in the header: one demo is NAMED
 # after the maintainer.
 RULES = [
-  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo e2e root firmware], what: "a ledger id",
+  { id: "R1", re: LEDGER_ID_RE,  scopes: %i[gem demo deploy e2e root firmware], what: "a ledger id",
     none: "no ledger id" },
   { id: "R2", re: ADR_RE,        scopes: %i[gem demo deploy e2e root firmware],
     what: "an ADR reference",
@@ -1955,16 +1956,7 @@ SCOPES = {
             # a filter against binaries — see `deploy_files` — and a self-test
             # arm re-derives the tracked set from git and reddens when something
             # falls outside it. The list is printed because the filter is real.
-            per: "deploy/** (#{DEPLOY_EXTS.join(' ')}, and any file with no extension)",
-            door: "maintainer tooling for one fleet, so the ledger-id rule stops at the " \
-                  "door on `bin/`'s footing — its INTENDED reader is the operator holding " \
-                  "the ssh key, and an opaque token costs ANY reader a lookup rather than a " \
-                  "misreading. That is about harm, not about who can open the file: this " \
-                  "repository is published, so a stranger reads this runbook whatever key " \
-                  "they hold, and every rule whose harm is worse for that stranger reaches " \
-                  "it — a foreign-language sentence, an attributed decision, a path that " \
-                  "does not resolve. The ADR-reference rule reaches it too, because its " \
-                  "exemption here was measured to hold back nothing at all" },
+            per: "deploy/** (#{DEPLOY_EXTS.join(' ')}, and any file with no extension)" },
   firmware: { label: "the lock firmware and App Clip sources", dirs: -> { firmware_dirs },
               files: ->(d) { firmware_files(d) },
               per: "#{FIRMWARE_ROOTS.map { |r| "#{r.split('/').last}/**" }.join(' and ')} " \
@@ -3382,12 +3374,14 @@ def self_test
                deploy_paths.any? { |p| p.end_with?("/deploy/Caddyfile") } &&
                deploy_paths.any? { |p| p.end_with?(".service") } &&
                deploy_paths.any? { |p| p.include?("/deploy/env/") })
-  check.call("R1 alone does NOT reach the deploy runbook — an opaque token costs ANY " \
-             "reader a lookup, not a misreading",
-             (rules_for(:deploy).map { |r| r[:id] } & %w[R1]).empty?)
-  check.call("R2-R8 DO — this repository is published, so a stranger reads the runbook " \
-             "whatever key they hold, and R2's exemption here held back nothing",
-             (%w[R2 R3 R4 R5 R6 R7 R8] - rules_for(:deploy).map { |r| r[:id] }).empty?)
+  check.call("EVERY rule reaches the deploy runbook and nothing stops at its door — this " \
+             "repository is published, so a stranger reads the runbook whatever key they " \
+             "hold, and a shipped runbook says what the script is, what it does, and how " \
+             "and when to run it",
+             (RULES.map { |r| r[:id] } - rules_for(:deploy).map { |r| r[:id] }).empty?)
+  check.call("the deploy scope declares no door at all — an exemption is kept where it " \
+             "holds lines back, and there is none here to keep",
+             SCOPES[:deploy][:door].nil?)
   check.call("a gem is NOT in the deploy scope",
              deploy_paths.none? { |p| p.include?("/kiosk-server/") })
 

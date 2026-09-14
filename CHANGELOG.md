@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-14: **The deploy runbook carried internal note numbers a reader cannot follow.** They are gone, the sentences stay, and the guard now asserts there.
 - 2026-09-14: **The firmware CI job used two compilers without saying which.** Both are named in the job now, and a step puts the sources through every compiler on the image.
 - 2026-09-14: **The lock firmware did not compile on Linux at all.** It now asks glibc for the POSIX level it uses, and `make portability` builds it with every compiler on the machine.
 - 2026-09-14: **The skooti lock took three byte spellings of one Ed25519 public key, and a signature anyone can write verifies under all three.** It applies RFC 8032's decode rules now.

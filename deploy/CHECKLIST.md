@@ -35,7 +35,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
 For EACH of the 7 apps:
 - [ ] `RAILS_ENV=production`, a generated `SECRET_KEY_BASE`, `PGHOST`, `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_{USER,PASSWORD}`, `PORT` (3001–3007). `KIOSK_<APP>_DB` and `KIOSK_<APP>_DB_USER` default to `kiosk_<app>_production` / `kiosk_<app>` — keep the shipped values and §3 needs no extra flags.
-- [ ] **Issuer + signing key (all 7 demos):** `KIOSK_ISSUER` (K-510) and `KIOSK_SIGNING_KEY_B64` are crash-if-absent
+- [ ] **Issuer + signing key (all 7 demos):** `KIOSK_ISSUER` and `KIOSK_SIGNING_KEY_B64` are crash-if-absent
       outside dev/test — the app refuses to boot without them, and so does `zeitwerk:check` in §5. The example ships
       `KIOSK_ISSUER=https://<app>.demo.kiosk.tech`: **change it if you serve a different origin**, because it is the `aud`
       every assistant proof is checked against — a wrong value rejects every assistant with "proof audience mismatch"
@@ -46,26 +46,27 @@ For EACH of the 7 apps:
       "beware" banner) — the production-grade showcase;
       `low` (or unset) for the other six
       (fast, poke-friendly; each still knob-adjustable to `high`).
-- [ ] **PoW mode (atablefor, K-497):** the flagship advertises the **reputation** anti-scalping policy — its env ships
-      `KIOSK_POW_MODE=reputation` (RateAndReputation with the real confirmed-bookings factor). ONE explicit selector replaces
-      the old mutually-overriding `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` / `KIOSK_POW_BACKOFF_DEMO` flags — drop them
-      (setting more than one now RAISES at boot). At `high` a fresh visitor pays its reputation count of ~2 proofs (~20 s) at
-      first contact, dropping to 1 then a free pass as its bookings confirm (K-517=b). Other modes: `demo` / `backoff` / `off`.
-- [ ] ⚠ **UPGRADING AN EXISTING BOX — run `deploy/box-prep-2026-08-11.sh` BEFORE the first `prod-demo` deploy (K-509/K-540):**
+- [ ] **PoW mode (atablefor):** the flagship advertises the **reputation** anti-scalping policy — its env ships
+      `KIOSK_POW_MODE=reputation` (RateAndReputation with the real confirmed-bookings factor). That ONE selector is what to
+      set; the `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` / `KIOSK_POW_BACKOFF_DEMO` flags are honoured only as
+      single-mode aliases — drop them (setting more than one RAISES at boot). At `high` a fresh visitor pays its reputation
+      count of ~2 proofs (~20 s) at first contact, dropping to 1 then a free pass as its bookings confirm. Other modes:
+      `demo` / `backoff` / `off`.
+- [ ] ⚠ **UPGRADING AN EXISTING BOX — run `deploy/box-prep-2026-08-11.sh` BEFORE the first `prod-demo` deploy:**
       ```
       ssh <deploy-user>@<box> 'sudo bash -s' < reference/deploy/box-prep-2026-08-11.sh
       ```
-      The `/etc/kiosk-demo/*.env` files are hand-maintained and no repo file drives them, so an env that predates
-      the K-497 flag collapse still sets `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` / `KIOSK_POW_BACKOFF_DEMO`,
-      which current code **REFUSES at boot** — deploying first takes that app down. The script drops those and the
-      long-dead `KIOSK_POW_REGISTER_DEMO` (nothing has read it since K-487; register PoW is unconditional via
+      The `/etc/kiosk-demo/*.env` files are hand-maintained and no repo file drives them, so an env written before the
+      single `KIOSK_POW_MODE` selector can still set two or more of `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` /
+      `KIOSK_POW_BACKOFF_DEMO`, which current code **REFUSES at boot** — deploying first takes that app down. The script
+      drops those and the dead `KIOSK_POW_REGISTER_DEMO` (nothing reads it; register PoW is unconditional via
       `c.registration_pow_count = 1`). A FRESH box built from this checklist needs none of it — the examples in
       `deploy/env/` are already clean. Nothing else instructs an operator to run this script, which is why the
-      line is here: the fix has been committed and unrun since 2026-08-11.
-- [ ] **PoW secret (all 7 demos, K-541):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
+      line is here.
+- [ ] **PoW secret (all 7 demos):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
       without it outside dev/test (a shipped default would be world-readable in the public repo, letting anyone forge a
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.
-- [ ] **Rental-token signing key (skooti only, K-686):** set `KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey -algorithm ed25519)"`
+- [ ] **Rental-token signing key (skooti only):** set `KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey -algorithm ed25519)"`
       — REQUIRED, enforced at boot: skooti refuses to start in production without it (and rejects a value that does not
       parse as an Ed25519 **private** key), because the dev keypair it signs with outside production unconditionally ships in this
       public repo — anyone with a clone could mint an unlock token every provisioned lock accepts, past reserve, payment,
@@ -73,50 +74,50 @@ For EACH of the 7 apps:
       (`openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32`); any lock still carrying the old
       repo key (`8857880d…`) must be reflashed. The other six operator demos have no locks and need nothing here.
 - [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
-- [ ] **Card-setup Checkout render (getgrocery, K-473):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
+- [ ] **Card-setup Checkout render (getgrocery):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
 ### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
 - [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
 - [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
-- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` — REQUIRED, enforced at boot (K-673): the
+- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` — REQUIRED, enforced at boot: the
       broker refuses to start in production without it (and rejects a PEM that does not parse as a private key), because
       the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
       forge attestations, and the pin flows below would faithfully pin its forgeable public half.
 - [ ] **Operator allow-list:** `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`.
 - [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_SKOOTI_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
-      The names differ by design (K-694): every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET` — their
+      The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET` — their
       `config/environments/production.rb` is byte-identical across the seven demos and so must not name a demo — while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
       operator from the `operator_id` in the intake body. Same for getgrocery when it is allow-listed
       (`KIOSK_PROVE_GETGROCERY_SECRET` at the broker ↔ `KIOSK_PROVE_INTAKE_SECRET` in getgrocery's env).
 
 ## 5. Build + boot each app
-- [ ] **Eager-load gate FIRST, on every changed app (K-488/K-513):**
+- [ ] **Eager-load gate FIRST, on every changed app:**
       ```
       RAILS_ENV=production SECRET_KEY_BASE=throwaway \
         KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx \
         KIOSK_ISSUER=https://throwaway.example.test \
         bin/rails zeitwerk:check                     # getgrocery: add STRIPE_SECRET_KEY=sk_test_throwaway
                                                      # prove: add PROVE_KEY_PEM="$(openssl genrsa 2048)" — it must PARSE
-                                                     #   as an RSA private key (K-673), a throwaway literal will not do;
+                                                     #   as an RSA private key — a throwaway literal will not do;
                                                      #   the kiosk vars above are ignored by the broker (harmless)
                                                      # skooti: add KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey \
                                                      #   -algorithm ed25519)" — same rule, it must PARSE as an Ed25519
-                                                     #   PRIVATE key (K-686)
+                                                     #   PRIVATE key
       ```
       It eager-loads the whole app the way production does and exits non-zero on the first constant/path mismatch — the
-      class that 502'd three demos in the K-487 deploy, invisible to every dev-mode gate. Needs no database (it loads
+      class that 502s an app on boot, invisible to every dev-mode gate. Needs no database (it loads
       code, it does not connect). Every value here is a throwaway: nothing is signed, served or dialed.
       The three env vars are not optional decoration — each is crash-if-absent in `production`, and a missing one aborts
       in the initializer BEFORE Zeitwerk runs, so the command exits 1 for a reason that has nothing to do with eager
-      loading (`KIOSK_POW_SECRET` K-541, `KIOSK_ISSUER` K-510, getgrocery's Stripe key/mock URL, the broker's
-      `PROVE_KEY_PEM` K-673, skooti's `KIOSK_UNLOCK_SIGNING_KEY_PEM` K-686). Verified on all 8 apps.
+      loading (`KIOSK_POW_SECRET`, `KIOSK_ISSUER`, getgrocery's Stripe key/mock URL, the broker's
+      `PROVE_KEY_PEM`, skooti's `KIOSK_UNLOCK_SIGNING_KEY_PEM`). Verified on all 8 apps.
       CI runs the same gate for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same
       gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate
       written twice, and this copy is the one a human types.
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
-- [ ] ⚠ **hoteling only, and ONLY on a database that already holds bookings (K-690/K-718):**
+- [ ] ⚠ **hoteling only, and ONLY on a database that already holds bookings:**
       `20260813000001_add_booking_overlap_guard` adds an EXCLUDE constraint, and Postgres validates it
       against existing rows — so it **refuses to apply** while any two live bookings overlap, and the
       deploy stops there with a constraint error. A fresh box and every `demo:setup` (which rebuilds
@@ -155,21 +156,20 @@ For EACH of the 7 apps:
       actually falls over, re-enable it IN THE REPO and deploy, then pick the bound from a burst
       rather than from either number written down (1 req/s live, 60/min in the snippet, neither
       derived from a measurement).
-- [ ] **HSTS arrives because the Caddyfile carries it, not because you pasted it (K-916, K-1295).**
+- [ ] **HSTS arrives because the Caddyfile carries it, not because you pasted it.**
       `deploy/Caddyfile`'s `(kioskproxy)` snippet emits
       `Strict-Transport-Security: max-age=31536000; includeSubDomains`, ENABLED — `header` is a stock
       directive and needs no module — and every vhost imports that snippet. Without it a client typing
       a bare hostname makes its FIRST request in plaintext, before the `:80`→`:443` redirect, which is
       the window HSTS exists to close. `config.force_ssl` is deliberately OFF in every app behind the
-      proxy (K-439: Caddy already terminates TLS and redirects, and the apps run with `assume_ssl`), so
+      proxy (Caddy already terminates TLS and redirects, and the apps run with `assume_ssl`), so
       the edge is the ONLY place this header can come from.
-- [ ] **Prove HSTS actually arrives — do not take the tick above on trust (K-1295):**
+- [ ] **Prove HSTS actually arrives — do not take the tick above on trust:**
       `deploy/check-live-hsts.sh` · it probes every vhost `deploy/Caddyfile` declares and names each
       origin that does not answer `max-age >= 31536000; includeSubDomains`, exit 1 if any does not.
-      This tick exists because an earlier one did not: HSTS was in the template from K-916, the tick
-      was written, never ticked, and MEASURED 2026-09-05 not one deployed origin sent the header — for
-      as long as the box had been serving. A checklist line is not a mechanism.
-- [ ] **Prove the throttle is really off, and burst before you probe the sibling (T-171):** the
+      A checklist line is not a mechanism: tick this one by running the probe, never by reading the
+      template — a template can carry the header while the box serves without it.
+- [ ] **Prove the throttle is really off, and burst before you probe the sibling:** the
       snippet's bucket is per-IP across every vhost, so 60+ sequential requests to one origin would
       429 the other seven — and it drains in under a minute, so a sibling probed AFTER the burst
       answers 200 whether or not a limiter exists. Probe the sibling while the burst is still
@@ -192,9 +192,9 @@ For EACH of the 7 apps:
       `rails db:migrate`, `rails db:seed` and `systemctl restart kiosk-demo@<app>` across all 8 units,
       then `systemctl reload caddy`.
 - [ ] ⚠ **`db:seed` is not optional — omit it and the demos serve empty catalogs.** `db:prepare` seeds only a
-      database it has just CREATED, so on every push after the first it is a no-op for content: K-464 records
-      live hoteling showing 5 properties instead of 100 and skooti's fleet missing, because the hook ran
-      `db:prepare` alone. Seeding on every push is safe — every demo's seeds are idempotent-additive (zero
+      database it has just CREATED, so on every push after the first it is a no-op for content: a box whose hook
+      runs `db:prepare` alone serves a partial catalog — hoteling with 5 properties instead of 100, skooti with
+      no fleet. Seeding on every push is safe — every demo's seeds are idempotent-additive (zero
       `delete_all`, verified live on all seven), so a push tops the catalog up and deletes nothing. This is
       also the only thing that re-seeds the catalog; see `deploy/README.md` step 5.
 - [ ] ⚠ **A SCHEMA THAT HAS DIVERGED IS REBUILT BY `deploy/demo-reset.sh`. `db:migrate` CANNOT DO IT.**
@@ -214,7 +214,7 @@ For EACH of the 7 apps:
       **Then move `FLEET_SCHEMA_BASELINE` in `bin/check-migration-replay` to the reset's date in the same
       change** — that constant is the one fact the gate cannot measure for itself, a reset is exactly the
       event that moves it, and its current value is when the reference fleet was last rebuilt.
-- [ ] ~~Prune cron~~ — **SKIPPED** (K-593/K-630) and there is nothing to install: this repo ships no
+- [ ] ~~Prune cron~~ — **SKIPPED**, and there is nothing to install: this repo ships no
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog
       re-seed instead, see `deploy/README.md` step 5.

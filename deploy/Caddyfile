@@ -58,7 +58,7 @@
 
 # Reusable snippet: shared proxy + the per-IP edge rate-limit, which is OFF.
 #
-# ── THERE IS NO DEFAULT THROTTLE, AND THAT IS A DECISION (T-171) ─────────────
+# ── THERE IS NO DEFAULT THROTTLE, AND THAT IS A DECISION ─────────────────────
 # The reason it is off: a Kiosk proof verifies in milliseconds, so a flood of
 # junk proofs costs the sender far more than it costs the origin. The fleet
 # would rather see what actually arrives and then react than ship a bound
@@ -73,7 +73,7 @@
 # default, not forswearing protection: leaving the block here, commented, with
 # the analysis beside it is what makes the next decision cheap.
 #
-# ── The exposure the limiter was for, which has not gone away (K-540) ────────
+# ── The exposure the limiter is for, and it has not gone away ────────────────
 # `POST /kiosk/auth/register` runs the PoW gate UNAUTHENTICATED, ahead of any
 # key verification: anyone can take a free 402 challenge and resubmit it with a
 # valid HMAC sig but garbage indices. PoW prices the attacker's SOLVE; it never
@@ -82,8 +82,9 @@
 # as well. The app can make each request cheaper; only something in FRONT of the
 # app bounds the request RATE.
 #
-# ── Why the arithmetic changed ───────────────────────────────────────────────
-# The app-side half of K-540 is shipped and measured (n=168 k=7, one box): one
+# ── The arithmetic that says the edge bound is not needed by default ─────────
+# The app-side half of that exposure is priced and measured (n=168 k=7, one
+# box): one
 # issued challenge drives at most one verify, and the verifier checks
 # cheapest-first and hashes lazily, so a garbage proof costs 0.30 ms — or
 # 0.012 ms if the attacker did not even order the indices — instead of the
@@ -122,19 +123,19 @@
 # route write it down where the next operator will read it — deploy/README.md
 # under "Edge rate-limit".
 #
-# ── HSTS (K-916) ─────────────────────────────────────────────────────────────
+# ── HSTS ─────────────────────────────────────────────────────────────────────
 # Every vhost below imports this snippet, so the header is emitted once for the
 # whole fleet rather than eight times by hand.
 #
 # WHY IT LIVES HERE AND NOT IN THE RAILS APPS. `config.force_ssl` is the Rails
 # way to get HSTS, and it is deliberately OFF in all eight apps: Caddy already
 # terminates TLS and already redirects :80 -> :443, and the apps run behind it
-# with `config.assume_ssl = true` (K-439), so turning force_ssl on would add a
-# SECOND redirect for no gain. What force_ssl was ALSO doing, and what nothing
-# then did, is emit `Strict-Transport-Security` — so until this directive the
-# fleet had no HSTS at all, and a client typing a bare hostname made its FIRST
-# request in plaintext, before the redirect. That first request is the window
-# HSTS exists to close, and it is the only thing this line buys.
+# with `config.assume_ssl = true`, so turning force_ssl on would add a SECOND
+# redirect for no gain. The other thing force_ssl does is emit
+# `Strict-Transport-Security`, and this directive is the only place the fleet
+# emits it: without it a client typing a bare hostname makes its FIRST request
+# in plaintext, before the redirect. That first request is the window HSTS
+# exists to close, and it is the only thing this line buys.
 #
 # `header` is a STOCK Caddy directive — unlike `rate_limit` above, it needs no
 # module and therefore ships ENABLED rather than commented.
@@ -148,13 +149,14 @@
 (kioskproxy) {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	# import ratelimit          # OFF BY DECISION (T-171). See the note above before re-enabling.
+	# import ratelimit          # OFF BY DECISION. See the note above before re-enabling.
 	# Caddy forwards X-Forwarded-For/Proto/Host to the upstream by default.
 	reverse_proxy {args[0]}
 }
 
 # (snippet) per-IP 60 req/min backstop — requires github.com/mholt/caddy-ratelimit.
-# NOT DEPLOYED and not a pending step: see the T-171 note above. If you ever
+# NOT DEPLOYED and not a pending step: see the no-default-throttle note above.
+# If you ever
 # uncomment it, uncomment the `import ratelimit` line above with it, and treat
 # the 60/min as a placeholder rather than a finding — it is far above any honest
 # agent's pace (register once, then solve one PoW per tolled call — sub-second at

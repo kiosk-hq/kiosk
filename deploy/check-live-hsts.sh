@@ -1,36 +1,28 @@
 #!/usr/bin/env bash
-# Does the DEPLOYED fleet actually send HSTS? (K-1295)
+# Does the DEPLOYED fleet actually send HSTS?
 #
-# WHY THIS EXISTS, and it is a diagnosis rather than a feature request. Two
-# halves of one class were filed together: the edge rate limit and HSTS. The
-# rate limit got a SCRIPT and it landed. HSTS got a line in deploy/CHECKLIST.md,
-# which is 0 ticked of 45, so its tick state carried no information at all. A
-# checklist line is not a mechanism.
+# WHAT IT IS. A live probe. It reads the vhosts out of deploy/Caddyfile and
+# asks each origin over HTTPS whether it answers `Strict-Transport-Security`
+# with `max-age >= 31536000; includeSubDomains`, naming every origin that does
+# not and exiting 1 if any does not. A checklist line is not a mechanism; this
+# is.
 #
-# MEASURED 2026-09-05, all eight origins:
-#   curl -sSI https://<host>/ | grep -ci '^strict-transport-security'  ->  0
-#
-# while deploy/Caddyfile's (kioskproxy) snippet had shipped the header, ENABLED,
-# since K-916. The template was right and the box was stale, because nothing
-# deployed the template: /etc/caddy/Caddyfile was hand-maintained.
-#
-# FIXED 2026-09-06 by deploy/deploy-caddy.sh, which installs this directory's
-# Caddyfile whole and verifies the wire. Re-measured the same day: 8 of 8 send
-# the header. THIS SCRIPT IS NOT RETIRED BY THAT and must not be -- the deploy
+# WHEN TO RUN IT. From anywhere, at any time, and after any Caddyfile change.
+# deploy/deploy-caddy.sh --apply already verifies the header on the wire as it
+# installs. THIS SCRIPT IS NOT RETIRED BY THAT and must not be -- the deploy
 # proves the header arrives at the moment it runs, and this proves it still
 # arrives now, from anywhere, without ssh.
 #
 # WHY IT PROBES THE WIRE RATHER THAN PARSING A CONFIG. "Does this config reach
 # a directive" is the right question only for a setting that cannot be observed
 # without flooding the box. HSTS is on every single response, so the strongest
-# available oracle is the response itself -- and it is the oracle that caught
-# this: a config check run on the template would have said OK for as long as the
-# box was serving without it.
+# available oracle is the response itself -- and a config check run on the
+# template says OK for as long as the box serves without the header.
 #
 # WHAT IT CANNOT SEE, said plainly:
 #   * Anything about a response the origin did not produce. An edge-generated
 #     refusal is invisible here, and this script does not try to provoke one.
-#     The fleet runs no throttle at all (T-171), and the snippet
+#     The fleet runs no throttle at all, and the snippet
 #     deploy/Caddyfile ships commented is a bucket shared across every demo
 #     vhost: reaching it would cost 60+ requests, i.e. a self-inflicted outage
 #     on the whole fleet to observe one header.

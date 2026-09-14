@@ -10,13 +10,11 @@
 # repository like everything else the demos run, rolled out by a declarative
 # script rather than hand-edited on the box.
 #
-# Until now /etc/caddy/Caddyfile was HAND-MAINTAINED and deploy/Caddyfile was a
-# template nobody applied. That split is not a filing detail — it is the reason
-# two separate findings existed at once and neither could be closed by a push:
-# the fleet sent no HSTS while the template shipped the header enabled (K-1295),
-# and the fleet throttled every request while the template shipped the limiter
-# commented out (K-1168/T-171). `git push` moved neither, because prod-demo
-# deploys the APPS and has never deployed the EDGE.
+# `prod-demo` deploys the APPS and never the EDGE, so a `git push` does not
+# move /etc/caddy/Caddyfile at all — this script is the only thing that does.
+# Hand-edit the box and the next --apply overwrites it; leave the box unvisited
+# and deploy/Caddyfile is a template nobody applied, which is how an edge
+# setting comes to differ from the file that declares it.
 #
 # THE REPO IS NOW THE SOURCE OF TRUTH. This script makes the box match the file
 # and refuses to guess: it never edits in place, never patches a line, and never
@@ -103,9 +101,9 @@ if [[ "${1:-}" == "--self-test" ]]; then
       "$(hosts_from_config | grep -v '\.demo\.kiosk\.tech$' | tr '\n' ' ')"
   # Count the DIRECTIVE, not the word: this file explains itself at length, so
   # the header is named in prose as well, and a bare word-count reads 2.
-  arm "the config declares HSTS, or deploying it would undo K-1295" "1" \
+  arm "the config declares HSTS, or deploying it would take the header off the fleet" "1" \
       "$(grep -cE '^[[:space:]]*header[[:space:]]+Strict-Transport-Security' "$SRC")"
-  arm "the config does NOT enable the limiter, or deploying it would undo T-171" "0" \
+  arm "the config does NOT enable the limiter, or deploying it would turn the throttle on" "0" \
       "$(grep -cE '^[[:space:]]*import ratelimit' "$SRC" || true)"
 
   # VACUITY — the KIND is a derivation check, so "the pattern must still match"

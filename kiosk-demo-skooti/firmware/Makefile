@@ -189,14 +189,25 @@ test-asan: $(ASAN_TARGET)
 # `-fsyntax-only`, so it is seconds rather than a build; the failure this
 # catches is a declaration, and a declaration is a front-end question.  Exits
 # non-zero on the first compiler that refuses the sources, naming it.
+#
+# IT DEDUPES ON THE RESOLVED PATH *AND* ON THE VERSION STRING, because each key
+# alone overcounts on one of the two platforms and the printed count is a claim.
+# MEASURED, first run of this target on ubuntu-latest: version-string alone said
+# «3 distinct compiler(s)» for gcc, clang and cc — where `cc` is the SAME binary
+# as gcc through the alternatives symlink and only prints a different argv[0] in
+# its first line.  Path alone is no better: on macOS `/usr/bin/cc` and
+# `/usr/bin/clang` are two separate files that are one compiler, and neither is
+# a symlink for `readlink -f` to resolve.
 # --------------------------------------------------------------------------
 portability:
-	@seen=''; n=0; \
+	@seen=''; paths=''; n=0; \
 	for c in $(CC) $(ASAN_CC) cc clang gcc; do \
-	  command -v "$$c" >/dev/null 2>&1 || { echo "  skip $$c — not installed"; continue; }; \
+	  p=`command -v "$$c" 2>/dev/null` || { echo "  skip $$c — not installed"; continue; }; \
+	  rp=`readlink -f "$$p" 2>/dev/null` || rp="$$p"; \
+	  case ":$$paths:" in *":$$rp:"*) continue;; esac; \
 	  id=`"$$c" --version 2>&1 | head -1 | tr -cd 'A-Za-z0-9.'`; \
 	  case ":$$seen:" in *":$$id:"*) continue;; esac; \
-	  seen="$$seen:$$id"; n=`expr $$n + 1`; \
+	  paths="$$paths:$$rp"; seen="$$seen:$$id"; n=`expr $$n + 1`; \
 	  echo "--- $$c: `"$$c" --version 2>&1 | head -1`"; \
 	  "$$c" $(BASE_CFLAGS) -fsyntax-only $(SRCS) crosscheck_main.c || exit 1; \
 	done; \

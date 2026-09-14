@@ -93,6 +93,32 @@ extern "C" {
 #define SKOOTI_TOKEN_MAX 512
 
 /*
+ * skooti_pubkey_is_canonical — is this 32-byte string the encoding RFC 8032
+ * 5.1.3 permits for the point it names?
+ *
+ * Parameters:
+ *   pubkey : 32 raw bytes — a candidate Ed25519 public key.
+ *
+ * Returns:
+ *   1  — bit 255 cleared leaves a y coordinate BELOW the field prime
+ *         p = 2^255 - 19, and the pair is not "x = 0 with bit 255 set".
+ *   0  — otherwise, and for a NULL pointer.
+ *
+ * WHY IT IS PUBLIC. The vendored library applies neither rule: it masks bit
+ * 255 off and reduces whatever is left, and it takes the x = 0 encoding with
+ * either sign bit. So one point has several byte spellings that verify — for
+ * the identity point, measurably three — and a fleet that names a key, blocks
+ * a key or provisions a key BY ITS BYTES is naming one of them.
+ *
+ * skooti_verify_token and skooti_verify_wire call this before verifying, so a
+ * caller of those needs nothing further. It is declared here for the caller
+ * that wants the answer where a key is RECEIVED — a provisioning routine, a
+ * fleet-key rotation — which is where a refusal can still be reported to a
+ * human instead of looking like a bad token.
+ */
+int skooti_pubkey_is_canonical(const uint8_t pubkey[32]);
+
+/*
  * skooti_verify_token — verify a skooti-issued Ed25519 rental token.
  *
  * Parameters:
@@ -111,6 +137,11 @@ extern "C" {
  *
  * Security properties:
  *   - The Ed25519 verify (orlp/ed25519) is internally constant-time.
+ *   - The PUBLIC KEY is canonicality-checked HERE, before that call, by
+ *     skooti_pubkey_is_canonical above — RFC 8032 5.1.3 steps 1 and 3, the y
+ *     range and the x = 0 sign bit, neither of which the vendored decoder
+ *     applies. Without it the identity point alone has three accepted
+ *     spellings, and a signature anyone can make verifies under all three.
  *   - The signature's SCALAR is range-checked HERE, before that call. RFC 8032
  *     5.1.7 decodes the second 32 bytes as a number below the group order L;
  *     the vendored verifier bounds them only by `signature[63] & 224`, which

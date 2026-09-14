@@ -50,6 +50,51 @@ static int ct_memeq(const void *a, const void *b, size_t len)
     return diff == 0 ? 1 : 0;
 }
 
+/*
+ * ct_le32_lt — is the 256-bit little-endian number at `a` strictly below the
+ * one at `b`?  Returns 1 or 0, and the comparison is STRICT: equal answers 0.
+ *
+ * Both RFC 8032 range rules this file implements are this one question asked
+ * of a different constant — the signature's scalar against the group order,
+ * the public key's y coordinate against the field prime — so it is written
+ * once.
+ *
+ * CONSTANT TIME. Neither operand is a secret: both arrive from outside and one
+ * of them is a compile-time constant. A verifier that answers in a
+ * data-dependent time still tells a caller WHICH check refused it, so this one
+ * does not branch on the bytes: all 32 positions are always read, in a fixed
+ * order, the comparison state is carried in arithmetic rather than in control
+ * flow, and there is no early return and no memory access indexed by the
+ * input.
+ *
+ * `lt` and `gt` latch the verdict of the most significant byte position at
+ * which the two differ. `undecided` is 1 until one of them latches, and masks
+ * every later position out arithmetically — which is what replaces the `break`
+ * a readable version would have.
+ */
+static int ct_le32_lt(const uint8_t a[32], const uint8_t b[32])
+{
+    uint32_t lt = 0;
+    uint32_t gt = 0;
+    int i;
+
+    for (i = 31; i >= 0; i--) {
+        uint32_t av = (uint32_t)a[i];
+        uint32_t bv = (uint32_t)b[i];
+        /* Unsigned wraparound sets bit 31 exactly when the left side is the
+         * smaller byte; both operands are below 256, so this is defined. */
+        uint32_t a_lt_b = ((av - bv) >> 31) & 1u;
+        uint32_t b_lt_a = ((bv - av) >> 31) & 1u;
+        uint32_t undecided = (lt | gt) ^ 1u;
+
+        lt |= undecided & a_lt_b;
+        gt |= undecided & b_lt_a;
+    }
+
+    /* Equal all the way down leaves both flags 0, which is the 0 answer. */
+    return (int)lt;
+}
+
 /* --------------------------------------------------------------------------
  * Minimal base64url decoder (no padding, RFC 4648 §5 alphabet)
  * -------------------------------------------------------------------------- */
@@ -255,30 +300,95 @@ static const uint8_t SC_ORDER_LE[32] = {
 
 static int ct_scalar_is_canonical(const uint8_t s[32])
 {
-    /* `lt` and `gt` latch the verdict of the most significant byte position at
-     * which s and L differ. `undecided` is 1 until one of them latches, and
-     * masks every later position out arithmetically — which is what replaces
-     * the `break` a readable version would have. All 32 positions are visited
-     * whatever the input. */
-    uint32_t lt = 0;
-    uint32_t gt = 0;
-    int i;
+    /* Strict, so s == L answers 0: the range the RFC gives is half-open. */
+    return ct_le32_lt(s, SC_ORDER_LE);
+}
 
-    for (i = 31; i >= 0; i--) {
-        uint32_t a = (uint32_t)s[i];
-        uint32_t b = (uint32_t)SC_ORDER_LE[i];
-        /* Unsigned wraparound sets bit 31 exactly when the left side is the
-         * smaller byte; both operands are below 256, so this is defined. */
-        uint32_t a_lt_b = ((a - b) >> 31) & 1u;
-        uint32_t b_lt_a = ((b - a) >> 31) & 1u;
-        uint32_t undecided = (lt | gt) ^ 1u;
+/* --------------------------------------------------------------------------
+ * Canonical Ed25519 public key — RFC 8032 5.1.3 steps 1 and 3, the other two
+ * decode rules the vendored verifier does not implement.
+ *
+ * 5.1.3 reads the 32 bytes as a little-endian number, takes bit 255 as x_0
+ * (the low bit of the x coordinate), clears it to get y, and FAILS when the
+ * remaining y is at or above the field prime p = 2^255 - 19 (step 1) or when
+ * the recovered x is 0 while x_0 is 1 (step 3). ed25519/ applies neither:
+ * fe_frombytes masks bit 255 off and reduces whatever is left, and the sign
+ * fixup compares a zero x against the requested sign instead of refusing that
+ * pair. So one point has several accepted spellings.
+ *
+ * MEASURED against the shipped ed25519/ sources, with a signature that
+ * verifies under the identity point — R = [1]B, S = 1, which satisfies
+ * [S]B = R + [k]A for A = identity whatever the message is. All three of
+ * `01 00..00` (y = 1, the canonical identity), `ee ff..ff 7f` (y = p + 1,
+ * which reduces to 1) and `01 00..00 80` (y = 1 with x_0 set, which 5.1.3
+ * step 3 refuses) decode to that same point, and ed25519_verify answers 1 for
+ * every one of them. Only the first is a legal encoding.
+ *
+ * WHY IT IS CHECKED HERE rather than left as a stated limit. This lock is
+ * given its key once at provisioning and never reads one off a token, so
+ * nothing an attacker writes to THIS lock reaches either rule. But this file
+ * is a reference an adopter copies, and an adopter's key may arrive from
+ * somewhere this demo has no view of — a fleet message, a provisioning tag, a
+ * config a server pushes. Two consequences travel with the extra spellings: a
+ * key blocklist or a fleet ACL keyed on the 32 bytes has three names for one
+ * key and blocks one of them, and a lock provisioned with a spelling the RFC
+ * refuses is a lock whose identity no conforming implementation agrees on.
+ * The check is 96 byte-comparisons against three constants, it leaves
+ * ed25519/ a verbatim drop, and it fails closed.
+ *
+ * The x = 0 test needs no field arithmetic. The curve equation is
+ * -x^2 + y^2 = 1 + d x^2 y^2, so x = 0 forces y^2 = 1 and, conversely, y = 1
+ * or y = p - 1 forces x^2 (d + 1) = 0 and hence x = 0. Those two y values are
+ * exactly the x = 0 encodings, and both are constants.
+ * -------------------------------------------------------------------------- */
 
-        lt |= undecided & a_lt_b;
-        gt |= undecided & b_lt_a;
-    }
+/* p = 2^255 - 19, the field prime, little-endian. */
+static const uint8_t FE_PRIME_LE[32] = {
+    0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f
+};
 
-    /* Equal all the way down leaves both flags 0, and s == L is out of range. */
-    return (int)lt;
+/* y = 1 — the identity point, and one of the two x = 0 encodings. */
+static const uint8_t FE_ONE_LE[32] = {
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+/* y = p - 1 — the order-2 point, and the other x = 0 encoding. */
+static const uint8_t FE_PRIME_MINUS_ONE_LE[32] = {
+    0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f
+};
+
+int skooti_pubkey_is_canonical(const uint8_t pubkey[32])
+{
+    uint8_t  y[32];
+    uint32_t x_0;
+    uint32_t y_in_range;
+    uint32_t x_is_zero;
+    int      i;
+
+    if (!pubkey) return 0;
+
+    for (i = 0; i < 32; i++) y[i] = pubkey[i];
+    x_0     = (uint32_t)(y[31] >> 7);
+    y[31]  &= 0x7f;
+
+    /* Step 1: y < p. */
+    y_in_range = (uint32_t)ct_le32_lt(y, FE_PRIME_LE);
+
+    /* Step 3: x = 0 with x_0 set is a refusal, and x = 0 is exactly y = 1 or
+     * y = p - 1. Both comparisons always run — neither short-circuits. */
+    x_is_zero = (uint32_t)ct_memeq(y, FE_ONE_LE, 32)
+              | (uint32_t)ct_memeq(y, FE_PRIME_MINUS_ONE_LE, 32);
+
+    return (int)(y_in_range & ((x_0 & x_is_zero) ^ 1u));
 }
 
 /* --------------------------------------------------------------------------
@@ -326,6 +436,15 @@ static int verify_bounded(const uint8_t pubkey[32],
 
     /* --- null guards --- */
     if (!pubkey || !token || !my_scooter_code) return 0;
+
+    /* --- RFC 8032 5.1.3: the public key must be the canonical encoding of the
+     * point it names. A provisioning-time property, checked on every verify
+     * because this is the only place a caller of this file is guaranteed to
+     * pass through: an adopter whose key arrives from a fleet message or a
+     * provisioning tag gets the same refusal the sketch's baked key would.
+     * See skooti_pubkey_is_canonical above for what the vendored decoder
+     * takes without it. --- */
+    if (!skooti_pubkey_is_canonical(pubkey)) return 0;
 
     /* --- token length cap --- */
     if (token_len == 0 || token_len > SKOOTI_TOKEN_MAX) return 0;

@@ -177,9 +177,12 @@ measurement over the whole domain instead of by a promise about it.
   rather than the RFC's: a public key whose y coordinate is at or above the
   field prime is reduced instead of refused, and the x = 0 encoding is taken
   with either sign bit. Both are about the PUBLIC KEY, which this lock is given
-  once at provisioning and never reads off the wire, so neither is reachable
-  from a token and neither is changed here. The scalar range is the one a token
-  carries, and it is the one that moved.
+  once at provisioning and never reads off the wire. The C reader now applies
+  both itself before it calls the library, so its own answer is the RFC's — the
+  library beside it is unchanged, and an adopter who calls it directly inherits
+  both. The two Ruby readers are not asked: their key is a constant of the
+  server, the shared vectors vary the TOKEN, and nothing in this set carries a
+  key at all. What holds the C answer is `firmware/host_test.c`.
 - That the readers agree on TIMING. The C reader compares the tag and the
   scooter code in constant time; the two Ruby readers use `==`. An accept-or-
   refuse answer is all a vector carries, so nothing here measures it.

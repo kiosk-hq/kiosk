@@ -733,13 +733,123 @@ static void test_expiry_boundary(void)
 }
 
 /*
- * Test 13 — jti_store: insert, replay detection, expiry pruning, table-full eviction
+ * Test 13 — public-key encoding: RFC 8032 5.1.3 steps 1 and 3
+ *
+ * The vendored library applies neither. It masks bit 255 off the key and
+ * reduces whatever is left instead of refusing a y at or above the field
+ * prime (step 1), and it compares a recovered x of 0 against the requested
+ * sign bit instead of refusing that pair (step 3). So one point has several
+ * byte spellings it accepts.
+ *
+ * That is not a paper deviation, and IDENTITY_SIG below is why. A signature
+ * verifies under the identity point whatever the message says: the equation
+ * is [S]B = R + [k]A, and A = identity collapses it to [S]B = R, which
+ * R = [1]B and S = 1 satisfy. Anyone can write those 64 bytes down. So each
+ * accepted spelling of the identity is a public key under which THIS lock
+ * would open on a token nobody signed, and the library on its own takes all
+ * three: the canonical `01 00..00`, the same y written as p + 1, and
+ * `01 00..00 80`, which is the canonical y with the sign bit set.
+ *
+ * The canonical identity is NOT refused here and that is deliberate: RFC 8032
+ * does not require a verifier to reject small-order or identity keys, and a
+ * lock provisioned with one has a provisioning problem rather than a decoding
+ * one. What this test pins is that the two SPELLINGS the RFC forbids are gone,
+ * so a fleet that blocks a key by its bytes blocks it once and for all.
+ *
+ * The first half asserts the predicate directly, because most of its domain
+ * cannot be reached through a token: a key that is merely wrong refuses every
+ * signature anyway, so an end-to-end call cannot tell "refused the key" from
+ * "refused the signature". The second half is the end-to-end pair, on the one
+ * input where the two answers differ.
+ */
+static void test_pubkey_canonical(void)
+{
+    uint8_t key[32];
+    int     result;
+    int     i;
+
+    /* R = [1]B (the base-point encoding) || S = 1, little-endian. */
+#define IDENTITY_SIG \
+    "WGZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmYBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+    printf("\n[13] Public-key encoding: y < p, and x = 0 only with the sign bit clear\n");
+
+    /* The provisioned key itself — the check must not refuse the real one. */
+    check(skooti_pubkey_is_canonical(SKOOTI_PUBKEY) == 1,
+          "the provisioned skooti public key is canonical → 1");
+
+    check(skooti_pubkey_is_canonical(NULL) == 0, "NULL public key → 0");
+
+    /* y = 0 and y = p - 1 are the ends of the legal range; both are canonical,
+     * which separates "the range check works" from "it refuses the edges". */
+    memset(key, 0, 32);
+    check(skooti_pubkey_is_canonical(key) == 1, "y = 0 → 1 (bottom of the range)");
+
+    key[0] = 0xec; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
+    check(skooti_pubkey_is_canonical(key) == 1, "y = p - 1 → 1 (top of the range)");
+
+    /* Step 1: y at or above p. p itself, p + 1, and every bit set (p + 18 with
+     * the sign bit on) — the three that a masking decoder silently reduces. */
+    key[0] = 0xed; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
+    check(skooti_pubkey_is_canonical(key) == 0, "y = p → 0 (same point as y = 0)");
+
+    key[0] = 0xee; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
+    check(skooti_pubkey_is_canonical(key) == 0, "y = p + 1 → 0 (same point as y = 1)");
+
+    memset(key, 0xff, 32);
+    check(skooti_pubkey_is_canonical(key) == 0, "every bit set → 0 (y = p + 18)");
+
+    /* Step 3: x = 0 is exactly y = 1 and y = p - 1, and each is legal with the
+     * sign bit CLEAR and refused with it SET. Four assertions, because a check
+     * that refused both signs would break the identity encoding the RFC
+     * allows. */
+    memset(key, 0, 32); key[0] = 0x01;
+    check(skooti_pubkey_is_canonical(key) == 1, "y = 1, sign clear → 1 (identity, legal)");
+
+    key[31] = 0x80;
+    check(skooti_pubkey_is_canonical(key) == 0, "y = 1, sign set → 0 (x = 0 with x_0 = 1)");
+
+    key[0] = 0xec; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
+    check(skooti_pubkey_is_canonical(key) == 1, "y = p - 1, sign clear → 1 (order-2 point)");
+
+    key[31] = 0xff;
+    check(skooti_pubkey_is_canonical(key) == 0, "y = p - 1, sign set → 0 (x = 0 with x_0 = 1)");
+
+    /* End to end. IDENTITY_SIG is a signature nobody had to hold a key to
+     * write, and the three spellings below all decode to the point it verifies
+     * under. The first is the encoding RFC 8032 permits, so the lock's answer
+     * there is the vendored library's and it is 1 — a lock provisioned with
+     * the identity is broken by its provisioning, not by its decoder. The
+     * other two are the encodings 5.1.3 refuses, and they are the ones this
+     * check turns from 1 into 0. */
+    memset(key, 0, 32); key[0] = 0x01;
+    result = skooti_verify_token(key, KAT_MSG "." IDENTITY_SIG, SCOOTER_CODE, NOW_FRESH);
+    check(result == 1, "identity key, canonical spelling → 1 (the RFC permits this encoding)");
+
+    key[0] = 0xee; for (i = 1; i < 31; i++) key[i] = 0xff; key[31] = 0x7f;
+    result = skooti_verify_token(key, KAT_MSG "." IDENTITY_SIG, SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "identity key spelled y = p + 1 → 0 (the library on its own answers 1)");
+
+    memset(key, 0, 32); key[0] = 0x01; key[31] = 0x80;
+    result = skooti_verify_token(key, KAT_MSG "." IDENTITY_SIG, SCOOTER_CODE, NOW_FRESH);
+    check(result == 0, "identity key with the sign bit set → 0 (the library on its own answers 1)");
+
+    /* And the control: the real key and the real token are untouched by all of
+     * the above. */
+    result = skooti_verify_token(SKOOTI_PUBKEY, WIRE_TOKEN, SCOOTER_CODE, NOW_FRESH);
+    check(result == 1, "the provisioned key still verifies the known-answer token → 1");
+
+#undef IDENTITY_SIG
+}
+
+/*
+ * Test 14 — jti_store: insert, replay detection, expiry pruning, table-full eviction
  */
 static void test_jti_store(void)
 {
     int r;
 
-    printf("\n[13] jti_store: insert, replay, prune, table-full eviction\n");
+    printf("\n[14] jti_store: insert, replay, prune, table-full eviction\n");
 
     /* 9a — fresh insert: first time → 0 (new) */
     jti_store_reset();
@@ -835,6 +945,7 @@ int main(void)
     test_wire_bytes();
     test_wire_length_bound();
     test_expiry_boundary();
+    test_pubkey_canonical();
     test_jti_store();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

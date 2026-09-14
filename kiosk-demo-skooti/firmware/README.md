@@ -32,6 +32,13 @@ sig             = Ed25519(private_signing_key, message)   # server-side only
 wire token      = "<message>.<base64url(sig)>"
 
 lock verifies:
+  0. its own public key is the encoding RFC 8032 5.1.3 permits: y below the
+     field prime, and x = 0 only with the sign bit clear. The vendored verifier
+     applies neither rule, so the identity point alone has three spellings it
+     takes — and a signature anyone can write down verifies under all three.
+     This one is a property of PROVISIONING rather than of the write, and it is
+     checked here because this is the only place every caller of verify.c
+     passes through
   1. the write is at most 512 bytes (SKOOTI_TOKEN_MAX) and holds no NUL byte —
      skooti_verify_wire is handed the write's own size, so a NUL is refused
      rather than ending the token where a const char * would, and no byte at
@@ -75,7 +82,7 @@ runs `check_grammar_coverage.rb --self-test`, `make test` and `make test-asan`
 on every push and pull request. It needs a C99 compiler, `make` and stdlib
 Ruby — no database, no bundle.
 
-Expected output (55 assertions pass, crosscheck MATCH, coverage clean). The
+Expected output (75 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:
 
 ```
@@ -84,14 +91,14 @@ Expected output (55 assertions pass, crosscheck MATCH, coverage clean). The
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 55 passed, 0 failed ===
+=== Results: 75 passed, 0 failed ===
 ALL PASS
 
 --- Ruby ↔ C crosscheck ---
   Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
-  Rental-token grammar — 83 live-signed vectors through all 3 readers of this token (9 respell the wire around the signature, 10 vary the Ruby encoding tag):
+  Rental-token grammar — 85 live-signed vectors through all 3 readers of this token (11 respell the wire around the signature, 10 vary the Ruby encoding tag):
     axis     vector                                         expect  C       issuer  lock
     count    six fields, well-formed                        accept  accept  accept  accept  MATCH ✓
     count    seven segments, one trailing delimiter         reject  reject  reject  reject  MATCH ✓
@@ -108,8 +115,8 @@ ALL PASS
     ...
     encoding the canonical token tagged UTF-16LE            accept  accept  accept  accept  MATCH ✓
     charset sweep — every byte value 0x00-0xFF in each opaque field: 256 in reservation_id (66 accepted, 190 refused) and 190 in scooter_code (all refused), 446 of 446 agreed MATCH ✓
-  MATCH — all 3 readers gave the declared answer on every one of these 529 vectors (axes: count, empty, tag, int, jti, length, fresh, sig, wire, bytes, charset, encoding) ✓
-  Grammar coverage — 15 rules and 6 stated limits on RENTAL_TOKEN.md across 3 subsections, naming all 12 vector axes (count, empty, tag, int, jti, length, fresh, sig, wire, bytes, charset, encoding); exhaustive over the byte domain: charset ✓
+  MATCH — all 3 readers gave the declared answer on every one of these 531 vectors (axes: count, empty, tag, int, jti, length, fresh, sig, wire, bytes, charset, encoding) ✓
+  Grammar coverage — 16 rules and 7 stated limits on RENTAL_TOKEN.md across 3 subsections, naming all 12 vector axes (count, empty, tag, int, jti, length, fresh, sig, wire, bytes, charset, encoding); exhaustive over the byte domain: charset; scalar respelt on: sig ✓
 ```
 
 This proves the C Ed25519 verifier correctly verifies tokens signed by the Kiosk

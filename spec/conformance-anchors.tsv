@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1698 anchors.
+# 1700 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1103,6 +1103,8 @@ kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	resolves an identity — an {Executor} cannot be built without one.
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
+kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this line — render the envelope, or raise
+kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	      def mark_kyc_verified!(agent_id, attributes: {})
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",

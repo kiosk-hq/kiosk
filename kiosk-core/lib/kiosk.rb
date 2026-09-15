@@ -17,6 +17,27 @@ require "kiosk/user_identity_providers/base"
 require "kiosk/payment_providers/base"
 
 module Kiosk
+  # Serialises the FIRST touch of the lazy {configuration} slot below.
+  #
+  # `@configuration ||= Configuration.new` would be a read, an allocation and a
+  # write with no lock between them: N threads racing the first read each build
+  # a Configuration of their own, the last write discards the others, and every
+  # setting written on a discarded copy is silently lost. The lazy store slots
+  # in kiosk-server's configuration extension are the same shape one level
+  # down, and this is the object they hang off — so a race here loses all of
+  # them at once rather than one store.
+  #
+  # The read path stays lock-free: the mutex is entered only while the ivar is
+  # still unset, so a settled slot costs one ivar read and nothing else. This
+  # one is on every path in every gem — `Kiosk.configuration` is how the whole
+  # framework reaches its settings.
+  #
+  # Nothing re-enters it. `Configuration#initialize` assigns plain ivars and
+  # reads no configuration, and no Configuration extension in this workspace
+  # overrides `initialize`, so the lock cannot be taken twice on one thread
+  # (a Ruby Mutex is not reentrant and would raise ThreadError).
+  CONFIGURATION_MUTEX = Mutex.new
+
   # Configure Kiosk for the host application.
   #
   # @example
@@ -35,12 +56,17 @@ module Kiosk
   end
 
   # Access the active configuration. Creates a default one on first read.
+  # The first read is serialised on {CONFIGURATION_MUTEX} so exactly one
+  # Configuration is ever built; every read after that is lock-free.
   def self.configuration
-    @configuration ||= Configuration.new
+    @configuration ||
+      CONFIGURATION_MUTEX.synchronize { @configuration ||= Configuration.new }
   end
 
   # Reset the configuration to a fresh default instance. Primarily for tests.
+  # Takes the same lock as the first read, so a reset racing a first touch
+  # settles one way or the other instead of interleaving inside it.
   def self.reset!
-    @configuration = Configuration.new
+    CONFIGURATION_MUTEX.synchronize { @configuration = Configuration.new }
   end
 end

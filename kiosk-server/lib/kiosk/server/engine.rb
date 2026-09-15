@@ -34,12 +34,13 @@
 # not to mount. (`isolate_namespace` scopes CONSTANTS, not URLs, so an
 # engine installing root paths on the host is fine.)
 #
-# Hand-drawing the same protocol routes in the host's config/routes.rb remains
-# possible (e.g. for a partial surface), and nothing shipped here does it any
-# more. A host that BOTH mounts and hand-draws keeps working: Rails dispatches
-# the FIRST matching route, hand-drawn lines precede everything `routes.append`
-# adds, and for paths under the prefix both the mount and a hand-drawn line
-# reach the same shipped controller either way.
+# THE MOUNT IS THE ONLY WAY A HOST DRAWS THIS PLANE. Copying these paths into
+# the host's own routes file is not a second supported spelling: it is a table
+# the operator then owns, of paths that are the spec's, which this gem can no
+# longer keep in step. `bin/check-verb-routes` refuses such a line
+# (PLANE-MOUNTED). Rails' first-match still decides between two lines that do
+# reach the same path — a route drawn ABOVE the mount wins — and that is the
+# fact the mount-goes-first ordering rests on, not a route an operator writes.
 #
 # A path under the mount that this engine does NOT draw falls THROUGH to the
 # host's later routes — the mounted route set answers `X-Cascade: pass` and the
@@ -273,9 +274,9 @@ module Kiosk
 
       # Root-relative discovery surface. `routes.append` blocks run when the
       # host's route set is FINALIZED — after config/routes.rb has been
-      # drawn — so the mount (and any hand-drawn duplicate, which then wins
-      # by first-match) is already visible when the gate runs. Re-evaluated
-      # on every dev-mode routes reload.
+      # drawn — so the mount is already visible when the gate below asks
+      # whether this engine is mounted at all. Re-evaluated on every dev-mode
+      # routes reload.
       initializer "kiosk-server.root_discovery_routes" do |app|
         app.routes.append do
           next unless Kiosk::Server::Engine.mounted_in?(app.routes)

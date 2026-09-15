@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The kiosk-pop auth surface. The engine draws the routes; hand-drawing them
-# in the host's config/routes.rb remains the escape hatch.
+# The kiosk-pop auth surface. These paths are the spec's, not the operator's,
+# so the ENGINE draws them and the host reaches them by mounting it.
 
 require "action_controller"
 require "json"

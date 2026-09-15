@@ -289,10 +289,11 @@ draw one, because an assistant reads `GET <mount>/schema` before it dials.
 Declared-but-unrouted is the bug class this trade opens, and
 `bin/check-verb-routes` is what holds your routes to your declarations.
 
-Hand-drawing the protocol routes yourself instead of mounting remains possible —
-for a partial surface, or mid-migration. Hand-drawn lines win over the engine's
-(Rails dispatches the first matching route), and either path reaches the same
-shipped controllers.
+**The protocol plane comes from the mount and from nowhere else.** Copying those
+paths into your routes file by hand is not a supported second way to draw them:
+the mount above the copy already answers, so the line is dead, and a protocol
+this gem keeps in step with the spec becomes a table you now own. Write your own
+verbs; mount the rest.
 
 
 ## Declaring queries and actions

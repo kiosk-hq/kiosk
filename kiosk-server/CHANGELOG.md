@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **Mounting the engine is how the protocol plane is drawn, not one of two ways.** The README, the gemspec and the controller headers stop offering a hand-drawn copy as an escape hatch.
 - **A configuration store slot could hand two concurrent first-touchers two different stores, so one PoW proof was accepted twice.** The four store defaults now build under a lock.
 - **`/auth.md` hands a cold assistant the wire skill and the published solver.** `## Discover` carries `skill_url` and its digest; `## Register` names the solver the 403 hint names.
 - README: the actionpack message quoted as an example of a sentence the wire does not publish is described in the present tense. It said `params.require` «used to» put that string on a 400; actionpack still does, so the past tense claimed a change that has not happened. The point it illustrates — a library's wording moves when the dependency moves, so the CODE travels and the sentence does not — is unchanged.

@@ -3,8 +3,8 @@
 # The discovery surface. The engine installs these routes at the HOST ROOT
 # (routes.append, gated on the engine being mounted) — the agents.txt v1.0
 # standard and RFC 8615 place them at the origin root, outside any mount
-# prefix. Hand-drawing them in the host's config/routes.rb remains the
-# escape hatch.
+# prefix. Mounting the engine is what installs them; the operator writes none
+# of these paths.
 
 require "action_controller"
 require "kiosk/server/headers"

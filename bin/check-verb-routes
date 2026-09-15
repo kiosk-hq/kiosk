@@ -31,11 +31,23 @@
 # names in `c.handlers`, which is the same list {Kiosk::Server::HandlerRegistrations}
 # reads at boot. Then it holds `config/routes/kiosk.rb` to it, line by line.
 #
-# ── The ten rules, and what each one is FOR ─────────────────────────────────
+# ── The eleven rules, and what each one is FOR ──────────────────────────────
 #
 #   MOUNTED           the wire file mounts Kiosk::Server::Engine. The protocol
 #                     plane (`schema`, `pay`, auth, JWKS, OpenAPI, the binding
 #                     ceremony, discovery) is not the operator's to write.
+#   PLANE-MOUNTED     and it is drawn by the MOUNT AND BY NOTHING ELSE. Phil,
+#                     2026-09-15: «СВОИ роуты (queries/runs) под неймспейсом
+#                     kiosk оператор (и демо!) прописывают САМИ. ОБЩИЕ (pay,
+#                     schema, auth итп) - маунтятся из engine. ТОЛЬКО ТАК.» So a
+#                     line in the wire file that reaches a kiosk-server
+#                     controller OTHER than the verb wire is a hand-copy of a
+#                     path the mount above it already draws — dead by
+#                     first-match, and a second place for the protocol to drift.
+#                     MOUNTED alone does not reach it, because such a file
+#                     mounts as well: measured 2026-09-15, two protocol lines
+#                     appended to hoteling's wire file left all 27
+#                     `bin/check-*` at exit 0.
 #   MOUNT-FIRST       the mount precedes every verb line. THIS IS THE ORDERING
 #                     PROPERTY the deleted catch-all had for free: Rails
 #                     dispatches the first matching route, so the protocol wins
@@ -321,6 +333,19 @@ def run_check(root)
                 "route per verb instead."
     end
 
+    # PLANE-MOUNTED.
+    drawn.each do |(index, method, path, target, _rest)|
+      next unless target.start_with?("kiosk/server/")
+      next if VERB_ACTION.value?(target)
+
+      errors << "#{label}: PLANE-MOUNTED — #{origin[:wire_rel]}:#{index + 1} hand-draws " \
+                "`#{method} \"#{path}\" => #{target}`, a protocol path. The common surfaces — " \
+                "schema, pay, the auth ceremonies, JWKS, OpenAPI, the binding wire, discovery — " \
+                "come from `mount Kiosk::Server::Engine` and from nowhere else; only this " \
+                "origin's OWN verbs are written by hand. The mount is above this line, so Rails " \
+                "answers from the engine and this copy is dead as well as wrong: delete it."
+    end
+
     routed = {}
     verb_routes.each do |(index, method, path, target, rest)|
       where   = "#{origin[:wire_rel]}:#{index + 1}"
@@ -463,6 +488,14 @@ SELF_TEST_CASES = [
     edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
            /^mount Kiosk::Server::Engine.*$/, "# (mount removed by the self-test)"],
     expect: /hoteling: MOUNTED/ },
+  { rule: "PLANE-MOUNTED",
+    what: "a demo hand-writes a common surface instead of taking it from the mount — the " \
+          "half of Phil's 2026-09-15 ruling MOUNTED cannot see, because the file mounts too",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /\z/,
+           "\nget  \"/kiosk/schema\",     to: \"kiosk/server/wire#schema\"\n" \
+           "post \"/kiosk/auth/login\", to: \"kiosk/server/auth#login\"\n"],
+    expect: /hoteling: PLANE-MOUNTED/ },
   { rule: "MOUNT-FIRST",
     what: "a verb line is written ABOVE the mount, where it could shadow the wire",
     edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",

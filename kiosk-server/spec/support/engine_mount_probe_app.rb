@@ -154,8 +154,8 @@ report["mounted"] = surface_snapshot
 report["mounted"]["mounted_in?"] =
   Kiosk::Server::Engine.mounted_in?(Rails.application.routes)
 
-# Scenario 2 — gem loaded but NOT mounted: must be inert (today's demos
-# hand-draw every route and must keep working unchanged until T-057).
+# Scenario 2 — gem loaded but NOT mounted: must be inert. Bundling kiosk-server
+# is not a decision to serve a Kiosk wire; mounting it is.
 Rails.application.routes.draw {}
 report["unmounted"] = {
   "GET /agents.txt"              => request("GET", "/agents.txt"),
@@ -165,9 +165,9 @@ report["unmounted"] = {
     Kiosk::Server::Engine.mounted_in?(Rails.application.routes),
 }
 
-# Scenario 3 — host BOTH mounts and hand-draws the same paths (a
-# half-migrated app): the hand-drawn line must win, everything else must
-# still resolve through the mount.
+# Scenario 3 — a host line drawn ABOVE the mount at a path the engine draws:
+# the host's line must win, everything else must still resolve through the
+# mount. This is the first-match fact the mount-goes-first rule rests on.
 Rails.application.routes.draw do
   get "/agents.txt",   to: "hand_drawn#hand"
   get "/kiosk/schema", to: "hand_drawn#hand"

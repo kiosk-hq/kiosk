@@ -11,13 +11,15 @@
 # engine's routes.append initializer. Three properties are pinned here:
 #
 #   1. mounted        → full surface, end-to-end through the real Rack stack;
-#   2. NOT mounted    → the gem is inert: loading it adds NO routes (today's
-#                       demos hand-draw everything and must stay byte-identical
-#                       in behaviour until T-057 migrates them);
-#   3. mounted + hand-drawn duplicates → the HOST's hand-drawn line wins
-#                       (config/routes.rb precedes routes.append; Rails
-#                       dispatches the first match), so a half-migrated app
-#                       cannot break.
+#   2. NOT mounted    → the gem is inert: bundling it adds NO routes, so an
+#                       app that has not decided to serve a Kiosk wire serves
+#                       none;
+#   3. a host line drawn ABOVE the mount wins (config/routes.rb precedes
+#                       routes.append; Rails dispatches the first match). That
+#                       is the mechanism the mount-goes-first rule rests on —
+#                       an operator's verb line written above the mount really
+#                       would shadow the protocol, which is why
+#                       `bin/check-verb-routes`' MOUNT-FIRST refuses it.
 #
 # The probe app is a real, booted Rails::Application run ONCE as a SUBPROCESS
 # (spec/support/engine_mount_probe_app.rb — see its header for why a
@@ -212,14 +214,19 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
     end
   end
 
-  context "when the host BOTH mounts the engine and hand-draws the same paths" do
-    it "the hand-drawn ROOT route wins: config/routes.rb precedes routes.append" do
+  # The first-match property MOUNT-FIRST rests on, measured rather than assumed:
+  # a host line drawn ABOVE the mount really does take the path. That is why the
+  # mount is the first line of an operator's wire file and why a verb written
+  # above it is refused at build time — not an invitation to draw the plane by
+  # hand, which `bin/check-verb-routes`' PLANE-MOUNTED rule refuses outright.
+  context "when a host route is drawn ABOVE the mount at a path the engine draws" do
+    it "the host's ROOT route wins: config/routes.rb precedes routes.append" do
       res = probe("double_draw", "GET /agents.txt")
       expect(res["status"]).to eq(200)
       expect(res["body"]).to eq("HAND-DRAWN")
     end
 
-    it "the hand-drawn MOUNT-PREFIXED route wins when drawn before the mount" do
+    it "the host's MOUNT-PREFIXED route wins when drawn before the mount" do
       res = probe("double_draw", "GET /kiosk/schema")
       expect(res["status"]).to eq(200)
       expect(res["body"]).to eq("HAND-DRAWN")

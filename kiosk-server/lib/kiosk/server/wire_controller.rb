@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The wire surface. The engine draws the routes; hand-drawing them in the
-# host's config/routes.rb remains the escape hatch.
+# The reserved wire surface — `schema` and `pay`. These paths are the spec's,
+# not the operator's, so the ENGINE draws them and the host mounts it.
 
 require "action_controller"
 require "action_dispatch/http/parameters"

@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-15: **The protocol plane is drawn by the mount and by nothing else (Phil).** `bin/check-verb-routes` refuses a hand-copied common surface, and the prose stops offering one.
 - 2026-09-15: **The TLS-seam guard walked `*.rb`, so a `.rake` file was not Ruby to it.** Its corpus is now Ruby by extension, name or shebang, and a loopback-only site declares itself.
 - 2026-09-15: **Fifteen handler controllers carried a comment saying no route reaches them, and nothing read it.** `bin/check-verb-routes` holds it now, so the comments are gone.
 - 2026-09-15: **No client driver here could dial https, so every flow ran against localhost.** One seam reads the scheme off the target, and `deploy/live-fleet-drive.rb` drives the fleet read-only.

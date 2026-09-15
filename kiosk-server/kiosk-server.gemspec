@@ -33,9 +33,8 @@ Gem::Specification.new do |spec|
     Kiosk::Server::Engine => Kiosk.configuration.mount_path` — drawing the
     wire/auth/JWKS/KYC/binding routes under the mount and installing the
     root-relative discovery routes (agents.txt, .well-known) into the host
-    when mounted; it also auto-injects the headers middleware. Hand-drawing
-    the same routes in config/routes.rb remains supported as the escape
-    hatch.
+    when mounted; it also auto-injects the headers middleware. The operator
+    draws only their own verbs, one explicit route each.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

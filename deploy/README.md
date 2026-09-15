@@ -115,25 +115,26 @@ below.) Any other demo is knob-adjustable: set
    there is no per-IP throttle on the box, which is the posture
    "Edge rate-limit" below describes.
 
-   **One thing on the box is left over, and it is not the limiter: `apt-mark
-   showhold` names `caddy`.** The package is pinned, so it takes no upgrade —
-   including a security one — on the process that terminates TLS for every
-   origin. Nothing here needs the pin: it exists to stop an upgrade replacing a
-   module-bearing binary with a stock one that would refuse a config naming
-   `rate_limit`, and this box has neither the module nor such a config. Clear it
-   on the box `deploy-caddy.sh`'s `KIOSK_CADDY_HOST` names:
+   **Nothing pins the package, and a Caddy upgrade is a thing somebody runs.**
+   `apt-mark showhold` on that box answers nothing. `unattended-upgrades` is
+   enabled and active there, but it will never touch Caddy — its
+   `Unattended-Upgrade::Allowed-Origins` lists only the distribution, its
+   `-security` pocket and the two ESM security pockets, while `apt-cache policy
+   caddy` shows the package coming from
+   `https://dl.cloudsmith.io/public/caddy/stable/deb/debian`. So a Caddy
+   security release lands only when a human takes it, on the box
+   `deploy-caddy.sh`'s `KIOSK_CADDY_HOST` names:
 
    ```
-   sudo apt-mark unhold caddy && apt-mark showhold    # expect: no output
    apt list --upgradable 2>/dev/null | grep -i caddy  # is an upgrade pending?
+   sudo apt install --only-upgrade caddy              # with a human watching
    ```
 
-   The unhold installs nothing by itself; it only stops pinning. Take any
-   pending upgrade with a human watching, because it restarts the proxy in front
-   of every origin, then confirm `caddy version`, `systemctl is-active caddy`,
-   `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` and a
-   request to each vhost. Do not re-hold it afterwards and do not add the
-   rate-limit module back: there is no default throttle here on purpose.
+   It restarts the proxy in front of every origin, so afterwards confirm `caddy
+   version`, `systemctl is-active caddy`, `caddy validate --config
+   /etc/caddy/Caddyfile --adapter caddyfile` and a request to each vhost. Do not
+   hold the package, and do not add the rate-limit module back: there is no
+   default throttle here on purpose.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
    secret, a Stripe **test** key for getgrocery only). Copy to

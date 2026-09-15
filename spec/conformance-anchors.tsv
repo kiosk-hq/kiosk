@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1701 anchors.
+# 1703 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -376,12 +376,14 @@ kiosk-demo-getgrocery/app/views/home/index.html.erb	<link rel="kiosk" href="<%= 
 kiosk-demo-getgrocery/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
 kiosk-demo-getgrocery/before-after.md	"address":"42 Camden Street, Dublin 2"
 kiosk-demo-getgrocery/before-after.md	# Before and After — why AI assistants stall at Instacart and Getir, and what getgrocery proves
+kiosk-demo-getgrocery/before-after.md	## With Kiosk — getgrocery
 kiosk-demo-getgrocery/before-after.md	## With Kiosk — getgrocery (`rake demo` output)
 kiosk-demo-getgrocery/before-after.md	**Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) stop at discovery:**
 kiosk-demo-getgrocery/before-after.md	**Honesty note up front.** getgrocery is what Instacart/Getir would look like if it spoke Kiosk — a fake-but-realistic g
 kiosk-demo-getgrocery/before-after.md	> Documented ChatGPT-Agent food orders take **6–20 minutes** (2–3× human) and stop at the **anti-bot screen, login, or p
 kiosk-demo-getgrocery/before-after.md	Every current personal AI assistant
 kiosk-demo-getgrocery/before-after.md	Every current personal AI assistant (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same walls
+kiosk-demo-getgrocery/before-after.md	abridged: everything demo:setup prints
 kiosk-demo-getgrocery/before-after.md	recorded **2026-08-26**
 kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
 kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"

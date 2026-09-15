@@ -25,7 +25,7 @@ Anti-bot friction compounds this. Behavioral fingerprinting (Cloudflare Turnstil
 ## With Kiosk — hoteling (`rake demo` output)
 
 hoteling is a Rails 8.1 app that speaks Kiosk. Below is the output of
-`bundle exec rake demo` — recorded **2026-08-26**, stdout and stderr as a
+`bundle exec rake demo` — recorded **2026-09-16**, stdout and stderr as a
 terminal shows them. `rake demo` is `demo:setup` then `demo:book`; the block
 starts at `demo:book`'s FIRST line, so what is cut is the whole of `demo:setup`'s
 output — and that is NOT only the `db:drop`/`db:create`/`db:schema:load`/`db:seed`
@@ -43,21 +43,17 @@ covers, and everything past that is the `abridged:` field's claim and a human's
 signature. The identifiers are that run's; the dates are
 `Date.today + 30` / `+ 33`, so they move with the day it is run.
 
-**The first line of the block was re-spelled after the recording, and saying
-so is cheaper than pretending otherwise.** Where the recording printed `(add
-to /etc/hosts: 127.0.0.1 hoteling.demo.kiosk.tech — using 127.0.0.1)`, this
-document carries the line the task prints today. The host lookup that line
-belongs to is now OPT-IN: unguarded, a local run of this task sent a DNS query
-for a `demo.kiosk.tech` subdomain on every invocation — an outbound query to
-the project's production domain, for a value the run discards on any machine
-without the hosts entry — so the query now happens only when
-`KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint had to name that
-variable as well as the hosts entry, because on its own the hosts entry no
-longer changes anything, and an instruction that does not do what it says is
-worse than no instruction. The run was not repeated for it and no other line
-in the block moved; `bin/check-demo-derivations` holds this line, like every
-other one here, to a literal the current rake task prints, which is what makes
-this note checkable rather than a promise.
+**No line in the block was re-spelled: it is one run, start to finish, and a
+block that would need a repair note is re-run instead.** That rule is why this
+recording exists at all. The one it replaces was taken before the flow called
+`payment_setup` ahead of `pay`, so every line that call prints was missing from
+it — the progress line in the first two runs, the members it adds to each run's
+JSON summary, and the assertions that read them — and nothing said so, because
+the membership test above cannot see a line that is absent. The first line of the
+block is the host-lookup hint, which appears on any checkout with no
+`/etc/hosts` entry for the demo host; the lookup itself is opt-in behind
+`KIOSK_DEMO_HOST_LOOKUP=1`, so that an ordinary local run sends no DNS query for
+a `demo.kiosk.tech` subdomain it would discard.
 
 <!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/hoteling_flow.rb, script/equihash_register.rb, script/pay_window.rb, config/environments/development.rb | keys_from: app/controllers/kiosk/hotels_controller.rb, app/controllers/kiosk/reservations_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->
 ```
@@ -65,35 +61,40 @@ this note checkable rather than a promise.
 
 ══ RUN 1: Happy path ══
   Server up at http://127.0.0.1:3003
-  Registered: user_id=df4e6810-404d-4339-87e0-9e4eeef7ee8c
+  Registered: user_id=71828a02-7087-438f-8a59-0b8f8cd4ce1c
   Properties: 100 found, using property_id=27 (Amber Fatih Residence)
   Availability: 2 room type(s) available, using room_type_id=63 (Standard, €70.00/night)
-  Reserved: booking_id=c811c2ee-3ad7-43f8-a89c-4ed8c216d4e0 total=€210.00
-  Payment settled: settlement_id=8a806257-f1a0-48a1-b564-1f8ce64482b9
-{"http_register":201,"http_properties":200,"http_availability":200,"http_reserve_room":200,"http_pay":200,"http_confirm_booking":200,"user_id":"df4e6810-404d-4339-87e0-9e4eeef7ee8c","agent_id":"bf31d135-b5da-4b37-9502-9aef561a9ecf","booking_id":"c811c2ee-3ad7-43f8-a89c-4ed8c216d4e0","total_cents":21000,"confirm_status":"confirmed","confirmation_code":"82ccc775-9c2e-4615-aec2-8d8aa5a47f9b","http_my_bookings":200,"stored_confirmation_code":"82ccc775-9c2e-4615-aec2-8d8aa5a47f9b"}
+  Reserved: booking_id=6f5eb34a-327c-4659-97c6-4baae7f2a58e total=€210.00
+  payment_setup: "ready"
+  Payment settled: settlement_id=7df2ac1a-08fe-469c-8a7e-baa491ac1d10
+{"http_register":201,"http_properties":200,"http_availability":200,"http_reserve_room":200,"http_payment_setup":200,"payment_setup_status":"ready","http_pay":200,"http_confirm_booking":200,"user_id":"71828a02-7087-438f-8a59-0b8f8cd4ce1c","agent_id":"5eb6056f-397d-433b-922f-8a2a0d340fd3","booking_id":"6f5eb34a-327c-4659-97c6-4baae7f2a58e","total_cents":21000,"confirm_status":"confirmed","confirmation_code":"ac9909d5-9d1f-4b88-bf4a-7685868ccb01","http_my_bookings":200,"stored_confirmation_code":"ac9909d5-9d1f-4b88-bf4a-7685868ccb01"}
   OK  http_register == 201
   OK  http_properties == 200
   OK  http_availability == 200
   OK  http_reserve_room == 200
+  OK  http_payment_setup == 200
+  OK  payment_setup_status == ready
   OK  http_pay == 200
   OK  http_confirm_booking == 200
   OK  confirm_status == confirmed
-  OK  booking_id present (c811c2ee-3ad7-43f8-a89c-4ed8c216d4e0)
-  OK  confirmation_code round-trips through my_bookings (82ccc775-9c2e-4615-aec2-8d8aa5a47f9b)
-  OK  bookings.confirmation_code == the code returned (82ccc775-9c2e-4615-aec2-8d8aa5a47f9b)
-  OK  this run's booking is confirmed in the DB (id=c811c2ee-3ad7-43f8-a89c-4ed8c216d4e0)
-  OK  exactly one kiosk.settlements row for this run's principal (df4e6810-404d-4339-87e0-9e4eeef7ee8c)
-  OK  exactly one kiosk.reservations row for THIS booking (c811c2ee-3ad7-43f8-a89c-4ed8c216d4e0)
+  OK  booking_id present (6f5eb34a-327c-4659-97c6-4baae7f2a58e)
+  OK  confirmation_code round-trips through my_bookings (ac9909d5-9d1f-4b88-bf4a-7685868ccb01)
+  OK  bookings.confirmation_code == the code returned (ac9909d5-9d1f-4b88-bf4a-7685868ccb01)
+  OK  this run's booking is confirmed in the DB (id=6f5eb34a-327c-4659-97c6-4baae7f2a58e)
+  OK  exactly one kiosk.settlements row for this run's principal (71828a02-7087-438f-8a59-0b8f8cd4ce1c)
+  OK  exactly one kiosk.reservations row for THIS booking (6f5eb34a-327c-4659-97c6-4baae7f2a58e)
   Server stopped.
 
 ══ RUN 2: Server-gate negative — SKIP_PAY → 403 ══
   Server up at http://127.0.0.1:3003
-  Registered: user_id=7647e7ad-d6f7-4319-ab68-5919e6c6a902
+  Registered: user_id=a6b2ed78-daa8-495d-9163-c40949b115c3
   Properties: 100 found, using property_id=27 (Amber Fatih Residence)
   Availability: 1 room type(s) available, using room_type_id=64 (Deluxe, €105.00/night)
-  Reserved: booking_id=45d550b8-d039-4c29-b94a-1bdce850af3f total=€315.00
-{"http_register":201,"http_properties":200,"http_availability":200,"http_reserve_room":200,"http_pay":null,"http_confirm_booking":403,"user_id":"7647e7ad-d6f7-4319-ab68-5919e6c6a902","agent_id":"690f3473-fdd8-44a1-b4d4-c435fe85f2ac","booking_id":"45d550b8-d039-4c29-b94a-1bdce850af3f","total_cents":31500,"confirm_status":null,"confirmation_code":null,"http_my_bookings":200,"stored_confirmation_code":null}
+  Reserved: booking_id=918ed409-5003-4647-8c8e-1da6b045ed2d total=€315.00
+  payment_setup: "ready"
+{"http_register":201,"http_properties":200,"http_availability":200,"http_reserve_room":200,"http_payment_setup":200,"payment_setup_status":"ready","http_pay":null,"http_confirm_booking":403,"user_id":"a6b2ed78-daa8-495d-9163-c40949b115c3","agent_id":"5aba5c84-3ca0-4054-b976-1aedd48115e7","booking_id":"918ed409-5003-4647-8c8e-1da6b045ed2d","total_cents":31500,"confirm_status":null,"confirmation_code":null,"http_my_bookings":200,"stored_confirmation_code":null}
   OK  SKIP_PAY: http_confirm_booking == 403
+  OK  SKIP_PAY: payment_setup still 200/ready (it answers about the principal)
   Server stopped.
 
 ══ RUN 3: capture-anchored paid state ══
@@ -123,9 +124,9 @@ this note checkable rather than a promise.
   OK    the raced booking ends `paid`, once
 
 == (e) TRANSCRIPT: `unpaid` was published only for the never-charged booking ==
-  OK    booking 6200f4cb-8d01-430a-8514-48c09aa1cbbc never read `unpaid` after a capture was claimed for it (saw ["unpaid"])
-  OK    booking ea81f21c-47c0-461b-9564-c4347d57efb3 never read `unpaid` after a capture was claimed for it (saw ["pending", "paid"])
-  OK    booking 1ee47e3b-945f-4206-b070-851ec66754d8 never read `unpaid` after a capture was claimed for it (saw ["paid"])
+  OK    booking c33850f1-895e-40a4-87c1-860b780d2176 never read `unpaid` after a capture was claimed for it (saw ["unpaid"])
+  OK    booking b9f9c491-7660-4c57-a9f4-f709fe48ebbc never read `unpaid` after a capture was claimed for it (saw ["pending", "paid"])
+  OK    booking 05c022f3-8b1f-49bf-b7c9-be828c8d1590 never read `unpaid` after a capture was claimed for it (saw ["paid"])
 
   All capture-window assertions PASSED.
 
@@ -150,10 +151,10 @@ because it is in the output.
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register, and pay the toll** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge?public_key=<urlencoded pem>` (the query parameter is REQUIRED — without it the endpoint answers `400 missing public_key query parameter`) → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`. **That first POST comes back `402`**: registration here is uniformly tolled (`c.registration_pow_count = 1`, `config/initializers/kiosk.rb`), and the 402 is an RFC 9457 problem document carrying a top-level `challenges` array the SERVER minted — so nothing can be solved in advance. The client solves each challenge and re-POSTs the SAME signed body with the proof in the `Kiosk-PoW` header → HTTP 201 → `agent_id`, `user_id`, `access_token`. The transcript shows only the `201`, because `http_register` is what the driver reports for the second POST. No existing account. No human login. No bot check.
-3. **Browse** — `GET /kiosk/properties` returned 100 hotel properties as a bare JSON array (name-ordered; the flow uses the first, Amber Fatih Residence, `property_id=27`). `GET /kiosk/availability?property_id=27&check_in=2026-09-25&check_out=2026-09-28` returned the room types still free for those nights, with nightly prices (price-ordered; the flow uses the first, Standard at €70.00/night).
-4. **Reserve** — `POST /kiosk/reserve_room {property_id:27, room_type_id:63, check_in:"2026-09-25", check_out:"2026-09-28"}` → HTTP 200, and the body IS the result: `booking_id:"c811c2ee-…"` and `total_cents:21000` (3 nights × 7000), plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A hold row was created in `kiosk.reservations`, stamped with a pay-by deadline.
-5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:21100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:21000`, `line_items:[{sku:"Standard", qty:3, price_cents:7000, booking_id:"c811c2ee-…"}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → HTTP 200 with `settlement_id`, `psp_reference`, `settled_amount_cents:21000` and `currency:"eur"`.
-6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:"c811c2ee-…"}` → HTTP 200, `status:"confirmed"`, `confirmation_code:"82ccc775-…"`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk — and the run asserts it twice: `my_bookings` reports the same code, and so does the `bookings` row itself.
+3. **Browse** — `GET /kiosk/properties` returned 100 hotel properties as a bare JSON array (name-ordered; the flow uses the first, Amber Fatih Residence, `property_id=27`). `GET /kiosk/availability?property_id=27&check_in=2026-10-16&check_out=2026-10-19` returned the room types still free for those nights, with nightly prices (price-ordered; the flow uses the first, Standard at €70.00/night).
+4. **Reserve** — `POST /kiosk/reserve_room {property_id:27, room_type_id:63, check_in:"2026-10-16", check_out:"2026-10-19"}` → HTTP 200, and the body IS the result: `booking_id:"6f5eb34a-…"` and `total_cents:21000` (3 nights × 7000), plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A hold row was created in `kiosk.reservations`, stamped with a pay-by deadline.
+5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:21100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:21000`, `line_items:[{sku:"Standard", qty:3, price_cents:7000, booking_id:"6f5eb34a-…"}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → HTTP 200 with `settlement_id`, `psp_reference`, `settled_amount_cents:21000` and `currency:"eur"`.
+6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:"6f5eb34a-…"}` → HTTP 200, `status:"confirmed"`, `confirmation_code:"ac9909d5-…"`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk — and the run asserts it twice: `my_bookings` reports the same code, and so does the `bookings` row itself.
 
 The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.settlements`, one row in `kiosk.reservations`.
 

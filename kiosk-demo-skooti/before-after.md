@@ -21,7 +21,7 @@ This mirrors the discovery-only ceiling documented for in-chat commerce connecto
 ## With Kiosk — skooti (`rake demo:rideflow` output)
 
 skooti is a Rails app that speaks Kiosk. Below is the RUN 1 section of a
-`rake demo:rideflow` recording — **2026-08-26**, against a booted demo.
+`rake demo:rideflow` recording — **2026-09-16**, against a booted demo.
 `bin/check-demo-derivations` holds every line in it to a string literal one of
 the declared producers prints; that is a subset test, so what was taken off the
 top and the bottom is the `abridged:` field's claim and a human's signature,
@@ -41,18 +41,20 @@ regression, which does run against the database.
   Registering (solving 1 Equihash PoW)...
   Registered.
   Browsed fleet: 6 scooter(s) available, picking SK-001
-  Reserved: id=ae01a0ae-336f-494f-b226-a006baee0947 scooter=SK-001 price=€0.15/min
-  Payment settled: settlement_id=95891ed3-c67e-4a0c-be61-24a687ce0dd7
-  start_rental: scooter=SK-001 exp=1787765706 unlocked=true
-{"http_register":201,"http_browse":200,"http_reserve":200,"http_pay":200,"http_start_rental":200,"user_id":"1b9a71a1-48f3-4b9d-98f1-8e6c911f1fdc","agent_id":"f74e9ef5-46f5-4c7d-80c5-cd35897c3395","reservation_id":"ae01a0ae-336f-494f-b226-a006baee0947","browse_rows_count":6,"rental_token":"kiosk-rental-v1|SK-001|ae01a0ae-336f-494f-b226-a006baee0947|1787764806|1787765706|c1f7e137a0e85cf3a72aec81ec064645.FgmXiTXn7PdxBl2MoKSFpEXWyIx3E6ylnVch7P8FjrTN1ErKLAw6ciC-SFEriWZodu6N_z6EVIOENFSkzx4DCw","exp":1787765706,"unlocked":true}
+  Reserved: id=cbc75227-3e9b-4444-a45c-81b5b61ff957 scooter=SK-001 price=€0.15/min
+  payment_setup: "ready"
+  Payment settled: settlement_id=dfe70489-c6e1-48c2-87a0-79b92c982010
+  start_rental: scooter=SK-001 exp=1789515552 unlocked=true
+{"http_register":201,"http_browse":200,"http_reserve":200,"http_payment_setup":200,"payment_setup_status":"ready","http_pay":200,"http_start_rental":200,"user_id":"3c49886b-8b66-44df-a32a-6f914c801554","agent_id":"a82d360a-dd83-4ce3-9ee0-4856ae7d22ae","reservation_id":"cbc75227-3e9b-4444-a45c-81b5b61ff957","browse_rows_count":6,"rental_token":"kiosk-rental-v1|SK-001|cbc75227-3e9b-4444-a45c-81b5b61ff957|1789514652|1789515552|0c2945a443c2dd0e65e258588079279e.B14gAF3eZkNl-WD16eIRcG1a_iZ4WPwskj_2pQep5Wo4dLZstdReEWkxl405qdpWq-P_7rTkasB7ZV37TYh3DQ","exp":1789515552,"unlocked":true}
   OK  http_browse (query scooters_available) == 200
   OK  browse_rows_count >= 1 (got 6)
+  OK  payment_setup == 200/ready (called before pay, as the descriptor says)
   OK  http_start_rental == 200
   OK  unlocked == true
-  OK  rental_token present (kiosk-rental-v1|SK-001|ae01a0a...)
-  OK  exp present (1787765706)
-  OK  this run's reservation is active in the DB (id=ae01a0ae-336f-494f-b226-a006baee0947)
-  OK  exactly one kiosk.settlements row for this run's principal (1b9a71a1-48f3-4b9d-98f1-8e6c911f1fdc)
+  OK  rental_token present (kiosk-rental-v1|SK-001|cbc7522...)
+  OK  exp present (1789515552)
+  OK  this run's reservation is active in the DB (id=cbc75227-3e9b-4444-a45c-81b5b61ff957)
+  OK  exactly one kiosk.settlements row for this run's principal (3c49886b-8b66-44df-a32a-6f914c801554)
 
   -- Offline-token negatives --
   OK  N1 expired: unlock(now=exp+1) == false

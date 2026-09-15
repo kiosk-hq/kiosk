@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **All four demos' `before-after.md` carried a recording its task had outgrown.** Each is re-run at head, and each document's drift narration collapses to one sentence.
 - 2026-09-16: **The same getgrocery quote ran `delivery_slots` into a private builder's body and dropped its `timezone` field.** The quote now ends where the shipped method does.
 - 2026-09-16: **getgrocery's `before-after.md` quoted two verb schemas requiring a `timezone` the quote never declared.** The lines are restored; the guard refuses an unsatisfiable schema.
 - 2026-09-16: **The pull-request template taught the repealed two-tier changelog rule.** It now states the one rule that binds every `CHANGELOG.md` here: under 200 characters, essence only.

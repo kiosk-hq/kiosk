@@ -27,7 +27,7 @@ The reason incumbents stay at discovery is economic, not technical. A reservatio
 ## With Kiosk — atablefor (`rake demo:book` output)
 
 atablefor is a Rails 8.1 app that speaks Kiosk. Below is recorded stdout from
-`bundle exec rake demo:book` — **2026-09-07**, on a database prepared by
+`bundle exec rake demo:book` — **2026-09-16**, on a database prepared by
 `rake demo:setup`, which `demo:book` does not declare as a prerequisite and so
 never runs; that is why the declaration below reads `abridged: none`. What holds
 the block is `bin/check-demo-derivations`: every line in it must be a line one
@@ -40,19 +40,16 @@ forward daily, so they move with the day it is run — and the first line appear
 because this machine has no entry for the demo host, which is the branch the
 task takes on any checkout that has not added one.
 
-**Nothing in this block was re-spelled: it is one run, start to finish.** The
-2026-08-26 recording it first replaced carried a repair note, because its first
-line had been edited by hand after the fact when the host lookup became opt-in
-(`KIOSK_DEMO_HOST_LOOKUP=1`), and later its `book_table` row went stale when
-that verb gained the zone-bearing `seating_label` the availability row already
-published. A hand-repaired line is checkable — `bin/check-demo-derivations`
-holds every line here to a literal the current rake task prints — but two
-repairs on one block is the point at which re-running the task is cheaper and
-more honest than repairing it again, so that rule is what this block follows
-too: it is a fresh run, taken after `my_bookings` stopped answering `+00:00`
-where the `book_table` confirmation of the same booking answered `+01:00`. One
-instant, one spelling, in every verb that publishes it — and the difference is
-visible in the block above, where `seating_at` now reads the same in both.
+**Nothing in this block was re-spelled: it is one run, start to finish.** That
+is this document's standing rule for a recording, and it is why no repair note
+appears beside it: when a block would need one, the task is re-run instead,
+because a hand-repaired line is cheap to write and hard to trust.
+`bin/check-demo-derivations` holds every line here to a literal the current rake
+task prints, which is what makes the rule checkable rather than a promise — but
+it is a membership test, so it cannot tell you a line is missing, and that is
+exactly how the recording this block replaces went stale: it predated the
+`timezone` member `book_table` and `my_bookings` now publish beside `seating_at`,
+so it showed two responses their own `output_schema` would refuse.
 
 <!-- derived: transcript | task: bundle exec rake demo:book | from: lib/tasks/demo.rake, script/book_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/dining_room_controller.rb, app/controllers/kiosk/bookings_controller.rb | abridged: none -->
 ```
@@ -63,14 +60,14 @@ visible in the block above, where `seating_at` now reads the same in both.
 
 ── Running script/book_flow.rb ──
 
-{"http_register":201,"user_id":"821f1887-a9e1-4d53-a188-63646f86f373","agent_id":"348c3464-8a50-4259-9151-ba4cbf7c3b8f","date":"2026-09-07","time":"20:00","party_size":2,"booking":{"booking_id":"6e101249-963e-4fac-bcab-70224648d945","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-09-07","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"6e101249-963e-4fac-bcab-70224648d945","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-09-07","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-07T20:00:00+01:00"}]}
+{"http_register":201,"user_id":"36c3034f-7238-4d03-9c60-c298780472ee","agent_id":"e0e43866-ba0c-483e-a45e-fb75d9d8f193","date":"2026-09-16","time":"20:00","party_size":2,"booking":{"booking_id":"3839f813-5147-4d12-846a-a8455e93cb5f","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-09-16","time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-16T20:00:00+01:00","timezone":"Europe/Lisbon","status":"confirmed"},"my_bookings":[{"booking_id":"3839f813-5147-4d12-846a-a8455e93cb5f","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-09-16","seating_time":"20:00","seating_label":"20:00 (Europe/Lisbon)","seating_at":"2026-09-16T20:00:00+01:00","timezone":"Europe/Lisbon"}]}
 
 ── Assertions ──
-  ✓  booking.booking_id present (6e101249-963e-4fac-bcab-70224648d945)
+  ✓  booking.booking_id present (3839f813-5147-4d12-846a-a8455e93cb5f)
   ✓  booking.status == confirmed
   ✓  booking.party_size == 2 (a table for two)
-  ✓  my_bookings shows the confirmed booking (id=6e101249-963e-4fac-bcab-70224648d945)
-  ✓  the new booking is confirmed in the DB (id=6e101249-963e-4fac-bcab-70224648d945)
+  ✓  my_bookings shows the confirmed booking (id=3839f813-5147-4d12-846a-a8455e93cb5f)
+  ✓  the new booking is confirmed in the DB (id=3839f813-5147-4d12-846a-a8455e93cb5f)
   ✓  the booking pins a table + seating instant (restaurant_table_id + seating_at set)
 
   All assertions passed.

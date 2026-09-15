@@ -34,7 +34,7 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 
 getgrocery is a Rails 8 app that speaks Kiosk. Below is the output of
 `bundle exec rake demo` (which is `demo:setup` then `demo:shop`, and `demo:shop`
-is what runs `script/getgrocery_flow.rb`) — recorded **2026-08-26**, stdout and
+is what runs `script/getgrocery_flow.rb`) — recorded **2026-09-16**, stdout and
 stderr as a terminal shows them. The block starts at `demo:shop`'s FIRST line,
 so what is cut is the whole of `demo:setup`'s output — and that is NOT only the
 `db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter and the seed listing it
@@ -52,57 +52,17 @@ test: it cannot show that no line is MISSING, so «the recording runs on to the
 task's last line» is the `abridged:` field's claim and a human's signature,
 not this script's.
 
-**FOUR LINES in the block below differ from what the run printed — three re-spelled
-after the recording and one added to the task since, and saying so is cheaper than
-pretending otherwise.** The FIRST is the `/etc/hosts` hint
-at the top. Where the recording printed `(add to /etc/hosts: 127.0.0.1
-getgrocery.demo.kiosk.tech -- using 127.0.0.1)`, this document carries the
-line the task prints today. The host lookup that line belongs to is now
-OPT-IN: unguarded, a local run of this task sent a DNS query for a
-`demo.kiosk.tech` subdomain on every invocation — an outbound query to the
-project's production domain, for a value the run discards on any machine
-without the hosts entry — so the query now happens only when
-`KIOSK_DEMO_HOST_LOOKUP=1` asks for it. The printed hint had to name that
-variable as well as the hosts entry, because on its own the hosts entry no
-longer changes anything, and an instruction that does not do what it says is
-worse than no instruction. The run was not repeated for it;
-`bin/check-demo-derivations` holds this line, like every other one here, to a
-literal the current rake task prints, which is what makes this note checkable
-rather than a promise.
-
-The SECOND is the delivery-slot row, which two later changes moved. The slot
-row's published field is `district`: `zone` collided with `DeliverySlots.zone`,
-which in the same demo is an IANA time zone — one word for a postal district
-and for a clock. And the row's `label`, a bare `08:00–10:00` that a customer in
-another zone reads as their own morning, now carries the zone it is written
-in. The driver's own summary line carries both, so where
-the recording printed `08:00–10:00 zone=D02` this document reads `08:00–10:00
-(Europe/Dublin) district=D02`. The run was not repeated for that either.
-
-The THIRD is the `my_orders` row inside the driver's JSON summary line. That
-verb published the booked window's instant as `+00:00` where `delivery_slots`
-and `create_order` published the same instant as `+01:00` — one moment in two
-spellings, under output schemas that described the field identically — and it
-carried no zone-bearing label at all, though it is the verb §11.6 sends an
-assistant to after a `pay` whose response was lost. Both are fixed, so where
-the recording printed `"slot_at":"2026-08-27T07:00:00.000+00:00"` this document
-carries `"slot_at":"2026-08-27T08:00:00+01:00"` and the `"slot_label"` that now
-travels beside it — the same instant of the same recorded run, spelled the way
-the code spells it today.
-
-The FOURTH is not a re-spelling but an ADDITION, and it is the only one of the
-four that was not in the run at all. The task gained an assertion after the
-recording: an order now carries the wall clock its delivery window was quoted
-on as a column of its own, rather than leaving every later screen to recover
-the clock by re-parsing the stored delivery address — so the task checks that
-the recorded clock and the `slot_label` the wire published name the same zone.
-The line stands where the task prints it, between the `my_orders` containment
-check and the verdict, and the two values in it are that recorded run's own:
-the window was `08:00–10:00` in `Europe/Dublin`. The run was not repeated for
-it. Apart from these four lines, every line is what the
-task printed on the day. `bin/check-demo-derivations` holds all of them —
-including these — to a literal the current driver prints, which is what makes
-this note checkable rather than a promise.
+**No line in the block was re-spelled: it is one run, start to finish, and a
+block that would need a repair note is re-run instead.** That rule is why this
+recording exists, and what went wrong in the one it replaces is worth a
+sentence because it is small: the driver gained a progress line for the slot
+query it always makes, the block was short exactly that one line, and nothing
+said so — a membership test cannot see a line that is absent. The first
+line of the block is the stripe-mock notice and the second the host-lookup hint;
+both appear on any checkout with no `STRIPE_SECRET_KEY` and no `/etc/hosts`
+entry for the demo host, and the lookup itself is opt-in behind
+`KIOSK_DEMO_HOST_LOOKUP=1` so an ordinary local run sends no DNS query for a
+`demo.kiosk.tech` subdomain it would discard.
 
 **This recording is the secret-free path**, the one CI runs: with no
 `STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,
@@ -121,16 +81,17 @@ key whenever one is present.
   Server up at http://127.0.0.1:3001
 
 -- Running script/getgrocery_flow.rb --
-  Registered: user_id=fe1a7146-dc21-4ea6-91ea-e1d560e386bc
+  Registered: user_id=01bc1061-822b-407f-8622-23c419527c39
   Catalog: 16 in-stock products (EUR)
   Ordering: sku=apple-juice, sku=banana, sku=butter-250g
   delivery_slots (district-less address): http=400 code=bad_request (rejected, as expected)
-  Delivery slot: id=1 08:00–10:00 (Europe/Dublin) district=D02 on 2026-08-27 (2026-08-27T08:00:00+01:00)
-  create_order: order_id=1af6fb28-c05a-416b-adb6-a6965251808d total=€8.47 slot_at=2026-08-27T08:00:00+01:00
+  delivery_slots (date=2026-09-16 in UTC): 6 window(s), first on 2026-09-16 (Europe/Dublin)
+  Delivery slot: id=1 08:00–10:00 (Europe/Dublin) district=D02 on 2026-09-16 (2026-09-16T08:00:00+01:00)
+  create_order: order_id=e8e5df49-8445-45c6-9ad8-bd5421387039 total=€8.47 slot_at=2026-09-16T08:00:00+01:00
   payment_setup: ready
-  pay: settlement_id=ebac3e74-9087-4560-adb3-14157fc4f48b psp_reference=pi_RGA0cgHgjoCS0YF
+  pay: settlement_id=bb7630f3-d0cc-4ddc-ad17-211758f58e86 psp_reference=pi_RN0LutWke6QNkqY
   my_orders: 1 order(s); own order payment_state=paid
-{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"fe1a7146-dc21-4ea6-91ea-e1d560e386bc","agent_id":"8be0b50f-573e-4d79-9ce2-9992476baef6","order_id":"1af6fb28-c05a-416b-adb6-a6965251808d","total_cents":847,"slot_at":"2026-08-27T08:00:00+01:00","chosen_slot_at":"2026-08-27T08:00:00+01:00","slot_date":"2026-08-27","past_slot_check":null,"payment_state":"paid","psp_reference":"pi_RGA0cgHgjoCS0YF","my_orders":[{"order_id":"1af6fb28-c05a-416b-adb6-a6965251808d","status":"paid","total_cents":847,"slot_at":"2026-08-27T08:00:00+01:00","slot_label":"08:00–10:00 (Europe/Dublin)","address":"42 Camden Street, Dublin 2","payment_state":"paid"}],"pay":{"settlement_id":"ebac3e74-9087-4560-adb3-14157fc4f48b","psp_reference":"pi_RGA0cgHgjoCS0YF","settled_amount_cents":0,"currency":"eur"}}
+{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"01bc1061-822b-407f-8622-23c419527c39","agent_id":"772096a4-25e0-4b82-9038-da7e0eae33de","order_id":"e8e5df49-8445-45c6-9ad8-bd5421387039","total_cents":847,"slot_at":"2026-09-16T08:00:00+01:00","chosen_slot_at":"2026-09-16T08:00:00+01:00","slot_date":"2026-09-16","past_slot_check":null,"payment_state":"paid","psp_reference":"pi_RN0LutWke6QNkqY","my_orders":[{"order_id":"e8e5df49-8445-45c6-9ad8-bd5421387039","status":"paid","total_cents":847,"slot_at":"2026-09-16T08:00:00+01:00","slot_label":"08:00–10:00 (Europe/Dublin)","address":"42 Camden Street, Dublin 2","payment_state":"paid"}],"pay":{"settlement_id":"bb7630f3-d0cc-4ddc-ad17-211758f58e86","psp_reference":"pi_RN0LutWke6QNkqY","settled_amount_cents":0,"currency":"eur"}}
 
 -- Assertions --
   OK  http_register == 201
@@ -142,22 +103,22 @@ key whenever one is present.
   OK  http_payment_setup == 200
   OK  http_pay == 200
   OK  http_my_orders == 200
-  OK  order_id present (1af6fb28-c05a-416b-adb6-a6965251808d)
-  OK  slot_at present (2026-08-27T08:00:00+01:00)
-  OK  create_order slot_at == chosen delivery_slot slot_at (2026-08-27T08:00:00+01:00) — no date drift
+  OK  order_id present (e8e5df49-8445-45c6-9ad8-bd5421387039)
+  OK  slot_at present (2026-09-16T08:00:00+01:00)
+  OK  create_order slot_at == chosen delivery_slot slot_at (2026-09-16T08:00:00+01:00) — no date drift
   OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op
   OK  my_orders own order payment_state == paid
-  OK  pay.settlement_id present (ebac3e74-9087-4560-adb3-14157fc4f48b)
-  OK  pay.psp_reference present (pi_RGA0cgHgjoCS0YF)
+  OK  pay.settlement_id present (bb7630f3-d0cc-4ddc-ad17-211758f58e86)
+  OK  pay.psp_reference present (pi_RN0LutWke6QNkqY)
   OK  pay.settled_amount_cents present (0)
   OK  pay.currency present (eur)
   OK  the settlement is denominated in the operator's own currency (eur)
   OK  (settled amount not asserted under stripe-mock — its fixture always reports amount_received=0)
-  OK  psp_reference is a stripe-mock PaymentIntent (pi_RGA0cgHgjoCS0YF)
-  OK  this run's order has a delivery slot (id=1af6fb28-c05a-416b-adb6-a6965251808d)
-  OK  exactly one kiosk.settlements row for this run's principal (fe1a7146-dc21-4ea6-91ea-e1d560e386bc)
-  OK  this run's order has 3 order_items (id=1af6fb28-c05a-416b-adb6-a6965251808d)
-  OK  my_orders contains own order 1af6fb28-c05a-416b-adb6-a6965251808d
+  OK  psp_reference is a stripe-mock PaymentIntent (pi_RN0LutWke6QNkqY)
+  OK  this run's order has a delivery slot (id=e8e5df49-8445-45c6-9ad8-bd5421387039)
+  OK  exactly one kiosk.settlements row for this run's principal (01bc1061-822b-407f-8622-23c419527c39)
+  OK  this run's order has 3 order_items (id=e8e5df49-8445-45c6-9ad8-bd5421387039)
+  OK  my_orders contains own order e8e5df49-8445-45c6-9ad8-bd5421387039
   OK  the order records the clock it was quoted on (Europe/Dublin) and my_orders names that one: 08:00–10:00 (Europe/Dublin)
 
   All assertions passed.
@@ -169,21 +130,18 @@ mean anything: a district-less delivery address is refused `400 bad_request`
 before any slot is shown, and `create_order` against a window that has already
 started is refused the same way. The first fires on every run and did here
 (`http_slots_badzone: 400`). **The second is wall-clock-dependent and did NOT
-fire in this recording** — the run went out at 19:03 Dublin, by which time every
-one of today's windows had started, so the driver did what a live assistant
-would do and asked for tomorrow instead (`delivery_slots: today is sold out …
-— querying 2026-08-27`). With the whole cart moved to a fresh day there was no
-past slot left to offer, `past_slot_check` is `null`, and the past-slot
-assertion reports itself a no-op rather than silently passing. Run the same task in the
-Dublin afternoon and both controls fire.
+fire in this recording** — the run went out before 08:00 Dublin, so not one of
+the day's six windows had started, none was filtered out, `past_slot_check` is
+`null`, and the past-slot assertion reports itself a no-op rather than silently
+passing. Run the same task in the Dublin afternoon and both controls fire.
 
 **What the AI assistant did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGrocery issuer and surface.
 2. **Self-register, and pay the toll** — generated an RSA-2048 keypair and proved possession of the private key: `GET /kiosk/auth/challenge?public_key=<urlencoded pem>` (the query parameter is REQUIRED — without it the endpoint answers `400 missing public_key query parameter`) → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`. **That first POST comes back `402`**: registration here is uniformly tolled (`c.registration_pow_count = 1`, `config/initializers/kiosk.rb`), and the 402 is an RFC 9457 problem document carrying a top-level `challenges` array the SERVER minted — so nothing can be solved in advance. The client solves each challenge and re-POSTs the SAME signed body with the proof in the `Kiosk-PoW` header → HTTP 201 → `agent_id`, `user_id`, `access_token`. The transcript shows only the `201`, because `http_register` is what the driver reports for the second POST. No existing account. No human login. No OTP. No bot screen.
 3. **Browse catalog** — `GET /kiosk/catalog` returned 16 in-stock products, sorted by name — the 15 groceries plus the age-restricted House Table Red Wine 750ml, which is the row that makes the age-gate beat below work (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
-4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=<today>&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned the windows still bookable for that day, each carrying its resolved Dublin postal district; the driver picked the first. The driver asks for TODAY on purpose, so the assertion below it catches any drift between the day the slot was shown for and the day `create_order` books — and when today comes back EMPTY, which is what «all windows started» means and what happened in the run above, it re-asks for tomorrow, exactly as a live assistant would. That is why the recording shows `delivery_slot_id=1`, the 08:00–10:00 window in district D02 on `2026-08-27`.
-5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:1, delivery_date:"2026-08-27", delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847` (with `total_eur:"€8.47"` and `currency`), `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`), and passed back the DATE the slot was shown for so the booking cannot drift a day.
+4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=<today>&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned the windows still bookable for that day, each carrying its resolved Dublin postal district; the driver picked the first. The driver asks for TODAY on purpose, so the assertion below it catches any drift between the day the slot was shown for and the day `create_order` books. A day that has entirely ended on the CALLER's own clock is refused by name rather than answered `200 []`, so an empty array keeps its one honest meaning. The run above went out before 08:00 Dublin, so all six of the day's windows were still bookable and the driver took the first: `delivery_slot_id=1`, the 08:00–10:00 window in district D02 on `2026-09-16`.
+5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:1, delivery_date:"2026-09-16", delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847` (with `total_eur:"€8.47"` and `currency`), `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`), and passed back the DATE the slot was shown for so the booking cannot drift a day.
 6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → the settlement itself: `{settlement_id, psp_reference, settled_amount_cents, currency:"eur"}`. Against real Stripe the settled amount is the order's own 847; the recording above ran on `stripe-mock`, whose fixture always reports `0`.
 7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/reschedule_delivery {order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
 

@@ -385,7 +385,7 @@ kiosk-demo-getgrocery/before-after.md	> Documented ChatGPT-Agent food orders tak
 kiosk-demo-getgrocery/before-after.md	Every current personal AI assistant
 kiosk-demo-getgrocery/before-after.md	Every current personal AI assistant (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same walls
 kiosk-demo-getgrocery/before-after.md	abridged: everything demo:setup prints
-kiosk-demo-getgrocery/before-after.md	recorded **2026-08-26**
+kiosk-demo-getgrocery/before-after.md	recorded **2026-09-16**
 kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
 kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-getgrocery/config/environments/production.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence

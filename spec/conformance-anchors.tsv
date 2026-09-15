@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1703 anchors.
+# 1704 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -315,6 +315,7 @@ kiosk-demo-atablefor/config/initializers/kiosk.rb	    c.reputation_factors = ->(
 kiosk-demo-atablefor/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-atablefor/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-atablefor/config/initializers/kiosk.rb	# ── NO payment_provider ──────────────────────────────────────────────────
+kiosk-demo-atablefor/config/initializers/kiosk.rb	Anti-scalping: 0 bookings → 2 proofs · 1 booking → 1 proof · 2+ → free pass
 kiosk-demo-atablefor/config/initializers/kiosk.rb	Factors: REAL DB lookup
 kiosk-demo-atablefor/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-atablefor/db/seeds.rb	# atablefor — a restaurant AGGREGATOR across a few Lisbon neighbourhoods, taking

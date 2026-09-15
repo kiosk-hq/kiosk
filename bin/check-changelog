@@ -163,10 +163,10 @@ KINDS = %w[Added Changed Deprecated Removed Fixed Security].freeze
 BASELINE_REV = "4afc6cf1400583a4fa3e8a33fe06e64115c60605"
 
 # >>> SHARED NEW-ENTRY RULE -- BEGIN
-# Byte-identical to the block of the same name in
-# `kiosk.tech/bin/check-changelog`. That script compares itself against this
-# copy whenever `../reference` is beside it, so the two repositories cannot
-# drift into two spellings of one rule. Edit both, or neither.
+# Byte-identical to the block of the same name in the SIBLING repository's
+# `bin/check-changelog`. The kiosk.tech copy compares itself against the
+# reference copy whenever that sibling is beside it, so the two repositories
+# cannot drift into two spellings of one rule. Edit both, or neither.
 LENGTH_CAP   = 200 # characters; an entry must be UNDER this
 SENTENCE_CAP = 2   # "one-two sentences"
 

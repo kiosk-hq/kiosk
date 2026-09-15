@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1707 anchors.
+# 1710 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -496,6 +496,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	task book: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	…and it lists the DOMAIN rather than echoing what was sent
 kiosk-demo-hoteling/lib/tasks/demo.rake	…and the refusal NAMES THE VALID VALUES an assistant may retry with
 kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the impossible price returns
+kiosk-demo-hoteling/script/hoteling_flow.rb	# ── Step 4b: payment_setup — the card check that MUST precede pay
 kiosk-demo-hoteling/script/pay_window.rb	RoomHold.where(user_id: USER_ID).delete_all
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
 kiosk-demo-hoteling/script/spending_cap_flow.rb	makes it a cap rather than a suggestion
@@ -618,6 +619,7 @@ kiosk-demo-skooti/script/pay_window.rb	start_rental issues the rental token on t
 kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture instead of answering «no settlement»
 kiosk-demo-skooti/script/rental_flow.rb	# Flow: register (PoW) → scooters_available → reserve → payment_setup → pay → start_rental →
 kiosk-demo-skooti/script/rental_flow.rb	# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
+kiosk-demo-skooti/script/rental_flow.rb	# ── Step 3b: payment_setup — the card check that MUST precede pay
 kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, self-verifying unlock credential.
 kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify
 kiosk-demo-stylish/Gemfile	gem "kiosk-rls",
@@ -1017,6 +1019,7 @@ kiosk-server/LICENSE.txt	Version 2.0, January 2004
 kiosk-server/README.md	## What's in this release
 kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account
 kiosk-server/README.md	The full host-side surface is shipped and covered by the gem's own suite
+kiosk-server/README.md	in this directory runs it and prints how many examples that is
 kiosk-server/README.md	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/kiosk-server.gemspec	spec.license       = "Apache-2.0"
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_device_authorizations.rb.tt",

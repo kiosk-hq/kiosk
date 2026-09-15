@@ -7,7 +7,7 @@
 - [ ] The touched gem's own suite is green (`cd <gem> && bundle exec rspec`; `bundle exec rake test` for `kiosk-rls-minitest`)
 - [ ] `./e2e/run.sh` is green
 - [ ] The `bin/check-*` guards that own what I touched are green — and if I changed a guard, its `--self-test` too
-- [ ] A `CHANGELOG.md` entry, if this alters behaviour, spec text, skill instructions or a claim (per-gem file = release notes; the repository-root file = the dated journal). Tests-only changes, refactors and typos do not need one.
+- [ ] A `CHANGELOG.md` entry, if this alters behaviour, spec text, skill instructions or a claim — the root file for a repository-wide change, `<gem>/CHANGELOG.md` for one package. Under 200 characters and one-two sentences, essence only; the commit message keeps the details. Tests-only changes, refactors and typos do not need one.
 
 <!-- Say which commands you actually ran. A command you did not run is not verified. -->
 

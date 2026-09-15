@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-15: **Fourteen shipped lines spelled this repository's own files with a directory name only the development workspace has.** They now spell the paths a clone actually has.
 - 2026-09-15: **The Caddy apt hold is cleared on the box.** The runbook says what is true now: nothing pins the package, and unattended-upgrades never had Caddy in scope.
 - 2026-09-15: **The protocol plane is drawn by the mount and by nothing else (Phil).** `bin/check-verb-routes` refuses a hand-copied common surface, and the prose stops offering one.
 - 2026-09-15: **The TLS-seam guard walked `*.rb`, so a `.rake` file was not Ruby to it.** Its corpus is now Ruby by extension, name or shebang, and a loopback-only site declares itself.

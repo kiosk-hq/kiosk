@@ -15,7 +15,7 @@
 #
 # The same bytes therefore exist in FOUR places that must never diverge:
 #
-#   1. reference/kiosk-pow-equihash/solve.py   — the SOURCE OF TRUTH (this repo)
+#   1. kiosk-pow-equihash/solve.py             — the SOURCE OF TRUTH (this repo)
 #   2. kiosk.tech/pow/solve.py                 — the first-party hosted copy
 #   3. the sha256 pinned in kiosk.tech/skill.md (+ the frozen skill-vX.Y.Z.md
 #      that carry the first-party URL)

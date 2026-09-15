@@ -54,7 +54,7 @@ For EACH of the 7 apps:
       `demo` / `backoff` / `off`.
 - [ ] ⚠ **UPGRADING AN EXISTING BOX — run `deploy/box-prep-2026-08-11.sh` BEFORE the first `prod-demo` deploy:**
       ```
-      ssh <deploy-user>@<box> 'sudo bash -s' < reference/deploy/box-prep-2026-08-11.sh
+      ssh <deploy-user>@<box> 'sudo bash -s' < deploy/box-prep-2026-08-11.sh
       ```
       The `/etc/kiosk-demo/*.env` files are hand-maintained and no repo file drives them, so an env written before the
       single `KIOSK_POW_MODE` selector can still set two or more of `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` /

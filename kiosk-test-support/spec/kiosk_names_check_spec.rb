@@ -15,7 +15,7 @@
 # — the same defence descriptor_cross_reference_spec.rb carries for the same
 # reason.
 RSpec.describe "bin/check-kiosk-names" do
-  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> reference/
+  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
   script        = File.join(monorepo_root, "bin", "check-kiosk-names")
 
   it "is executable" do

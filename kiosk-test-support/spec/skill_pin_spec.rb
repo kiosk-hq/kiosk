@@ -53,7 +53,7 @@ require "digest"
 # is a FAILURE naming the path it looked in, never a skip. Unset — a developer's
 # `reference`-only clone — the skip stands and says so.
 RSpec.describe "the skill pin" do
-  monorepo_root = File.expand_path("../..", __dir__)  # spec/ -> kiosk-test-support/ -> reference/
+  monorepo_root = File.expand_path("../..", __dir__)  # spec/ -> kiosk-test-support/ -> monorepo root
   site_root     = File.expand_path("../kiosk.tech", monorepo_root)
 
   # The default skill URL kiosk-server ships. Read unconditionally, at load

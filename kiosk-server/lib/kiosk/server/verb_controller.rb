@@ -40,11 +40,11 @@ module Kiosk
     # routes file — `rails routes` lists the verbs themselves — and they cost
     # three things, each answered where it lands:
     #
-    #   * declared-but-unrouted is a REAL bug class, and
-    #     `reference/bin/check-verb-routes` is the check — it derives the
-    #     expected list from each origin's own handler controllers and fails on
-    #     a missing route, an extra route, or a method that disagrees with the
-    #     kind. At runtime an unrouted verb is a 404 like any other path.
+    #   * declared-but-unrouted is a REAL bug class, and `bin/check-verb-routes`
+    #     is the check — it derives the expected list from each origin's own
+    #     handler controllers and fails on a missing route, an extra route, or a
+    #     method that disagrees with the kind. At runtime an unrouted verb is a
+    #     404 like any other path.
     #   * the reserved plane wins by first-match, because the operator
     #     draws `mount Kiosk::Server::Engine` FIRST and their verbs after it —
     #     and, more strongly, {HandlerMixin::RESERVED_NAMES} refuses such a

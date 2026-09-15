@@ -421,11 +421,11 @@
 #
 # It is not hypothetical. `e2e/README.md` and `e2e/run.sh` told a reader that
 # «`e2e/mise.toml` pins the version this harness is actually run and gated on»,
-# and `CLAUDE.md` said «Ruby 4.0.1 (`.mise.toml`)». MEASURED: `git ls-files
-# reference/e2e` carries no `mise.toml`, and `git check-ignore -v e2e/mise.toml`
+# and `CLAUDE.md` said «Ruby 4.0.1 (`.mise.toml`)». MEASURED: `git ls-files e2e`
+# carries no `mise.toml`, and `git check-ignore -v e2e/mise.toml`
 # answers `.gitignore:27:mise.toml`. The file is on this laptop and in no clone.
-# R7 was green on all three sentences the whole time, and `reference/README.md`
-# two directories over already said the opposite («No toolchain pin ships in this
+# R7 was green on all three sentences the whole time, and this repository's own
+# `README.md` already said the opposite («No toolchain pin ships in this
 # repository … are gitignored so each developer manages their own»), so the tree
 # disagreed with itself and nothing said so.
 #

@@ -103,7 +103,7 @@ RSpec.describe "verb reach declarations" do
     out
   end
 
-  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> reference/
+  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
   origins = Dir[File.join(monorepo_root, "kiosk-demo-*/app/controllers/kiosk/*.rb")]
             .group_by { |path| path[%r{/(kiosk-demo-[^/]+)/}, 1] }
   origins["e2e"] = Dir[File.join(monorepo_root, "e2e/fixtures/*_controller.rb")]

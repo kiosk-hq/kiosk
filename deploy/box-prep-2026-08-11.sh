@@ -3,7 +3,7 @@
 #
 # Run from a workstation checkout (script travels over stdin, needs no upload):
 #
-#   ssh ubuntu@kyc.demo.kiosk.tech 'sudo bash -s' < reference/deploy/box-prep-2026-08-11.sh
+#   ssh ubuntu@kyc.demo.kiosk.tech 'sudo bash -s' < deploy/box-prep-2026-08-11.sh
 #
 # What it does, and why the next deploy NEEDS it first — it edits ONLY the
 # hand-maintained /etc/kiosk-demo/*.env files, which no repo file drives:

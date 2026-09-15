@@ -5808,7 +5808,7 @@ end
 # measurement — «exactly ONE relative path in that corpus exists in two or more
 # demos, and it is already declared» — into «no two of them share a path», and
 # put that in four places: here, in the error a violator reads, in the green line
-# of every passing run, and in reference/CLAUDE.md. The script's own planted
+# of every passing run, and in this repo's CLAUDE.md. The script's own planted
 # failure message refuted it, listing atablefor's, getgrocery's and hoteling's
 # copies of that one path side by side in a single bracket. A justification that
 # the run can derive should never be a sentence somebody keeps.

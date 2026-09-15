@@ -440,7 +440,7 @@ RSpec.describe "demo descriptor cross-references" do
     found
   end
 
-  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> reference/
+  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
   # …/kiosk-demo-X/config/initializers/kiosk.rb → …/kiosk-demo-X
   demo_dirs = Dir[File.join(monorepo_root, "kiosk-demo-*/config/initializers/kiosk.rb")]
               .sort.map { |path| File.expand_path("../../..", path) }

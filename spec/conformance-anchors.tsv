@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1700 anchors.
+# 1701 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -354,6 +354,7 @@ kiosk-demo-getgrocery/README.md	`STRIPE_MOCK_URL=http://localhost:12111` to boot
 kiosk-demo-getgrocery/README.md	kiosk-redteam battery — every applicable attack BLOCKED
 kiosk-demo-getgrocery/README.md	silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def create_order
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	THE CALLER'S DAY, ON THE SHOP'S CALENDAR.
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots

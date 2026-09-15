@@ -612,6 +612,7 @@ class Kiosk::OrdersController < ActionController::API
                   currency:    { type: "string" },
                   slot_at:     { type: "string" },
                   slot_label:  { type: "string" },
+                  timezone:    { type: "string" },
                   pay_hint:    { type: "string" },
                 },
                 required: %w[order_id total_cents total_eur currency slot_at slot_label timezone pay_hint]
@@ -629,6 +630,7 @@ class Kiosk::OrdersController < ActionController::API
     total_eur: "€12.87", currency: "eur",
     slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
     slot_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
+    timezone: DeliverySlots::DEFAULT_ZONE_NAME,
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
@@ -666,6 +668,7 @@ class Kiosk::OrdersController < ActionController::API
                   order_id:       { type: "string" },
                   rescheduled_at: { type: "string" },
                   rescheduled_label: { type: "string" },
+                  timezone:       { type: "string" },
                 },
                 required: %w[order_id rescheduled_at rescheduled_label timezone]
   # Resolved for {DeliverySlots.example_date}'s reason.

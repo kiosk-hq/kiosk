@@ -408,6 +408,14 @@
 #     CONTAINS is still the human's word.
 #   * IT CANNOT PROVE THE LINES ARE IN THE RIGHT ORDER, or that they came from
 #     ONE run. Two lines from mutually exclusive branches both pass.
+#   * AND THE SNIPPET CHECK IS A SUBSET TEST FOR THE SAME REASON — a source line
+#     the quoting wave DROPPED is invisible here, because membership only ever
+#     asks about the lines that ARE quoted. That hole went unwritten until
+#     K-1648, when two getgrocery schemas were found missing a `timezone:`
+#     property their own `required:` lists still named. Only the one decidable
+#     CONSEQUENCE of such a drop is now caught (see `unsatisfiable_schemas`);
+#     a dropped line with no consequence inside the block is still the human's
+#     word, exactly as `abridged:` is.
 #   * IT CANNOT SEE A LINE PRINTED BY A PRODUCER NOBODY DECLARED. `from:` is a
 #     human's list; a line that came from an undeclared file simply fails, and a
 #     wrong line that happens to match a declared file's literal simply passes.
@@ -834,6 +842,54 @@ def key_names(src)
     end
   end
   names
+end
+
+# ── A QUOTED SCHEMA NO DOCUMENT CAN SATISFY (K-1648) ─────────────────────────
+#
+# The snippet check above is a MEMBERSHIP test, exactly like the transcript one:
+# every quoted line must exist in some version of the source. A line the quoting
+# wave DROPPED is therefore invisible to it, and unlike the transcript hole —
+# which this file's own header declares — nothing said so for snippets.
+#
+# It is not closable in general: a snippet is abridged ON PURPOSE, and what the
+# cut contains is the human's word. But ONE consequence of a dropped line is
+# decidable from the block alone, with no reference to the source at all: a JSON
+# Schema whose `required:` names a property the same schema does not declare,
+# under `additionalProperties: false`, describes a document that cannot exist.
+# That is what getgrocery published for as long as its `orders_controller.rb`
+# quote stood — `timezone:` went out of two `properties` blocks with the
+# `description:` keys around it, while both `required:` lists kept naming it.
+#
+# WHAT IT READS is the BLOCK and never the source, so the property holds whether
+# or not the quote is faithful — a reader copying the recipe meets it either way.
+# WHAT IT DOES NOT REACH, stated because an over-claimed guard is this class's
+# own recurring defect: an `example_params`/`example_row` key (segments stop
+# there), a dropped property nothing lists as `required:`, and a schema that does
+# not close its object. Those stay invisible here.
+SCHEMA_OPENER  = /\b(input_schema|output_schema)\b/
+SCHEMA_CLOSER  = /\A\s*(def |kind |example_params|example_row|input_schema|output_schema)/
+SCHEMA_REQUIRE = /required:\s*(%w\[[^\]]*\]|\[[^\]]*\])/
+
+def unsatisfiable_schemas(lines)
+  found = []
+  lines.each_with_index do |line, i|
+    next unless (opener = line[SCHEMA_OPENER])
+
+    tail = lines[(i + 1)..] || []
+    stop = tail.index { |l| l =~ SCHEMA_CLOSER } || tail.length
+    seg  = ([line] + tail[0...stop]).join("\n")
+    next unless seg.include?("additionalProperties: false")
+
+    required = seg.scan(SCHEMA_REQUIRE).flatten.flat_map do |list|
+      list.start_with?("%w") ? list[3..-2].to_s.split : list.scan(/"([^"]+)"/).flatten
+    end
+    next if required.empty?
+
+    declared = seg.scan(/([a-z_][a-z0-9_]*):\s*\{/).flatten
+    missing  = (required - declared).uniq
+    found << [opener, missing, i] unless missing.empty?
+  end
+  found
 end
 
 # ── WHAT A WILDCARD IS ALLOWED TO HAVE CAPTURED (K-1105) ─────────────────────
@@ -1945,6 +2001,15 @@ end
         errors << "#{where}: `transform: #{transforms.join(', ')}` is declared but no line in the " \
                   "block needs it — every quoted line is already in the raw file. A transformation " \
                   "is declared because it was APPLIED; a decorative one is a prose promise again."
+      end
+      unsatisfiable_schemas(body).each do |opener, missing, k|
+        lineno = block.fence_line + (block.body.length - body.length) + 1 + k
+        errors << "#{label}:#{lineno}: this `#{opener}` closes its object " \
+                  "(`additionalProperties: false`) and its `required:` names " \
+                  "#{missing.join(', ')}, which the same schema never declares — so no document " \
+                  "can satisfy it and an adopter copying this block ships a verb nothing can " \
+                  "answer. In a DERIVED block that means a property line went out with the " \
+                  "`description:` keys around it: restore the line, do not edit `required:` (K-1648)."
       end
       counts[:snippet] += 1
       puts "  snippet    #{where}  #{froms.first}#{transforms.empty? ? '' : "  [#{transforms.join(' ')}]"}" if listing

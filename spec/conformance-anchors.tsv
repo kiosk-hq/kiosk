@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1704 anchors.
+# 1707 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1724,3 +1724,6 @@ kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def rack
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def role_for(user)
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def verify(request)
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	    # `active_for_authentication?` already gates the Warden user, so a locked
+kiosk-user-idp-devise/spec/kiosk/user_identity_providers/devise_spec.rb	    context "Rack env shim" do
+kiosk-user-idp-devise/spec/kiosk/user_identity_providers/devise_spec.rb	    context "shipped wire — ActionDispatch::Request" do
+kiosk-user-idp-devise/spec/kiosk/user_identity_providers/devise_spec.rb	    context "when current_user is present" do

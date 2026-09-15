@@ -856,9 +856,14 @@ end
 # decidable from the block alone, with no reference to the source at all: a JSON
 # Schema whose `required:` names a property the same schema does not declare,
 # under `additionalProperties: false`, describes a document that cannot exist.
-# That is what getgrocery published for as long as its `orders_controller.rb`
-# quote stood — `timezone:` went out of two `properties` blocks with the
-# `description:` keys around it, while both `required:` lists kept naming it.
+# That is what getgrocery published from 2026-09-10 to 2026-09-16, and the CAUSE
+# earns its line because it is the shape rather than an accident. The wave that
+# added `timezone` to `orders_controller.rb` moved the quote's two `required:`
+# lists and one `example_row` and never added the `properties` lines beside them.
+# Nothing was dropped: the lines were never quoted. That is a HALF-RELINK of a
+# derived block, and a membership test cannot see one by construction — the half
+# that moved is present in the source, and the half that did not is absent from
+# the document, which is exactly the pair membership never asks about.
 #
 # WHAT IT READS is the BLOCK and never the source, so the property holds whether
 # or not the quote is faithful — a reader copying the recipe meets it either way.

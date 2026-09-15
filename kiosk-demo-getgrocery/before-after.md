@@ -295,15 +295,16 @@ happens.** It was DERIVED from
 deleting text, never by rewriting it. Every line below is a line of that file
 with its `description` cut out and nothing else altered — no rewording, no
 reordering, nothing invented — and the two kinds of elision marker say so on
-their own line. Three things were deleted. (1) One of getgrocery's four shipped
+their own line. Four things were deleted. (1) One of getgrocery's four shipped
 queries, `kyc_status`. (2) Each remaining verb's prose `description`, collapsed
 to a `description "…"   # elided` line, and every `description:` key inside a
 schema. (3) Part of `delivery_slots`'s guards, at an explicit `GUARDS ELIDED`
-marker. Everything else — field names, types, `required` lists, `enum`s,
+marker. (4) The private `render_slots` that verb answers with, at an explicit
+`PRIVATE BUILDER ELIDED` marker. Everything else — field names, types, `required` lists, `enum`s,
 `example_params`, `example_row` and the guards that remain — is the shipped
 declaration.
 
-<!-- derived: snippet | from: app/controllers/kiosk/storefront_controller.rb | transform: strip_descriptions | abridged: the kyc_status verb, each remaining verb's prose description, every schema description: key, and delivery_slots' guards at a marked line -->
+<!-- derived: snippet | from: app/controllers/kiosk/storefront_controller.rb | transform: strip_descriptions | abridged: the kyc_status verb, each remaining verb's prose description, every schema description: key, and delivery_slots' guards and the private render_slots it answers with, each at a marked line -->
 ```ruby
 # app/controllers/kiosk/storefront_controller.rb
 class Kiosk::StorefrontController < ActionController::API
@@ -427,24 +428,25 @@ class Kiosk::StorefrontController < ActionController::API
     # `WireArguments.caller_day`, which reads the day on the CALLER's own
     # calendar and refuses by name one that has entirely ended there, because
     # `200 []` for it would be indistinguishable from the one honest empty case
-    # below. The method then ends with the lines below, which ARE the shipped
-    # ones.
+    # below. The method then ends with the comment and the call below, which
+    # ARE the shipped ones.
 
     # PAST-SLOT FILTER: for TODAY at the address, drop any slot whose start has
     # already passed there; future dates keep all slots. An assistant should not
     # see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is what
     # create_order books — and it is the SHOP's day, which is how a caller
     # learns that its «tonight» landed on the shop's tomorrow.
-    zone = DeliverySlots.zone_for(district)
-    render json: DeliverySlots.bookable_ids(date, zone).map { |slot_id|
-      slot_time = DeliverySlots.slot_at(date, slot_id, zone)
-      { "delivery_slot_id" => slot_id,
-        "date"     => date.iso8601,
-        "slot_at"  => slot_time.iso8601,
-        "label"    => DeliverySlots.label(slot_time, zone),
-        "district" => district }
-    }
+    render_slots(date, district)
   end
+
+  # ── PRIVATE BUILDER ELIDED HERE (this comment is the document's, not the file's) ──
+  # `render_slots` is a private method at the foot of the shipped file, and it is
+  # the ONE writer of a slot row, so nothing in this app can disagree with it
+  # about one. It answers a row per bookable window carrying every field the
+  # `output_schema` above declares: the window's id, the SHOP's `date`, the
+  # absolute `slot_at`, the human `label` built by `DeliverySlots.label`, the
+  # `timezone` read off THIS DISTRICT's own zone rather than one constant for the
+  # shop, and the `district` itself.
 
   # ── my_orders — per-principal: the caller's OWN orders only. The caller
   # supplies no filter; the scope is provider-controlled and un-bypassable.

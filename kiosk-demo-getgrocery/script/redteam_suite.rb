@@ -679,7 +679,7 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
         headers["Authorization"] = "Bearer #{token}" if token
         req = Net::HTTP::Post.new(uri, headers)
         req.body = JSON.generate(name: "catalog")
-        res  = Net::HTTP.new(uri.host, uri.port).request(req)
+        res  = Kiosk::Redteam::Wire.http_for(uri).request(req)
         body = (JSON.parse(res.body) rescue {})
         [res.code.to_i == 404 && body["code"].nil?,
          "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
@@ -717,7 +717,7 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   def call(client, profile)
     a   = register_principal(client, name: "redteam-method-a", profile:)
     uri = URI("#{BASE_URL}/kiosk/create_order")
-    res = Net::HTTP.new(uri.host, uri.port)
+    res = Kiosk::Redteam::Wire.http_for(uri)
                    .request(Net::HTTP::Get.new(uri, "Authorization" => "Bearer #{a.token}"))
     body    = (JSON.parse(res.body) rescue {})
     allow   = res["allow"]

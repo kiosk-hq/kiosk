@@ -186,6 +186,11 @@ gem "kiosk-server",        path: "@KIOSK_OSS@/kiosk-server"
 gem "kiosk-reputation",    path: "@KIOSK_OSS@/kiosk-reputation"
 gem "kiosk-pow-equihash",  path: "@KIOSK_OSS@/kiosk-pow-equihash"
 gem "kiosk-user-idp-devise", path: "@KIOSK_OSS@/kiosk-user-idp-devise"
+# kiosk-redteam ships Kiosk::Redteam::Wire.http_for, the one place this
+# repository decides http vs https. The fixtures and schema_conformance.rb open
+# their sockets through it, so SERVER_URL may name a deployed TLS origin and
+# not only this harness's own localhost app.
+gem "kiosk-redteam",       path: "@KIOSK_OSS@/kiosk-redteam"
 
 # Devise backs the HUMAN half of the account-binding ceremony. The adapter above
 # only reads the request's Warden user, so the provider's own Devise install is

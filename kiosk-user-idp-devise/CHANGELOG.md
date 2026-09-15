@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **`DeviseSession` reads TLS off the target's scheme.** It opened every socket in cleartext, so an `https://` server URL could not be dialled at all.
+
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 
 ### Added

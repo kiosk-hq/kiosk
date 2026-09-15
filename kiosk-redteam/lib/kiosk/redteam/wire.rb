@@ -56,6 +56,46 @@ module Kiosk
         end
       end
 
+      # THE ONE PLACE THE http/https DECISION IS MADE, for every client-side
+      # driver in this repository.
+      #
+      # It is derived from the URI's SCHEME and from nothing else — no flag, no
+      # environment variable, no port heuristic. A driver handed
+      # `https://hoteling.demo.kiosk.tech` dials TLS because the caller said
+      # `https`, and one handed `http://127.0.0.1:3001` does not, so the same
+      # driver reaches a local app and a deployed origin without being told
+      # which it is talking to.
+      #
+      # WHY IT IS A SEAM RATHER THAN A LINE EACH DRIVER WRITES. This repository
+      # ships sixty-seven client-side `Net::HTTP` call sites across thirty
+      # files: the demo flow drivers and red-team suites, the `e2e/` fixtures
+      # and `schema_conformance.rb`, this gem's own {Client}, and
+      # `kiosk-user-idp-devise`'s `DeviseSession`. Sixty-six of them are here;
+      # `DeviseSession` writes the line out because an IdP adapter may not
+      # depend on this gem to open a socket, and `bin/check-tls-seam` declares
+      # that copy by name. A decision that must come out the same way in
+      # sixty-seven places is a decision that belongs in one: while each site
+      # carried it, a single omission was the whole client side of the tree
+      # unable to dial anything but `127.0.0.1`, under a README promising «any
+      # Kiosk origin». That guard is what keeps a sixty-eighth hand-written
+      # site from appearing.
+      #
+      # Timeouts default to Net::HTTP's own: this returns a CONFIGURED socket
+      # factory, not a policy. {Wire} passes its own pair; a driver that has
+      # never set one keeps the behaviour it had.
+      #
+      # @param uri           [URI] the request's target — its `scheme` is the input
+      # @param open_timeout  [Integer, nil] seconds, or nil to leave the default
+      # @param read_timeout  [Integer, nil] seconds, or nil to leave the default
+      # @return [Net::HTTP] not yet started
+      def self.http_for(uri, open_timeout: nil, read_timeout: nil)
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl      = uri.scheme == "https"
+        http.open_timeout = open_timeout if open_timeout
+        http.read_timeout = read_timeout if read_timeout
+        http
+      end
+
       # An `Authorization: Bearer …` header hash.
       #
       # A module function as well as an instance method because half the beats
@@ -144,10 +184,8 @@ module Kiosk
         # which reads as "the origin was unreachable". A harness whose own bugs
         # look like the provider being down is worse than one that crashes.
         begin
-          http = Net::HTTP.new(uri.host, uri.port)
-          http.use_ssl      = uri.scheme == "https"
-          http.open_timeout = @open_timeout
-          http.read_timeout = @read_timeout
+          http = self.class.http_for(uri, open_timeout: @open_timeout,
+                                          read_timeout: @read_timeout)
           wrap(http.request(req))
         rescue StandardError => e
           # Status 0, never an exception and never a status a scenario admits:

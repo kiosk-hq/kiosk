@@ -4,7 +4,7 @@
 # on the verify page → possession-proof token poll), a wire call as the bound
 # assistant account, the human-initiated link-code redeem, and unlink.
 # Prints a JSON result line on stdout; the shell asserts each field.
-require "jwt"; require "json"; require "net/http"; require "uri"; require "openssl"; require "securerandom"; require "base64"
+require "jwt"; require "json"; require "net/http"; require "kiosk/redteam/wire"; require "uri"; require "openssl"; require "securerandom"; require "base64"
 
 # The human half of this ceremony is a REAL browser session: there is
 # no stub user-IdP left to hand this driver a `user:u-<uuid>` bearer. The
@@ -26,13 +26,13 @@ def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
 def get_json(url, headers = {})
   uri = URI(url)
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -40,7 +40,7 @@ def post_form(url, form, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, headers)
   req.set_form_data(form)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 

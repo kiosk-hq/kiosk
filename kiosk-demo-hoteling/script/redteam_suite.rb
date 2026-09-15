@@ -550,7 +550,7 @@ module RawWire
     headers["Authorization"] = "Bearer #{principal.token}" if principal
     req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
     req.body = JSON.generate(body) if body
-    res = Net::HTTP.new(uri.host, uri.port).request(req)
+    res = Kiosk::Redteam::Wire.http_for(uri).request(req)
     [res, (JSON.parse(res.body) rescue {})]
   end
 end

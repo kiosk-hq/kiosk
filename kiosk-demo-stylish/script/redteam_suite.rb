@@ -418,7 +418,7 @@ def oauth_post(path, form)
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri)
   req.set_form_data(form)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 

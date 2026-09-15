@@ -44,6 +44,7 @@
 require "date"
 require "json"
 require "net/http"
+require "kiosk/redteam/wire"
 require "openssl"
 require "securerandom"
 require "uri"
@@ -66,14 +67,14 @@ def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
 def get_json(url, headers = {}, params = {})
   uri = URI(url)
   uri.query = URI.encode_www_form(params) unless params.empty?
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -83,7 +84,7 @@ def post_form(url, form)
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/x-www-form-urlencoded")
   req.body = URI.encode_www_form(form)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, res.body.to_s]
 end
 

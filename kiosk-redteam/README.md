@@ -18,6 +18,16 @@ deployment. Everything provider-specific (which verbs exist, how to create an
 owned row, how to build a mandate) lives in a `Profile` you supply; no provider
 name is hard-coded in the gem.
 
+**`http` or `https` is decided by the base URL you pass and by nothing else.**
+There is no TLS flag and no environment variable: `Client`, `Wire` and anything
+a `Runner` builds open their socket through `Kiosk::Redteam::Wire.http_for`,
+which reads the scheme off the target. So `base_url:
+"http://127.0.0.1:3000"` is a local app and `base_url:
+"https://example.com"` is that deployment, with the same code and the same
+profile. Point it at a deployment you do not own and remember what a battery
+is: scenarios REGISTER principals and STAGE the state their attack needs, so
+run it against something you are willing to have written to.
+
 ### Blocked, breached, skipped — the three states
 
 | Verdict | Means | Printed |

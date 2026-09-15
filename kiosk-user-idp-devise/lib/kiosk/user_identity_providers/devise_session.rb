@@ -122,8 +122,26 @@ module Kiosk
       #
       # Absorb Set-Cookie on EVERY response: Rails rotates the session cookie on
       # sign-in, and a jar that only reads the sign-in response goes stale.
+      #
+      # TLS IS DERIVED FROM THE TARGET'S SCHEME and from nothing else, so
+      # `DeviseSession.new("https://stylish.demo.kiosk.tech")` reaches a
+      # deployed origin and `…("http://127.0.0.1:3005")` reaches a local one,
+      # with no flag telling this driver which it is talking to. The line is
+      # written out here rather than taken from
+      # {Kiosk::Redteam::Wire.http_for}, which is where the rest of this
+      # repository's client drivers get it: this gem is a Devise IdP adapter
+      # and may not depend on an adversarial test harness to open a socket.
+      # `bin/check-tls-seam` holds BOTH spellings, so the duplicate is declared
+      # rather than loose.
+      #
+      # The scheme is read off the REQUEST rather than off `@uri`, because
+      # {#uri_for} lets a caller pass a fully-qualified URL and that target is
+      # the one being dialled.
       def request(req)
-        res = Net::HTTP.new(@uri.host, @uri.port).request(req)
+        target = req.uri || @uri
+        http = Net::HTTP.new(target.host, target.port)
+        http.use_ssl = target.scheme == "https"
+        res = http.request(req)
         Array(res.get_fields("set-cookie")).each do |line|
           name, value = line.split(";").first.split("=", 2)
           @cookies[name] = value

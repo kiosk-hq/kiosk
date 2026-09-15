@@ -142,7 +142,7 @@ def broker_start_verification(callback_url:, subject_handle:, requested_claims: 
   uri = URI("#{BROKER_URL}/verifications")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{secret}")
   req.body = JSON.generate(operator_id:, callback_url:, requested_claims:, subject_handle:)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -150,7 +150,7 @@ def broker_approve(request_id)
   uri = URI("#{BROKER_URL}/verify")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/x-www-form-urlencoded")
   req.body = URI.encode_www_form(request: request_id, decision: "approve")
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   res.code.to_i
 end
 
@@ -158,7 +158,7 @@ def post_kyc_callback(body)
   uri = URI("#{BASE_URL}/kyc/callback")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
   req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   res.code.to_i
 end
 
@@ -1093,7 +1093,7 @@ raw_wire = lambda do |method, path, body = nil, bearer: true|
   headers["Authorization"] = "Bearer #{wire_probe.token}" if bearer
   req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
   req.body = JSON.generate(body) if body
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res, (JSON.parse(res.body) rescue {})]
 end
 
@@ -1191,7 +1191,7 @@ self_asserted_token_forgery = lambda do
   probe = lambda do |token|
     uri = URI("#{BASE_URL}/kiosk/my_reservations")
     req = Net::HTTP::Get.new(uri, { "Authorization" => "Bearer #{token}" })
-    Net::HTTP.new(uri.host, uri.port).request(req).code.to_i
+    Kiosk::Redteam::Wire.http_for(uri).request(req).code.to_i
   end
 
   forgeries = [

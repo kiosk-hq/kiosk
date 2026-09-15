@@ -54,6 +54,7 @@ require "base64"
 require "json"
 require "jwt"
 require "net/http"
+require "kiosk/redteam/wire"
 require "openssl"
 require "securerandom"
 require "uri"
@@ -69,7 +70,7 @@ CAPTURE  = ENV.fetch("AUTH_CAPTURE")
 
 def get_json(url, headers = {})
   uri = URI(url)
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -77,7 +78,7 @@ def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -90,7 +91,7 @@ def post_form(url, form)
   uri = URI(url)
   req = Net::HTTP::Post.new(uri)
   req.set_form_data(form)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 

@@ -1329,12 +1329,13 @@ def e2e_files(root)
 end
 
 # The fleet runbook. Every file here is text — the runbook, the checklist, the
-# Caddy template (no extension), the unit file, the SQL and the `.env.example`
-# set — so the extension list is a statement about what is THERE rather than a
-# filter against binaries, and a self-test arm re-derives the tracked set from
-# git and fails when something falls outside it.
+# Caddy template (no extension), the unit file, the SQL, the `.env.example`
+# set, the shell tools and the one Ruby live-fleet driver — so the extension
+# list is a statement about what is THERE rather than a filter against
+# binaries, and a self-test arm re-derives the tracked set from git and fails
+# when something falls outside it. That arm is what put `.rb` here.
 DEPLOY_ROOT = File.join(REPO, "deploy").freeze
-DEPLOY_EXTS = %w[.md .sh .sql .service .example .conf .yml .json .txt].freeze
+DEPLOY_EXTS = %w[.md .sh .sql .service .example .conf .yml .json .txt .rb].freeze
 
 def deploy_dirs
   File.directory?(DEPLOY_ROOT) ? [DEPLOY_ROOT] : []

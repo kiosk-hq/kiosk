@@ -14,6 +14,7 @@
 require "json"
 require "jwt"
 require "net/http"
+require "kiosk/redteam/wire"
 require "uri"
 require "openssl"
 require "open3"
@@ -32,13 +33,13 @@ def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
 def get_json(url, headers = {})
   uri = URI(url)
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 

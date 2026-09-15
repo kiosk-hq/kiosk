@@ -39,6 +39,7 @@ require "date"
 require "jwt"
 require "json"
 require "net/http"
+require "kiosk/redteam/wire"
 require "openssl"
 require "securerandom"
 require "uri"
@@ -67,7 +68,7 @@ def get_url(url, bearer: nil)
   uri = URI(url)
   headers = {}
   headers["Authorization"] = "Bearer #{bearer}" if bearer
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {}), res]
 end
 
@@ -102,14 +103,14 @@ def total_count(res) = res["X-Total-Count"]&.to_i
 require_relative "equihash_register"
 helper_get = ->(url) {
   uri = URI(url)
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 }
 helper_post = ->(url, body, headers = {}) {
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 }
 _key, reg = equihash_register(

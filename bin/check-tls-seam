@@ -1,0 +1,257 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# TLS seam guard — no client driver in this repository may open a socket whose
+# scheme it did not read off the target (K-1622, K-1623).
+#
+# WHAT BREAKS WITHOUT IT
+# ----------------------
+# `Net::HTTP.new(host, port)` is CLEARTEXT. It does not raise on an `https://`
+# URL, it does not warn, and it does not fall back: it opens a plain socket to
+# port 443, and a TLS edge answers by resetting the connection. So a driver
+# missing one line is not a driver with a TLS bug — it is a driver that can
+# reach `127.0.0.1` and nothing else, while every deployed Kiosk origin, and
+# every origin an adopter would point this code at, is served over TLS.
+# `kiosk-redteam`'s README promises «it can be pointed at any Kiosk origin»;
+# that promise is this guard's subject.
+#
+# THE TWO RULES, AND WHY BOTH ARE NEEDED
+# --------------------------------------
+#   TS-1  Every `Net::HTTP.new` call site must decide TLS from a URI's SCHEME.
+#         Either the site goes through `Kiosk::Redteam::Wire.http_for`, which
+#         is the seam, or it carries a `use_ssl` assignment reading a `.scheme`
+#         within a few lines of itself. A site that does neither is the defect.
+#   TS-2  A site that spells the decision OUT rather than taking the seam must
+#         be DECLARED below with a reason. TS-1 alone permits sixty-eight
+#         correct copies of one line, which is the state this seam replaced:
+#         every copy is a place the next omission can happen, and the omission
+#         is silent. The declaration is what makes a new copy an argument
+#         somebody has to win rather than a diff nobody notices.
+#
+# WHAT IT DOES NOT CHECK, said plainly. It reads SOURCE, so it cannot see a
+# driver that takes its scheme from a flag, an environment variable or a port
+# number and happens to be right today; and it says nothing about certificate
+# verification, which is `Net::HTTP`'s own default (`VERIFY_PEER`) and is not
+# overridden anywhere this walks — `git grep VERIFY_NONE` is the command that
+# refutes that sentence, and at the time of writing it exits 1.
+#
+# Usage: bin/check-tls-seam [--self-test]
+
+require "open3"
+
+REPO = File.expand_path("..", __dir__)
+
+# ── TS-2: the declared hand-written copies of the decision ───────────────────
+#
+# Keyed by repo-relative path. Everything else must take the seam.
+DECLARED = {
+  "kiosk-redteam/lib/kiosk/redteam/wire.rb" =>
+    "THE SEAM ITSELF — Wire.http_for is the one place the decision is made, so " \
+    "this is the site every other client driver delegates to.",
+  "kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise_session.rb" =>
+    "DeviseSession is the client half of a Devise IdP adapter and may not take a " \
+    "runtime dependency on kiosk-redteam, an adversarial test harness, merely to " \
+    "open a socket. It carries the line in its own single request funnel.",
+  "kiosk-demo-getgrocery/app/services/prove_broker_client.rb" =>
+    "SERVER-side outbound: the demo's Rails app calling the prove broker. A Rails " \
+    "app does not load the red-team gem in production.",
+  "kiosk-demo-skooti/app/services/prove_broker_client.rb" =>
+    "SERVER-side outbound: same call, same reason, hand-copied per demo.",
+  "kiosk-demo-prove/app/services/callback_poster.rb" =>
+    "SERVER-side outbound: the broker posting its verification callback.",
+}.freeze
+
+CALL     = "Net::HTTP.new"
+SEAM     = "Wire.http_for"
+# How far below the constructor a scheme-derived `use_ssl` may sit. Three lines
+# covers `http = Net::HTTP.new(...)` / `http.use_ssl = ...` with a comment
+# between them; more would start admitting a different method's assignment.
+WINDOW   = 3
+
+FAILURES = []
+
+def fail!(message)
+  FAILURES << message
+  puts "  x #{message}"
+end
+
+def pass(message)
+  puts "  ok #{message}"
+end
+
+# Tracked Ruby, minus the vendored bundle. `git ls-files` rather than a walk:
+# the question is what this repository SHIPS.
+def tracked_ruby
+  out, status = Open3.capture2("git", "-C", REPO, "ls-files", "-z", "*.rb")
+  raise "git ls-files failed" unless status.success?
+
+  out.split("\0").reject { |p| p.start_with?(".gems/") || p.include?("/.gems/") }
+end
+
+# Every `Net::HTTP.new` site in one file's source, classified.
+#
+# @return [Array<Hash>] { line:, text:, scheme_derived: }
+def sites_in(source)
+  lines = source.lines
+  lines.each_with_index.filter_map do |text, index|
+    next if text.lstrip.start_with?("#")
+    next unless text.include?(CALL)
+
+    window = lines[index, WINDOW + 1].join
+    { line: index + 1, text: text.strip,
+      scheme_derived: window.match?(/use_ssl\s*=.*\.scheme/) }
+  end
+end
+
+def seam_call_sites(files)
+  files.sum do |path|
+    File.read(File.join(REPO, path)).lines.count do |line|
+      !line.lstrip.start_with?("#") && line.include?(SEAM)
+    end
+  end
+end
+
+def run_check
+  files = tracked_ruby
+  offenders  = []
+  undeclared = []
+  declared_seen = Hash.new(0)
+
+  files.each do |path|
+    sites = sites_in(File.read(File.join(REPO, path)))
+    next if sites.empty?
+
+    sites.each do |site|
+      if !site[:scheme_derived]
+        offenders << "#{path}:#{site[:line]}  #{site[:text]}"
+      elsif DECLARED.key?(path)
+        declared_seen[path] += 1
+      else
+        undeclared << "#{path}:#{site[:line]}  #{site[:text]}"
+      end
+    end
+  end
+
+  puts "── TS-1: every Net::HTTP.new decides TLS from the target's scheme ──"
+  if offenders.empty?
+    pass "no cleartext-only socket in #{files.size} tracked Ruby file(s)"
+  else
+    offenders.each do |site|
+      fail! "#{site}\n       no scheme-derived use_ssl within #{WINDOW} line(s) — this " \
+            "socket is CLEARTEXT on port 443. Open it with " \
+            "Kiosk::Redteam::Wire.http_for(uri)."
+    end
+  end
+
+  puts
+  puts "── TS-2: a hand-written copy of the decision is declared ──"
+  if undeclared.empty?
+    pass "#{DECLARED.size} declared site(s), no undeclared copy"
+  else
+    undeclared.each do |site|
+      fail! "#{site}\n       spells the http/https decision out instead of taking " \
+            "Kiosk::Redteam::Wire.http_for. Take the seam, or declare this path in " \
+            "DECLARED with the reason it cannot."
+    end
+  end
+
+  stale = DECLARED.keys.reject { |path| declared_seen[path].positive? }
+  stale.each do |path|
+    fail! "DECLARED names #{path}, which no longer carries a scheme-derived " \
+          "Net::HTTP.new — delete the entry rather than leaving a permission nobody uses."
+  end
+
+  puts
+  puts "── the census this guard exists to hold at zero ──"
+  seam = seam_call_sites(files)
+  puts "  #{seam} call site(s) go through #{SEAM}; " \
+       "#{declared_seen.values.sum} declared hand-written site(s) in #{DECLARED.size} file(s)"
+
+  if seam.zero?
+    fail! "NOTHING calls #{SEAM} — either the seam was deleted or this walker " \
+          "stopped matching; a corpus with no seam calls is not a clean tree."
+  end
+
+  FAILURES.empty?
+end
+
+def self_test
+  require "tmpdir"
+  failures = []
+  check = lambda do |name, ok|
+    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
+    failures << name unless ok
+  end
+
+  # ── THE ORIGINAL DEFECT, PLANTED (T-201 rule 3) ────────────────────────────
+  # Not a synthetic shape: this is `Client#post_json` exactly as it stood when
+  # K-1622 was filed — a driver handed an https base URL that opens the socket
+  # in cleartext and says nothing.
+  original = <<~RUBY
+    def post_json(path, body)
+      uri = URI("\#{@base_url}\#{path}")
+      req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" })
+      req.body = JSON.generate(body)
+
+      http = Net::HTTP.new(uri.host, uri.port)
+      res  = http.request(req)
+    end
+  RUBY
+  sites = sites_in(original)
+  check.call("TS-1 sees the K-1622 defect at all", sites.size == 1)
+  check.call("TS-1 calls the K-1622 defect cleartext", sites.none? { _1[:scheme_derived] })
+
+  fixed = original.sub("Net::HTTP.new(uri.host, uri.port)", "Wire.http_for(uri)")
+  check.call("…and the seam's own spelling leaves no site to judge", sites_in(fixed).empty?)
+
+  spelled = original.sub("http = Net::HTTP.new(uri.host, uri.port)\n",
+                         "http = Net::HTTP.new(uri.host, uri.port)\n" \
+                         "  http.use_ssl = uri.scheme == \"https\"\n")
+  check.call("TS-1 accepts a spelled-out scheme-derived assignment",
+             sites_in(spelled).all? { _1[:scheme_derived] })
+
+  # A `use_ssl` that is NOT read off a scheme is the shape a flag-driven driver
+  # has, and it is the one TS-1 must still refuse.
+  flagged = original.sub("http = Net::HTTP.new(uri.host, uri.port)\n",
+                         "http = Net::HTTP.new(uri.host, uri.port)\n" \
+                         "  http.use_ssl = ENV[\"TLS\"] == \"1\"\n")
+  check.call("TS-1 refuses a use_ssl taken from a flag rather than the scheme",
+             sites_in(flagged).none? { _1[:scheme_derived] })
+
+  far = original.sub("http = Net::HTTP.new(uri.host, uri.port)\n",
+                     "http = Net::HTTP.new(uri.host, uri.port)\n" + ("  # pad\n" * 6) +
+                     "  http.use_ssl = uri.scheme == \"https\"\n")
+  check.call("TS-1 does not credit an assignment #{WINDOW + 1}+ lines away",
+             sites_in(far).none? { _1[:scheme_derived] })
+
+  check.call("a commented-out constructor is not a site",
+             sites_in("# http = Net::HTTP.new(uri.host, uri.port)\n").empty?)
+
+  # ── VACUITY: the walker must have a live subject in THIS tree ──────────────
+  files = tracked_ruby
+  check.call("the tracked Ruby corpus is non-empty", files.size > 100)
+  live = files.count { |p| sites_in(File.read(File.join(REPO, p))).any? }
+  check.call("the constructor still occurs in this repository", live.positive?)
+  check.call("every DECLARED path exists", DECLARED.keys.all? { File.exist?(File.join(REPO, _1)) })
+  check.call("#{SEAM} has live call sites here", seam_call_sites(files).positive?)
+
+  if failures.empty?
+    puts "SELF-TEST OK"
+    0
+  else
+    puts "SELF-TEST FAILED: #{failures.size} arm(s)"
+    1
+  end
+end
+
+if ARGV.include?("--self-test")
+  exit self_test
+elsif run_check
+  puts
+  puts "OK tls seam: every client socket reads its scheme off the target"
+  exit 0
+else
+  puts
+  puts "x tls seam: #{FAILURES.size} finding(s)"
+  exit 1
+end

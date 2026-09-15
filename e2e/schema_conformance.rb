@@ -49,6 +49,7 @@
 require "json"
 require "json_schemer"
 require "net/http"
+require "kiosk/redteam/wire"
 require "uri"
 # The RESERVED wire names, read from the engine rather than restated (§4). Its
 # own requires are `date`, `time`, `rack` and `kiosk/server/errors` — all
@@ -56,6 +57,21 @@ require "uri"
 require "kiosk/server/argument_decoder"
 
 SERVER  = ENV.fetch("SERVER_URL")
+# LIVE MODE — the same file, pointed at a DEPLOYED origin instead of at the app
+# e2e/run.sh just built.
+#
+# It is the same assertions over different bytes, and the difference is what
+# this harness is ALLOWED to do. Against its own throwaway app it may register,
+# pay and unlink; against somebody's running deployment it may only read. So
+# live mode carries no TOKEN and no capture files, and every check that needs
+# one is SKIPPED BY NAME rather than failed — a skip is a third state here for
+# the same reason it is one in kiosk-redteam: it is not a pass, and the summary
+# prints it beside the passes so a live run cannot be read as the full one.
+#
+# Everything that survives is what an unauthenticated stranger can see: the
+# discovery document, the served catalog and the examples in it, and the
+# problem documents an origin hands a caller who has proved nothing.
+LIVE = ENV["KIOSK_LIVE"] == "1"
 E2E_DIR = __dir__
 SCHEMA_DIR = File.join(E2E_DIR, "schemas")
 # The sixth schema is not copied here — kiosk-server vendors it already, for
@@ -67,6 +83,7 @@ POW_SCHEMA = File.expand_path(
 
 PASS = []
 FAIL = []
+SKIP = []
 
 def ok(label)
   PASS << label
@@ -76,6 +93,18 @@ end
 def bad(label, detail)
   FAIL << label
   puts "  \e[1;31m✗\e[0m #{label}\n     #{detail}"
+end
+
+# NOT A PASS. A check whose input this run is not permitted to create.
+def skipped(label, reason)
+  SKIP << label
+  puts "  \e[1;33m–\e[0m SKIP #{label}\n     #{reason}"
+end
+
+# `bad` against our own app, `skipped` against somebody's deployment — the
+# check is identical and only the entitlement differs.
+def absent(label, detail, reason)
+  LIVE ? skipped(label, reason) : bad(label, detail)
 end
 
 # ── the schema set ───────────────────────────────────────────────────────────
@@ -140,7 +169,7 @@ end
 
 def get(path, headers = {})
   uri = URI("#{SERVER}#{path}")
-  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, res.body]
 end
 
@@ -148,7 +177,7 @@ def post(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = body
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   [res.code.to_i, res.body]
 end
 
@@ -199,22 +228,52 @@ status, raw = post("/kiosk/auth/register",
                                  signed: "not-reached-the-toll-comes-first"))
 problems << ["POST /kiosk/auth/register (unpaid toll, #{status})", parse(raw)]
 
-status, raw = get("/kiosk/salons")
-problems << ["GET /kiosk/salons unauthenticated (#{status})", parse(raw)]
+# THE PROBE VERB IS READ OFF THE CATALOG THIS ORIGIN JUST SERVED, not named
+# here. `salons` is what the e2e fixture app publishes; a deployed origin
+# publishes its own verbs, and a harness that can only probe one origin's verb
+# list can only probe one origin. Preference goes to a query whose input_schema
+# is CLOSED and EMPTY, because that is the one an undeclared argument turns into
+# the wire's own 400 below.
+PROBE_QUERY = ENV["PROBE_QUERY"] || begin
+  queries = Array(catalog["queries"])
+  closed  = queries.find do |q|
+    schema = q["input_schema"]
+    schema.is_a?(Hash) && schema["additionalProperties"] == false &&
+      (schema["properties"].nil? || schema["properties"].empty?)
+  end
+  (closed || queries.find { |q| q.dig("input_schema", "additionalProperties") == false } ||
+    queries.first || {})["name"]
+end
+abort "schema_conformance: the served catalog publishes no query to probe" unless PROBE_QUERY
 
-TOKEN = ENV.fetch("TOKEN")
-AUTH  = { "Authorization" => "Bearer #{TOKEN}" }
+status, raw = get("/kiosk/#{PROBE_QUERY}")
+problems << ["GET /kiosk/#{PROBE_QUERY} unauthenticated (#{status})", parse(raw)]
+
+# A live run holds no bearer: minting one means registering an agent on a
+# machine this harness does not own.
+TOKEN = LIVE ? ENV["TOKEN"] : ENV.fetch("TOKEN")
+AUTH  = TOKEN ? { "Authorization" => "Bearer #{TOKEN}" } : nil
 
 # `salons` declares a CLOSED empty input_schema, so an undeclared argument is
 # the wire's own 400 from RequestValidation — a document built on a different
 # path from every other one here.
-status, raw = get("/kiosk/salons?zzz=1", AUTH)
-problems << ["GET /kiosk/salons?zzz=1 — an undeclared argument (#{status})", parse(raw)]
+if AUTH
+  status, raw = get("/kiosk/#{PROBE_QUERY}?zzz=1", AUTH)
+  problems << ["GET /kiosk/#{PROBE_QUERY}?zzz=1 — an undeclared argument (#{status})", parse(raw)]
+else
+  skipped "the RequestValidation 400 (an undeclared argument)",
+          "it is an AUTHENTICATED probe and a live run mints no bearer"
+end
 
 # This origin configures no `kyc_public_key`, so the KYC attestation path is
 # PUBLISHED with no module behind it: 501 module_not_served.
-status, raw = post("/kiosk/agents/kyc", JSON.generate(kyc_jws: "not.a.jws"), AUTH)
-problems << ["POST /kiosk/agents/kyc — no KYC module here (#{status})", parse(raw)]
+if AUTH
+  status, raw = post("/kiosk/agents/kyc", JSON.generate(kyc_jws: "not.a.jws"), AUTH)
+  problems << ["POST /kiosk/agents/kyc — no KYC module here (#{status})", parse(raw)]
+else
+  skipped "the 501 module_not_served problem document",
+          "it is an AUTHENTICATED probe and a live run mints no bearer"
+end
 
 problems.each do |label, doc|
   conforms(label, "#{B}/problem.schema.json", doc) do |broken|
@@ -359,9 +418,10 @@ if pay_capture && File.exist?(pay_capture)
     settled
   end
 else
-  bad "the AP2 mandate chain was validated",
-      "PAY_CAPTURE (#{pay_capture.inspect}) is missing — pay_flow.rb did not write the " \
-      "captured request/claims/response, so five mandate schemas checked nothing"
+  absent "the AP2 mandate chain was validated",
+         "PAY_CAPTURE (#{pay_capture.inspect}) is missing — pay_flow.rb did not write the " \
+         "captured request/claims/response, so five mandate schemas checked nothing",
+         "settling a payment means charging somebody's deployment"
 end
 
 # ── 6. the SOLVED PoW proof, against `pow.schema.json#/$defs/proof` ──────────
@@ -408,9 +468,11 @@ if pow_capture && !pow_capture.empty? && File.exist?(pow_capture)
         "`#/$defs/proof` half is again reached by nothing"
   end
 else
-  bad "the solved PoW proof was validated",
-      "POW_CAPTURE (#{pow_capture.inspect}) is missing — register_pow_flow.rb did not write the " \
-      "accepted Kiosk-PoW header, so `#/$defs/proof` and the u64 index bound checked nothing"
+  absent "the solved PoW proof was validated",
+         "POW_CAPTURE (#{pow_capture.inspect}) is missing — register_pow_flow.rb did not write " \
+         "the accepted Kiosk-PoW header, so `#/$defs/proof` and the u64 index bound checked " \
+         "nothing",
+         "an ACCEPTED proof only exists once a registration succeeded, which creates an agent"
 end
 
 # ── 7. kyc.schema.json — vendored, compiled, and honestly not exercised ──────
@@ -601,10 +663,12 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
         "register=#{auth.fetch("registration").keys.sort.inspect}"
   end
 else
-  bad "the §5/§6 auth and binding wire objects were validated",
-      "AUTH_CAPTURE (#{auth_capture.inspect}) is missing — auth_wire_capture.rb did not write " \
-      "the ceremonies' bytes, so auth.schema.json and binding.schema.json checked nothing"
+  absent "the §5/§6 auth and binding wire objects were validated",
+         "AUTH_CAPTURE (#{auth_capture.inspect}) is missing — auth_wire_capture.rb did not write " \
+         "the ceremonies' bytes, so auth.schema.json and binding.schema.json checked nothing",
+         "both ceremonies register, bind and unlink an agent"
 end
 
-puts "\n  pass: #{PASS.size}\n  fail: #{FAIL.size}"
+puts "\n  pass: #{PASS.size}\n  fail: #{FAIL.size}\n  skip: #{SKIP.size}"
+puts "  (#{SERVER} — read-only live mode: a skip is not a pass)" if LIVE
 exit 1 unless FAIL.empty?

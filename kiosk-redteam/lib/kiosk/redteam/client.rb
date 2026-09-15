@@ -8,6 +8,10 @@ require "securerandom"
 require "uri"
 require "jwt"
 require "kiosk/pow/equihash"
+# {Wire.http_for} — the one place this repository decides http vs https. Required
+# here rather than leaned on through kiosk/redteam.rb, so a caller that loads only
+# this file still gets a Client that can dial a TLS origin.
+require "kiosk/redteam/wire"
 
 module Kiosk
   module Redteam
@@ -413,7 +417,7 @@ module Kiosk
         uri = URI("#{@base_url}#{path}")
         req = Net::HTTP::Post.new(uri)
         req.set_form_data(form)
-        res = Net::HTTP.new(uri.host, uri.port).request(req)
+        res = Wire.http_for(uri).request(req)
 
         parsed = begin
           JSON.parse(res.body)
@@ -443,7 +447,7 @@ module Kiosk
         req = Net::HTTP::Post.new(uri, hdrs)
         req.body = JSON.generate(body)
 
-        http = Net::HTTP.new(uri.host, uri.port)
+        http = Wire.http_for(uri)
         res  = http.request(req)
 
         parsed = begin
@@ -475,7 +479,7 @@ module Kiosk
         hdrs["Authorization"] = "Bearer #{bearer}" if bearer
         hdrs["Kiosk-PoW"] = pow if pow
         hdrs = hdrs.merge(headers)
-        res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, hdrs))
+        res = Wire.http_for(uri).request(Net::HTTP::Get.new(uri, hdrs))
 
         parsed = begin
           JSON.parse(res.body)

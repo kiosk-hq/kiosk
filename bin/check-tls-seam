@@ -31,9 +31,11 @@
 # WHAT IT DOES NOT CHECK, said plainly. It reads SOURCE, so it cannot see a
 # driver that takes its scheme from a flag, an environment variable or a port
 # number and happens to be right today; and it says nothing about certificate
-# verification, which is `Net::HTTP`'s own default (`VERIFY_PEER`) and is not
-# overridden anywhere this walks — `git grep VERIFY_NONE` is the command that
-# refutes that sentence, and at the time of writing it exits 1.
+# verification, which stays at `Net::HTTP`'s own `VERIFY_PEER` default because
+# nothing overrides it. THAT last clause is a negative, so here is the command
+# that refutes it and what it answers: `git grep -c VERIFY_NONE` over this
+# repository returns exactly ONE line, and it is this paragraph. Any second hit
+# is a driver that stopped verifying its peer, and this guard will not tell you.
 #
 # Usage: bin/check-tls-seam [--self-test]
 

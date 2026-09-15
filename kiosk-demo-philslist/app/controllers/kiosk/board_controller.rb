@@ -6,10 +6,6 @@
 # a method with no macros above it is a helper the wire cannot see. `kind` is
 # what puts a declaration on `GET` or `POST`, and it belongs to the DECLARATION,
 # not to the class — the write half simply lives next door.
-#
-# NOT ROUTABLE: config/routes.rb draws nothing here. Authentication, the
-# registration PoW gate and the GUC-scoped transaction all live in the wire, so
-# a route drawn straight at a handler would bypass all three — the mixin 404s.
 class Kiosk::BoardController < ApplicationController
   include Kiosk::Handler
 

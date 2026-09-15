@@ -20,8 +20,6 @@
 #
 # Nothing here means a 402. The 402s an assistant meets on this origin come from
 # the registration PoW gate, upstream of dispatch, never from a handler.
-#
-# NOT ROUTABLE — see Kiosk::FleetController.
 class Kiosk::RentalsController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals

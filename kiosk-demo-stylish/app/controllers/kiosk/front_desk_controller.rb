@@ -7,11 +7,6 @@
 # macro is claimed by the NEXT `def` — a method with no macros above it is a
 # helper the wire cannot see. `kind :query` puts a declaration on `GET`, and the
 # kind belongs to the DECLARATION, not the class.
-#
-# NOT ROUTABLE: config/routes.rb draws nothing here. Handlers are reached only
-# through the wire, where authentication, the registration PoW gate and the
-# GUC-scoped transaction live; a route drawn straight here would bypass all
-# three, and the mixin answers such a request 404.
 class Kiosk::FrontDeskController < ApplicationController
   include Kiosk::Handler
 

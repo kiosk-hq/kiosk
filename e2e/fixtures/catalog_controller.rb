@@ -14,14 +14,6 @@
 # config/initializers/kiosk.rb; without that line the engine has nothing to
 # register from and the origin serves no verbs at all.
 #
-# NOT ROUTABLE BY HAND. config/routes.rb draws nothing at this controller by
-# name: handlers are reached only through the wire, which is where
-# authentication, the registration PoW gate and the GUC-scoped transaction
-# live. A route drawn straight here would bypass all three, and the mixin
-# answers such a request 404. What routes.rb DOES draw is the wire's own
-# per-verb pair (`GET /kiosk/:kiosk_verb`), which resolves the name against
-# the registry and reaches these actions through the gates, not around them.
-#
 # The SQL here is deliberately RAW and deliberately unchanged from the
 # registered blocks a hand-written handler would carry.
 class Kiosk::CatalogController < ApplicationController

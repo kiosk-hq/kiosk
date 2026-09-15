@@ -11,11 +11,6 @@
 # `kind :query` above each declaration is what puts it on `GET`; the kind belongs
 # to the DECLARATION, not to the class, so one controller may declare
 # both. The five write verbs live next door in Kiosk::RentalsController.
-#
-# NOT ROUTABLE. config/routes.rb draws nothing here: handlers are reached only
-# through the wire, which is where authentication, the registration PoW gate and
-# the GUC-scoped transaction live. A route drawn straight at this controller
-# would bypass all three, and the mixin answers such a request 404.
 class Kiosk::FleetController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals

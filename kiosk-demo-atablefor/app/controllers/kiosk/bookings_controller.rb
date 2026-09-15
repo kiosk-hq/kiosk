@@ -15,8 +15,6 @@
 # No `pay` verb and no payment provider here: a `deposit_eur` is a display-only
 # no-show hold settled at the restaurant, so nothing below is a 402 — the one an
 # assistant can meet on this origin comes from the PoW gate upstream of dispatch.
-#
-# NOT ROUTABLE — see Kiosk::DiningRoomController.
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals

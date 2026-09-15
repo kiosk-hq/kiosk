@@ -14,8 +14,6 @@
 # top-level `code`; {KioskRefusals#render_operation} is where that happens. tudu
 # advertises no `pay` verb and configures no payment provider: the only 402 on
 # this origin comes from the registration PoW gate, never from a handler.
-#
-# NOT ROUTABLE — see Kiosk::HouseholdController.
 class Kiosk::TodoListsController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals

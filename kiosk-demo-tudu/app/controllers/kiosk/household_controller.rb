@@ -12,10 +12,6 @@
 # a non-member gets 403 rather than 404 so probing can't enumerate ids. The
 # decision is `Membership.reachable?` (no request in it); the HTTP refusal is
 # {KioskMembershipGate}, shared with the write half in Kiosk::TodoListsController.
-#
-# NOT ROUTABLE: config/routes.rb draws nothing here. Handlers are reached only
-# through the wire, where authentication, the registration PoW gate and the
-# GUC-scoped transaction live; the mixin answers a direct request 404.
 class Kiosk::HouseholdController < ApplicationController
   include Kiosk::Handler
   include KioskMembershipGate

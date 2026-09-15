@@ -9,11 +9,6 @@
 # `kind :query` belongs to the DECLARATION and not to the class, so one
 # controller may declare both kinds; keeping the write half next door in
 # Kiosk::ReservationsController is this demo's shape, not a rule.
-#
-# NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, where authentication, the registration PoW gate
-# and the GUC-scoped transaction live. A route drawn straight here would bypass
-# all three, and the mixin answers such a request 404.
 class Kiosk::HotelsController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals

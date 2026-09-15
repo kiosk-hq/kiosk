@@ -10,8 +10,6 @@
 # re-renders it as the RFC 9457 problem document whose TOP-LEVEL `code` an
 # assistant branches on; {KioskRefusals#render_operation} is the one place an
 # {OperationResult} becomes a status.
-#
-# NOT ROUTABLE — see Kiosk::FrontDeskController.
 class Kiosk::AppointmentsController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals

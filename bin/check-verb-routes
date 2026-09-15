@@ -31,7 +31,7 @@
 # names in `c.handlers`, which is the same list {Kiosk::Server::HandlerRegistrations}
 # reads at boot. Then it holds `config/routes/kiosk.rb` to it, line by line.
 #
-# ── The nine rules, and what each one is FOR ────────────────────────────────
+# ── The ten rules, and what each one is FOR ─────────────────────────────────
 #
 #   MOUNTED           the wire file mounts Kiosk::Server::Engine. The protocol
 #                     plane (`schema`, `pay`, auth, JWKS, OpenAPI, the binding
@@ -58,6 +58,27 @@
 #   DRAWN             `config/routes.rb` reaches the wire file with Rails' own
 #                     `draw(:kiosk)` and draws no kiosk-server wire route of its
 #                     own — the interleaved table T-183 moved out.
+#   HANDLER-UNROUTED  NO routes file this origin ships draws a route AT a
+#                     handler controller — not the wire file, and not the app's
+#                     own. A handler is reached through the wire and by nothing
+#                     else, because authentication, the registration PoW gate
+#                     and the GUC-scoped transaction all live in
+#                     {Kiosk::Server::VerbController}, ABOVE the sub-dispatch.
+#                     The runtime half of this promise already exists and is
+#                     not this script's: `include Kiosk::Handler` installs
+#                     `before_action :kiosk_require_wire_dispatch!`, which
+#                     answers 404 `verb_not_found` to any request that did not
+#                     arrive through the seam. THIS rule is the static half —
+#                     the line is not shipped in the first place — and until
+#                     T-107 that half was a comment in fifteen controller
+#                     headers and nothing read it. Measured 2026-09-15 before
+#                     the rule existed: a `get "/backdoor", to:
+#                     "kiosk/hotels#search_hotels"` planted in hoteling's own
+#                     `config/routes.rb` left all 27 `bin/check-*` at exit 0.
+#                     It reads every non-comment LINE rather than only the
+#                     route lines `ROUTE_LINE` matches, because
+#                     `resources … controller: "kiosk/hotels"` is the same
+#                     mistake in a spelling that regex cannot see.
 #
 # ── What it deliberately does NOT do ────────────────────────────────────────
 #
@@ -130,6 +151,12 @@ def controller_file(class_name)
   class_name.split("::")
             .map { |part| part.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }
             .join("/") + ".rb"
+end
+
+# `Kiosk::HotelsController` -> `kiosk/hotels`, the string a Rails route names a
+# controller by. The same underscore rule as above, minus the suffix.
+def controller_target(class_name)
+  controller_file(class_name).delete_suffix("_controller.rb")
 end
 
 # The declared verbs of one origin, read out of the controllers its own
@@ -384,6 +411,35 @@ def run_check(root)
                 "#{origin[:wire_rel]}: the protocol plane through the mount, the operator's " \
                 "verbs one explicit line each."
     end
+
+    # HANDLER-UNROUTED. The three spellings that name a controller in a Rails
+    # routes file; a path like "/kiosk/catalog" is none of them, which is why
+    # the quote must sit against the target rather than anywhere on the line.
+    handler_targets = handlers.to_h { |name| [controller_target(name), name] }
+    [[origin[:routes_rel], routes_source], [origin[:wire_rel], wire_source]].each do |rel, source|
+      source.lines.each_with_index do |line, index|
+        next if line.lstrip.start_with?("#")
+
+        hit = handler_targets.find do |target, _|
+          line.include?("\"#{target}#") ||
+            line.include?("controller: \"#{target}\"") ||
+            line.include?("to: \"#{target}\"")
+        end
+        next unless hit
+
+        target, class_name = hit
+        errors << "#{label}: HANDLER-UNROUTED — #{rel}:#{index + 1} draws a route at " \
+                  "`#{target}`, which is #{class_name}, a handler this origin registers in " \
+                  "`c.handlers`. A handler is reached through the Kiosk wire and by nothing " \
+                  "else: authentication, the registration PoW gate and the GUC-scoped " \
+                  "transaction are all above the sub-dispatch, so this route would be a way " \
+                  "in around them. It is not one — `include Kiosk::Handler` installs " \
+                  "`before_action :kiosk_require_wire_dispatch!` and the request answers 404 " \
+                  "verb_not_found — so the line is dead as well as wrong. Route the verb " \
+                  "instead: `#{mount_path}/<verb-name>` to `kiosk/server/verb#show` (query) " \
+                  "or `#create` (action), in #{origin[:wire_rel]}."
+      end
+    end
   end
 
   if total_verbs.zero? || total_routes.zero?
@@ -457,6 +513,23 @@ SELF_TEST_CASES = [
     edit: ["kiosk-demo-hoteling/config/routes.rb", /^  draw\(:kiosk\)$/,
            "  draw(:kiosk)\n  get \"/kiosk/schema\", to: \"kiosk/server/wire#schema\""],
     expect: /hoteling: DRAWN — config\/routes\.rb:\d+ still hand-draws/ },
+  { rule: "HANDLER-UNROUTED (the app's own routes file)",
+    what: "T-107's original defect — an operator draws an ordinary route straight at a handler, " \
+          "which is the thing fifteen controller headers asserted nobody does",
+    edit: ["kiosk-demo-hoteling/config/routes.rb", /^  draw\(:kiosk\)$/,
+           "  get \"/backdoor\", to: \"kiosk/hotels#search_hotels\"\n  draw(:kiosk)"],
+    expect: %r{hoteling: HANDLER-UNROUTED — config/routes\.rb:\d+} },
+  { rule: "HANDLER-UNROUTED (the wire file)",
+    what: "the same line written where every other rule already looks",
+    edit: ["kiosk-demo-hoteling/config/routes/kiosk.rb",
+           /^post "\/kiosk\/reserve_room".*$/,
+           "\\0\nget  \"/kiosk/backdoor\", to: \"kiosk/hotels#search_hotels\""],
+    expect: %r{hoteling: HANDLER-UNROUTED — config/routes/kiosk\.rb:\d+} },
+  { rule: "HANDLER-UNROUTED (a resources block)",
+    what: "the same mistake spelled `resources … controller:`, which ROUTE_LINE cannot match at all",
+    edit: ["kiosk-demo-hoteling/config/routes.rb", /^  draw\(:kiosk\)$/,
+           "  resources :hotels, controller: \"kiosk/hotels\", only: [:index]\n  draw(:kiosk)"],
+    expect: %r{hoteling: HANDLER-UNROUTED — config/routes\.rb:\d+} },
   { rule: "VACUITY (the verb parser)",
     what: "the parser stops seeing declarations, so every rule passes with nothing to compare",
     edit: ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",

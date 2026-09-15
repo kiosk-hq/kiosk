@@ -2,7 +2,7 @@
 
 # philslist's WRITE surface: the three verbs an assistant reaches with
 # `POST /kiosk/<action-name>` — same shape as Kiosk::BoardController, `kind
-# :action` above each declaration. NOT ROUTABLE, see that controller.
+# :action` above each declaration.
 #
 # Each write reads its arguments off the request, hands them to an Operation and
 # renders what it answers; the business decisions live in

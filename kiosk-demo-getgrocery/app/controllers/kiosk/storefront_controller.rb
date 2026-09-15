@@ -18,12 +18,6 @@
 # vocabulary — an address is checked against the served Dublin districts here and
 # by both order verbs there, word for word — through {WireArguments} (which
 # renders nothing, so the Operations use it too) and {KioskRefusals}.
-#
-# NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, which is where authentication, the registration
-# PoW gate, the declared-input_schema check and the GUC-scoped transaction live.
-# A route drawn straight here would bypass all four, and the mixin answers such a
-# request 404.
 class Kiosk::StorefrontController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals

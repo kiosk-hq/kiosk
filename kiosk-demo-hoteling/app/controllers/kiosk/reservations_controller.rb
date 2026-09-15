@@ -19,8 +19,6 @@
 # Nothing here means a 402. The wire's three payment/PoW codes share that status
 # and `Errors::STATUS_CODES` refuses to guess between them; the 402s on this
 # origin come from the PoW gates upstream of dispatch, never from a handler.
-#
-# NOT ROUTABLE — see Kiosk::HotelsController.
 class Kiosk::ReservationsController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals

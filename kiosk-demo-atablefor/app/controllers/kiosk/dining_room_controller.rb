@@ -13,12 +13,6 @@
 # {WireArguments} and the RENDERER in {KioskRefusals}, and the rolling upcoming
 # seatings both halves need are a library module (app/models/seatings.rb), so
 # what `availability` offers is exactly what `book_table` accepts.
-#
-# NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, where authentication, the declared
-# `input_schema`, the anti-scalping PoW toll and the GUC-scoped transaction
-# live. A route drawn straight here would bypass all four, and the mixin
-# answers such a request 404.
 class Kiosk::DiningRoomController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals

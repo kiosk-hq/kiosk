@@ -7,8 +7,9 @@
 #   C2  PayForOtherUseSelf  — B pays for A's booking, B tries confirm_booking
 #   C3  SpentResourceReuse  — re-confirm an already-confirmed booking
 #
-# Three local cashier-check beats attack ValidatingBookingProvider (the
-# monetary check run at capture, before StubPsp settles):
+# Three cashier-check beats attack ValidatingBookingProvider (the monetary
+# check run at capture, before StubPsp settles) — the first from the shared
+# kiosk-redteam library, the other two local to this file:
 #   WrongCurrencyCart  — pay own booking in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted booking price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403

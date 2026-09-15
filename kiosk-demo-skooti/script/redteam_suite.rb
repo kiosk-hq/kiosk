@@ -21,8 +21,9 @@
 #                              attacker A (KycVerifier binds sub to the caller),
 #                              so A's rent_motorcycle stays 403.
 #
-# Three local cashier-check beats attack ValidatingRentalProvider (the monetary
-# check run at capture, before StubPsp settles):
+# Three cashier-check beats attack ValidatingRentalProvider (the monetary check
+# run at capture, before StubPsp settles) — the first from the shared
+# kiosk-redteam library, the other two local to this file:
 #   WrongCurrencyCart  — pay own reservation in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted rental price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
@@ -466,8 +467,9 @@ end
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 12 generic + 3 local cashier-check beats + the malformed-uuid beat; skooti's
-# full surface makes all generic scenarios applicable (0 skips expected). Nine
+# 14 library beats (WrongCurrencyCart among them) + 2 local cashier-check beats
+# + the malformed-uuid and hostile-shape beats; skooti's full surface makes all
+# library scenarios applicable (0 skips expected). Nine
 # further skooti-local beats run after the runner, below — seven of them, plus
 # the two wire-shape beats (UnregisteredVerbIsOrdinaryRefusal,
 # MethodMismatch).
@@ -651,7 +653,7 @@ scenarios = [
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
 #
-# skooti exposes the full surface: 12 generic scenarios, 0 skips expected.
+# skooti exposes the full surface: 14 library scenarios, 0 skips expected.
 # If this set changes, a profile typo silently disabled a gate — fail loud.
 EXPECTED_SKIP_NAMES = [].freeze
 

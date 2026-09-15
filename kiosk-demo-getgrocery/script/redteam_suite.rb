@@ -16,8 +16,10 @@
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
-# catalog prices, and sum correctly. Three local scenarios attack exactly that,
-# and a fourth (MalformedItemsCart) attacks the input shape create_order takes.
+# catalog prices, and sum correctly. Three scenarios attack exactly that — the
+# library's WrongCurrencyCart for the unit of account, and TamperedPriceCart and
+# InflatedTotalCart local to this file — and a fourth (MalformedItemsCart)
+# attacks the input shape create_order takes.
 #
 # THE 0.4 WIRE. A query is `GET /kiosk/<query-name>` with its arguments in the
 # query string and an action is `POST /kiosk/<action-name>` with its arguments

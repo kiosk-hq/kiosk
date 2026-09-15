@@ -136,6 +136,17 @@
 # A block with no declaration is skipped exactly as before, so nothing outside
 # the opted-in set changes, and the run prints how many blocks have opted in.
 #
+# AND IT PRINTS THE DENOMINATOR BESIDE IT, WHICH IS THE HONEST HALF. Opting in
+# is a JUDGEMENT this script cannot make: measured over this repository, the
+# overwhelming majority of fenced blocks quote a command to type, a config, a
+# schema or a diagram, and carry no figure a producer could ever contradict --
+# so a gate demanding that every block opt in would be a gate demanding noise.
+# What would be dishonest is printing the subjects without the population, so
+# every run also says how many blocks NO declaration reaches and how many of
+# those carry a standalone digit run. `--self-test` fails when that denominator
+# collapses to the numerator, because a corpus this size cannot become fully
+# opted in -- a zero there is a broken walker, not a finished job.
+#
 # STILL UNREACHED, so nobody reads the split as complete: `kiosk.tech/` and the
 # private repo, which would need this script run there too (and, for
 # `kiosk.tech`, the twin-digest discipline `check-publication-paths` uses).
@@ -496,7 +507,10 @@ def fenced_blocks(text)
 
       k += 1
     end
-    blocks << { decls: decls, body: lines[(i + 1)...k].join("\n"), line: i + 1 } unless decls.empty?
+    # EVERY block, opted in or not. The ones with no declarations are read by
+    # no arm -- they are the census the caller prints, which is the only thing
+    # that keeps «3 opted in» from reading as coverage of the whole corpus.
+    blocks << { decls: decls, body: lines[(i + 1)...k].join("\n"), line: i + 1 }
     i = k + 1
   end
   blocks
@@ -507,6 +521,19 @@ end
 def fence_findings(root, rel, text, stats)
   out = []
   fenced_blocks(text).each do |block|
+    # THE CENSUS, counted before the arms and never gated: how many fenced
+    # blocks this corpus holds, how many of them no declaration reaches, and
+    # how many of THOSE carry a standalone digit run this arm therefore checks
+    # for nothing. Reported rather than asserted, because opting a block in is
+    # a judgement (most fences quote a command to type, not a run with figures
+    # in it) and a gate over that judgement is a gate someone switches off.
+    stats[:fence_blocks_corpus] += 1
+    if block[:decls].empty?
+      stats[:fence_blocks_unopted] += 1
+      stats[:fence_blocks_unopted_with_digits] += 1 if block[:body].match?(FENCE_DIGIT)
+      next
+    end
+
     stats[:fenced_blocks] += 1
     block[:decls].each do |d|
       stats[:fence_declarations] += 1
@@ -923,6 +950,12 @@ def report(result, quiet:)
     puts "  fenced blocks opted in: #{s[:fenced_blocks]} carrying #{s[:fence_declarations]} " \
          "declaration(s) over #{s[:fence_figures]} figure(s) " \
          "(#{s[:fence_declarations_ok]} agreed with their command)"
+    # Say the denominator out loud. This arm reaches what has opted in and
+    # NOTHING else, so a reader who sees only the line above will read a
+    # handful of subjects as coverage of every fence in the tree.
+    puts "  fenced blocks THIS ARM DOES NOT READ: #{s[:fence_blocks_unopted]} of " \
+         "#{s[:fence_blocks_corpus]} in this corpus have no `fence-count:` declaration, " \
+         "#{s[:fence_blocks_unopted_with_digits]} of them carrying a standalone digit run"
     puts "  REPORTED, NOT GATED: #{s[:reported_hits]} count(s) in source comments; " \
          "#{s[:broad_residue]} cardinal-plus-plural hit(s) the noun vocabulary does not reach"
   end
@@ -1145,6 +1178,16 @@ def run_self_test
                 "#{s[:fence_declarations_ok].to_i} fence declaration(s) agreeing with a command -- " \
                 "the fence arm has no subject here and would exit 0 whatever a block said."
   end
+  # And the CENSUS beside it has its own vacuity hazard, the opposite way
+  # round: if the walker stops seeing un-opted-in blocks the denominator
+  # silently becomes the numerator and the honest line starts reading as full
+  # coverage. The corpus is overwhelmingly un-opted-in and will stay that way,
+  # so a zero here is a broken walker, never a finished job.
+  if s[:fence_blocks_corpus].to_i <= s[:fenced_blocks].to_i
+    failures << "the census counted #{s[:fence_blocks_corpus].to_i} fenced block(s) against " \
+                "#{s[:fenced_blocks].to_i} opted in -- the walker has stopped seeing the blocks " \
+                "no declaration reaches, and the denominator it prints is no longer one."
+  end
 
   # Every declared file class must have a subject here. A class whose extractor
   # returns nothing is a class that has been switched off, and it reads as
@@ -1167,6 +1210,9 @@ def run_self_test
   puts "  real tree: #{s[:fenced_blocks].to_i} opted-in fenced block(s), " \
        "#{s[:fence_figures].to_i} figure(s) inside them, " \
        "#{s[:fence_declarations_ok].to_i} re-derived by their own command"
+  puts "  real tree: #{s[:fence_blocks_unopted].to_i} of #{s[:fence_blocks_corpus].to_i} fenced " \
+       "block(s) opted into nothing (#{s[:fence_blocks_unopted_with_digits].to_i} of those carry a " \
+       "standalone digit run) -- the census is the denominator, not a backlog"
   puts "  real tree: every file class has a subject -- prose #{s[:files_prose].to_i}, env " \
        "#{s[:files_env].to_i}, gemspec #{s[:files_gemspec].to_i} (#{s[:gemspec_units].to_i} published " \
        "sentence(s)), code #{s[:files_code].to_i}"

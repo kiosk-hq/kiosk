@@ -29,10 +29,10 @@ Demonstrates:
 - **`/.well-known/kiosk.json` with `pay` absent** — no `payment_provider` and no
   PSP adapter (shared with philslist). `POST /kiosk/pay` is drawn, because the
   mounted engine draws the whole protocol plane at every origin, and it refuses
-  with the wire's own `403`; nothing advertises it. The mandate and settlement
-  tables ARE installed and stay empty: every demo runs the same unmodified
-  `kiosk:install`, so the absence of payments here is the absence of a provider,
-  not of schema and not of a path.
+  an authenticated caller with `501 module_not_served`; nothing advertises it.
+  The mandate and settlement tables ARE installed and stay empty: every demo
+  runs the same unmodified `kiosk:install`, so the absence of payments here is
+  the absence of a provider, not of schema and not of a path.
 - **Full human web UI** (NOT api_only) — the tutorial-plain scaffold (lists,
   todos, invite, the manage-assistants page) is the video centerpiece.
 

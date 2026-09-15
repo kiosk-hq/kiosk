@@ -22,7 +22,9 @@ seven operator demos. A reader diffing this directory against a fresh `rails g
 kiosk:install` should expect that generator's whole output PLUS whatever
 post-install kiosk migrations the fleet has taken since — the same set
 everywhere, held there by the same rule.
-Nothing writes them here: there is no `pay` route and no PSP, so an empty
+Nothing writes them here: `POST /kiosk/pay` is drawn like everywhere else —
+the mount draws the whole protocol plane — but no `payment_provider` is
+configured, so the origin refuses before it reads a mandate and an empty
 `cart_mandates` on this host means what it says.
 
 The same wire contract the commerce demos use for checkout carries a plain
@@ -40,7 +42,8 @@ Demonstrates:
   **deliberately no payments**: philslist configures no `payment_provider`, so
   `pay` is absent from `capabilities`, from `agents.json` and from `agents.txt`,
   and `POST /kiosk/pay` — which the mounted engine draws at every origin, because
-  the path is the protocol's — refuses with the wire's own `403`
+  the path is the protocol's — refuses an authenticated caller with `501
+  module_not_served`, the origin-wide refusal
 - App-layer data isolation on an **owned resource**: any principal may
   `browse_listings` across all sellers, but `my_listings` /
   `edit_listing` / `close_listing` are scoped to

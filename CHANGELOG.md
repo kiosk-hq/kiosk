@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-15: **`Kiosk.configuration` built a second Configuration under a concurrent first read.** The memo is serialised now, so a racing writer's settings are not discarded.
+- 2026-09-15: **Nothing told an operator to release the apt hold a retired `box-prep` step left on Caddy.** The runbook names it and the command that clears it.
 - 2026-09-15: **A figure inside a quoted `make test` run was held by nothing.** A fenced block can now declare its figures and have each one re-derived.
 - 2026-09-15: **One PoW proof could be accepted more than once.** The configuration's store slots built a second store under a concurrent first touch; that first touch is now serialised.
 - 2026-09-15: **The skooti lock verified a signature nobody signed under a low-order public key.** The verifier now refuses the eight small-order Ed25519 keys.

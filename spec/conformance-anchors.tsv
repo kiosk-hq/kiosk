@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1697 anchors.
+# 1698 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -53,6 +53,7 @@ deploy/README.md	## Per-demo map
 deploy/README.md	**PoW difficulty is a feature**: ALL seven demos honor the
 deploy/README.md	**The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
 deploy/README.md	Runbook for hosting the 7 Kiosk demo Rails apps **plus the KYC broker**
+deploy/README.md	What the EDGE on that box is, measured over ssh 2026-09-15, read-only:
 deploy/README.md	by **Caddy** (auto-TLS), each app a loopback **Puma** under **systemd** — sized
 deploy/README.md	| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
 deploy/demo-reset.sh	# ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants

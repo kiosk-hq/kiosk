@@ -105,6 +105,34 @@ below.) Any other demo is knob-adjustable: set
    box has a quarter of that laptop's cores. Any sizing argument that has been made from those numbers was
    guessing at this line; scale them before reusing them, or better, measure on
    the box.
+
+   **What the EDGE on that box is, measured over ssh 2026-09-15, read-only:**
+   the Caddy binary is stock — `caddy list-modules` names no rate-limit module —
+   and `/etc/caddy/Caddyfile` carries no live `rate_limit` directive, every
+   mention of it in the file being a comment. `caddy validate` answers *Valid
+   configuration*, the service is active, `caddy version` is **v2.11.4**. So
+   there is no per-IP throttle on the box, which is the posture
+   "Edge rate-limit" below describes.
+
+   **One thing on the box is left over, and it is not the limiter: `apt-mark
+   showhold` names `caddy`.** The package is pinned, so it takes no upgrade —
+   including a security one — on the process that terminates TLS for every
+   origin. Nothing here needs the pin: it exists to stop an upgrade replacing a
+   module-bearing binary with a stock one that would refuse a config naming
+   `rate_limit`, and this box has neither the module nor such a config. Clear it
+   on the box `deploy-caddy.sh`'s `KIOSK_CADDY_HOST` names:
+
+   ```
+   sudo apt-mark unhold caddy && apt-mark showhold    # expect: no output
+   apt list --upgradable 2>/dev/null | grep -i caddy  # is an upgrade pending?
+   ```
+
+   The unhold installs nothing by itself; it only stops pinning. Take any
+   pending upgrade with a human watching, because it restarts the proxy in front
+   of every origin, then confirm `caddy version`, `systemctl is-active caddy`,
+   `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` and a
+   request to each vhost. Do not re-hold it afterwards and do not add the
+   rate-limit module back: there is no default throttle here on purpose.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
    secret, a Stripe **test** key for getgrocery only). Copy to
@@ -146,6 +174,12 @@ file, so it follows an override on its own.
 
 ### Steps
 
+<!-- fence-count: 8 DBs ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l -->
+<!-- fence-count: 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l -->
+<!-- fence-count: ON_ERROR_STOP=1 ¦ why: a psql flag value, not a quantity -->
+<!-- fence-count: max_connections=100 ¦ why: a Postgres setting this runbook asks you to type, not a count of anything here -->
+<!-- fence-count: step #3 ¦ why: a pointer to a numbered step above, not a quantity -->
+<!-- fence-count: answer 429 ¦ why: an HTTP status code -->
 ```sh
 # 0. Check the monorepo out AT /srv/kiosk (owned by the kiosk user) — the repo
 #    ROOT is /srv/kiosk itself, not a subdirectory of it. So each app lives at
@@ -317,6 +351,7 @@ line buys.
 
 Re-check it any time, from anywhere, no ssh needed:
 
+<!-- fence-count: 8 ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l -->
 ```sh
 deploy/check-live-hsts.sh          # must print OK for all 8
 ```

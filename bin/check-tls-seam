@@ -28,6 +28,21 @@
 #         is silent. The declaration is what makes a new copy an argument
 #         somebody has to win rather than a diff nobody notices.
 #
+#   TS-3  A site whose target is a LITERAL loopback URL the same file builds is
+#         permitted to stay cleartext, and must be DECLARED in CLEARTEXT_OK with
+#         its reason. `http://127.0.0.1:3000` is not a TLS origin and never will
+#         be; demanding a scheme-derived line there would be a line that can
+#         only ever evaluate one way. The declaration is what stops «it is only
+#         localhost» from being said about a driver an operator can repoint.
+#
+# THE CORPUS IS RUBY, NOT `*.rb` (K-1624). The first writing walked
+# `git ls-files "*.rb"`, so four cleartext constructor sites in a `.rake` task
+# were outside every rule above — a guard whose header states a universal and
+# whose walk reads a file extension. Ruby in this repository is also `Rakefile`,
+# `Gemfile`, `*.gemspec`, `*.rake`, `*.ru`, and any tracked file whose first line
+# is a `ruby` shebang; the walk now takes all of them and prints the count it
+# walked, so a corpus that shrinks is visible rather than silent.
+#
 # WHAT IT DOES NOT CHECK, said plainly. It reads SOURCE, so it cannot see a
 # driver that takes its scheme from a flag, an environment variable or a port
 # number and happens to be right today; and it says nothing about certificate
@@ -36,6 +51,10 @@
 # that refutes it and what it answers: `git grep -c VERIFY_NONE` over this
 # repository returns exactly ONE line, and it is this paragraph. Any second hit
 # is a driver that stopped verifying its peer, and this guard will not tell you.
+# It also matches one spelling only — `Net::HTTP.new`. `Net::HTTP.get_response`
+# and the other class-level shortcuts derive `use_ssl` from the URI themselves,
+# which is why they are not the subject; a driver reaching for `TCPSocket` or
+# another HTTP library is genuinely outside this walk.
 #
 # Usage: bin/check-tls-seam [--self-test]
 
@@ -61,7 +80,32 @@ DECLARED = {
     "SERVER-side outbound: same call, same reason, hand-copied per demo.",
   "kiosk-demo-prove/app/services/callback_poster.rb" =>
     "SERVER-side outbound: the broker posting its verification callback.",
+  "bin/check-live-skill-pin" =>
+    "A guard, not a driver: it reaches the live site from a developer shell and " \
+    "must not load kiosk-redteam, which is not on a bare guard's load path. It " \
+    "carries the line in its single fetch helper. Visible only since K-1624 " \
+    "widened the corpus past `*.rb`.",
 }.freeze
+
+# ── TS-3: the declared cleartext sites ───────────────────────────────────────
+#
+# Same shape as DECLARED and the same stale-entry check: keyed by repo-relative
+# path, valued by the reason. This hash is the ONLY place «it is only localhost»
+# is allowed to be said, and CLEARTEXT_EVIDENCE below is what keeps the saying
+# tied to the file.
+CLEARTEXT_OK = {
+  "kiosk-demo-skooti/lib/tasks/demo.rake" =>
+    "Every socket in this task dials `server_url`, which the task itself builds " \
+    "as the literal `http://\#{host}:\#{port}` of a Rails server it has just " \
+    "spawned on 127.0.0.1. The scheme is a constant here and cannot be https, " \
+    "so a scheme-derived line would be a branch with one arm.",
+}.freeze
+
+# What a CLEARTEXT_OK declaration has to be able to point at: a literal
+# cleartext URL built in that same file. It is not a proof — a file can build
+# one literal and dial another — but it is the difference between a permission
+# tied to the source and a permission that is only a sentence in this script.
+CLEARTEXT_EVIDENCE = %r{"http://}
 
 CALL     = "Net::HTTP.new"
 SEAM     = "Wire.http_for"
@@ -81,13 +125,42 @@ def pass(message)
   puts "  ok #{message}"
 end
 
+# This script is the one file excluded from its own walk. It carries the
+# constructor's spelling in prose and in self-test string literals, and it opens
+# no socket at all — it requires `open3` and nothing else. Excluding it by name
+# is narrower than teaching this walker to parse Ruby, and a self-test arm holds
+# that it really does not speak HTTP, so the exclusion cannot quietly become a
+# hiding place.
+SELF = "bin/check-tls-seam"
+
+# Ruby by EXTENSION, by NAME, or by SHEBANG — the three ways a tracked file in
+# this repository is Ruby. K-1624: `*.rb` is none of them on its own.
+RUBY_EXTENSIONS = %w[.rb .rake .gemspec .ru].freeze
+RUBY_BASENAMES  = %w[Gemfile Rakefile].freeze
+RUBY_SHEBANG    = /\A#!.*\bruby\b/
+
 # Tracked Ruby, minus the vendored bundle. `git ls-files` rather than a walk:
 # the question is what this repository SHIPS.
 def tracked_ruby
-  out, status = Open3.capture2("git", "-C", REPO, "ls-files", "-z", "*.rb")
+  out, status = Open3.capture2("git", "-C", REPO, "ls-files", "-z")
   raise "git ls-files failed" unless status.success?
 
   out.split("\0").reject { |p| p.start_with?(".gems/") || p.include?("/.gems/") }
+     .reject { |p| p == SELF }
+     .select { |p| ruby_source?(p) }
+end
+
+def ruby_source?(path)
+  return true if RUBY_EXTENSIONS.include?(File.extname(path))
+  return true if RUBY_BASENAMES.include?(File.basename(path))
+
+  full = File.join(REPO, path)
+  return false unless File.file?(full)
+
+  first = File.open(full, "rb") { |f| f.gets(256).to_s }
+  first.match?(RUBY_SHEBANG)
+rescue ArgumentError, Errno::EACCES
+  false
 end
 
 # Every `Net::HTTP.new` site in one file's source, classified.
@@ -117,7 +190,8 @@ def run_check
   files = tracked_ruby
   offenders  = []
   undeclared = []
-  declared_seen = Hash.new(0)
+  declared_seen  = Hash.new(0)
+  cleartext_seen = Hash.new(0)
 
   files.each do |path|
     sites = sites_in(File.read(File.join(REPO, path)))
@@ -125,7 +199,11 @@ def run_check
 
     sites.each do |site|
       if !site[:scheme_derived]
-        offenders << "#{path}:#{site[:line]}  #{site[:text]}"
+        if CLEARTEXT_OK.key?(path)
+          cleartext_seen[path] += 1
+        else
+          offenders << "#{path}:#{site[:line]}  #{site[:text]}"
+        end
       elsif DECLARED.key?(path)
         declared_seen[path] += 1
       else
@@ -136,7 +214,7 @@ def run_check
 
   puts "── TS-1: every Net::HTTP.new decides TLS from the target's scheme ──"
   if offenders.empty?
-    pass "no cleartext-only socket in #{files.size} tracked Ruby file(s)"
+    pass "no cleartext-only socket in #{files.size} tracked Ruby-language file(s)"
   else
     offenders.each do |site|
       fail! "#{site}\n       no scheme-derived use_ssl within #{WINDOW} line(s) — this " \
@@ -164,10 +242,35 @@ def run_check
   end
 
   puts
+  puts "── TS-3: a cleartext site dials a literal loopback URL, and says so ──"
+  if CLEARTEXT_OK.empty?
+    pass "nothing claims the loopback exemption"
+  else
+    CLEARTEXT_OK.each_key do |path|
+      if cleartext_seen[path].zero?
+        fail! "CLEARTEXT_OK names #{path}, which no longer carries a cleartext " \
+              "Net::HTTP.new — delete the entry rather than leaving a permission nobody uses."
+        next
+      end
+
+      source = File.read(File.join(REPO, path))
+      if source.match?(CLEARTEXT_EVIDENCE)
+        pass "#{path}: #{cleartext_seen[path]} cleartext site(s), and the file builds a literal cleartext URL"
+      else
+        fail! "CLEARTEXT_OK names #{path}, but that file builds no literal " \
+              "cleartext URL any more — its targets now come from somewhere this " \
+              "guard cannot see, so the loopback reason no longer holds."
+      end
+    end
+  end
+
+  puts
   puts "── the census this guard exists to hold at zero ──"
   seam = seam_call_sites(files)
   puts "  #{seam} call site(s) go through #{SEAM}; " \
-       "#{declared_seen.values.sum} declared hand-written site(s) in #{DECLARED.size} file(s)"
+       "#{declared_seen.values.sum} declared hand-written site(s) in #{DECLARED.size} file(s); " \
+       "#{cleartext_seen.values.sum} declared cleartext site(s) in #{CLEARTEXT_OK.size} file(s)"
+  puts "  corpus: #{files.size} tracked Ruby-language file(s) — extension, basename or ruby shebang"
 
   if seam.zero?
     fail! "NOTHING calls #{SEAM} — either the seam was deleted or this walker " \
@@ -229,8 +332,45 @@ def self_test
   check.call("a commented-out constructor is not a site",
              sites_in("# http = Net::HTTP.new(uri.host, uri.port)\n").empty?)
 
-  # ── VACUITY: the walker must have a live subject in THIS tree ──────────────
+  # ── THE K-1624 DEFECT, PLANTED: the same driver, in a `.rake` file ─────────
+  # The corpus, not the classifier, was the hole: `sites_in` always called this
+  # cleartext; nothing ever handed it the file. So the arm is about membership.
   files = tracked_ruby
+  check.call("a .rake file is Ruby to this walker",      ruby_source?("kiosk-demo-skooti/lib/tasks/demo.rake"))
+  check.call("a Rakefile is Ruby to this walker",        ruby_source?("Rakefile"))
+  check.call("a Gemfile is Ruby to this walker",         ruby_source?("Gemfile"))
+  check.call("a .gemspec is Ruby to this walker",        ruby_source?("kiosk-redteam/kiosk-redteam.gemspec"))
+  check.call("a ruby-shebang bin/ script is Ruby to this walker",
+             ruby_source?("bin/check-live-skill-pin"))
+  check.call("a .md file is NOT Ruby to this walker",    !ruby_source?("README.md"))
+  check.call("the .rake file K-1624 was filed about is IN the corpus",
+             files.include?("kiosk-demo-skooti/lib/tasks/demo.rake"))
+  check.call("the shebang script K-1624 was filed about is IN the corpus",
+             files.include?("bin/check-live-skill-pin"))
+  check.call("the corpus is strictly wider than the *.rb glob it replaced",
+             files.count { File.extname(_1) == ".rb" } < files.size)
+
+  # ── the SELF exclusion is exactly one file, and it speaks no HTTP ──────────
+  check.call("this script excludes itself and nothing else", !files.include?(SELF))
+  self_source = File.read(File.join(REPO, SELF))
+  check.call("…and the excluded file opens no socket",
+             !self_source.match?(/^\s*require\s+["']net\/http["']/))
+
+  # ── TS-3: the loopback declaration is a permission with evidence ───────────
+  check.call("every CLEARTEXT_OK path exists",
+             CLEARTEXT_OK.keys.all? { File.exist?(File.join(REPO, _1)) })
+  check.call("every CLEARTEXT_OK path really carries a cleartext site",
+             CLEARTEXT_OK.keys.all? { |path|
+               sites_in(File.read(File.join(REPO, path))).any? { !_1[:scheme_derived] }
+             })
+  check.call("every CLEARTEXT_OK path really builds a literal cleartext URL",
+             CLEARTEXT_OK.keys.all? { File.read(File.join(REPO, _1)).match?(CLEARTEXT_EVIDENCE) })
+  check.call("a file that builds no literal cleartext URL fails the TS-3 evidence test",
+             !"uri = URI(ENV.fetch(\"SERVER_URL\"))\n".match?(CLEARTEXT_EVIDENCE))
+  check.call("no path is both DECLARED and CLEARTEXT_OK",
+             (DECLARED.keys & CLEARTEXT_OK.keys).empty?)
+
+  # ── VACUITY: the walker must have a live subject in THIS tree ──────────────
   check.call("the tracked Ruby corpus is non-empty", files.size > 100)
   live = files.count { |p| sites_in(File.read(File.join(REPO, p))).any? }
   check.call("the constructor still occurs in this repository", live.positive?)

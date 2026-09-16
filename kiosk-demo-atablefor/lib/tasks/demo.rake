@@ -679,7 +679,7 @@ namespace :demo do
 
     A COUNT (not a time window) is deliberate: a window would let a bot flood
     thousands of requests inside it; a count caps exactly how many free calls one
-    ~9 s solve buys, then the toll returns.
+    solve buys, then the toll returns.
 
     Asserts:
       • http_first_challenge == 402       (a fresh identity is tolled)

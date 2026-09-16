@@ -12,7 +12,7 @@ module Kiosk
       # identity is challenged again for a fresh solve. The grant is a COUNT, not
       # a time window — a window would let a bot flood thousands of requests
       # inside it, whereas a count caps exactly how many free calls one solve
-      # buys. So ONE ~9 s Equihash solve buys the next `count` calls free, then
+      # buys. So ONE Equihash solve buys the next `count` calls free, then
       # the identity is re-challenged: the load-bearing "solve once, next N calls
       # free" behaviour.
       #

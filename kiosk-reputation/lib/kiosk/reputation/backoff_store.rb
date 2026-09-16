@@ -10,7 +10,7 @@ module Kiosk
     # (re)sets it via {#grant}; each following request CONSUMES one via
     # {#consume}. A COUNT — not a time window — is deliberate: a window would let
     # a bot flood thousands of requests inside it, whereas a count caps exactly
-    # how many free calls one ~9 s solve buys.
+    # how many free calls one solve buys.
     #
     # == Interface contract
     #

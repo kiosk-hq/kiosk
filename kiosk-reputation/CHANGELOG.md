@@ -14,6 +14,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Changed
 
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
+- **Three packaged sentences priced a solve at «~9 s» with no solver, machine or parameters (K-1694).** The seconds are removed; the count-not-window argument is unchanged.
 - **A signed challenge could be re-partitioned into another alg/params split under its own HMAC (K-1693).** `Challenge` now refuses a canonical-string delimiter in any field.
 - **`Policy#challenge_for`'s `verb:` contract is stated as closed, and a wrong branch is no longer silent (K-1395).** The hook receives one of `:query`, `:run`, `:pay` and nothing else; a handler declared `kind :action` in kiosk-server arrives as `:run`. Branching on `:action` matched nothing and declined to toll every write with no error, log line or failing test. `kiosk-server` now refuses such a policy at configuration time. No behaviour change in this gem.
 

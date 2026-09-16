@@ -288,7 +288,7 @@ A reusable strategy for the recency-grace pattern: after an identity solves
 **one** proof, it is granted a fixed **count** of ungated follow-up requests;
 when that count is exhausted it is challenged again. The grant is a **COUNT, not
 a time window** — a window would let a bot flood thousands of requests inside
-it, whereas a count caps exactly how many free calls one ~9 s solve buys. It
+it, whereas a count caps exactly how many free calls one solve buys. It
 turns "cost per request" into "cost per burst": the toll is paid once, up front,
 and amortised over the next `count` calls.
 

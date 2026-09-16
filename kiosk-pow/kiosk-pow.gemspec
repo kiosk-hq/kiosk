@@ -20,8 +20,10 @@ Gem::Specification.new do |spec|
     and the Python solver produce byte-identical Argon2id digests, checked by
     this REPOSITORY's `rake parity` task. That task is a Rakefile task run by
     hand; the Rakefile is deliberately not packaged (it needs spec/ and the
-    development bundle, neither of which ships), so it is not in this gem and
-    nothing runs it automatically.
+    development bundle, neither of which ships), so it is not in this gem.
+    What CI runs on every push is this gem's own `:parity` spec examples,
+    which assert the same digest agreement and a solve.py roundtrip; spec/
+    is not packaged either, so neither check ships inside the gem.
 
     Reached through kiosk-reputation's backend registry when a HOST registers
     it under "argon2id" — no PoW gem self-registers, and nothing in this

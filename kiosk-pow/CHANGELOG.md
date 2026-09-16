@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- CI now installs argon2-cffi, so the `:parity` examples run instead of pending; the gemspec says so rather than implying nothing checks the two implementations.
 - The gemspec stops saying the `rake parity` check is «included» and «enforced»: the Rakefile is not packaged and nothing runs the task.
 - The gemspec stops claiming kiosk-reputation uses this backend; a host must register it, and nothing here does outside kiosk-server's specs.
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.

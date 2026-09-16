@@ -152,12 +152,15 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     # comment may call this alphabet Crockford (except to deny it) or quote
     # the retired 32^8 / "no 0/O/1/I/L/U" figures.
     #
-    # `lib` and `app` ARE THE WHOLE SCOPE, deliberately. CHANGELOG.md is
-    # packaged too and carried the retired sentence for longer than any of
-    # them, but a changelog is append-only: a wrong entry is superseded by a
-    # new one naming it, never rewritten, so a sweep over it would redden on
-    # frozen history for ever. The 0.2.0 entry stands and an Unreleased entry
-    # corrects it.
+    # `lib` and `app` ARE THE WHOLE SCOPE HERE, deliberately, and the packaged
+    # CHANGELOG.md is held one directory up instead. A changelog is append-only
+    # -- a wrong entry is superseded by a new one naming it, never rewritten --
+    # so a sweep of THIS shape over it would redden on frozen history for ever.
+    # `bin/check-changelog` arm CL-10 is the shape that does not: it reads only
+    # entries that are NEW against its declared baseline commit and prints the
+    # rest as a census, and its RETIRED table carries this claim by name. The
+    # 0.2.0 entry stands, an Unreleased entry corrects it, and a fresh entry
+    # asserting it again is red (K-1671).
     it "is described as neither Crockford nor 32^8 anywhere in lib or app" do
       root = File.expand_path("../../..", __dir__)
       offenders = Dir.glob("#{root}/{lib,app}/**/*.{rb,erb}").sort.flat_map do |path|

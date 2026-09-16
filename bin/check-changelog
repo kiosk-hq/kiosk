@@ -81,6 +81,10 @@
 #
 #   CL-8  A NEW entry is under 200 characters.
 #   CL-9  A NEW entry runs to at most two sentences.
+#   CL-10 A NEW entry does not revive a claim this repository has RETIRED.
+#         The retired claims are declared in the RETIRED table below, each with
+#         the ledger row that retired it, what is true instead, and the marker
+#         an entry uses to name the claim in order to supersede it.
 #
 # THE RULE CL-8 AND CL-9 HOLD, in Phil's own words (2026-09-11), and it binds
 # every `CHANGELOG.md` in this workspace -- root record and per-gem package
@@ -113,6 +117,19 @@
 # `- ` dropped, wrapped lines joined by a single space and the ends stripped.
 # That is the unit the umbrella constitution names.
 #
+# CL-10 RIDES THAT SAME BASELINE, and that is the whole reason it is here rather
+# than in the spec file that owns the claim (K-1671). K-888 retired a sentence
+# about `USER_CODE_ALPHABET` and pinned an anti-regrowth sweep in
+# `kiosk-server/spec/kiosk/server/device_authorization_spec.rb`; that sweep globs
+# `{lib,app}`, so it cannot see the `CHANGELOG.md` beside them -- the one file of
+# that gem `spec.files` PACKAGES and an adopter installs. A verify wave measured
+# it rather than reasoning about it: the retired sentence written back into a
+# fresh Unreleased entry left the sweep at 48 examples 0 failures and all 27
+# `bin/check-*` guards at exit 0. The sweep DECLINED to widen, and its stated
+# reason -- an append-only file would redden on frozen history for ever -- is
+# true of a WHOLE-FILE scan and only of that. The baseline tier is the shape
+# that is not: it reads what is new and counts the rest.
+#
 # IF THE BASELINE COMMIT IS NOT IN THE CLONE the run FAILS and says so, naming
 # the remedy. It does not skip: a skipped arm exits 0 and reads exactly like a
 # clean tree, which is the failure this workspace distrusts most. CI checks out
@@ -130,7 +147,10 @@
 # DIFFER (`## [0.2.0]` and `## [0.2]`) are two sections to this script, not a
 # repeat. Headings inside fenced code blocks are skipped, and the fence tracker
 # is a line scan: an unbalanced fence in a changelog will hide the headings
-# after it.
+# after it. CL-10 knows only the claims the RETIRED table declares -- it cannot
+# tell that a sentence has become false, only that a sentence somebody already
+# retired has come back -- and its `correcting` marker is an OPT-OUT a writer
+# can type: an entry carrying that marker is exempt whatever else it says.
 #
 # THE TWIN. `kiosk.tech/bin/check-changelog` holds CL-7/CL-8/CL-9 over that
 # repository's single changelog. It is a different script with a different
@@ -398,8 +418,60 @@ ARMS = [
       MD
     },
   },
+  {
+    id: "CL-10",
+    what: "a NEW entry reviving a claim the RETIRED table records as retired",
+    repair: "say what is true instead (the table's `says` line), or -- if the entry exists to " \
+            "retire the claim -- name it as superseded, which is what the `correcting` marker " \
+            "is for; never edit the frozen entry that carried it",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ## [Unreleased]
+
+        ### Changed
+
+        - the user_code alphabet is 8-char Crockford (no 0/O/1/I/L/U), a claim retired long ago.
+
+        ## [0.1.0]
+
+        ### Added
+
+        #{RETIRED_BACKLOG_ENTRY}
+      MD
+    },
+  },
 ].freeze
 # <<< ARM TABLE -- END
+
+# ── RETIRED CLAIMS ───────────────────────────────────────────────────────────
+#
+# CL-10's whole content: sentences this repository has retired, which may not
+# come back in an entry written from now on. The header says why this rides the
+# baseline; what belongs here is the shape of a record.
+#
+# EACH RECORD DECLARES ITS OWN ESCAPE, and it has to. A retired claim must stay
+# NAMEABLE or nothing can supersede it -- the live entry that retires the one
+# below quotes it in full, so a rule with no escape would redden on the repair
+# for its own motivating defect. `correcting` is that escape: a marker a writer
+# types on purpose and a reader sees in the same sentence. It is an OPT-OUT, and
+# the header says so.
+#
+# `pattern` is held NON-VACUOUS by `--self-test`, which requires it to match a
+# tracked line of this repository somewhere. A pattern that has stopped matching
+# anything reads exactly like coverage while covering nothing -- the failure the
+# sibling repository's `EARLIER_WIRES` rule carried for its whole existence.
+RETIRED = [
+  {
+    ledger: "K-888",
+    what: "the `user_code` alphabet called Crockford base32, or its space quoted as 32^8",
+    says: "the alphabet is 31 characters and KEEPS U (only 0/1/I/L/O are dropped), " \
+          "so the space is 31^8",
+    pattern: %r{32\^8|32\*\*8|no 0/O/1/I/L/U|Crockford},
+    correcting: /SUPERSEDES|NOT Crockford/,
+  },
+].freeze
 
 # COURTESY MANIFEST. The two per-demo changelogs, each with the reason it is
 # there, because an undeclared exemption is how a rule becomes a habit. Every
@@ -530,6 +602,25 @@ def baseline_of(root, rev)
   { rev: rev, missing: false, set: set, files: paths.length }
 end
 
+# Does a RETIRED pattern describe prose that actually exists here? Every tracked
+# file is read -- a retired claim can sit in a comment, a README or a fixture,
+# and the question is about the repository rather than about changelogs. THIS
+# FILE IS EXCLUDED, and that is the whole point: the table below quotes the
+# vocabulary it forbids, so a self-reading walk would answer yes for any pattern
+# at all and prove nothing. Undecodable bytes are scrubbed rather than skipped,
+# so a file git calls binary still answers for the text it carries.
+def pattern_occurs?(root, pattern)
+  self_rel = SELF_PATH.delete_prefix("#{root}/")
+  tracked(root).any? do |rel|
+    next false if rel == self_rel
+
+    abs = File.join(root, rel)
+    next false unless File.file?(abs)
+
+    File.binread(abs).force_encoding(Encoding::UTF_8).scrub("").match?(pattern)
+  end
+end
+
 def corpus(root)
   changelogs = tracked(root, "*CHANGELOG.md")
   gem_dirs   = tracked(root, "*.gemspec").map { |p| File.dirname(p) }.uniq.sort
@@ -558,9 +649,11 @@ def scan(root, baseline)
   entries    = 0
   dated      = 0
   fresh      = 0
-  backlog    = 0
-  long_back  = 0
-  multi_back = 0
+  backlog      = 0
+  long_back    = 0
+  multi_back   = 0
+  retired_back = 0
+  retired_seen = Hash.new(0)
 
   changelogs, gem_dirs = corpus(root)
 
@@ -573,18 +666,30 @@ def scan(root, baseline)
     end
     roles[role] += 1
 
-    # CL-8 / CL-9 over every changelog, but only over entries that are NEW
-    # against the baseline. The rest is counted and printed, never failed.
+    # CL-8 / CL-9 / CL-10 over every changelog, but only over entries that are
+    # NEW against the baseline. The rest is counted and printed, never failed.
     full_entries(File.read(File.join(root, rel))).each do |e|
+      revived = RETIRED.reject { |r| e.text.match?(r[:correcting]) }
+                       .select  { |r| e.text.match?(r[:pattern]) }
       if baseline[:set].key?(e.text)
-        backlog    += 1
-        long_back  += 1 if e.text.length >= LENGTH_CAP
-        multi_back += 1 if sentence_count(e.text) > SENTENCE_CAP
+        backlog      += 1
+        long_back    += 1 if e.text.length >= LENGTH_CAP
+        multi_back   += 1 if sentence_count(e.text) > SENTENCE_CAP
+        retired_back += revived.length
+        revived.each { |r| retired_seen[r[:ledger]] += 1 }
         next
       end
 
       fresh += 1
       gist  = e.text.length > 64 ? "#{e.text[0, 64]}…" : e.text
+      revived.each do |r|
+        arm = arm_for("CL-10")
+        findings << {
+          path: rel, line: e.line, id: arm[:id], repair: arm[:repair],
+          what: "new entry revives the claim #{r[:ledger]} retired -- #{r[:what]} -- " \
+                "where #{r[:says]}: `#{gist}`",
+        }
+      end
       if e.text.length >= LENGTH_CAP
         arm = arm_for("CL-8")
         findings << {
@@ -686,7 +791,8 @@ def scan(root, baseline)
     gems: gem_dirs.length, releases: releases, subsections: subsects,
     entries: entries, dated: dated, baseline: baseline[:rev],
     baseline_files: baseline[:files], baseline_set: baseline[:set].length,
-    fresh: fresh, backlog: backlog, long_back: long_back, multi_back: multi_back }
+    fresh: fresh, backlog: backlog, long_back: long_back, multi_back: multi_back,
+    retired_back: retired_back, retired_seen: retired_seen }
 end
 
 def arm_for(id)
@@ -707,9 +813,13 @@ def report(result, quiet:)
     puts "  baseline #{result[:baseline][0, 12]} -- #{result[:baseline_set]} entry(ies) over " \
          "#{result[:baseline_files]} changelog(s) at that commit"
     puts "  #{result[:backlog]} entry(ies) at or before the baseline, #{result[:fresh]} new " \
-         "since it; CL-8/CL-9 read the new ones only"
+         "since it; CL-8/CL-9/CL-10 read the new ones only"
     puts "  CENSUS, never failed: of the backlog, #{result[:long_back]} are #{LENGTH_CAP} " \
          "characters or longer and #{result[:multi_back]} run past #{SENTENCE_CAP} sentences"
+    puts "  CENSUS, never failed: #{result[:retired_back]} backlog entry(ies) assert a RETIRED " \
+         "claim (#{RETIRED.length} declared" \
+         "#{RETIRED.map { |r| ", #{r[:ledger]} #{result[:retired_seen][r[:ledger]]}" }.join});" \
+         " CL-10 reads the new entries only"
     COURTESY.each do |entry|
       puts format("  courtesy %-42s covered %d", entry[:path], result[:covered][entry[:path]])
     end
@@ -720,8 +830,8 @@ def report(result, quiet:)
       puts
       puts "check-changelog: OK -- every release section answers each kind once, every tracked " \
            "changelog has a declared role, every repository-record entry says when, and every " \
-           "entry newer than the baseline is under #{LENGTH_CAP} characters and at most " \
-           "#{SENTENCE_CAP} sentences."
+           "entry newer than the baseline is under #{LENGTH_CAP} characters, at most " \
+           "#{SENTENCE_CAP} sentences, and free of every claim the RETIRED table records."
       puts "(The standing backlog is counted above and never failed -- a changelog is " \
            "append-only. See the header for what this cannot see.)"
     end
@@ -743,8 +853,8 @@ def run_check(quiet: false, baseline: nil)
   base = baseline_of(REPO, baseline)
   if base[:missing]
     warn "check-changelog: FAIL -- baseline commit #{base[:rev]} is not in this clone, so " \
-         "CL-8/CL-9 cannot tell a new entry from the standing backlog. It does not skip: a " \
-         "skipped arm exits 0 and reads exactly like a clean tree."
+         "CL-8/CL-9/CL-10 cannot tell a new entry from the standing backlog. It does not " \
+         "skip: a skipped arm exits 0 and reads exactly like a clean tree."
     warn "      repair: fetch it (`git fetch --unshallow`, or check out with " \
          "`fetch-depth: 0`), or pass `--baseline <rev>` naming a commit this clone has"
     return 1
@@ -771,14 +881,23 @@ end
 # subsections, a courtesy record, and -- the one that is not obvious -- a
 # release section containing a FENCED BLOCK that itself contains headings,
 # which a scan without a fence tracker reports as three repeats -- and, for
-# CL-8/CL-9, a PRE-BASELINE entry that is long and runs to four sentences. That
-# last one is the K-1097 property under test: it is committed at the baseline,
-# so it must be COUNTED and must never be failed, and the plants below keep it
+# CL-8/CL-9, a PRE-BASELINE entry that is long and runs to four sentences, and
+# for CL-10 a PRE-BASELINE entry asserting a retired claim. Those last two are
+# the K-1097 property under test: both are committed at the baseline, so both
+# must be COUNTED and neither may ever be failed, and the plants below keep them
 # in the file so the same run proves both halves at once.
 BACKLOG_ENTRY = "- 2026-01-01: **a long entry from before the rule, kept exactly as written.** " \
                 "It runs to several sentences and well past two hundred characters, which is " \
                 "what the whole standing corpus looks like. It is history, so it is never " \
                 "edited. The census counts it and no arm fails on it."
+
+# The CL-10 half of the same property, and it is the one K-1671 is about: an
+# entry that asserted a claim this repository has since retired, committed at
+# the baseline. It must be COUNTED and never failed -- rewriting it is the one
+# thing an append-only record forbids -- while the identical sentence in a new
+# entry is red. Both halves are proved by the same run.
+RETIRED_BACKLOG_ENTRY = "- the user_code alphabet is 8-char Crockford (no 0/O/1/I/L/U), " \
+                        "written before that was retired and frozen ever since."
 
 GREEN = {
   "CHANGELOG.md" => <<~MD,
@@ -835,6 +954,8 @@ GREEN = {
     ### Added
 
     - the same kind again, in a DIFFERENT release, which is the correct shape.
+
+    #{RETIRED_BACKLOG_ENTRY}
   MD
   "kiosk-demo-atablefor/CHANGELOG.md" => "# Changelog\n\n## Unreleased\n\n- a courtesy record.\n",
   "kiosk-demo-prove/CHANGELOG.md" => "# Changelog\n\n- a courtesy record.\n",
@@ -909,6 +1030,19 @@ def self_test_fixture(failures)
                   "property is proved by nothing:\n#{out}"
     end
 
+    # THE SAME PROPERTY FOR CL-10, and it is K-1671's whole subject: the fixture
+    # holds a COMMITTED entry asserting a retired claim, the run above was exit
+    # 0, and the census says it saw it. Without the count the exit 0 would be
+    # indistinguishable from a fixture in which no retired claim ever appeared.
+    retired_census = out[/CENSUS, never failed: (\d+) backlog entry\(ies\) assert a RETIRED/, 1].to_i
+    if retired_census.positive?
+      puts "  backlog: #{retired_census} committed entry(ies) assert a retired claim, " \
+           "still exit 0 -- OK"
+    else
+      failures << "the fixture's pre-baseline retired-claim entry was not counted, so CL-10's " \
+                  "never-redden property is proved by nothing:\n#{out}"
+    end
+
     # AND THE BASELINE MUST NOT BE SKIPPABLE. A commit this clone does not have
     # has to be a RED run naming the remedy; a skip would exit 0 and read like a
     # clean tree, which is the failure this workspace distrusts most.
@@ -969,6 +1103,28 @@ def self_test_fixture(failures)
     keep.each { |rel, body| write(dir, rel, body) }
     stage(dir)
 
+    # CL-10's CONTROL, and a rule with no escape would have failed it. The
+    # repair for the original defect is an entry that QUOTES the retired claim
+    # in order to supersede it -- brand new, therefore inside CL-10's scope --
+    # so the marker has to carry it back to green or the gate forbids its own
+    # remedy. Same file, same release, one word of difference from the plant.
+    corr = keep["kiosk-widget/CHANGELOG.md"].dup.force_encoding(Encoding::UTF_8).sub(
+      "### Changed\n",
+      "### Changed\n\n- **SUPERSEDES** the note that the user_code alphabet is " \
+      "8-char Crockford (no 0/O/1/I/L/U); it keeps U and the space is 31^8.\n",
+    )
+    File.write(File.join(dir, "kiosk-widget/CHANGELOG.md"), corr)
+    stage(dir)
+    out5, err5, st5 = run_guard_in(dir, base)
+    if st5.exitstatus.zero?
+      puts "  control CL-10: a NEW entry superseding the claim by name stays green -- OK"
+    else
+      failures << "a new entry that names the retired claim in order to supersede it was " \
+                  "failed, so the gate forbids its own repair:\n#{out5}#{err5}"
+    end
+    keep.each { |rel, body| write(dir, rel, body) }
+    stage(dir)
+
     _, _, st4 = run_guard_in(dir, base)
     failures << "the fixture tree did not return to exit 0 after the plants" unless st4.exitstatus.zero?
   end
@@ -980,7 +1136,8 @@ def run_self_test
 
   base = baseline_of(REPO, nil)
   if base[:missing]
-    failures << "the declared baseline #{base[:rev]} is not in this clone, so CL-8/CL-9 cannot run"
+    failures << "the declared baseline #{base[:rev]} is not in this clone, so CL-8/CL-9/CL-10 " \
+                "cannot run"
     result = scan(REPO, { rev: base[:rev], missing: true, set: {}, files: 0 })
   else
     result = scan(REPO, base)
@@ -1005,6 +1162,17 @@ def run_self_test
     failures << "not one pre-baseline entry is at or over #{LENGTH_CAP} characters, so the census " \
                 "tier is proving nothing here and CL-8 could be scoped to the whole file instead"
   end
+  if result[:retired_back].zero?
+    failures << "not one pre-baseline entry asserts a RETIRED claim, so CL-10's census tier is " \
+                "proving nothing here and the arm could be scoped to the whole file instead"
+  end
+  vacuous = RETIRED.reject { |r| pattern_occurs?(REPO, r[:pattern]) }
+  vacuous.each do |r|
+    failures << "#{r[:ledger]}'s RETIRED pattern /#{r[:pattern].source}/ matches no tracked line " \
+                "of this repository, so it covers nothing while reading exactly like coverage"
+  end
+  puts "  real tree: #{RETIRED.length} RETIRED claim(s) declared, each matching tracked prose " \
+       "(#{result[:retired_back]} pre-baseline entry(ies) assert one, census only)"
   puts "  real tree: #{result[:files]} changelog(s), #{result[:releases]} release section(s), " \
        "#{result[:subsections]} subsection heading(s), #{result[:dated]} of " \
        "#{result[:entries]} repository entry(ies) dated -- non-vacuous"
@@ -1018,10 +1186,11 @@ def run_self_test
 
   if failures.empty?
     puts
-    puts "check-changelog --self-test: OK -- red on a plant of every arm (CL-1..CL-9) and on an " \
-         "unresolvable baseline, green on every legitimate shape including headings inside a " \
-         "fence, an undated bullet in a GEM record and a committed entry over both caps, and " \
-         "non-vacuous over this repository."
+    puts "check-changelog --self-test: OK -- red on a plant of every arm (CL-1..CL-10) and on " \
+         "an unresolvable baseline, green on every legitimate shape including headings inside a " \
+         "fence, an undated bullet in a GEM record, a committed entry over both caps, a " \
+         "committed entry asserting a retired claim and a new entry superseding one by name, " \
+         "and non-vacuous over this repository."
     return 0
   end
 

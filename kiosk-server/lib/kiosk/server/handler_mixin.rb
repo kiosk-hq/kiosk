@@ -376,11 +376,18 @@ module Kiosk
               "no default to fall back on."
           end
 
-          # ONE NAME, ONE KIND, for the half a single class body can see. The
-          # cross-class half is {HandlerRegistrations.refuse_cross_kind_collisions!},
+          # ONE NAME, ONE DECLARATION, for the half a single class body can see.
+          # The cross-class half is {HandlerRegistrations.refuse_cross_kind_collisions!},
           # which is the first moment the whole surface exists at once; this is
           # the same rule caught earlier, where the operator has both methods in
           # hand.
+          #
+          # A code reload does NOT come through here: the engine's `to_prepare`
+          # calls {ClassMethods#kiosk_register!}, which re-registers from the
+          # declarations already stored, and a reloaded class body is read on a
+          # NEW class object whose `kiosk_declarations` starts empty. So a clash
+          # at this point is always two declarations in one generation of one
+          # class body — an operator mistake with no legitimate reading.
           clash = kiosk_declarations[name]
           if clash && clash[:kind] != declaration[:kind]
             raise ArgumentError,
@@ -391,6 +398,15 @@ module Kiosk
               "GET #{Kiosk.configuration.mount_path}/#{name} and " \
               "POST #{Kiosk.configuration.mount_path}/#{name} cannot reach different handlers. " \
               "Rename one, or give it a `wire_name` of its own."
+          elsif clash
+            raise ArgumentError,
+              "#{where} declares the Kiosk verb #{name.inspect}, which ##{clash[:method_name]} " \
+              "on this class already declares. A verb name is ONE path segment reaching ONE " \
+              "method: storing the second would replace the first, " \
+              "#{Kiosk.configuration.mount_path}/#{name} would reach " \
+              "##{declaration[:method_name]}, and ##{clash[:method_name]} would be off the wire " \
+              "with nothing to say so. Rename one of the methods, or give one of them a " \
+              "`wire_name` of its own."
           end
 
           unless HandlerMixin::NAME_PATTERN.match?(name)

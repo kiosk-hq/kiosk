@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **A handler class could declare one verb name twice and the second silently replaced the first.** It is refused at class-body load now, as the engine already documented.
 - 2026-09-16: **Three more engine comments named a wrong code count, a stale demo tally, or a version that would carry unbuilt work.** Each now describes the code beside it.
 - 2026-09-16: **`Result#ok?` is gone — a constant-true predicate on an internal type nothing called.** Three sibling members with no caller stay, each now saying in the file why it ships.
 - 2026-09-16: **Engine comments that named a wrong count, caller or cause now say what the code does.** A new spec holds `server.rb`'s two controller lists to the directory.

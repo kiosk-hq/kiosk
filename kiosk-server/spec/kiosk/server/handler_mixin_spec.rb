@@ -848,6 +848,57 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       }.to raise_error(ArgumentError, /already declares it as a query/)
     end
 
+    # The EQUALITY case the kind check above skipped (K-1659). Before this the
+    # second declaration was stored, silently replacing the first: the earlier
+    # method went off the wire with nothing — not the cross-class check, which
+    # intersects the two registries and so cannot see a same-kind pair, and not
+    # bin/check-verb-routes, which derives its expected routes from the
+    # declarations that survived — saying so.
+    it "refuses one name declared twice at the same kind on the same class" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+          kind :query
+          description "The first."
+          input_schema type: "object"
+          output_schema true
+          def board = render(json: [])
+
+          kind :query
+          description "The second, under the same name."
+          input_schema type: "object"
+          output_schema true
+          wire_name "board"
+          def board_again = render(json: [])
+        end
+      }.to raise_error(ArgumentError, /#board on this class already declares/)
+    end
+
+    # THE CONTROL for the refusal above: re-REGISTERING is not re-DECLARING.
+    # The engine's `to_prepare` calls `kiosk_register!` on every reload, and a
+    # reloaded class body is read on a new class object whose declarations
+    # start empty — so neither path meets the clash, however many times it
+    # runs. (The real reloader cycle is handler_registration_boot_spec.rb's
+    # `development` scenario, which reloads three times in a booted app.)
+    it "does not treat re-registration, or a reloaded generation, as a duplicate" do
+      generation = lambda do
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+          kind :query
+          description "One verb, declared once per generation."
+          input_schema type: "object"
+          output_schema true
+          wire_name "board"
+          def board = render(json: [])
+        end
+      end
+
+      first = generation.call
+      expect { 3.times { first.kiosk_register! } }.not_to raise_error
+      expect { generation.call }.not_to raise_error
+      expect(Kiosk::Server::Queries.known).to include("board")
+    end
+
     # ── spec §8.1/§8.3 + T-073 = A, refused where the mistake is made ────
     #
     # All four raise at CLASS-BODY LOAD, so an operator meets them at boot with

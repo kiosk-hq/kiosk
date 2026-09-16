@@ -101,20 +101,29 @@ RSpec.describe "the skill pin" do
   # bin/check-version-parity binds each of these URLs to the protocol's
   # MAJOR.MINOR and deliberately ignores PATCH (protocol.md §14.4 makes the
   # skill's PATCH an independent line). That leaves one thing unguarded and
-  # this is it: the engine default may name a 0.3 cut that is not the cut the
-  # demos pin — `skill-v0.3.2.md` passes version parity perfectly. A third
-  # party inheriting the default would then advertise a superseded skill while
-  # every demo in the same repo advertises the current one.
+  # this is it: the engine default may name a cut that is not the cut the demos
+  # pin, and ANY TWO CUTS OF THE SAME SERIES pass version parity perfectly,
+  # however far apart their PATCH. A third party inheriting the default would
+  # then advertise a superseded skill while every demo in the same repo
+  # advertises the current one.
+  #
+  # No version numeral is written into this comment or into the failure message
+  # below, and that is a rule rather than an oversight: the message PRINTS
+  # every URL it is complaining about and derives the series FROM them, so the
+  # one sentence a maintainer meets at the exact moment the pins disagree
+  # cannot argue from a series the fleet has moved past.
   it "is the same published cut in kiosk-server's default and in every demo" do
     skip "kiosk-server's default is unreadable (asserted above)" if default_url.nil?
 
-    named = pins.transform_values { _1[:url] }.merge("kiosk-server (default)" => default_url)
+    named  = pins.transform_values { _1[:url] }.merge("kiosk-server (default)" => default_url)
+    series = named.values.filter_map { _1[%r{skill-v(\d+\.\d+)\.}, 1] }.uniq.sort
     expect(named.values.uniq.size).to eq(1),
                                       "the skill_url consumers disagree on which cut is current:\n" \
                                       "#{named.map { |who, url| "  #{who}: #{url}" }.join("\n")}\n" \
                                       "All nine consumers re-pin together when a new skill is cut " \
-                                      "(ADR-0012). bin/check-version-parity cannot see this — it " \
-                                      "compares MAJOR.MINOR only, and every URL above is 0.3."
+                                      "(ADR-0012). bin/check-version-parity compares MAJOR.MINOR " \
+                                      "only, so it sees this disagreement ONLY if the series above " \
+                                      "differ — and they are #{series.join(" / ")}."
   end
 
   # ── Byte level: needs the published files, so umbrella checkouts only ──────

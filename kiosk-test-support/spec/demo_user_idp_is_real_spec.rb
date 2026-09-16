@@ -9,10 +9,11 @@ require "kiosk"
 # the point. That spec loaded the REAL shipped `user:u-<uuid>` bearer stub and
 # proved it resolved to NO identity under a stubbed production Rails.env, while
 # still accepting the forgery under development — because every driver and the
-# e2e harness needed it to (K-555). The stub is deleted: the four demos that
-# carried one (getgrocery, hoteling, skooti) and stylish's role-carrying
-# `X-Staff-Session` SSO stand-in all authenticate humans through
-# `kiosk-user-idp-devise` now, in every environment. An env gate on an arm that
+# e2e harness needed it to (K-555). The stub is deleted: the THREE demos that
+# carried one — getgrocery, hoteling and skooti — and stylish's role-carrying
+# `X-Staff-Session` SSO stand-in, four artefacts of two shapes, all
+# authenticate humans through `kiosk-user-idp-devise` now, in every
+# environment. An env gate on an arm that
 # does not exist is not a property worth testing; that the arm cannot GROW BACK
 # is.
 #

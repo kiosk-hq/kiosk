@@ -10,10 +10,13 @@
 # autoloader, so a file that crosses that boundary is loaded under a
 # configuration it was never written for; it stayed green in every local gate
 # and was found only by a full runner build of `demo:rideflow`, days after
-# merge. None of the four `bin/check-*` scripts can see it by construction:
-# check-demo-copies compares copies at MATCHING relative paths, so a file
-# reaching ACROSS apps is invisible to it; check-ci-tasks reads task wiring;
-# check-gem-packaging reads built gems; check-solver-pin probes the live site.
+# merge. The four guards that come NEAREST cannot see it, each for a structural
+# reason rather than an oversight: check-demo-copies compares copies at
+# MATCHING relative paths, so a file reaching ACROSS apps is invisible to it;
+# check-ci-tasks reads task wiring; check-gem-packaging reads built gems;
+# check-solver-pin probes the live site. Four is how many are NAMED here, not
+# how many `bin/` ships — `ls bin/check-* | wc -l` is the count, and this
+# paragraph makes no claim about the rest of them.
 #
 # THREE KINDS OF REACH, AND ONLY ONE IS FORBIDDEN. The distinction is the whole
 # design of this guard, because the other two are accepted shapes that a naive

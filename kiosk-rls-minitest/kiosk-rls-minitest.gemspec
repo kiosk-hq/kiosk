@@ -13,7 +13,8 @@ Gem::Specification.new do |spec|
 
     `include Kiosk::TestHelpers` inside any `Minitest::Test` subclass mixes
     in the journey helpers (`as_agent_of`, `as_user`, `as_agent`,
-    `as_anonymous`, `query`, `run_action`, `pay_action`, `kiosk_seed`).
+    `as_anonymous`, `query`, `run_query`, `run_action`, `pay_action`,
+    `kiosk_seed`).
 
     Ships the assertions `assert_rls_denied` and `assert_quota_exceeded`
     for asserting the structured error classes — both also exposed as

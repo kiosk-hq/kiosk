@@ -15,14 +15,17 @@ class IntegrationJourneyTest < Minitest::Test
   end
 
   def test_journey_helpers_are_available
-    assert_respond_to self, :as_agent_of
-    assert_respond_to self, :as_user
-    assert_respond_to self, :as_agent
-    assert_respond_to self, :as_anonymous
-    assert_respond_to self, :query
-    assert_respond_to self, :run_action
-    assert_respond_to self, :pay_action
-    assert_respond_to self, :kiosk_seed
+    helpers = %i[as_agent_of as_user as_agent as_anonymous
+                 query run_query run_action pay_action kiosk_seed]
+
+    # The list is hand-kept, so hold it to the MODULE rather than to itself.
+    # It was short by `run_query` for as long as that method existed, and an
+    # assert_respond_to roll-call over a short list passes whether or not the
+    # missing helper is mixed in at all — the one thing this test exists to
+    # catch.
+    assert_equal Kiosk::TestHelpers::Journey.public_instance_methods(false).sort, helpers.sort
+
+    helpers.each { |helper| assert_respond_to self, helper }
   end
 
   def test_assertions_are_available

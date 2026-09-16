@@ -12,8 +12,8 @@ Gem::Specification.new do |spec|
     (kiosk-test-support) into RSpec.
 
     Automatically mixes the journey helpers (`as_agent_of`, `as_user`,
-    `as_agent`, `as_anonymous`, `query`, `run_action`, `pay_action`,
-    `kiosk_seed`) into any example group tagged
+    `as_agent`, `as_anonymous`, `query`, `run_query`, `run_action`,
+    `pay_action`, `kiosk_seed`) into any example group tagged
     `type: :kiosk_journey` (or `type: :kiosk_agent`, which `kiosk-agent-test`
     later upgrades to live-LLM mode).
 

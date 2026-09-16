@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **The published journey-helper roll-call was short by `run_query` at seven sites, two of them the tests that assert it.** The lists name it, and the tests ask the module.
 - 2026-09-16: **`Cuckoo.verify` raised on seven malformed-input shapes where its own comment, the changelog and the Equihash backend all promised false.** It answers false now.
 - 2026-09-16: **A signed PoW challenge could be re-partitioned into another alg/params split under its own HMAC.** The delimiter invariant is enforced at mint and at verify now.
 - 2026-09-16: **A retired claim could regrow in a packaged `CHANGELOG.md` with nothing going red.** `bin/check-changelog` arm CL-10 refuses one in any entry newer than its baseline.

@@ -6,7 +6,7 @@ Minitest integration for the [Kiosk](https://kiosk.tech) journey-test DSL.
 
 Wires the framework-agnostic journey-test DSL (`kiosk-test-support`) into Minitest. Adds:
 
-- A convenience include — `include Kiosk::TestHelpers` mixes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_action`, `pay_action`, `kiosk_seed`) and the assertions into a `Minitest::Test` subclass.
+- A convenience include — `include Kiosk::TestHelpers` mixes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_query`, `run_action`, `pay_action`, `kiosk_seed`) and the assertions into a `Minitest::Test` subclass.
 - Assertions: `assert_rls_denied { block }`, `assert_quota_exceeded { block }`, plus `refute_*` negative forms.
 - Spec-DSL: `proc { ... }.must_raise_rls_denied`, etc.
 

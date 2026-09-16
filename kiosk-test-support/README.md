@@ -36,7 +36,7 @@ as_anonymous do
 end
 ```
 
-Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See the `Kiosk::TestHelpers::Journey` docstrings for full semantics.
+Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_query(name, **args)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See the `Kiosk::TestHelpers::Journey` docstrings for full semantics.
 
 ## Wiring an executor
 

@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The published journey-helper roll-call was short by `run_query` (K-1696).** The lists name it now, and the two «helpers are available» tests are held to the module rather than to themselves.
+
 - The route conformance check no longer special-cases the engine's refusal controller, which no longer exists: a declared verb whose route is missing is reported as declared-and-never-routed, which is what every caller now meets as an ordinary 404.
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - Dropped the `kiosk-rls` dependency (RLS is opt-in now). This gem never

@@ -6,7 +6,7 @@ RSpec integration for the [Kiosk](https://kiosk.tech) journey-test DSL.
 
 Wires the framework-agnostic journey-test DSL (`kiosk-test-support`) into RSpec. Adds:
 
-- `type: :kiosk_journey` metadata — auto-includes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_action`, `pay_action`, `kiosk_seed`).
+- `type: :kiosk_journey` metadata — auto-includes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_query`, `run_action`, `pay_action`, `kiosk_seed`).
 - `type: :kiosk_agent` metadata — same DSL today; the optional `kiosk-agent-test` gem later upgrades it to live-LLM mode.
 - Matchers: `be_rls_denied`, `be_quota_exceeded`.
 

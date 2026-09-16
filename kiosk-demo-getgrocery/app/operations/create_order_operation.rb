@@ -171,7 +171,7 @@ class CreateOrderOperation
           next OperationResult.refused(
             code:    "forbidden",
             message: "order not found, not yours, or no longer replaceable (it is paid, being " \
-                     "paid, or already scheduled) — NOTHING was created and nothing was charged. " \
+                     "paid, or its delivery already moved) — NOTHING was created and nothing was charged. " \
                      "Re-read my_orders: an order that is already paid moves with " \
                      "reschedule_delivery, and a SEPARATE order is placed by calling create_order " \
                      "without order_id.",

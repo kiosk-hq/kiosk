@@ -154,7 +154,7 @@ class Kiosk::OrdersController < ActionController::API
                  # handler enforces (Kiosk::UuidCheck), which a bare {type:"string"} does not.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN,
-                                     description: "uuid of an unpaid order of yours to replace in place — it keeps that id, and the answer echoes it back. An id this shop cannot replace (unknown, another account's, or one that is paid, being paid or already scheduled) is refused with a 403: no order is created by such a call, so a replace that comes back refused has cost nothing." },
+                                     description: "uuid of an unpaid order of yours to replace in place — it keeps that id, and the answer echoes it back. An id this shop cannot replace (unknown, another account's, or one whose delivery has already been moved, or one that is paid or being paid) is refused with a 403: no order is created by such a call, so a replace that comes back refused has cost nothing." },
                },
                required: ["items", "delivery_slot_id", "delivery_address"]
   output_schema type: "object",

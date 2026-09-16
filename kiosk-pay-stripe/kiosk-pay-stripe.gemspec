@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
         wire whether a principal still has to complete it, backed by
         `saved_method?`, which asks Stripe whether the resolved Customer has a
         usable card.
-      - Charging. `Kiosk::PaymentProviders::Base#capture` settles an AP2 cart
+      - Charging. This adapter's own `#capture` settles an AP2 cart
         mandate as an `off_session` (merchant-initiated) PaymentIntent against
         that saved card — the assistant authorizes the cart, it never presents
         a card.

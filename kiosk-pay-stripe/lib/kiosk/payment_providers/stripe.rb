@@ -52,6 +52,12 @@ module Kiosk
       #   environment (e.g. getgrocery when KIOSK_TEST_AUTOCARD=1); it is
       #   never enabled in production or the live demo, where the real hosted
       #   SetupIntent flow runs.
+      # @param return_url [String, nil] the operator-owned https origin Stripe
+      #   redirects the human's browser to after they enter a card on the
+      #   hosted page. Pass it unless Kiosk's `issuer` is configured and
+      #   `<issuer>/payment/return` is the right target: with neither,
+      #   #setup_url raises rather than fall back to a localhost address a real
+      #   customer's browser would follow. See #resolved_return_url.
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",
                      customer_resolver: nil, customer_saver: nil, test_autocard: false,
                      return_url: nil)

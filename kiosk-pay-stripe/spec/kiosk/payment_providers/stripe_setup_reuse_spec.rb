@@ -174,10 +174,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, "setup-session reuse (K-492)" do
       url = adapter.setup_url(user_id: "user-1")
 
       expect(url).to start_with("https://checkout.stripe.com/")
-      # stripe-mock echoes create params, so this is a session WE asked for in
-      # setup mode — not the payment-mode fixture the list served.
-      created = ::Stripe::Checkout::Session.list(customer: customer_store["user-1"], status: "open", limit: 10).data.first
-      expect(created.mode).to eq("payment"), "stripe-mock became stateful — extend the reuse group above to it"
+      # stripe-mock is STATELESS: the session the adapter just minted is not in
+      # its list, which still serves the canned payment-mode fixture. That is
+      # the assertion — the mint above cannot have been a reuse of anything the
+      # list served, because the list has not changed.
+      listed_after_mint = ::Stripe::Checkout::Session.list(customer: customer_store["user-1"], status: "open", limit: 10).data.first
+      expect(listed_after_mint.mode).to eq("payment"), "stripe-mock became stateful — extend the reuse group above to it"
     end
   end
 end

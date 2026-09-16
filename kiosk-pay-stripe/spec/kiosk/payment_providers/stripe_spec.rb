@@ -68,9 +68,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     # omitting both yields a session whose hosted page errors. The shipped code
     # always passes `payment_method_types: ["card"]` (so `currency` is not
     # needed) — this pins that so a future regression dropping it is caught here
-    # rather than on Stripe's hosted page. NOTE: this does NOT explain the
-    # observed live "Something went wrong" (the shipped call already pins card);
-    # that is under investigation (key/account context, see the K-473 row).
+    # rather than on Stripe's hosted page.
     it "always pins explicit payment_method_types so setup mode needs no currency (K-473)" do
       session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
 

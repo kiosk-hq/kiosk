@@ -134,7 +134,7 @@ Kiosk.configure do |c|
   # registry, nothing else in the app ever references these classes, and this
   # harness boots DEVELOPMENT (eager_load = false), so without it Zeitwerk never
   # loads them, the registry stays empty, and the origin answers `GET
-  # /kiosk/schema` with `queries=[] actions=[]`, 404s every query and run, and
+  # /kiosk/schema` with `queries=[] actions=[]`, 404s every verb path, and
   # advertises `"capabilities": []`.
   c.handlers = %w[Kiosk::CatalogController Kiosk::BookingsController]
 

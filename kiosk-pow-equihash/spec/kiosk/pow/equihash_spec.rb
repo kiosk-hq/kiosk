@@ -738,7 +738,7 @@ RSpec.describe Kiosk::Pow::Equihash do
   describe "Python solver parity", :parity do
     let(:python) { find_python_with_blake2b }
 
-    before { skip "python3 with hashlib.blake2b not found" unless python }
+    before { parity_skip("python3 with hashlib.blake2b not found") unless python }
 
     it "Python blake2b matches Ruby for the KAT seed" do
       require "tempfile"
@@ -761,7 +761,7 @@ RSpec.describe Kiosk::Pow::Equihash do
 
       # solve.py requires numpy; the plain blake2b python may lack it.
       python = find_python_with_numpy
-      skip "python3 with numpy not found (pip install numpy)" unless python
+      parity_skip("python3 with numpy not found (pip install numpy)") unless python
 
       require "base64"
       challenge = JSON.generate(
@@ -793,7 +793,7 @@ RSpec.describe Kiosk::Pow::Equihash do
       skip "solve.py not found" unless File.exist?(solver_py)
 
       python = find_python_with_numpy
-      skip "python3 with numpy not found (pip install numpy)" unless python
+      parity_skip("python3 with numpy not found (pip install numpy)") unless python
 
       require "base64"
       salt      = "kiosk-eqx-parity-168".b
@@ -838,6 +838,21 @@ RSpec.describe Kiosk::Pow::Equihash do
       220716, 2282797, 1287422, 1739283, 1064154, 3198198, 3579075, 3590378,
       228235, 2335503, 1297479, 3907179, 1108349, 2972099, 3417182, 3877732
     ]
+  end
+
+  # Skip an absent parity toolchain — unless the environment UNDERTOOK to
+  # provide one. A skip is the same colour as a pass in every summary line CI
+  # prints, so a job that installs the interpreter and then silently fails to
+  # would otherwise read exactly like a job that ran the check.
+  def parity_skip(reason)
+    if ENV["KIOSK_REQUIRE_PARITY"] == "1"
+      raise "KIOSK_REQUIRE_PARITY=1 was set, so the caller undertook to provide the parity " \
+            "toolchain — #{reason}. Do NOT relax this to a skip: these examples are the only " \
+            "cross-implementation check of the shipped solver, and a skipped example reads as " \
+            "a passing one."
+    end
+
+    skip reason
   end
 
   def find_python_with_blake2b

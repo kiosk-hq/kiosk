@@ -213,7 +213,10 @@ RSpec.describe Kiosk::Pow do
   # ---------------------------------------------------------------------------
   # Cross-implementation parity (shells out to Python)
   #
-  # Skipped automatically if no python3 with argon2-cffi is available.
+  # Skipped automatically if no python3 with argon2-cffi is available — and a
+  # skip is the same colour as a pass in every summary line a CI job prints, so
+  # any environment that UNDERTOOK to provide the interpreter sets
+  # `KIOSK_REQUIRE_PARITY=1` and gets a failure instead of two pending examples.
   # Run `bundle exec rake parity` for the full interactive parity report.
   # ---------------------------------------------------------------------------
 
@@ -222,7 +225,22 @@ RSpec.describe Kiosk::Pow do
     let(:python)      { find_python_with_argon2 }
     let(:solve_py)    { File.join(__dir__, "../../solve.py") }
 
-    before { skip "python3 with argon2-cffi not found" unless python }
+    before do
+      next if python
+
+      # Fail-closed for any environment that PROMISED the interpreter. These
+      # two examples are the ONLY thing anywhere that compares this gem's
+      # packaged `solve.py` with its Ruby verifier, and an absent argon2-cffi
+      # turns them into two pending lines nobody reads.
+      if ENV["KIOSK_REQUIRE_PARITY"] == "1"
+        raise "KIOSK_REQUIRE_PARITY=1 was set, so the caller undertook to provide a python3 " \
+              "with argon2-cffi — and none of the candidate interpreters has it. Do NOT relax " \
+              "this to a skip: nothing else checks that the packaged solve.py and this verifier " \
+              "agree, and a skipped example reads as a passing one."
+      end
+
+      skip "python3 with argon2-cffi not found"
+    end
 
     it "Python argon2-cffi produces the same digest as Ruby for the known vector" do
       require "tempfile"

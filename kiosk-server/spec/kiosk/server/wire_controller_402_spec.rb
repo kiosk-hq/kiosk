@@ -166,10 +166,13 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
       provider.define_singleton_method(:setup_required?) { |user_id:| true }
       Kiosk.configure { |c| c.payment_provider = provider }
 
-      # connection_for(identity) touches ActiveRecord::Base.connection; the pay
-      # verb only USES it after the setup check, so a bare stub suffices.
+      # connection_for(identity) takes ActiveRecord::Base.lease_connection, and
+      # the pay verb only USES it after the setup check, so a bare stub
+      # suffices. `.connection` is deliberately NOT defined: the engine stopped
+      # calling it (Rails 8.1 soft-deprecates it, and it raises under
+      # permanent_connection_checkout = :disallowed), so a stub that offers it
+      # would let the call come back without this spec noticing.
       ar_base = Class.new do
-        define_singleton_method(:connection)       { Object.new }
         define_singleton_method(:lease_connection) { Object.new }
       end
       stub_const("ActiveRecord::Base", ar_base)

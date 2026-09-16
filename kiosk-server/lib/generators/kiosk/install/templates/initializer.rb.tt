@@ -28,7 +28,7 @@ Kiosk.configure do |c|
   # empty and this origin serves NO verbs: a handler registers when its
   # class body is read, nothing in your app ever references one on its own
   # (the wire reaches it THROUGH the registry), so GET <mount>/schema
-  # answers with an empty catalog, every query/run answers 404, and
+  # answers with an empty catalog, every verb path answers 404, and
   # /.well-known/kiosk.json advertises "capabilities": []. Fill this in as
   # you add handler controllers — see "Declaring queries and actions" in
   # the kiosk-server README, e.g.:

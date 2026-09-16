@@ -111,9 +111,11 @@ Gem::Specification.new do |spec|
   spec.add_dependency "railties",      "~> 8.1"
   # actionpack    — ActionController::{API,Base,InvalidAuthenticityToken}.
   spec.add_dependency "actionpack",    "~> 8.1"
-  # activerecord  — ActiveRecord::Base.connection is how the auth plane and the
-  #                 device-authorization store reach the database, plus
-  #                 ActiveRecord::{RecordNotUnique,StatementInvalid,Migration}.
+  # activerecord  — ActiveRecord::Base.lease_connection is how the auth plane,
+  #                 the wire and the durable stores reach the database (NOT
+  #                 `.connection`, which Rails 8.1 soft-deprecates and which
+  #                 RAISES under permanent_connection_checkout = :disallowed),
+  #                 plus ActiveRecord::{RecordNotUnique,StatementInvalid,Migration}.
   spec.add_dependency "activerecord",  "~> 8.1"
   # activesupport — String#constantize (agent_registration) and String#classify
   #                 (generator template).

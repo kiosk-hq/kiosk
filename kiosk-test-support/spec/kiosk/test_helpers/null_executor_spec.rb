@@ -78,6 +78,37 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
     end
   end
 
+  describe "#run_query" do
+    it "records name + args under its own kind" do
+      executor.run_query(:my_orders, { since: "2026-01-01" })
+      call = executor.calls_of(:run_query).first
+      expect(call.args).to eq(name: :my_orders, args: { since: "2026-01-01" })
+      expect(executor.calls_of(:run_action)).to be_empty
+    end
+
+    # K-1706. THE ONE BEHAVIOUR THAT SEPARATES THE READ SIDE FROM THE ACTION
+    # KINDS: `default_for` answers [] for a read and nil for a write, so a verb
+    # declared `kind :query` yields rows rather than nothing when no result was
+    # queued. The pay_action example below is the control for the other half.
+    it "returns [] by default, as the READ side does and the action kinds do not" do
+      expect(executor.run_query(:my_orders, {})).to eq([])
+      expect(executor.run_action(:x, {})).to be_nil
+    end
+
+    it "returns the queued result FIFO via enqueue_run_query" do
+      executor.enqueue_run_query([{ "id" => 1 }])
+      executor.enqueue_run_query([{ "id" => 2 }])
+      expect(executor.run_query(:my_orders, {})).to eq([{ "id" => 1 }])
+      expect(executor.run_query(:my_orders, {})).to eq([{ "id" => 2 }])
+    end
+
+    it "raises RLSDenied when an error is enqueued" do
+      executor.enqueue_error(:run_query, :rls_denied)
+      expect { executor.run_query(:my_orders, {}) }
+        .to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
+    end
+  end
+
   describe "#pay_action" do
     it "records under its own kind" do
       executor.pay_action(:buy, { sku: "x" })

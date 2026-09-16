@@ -109,6 +109,27 @@ RSpec.describe Kiosk::TestHelpers::Journey do
     end
   end
 
+  describe "#run_query" do
+    # K-1706. Two `respond_to` roll-calls asserted this helper's NAME and
+    # nothing at either layer ran it, so the read side of an origin's wire
+    # could be renamed or mis-forwarded with the suite green.
+    it "delegates name + kwargs under the current identity" do
+      harness.as_agent_of(alice) do
+        harness.run_query(:my_orders, since: "2026-01-01")
+      end
+      call = executor.calls_of(:run_query).first
+      expect(call.args).to        eq(name: :my_orders, args: { since: "2026-01-01" })
+      expect(call.identity.user_id).to eq("u-alice")
+    end
+
+    it "is a DIFFERENT kind from run_action, which is the whole reason it exists" do
+      harness.as_agent_of(alice) { harness.run_query(:my_orders) }
+
+      expect(executor.calls_of(:run_query).size).to eq(1)
+      expect(executor.calls_of(:run_action)).to be_empty
+    end
+  end
+
   describe "#pay_action" do
     it "delegates under :pay_action kind" do
       harness.as_agent_of(alice) { harness.pay_action(:buy, sku: "x") }

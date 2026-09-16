@@ -342,10 +342,9 @@ def classify(rel, text)
   return :env     if base.end_with?(".env.example")
   return :gemspec if rel.end_with?(".gemspec")
   return :code    if rel.end_with?(".rb", ".rake", ".sh")
-  # Extensionless executables, by SHEBANG -- the same derivation
-  # `audit/check-script-warnings.rb` and `audit/check-guard-corpus-counts.rb`
-  # use, and for the same reason: a guard joins this corpus by existing rather
-  # than by being remembered. Every `bin/check-*` in this repository is spelled
+  # Extensionless executables, by SHEBANG -- derived rather than listed, so a
+  # guard joins this corpus by existing rather than by being remembered. Every
+  # `bin/check-*` in this repository is spelled
   # that way, so without this line the whole guard family -- the densest body of
   # engineering comment prose here -- was in NO class at all (K-1723).
   return :code    if !base.include?(".") && text.start_with?("#!")

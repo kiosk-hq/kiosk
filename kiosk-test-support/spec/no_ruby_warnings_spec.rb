@@ -15,10 +15,10 @@
 # the spec helpers answered ONE line, which was a sentence in a header rather
 # than a command anything ran.
 #
-# WHY THIS AND NOT `audit/check-script-warnings.rb`, which is the workspace's
-# other Ruby-warning gate and was the obvious place to widen. That gate EXECUTES
-# its corpus: it runs each guard script in a subprocess under `-w` and reads the
-# stderr of a real run. A gem's `lib` file, a demo's `db/seeds.rb` and a spec are
+# WHY A PARSE AND NOT A RUN. The obvious instrument is the one that RUNS a
+# script under `-w` and reads the stderr of a real run, which is how a gate over
+# executable tooling is written. It cannot reach this corpus at all: a gem's
+# `lib` file, a demo's `db/seeds.rb` and a spec are
 # not runnable that way — half of them would need a database and the rest would
 # need a Rails boot — so widening its corpus is not an option that exists. The
 # instrument for source is the OTHER verb of the same flag: PARSE it. Nothing is
@@ -48,8 +48,8 @@
 # WHAT IT CANNOT CATCH, stated plainly because a parse is not an execution:
 #
 #   * every RUNTIME warning — a redefined method, an already-initialised
-#     constant, a `Struct` member shadowing. Those need the file loaded, which
-#     is `audit/check-script-warnings.rb`'s job over the corpus that CAN be run.
+#     constant, a `Struct` member shadowing. Those need the file LOADED, so
+#     they belong to a gate that runs its corpus rather than parsing it.
 #   * a variable that IS read, by code that never executes.
 #   * anything outside a tracked `.rb` or `.rake` file: `.erb` templates, the
 #     `.rb.tt` generator templates (which are not valid Ruby on their own), and
@@ -133,8 +133,7 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
   end
 
   # Not an assertion: the other tier. A parse warning this guard does not gate
-  # is printed so it is a number on every run rather than a belief, which is
-  # the half `audit/check-script-warnings.rb` calls NOTICE.
+  # is printed so it is a number on every run rather than a belief.
   it "reports every other parse warning without failing on it" do
     rest = WARNINGS.reject { |(_, line)| line =~ FATAL_WARNING }
     rest.each { |(rel, line)| RSpec.configuration.reporter.message("  NOTICE #{rel}: #{line}") }

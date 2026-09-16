@@ -10,21 +10,25 @@
 
 require "kiosk/user_identity_providers/devise"
 
-# ── PoW / Reputation — the :query toll, selected by ATABLEFOR_POW_MODE ──────
+# ── PoW / Reputation — the verb toll, selected by ATABLEFOR_POW_MODE ────────
 #
-# The Equihash challenge is issued ONLY for :query. :run is ungated, so
-# `rake demo:book` pays no :query toll; registration PoW is a separate,
+# The engine offers EVERY wire command to the gate, whatever its kind, and the
+# SELECTED policy decides which verbs actually draw a challenge. Only the
+# :demo policy below scopes the toll to :query; the :reputation policy — what
+# a non-local boot gets — and :backoff never read the verb at all, so an
+# action is tolled too: script/reputation_flow.rb books a table against a live
+# challenge and is the thing to read. Registration PoW is a separate,
 # always-on gate (own section below).
 #
-#   rake demo:book — no KIOSK_POW_DEMO → no :query toll
-#   rake demo:pow  — KIOSK_POW_DEMO=1  → :query toll active
+#   rake demo:book — no PoW flag set  → :off in dev → nothing is tolled
+#   rake demo:pow  — KIOSK_POW_DEMO=1 → :demo → :query tolled, :run free
 #
 # Reservation-scalping is the abuse a table-booking provider fears: scripts
 # that mass-claim prime-time 2-tops to resell. PoW prices that at the door —
-# a metered toll per query, tuned per provider, not a hardware wall.
+# a metered toll per request, tuned per provider, not a hardware wall.
 #
 # KIOSK_POW_DIFFICULTY (Kiosk::Pow::Equihash::Difficulty) picks the params; both
-# the :query toll and the reputation gate inherit the level. Unset = low.
+# the verb toll and the registration gate inherit the level. Unset = low.
 #   low  (default) → n=96 k=5  — sub-second on the reference solver; CI stays fast.
 #   high           → n=168 k=7 — ~1.3 GiB and ~10s on the reference numpy solver
 #                    on one M-series laptop core. The GiB is that solver's
@@ -59,7 +63,7 @@ Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equ
 #                a genuine booking record.
 #   demo       — flat AtableforDemoPowPolicy: always toll :query (rake demo:pow).
 #   backoff    — "solve once, next N calls free" (N = KIOSK_POW_BACKOFF_DEMO, else 10).
-#   off        — no :query toll. Registration PoW (below) stays on regardless.
+#   off        — no verb toll at all. Registration PoW (below) stays on regardless.
 #
 # ONE selector, because independent `if ENV[…]` blocks each assigning
 # `reputation_policy` would leave only the LAST in effect, and a co-active

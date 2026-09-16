@@ -11,9 +11,9 @@ module Kiosk
     # reference numpy solver as measured on one M-series laptop core and no
     # other hardware; the GiB is that solver's table, not a floor (n, k)
     # imposes on every implementation -- a memory-optimised solver trades it
-    # for time, which is how 200/9's real footprint fell to ~144 MB (see
-    # bench/). Equihash is NOT ASIC- or GPU-proof — its role here is a
-    # cheap-to-verify metered toll, not a hardware equaliser.
+    # for time, which is how 200/9's real footprint fell to ~144 MB. Equihash
+    # is NOT ASIC- or GPU-proof — its role here is a cheap-to-verify metered
+    # toll, not a hardware equaliser.
     #
     # == Algorithm
     #
@@ -37,9 +37,10 @@ module Kiosk
     #
     # `verify(salt:, params:, nonce:)` first checks the indices structurally
     # (count, type, range, distinctness, canonical subtree ordering — no
-    # hashing at all), then recomputes up to 128 BLAKE2b-256 hashes pair by
-    # pair, extracting n bits from each, checking the Wagner collision tree
-    # level by level and finally the global XOR = 0.
+    # hashing at all), then recomputes up to 128 BLAKE2b-256 hashes leaf by
+    # leaf, extracting n bits from each and folding the Wagner tree as each
+    # pair completes — the per-level collision rule, evaluated depth-first
+    # rather than level by level — and finally the global XOR = 0.
     #
     # == No difficulty target
     #
@@ -314,9 +315,9 @@ module Kiosk
         # answers `false`.
         #
         # The bounds are the ones the arithmetic below actually needs, and no
-        # more — every parameter pair this gem, the demos and the specs use
-        # (168/7, 96/5, 200/9, 32/3, 24/2, 8/1, 8/2, 8/3) satisfies them, so the
-        # ACCEPTED SET IS UNCHANGED. They live in {valid_params?} so the gate
+        # more: every pair in real use here passes them, and the only tracked
+        # pairs they reject are the degenerate ones `equihash_spec.rb` carries
+        # to prove they bite. They live in {valid_params?} so the gate
         # that MINTS a challenge can ask the same question before issuing one
         # and the two can never disagree.
         return false unless valid_params?(params)
@@ -324,6 +325,7 @@ module Kiosk
         n, k  = coerce_params(params)
         n_div = n / (k + 1)  # bits per level: 168/8 = 21
 
+        # ── Step 1: the INDICES themselves — count, type, range, distinctness ─
         expected_len = 1 << k  # 2^k
         return false unless indices.length == expected_len
 

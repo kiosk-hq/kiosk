@@ -30,6 +30,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The verifier's comments now describe the verifier (K-1679..K-1682).** They named the opposite traversal, cited nothing, skipped a step number and kept a short list.
 - The gemspec said `~17 ms` to verify where the README, the docstring and this gem's own spec all say `~18 ms`. A new example holds the two together.
 - **The README states the verify/solve split, and a guard in the repository holds it (K-1396).** Verifying is the operator's Ruby — nothing a served request loads spawns a process, and `solve.py` is here for the caller that pays the toll. `bin/check-served-pow-purity` fails if any process-spawning construct becomes reachable from the served PoW path. No code change; the property was already true.
 

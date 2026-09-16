@@ -9,8 +9,9 @@ Gem::Specification.new do |spec|
   spec.summary       = "Adversarial regression harness for Kiosk providers"
   spec.description   = <<~DESC
     kiosk-redteam drives hostile HTTP scenarios against any Kiosk provider
-    and asserts each attack is correctly blocked (HTTP 401/402/403 or a domain
-    denial response).  A scenario that finds a real breach fails loudly.
+    and asserts each attack is correctly blocked — a deliberate refusal, never
+    a crash and never a toll the harness could not settle.  A scenario that
+    finds a real breach fails loudly.
 
     Ships: an HTTP Client (register + Equihash PoW, kyc, query/run/pay with
     RS256 mandate signing), a Scenario/Verdict/Runner framework, and a library

@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **The gem's own packaged changelog still published the `user_code` alphabet claim retired a month ago.** A new entry supersedes it; the old one stands.
 - 2026-09-16: **The PoW plane's comments named a stale spec count, the wrong caller, the retired Equihash pair and four rotted line numbers.** Each now describes the code beside it.
 - 2026-09-16: **A handler class could declare one verb name twice and the second silently replaced the first.** It is refused at class-body load now, as the engine already documented.
 - 2026-09-16: **Three more engine comments named a wrong code count, a stale demo tally, or a version that would carry unbuilt work.** Each now describes the code beside it.

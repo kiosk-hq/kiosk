@@ -38,6 +38,15 @@ module Kiosk
       # {AuthChallengeStores::ActiveRecord#take} (one `DELETE ... RETURNING`).
       # An override that implements it as a read followed by {#update} is a
       # defect, not a style choice.
+      #
+      # {#find_by_user_code_hash} carries the other cross-adapter requirement:
+      # it answers only a `:pending` row, and never one that has been approved,
+      # denied, consumed or expired. {DeviceVerification} builds its whole
+      # "only pending rows are visible" contract on that, and `.approve` would
+      # raise {DeviceAuthorization::StateError} — a 500, not a wrong-code page
+      # — on a row an override let through. Both shipped adapters filter, and
+      # the shared examples in `device_authorization_stores_spec.rb` assert it
+      # against each; an override is held by nothing but this sentence.
       class Base
         def create(_device_authorization);        raise NotImplementedError; end
         def update(_device_authorization);        raise NotImplementedError; end

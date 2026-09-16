@@ -19,11 +19,12 @@ class Kiosk::DiningRoomController < ApplicationController
 
   # availability — open tables ACROSS the aggregator for the upcoming rolling
   # seatings that seat the party. Public: any authenticated agent may browse, no
-  # per-user scoping. The upcoming seatings (19/20/21 Europe/Lisbon, past ones
-  # filtered, rolling to tomorrow) come from app/models/seatings.rb, so
-  # availability is NEVER stale. Tables are FINITE: a table is "open" for a
-  # seating only when no CONFIRMED booking holds it for that exact
-  # (table, seating_at), so a fully-booked seating is legitimately absent.
+  # per-user scoping. The upcoming seatings (19/20/21 on EACH RESTAURANT's own
+  # clock, past ones filtered, rolling to tomorrow) come from
+  # app/models/seatings.rb, so availability is NEVER stale. Tables are FINITE:
+  # a table is "open" for a seating only when no CONFIRMED booking holds it for
+  # that exact (table, seating_at), so a fully-booked seating is legitimately
+  # absent.
   #
   # No caller value is ever spliced into SQL — the filters below are ordinary
   # ActiveRecord conditions. The result is small and NOT paginated.
@@ -34,7 +35,8 @@ class Kiosk::DiningRoomController < ApplicationController
               "UPCOMING seatings that can seat the party. One row per open " \
               "(restaurant, table, seating), so an EMPTY array means what you " \
               "asked for is genuinely sold out. Seatings are the current " \
-              "upcoming ones (Europe/Lisbon), never stale, and one with every " \
+              "upcoming ones on EACH RESTAURANT's own clock — the `timezone` " \
+              "field of a row names it — never stale, and one with every " \
               "table taken is absent. Once the human picks a row, `book_table` " \
               "confirms it; everything it needs is on that row. Any deposit " \
               "shown is a no-show hold settled at the restaurant — this origin " \

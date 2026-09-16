@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-17: **atablefor's `availability` descriptor told an assistant the seatings are Europe/Lisbon; the handler builds one roster per restaurant clock.** The prose says so now.
 - 2026-09-17: **atablefor's public board rendered every restaurant's seating on the aggregator's clock, with no zone named.** It reads `restaurants.timezone` now and names it.
 - 2026-09-17: **The KYC broker's `robots.txt` sent an agent to two documents it 404s, because the file was held identical across all eight demos.** prove now advertises only what it serves.
 - 2026-09-17: **The shared container context was justified in eleven files by «every demo's Gemfile resolves the kiosk gems through `path:`» — the KYC broker's has none.** Re-worded.

@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **A guard header may no longer state the size of the rule table under it.** `check-prose-counts` gains RS-1, and now reads the extensionless scripts it had never classified.
 - 2026-09-16: **Three public methods in two gems had no caller and no test.** Two are deleted; `DeviseSession#sign_out!` gets the client half's first spec, over a real socket.
 - 2026-09-16: **`errors.rb` scoped itself to the journey DSL while holding two classes the conformance checks raise, one asserted by nothing.** Both corrected.
 - 2026-09-16: **Two shipped `kiosk-rls` surfaces promised `rake kiosk:rls:{show,check}`, which nothing defines.** Both now say what the gem does and what `psql` answers.

@@ -164,6 +164,45 @@
 # wrote. A guard that is green because its allow-file swallowed everything is
 # the failure this split exists to avoid.
 #
+# A RULE-SET SIZE IS DERIVED FROM THE ENUMERATION IT INTRODUCES (K-1721, K-1722).
+# The arm above asks a count to name a command. There is one shape where the
+# derivation is already in the file and needs no command at all: a comment that
+# says how many rules, arms, passes or classes a script has, standing directly
+# above the enumeration of them. That enumeration IS the count, so the cardinal
+# beside it is a second copy of a number nothing joins to the first -- and this
+# is the class that has actually rotted here. Six guard headers carried a size
+# their own enumeration refuted; five were exact when they were written and were
+# outgrown by a later rule, and the sixth was byte-identical in both published
+# repositories at once because the file is a twin.
+#
+# So RS-1 compares them. It reads a comment line carrying a cardinal directly in
+# front of `rules`/`arms`/`passes`/`classes`/`assertions`/`checks`, requires an
+# enumeration of THREE OR MORE distinct ids to begin within eight lines below it
+# with nothing but comment between, and fails when the two disagree. An id is a
+# prefixed number (`CL-1`, `R8`, `TS-3`), a parenthesised letter or roman
+# numeral, or a bare capitalised tag in a column (`SEC`, `PM`, `ABS`, `RN`);
+# they are grouped into a BLOCK by kind, so one file's several enumerations do
+# not pool into one wrong total.
+#
+# WHY IT IS SO NARROW, and the number that settled it. A cardinal in front of
+# one of those nouns, anywhere in this repository's guards and deploy scripts,
+# is roughly eighty comment lines -- nearly all of them correct English about a
+# SUB-block ("the two arms read only entries that are NEW", "ON TWO RULES
+# ONLY"). Requiring the enumeration to BEGIN below the sentence is what
+# separates a total from a mention: over every tracked text file here, that
+# conjunction matched exactly one line, and it was the live defect. A wider
+# rule would arrive red on correct prose, which is the trade K-1097 measured and
+# this header already took once, for source comments, three paragraphs up.
+#
+# THE ARM IS SCOPED TO NEITHER A FILE CLASS NOR AN EXTENSION, deliberately. It
+# runs over every readable tracked text file, and its own scoping is the
+# enumeration -- a file with no rule table of three or more ids cannot produce a
+# finding, whatever its name. Placing it surfaced a gap that was NOT this arm's:
+# `classify` read no extensionless file at all, so the `bin/check-*` guards --
+# where this class has lived its whole life, and the densest body of engineering
+# comment prose in this repository -- were in no class and every other arm here
+# was blind to them. They are read now, by shebang (K-1723).
+#
 # WHAT IT WOULD NOT CATCH. This list is the header's most useful paragraph, so
 # nothing here is overtrusted:
 #
@@ -296,13 +335,20 @@ BARE_MARKER = /\Acount:\s*(\d+)\s*¦\s*from:\s*(.+?)\s*\z/.freeze
 #              maintainer writes to the next maintainer is reported.
 #   :comments  Ruby comment blocks -- commentary for a reader of the source, in
 #              which an enumeration in the same breath is ordinary. REPORTED.
-def classify(rel)
+def classify(rel, text)
   base = File.basename(rel)
   return nil if base == "CHANGELOG.md"   # append-only: an old entry records the tree AS IT WAS
   return :prose   if rel.end_with?(".md")
   return :env     if base.end_with?(".env.example")
   return :gemspec if rel.end_with?(".gemspec")
-  return :code    if rel.end_with?(".rb", ".rake")
+  return :code    if rel.end_with?(".rb", ".rake", ".sh")
+  # Extensionless executables, by SHEBANG -- the same derivation
+  # `audit/check-script-warnings.rb` and `audit/check-guard-corpus-counts.rb`
+  # use, and for the same reason: a guard joins this corpus by existing rather
+  # than by being remembered. Every `bin/check-*` in this repository is spelled
+  # that way, so without this line the whole guard family -- the densest body of
+  # engineering comment prose here -- was in NO class at all (K-1723).
+  return :code    if !base.include?(".") && text.start_with?("#!")
 
   nil
 end
@@ -389,6 +435,17 @@ ARMS = [
     plant: lambda { |dir|
       path = File.join(dir, "fixture.gemspec")
       File.write(path, File.read(path).sub("names three\n    gates", "names nine\n    gates"))
+    },
+  },
+  {
+    id: "RS-1",
+    what: "a header that states the SIZE of the rule enumeration directly below it, and the " \
+          "enumeration says otherwise (K-1721 -- five guard headers outgrown by a later rule, " \
+          "and one twin carrying the same defect in both published repositories)",
+    plant: lambda { |dir|
+      path = File.join(dir, "bin/fixture-guard")
+      File.write(path, File.read(path).sub("WHAT IT CHECKS. Four arms",
+                                           "WHAT IT CHECKS. Three arms"))
     },
   },
   {
@@ -728,6 +785,100 @@ def broad_hits_in(sentence)
   n
 end
 
+# ── rule-set size (RS-1) ─────────────────────────────────────────────────────
+#
+# See the header. The derivation is the enumeration itself, so nothing here runs
+# a command; the two halves are a COMMENT LINE naming a size and a BLOCK of ids
+# beginning below it.
+
+# An id at the head of a comment line, in a column. Four spellings, because the
+# guards in this tree use four: a prefixed number, a bare letter-and-number, a
+# parenthesised letter or roman numeral, and a capitalised tag followed by a
+# gutter of at least two spaces (`SEC   Every bare section citation`).
+RULE_LEAD = /\A\s*(?:\#+|\/\/+|--|\*)/.freeze
+RULE_ID   = /\A\s*(?:\#+|\/\/+|--|\*)(?<ind>[ ]{1,20})
+              (?<tok>[A-Z]{1,4}-\d{1,3}|[A-Z]\d{1,3}|\([a-z]\)
+                    |\((?:i{1,3}|iv|vi{0,3}|ix|xi{0,2})\)
+                    |[A-Z]{2,6}(?=[ ]{2,}))
+              (?:[ ]+\S|[ ]*\z)/x.freeze
+RULE_NOUNS = /(?:arms|rules|passes|classes|assertions|checks)/i.freeze
+RULE_PHRASE = /\b(#{CARDINAL})[ ]+(#{RULE_NOUNS})\b/i.freeze
+# A demonstrative in front of the cardinal makes it a BACK-reference to part of
+# a set ("these two rules"), never a statement of the set's size.
+RULE_DEMONSTRATIVE = /\b(?:these|those|their|its|last|first|next|other|remaining|further|more|only)[ ]+\z/i.freeze
+RULE_LOOKAHEAD = 8   # lines between the sentence and the enumeration it introduces
+RULE_GAP       = 12  # lines between two members of ONE enumeration
+RULE_MIN       = 3   # members below which an enumeration is not a rule table
+
+def rule_kind(tok, ind)
+  return [:paren, 0]                                if tok.start_with?("(")
+  return [tok[/\A[A-Z]{1,4}/].to_sym, 0]            if tok =~ /\A[A-Z]{1,4}-?\d/
+
+  [:tag, ind.length]
+end
+
+# Maximal runs of same-kind ids, keyed by the line the run STARTS on.
+def rule_blocks(lines)
+  marks = []
+  lines.each_with_index do |line, i|
+    m = RULE_ID.match(line)
+    marks << [i, rule_kind(m[:tok], m[:ind]), m[:tok]] if m
+  end
+  blocks = []
+  marks.each do |(i, kind, tok)|
+    last = blocks.last
+    if last && last[:kind] == kind && i - last[:last] <= RULE_GAP
+      last[:last] = i
+      last[:members] << tok
+    else
+      blocks << { kind: kind, start: i, last: i, members: [tok] }
+    end
+  end
+  blocks.select { |b| b[:members].uniq.length >= RULE_MIN }
+        .to_h { |b| [b[:start], b] }
+end
+
+def rule_set_findings(rel, text, stats)
+  lines = text.lines.map(&:chomp)
+  starts = rule_blocks(lines)
+  stats[:rule_enumerations] += starts.length
+  out = []
+  lines.each_with_index do |line, i|
+    next unless line =~ RULE_LEAD
+    next if RULE_ID.match?(line)
+
+    line.to_enum(:scan, RULE_PHRASE).map { Regexp.last_match }.each do |m|
+      next if RULE_DEMONSTRATIVE.match?(line[0...m.begin(1)])
+
+      stats[:rule_phrases] += 1
+      block = nil
+      ((i + 1)..(i + RULE_LOOKAHEAD)).each do |j|
+        break if j >= lines.length
+
+        if (b = starts[j])
+          block = b
+          break
+        end
+        break if RULE_ID.match?(lines[j])
+        break unless lines[j] =~ RULE_LEAD || lines[j].strip.empty?
+      end
+      next if block.nil?
+
+      members = block[:members].uniq
+      said    = cardinal_value(m[1])
+      if said == members.length
+        stats[:rule_introducers_ok] += 1
+      else
+        out << { path: rel, id: "RS-1",
+                 what: "`#{m[0]}` stands above an enumeration of #{members.length}: " \
+                       "#{members.join(', ')}",
+                 extra: line.strip }
+      end
+    end
+  end
+  out
+end
+
 # ── declarations ─────────────────────────────────────────────────────────────
 
 def markers_in(sentence)
@@ -821,7 +972,12 @@ def scan(root)
     text = readable_text(abs)
     next if text.nil?
 
-    kind = classify(rel)
+    # RS-1 runs over EVERY readable tracked text file, before the class gate:
+    # the guards this class lives in are extensionless and `classify` returns
+    # nil for all of them. Its own scoping is the enumeration it needs to find.
+    findings.concat(rule_set_findings(rel, text, stats))
+
+    kind = classify(rel, text)
     if kind.nil?
       stats[:out_of_scope] += 1
       next
@@ -958,6 +1114,12 @@ def report(result, quiet:)
          "#{s[:fence_blocks_unopted_with_digits]} of them carrying a standalone digit run"
     puts "  REPORTED, NOT GATED: #{s[:reported_hits]} count(s) in source comments; " \
          "#{s[:broad_residue]} cardinal-plus-plural hit(s) the noun vocabulary does not reach"
+    # RS-1's own two halves, derived on every run for the reason the line above
+    # it exists: an arm whose detector has stopped seeing either half exits 0
+    # forever and reads as coverage.
+    puts "  rule-set sizes (RS-1): #{s[:rule_enumerations]} enumeration(s) of " \
+         "#{RULE_MIN}+ ids, #{s[:rule_phrases]} comment(s) naming a rule-set size, " \
+         "#{s[:rule_introducers_ok]} of them standing above the enumeration they count"
   end
 
   if result[:findings].empty?
@@ -981,6 +1143,8 @@ def report(result, quiet:)
   warn "  Repair, in order of preference: elide the count; or declare it with a marker IN ITS OWN"
   warn "  SENTENCE -- <!-- count: N ¦ from: <command> --> ; or add a line to #{ALLOW_FILE} with a"
   warn "  one-line reason, and a `from:` command if one exists."
+  warn "  For [RS-1] the repair is the first of those and nothing else: DELETE the cardinal. The"
+  warn "  enumeration under it is the derivation, and a second copy of a number is what rots."
   warn "  Inside a FENCED block: <!-- fence-count: <N> <text from the block> ¦ from: <command> -->"
   warn "  on the line above the fence, or the same with `why:` for a figure nothing re-derives."
   1
@@ -1041,6 +1205,29 @@ GREEN = {
     === Results: 3 files scanned, 0 failed ===
     ```
   MD
+  # THE RS-1 CONTROL. A guard-shaped script whose header states the size of its
+  # own rule table and states it CORRECTLY -- four arms, four ids. It must stay
+  # green: RS-1's whole claim is that it separates a wrong total from a right
+  # one, and a plant with no control measures only that the pattern matches
+  # something. It is extensionless on purpose, because that is what the guards
+  # carrying this class are, and `classify` returns nil for it -- so this file
+  # is read by RS-1, and -- since K-1723 brought the extensionless scripts into
+  # `:code` -- REPORTED rather than gated by the census, exactly like a guard.
+  "bin/fixture-guard" => <<~GUARD,
+    #!/usr/bin/env ruby
+    # fixture-guard -- a stand-in for the shape K-1721 was about.
+    #
+    # WHAT IT CHECKS. Four arms, over the tree this script lives in.
+    #
+    #   FG-1  the first rule.
+    #   FG-2  the second rule.
+    #   FG-3  the third rule.
+    #   FG-4  the fourth rule, added later -- which is how the class is born.
+    #
+    # Two of the rules above are bans, and that sentence names a SUBSET rather
+    # than a size: it must not be read as a total.
+    exit 0
+  GUARD
   # An excused count, with the entry that excuses it below.
   "docs/allowed.md" => "The upstream standard defines seven sections, which are not ours to count.\n",
   # A gemspec, carrying a count in BOTH published spellings -- the one-line
@@ -1099,6 +1286,13 @@ def self_test_fixture(failures)
       puts "  green tree: exit 0 -- a declared count, a wrapped sentence, an allow entry, a fence -- OK"
     else
       failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
+    end
+    unless out =~ /rule-set sizes \(RS-1\): [1-9]\d* enumeration\(s\)/ &&
+           out =~ /, [1-9]\d* of them standing above the enumeration they count/
+      failures << "the green tree did not READ the RS-1 control: `bin/fixture-guard` states its " \
+                  "own rule-table size correctly, so the run must report at least one enumeration " \
+                  "and at least one introducer AGREEING with it. A control nothing looked at is " \
+                  "not a control:\n#{out}"
     end
     unless out.include?("2 declared in their own sentence")
       failures << "the green tree did not excuse BOTH declared counts -- the wrapped one and the " \
@@ -1189,6 +1383,24 @@ def run_self_test
                 "no declaration reaches, and the denominator it prints is no longer one."
   end
 
+  # RS-1's two halves, each with the vacuity hazard every other arm here has:
+  # a detector that has stopped finding enumerations, or stopped finding the
+  # sentences that name their size, exits 0 forever and reads as coverage. Both
+  # are asked of the REAL tree, not of the fixture.
+  if s[:rule_enumerations].to_i < 5
+    failures << "the real tree holds #{s[:rule_enumerations].to_i} rule enumeration(s) of " \
+                "#{RULE_MIN}+ ids. RS-1's id reader has gone blind, and the arm would exit 0 " \
+                "whatever a guard header said."
+  end
+  if s[:rule_phrases].to_i < 5
+    failures << "the real tree holds #{s[:rule_phrases].to_i} comment(s) naming a rule-set size. " \
+                "RS-1's phrase reader has gone blind, and the arm would exit 0 whatever an " \
+                "enumeration said."
+  end
+  puts "  real tree: #{s[:rule_enumerations].to_i} rule enumeration(s), " \
+       "#{s[:rule_phrases].to_i} size-naming comment(s), " \
+       "#{s[:rule_introducers_ok].to_i} introducer(s) agreeing with what they introduce"
+
   # Every declared file class must have a subject here. A class whose extractor
   # returns nothing is a class that has been switched off, and it reads as
   # coverage forever -- so it fails instead.
@@ -1225,7 +1437,8 @@ def run_self_test
     puts
     puts "check-prose-counts --self-test: OK -- red on a plant of every arm including a marker one " \
          "sentence away and well inside the old proximity window, green on a wrapped declared " \
-         "sentence, and non-vacuous over this repository."
+         "sentence and on a rule-set header that counts its own enumeration correctly, and " \
+         "non-vacuous over this repository."
     return 0
   end
 

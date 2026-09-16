@@ -231,13 +231,46 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
     # mock) is what serializes the claim. It needs the row to be actually
     # committed — see the `:real_concurrency` exception in spec_helper.rb —
     # and cleans up its own row since no transaction rolls it back.
+    #
+    # WHICH WINDOW IS WIDENED IS THE WHOLE TEST, AND IT USED TO BE THE WRONG ONE
+    # (K-1736). A delay inside `ProveKey.mint` widens claim -> mint, which runs
+    # AFTER the conditional UPDATE: every losing thread then did its read only
+    # once the winner's UPDATE had already committed, saw a row that was no
+    # longer pending, and was turned away by the in-memory `#confirmable?`
+    # pre-check at the top of #decide. That is the check-then-write shape this
+    # example exists to disprove, so the example was passing for the wrong
+    # reason. MEASURED by three mutations of the controller, each run against
+    # this file: `raise` as the first statement of `lost_race_response` left it
+    # GREEN (the loser arm was never reached at all), defeating the conditional
+    # claim itself -- `update_all(...) == 1` rewritten `>= 0`, so every caller
+    # "wins" -- left it GREEN, and only reordering `approve!` before `claim!`
+    # turned it red. It pinned the ORDER and not the ATOMICITY.
+    #
+    # So the delay is on the READ. Every thread is held inside the read -> claim
+    # window until all of them have seen the row as pending -- `reads` below
+    # asserts exactly that, and it is what makes the N-1 refusals a statement
+    # about the conditional UPDATE rather than about the pre-check. The mint
+    # delay stays beside it, for its original purpose: it holds the winner
+    # inside the expensive half while the losers are still racing, so a second
+    # mint would overlap the first rather than following it.
     it "is single-use under concurrency: N racing approvals mint exactly once", :real_concurrency do
       rid = open_request
       begin
-        # Widen the claim-vs-mint window deterministically (same technique as
-        # kiosk-server's pow_gate_spec slow_ok_backend): with no
-        # delay the window is sub-millisecond and the race is a timing
-        # coin-flip rather than a reliable assertion.
+        # THE WINDOW THE RACE NEEDS: hold every reader between its read and its
+        # claim. With no delay here the window is sub-millisecond and which
+        # branch refuses the losers is a timing coin-flip (same technique as
+        # kiosk-server's pow_gate_spec slow_ok_backend, aimed one seam earlier).
+        reads = []
+        read_mutex = Mutex.new
+        allow(ProveRequest).to receive(:find_by).and_wrap_original do |original, *args, **kwargs|
+          row = original.call(*args, **kwargs)
+          read_mutex.synchronize { reads << row&.status }
+          sleep 0.15
+          row
+        end
+
+        # And hold the WINNER inside the expensive half, so a second mint would
+        # overlap the first instead of following it.
         allow(ProveKey).to receive(:mint).and_wrap_original do |original, **kwargs|
           sleep 0.15
           original.call(**kwargs)
@@ -266,6 +299,12 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
           end
         end
         statuses = threads.map(&:value)
+
+        # THE PRECONDITION, asserted rather than assumed: all N read the row as
+        # pending, so none of them can have been refused by the `#confirmable?`
+        # pre-check. Without this the two assertions below are satisfied by a
+        # plain check-then-write and say nothing about the claim.
+        expect(reads.count("pending")).to eq(n)
 
         expect(statuses.count(200)).to eq(1)
         expect(statuses.count(422)).to eq(n - 1)

@@ -9,10 +9,12 @@ module Kiosk
     # synthetic placeholder, service account, team / org, or parent agent
     # depending on the adapter.
     #
-    # Adapters ship as `kiosk-user-idp-*` gems. Today only
-    # `kiosk-user-idp-devise` (embedded mode) ships; further embedded and
-    # satellite-mode adapters (Warden, JWT-bearer, pg-session, generic OIDC,
-    # …) are planned — none exist yet.
+    # Adapters ship as `kiosk-user-idp-*` gems, and `kiosk-user-idp-devise`
+    # (embedded mode) is the only one there is: `git ls-files
+    # 'kiosk-user-idp-*/*.gemspec'` names it and nothing else. Whatever else
+    # already authenticates the principal at the provider — another Rack
+    # session layer, a bearer token, a satellite front end — is reached by
+    # subclassing this Base and returning an {Kiosk::Identity} from #verify.
     class Base
       # Verify an incoming request into a {Kiosk::Identity}.
       #

@@ -8,9 +8,10 @@ module Kiosk
     # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` (in kiosk-server)
     # ships as the default and is used with ZERO config: it registers agents
     # into the local `agents` table and signs tokens with the provider's own
-    # JWKS. Fronting an EXTERNAL agent-identity issuer by subclassing this Base
-    # is a PLANNED seam — no external `kiosk-agent-idp-*` adapter (Entra Agent
-    # ID, Okta Agent Identity, Google Agent Passport, ID-JAG, …) ships yet.
+    # JWKS. Fronting an EXTERNAL agent-identity issuer means subclassing this
+    # Base and setting `c.agent_idp`; this repository ships no adapter that does
+    # — `git ls-files 'kiosk-agent-idp-*'` counts 0 — so an operator who needs
+    # one writes it against the three methods below.
     #
     # **THE ONE CONSTRAINT THE SEAM IMPOSES ON AN ADAPTER: the `agent_id` it
     # puts in a {Kiosk::Identity} must be a UUID string.** {Kiosk::Identity}

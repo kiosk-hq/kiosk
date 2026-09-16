@@ -23,6 +23,7 @@ The foundation. Defines:
   agent identifier onto a local uuid inside the adapter. `user_id`
   carries no such constraint — it follows `c.user_id_type` (`Kiosk.configuration.user_id_type`).
 - **Postgres GUC namespace constants** — `Kiosk::GUC`
+- **Canonical-uuid shape guard** — `Kiosk::UuidCheck` (the runtime `valid?` and the matching JSON Schema `pattern` a verb declares)
 - **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, default mount path)
 - **Configuration** — `Kiosk.configure { |c| ... }`
 

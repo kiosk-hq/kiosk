@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- `UuidCheck`'s JSON Schema pattern IS enforced: the engine validates every verb's arguments against its `input_schema`. The doc said it validated nothing.
+- The three adapter-base docs and the gemspec stop forecasting adapter gems that do not exist, and name what does.
 - `Kiosk.configuration` serialises its FIRST read: racing first-touchers share one `Configuration` instead of each building their own. Later reads stay lock-free.
 - README and `Identity` doc: the accessors are `Kiosk.configuration.user_id_type` / `.roles` — `Kiosk.user_id_type` and `Kiosk.roles` do not exist.
 - `Kiosk::Protocol` gains `HEADER_TIMEZONE` (`Kiosk-Timezone`), the request header a caller declares its own clock in.

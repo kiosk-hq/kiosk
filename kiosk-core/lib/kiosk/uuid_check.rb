@@ -40,10 +40,17 @@ module Kiosk
     # full match. It lives beside {PATTERN} so the DECLARED contract and the
     # RUNTIME guard cannot drift apart unnoticed.
     #
-    # It is a declaration, NOT a second enforcement point: kiosk-server
-    # validates nothing against `input_schema`. This tells an assistant reading
-    # `GET <endpoint>/schema` what shape to send, and {valid?} in the handler is
-    # what actually rejects a bad one.
+    # IT IS ENFORCED, and by two different layers for two different reasons.
+    # The engine validates a verb's arguments against the `input_schema` it
+    # declares — `Kiosk::Server::RequestValidation.validate_arguments!`, called
+    # UNCONDITIONALLY from `VerbController` on the per-verb wire, not behind
+    # `c.validate_requests` — so a malformed id is refused as a typed 400
+    # naming the pattern before any handler code runs. {valid?} is the check
+    # that does not depend on the engine at all: an operator's own guard, on
+    # the operator's own error, reached from ordinary app code (a service
+    # object, a job, a console) where no wire request is in flight. Declaring
+    # this pattern in an `input_schema` therefore buys a real refusal as well
+    # as telling an assistant reading `GET <endpoint>/schema` what to send.
     JSON_SCHEMA_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 
     # @param value [Object] the candidate id (usually a String off the wire)

@@ -40,9 +40,10 @@ module Kiosk
     # Abstract base for AP2 PSP (Payment Service Provider) adapters.
     # See the Payment (AP2 mandate chain) section of the spec.
     #
-    # Subclasses ship as `kiosk-pay-*` gems. Today only `kiosk-pay-stripe`
-    # ships; further open adapters (e.g. Paddle) and commercial regional
-    # PSPs are planned on customer demand — none exist yet.
+    # Subclasses ship as `kiosk-pay-*` gems, and `kiosk-pay-stripe` is the only
+    # one there is: `git ls-files 'kiosk-pay-*/*.gemspec'` names it and nothing
+    # else. A second PSP is written against the two methods below — the port is
+    # `setup_required?` and `capture`, and that is the whole of it.
     class Base
       # Returns true when the principal MUST complete a payment setup flow
       # (e.g. Stripe SetupIntent — card-on-file) before a charge can proceed.

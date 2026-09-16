@@ -41,8 +41,9 @@ module Kiosk
 
     # Payment PSP adapter instance — captures AP2 cart mandates into PSP
     # settlements (see {Kiosk::PaymentProviders::Base}). Default nil; the
-    # provider selects one per market (kiosk-pay-stripe today; further
-    # kiosk-pay-* adapters planned).
+    # provider selects one per market, and `kiosk-pay-stripe` is the only
+    # `kiosk-pay-*` adapter this repository ships — `git ls-files
+    # 'kiosk-pay-*/*.gemspec'` names it and nothing else.
     attr_accessor :payment_provider
 
     # Postgres GUC namespace (see {Kiosk::GUC}). Default "app".

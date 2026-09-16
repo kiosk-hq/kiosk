@@ -46,7 +46,7 @@ end
 
 # Owner carries a staff_role + Devise credentials (they sign in to the salon to
 # link their assistant, the same real session the binding surfaces use).
-owner = User.find_or_create_by!(id: OWNER_ID) do |u|
+User.find_or_create_by!(id: OWNER_ID) do |u|
   u.email      = "owner@combette.example"
   u.password   = DEMO_PASSWORD
   u.staff_role = "owner"

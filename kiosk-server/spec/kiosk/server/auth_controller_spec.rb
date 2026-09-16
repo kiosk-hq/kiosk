@@ -122,7 +122,7 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
       agent_id: "a-2", role: "customer",
     )
 
-    status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env(token))
+    status, _body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env(token))
     expect(status).to eq(200)
 
     # The watermark now covers the ORIGINAL token's iat (siblings dropped),

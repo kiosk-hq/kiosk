@@ -152,7 +152,6 @@ STDERR.puts "  Registered alcohol-buyer agent #{a_agent} (own keypair only — n
 rows       = catalog(a_token)
 wine       = rows.find { |r| r["age_restricted"] == true }
 abort "catalog has no age_restricted item — seed the wine" if wine.nil?
-non_wine   = rows.find { |r| !r["age_restricted"] } || rows.first
 STDERR.puts "  Age-restricted item in catalog: sku=#{wine["sku"]} #{wine["price_eur"]}"
 
 alcohol_items = [{ sku: wine["sku"], qty: 1 }]
@@ -245,7 +244,7 @@ STDERR.puts "  pay: http=#{rc_pay} psp_reference=#{psp_ref.inspect}"
 # ── PART B: non-alcohol positive control — NO KYC at all ──────────────────────
 
 STDERR.puts "── PART B: non-alcohol order (positive control — NO KYC) ──"
-b_key, b_agent, b_user, b_token = register_agent
+_b_key, _b_agent, _b_user, b_token = register_agent
 b_rows  = catalog(b_token)
 b_item  = b_rows.find { |r| !r["age_restricted"] }
 rc_b, b_body = create_order(b_token, [{ sku: b_item["sku"], qty: 1 }])
@@ -257,7 +256,7 @@ STDERR.puts "  create_order (#{b_item["sku"]}, NO KYC submitted): http=#{rc_b} o
 STDERR.puts "── REDTEAM ──"
 # R1: a FORGED age attestation (trusted issuer + correct aud, but signed with a
 # DIFFERENT key) is rejected at /agents/kyc, so alcohol create_order stays blocked.
-rt_key, rt_agent, rt_user, rt_token = register_agent
+_rt_key, _rt_agent, rt_user, rt_token = register_agent
 forged_signing_key = OpenSSL::PKey::RSA.generate(2048)
 now = Time.now.to_i
 forged_jws = JWT.encode(
@@ -265,7 +264,7 @@ forged_jws = JWT.encode(
     attributes: { age_over_18: true }, iat: now, exp: now + 3600 },
   forged_signing_key, "RS256",
 )
-rc_forged, forged_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: forged_jws },
+rc_forged, _forged_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: forged_jws },
                                    { "Authorization" => "Bearer #{rt_token}" })
 STDERR.puts "  forged attestation submit: http=#{rc_forged} (expect 403)"
 rc_rt_alcohol, _ = create_order(rt_token, alcohol_items)

@@ -310,7 +310,7 @@ STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 # Gate-1 WHERE id=rA AND user_id=kiosk.current_user_id() AND status='reserved'
 # finds nothing because rA.user_id = A ≠ B → 403.
 # The 403 genuinely isolates Gate-1 ownership, not a payment gap.
-rc_confirm_b, confirm_b_resp = WIRE.post_json(
+rc_confirm_b, _confirm_b_resp = WIRE.post_json(
   "/kiosk/confirm_booking",
   { booking_id: booking_id_a },
   WIRE.bearer(token_b),

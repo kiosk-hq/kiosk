@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1711 anchors.
+# 1710 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -38,7 +38,6 @@ README.md	Red-team scenarios, adversarial test harness
 README.md	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
 README.md	multi-assistant identity per user
 README.md	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
-README.md	| `kiosk-rls` | Opt-in RLS DSL + migration helpers (`rake kiosk:rls:{show,check}` planned, lands in a follow-up) | alpha |
 ROADMAP.md	**MPP as a settlement adapter.**
 bin/check-verb-routes	#   METHOD-KIND       GET for a query, POST for an action.
 deploy/Caddyfile	atablefor.demo.kiosk.tech {
@@ -1007,7 +1006,7 @@ kiosk-rls-rspec/lib/kiosk/rls_rspec/matchers.rb	RSpec::Matchers.define :be_rls_d
 kiosk-rls/CHANGELOG.md	- `rake kiosk:rls:{show,check}` rake tasks (need PG connection — land later).
 kiosk-rls/README.md	**Prerequisite for real enforcement:** the application must connect as a **non-superuser, non-owner role**
 kiosk-rls/README.md	**RLS is not Kiosk's primary security model.**
-kiosk-rls/README.md	Out of this release: `rake kiosk:rls:show TABLE` and `rake kiosk:rls:check` (need a live PostgreSQL connection and land in a follo
+kiosk-rls/README.md	This gem emits DDL and ships no rake tasks.
 kiosk-rls/README.md	When you opt in, `enable_rls_on` emits both `ENABLE ROW LEVEL SECURITY` **and** `FORCE ROW LEVEL SECURITY`
 kiosk-rls/README.md	`kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer
 kiosk-rls/lib/kiosk/rls/dsl.rb	    #   enable_rls_on(table)                      — full-table RLS turn-on

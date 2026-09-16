@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The README stopped forecasting `rake kiosk:rls:{show,check}`, which nothing defines (K-1700).** It now points at `psql`, which answers both questions today.
+
 - **The rubygems blurb listed the DDL this gem emits and left out FORCE ROW LEVEL SECURITY (K-1697).** Without it Postgres exempts the table owner and RLS is a no-op.
 - **`system_role` stops pointing at an Action-DSL escalation that has not shipped (K-1695).** Its live caveat now carries the measurement behind it.
 

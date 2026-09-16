@@ -108,7 +108,7 @@ end
 
 Pre-v1.0 alpha. The DSL surface is stable across pre-v1.0 minor bumps; SQL emission may evolve as we add corner cases (schema-qualified tables, partitioned tables, view-based column gating).
 
-Out of this release: `rake kiosk:rls:show TABLE` and `rake kiosk:rls:check` (need a live PostgreSQL connection and land in a follow-up).
+This gem emits DDL and ships no rake tasks. What a table's policies actually are on a live database is `psql`'s to answer, and it needs nothing from here: `\d+ TABLE` prints a `Policies (forced row security enabled)` block carrying every policy body, and `select * from pg_policies where tablename = 'TABLE'` returns the same as rows.
 
 ## License
 

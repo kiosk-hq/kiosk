@@ -422,9 +422,9 @@ module Kiosk
         )
       end
 
-      # Default: host's primary ActiveRecord connection. Satellite-mode
-      # / app_role connection-pool plumbing lands in a
-      # follow-up release.
+      # The host's primary ActiveRecord connection — every caller on this
+      # origin is served from the same pool, and the resolved identity this
+      # takes is not used in choosing it.
       #
       # `lease_connection`, not `connection`: Rails 8.1 soft-deprecates
       # `ActiveRecord::Base.connection`, and under

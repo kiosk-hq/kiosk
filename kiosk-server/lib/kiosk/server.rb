@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# kiosk-server — the Rails engine, the nine wire/auth/discovery controllers,
-# the install generator, and the pure-Ruby pieces they build on (well-known
-# doc builder, headers, schema-migration SQL). See https://kiosk.tech.
+# kiosk-server — the Rails engine, the wire/auth/discovery controllers, the
+# install generator, and the pure-Ruby pieces they build on (well-known doc
+# builder, OpenAPI document builder, headers, schema-migration SQL). See
+# https://kiosk.tech.
 #
 # This is a Rails gem: railties, actionpack, activerecord and activesupport
 # are declared runtime dependencies (see the gemspec) and are loaded here
@@ -70,13 +71,19 @@ require "kiosk/server/mandate_verifier"
 
 require "kiosk/server/engine"
 
-# Controllers. This block loads the wire surface (WireController), the
-# discovery surface (DiscoveryController —
-# agents.txt/json, agent-configuration, kiosk.json, api-catalog, auth.md),
-# JWKS (JwksController), the kiosk-pop auth surface (AuthController — NOT
-# OAuth — plus the link/claim/unlink binding endpoints), the KYC attestation
-# surface (KycAttestationController), and the account-binding ceremony's
-# OAuth-wire + HTML controllers.
+# Controllers. Every controller this gem ships is required here AND named in
+# the manifest below, and `server_controller_manifest_spec.rb` derives the set
+# from the directory and holds both lists to it — so neither can quietly fall
+# behind a controller somebody adds. The surfaces: the wire (WireController for
+# the reserved `schema`/`pay`, VerbController for the operator's own verbs),
+# the derived OpenAPI document (OpenApiController), the discovery surface
+# (DiscoveryController — agents.txt/json, agent-configuration, kiosk.json,
+# api-catalog, auth.md), JWKS (JwksController), the kiosk-pop auth surface
+# (AuthController — NOT OAuth — plus the link/claim/unlink binding endpoints),
+# the KYC attestation surface (KycAttestationController), and the
+# account-binding ceremony's OAuth-wire and HTML controllers
+# (OauthDeviceAuthorizationController, OauthTokenController,
+# DeviceVerifyController, AssistantsController).
 require "kiosk/server/wire_controller"
 require "kiosk/server/verb_controller"
 require "kiosk/server/open_api_controller"
@@ -140,6 +147,11 @@ module Kiosk
     #   Signing / discovery:
     #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration, api-catalog (RFC 9727), auth.md
     #   - {Kiosk::Server::DiscoveryController} — serves those six discovery docs
+    #   - {Kiosk::Server::OpenApi}          — OpenAPI 3.1 description of this
+    #                                         origin's verbs, derived from the
+    #                                         registries and memoized per origin
+    #   - {Kiosk::Server::OpenApiController} — Rails controller serving
+    #                                         <mount>/openapi.json
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (kiosk-pop access tokens)

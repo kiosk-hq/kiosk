@@ -99,8 +99,14 @@ module Kiosk
       #
       #   * the caller signed the wrong value (its bug — the wire hint covers it), or
       #   * `c.issuer` does not match the host this instance is actually served
-      #     on (the operator's bug: every demo defaults the issuer to localhost,
-      #     so one missing KIOSK_ISSUER rejects every real assistant).
+      #     on — the operator's bug, and the expensive one: a value that is
+      #     right in development and wrong where the assistants dial rejects
+      #     every real caller. The remedy is to read it from the environment
+      #     and FAIL THE BOOT when it is absent in production rather than
+      #     falling back to a development default; every demo in this
+      #     repository that configures an issuer does exactly that, and
+      #     `git grep -l "KIOSK_ISSUER is required in production" --
+      #     "kiosk-demo-*/config/environments/production.rb"` names them.
       #
       # A run of these lines where the SIGNED aud is the host your users reach
       # is the second case. This goes to the operator's log and never onto the

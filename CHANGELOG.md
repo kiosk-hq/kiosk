@@ -26,6 +26,8 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **`Result#ok?` is gone — a constant-true predicate on an internal type nothing called.** Three sibling members with no caller stay, each now saying in the file why it ships.
+- 2026-09-16: **Engine comments that named a wrong count, caller or cause now say what the code does.** A new spec holds `server.rb`'s two controller lists to the directory.
 - 2026-09-16: **All four demos' `before-after.md` carried a recording its task had outgrown.** Each is re-run at head, and each document's drift narration collapses to one sentence.
 - 2026-09-16: **The same getgrocery quote ran `delivery_slots` into a private builder's body and dropped its `timezone` field.** The quote now ends where the shipped method does.
 - 2026-09-16: **getgrocery's `before-after.md` quoted two verb schemas requiring a `timezone` the quote never declared.** The lines are restored; the guard refuses an unsatisfiable schema.

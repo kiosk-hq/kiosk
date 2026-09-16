@@ -1072,7 +1072,7 @@ kiosk-server/lib/kiosk/server/engine.rb	          get "/.well-known/kiosk.json",
 kiosk-server/lib/kiosk/server/engine.rb	          get "/agents.json", to: "kiosk/server/discovery#agents_json"
 kiosk-server/lib/kiosk/server/engine.rb	          get "/agents.txt",  to: "kiosk/server/discovery#agents_txt"
 kiosk-server/lib/kiosk/server/engine.rb	          get "/auth.md",     to: "kiosk/server/discovery#auth_md"
-kiosk-server/lib/kiosk/server/engine.rb	        # `schema` is one of the TWO routes under this mount that resolve no
+kiosk-server/lib/kiosk/server/engine.rb	        # `schema` resolves no identity — it is PUBLIC, like `openapi.json`
 kiosk-server/lib/kiosk/server/engine.rb	        get  "auth/challenge", to: "auth#challenge"
 kiosk-server/lib/kiosk/server/engine.rb	        get  "schema", to: "wire#schema"
 kiosk-server/lib/kiosk/server/engine.rb	        post "agents/kyc", to: "kyc_attestation#create"

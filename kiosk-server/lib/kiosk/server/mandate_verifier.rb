@@ -277,9 +277,8 @@ module Kiosk
       # only shipped PSP adapter and `kiosk-pay-stripe` passes `cart_mandate.currency`
       # straight into `PaymentIntent.create`; the vendored client documents that
       # parameter, and the value it reads back, as «Three-letter ISO currency code,
-      # in lowercase». Lower case is also what 148 of the 158 currency literals in
-      # this repository already say, and what the specification's own worked
-      # example prints.
+      # in lowercase». It is also what the specification's own worked example
+      # prints.
       #
       # WHAT THIS IS NOT. It does not decide whether an operator's currency domain
       # admits two spellings — §11.1 leaves that to the operator and still does.

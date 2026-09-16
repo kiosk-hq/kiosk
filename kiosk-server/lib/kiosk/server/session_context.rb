@@ -60,6 +60,12 @@ module Kiosk
 
       # The session open on this thread, or nil.
       #
+      # NO CALLER IN THIS REPOSITORY, and it ships anyway: it is one of the
+      # three-member guard surface an operator's identity-scoped scope reaches
+      # for, announced together in this gem's CHANGELOG, and {require_open!}
+      # below — the member the demos actually call, from ten model files — is
+      # the raising sibling of this one and of {open?}.
+      #
       # @return [SessionContext, nil]
       def self.current = Thread.current[KEY]
 

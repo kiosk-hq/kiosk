@@ -38,6 +38,13 @@ module Kiosk
       end
 
       # True when the result was truncated (more rows exist beyond this page).
+      #
+      # NO CALLER IN THIS REPOSITORY, and it ships anyway: {Page} is the type an
+      # OPERATOR's query handler returns, so this is the readable spelling of
+      # the `next_cursor` contract for the code that BUILDS a page, not for the
+      # wire — the wire reads `next_cursor` itself, in
+      # {WireController#add_pagination_headers}. `page_spec.rb` holds both
+      # answers.
       def truncated? = !next_cursor.nil?
     end
 
@@ -151,8 +158,9 @@ module Kiosk
         super(kind: kind, payload: payload, next_cursor: next_cursor, total: total)
       end
 
-      def ok? = true
-
+      # A Result IS the success case — a refusal never becomes one, errors
+      # travel as {Errors::Base#to_problem} — so 200 is not a default here, it
+      # is the only status this type has.
       def http_status = 200
 
       # THE SUCCESS BODY: the handler's rendered payload, VERBATIM. No `ok`,

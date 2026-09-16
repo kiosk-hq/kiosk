@@ -32,10 +32,9 @@ RSpec.describe Kiosk::Server::Result do
     end
   end
 
-  describe "#ok? and #http_status" do
-    it "always reports ok and HTTP 200" do
+  describe "#http_status" do
+    it "always reports HTTP 200" do
       r = described_class.new(kind: :rows, payload: [])
-      expect(r.ok?).to         be(true)
       expect(r.http_status).to eq(200)
     end
   end

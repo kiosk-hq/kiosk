@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **Engine comments that named a wrong count, caller or cause now say what the code does.** A new spec holds `server.rb`'s two controller lists to the directory they describe.
 - **Mounting the engine is how the protocol plane is drawn, not one of two ways.** The README, the gemspec and the controller headers stop offering a hand-drawn copy as an escape hatch.
 - **A configuration store slot could hand two concurrent first-touchers two different stores, so one PoW proof was accepted twice.** The four store defaults now build under a lock.
 - **`/auth.md` hands a cold assistant the wire skill and the published solver.** `## Discover` carries `skill_url` and its digest; `## Register` names the solver the 403 hint names.
@@ -252,6 +253,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - Test coverage: 47 new examples (33 on `DeviceAuthorization` + 14 on stores + config integration). Full kiosk-server suite remains green at 222 examples, 0 failures.
 
 ### Removed
+
+- **`Kiosk::Server::Result#ok?` is gone.** A constant-true predicate on a type this gem calls internal, with no caller anywhere; `#http_status` is the whole of what a Result answers with.
 
 - **`kiosk.actions` and `kiosk.action_log` leave the canonical migration set (K-828).** Canonical migration 003 is retired and the install generator emits nine migrations instead of ten (004-010 keep their ordinals). With the audit trail now the operator's, a shipped migration that creates two audit tables nothing ever fills is exactly the dead schema K-791 objected to. `SchemaDefinitions.actions_log_sql`, the `create_kiosk_actions_log` template and `Kiosk::Server::ActionLog` (with `c.audit_log` / `c.audit_log_args`) are gone rather than deprecated: there are no adopters to carry a shim for, and an existing installation drops the two tables by hand.
 

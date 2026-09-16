@@ -312,12 +312,11 @@ module Kiosk
         # caller, while `forbidden` means "authenticated, but this identity
         # may not do this".
         #
-        # `schema` is one of the TWO routes under this mount that resolve no
-        # identity (the other is `openapi.json`, below): it answers
-        # {SchemaDocument}, derived at boot, under a public cache policy. It is
-        # still drawn HERE rather than beside the discovery routes because it
-        # is mount-relative — it describes THIS wire, and its URL derives from
-        # the discovery document's `endpoint`.
+        # `schema` resolves no identity — it is PUBLIC, like `openapi.json`
+        # below: it answers {SchemaDocument}, derived at boot, under a public
+        # cache policy. It is still drawn HERE rather than beside the discovery
+        # routes because it is mount-relative — it describes THIS wire, and its
+        # URL derives from the discovery document's `endpoint`.
         get  "schema", to: "wire#schema"
         post "pay",    to: "wire#pay"
 

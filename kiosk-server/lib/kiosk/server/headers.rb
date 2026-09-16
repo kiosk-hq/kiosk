@@ -27,6 +27,11 @@ module Kiosk
       end
 
       # Build a fresh headers hash with the three Kiosk headers set.
+      #
+      # NO CALLER IN THIS REPOSITORY: {HeadersMiddleware} mutates the Rack hash
+      # it is handed, through {add_to} above. This is the public no-hash
+      # spelling of the same three headers, and its example is the builder half
+      # of the Section 3.6 conformance evidence.
       def self.build(server_version: Kiosk::Server::VERSION)
         add_to({}, server_version: server_version)
       end

@@ -49,9 +49,17 @@ module Kiosk
         end
 
         # Returns true iff the agent has a non-NULL `kyc_verified_at` timestamp.
-        # The binary KYC gate. A KYC-restricted Action (e.g. skooti's
-        # `rent_motorcycle`) calls this, or the finer-grained
-        # {#kyc_has_attributes?} when it needs specific booleans.
+        # The BINARY KYC gate — «this agent completed some verification», with
+        # no statement about what was verified. {#kyc_has_attributes?} below is
+        # the reader for a gate that needs specific named booleans.
+        #
+        # NO CALLER IN THIS REPOSITORY, and the reason is worth knowing before
+        # you build on it: it is reachable from an operator's verb as
+        # `Kiosk.configuration.agent_idp.kyc_verified?(agent_id)`, and the one
+        # KYC-gated verb in the shipped fleet does not want it — skooti's
+        # `rent_motorcycle` needs NAMED attributes rather than the flag, and
+        # reads them through an ActiveRecord model of its own (see
+        # {#kyc_has_attributes?}).
         def kyc_verified?(agent_id)
           row = agents_column("kyc_verified_at", agent_id)
           return false if row.nil?
@@ -89,8 +97,15 @@ module Kiosk
 
         # Returns true iff EVERY name in `required` is present-and-true in the
         # agent's stored KYC attributes. `required` is a list of attribute
-        # names (Strings/Symbols). Used by an attribute-gated Action, e.g.
-        # `rent_motorcycle` requiring both `age_over_18` and `licence_a`.
+        # names (Strings/Symbols) — the reader for an attribute-gated Action,
+        # one that needs, say, both `age_over_18` and `licence_a`.
+        #
+        # NO CALLER IN THIS REPOSITORY EITHER, and the shipped demo that gates
+        # on exactly that pair goes the other way deliberately: skooti's
+        # `rent_motorcycle` reads the engine-owned `kyc_attributes` rows
+        # through `Agent.kyc_granted?`, an ActiveRecord scope in the demo, so
+        # the gate is written in the app's own idiom. Both routes read the same
+        # rows; this one is the one that needs no model.
         def kyc_has_attributes?(agent_id, required)
           attrs = kyc_attributes(agent_id)
           Array(required).all? { |name| attrs[name.to_s] == true }

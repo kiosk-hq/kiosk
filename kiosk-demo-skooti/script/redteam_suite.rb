@@ -98,8 +98,8 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require_relative "prove_test_issuer"
 require_relative "../app/services/prove_trust"
 # The Equihash params printed in the run header below are READ from the same
-# module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`,
-# config/initializers/kiosk.rb:45), never typed. It ships in kiosk-pow-equihash
+# module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`, in
+# config/initializers/kiosk.rb), never typed. It ships in kiosk-pow-equihash
 # and is ENV-only, so it loads outside a Rails boot exactly as ProveTrust does.
 require "kiosk/pow/equihash"
 
@@ -234,8 +234,9 @@ profile = Kiosk::Redteam::Profile.new(
   gated_args:   ->(ref) { { reservation_id: ref[:id] } },
 
   # ── pay_for — MandatePrincipalSwap, MandateReplay, C2, C3, KYC ──────────
-  # Exact shapes from script/rental_flow.rb:166-214 (RS256, scope=mobility,
-  # line_items with sku + reservation_id as required by start_rental Gate 2).
+  # Exact shapes from the mandate `script/rental_flow.rb` builds (RS256,
+  # scope=mobility, line_items with sku + reservation_id as required by
+  # start_rental Gate 2).
   pay_for: lambda { |_client, principal, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -666,7 +667,7 @@ puts "  base_url:              #{BASE_URL}"
 # env leaves the header announcing one world while the battery attacks another.
 # What each half reads:
 #   • n / k — `Kiosk::Pow::Equihash::Difficulty.params`, the SAME plain module the server initializer
-#     reads into `c.registration_pow_params` (config/initializers/kiosk.rb:45), so
+#     reads into `c.registration_pow_params` (config/initializers/kiosk.rb), so
 #     KIOSK_POW_DIFFICULTY=high moves the /register gate and this line together
 #     instead of leaving the line claiming one level's pair against a server
 #     that is serving the other's — and no pair is retyped here to illustrate it,
@@ -710,13 +711,14 @@ results = runner.run(scenarios)
 motorcycle_forged_kyc = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
   # NO `pow_difficulty:` HERE, AND NOT IN THE OTHER SIX LOCAL BEATS EITHER.
-  # The kwarg is INERT: `Client#register!` accepts it and `build_register` never reads
-  # it (kiosk-redteam/lib/kiosk/redteam/client.rb:52-57, restated at :253-257), because
+  # The kwarg is INERT: `Client#register!` accepts it and `build_register` never
+  # reads it — the `@param pow_difficulty` line above `Client#register_raw` says
+  # so, and `#build_register`'s own header restates it — because
   # PoW is driven entirely off the server’s 402 Equihash challenges. Passing it here
   # would READ as a gate being configured at a call site that configures nothing, and
   # re-deriving it from the profile would keep that false reading while removing only
   # the literal. The GENERIC path still threads `profile.pow_difficulty`
-  # (kiosk-redteam/lib/kiosk/redteam/scenario.rb:230): that kwarg is a documented
+  # (`Scenario`'s own `client.register!` call): that kwarg is a documented
   # backwards-compat shim for callers already passing it, and scenarios read the
   # profile value directly for APPLICABILITY (RegistrationWithoutPow), which is a real
   # read these beats do not make.

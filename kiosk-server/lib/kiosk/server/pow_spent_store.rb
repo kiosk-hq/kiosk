@@ -11,10 +11,12 @@ module Kiosk
     # without penalty; if the quota then goes unmet the request gets a fresh
     # `Errors::PowRequired` re-challenge (402) — never `Errors::Forbidden`.
     #
-    # The store is pruned opportunistically on each `spent?` call, so memory
-    # usage is bounded by the number of unexpired challenge ids seen since the
-    # last prune. With a default TTL of 300 s and typical challenge rates this
-    # is negligible.
+    # The store is pruned opportunistically by BOTH reading methods — {#claim}
+    # and {#spent?} — so memory is bounded by the number of unexpired challenge
+    # ids seen since the last prune. `claim` is the one that matters: it is the
+    # gate's own call, so the sweep runs on the tolled path itself rather than
+    # waiting for a `spent?` no request makes. With a default TTL of 300 s and
+    # typical challenge rates the residue is negligible.
     #
     # == Multi-process deployments
     #
@@ -112,7 +114,10 @@ module Kiosk
       end
 
       # Remove all entries whose exp has passed. Called automatically by
-      # {#spent?} before each look-up.
+      # {#claim} and by {#spent?}, before each look-up. Unthrottled, because it
+      # is a Hash scan under the same mutex the look-up already takes;
+      # {PowSpentStores::ActiveRecord}, whose sweep is a DELETE, throttles its
+      # own.
       def prune!
         now = Time.now.to_i
         @mutex.synchronize { @store.reject! { |_, exp| exp <= now } }

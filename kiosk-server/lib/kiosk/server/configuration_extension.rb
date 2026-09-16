@@ -460,7 +460,7 @@ module Kiosk
         @audit_sink = value
       end
 
-      # ── PoW challenge-response gate (R2) ──────────────────────────────────
+      # ── PoW challenge-response gate ───────────────────────────────────────
 
       # Reputation policy that decides when and how hard to challenge a request.
       # Default nil = never challenge (zero overhead; existing behaviour unchanged).

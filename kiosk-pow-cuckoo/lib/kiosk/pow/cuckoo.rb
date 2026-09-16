@@ -8,8 +8,9 @@ module Kiosk
     #
     # Clean-room implementation from the Cuckatoo algorithm spec (Tromp's
     # doc/spec and doc/mathspec).  Only the VERIFIER is implemented here —
-    # the cheap, asymmetric, security-critical side.  The solver is a
-    # separate component (see T2 / T3 of the R2 plan).
+    # the cheap, asymmetric, security-critical side, and the half an operator
+    # has to trust.  Solving is a separate program: the reference solver is
+    # `solve_cuckoo.py`, packaged beside this file.
     #
     # == Primitives (both clean-room, permissive):
     #

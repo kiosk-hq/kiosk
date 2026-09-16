@@ -379,8 +379,13 @@ RSpec.describe Kiosk::Server::PowGate do
           )
         end
 
-        # Pinned verbatim: this URL must stay identical to the solver URL the
-        # published skill pins (K-490(e)) — the two must not drift.
+        # Pinned verbatim, and pinned to the UNVERSIONED solver URL on purpose:
+        # a server naming a solver does not know which skill cut its caller
+        # read, so the 403 names the copy that is allowed to move and the
+        # published skill supplies the digest beside its own content-addressed
+        # pin. The two URLs are therefore NOT the same string and must not be
+        # made so; `bin/check-solver-pin` holds this one against the hosted
+        # file, and the skill's against its digest.
         expect(error.hint).to eq(
           "solve with the reference solver at https://kiosk.tech/pow/solve.py — " \
           "a hand-written Equihash solver will not match this verifier",
@@ -433,9 +438,9 @@ RSpec.describe Kiosk::Server::PowGate do
     #
     # The sig covers the request fingerprint, so a genuinely solved proof is
     # spendable on ONE call and nothing else. All three halves of that digest
-    # are exercised here — the method and the verb became bindable only at the
-    # 0.4 cutover — and the control example at the end proves the three
-    # refusals are not passing for some trivial reason.
+    # are exercised here, one example each, and the control example FIRST in
+    # the block proves the three refusals are not passing for some trivial
+    # reason.
 
     describe "proof issued for a different request" do
       # `GET catalog?q=milk`, the call every example below mints its proof for.
@@ -700,6 +705,21 @@ RSpec.describe Kiosk::Server::PowGate do
       # Trigger prune by checking another id
       store.spent?("trigger-prune-#{SecureRandom.uuid}")
       expect(store.spent?(id)).to be(false)
+    end
+
+    # The OTHER pruning caller, and the one that matters: `claim` is what the
+    # gate calls on every tolled request, while `spent?` is a read no request
+    # makes. A store that swept only on `spent?` would grow without bound in a
+    # running origin, which is the reading the class note used to invite.
+    #
+    # Asserted on the ENTRY SET rather than on a return value, because a
+    # later `claim` of the expired id would sweep it itself and answer true
+    # either way — the question here is whether an UNRELATED claim sweeps.
+    it "prunes on the CLAIM path too, not only on a `spent?` read" do
+      expired = "expired-#{SecureRandom.uuid}"
+      store.mark_spent(expired, Time.now.to_i - 1)
+      store.claim("unrelated-#{SecureRandom.uuid}", future_exp)
+      expect(store.instance_variable_get(:@store)).not_to have_key(expired)
     end
 
     it "returns false safely for a nil id" do

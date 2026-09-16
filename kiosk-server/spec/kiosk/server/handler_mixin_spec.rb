@@ -716,7 +716,8 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       # file: the identical render path, one code apart, DOES get its header.
       # Without that pairing an assertion of absence would also pass if the
       # header were never emitted anywhere. The third member of the trio
-      # (`pow_required`) is controlled in wire_controller_402_spec.rb:74.
+      # (`pow_required`) is controlled in wire_controller_402_spec.rb, by its
+      # «carries WWW-Authenticate: Kiosk-PoW AND the challenges» example.
       klass = Class.new(ApplicationController) do
         include Kiosk::Handler
         kind :action

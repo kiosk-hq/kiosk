@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The PoW gate and spent store described a caller, a spec count and a memory bound they do not have.** A new example covers the sweep that actually runs.
 - **A second declaration of one verb name on a handler class is refused at class-body load.** It used to replace the first, taking that verb off the wire with nothing saying so.
 - **Three more engine comments named a wrong code count, a stale demo tally, or a version that would carry unbuilt work.** Each now describes the code beside it.
 - **Engine comments that named a wrong count, caller or cause now say what the code does.** A new spec holds `server.rb`'s two controller lists to the directory they describe.

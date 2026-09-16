@@ -7,7 +7,7 @@
 # `spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]`.
 # It omitted `app/`, so the three ERB templates under
 # `app/views/kiosk/server/{device_verify,assistants}/` were not in the built gem
-# — while `device_verify_controller.rb:38` and `assistants_controller.rb:28`
+# — while `device_verify_controller.rb` and `assistants_controller.rb`
 # `append_view_path` at exactly that directory. Every consumer installing from
 # RubyGems got `ActionView::MissingTemplate` on BOTH HTML pages of the
 # account-binding ceremony: the entire human-facing half of the flow, gone.

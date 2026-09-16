@@ -5,10 +5,13 @@ require "json"
 
 module Kiosk
   module Server
-    # PoW challenge-response gate (R2 protocol hook).
+    # PoW challenge-response gate.
     #
-    # Called by {WireController#run_command} AFTER identity resolution and BEFORE
-    # {Executor.call}. When `Kiosk.configuration.reputation_policy` is nil
+    # Called by {WireController#execute_wire} AFTER identity resolution and
+    # BEFORE {Executor.call}, so it stands in front of every endpoint that
+    # reaches the executor: each declared verb, through {VerbController}, and
+    # the reserved `pay`, through {WireController#run_command}. When
+    # `Kiosk.configuration.reputation_policy` is nil
     # (the default), {.gate} returns `:proceed` immediately — zero overhead,
     # no `kiosk-reputation` references evaluated. This is the invariant that
     # keeps all existing tests, demos, and e2e flows byte-for-byte unchanged.
@@ -107,8 +110,9 @@ module Kiosk
         policy = config.reputation_policy
 
         # ── Fast path (default, nil policy) ──────────────────────────────────
-        # No kiosk-reputation references evaluated here. This is the ONLY path
-        # exercised by the ~389 existing specs — byte-for-byte unchanged.
+        # No kiosk-reputation references evaluated here, and no store, secret or
+        # backend is touched: an origin that has configured no policy pays
+        # nothing for this gate standing in front of every verb.
         return :proceed if policy.nil?
 
         # ── Policy present: guard checks ─────────────────────────────────────

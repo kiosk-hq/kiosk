@@ -11,8 +11,9 @@ require "kiosk/pow/equihash"
 # We drive the gate's VERIFY path with a deterministic known-answer proof
 # (n=8, k=1, salt="kat", indices=[2,10] — the KAT from kiosk-pow-equihash) so
 # the test is fast and reproducible. The shipped Python solver produces the same
-# {indices, header_nonce} shape for production (n=192, k=7); solver↔verifier
-# parity is the gem's concern. This spec proves the GATE ORCHESTRATION with the
+# {indices, header_nonce} shape at the shipped default parameters, whatever
+# `Kiosk::Pow::Equihash.params` answers; solver↔verifier parity is the gem's
+# concern. This spec proves the GATE ORCHESTRATION with the
 # real equihash crypto: N distinct challenges, verify-through-backend, the
 # all-or-re-challenge quota, spend semantics, and fingerprint binding.
 RSpec.describe "PowGate × equihash (real backend, real gate)" do

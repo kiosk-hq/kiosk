@@ -11,17 +11,17 @@ module Kiosk
     # with an in-process set that property holds PER WORKER, so a proof replayed
     # against a second Puma worker is accepted a second time.
     #
-    # This module ships the referent implementation of the shared store the spec
+    # This module ships the reference implementation of the shared store the spec
     # requires of a multi-process operator:
     #
     #   Kiosk.configure do |c|
     #     c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
     #   end
     #
-    # Naming note: the in-process store keeps its existing top-level constant
-    # ({PowSpentStore}) rather than moving to `PowSpentStores::InMemory` —
-    # renaming it would break every operator initializer that references it, and
-    # that is not what this change is for.
+    # Naming note: the in-process store is the top-level {PowSpentStore} and not
+    # a `PowSpentStores::InMemory` beside the adapter below. It is named in
+    # operator initializers, so the constant is part of the published surface
+    # and moving it would be a breaking rename for a tidier namespace.
     module PowSpentStores
       # Spent-id store backed by the `<schema>.pow_spent` table
       # ({SchemaDefinitions.pow_spent_sql}), shared by every process pointed at
@@ -42,12 +42,12 @@ module Kiosk
       #
       # A claim must be durable independently of the request that made it, or a
       # rollback would un-spend a consumed proof. Both shipped gate call sites
-      # run OUTSIDE any transaction — `wire_controller.rb` calls `PowGate.gate`
-      # before `Executor.call` opens the GUC-scoped transaction
-      # (`wire_controller.rb:94` vs `:113`), and `agent_registration.rb` calls
-      # `RegistrationPow.gate` at `:44`, before its `conn.transaction` at `:70`.
-      # An operator who wraps the whole request in a transaction of their own
-      # (a `before_action`-opened one, say) breaks that and must give this store
+      # run OUTSIDE any transaction: {WireController#execute_wire} calls
+      # `PowGate.gate` before the `Executor.call` that opens the GUC-scoped
+      # transaction, and {AgentRegistration.call} calls
+      # `RegistrationPow.gate` before its own `conn.transaction`. An operator
+      # who wraps the whole request in a transaction of their own (a
+      # `before_action`-opened one, say) breaks that and must give this store
       # its own connection.
       class ActiveRecord
         # Seconds between opportunistic TTL sweeps. The sweep exists to bound

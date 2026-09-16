@@ -47,7 +47,7 @@ Gem::Specification.new do |spec|
 
   # `app/` is NOT optional. Two controllers resolve their templates by path —
   # `append_view_path File.expand_path("../../../app/views", __dir__)` in
-  # device_verify_controller.rb:38 and assistants_controller.rb:28 — so a gem
+  # device_verify_controller.rb and assistants_controller.rb — so a gem
   # built without app/views answers BOTH HTML pages of the account-binding
   # ceremony with ActionView::MissingTemplate. It shipped that way because
   # every consumer in this monorepo uses `path:`, which serves the working

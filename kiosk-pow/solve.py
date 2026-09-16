@@ -25,7 +25,8 @@ Dependencies:
 
 The Ruby provider verifies with the same parameters (Argon2::Ext.argon2id_hash_raw
 via libargon2, version 0x13).  Both sides produce byte-identical digests —
-see `bundle exec rake parity` in the kiosk-pow gem for the automated proof.
+`bundle exec rake parity`, in the kiosk monorepo, runs that comparison by hand;
+the Rakefile it lives in is not packaged with this gem.
 """
 
 import argon2.low_level

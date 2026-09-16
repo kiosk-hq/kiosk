@@ -95,4 +95,36 @@ RSpec.describe "the README's solve/verify lever" do
                                            "retune closed the gap — in which case say so — or one of " \
                                            "the two figures was edited without its operands."
   end
+
+  # THE GEMSPEC IS THE LEAST-READ COPY OF THE SAME NUMBER AND WAS THE ONE THAT
+  # DRIFTED (K-1676). Its `summary` and `description` are what rubygems.org
+  # prints, so they are the most-READ prose this gem has and the least-CHECKED:
+  # the README's verify figure is an operand of the lever derivation above and
+  # is parsed on every run, while the gemspec's copy of it was held by nothing
+  # and read `~17 ms` against the README's, the class docstring's, the
+  # CHANGELOG's and this file's own `~18 ms`.
+  #
+  # The rule is narrow on purpose: EVERY millisecond figure in the gemspec must
+  # be the README's valid-proof verify cost, because that is the only
+  # millisecond quantity this gem has. A second, genuinely different one is a
+  # decision somebody makes here, in this example, rather than a number that
+  # slips in.
+  it "states the same verify cost in the gemspec as in the README" do
+    gemspec = File.read(File.expand_path("../kiosk-pow-equihash.gemspec", __dir__))
+    verify_ms = readme[/~([\d.]+) ms for a valid proof/, 1]
+    expect(verify_ms).not_to be_nil, "no valid-proof verify cost stated in the README"
+
+    stated = gemspec.scan(/~([\d.]+) ms/).flatten
+    expect(stated).not_to be_empty,
+                          "the gemspec states no millisecond figure at all. If the verify cost was " \
+                          "deliberately dropped from the blurb, drop this example with it — do not " \
+                          "leave an example that passes by matching nothing."
+
+    disagreeing = stated.reject { |ms| ms == verify_ms }
+    expect(disagreeing).to be_empty,
+                           "the gemspec says ~#{disagreeing.uniq.join("/")} ms where the README says " \
+                           "~#{verify_ms} ms for a valid proof. The README figure is the one the " \
+                           "lever derivation above is computed from; the gemspec is the copy " \
+                           "rubygems.org prints. Move them together or state why they differ."
+  end
 end

@@ -39,7 +39,7 @@ module Kiosk
   #
   # == Spent-id set (caller responsibility)
   #
-  # {Challenge} is stateless. kiosk-server (T3) must maintain a small
+  # {Challenge} is stateless. kiosk-server must maintain a small
   # spent-id set (TTL ≤ challenge[:exp]) to prevent replay of a valid proof.
   module Reputation
   end

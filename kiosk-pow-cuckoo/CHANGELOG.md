@@ -9,6 +9,10 @@ entries already below.
 
 ## [Unreleased]
 
+### Changed
+
+- The gemspec stops labelling itself with private roadmap phases (T1, T2/T3) that nothing an adopter can open resolves.
+
 ### Added
 - Clean-room Cuckatoo-Cycle verifier
 - Pure-Ruby BLAKE2b-256 (from public-domain BLAKE2 spec)

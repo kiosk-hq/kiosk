@@ -17,10 +17,15 @@ Gem::Specification.new do |spec|
     Ships the provider-side Ruby verify (one Argon2id eval, no loop) and a
     portable Python solver (solve.py / argon2-cffi) that an assistant runs in
     its sandbox when a `pow_required` challenge is received.  The Ruby verify
-    and the Python solver produce byte-identical Argon2id digests — enforced
-    by the included `rake parity` cross-implementation check.
+    and the Python solver produce byte-identical Argon2id digests, checked by
+    this REPOSITORY's `rake parity` task. That task is a Rakefile task run by
+    hand; the Rakefile is deliberately not packaged (it needs spec/ and the
+    development bundle, neither of which ships), so it is not in this gem and
+    nothing runs it automatically.
 
-    Used by kiosk-reputation (the policy layer) via the backend registry.
+    Reached through kiosk-reputation's backend registry when a HOST registers
+    it under "argon2id" — no PoW gem self-registers, and nothing in this
+    repository registers this one outside kiosk-server's own specs.
     Does not depend on kiosk-core or Rails — pure Ruby + libargon2 FFI.
   DESC
   spec.homepage      = "https://kiosk.tech"

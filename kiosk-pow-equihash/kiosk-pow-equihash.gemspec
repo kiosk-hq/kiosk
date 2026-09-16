@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.version = Kiosk::Pow::Equihash::VERSION
   spec.authors = ["Phil Pirozhkov"]
   spec.email   = ["hello@fili.pp.ru"]
-  spec.summary = "Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~17 ms to verify, ~1.3 GiB for the reference solver to solve)"
+  spec.summary = "Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~18 ms to verify, ~1.3 GiB for the reference solver to solve)"
   spec.description = <<~DESC
     kiosk-pow-equihash is the shipped default proof-of-work backend for the
     Kiosk framework: a pure-Ruby Equihash (Biryukov & Khovratovich birthday-
@@ -28,7 +28,7 @@ Gem::Specification.new do |spec|
     ever been measured on; the ~1.3 GiB peak is THIS solver's table, not the
     host's -- and not a floor (n, k) imposes on every implementation, since a
     memory-optimised solver trades it for time) while verify costs 128 BLAKE2b evaluations —
-    ~17 ms and a few KB in pure Ruby. That asymmetry is the point: the gem
+    ~18 ms and a few KB in pure Ruby. That asymmetry is the point: the gem
     prices a request, it does not equalise hardware. Equihash is neither ASIC-
     nor GPU-proof (it was ASIC'd on Zcash); abuse resistance comes from the
     reputation policy's N-proofs knob and caps, not from this algorithm.

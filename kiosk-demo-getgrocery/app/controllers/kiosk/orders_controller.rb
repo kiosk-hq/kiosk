@@ -100,7 +100,10 @@ class Kiosk::OrdersController < ActionController::API
   # forged one is refused with a typed 400 naming it rather than silently ignored.
   kind :action
   description "Create a grocery order for the authenticated principal, or REPLACE an unpaid one in " \
-              "place — which is how a human changes their mind before any money moves. Delivery is " \
+              "place — which is how a human changes their mind before any money moves. Those are " \
+              "the only two things this verb does: naming an order it can no longer replace — " \
+              "unknown, not yours, or already paid for — is REFUSED, and never quietly becomes a " \
+              "second order. Delivery is " \
               "part of the order rather than a later step: this origin will not take an order it " \
               "cannot deliver, so a window and an address are required to place one. The answer " \
               "carries the operator's quote and, in words, the exact mandate that quote expects — " \
@@ -151,7 +154,7 @@ class Kiosk::OrdersController < ActionController::API
                  # handler enforces (Kiosk::UuidCheck), which a bare {type:"string"} does not.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN,
-                                     description: "uuid of an unpaid order to replace." },
+                                     description: "uuid of an unpaid order of yours to replace in place — it keeps that id, and the answer echoes it back. An id this shop cannot replace (unknown, another account's, or one that is paid, being paid or already scheduled) is refused with a 403: no order is created by such a call, so a replace that comes back refused has cost nothing." },
                },
                required: ["items", "delivery_slot_id", "delivery_address"]
   output_schema type: "object",

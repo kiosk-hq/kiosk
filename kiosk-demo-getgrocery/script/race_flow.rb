@@ -119,6 +119,15 @@ def order_row(order_id)
   ).first
 end
 
+# How many orders this principal is holding. A refused write must move this by
+# zero, which is the half a refusal's CODE cannot state: a create_order that
+# answers a refusal and writes an order anyway has billed for the refusal.
+def orders_held
+  ActiveRecord::Base.connection.execute(
+    "SELECT count(*) FROM orders WHERE user_id = #{q(USER_ID)}::uuid"
+  ).first["count"].to_i
+end
+
 # The `payment_state` the WIRE publishes for one order — read through the real
 # `my_orders` query with the GUCs set, not out of the table, because the
 # assertion is about what an assistant is TOLD.
@@ -209,14 +218,30 @@ check(claimed, "pay claimed order O (status → paying) before capture")
 
 # ATTACK: while the pay is blocked mid-capture, try to swap O's items to an
 # expensive line via create_order{order_id: O}.
-swap = create_order!(items: [{ sku: DEAR_SKU, qty: 100 }], delivery_slot_id: 3,
-                     delivery_date: FUTURE, delivery_address: ADDRESS, order_id: order_id)
+orders_before = orders_held
+swap_refusal = begin
+  create_order!(items: [{ sku: DEAR_SKU, qty: 100 }], delivery_slot_id: 3,
+                delivery_date: FUTURE, delivery_address: ADDRESS, order_id: order_id)
+  nil
+rescue StandardError => e
+  e
+end
 
 o_after = order_row(order_id)
 check(o_after["total_cents"].to_i == CHEAP_PRICE,
       "order O still holds the CHEAP total (#{o_after["total_cents"]}c == #{CHEAP_PRICE}c) — swap rejected")
-check(swap["order_id"] != order_id,
-      "create_order did NOT mutate O — it minted a separate order (#{swap["order_id"]}) instead of rewriting the in-flight one")
+# AND THE REFUSAL IS THE WHOLE ANSWER. A swap this origin will not perform is a
+# typed 403 with NOTHING written — an attack that ends in a second billable
+# order is an attack that succeeded at the till, whatever it failed to swap.
+# The same answer reaches an assistant whose human paid between a `my_orders`
+# read and this call, which is how an honest caller meets it without any race.
+check(swap_refusal.respond_to?(:code) && swap_refusal.code == "forbidden" &&
+      swap_refusal.http_status == 403,
+      "create_order REFUSED the swap with a typed 403 forbidden " \
+      "(got #{swap_refusal.class}#{swap_refusal.respond_to?(:code) ? "/#{swap_refusal.code}" : ""})")
+check(orders_held == orders_before,
+      "…and minted NO order doing it (#{orders_held} orders, was #{orders_before}) — a refused " \
+      "replace is not a duplicate the human pays for twice")
 
 # ── IN-FLIGHT: what my_orders publishes about O RIGHT NOW ────────────────────
 # The capture has STARTED and its outcome is unknown. protocol.md §11.6 forbids
@@ -370,6 +395,24 @@ reschedule_error = action_error("reschedule_delivery",
                                 { order_id: "not-a-uuid", delivery_slot_id: 3, delivery_date: FUTURE })
 check(reschedule_error.respond_to?(:code) && reschedule_error.code == "bad_request" && reschedule_error.http_status == 400,
       "reschedule_delivery rejects a malformed order_id with a 400 bad_request (got #{reschedule_error.class})")
+
+# AND A WELL-FORMED ID THAT NAMES NOTHING IS THE OTHER HALF. The shape guard
+# above answers "that is not an id"; this answers "that is not an order I can
+# replace", which is what a stale or mistyped id actually produces — and it must
+# answer it rather than placing a second billable order. The wording is
+# deliberately the same sentence an id belonging to someone else gets, so a
+# caller cannot enumerate other principals' orders with it.
+held_before = orders_held
+absent_error = action_error("create_order",
+                            { order_id: "00000000-0000-4000-8000-0000000000ff",
+                              items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
+                              delivery_date: FUTURE, delivery_address: ADDRESS })
+check(absent_error.respond_to?(:code) && absent_error.code == "forbidden" &&
+      absent_error.http_status == 403,
+      "create_order refuses a well-formed order_id it cannot replace with a 403 forbidden " \
+      "(got #{absent_error.class})")
+check(orders_held == held_before,
+      "…and writes nothing doing it (#{orders_held} orders, was #{held_before})")
 
 puts "\n== an order stuck in `paying` is reconciled from local evidence =="
 

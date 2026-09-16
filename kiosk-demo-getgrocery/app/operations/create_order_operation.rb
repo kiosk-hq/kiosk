@@ -153,20 +153,43 @@ class CreateOrderOperation
                         .lock
                         .pick(:id)
 
-        if replaced
-          OrderItem.where(order_id: replaced).delete_all
-          Order.where(id: replaced).update_all(
-            total_cents: total_cents,
-            slot_at:     slot_at,
-            address:     delivery_address.to_s,
-            # THE CLOCK THIS WINDOW IS QUOTED ON, RECORDED BESIDE IT. A replace
-            # may move the delivery to a different address, so the zone moves
-            # with it: the row carries the clock of the door this order is going
-            # to, and every surface that renders the window reads it from there.
-            timezone:    zone.name,
-            updated_at:  now,
+        # NAMING AN ORDER THAT CANNOT BE REPLACED IS REFUSED, NOT CREATED
+        # ANYWAY. `order_id` is the caller SAYING which of this verb's two
+        # published outcomes it means, so falling through to the create is a
+        # third outcome nothing declares — and on this verb the third outcome
+        # is a second BILLABLE order, answered `ok`, with only the returned
+        # `order_id` differing from the one that was sent. Nothing tells a
+        # caller to compare those. The ordinary way to meet it needs no race: an
+        # assistant reads `my_orders`, the human pays in between, and the
+        # replace it sends is a duplicate delivery and a duplicate charge.
+        #
+        # ONE SENTENCE FOR THREE CASES, exactly as `reschedule_delivery`'s gate
+        # 3 words it and for the same reason: unknown, not yours and no longer
+        # replaceable are one answer here, because telling them apart would let
+        # a caller enumerate other principals' order ids.
+        if replaced.nil?
+          next OperationResult.refused(
+            code:    "forbidden",
+            message: "order not found, not yours, or no longer replaceable (it is paid, being " \
+                     "paid, or already scheduled) — NOTHING was created and nothing was charged. " \
+                     "Re-read my_orders: an order that is already paid moves with " \
+                     "reschedule_delivery, and a SEPARATE order is placed by calling create_order " \
+                     "without order_id.",
           )
         end
+
+        OrderItem.where(order_id: replaced).delete_all
+        Order.where(id: replaced).update_all(
+          total_cents: total_cents,
+          slot_at:     slot_at,
+          address:     delivery_address.to_s,
+          # THE CLOCK THIS WINDOW IS QUOTED ON, RECORDED BESIDE IT. A replace
+          # may move the delivery to a different address, so the zone moves
+          # with it: the row carries the clock of the door this order is going
+          # to, and every surface that renders the window reads it from there.
+          timezone:    zone.name,
+          updated_at:  now,
+        )
       end
 
       # `insert!` and NOT `create!`, and the reason is a wire answer rather than

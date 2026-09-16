@@ -151,8 +151,15 @@ namespace :demo do
   # resolve, a verb executes, a query answers the shape it declared, and data
   # access is scoped to the authenticated principal. An operator is asked to
   # conform to a document, so they have to be able to run its claims — the
-  # assertions live in `kiosk-test-support` and `test/` is four assertion names
-  # around this demo's own fixtures.
+  # assertions live in `kiosk-test-support` and `test/kiosk_conformance_test.rb`
+  # is four assertion names around this demo's own fixtures.
+  #
+  # It is `bin/rails test` and not one file, so it also runs this shop's OWN
+  # DB-backed regressions beside the conformance suite — a verb driven through
+  # the same GUC-scoped session, asserting what it answers rather than which
+  # shape it answers in. `test/create_order_replace_test.rb` is the first: the
+  # replace path may end in exactly the two outcomes its descriptor names, and a
+  # third one there is a second billable order.
   #
   # It is the ORDINARY Rails test runner on purpose. An adopting operator opens
   # a demo to find out what testing a Kiosk integration looks like, and what
@@ -169,7 +176,7 @@ namespace :demo do
   # calls reach the registered handler through a GUC-scoped session. The WIRE
   # in front of those handlers is what demo:shop, demo:isolation and
   # demo:redteam drive.
-  desc "Conformance: routes resolve, verbs execute, queries answer their declared shape, data is principal-scoped."
+  desc "Conformance (routes resolve, verbs execute, queries answer their declared shape, data is principal-scoped) plus this shop's own DB-backed verb regressions — the whole of `bin/rails test`."
   task :conformance do
     puts "\n── Kiosk conformance (bin/rails test, RAILS_ENV=test) ──"
     sh "RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load"

@@ -30,11 +30,12 @@
 # reasons are restated in full instead, so this file is readable by the people
 # who will actually receive it.
 #
-# WHAT IT CHECKS. Three arms, all over `git ls-files` in the repository the
-# script lives in -- what ships is what git carries, so the working tree is not
-# the question, and the run must happen INSIDE each repository: a pathspec
-# aimed at a sibling directory from one level up matches nothing and exits like
-# a clean tree, which is how a whole repository once read as leak-free.
+# WHAT IT CHECKS. The arms enumerated below, all over `git ls-files` in the
+# repository the script lives in -- what ships is what git carries, so the
+# working tree is not the question, and the run must happen INSIDE each
+# repository: a pathspec aimed at a sibling directory from one level up matches
+# nothing and exits like a clean tree, which is how a whole repository once read
+# as leak-free.
 #
 #   SEC   Every bare section citation (`§3`, `§3.7`, `§3.7.4`) must resolve
 #         to a section that EXISTS in the published protocol specification.
@@ -120,7 +121,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "e48a45a4009ee6b93b93ab2949af08f0860e0ca2804c5009ada9d86533cb36d8"
+TWIN_DIGEST = "7d421942927c0e0fef68c01cbab0119cb8d3cad99f454b18b47b8af045f7f0c8"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"

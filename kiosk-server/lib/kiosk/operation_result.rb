@@ -40,7 +40,7 @@ module Kiosk
   #
   # The map is deliberately NOT shipped here, and that is the whole design.
   # A code your app never produces has no business having a mapping, so the
-  # table is not derivable from the protocol's fourteen codes; and it is not
+  # table is not derivable from the protocol's code vocabulary; and it is not
   # derivable from the status either, because the wire vocabulary is not
   # injective — `kyc_required` and `forbidden` are BOTH 403, and only the
   # operator knows which one a given refusal means. {#status} therefore raises

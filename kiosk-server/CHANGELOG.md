@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **Three more engine comments named a wrong code count, a stale demo tally, or a version that would carry unbuilt work.** Each now describes the code beside it.
 - **Engine comments that named a wrong count, caller or cause now say what the code does.** A new spec holds `server.rb`'s two controller lists to the directory they describe.
 - **Mounting the engine is how the protocol plane is drawn, not one of two ways.** The README, the gemspec and the controller headers stop offering a hand-drawn copy as an escape hatch.
 - **A configuration store slot could hand two concurrent first-touchers two different stores, so one PoW proof was accepted twice.** The four store defaults now build under a lock.

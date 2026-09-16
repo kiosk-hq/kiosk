@@ -18,8 +18,9 @@ module Kiosk
     # `kind :query` is what puts it HERE rather than in {Actions}, and the same
     # class may declare both. See {Kiosk::Handler}. The operator names those
     # classes in `Kiosk.configuration.handlers` and {HandlerRegistrations} —
-    # driven by the engine's `to_prepare` — puts them here. It is what all
-    # seven demos, the e2e harness and the install generator use.
+    # driven by the engine's `to_prepare` — puts them here. It is what every
+    # demo in this repository that serves a Kiosk wire uses, along with the e2e
+    # harness and the install generator.
     #
     # A handler runs inside a GUC-scoped {SessionContext}, so
     # `kiosk.current_user_id()` and friends are available for per-user scoping.

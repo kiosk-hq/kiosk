@@ -383,7 +383,7 @@ module Kiosk
       # RUNTIME dependency of this gem since 0.4, not an optional extra
       # tied to this flag — it is still required LAZILY, so a vendored checkout
       # missing it gets a {Errors::ConfigurationError} naming the gem rather than
-      # a LoadError at boot. The fuller uniform-validation layer is v0.5.
+      # a LoadError at boot.
       #
       # **DEFAULT TRUE, and the asymmetry with the flag below is the whole
       # reason.** OFF is the setting that produces the silent failure: a

@@ -7787,8 +7787,8 @@ end
 # with numpy on PATH before anything would run at all.
 #
 # THE SHAPE, and it is the reason this is a rule rather than eight files. The
-# demos' Gemfiles resolve the kiosk gems through `path: "../kiosk-<gem>"`, so a
-# container build context CANNOT be a single demo directory — it has to be this
+# kiosk gems are resolved through `path: "../kiosk-<gem>"` wherever a demo
+# depends on them, so a container build context CANNOT be a single demo directory — it has to be this
 # repository. That makes the expensive half — the image — shared by
 # construction: ONE `Dockerfile` at the repository root, carrying every demo's
 # bundle, `psql`, python3+numpy, curl and jq. What is genuinely per-demo is
@@ -7900,9 +7900,9 @@ end
 # repository, so a recipe inside a demo directory cannot build that demo.
 container_stray_images = container_images.reject { |rel| File.dirname(rel) == "." }
 container_stray_images.each do |rel|
-  errors << "#{rel} is a SECOND container image recipe. The image is shared on purpose (T-192): every " \
-            "demo's Gemfile resolves the kiosk gems through `path: \"../kiosk-<gem>\"`, so the build " \
-            "context is this repository and a recipe inside one demo cannot build it. One `Dockerfile` " \
+  errors << "#{rel} is a SECOND container image recipe. The image is shared on purpose (T-192): the " \
+            "kiosk gems are resolved through `path: \"../kiosk-<gem>\"` wherever a demo depends on " \
+            "them, so the build context is this repository and a recipe inside one demo cannot build it. One `Dockerfile` " \
             "at the repository root carries all of them; keeping a second one here means eight copies " \
             "of an install list, which is the drift the rest of this file is about."
 end
@@ -7992,9 +7992,9 @@ container_composes.each do |rel|
 
   unless body.match?(/^\s+context:\s*\.\.\s*$/) && body.match?(/^\s+dockerfile:\s*Dockerfile\s*$/)
     errors << "#{rel}: it does not build from the shared `Dockerfile` with the repository as its " \
-              "context (T-192). `context: ..` and `dockerfile: Dockerfile` are not decoration: this " \
-              "demo's Gemfile resolves the kiosk gems through `path: \"../kiosk-<gem>\"`, so a " \
-              "narrower context cannot install its dependencies at all."
+              "context (T-192). `context: ..` and `dockerfile: Dockerfile` are not decoration: a " \
+              "demo that depends on the kiosk gems resolves them through `path: \"../kiosk-<gem>\"`, " \
+              "so a narrower context cannot install its dependencies at all."
   end
 
   # The database image major is derived from what CI actually runs, because the

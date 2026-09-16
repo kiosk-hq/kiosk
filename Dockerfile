@@ -1,8 +1,9 @@
 # The container path for every demo in this repository — ONE image, eight apps.
 #
-# WHY ONE IMAGE RATHER THAN EIGHT. The demos are eight standalone Rails apps
-# whose Gemfiles resolve the kiosk gems through `path: "../kiosk-<gem>"`, so a
-# build context that contains only one demo cannot install its dependencies:
+# WHY ONE IMAGE RATHER THAN EIGHT. The demos are eight standalone Rails apps,
+# and the kiosk gems are resolved through `path: "../kiosk-<gem>"` wherever a
+# demo depends on them, so a build context that contains only one demo cannot
+# install its dependencies:
 # the context has to be this repository. Once it is, per-demo images buy
 # nothing and cost something real — getgrocery's `demo:agecheck` and skooti's
 # `demo:kyc`/`demo:redteam` boot the KYC broker in `kiosk-demo-prove`, so an

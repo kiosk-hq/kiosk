@@ -17,10 +17,11 @@
 # with any task from the list in README.md.
 #
 # The image is shared by every demo in this repository and is built from the
-# Dockerfile one directory up. It has to be: this demo's Gemfile resolves the
-# kiosk gems through `path: "../kiosk-<gem>"`, so the build context is the
-# repository rather than this directory — and one image carrying all of them
-# is also what lets the tasks that boot a sibling demo work.
+# Dockerfile one directory up. It has to be: the kiosk gems are resolved
+# through `path: "../kiosk-<gem>"` wherever a demo depends on them, so the
+# build context is the repository rather than any one demo directory — and one
+# image carrying all of them is also what lets the tasks that boot a sibling
+# demo work.
 name: kiosk-demo-skooti
 
 services:

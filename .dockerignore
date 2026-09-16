@@ -1,8 +1,8 @@
 # What the container build does NOT need out of this repository.
 #
-# The build context is this whole repository, because every demo's Gemfile
-# resolves the kiosk gems through `path: "../kiosk-<gem>"`. That makes the
-# context large, and everything below is either regenerated inside the image,
+# The build context is this whole repository, because the kiosk gems are
+# resolved through `path: "../kiosk-<gem>"` wherever a demo depends on them.
+# That makes the context large, and everything below is either regenerated inside the image,
 # machine-local, or has no bearing on a build.
 #
 # This file is an instruction to the build beside it: `Dockerfile` in this same

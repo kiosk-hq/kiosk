@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **A signed PoW challenge could be re-partitioned into another alg/params split under its own HMAC.** The delimiter invariant is enforced at mint and at verify now.
 - 2026-09-16: **A retired claim could regrow in a packaged `CHANGELOG.md` with nothing going red.** `bin/check-changelog` arm CL-10 refuses one in any entry newer than its baseline.
 - 2026-09-16: **The gemspec justified the ActiveRecord dependency by the one method the engine never calls, and the install template named two deleted endpoints.**
 - 2026-09-16: **The gem's own packaged changelog still published the `user_code` alphabet claim retired a month ago.** A new entry supersedes it; the old one stands.

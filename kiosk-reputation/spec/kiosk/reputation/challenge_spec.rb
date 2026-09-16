@@ -434,6 +434,130 @@ RSpec.describe Kiosk::Reputation::Challenge do
   end
 
   # ---------------------------------------------------------------------------
+  # Canonical-string ambiguity — the delimiter invariant (K-1693)
+  # ---------------------------------------------------------------------------
+  describe "canonical-string delimiters may not appear in field values" do
+    # The canonical string joins six fields with OUTER_DELIM and renders params
+    # as `k=v` pairs joined with PARAM_DELIM. A delimiter inside a value gives
+    # that string a SECOND pre-image, so one signature covers two different
+    # (alg, params) splits — a substituted backend under a valid sig. The
+    # constants declared the invariant from the first commit and nothing
+    # checked it.
+    describe ".issue refuses to mint an ambiguous challenge" do
+      it "refuses an alg carrying the field delimiter" do
+        expect do
+          described_class.issue(
+            alg: "equi|hash", params: params,
+            request_fingerprint: fingerprint,
+            secret: secret, ttl: ttl, now: now, salt: salt, id: id
+          )
+        end.to raise_error(ArgumentError, /ambiguous.*alg .* contains/)
+      end
+
+      it "refuses an id carrying the field delimiter" do
+        expect do
+          described_class.issue(
+            alg: alg, params: params,
+            request_fingerprint: fingerprint,
+            secret: secret, ttl: ttl, now: now, salt: salt, id: "a|b"
+          )
+        end.to raise_error(ArgumentError, /ambiguous.*id .* contains/)
+      end
+
+      it "refuses a request fingerprint carrying the field delimiter" do
+        expect do
+          described_class.issue(
+            alg: alg, params: params,
+            request_fingerprint: "fp|forged",
+            secret: secret, ttl: ttl, now: now, salt: salt, id: id
+          )
+        end.to raise_error(ArgumentError, /ambiguous.*request_fingerprint .* contains/)
+      end
+
+      [["|", :outer], [",", :param], ["=", :kv]].each do |delim, name|
+        it "refuses a params KEY carrying the #{name} delimiter" do
+          expect do
+            described_class.issue(
+              alg: alg, params: { "n#{delim}x" => 168 },
+              request_fingerprint: fingerprint,
+              secret: secret, ttl: ttl, now: now, salt: salt, id: id
+            )
+          end.to raise_error(ArgumentError, /ambiguous.*params key .* contains/)
+        end
+
+        it "refuses a params VALUE carrying the #{name} delimiter" do
+          expect do
+            described_class.issue(
+              alg: alg, params: { n: "168#{delim}7" },
+              request_fingerprint: fingerprint,
+              secret: secret, ttl: ttl, now: now, salt: salt, id: id
+            )
+          end.to raise_error(ArgumentError, /ambiguous.*params value .* contains/)
+        end
+      end
+
+      it "still mints the ordinary challenge (control)" do
+        expect(challenge[:sig]).not_to be_empty
+      end
+    end
+
+    describe ".verify refuses a re-partitioned submission" do
+      # THIS is the half a caller can reach at head: re-partitioning the params
+      # of an honestly-minted challenge needs NO delimiter in any ISSUED field,
+      # and `expect:` cannot see it, because both sides render to one string.
+      # `{n: 168, k: 7}` renders `k=7,n=168`, and so do both of these.
+      [{ "k=7,n" => "168" }, { "k" => "7,n=168" }].each do |repartition|
+        it "answers :bad_params for #{repartition.inspect} under the honest sig" do
+          forged = challenge.merge(params: repartition)
+          # The sig is the HONEST one, untouched — the attack is that it still verifies.
+          expect(forged[:sig]).to eq(challenge[:sig])
+          expect(
+            described_class.verify(
+              challenge: forged, nonce: "good",
+              request_fingerprint: fingerprint, secret: secret, now: now + 1
+            )
+          ).to eq(:bad_params)
+        end
+
+        it "answers :bad_params for #{repartition.inspect} even WITH expect:" do
+          forged = challenge.merge(params: repartition)
+          expect(
+            described_class.verify(
+              challenge: forged, nonce: "good",
+              request_fingerprint: fingerprint, secret: secret, now: now + 1,
+              expect: { alg: alg, params: params }
+            )
+          ).to eq(:bad_params)
+        end
+      end
+
+      it "does not invoke the backend for a re-partitioned submission" do
+        spy = Class.new do
+          def self.called? = defined?(@called) && @called
+          def self.verify(salt:, params:, nonce:) = (@called = true)
+        end
+        Kiosk::Reputation::Backends.register("equihash", spy)
+
+        described_class.verify(
+          challenge: challenge.merge(params: { "k=7,n" => "168" }), nonce: "good",
+          request_fingerprint: fingerprint, secret: secret, now: now + 1
+        )
+        expect(spy.called?).to be_falsey
+      end
+
+      it "leaves the honest echo verifying (control)" do
+        expect(
+          described_class.verify(
+            challenge: challenge, nonce: "good",
+            request_fingerprint: fingerprint, secret: secret, now: now + 1,
+            expect: { alg: alg, params: params }
+          )
+        ).to eq(:ok)
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Canonical string stability
   # ---------------------------------------------------------------------------
   describe "canonical string is param-key-order-independent" do

@@ -24,7 +24,12 @@ module Kiosk
     #      → :bad_sig on mismatch  (forged, tampered, or wrong-request proof)
     #   2. Check exp > now (integer comparison).
     #      → :expired if passed
-    #   3. Re-derive the demanded alg/params from the CALLER's live config and
+    #   3a. Reject a challenge whose fields carry a canonical-string delimiter
+    #      (string scan). Such a challenge has a SECOND pre-image, so one sig
+    #      covers two different (alg, params) splits; {.issue} cannot mint one,
+    #      so this is never an honest client.
+    #      → :bad_params
+    #   3b. Re-derive the demanded alg/params from the CALLER's live config and
     #      compare them with what the challenge names (string compare).
     #      → :bad_params on mismatch  (see below)
     #   4. ONLY THEN call the backend .verify (one Equihash proof check).
@@ -65,12 +70,20 @@ module Kiosk
     # maintaining a small spent-id set (TTL ≤ challenge[:exp]) to prevent
     # replay of a valid, unexpired proof. {.verify} does NOT track spent ids.
     module Challenge
-      # Delimiter between canonical-string fields. Must not appear in field values.
+      # Delimiter between canonical-string fields. Must not appear in field
+      # values, and {delimiter_offence} is what holds that: {.issue} refuses to
+      # mint a challenge carrying one and {.verify} answers :bad_params for a
+      # submitted challenge that does.
       OUTER_DELIM = "|"
-      # Delimiter between param key=value pairs.
+      # Delimiter between param key=value pairs. Same invariant, same guard —
+      # a param key or value carrying one re-partitions {params_string}.
       PARAM_DELIM = ","
-      # Key=value separator inside a param pair.
+      # Key=value separator inside a param pair. Same invariant, same guard.
       KV_DELIM = "="
+
+      # Every delimiter the canonical string is built from, for the one guard
+      # that enforces the invariant the three declare.
+      DELIMITERS = [OUTER_DELIM, PARAM_DELIM, KV_DELIM].freeze
 
       class << self
         # Build a signed, request-bound challenge hash.
@@ -84,12 +97,24 @@ module Kiosk
         # @param salt               [String]  raw bytes for the PoW salt (injectable for tests)
         # @param id                 [String]  opaque challenge id (injectable for tests)
         # @return [Hash] wire challenge: {id:, alg:, params:, salt: <base64>, exp:, sig:}
+        # @raise [ArgumentError] when a field would make the signed canonical
+        #   string ambiguous (see {delimiter_offence}), or when `params` is not
+        #   a Hash (see {params_string})
         def issue(alg:, params:, request_fingerprint:, secret:, ttl:,
                   now: Time.now.to_i,
                   salt: SecureRandom.bytes(16),
                   id: SecureRandom.uuid)
           salt_b64 = Base64.strict_encode64(salt)
           exp      = now + ttl
+
+          offence = delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
+          if offence
+            raise ArgumentError,
+              "challenge field would make the signed canonical string ambiguous: #{offence}. " \
+              "Fix the source of the value: the `alg`/`params` your reputation_policy returns " \
+              "from #challenge_for, or `c.registration_pow_params` for POST /auth/register."
+          end
+
           sig      = compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
 
           { id: id, alg: alg, params: params, salt: salt_b64, exp: exp, sig: sig }
@@ -107,6 +132,12 @@ module Kiosk
         #   a challenge naming anything else is rejected with :bad_params even
         #   though its sig is valid. Omit to skip the check.
         # @return [Symbol] :ok | :bad_sig | :expired | :bad_params | :bad_proof
+        # @raise [KeyError] when the challenge names an algorithm no backend is
+        #   registered under. A challenge that reaches the backend step was
+        #   minted by THIS host (its sig verified) and no caller can move the
+        #   `alg` past step 3a, so this is an operator misconfiguration — the
+        #   registry names what IS registered rather than answering :bad_proof
+        #   for a difficulty nobody can evaluate.
         def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil)
           id       = challenge[:id]
           alg      = challenge[:alg]
@@ -122,7 +153,17 @@ module Kiosk
           # --- Step 2 (CHEAP): expiry check ---
           return :expired unless exp.to_i > now.to_i
 
-          # --- Step 3 (CHEAP): parameters must still be the ones we demand ---
+          # --- Step 3a (CHEAP): the signed string must have ONE pre-image ---
+          # A submitted field carrying a delimiter re-partitions the canonical
+          # string, so the honest challenge's sig verifies over a DIFFERENT
+          # (alg, params) split — a substituted backend under a valid signature.
+          # {.issue} cannot mint such a challenge, so an honest client can never
+          # echo one back; but it is not chargeable bad faith either (no hash
+          # loop ran and no backend was named), so it takes the re-challenge
+          # outcome rather than :bad_proof.
+          return :bad_params if delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
+
+          # --- Step 3b (CHEAP): parameters must still be the ones we demand ---
           # The sig only proves WE minted this challenge; `expect` is what this
           # server demands RIGHT NOW. Both must hold before we spend a hash loop.
           return :bad_params unless matches_expected?(expect, alg, params)
@@ -135,6 +176,53 @@ module Kiosk
         end
 
         private
+
+        # The invariant {OUTER_DELIM}, {PARAM_DELIM} and {KV_DELIM} declare,
+        # enforced — the one thing that makes {canonical_string} injective.
+        #
+        # The canonical string joins six fields with OUTER_DELIM and renders
+        # params as `k=v` pairs joined with PARAM_DELIM. A delimiter INSIDE a
+        # value gives that string a second pre-image, and both halves of the
+        # ambiguity are live: an `alg` of `equi|hash` with params `{n:,k:}`
+        # renders exactly as an `alg` of `equi` with params `{"hash|k" => …}`,
+        # and params `{n: 168, k: 7}` render exactly as `{"k=7,n" => "168"}`.
+        # Either re-partition carries the honest challenge's signature, and the
+        # second needs no delimiter in any ISSUED field at all — a client can
+        # mint it from a challenge it was legitimately served, and the `expect:`
+        # comparison cannot see it, because both sides render to one string.
+        #
+        # Checked on BOTH sides deliberately: {.issue} raises so the operator
+        # learns at the source, {.verify} returns :bad_params so a submitted
+        # re-partition is refused whatever this host once minted.
+        #
+        # Only OUTER_DELIM is refused in the five scalar fields; the param
+        # delimiters are meaningless outside the params rendering. A non-Hash
+        # `params` is not this method's error to report — {params_string}
+        # raises a typed ArgumentError naming the value.
+        #
+        # @return [String, nil] a message naming the offending field, or nil
+        def delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
+          { "id" => id, "alg" => alg, "salt" => salt_b64,
+            "exp" => exp, "request_fingerprint" => request_fingerprint }.each do |field, value|
+            if value.to_s.include?(OUTER_DELIM)
+              return "#{field} #{value.to_s.inspect} contains #{OUTER_DELIM.inspect}"
+            end
+          end
+
+          return nil unless params.is_a?(Hash)
+
+          params.each do |key, value|
+            DELIMITERS.each do |delim|
+              return "params key #{key.to_s.inspect} contains #{delim.inspect}" if key.to_s.include?(delim)
+
+              if value.to_s.include?(delim)
+                return "params value #{value.to_s.inspect} (key #{key.to_s.inspect}) contains #{delim.inspect}"
+              end
+            end
+          end
+
+          nil
+        end
 
         # Does the challenge still name the algorithm + parameters the caller's
         # live configuration demands? (The server-side re-derivation check.)

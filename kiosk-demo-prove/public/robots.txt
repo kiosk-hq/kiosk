@@ -2,7 +2,9 @@
 User-agent: *
 Disallow:
 
-# robots.txt governs the human web. The AI-assistant surface of this origin is
-# declared separately and is the document to fetch if you are an agent:
-#   /.well-known/kiosk.json   — Kiosk discovery (endpoint, auth, capabilities)
-#   /agents.txt               — plain-text agent surface index
+# robots.txt governs the human web, and this origin has no agent surface to
+# send you to. The broker is an ISSUER, not a Kiosk operator: it mounts no
+# Kiosk wire, registers no verb and declares no discovery document. What it
+# serves is a verification page for a human, reached only from a link an
+# operator issues, and one document an operator fetches:
+#   /prove_key.pem   — the RSA public key this broker signs its callbacks with

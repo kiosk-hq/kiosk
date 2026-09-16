@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-17: **The KYC broker's `robots.txt` sent an agent to two documents it 404s, because the file was held identical across all eight demos.** prove now advertises only what it serves.
 - 2026-09-17: **The shared container context was justified in eleven files by «every demo's Gemfile resolves the kiosk gems through `path:`» — the KYC broker's has none.** Re-worded.
 - 2026-09-17: **Six shipped files stated the wire's refusal vocabulary as fourteen codes; it has been seventeen since 2026-08-31.** The cardinal is gone and `check-prose-counts` now derives it.
 - 2026-09-16: **The one generated oracle a reader of this repository cannot regenerate did not say so.** Its header and its guard now name the repair that is actually available.

@@ -1548,13 +1548,25 @@ COPIES = {
           "(mise.toml, .bundle, .env) belong in the ROOT .gitignore instead (K-552).",
   },
   "public/robots.txt" => {
-    rule: :identical,
+    rule:   :identical,
+    except: { "prove" => "#{PROVE_SKELETON}, and the divergence here is not skeleton drift but the " \
+                         "agent block being FALSE of it (K-1737): the operator copy sends an agent " \
+                         "to /.well-known/kiosk.json and /agents.txt, and both come from the " \
+                         "engine's mount-gated routes.append, so an origin that mounts no Kiosk " \
+                         "wire cannot serve either — PROBED on the booted broker, both 404 while / " \
+                         "and /prove_key.pem answer 200. prove's own home page had been saying so " \
+                         "one file away («it serves no discovery document»). Its copy therefore " \
+                         "names what this origin does serve and nothing it does not" },
     why:  "The T-048 crawling policy: allow everything (these are public demos we want indexed) " \
           "and point the crawler-turned-agent at the agent surface (/.well-known/kiosk.json, " \
-          "/agents.txt). One policy statement for all eight apps; a copy that drifts advertises " \
+          "/agents.txt). One policy statement for the operator seven; a copy that drifts advertises " \
           "a policy the launch story does not make. Its existence is also log hygiene: " \
           "ActionDispatch::Static answers it ahead of routing, where every hit used to raise " \
-          "ActionController::RoutingError into the production journal.",
+          "ActionController::RoutingError into the production journal. It was `:identical` across " \
+          "all EIGHT until K-1737, which is the failure mode of a lockstep rule rather than of a " \
+          "copy: holding a true sentence identical across a corpus whose members do not all satisfy " \
+          "it turns the copy that does not into a false advertisement, and the guard is what keeps " \
+          "it there.",
   },
   "public/favicon.ico" => {
     rule: :identical,

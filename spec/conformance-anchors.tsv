@@ -27,9 +27,9 @@ CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but 
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
 README.md	Apache-2.0 for every gem in this repo.
 README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an AI-assistant surface
-README.md	Commercial gems (regional PSPs, enterprise-IdP tiers) are planned to live in separate repos under the `kiosk-hq` org, outside this Apache-2.0 monorepo. None exist yet.
 README.md	Customer reputation factors + bad-proof signal
 README.md	Equihash (n=168, k=7)
+README.md	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
 README.md	Meta-gem; `bundle add kiosk-all` installs core + server
 README.md	Opt-in RLS DSL + migration helpers
 README.md	PSP adapter — Stripe, AP2 mandate trail

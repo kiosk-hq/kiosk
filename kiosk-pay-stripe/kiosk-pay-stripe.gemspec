@@ -30,9 +30,9 @@ Gem::Specification.new do |spec|
     callables, and no application table is read inside the gem.
 
     Today only kiosk-pay-stripe ships; there is no default PSP
-    (Configuration#payment_provider is nil). Further open adapters (e.g.
-    Paddle) and commercial regional PSPs are planned on customer demand —
-    none exist yet.
+    (Configuration#payment_provider is nil). A host that needs another PSP
+    subclasses Kiosk::PaymentProviders::Base and assigns the instance to
+    Kiosk.configuration.payment_provider.
   DESC
   spec.homepage    = "https://kiosk.tech"
   spec.license     = "Apache-2.0"

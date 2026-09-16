@@ -57,7 +57,8 @@ static void check(int condition, const char *description)
 }
 
 /* --------------------------------------------------------------------------
- * Known-answer vector (T1 firmware fixtures)
+ * Known-answer vector — the same message, key and signature
+ * script/rental_token_issuer_kat.rb mints and prints
  * -------------------------------------------------------------------------- */
 
 /* Dev public key — 32 raw bytes (matches hex above) */

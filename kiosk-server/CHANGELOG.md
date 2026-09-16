@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The install template stops calling the external agent-IdP seam «planned».** It names the one subclass the engine actually ships (K-1673).
 - **The gemspec named `ActiveRecord::Base.connection`; the engine uses `lease_connection` everywhere.** The install template stops naming the deleted query/run endpoints.
 - **SUPERSEDES the 0.2.0 note that the `user_code` alphabet is «8-char Crockford (no 0/O/1/I/L/U)».** It is 31 chars and KEEPS U; the brute-force space is 31^8.
 - **The PoW gate and spent store described a caller, a spec count and a memory bound they do not have.** A new example covers the sweep that actually runs.

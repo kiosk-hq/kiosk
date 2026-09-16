@@ -8,6 +8,7 @@ entries that are new against its declared baseline commit, and never on the
 entries already below.
 
 ## [Unreleased]
+- **The rubygems blurb stopped forecasting PSP adapters that do not exist (K-1673).** It names the base class a host subclasses instead.
 - **The rubygems blurb credited this gem's charging to a `kiosk-core` method that only raises (K-1688).** It names this adapter's own `#capture` now.
 - **`return_url:` — the keyword whose absence raises — is documented, and three stale or inverted comments are gone (K-1690, K-1691, K-1692).**
 - The two operator log lines that report a degraded `setup_url` now end in the

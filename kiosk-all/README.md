@@ -56,7 +56,7 @@ gem "kiosk-user-idp-devise", github: "kiosk-hq/kiosk"   # only shipped user-IdP 
 gem "kiosk-pay-stripe",      github: "kiosk-hq/kiosk"   # only shipped PSP adapter today
 ```
 
-Further `kiosk-user-idp-*` (Warden, JWT-bearer, Clerk, Auth0, …) and `kiosk-pay-*` (Paddle, regional PSPs, …) adapters are planned per market and stack — none exist yet.
+Those two are the whole set: `git ls-files 'kiosk-user-idp-*/*.gemspec' 'kiosk-pay-*/*.gemspec'` names one gem each. For a stack or a market neither covers, subclass `Kiosk::UserIdentityProviders::Base` or `Kiosk::PaymentProviders::Base` in your own app and assign it in the initializer.
 
 Why not bundled: there is no «one PSP per provider» or «one IdP per provider» globally; bundling Stripe + Paddle + every IdP would pull five unused gems into every Gemfile. Providers pick per market (`kiosk-pay-*`) and per existing identity stack (`kiosk-user-idp-*`) — this is the same reason `kiosk-pay-all` is deliberately not provided.
 

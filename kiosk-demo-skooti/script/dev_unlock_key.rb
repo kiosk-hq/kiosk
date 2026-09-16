@@ -10,7 +10,7 @@ require "openssl"
 # It is a fixed keypair (not per-boot ephemeral) so that:
 #   1. Rental token signatures are stable across process restarts.
 #   2. The known-answer vector (script/rental_token_issuer_kat.rb) reproduces exactly.
-#   3. The firmware host-test (T3) can hard-code the public key.
+#   3. The firmware host-test (firmware/host_test.c) can hard-code the public key.
 #
 # DEV/TEST ONLY. The private half ships world-readable in this public
 # repo, so it is NOT a key anything real may sign with: production resolves

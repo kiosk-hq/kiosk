@@ -230,7 +230,7 @@ genuinely unavoidable, declare it in that script with the reason.
 
 Apache-2.0 for every gem in this repo. See each gem's `LICENSE.txt`.
 
-Commercial gems (regional PSPs, enterprise-IdP tiers) are planned to live in separate repos under the `kiosk-hq` org, outside this Apache-2.0 monorepo. None exist yet.
+Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list, and each one declares `spec.license = "Apache-2.0"`.
 
 ## Links
 

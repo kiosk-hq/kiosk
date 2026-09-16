@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- README: the adapter section names the two adapter gems that ship and the base classes to subclass, instead of forecasting adapters that do not exist (K-1673).
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - `kiosk-rls` is no longer bundled — RLS is opt-in. Add `gem "kiosk-rls"`
   explicitly if you use `enable_rls_on` in migrations.

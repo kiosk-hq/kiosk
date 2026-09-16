@@ -135,8 +135,9 @@ Kiosk.configure do |c|
   # to the bundled kiosk-pop DefaultAgentIdp, used with ZERO config: it verifies
   # the tokens the register/login endpoints mint. Set it ONLY to front an
   # external agent-identity issuer by implementing
-  # `Kiosk::AgentIdentityProviders::Base` — external agent-IdP adapters are a
-  # planned seam; none ship yet. If you do write one: the `agent_id` your
+  # `Kiosk::AgentIdentityProviders::Base` — the only subclass Kiosk ships is
+  # the bundled DefaultAgentIdp named above, so an adapter fronting an
+  # external issuer is yours to write. If you do write one: the `agent_id` your
   # adapter puts in a `Kiosk::Identity` MUST be a UUID string. Every agent_id
   # column these migrations create — and the `current_agent_id()` helper RLS
   # policies call — is typed `uuid`, with no equivalent of `user_id_type` to

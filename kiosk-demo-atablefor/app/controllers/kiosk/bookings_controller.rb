@@ -71,7 +71,8 @@ class Kiosk::BookingsController < ApplicationController
   # the assistant meant by it — and a booking confirmation is the artefact a
   # human keeps. So the same zone-bearing rendering `availability` and
   # `my_bookings` publish is on this row too, from the same {Seatings.label}:
-  # one label, one spelling, three surfaces — and `timezone` names the clock,
+  # one label, one spelling, every surface that writes a seating out — and
+  # `timezone` names the clock,
   # which is the RESTAURANT's rather than this aggregator's.
   output_schema type: "object",
                 description: "The confirmed booking.",

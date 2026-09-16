@@ -38,8 +38,14 @@ class HomeController < ActionController::Base
   # The login address is deliberately NOT selected: this query feeds a page
   # anyone can fetch, and a column that never leaves the SELECT cannot be
   # published by a later reader of it. Read-only — the board never mutates
-  # anything. Now onward, soonest first. Times are rendered in Europe/Lisbon (the
-  # operator's locale) so the board reads in local wall-clock.
+  # anything. Now onward, soonest first.
+  #
+  # THE CLOCK IS THE RESTAURANT'S, and it is read out of `restaurants.timezone`
+  # — the recorded column {Seatings} argues for, because an aggregator listing
+  # places in two cities offers two different rosters at one instant. The JOIN
+  # this query already makes is what supplies it, so the zone travels with the
+  # row rather than being a literal beside it, and `slot_zone` comes back with
+  # the pair so the rendered line can NAME the clock it is written in.
   def upcoming_reservations
     conn = ActiveRecord::Base.connection
     conn.execute(<<~SQL).to_a
@@ -49,8 +55,9 @@ class HomeController < ActionController::Base
         rt.label                                                           AS table_label,
         rt.deposit_eur                                                     AS deposit_eur,
         b.party_size                                                       AS party_size,
-        to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'Dy DD Mon')    AS slot_day,
-        to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'HH24:MI')      AS slot_time,
+        to_char(b.seating_at AT TIME ZONE r.timezone, 'Dy DD Mon')         AS slot_day,
+        to_char(b.seating_at AT TIME ZONE r.timezone, 'HH24:MI')           AS slot_time,
+        r.timezone                                                         AS slot_zone,
         u.display_name                                                     AS diner_name,
         u.id                                                               AS diner_account_id
       FROM bookings b
@@ -64,7 +71,17 @@ class HomeController < ActionController::Base
     SQL
   end
 
-  helper_method :board_diner_name
+  helper_method :board_diner_name, :board_seating_label
+
+  # A seating written out for a human, on the RESTAURANT's clock and with that
+  # clock named beside it — "20:00 (Europe/Lisbon)". It goes through
+  # {Seatings.label}, the same one the wire verbs publish `seating_label` from,
+  # so this page is one more READER of that sentence and not a second spelling
+  # of it: a bare "20:00" on a board spanning two cities is a wall clock with no
+  # clock named.
+  def board_seating_label(row)
+    Seatings.label(row["slot_time"], Time.find_zone!(row["slot_zone"]))
+  end
 
   # Public label for a reservation's diner: the seeded display name, else an
   # opaque `diner-<hex>` derived from the account uuid. {User.public_name} is

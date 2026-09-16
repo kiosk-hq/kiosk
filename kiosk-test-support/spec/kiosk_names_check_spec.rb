@@ -3,7 +3,7 @@
 # `bin/check-kiosk-names` runs in CI (T-068 slice 3; the rule is spec §8.1 / §8.3).
 #
 # The check itself is a standalone script — no Rails, no database, a second to
-# run — and its three assertions are described in its own header. This spec is
+# run — and its assertions are described in its own header. This spec is
 # how it reaches CI: kiosk-test-support is in the gems matrix, so running the
 # script from here gates every push without a workflow of its own.
 #

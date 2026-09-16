@@ -34,6 +34,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The verdict headers stop sending a reader to an INDETERMINATE state this gem never had.** There are three verdicts; an answer that proved nothing is told by its `detail`, not by a fourth.
+
 - **The rubygems blurb stops listing HTTP 402 among the statuses that constitute a block.** The predicate, the README and `verdict_from` dropped 402 long ago; the blurb is read first.
 
 - **`Scenarios::WrongCurrencyCart` names `403` instead of delegating to `blocked?`.** Delegating admitted a `401`, which says the credential was rejected rather than that the cashier refused the cart — a refusal scored for an attack that never reached the counter. Same reason the gem already declines to delegate a bare `402`.

@@ -52,8 +52,12 @@ module Kiosk
   #
   # A 5xx or connection error is NOT blocked — a crash cannot masquerade as a
   # successful enforcement gate.  Neither is a 402: see {PAYMENT_REQUIRED_CODES}.
-  # Every other non-2xx is INDETERMINATE; scenarios should surface those as
-  # leaks, not blocks.
+  # Anything meeting neither bullet is not blocked either, and there is no
+  # fourth verdict for it: {Scenario#verdict_from} answers the
+  # not-blocked-not-skipped state — the one {Runner} prints as BREACH — with a
+  # `detail` naming what came back and, when the scenario named a gate with
+  # `expect:`/`expect_code:`, what was demanded.  An answer that proved nothing
+  # is told from a real finding by reading that string, not by a fourth state.
   module Redteam
     # Canonical set of HTTP statuses that constitute a deliberate block.
     #

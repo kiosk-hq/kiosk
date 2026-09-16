@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **`have_a_route_for_every_verb` took no block parameter, so `origin:` was accepted and discarded (K-1702).** It now honours the keyword its Minitest twin honours.
+
 - **The published journey-helper roll-call was short by `run_query` (K-1696).** The lists name it now, and the two «helpers are available» tests are held to the module rather than to themselves.
 
 - The route conformance check no longer special-cases the engine's refusal controller, which no longer exists: a declared verb whose route is missing is reported as declared-and-never-routed, which is what every caller now meets as an ordinary 404.

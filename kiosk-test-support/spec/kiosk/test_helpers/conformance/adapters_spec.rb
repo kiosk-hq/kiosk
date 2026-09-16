@@ -131,6 +131,43 @@ RSpec.describe "the conformance adapters" do
       expect(nil).to have_a_route_for_every_verb
     end
 
+    # K-1702. `have_a_route_for_every_verb` was defined with NO block parameter,
+    # so RSpec handed it the options Hash, Ruby discarded it, and `origin:` was
+    # accepted syntactically and dropped — the matcher then answered about the
+    # CONFIGURED origin, which is a wrong verdict rather than an error. The
+    # adopter this bites has more than one origin, which is what this gem's own
+    # suite is: an engine-backed one and a NullOrigin.
+    it "honours an explicit origin: over a broken configured one" do
+      broken = null_origin.new(verbs: [lying_verb], routes: {})
+      Kiosk::TestHelpers::Conformance.origin = broken
+
+      # CONTROL ONE: the configured origin really is unrouted, so a green
+      # keyword example below cannot be green for want of anything to catch.
+      expect { expect(nil).to have_a_route_for_every_verb }
+        .to raise_error(RSpec::Expectations::ExpectationNotMetError, /not routed as their kind requires/)
+
+      # CONTROL TWO: the configured-origin path still works — the subject form
+      # names its own origin and is unaffected by the keyword.
+      expect(honest_origin).to have_a_route_for_every_verb
+
+      # THE PROPERTY: the keyword is honoured, not dropped.
+      expect(nil).to have_a_route_for_every_verb(origin: honest_origin)
+    end
+
+    it "honours origin: on all four matchers, the parity the header claims" do
+      Kiosk::TestHelpers::Conformance.origin = null_origin.new(verbs: [lying_verb], routes: {})
+      scoped = null_origin.new(
+        verbs:   [lying_verb],
+        answers: { ["catalog", :alice] => [{ "price_cents" => 1 }],
+                   ["catalog", :bob]   => [{ "price_cents" => 2 }] },
+      )
+
+      expect(nil).to have_a_route_for_every_verb(origin: honest_origin)
+      expect(:catalog).to execute_as_a_kiosk_verb(origin: honest_origin)
+      expect(:catalog).to answer_its_declared_schema(origin: honest_origin)
+      expect(:catalog).to be_scoped_to_principal(as: :alice, and_not: :bob, origin: scoped)
+    end
+
     it "fails on the descriptor lie" do
       Kiosk::TestHelpers::Conformance.origin = lying_origin
 

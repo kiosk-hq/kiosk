@@ -66,10 +66,16 @@ end
 # controller under its own name, with the method its kind requires. An origin
 # that declares NO verbs fails — an empty registry must not read as "all zero of
 # my verbs are routed".
-RSpec::Matchers.define :have_a_route_for_every_verb do
+#
+# Three ways to name the origin, in this order: the SUBJECT, then an explicit
+# `origin:`, then the configured one. The `|options = {}|` is load-bearing and
+# not decoration — a matcher defined with no block parameter is still CALLABLE
+# with keywords, and Ruby then discards the Hash RSpec hands it, so the keyword
+# is accepted and dropped and the verdict is about a different origin.
+RSpec::Matchers.define :have_a_route_for_every_verb do |options = {}|
   match do |origin|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.routes(
-      origin || Kiosk::TestHelpers::Conformance.require_origin!,
+      origin || Kiosk::TestHelpers::Conformance::RSpecOptions.origin(options),
     )
     @outcome.ok?
   end

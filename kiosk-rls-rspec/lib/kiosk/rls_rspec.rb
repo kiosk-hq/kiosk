@@ -10,12 +10,10 @@ require "kiosk/rls_rspec/matchers"
 
 module Kiosk
   module RLSRSpec
-    # The metadata tags that pull in the journey DSL. `:kiosk_journey` is
-    # the deterministic SQL/Action shape; `:kiosk_agent` is reserved for
-    # the optional `kiosk-agent-test` companion gem, which
-    # upgrades this same module with a live-LLM driver. Both tags share
-    # the same DSL surface so a test can graduate from one to the other
-    # without changing the helper calls.
+    # The metadata tags that pull in the journey DSL. Both get the SAME
+    # surface — they differ only in the name a group tags itself with, so a
+    # test can move between them without changing a helper call. Nothing here
+    # drives a live model: `:kiosk_agent` is a tag, not a mode.
     JOURNEY_TYPES = %i[kiosk_journey kiosk_agent].freeze
 
     # Register the journey DSL include for the journey metadata tags with

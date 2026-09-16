@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **The RLS gems forecast a companion gem and an Action-DSL verb that do not exist, and the kiosk-rls blurb omitted the FORCE statement without which RLS is a no-op.**
 - 2026-09-16: **Four sentences, two of them inside a packaged gem, priced an Equihash solve at «~9 s» with no solver, machine or parameters named.** The seconds are gone.
 - 2026-09-16: **kiosk-pay-stripe: the rubygems blurb credited charging to a method that only raises, the keyword whose absence raises was undocumented, and two comments had outlived their facts.**
 - 2026-09-16: **The packaged Cuckatoo solver shipped a scalar SipHash nothing called, a dead parameter, a narration of a version that no longer exists, and a salt length its own literal refutes.**

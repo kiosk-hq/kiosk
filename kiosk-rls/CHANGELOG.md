@@ -13,6 +13,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The rubygems blurb listed the DDL this gem emits and left out FORCE ROW LEVEL SECURITY (K-1697).** Without it Postgres exempts the table owner and RLS is a no-op.
+- **`system_role` stops pointing at an Action-DSL escalation that has not shipped (K-1695).** Its live caveat now carries the measurement behind it.
+
 - README: every `gem` line in the install section now carries `github: "kiosk-hq/kiosk"`, so a copied line resolves before publication; the banner above them states what the block does rather than asking the reader to add it.
 - Now truly opt-in: no longer a dependency of kiosk-server, kiosk-all, or
   kiosk-test-support. `ConfigurationExtension` now contributes only

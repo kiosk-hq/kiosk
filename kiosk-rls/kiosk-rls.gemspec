@@ -12,9 +12,12 @@ Gem::Specification.new do |spec|
     their ActiveRecord migrations: `enable_rls_on`, `policy`, plus the
     add/change/remove/rename migration verbs.
 
-    The DSL compiles to standard PostgreSQL DDL (ALTER TABLE ENABLE ROW
-    LEVEL SECURITY, GRANT, CREATE POLICY, COMMENT ON TABLE) and runs inside
-    the migration's transaction via the host's `#execute` method.
+    The DSL compiles to standard PostgreSQL DDL (ALTER TABLE ENABLE ROW LEVEL
+    SECURITY, ALTER TABLE FORCE ROW LEVEL SECURITY, GRANT, CREATE POLICY,
+    COMMENT ON TABLE) and runs inside the migration's transaction via the
+    host's `#execute` method. FORCE is not optional: without it Postgres
+    exempts the table owner, and the typical Rails app connects as the owner,
+    so RLS would be a no-op.
 
     Adds the RLS-only `system_role` field to `Kiosk::Configuration`
     (`app_role` and `schema` live in kiosk-core).

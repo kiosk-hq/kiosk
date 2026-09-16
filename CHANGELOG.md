@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **Three `kiosk-pow-cuckoo` sentences priced a toy solve in seconds without naming a machine.** The figure is gone; the task prints its own.
 - 2026-09-16: **Six shipped surfaces still promised adapter gems and a seam nobody can open, and two skooti files carried private roadmap labels.** Each now states the live fact instead.
 - 2026-09-16: **The RLS gems forecast a companion gem and an Action-DSL verb that do not exist, and the kiosk-rls blurb omitted the FORCE statement without which RLS is a no-op.**
 - 2026-09-16: **Four sentences, two of them inside a packaged gem, priced an Equihash solve at «~9 s» with no solver, machine or parameters named.** The seconds are gone.

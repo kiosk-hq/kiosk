@@ -130,7 +130,7 @@ edgebits and reduced proofsize only**.
 | Language | Python 3 + numpy |
 | Status   | Reference/toy — NOT production |
 | Purpose  | Mechanism demonstration at small sizes |
-| Tested at | edgebits=10, proofsize=12 (~1 second) |
+| Tested at | edgebits=10, proofsize=12 |
 | Memory guard | Built-in `_enforce_memory_budget`: refuses oversized edgebits |
 | Safety wrapper | `KIOSK_POW_MAX_BYTES=536870912 timeout 30 nice -n 19 python3 solve_cuckoo.py` |
 
@@ -139,7 +139,8 @@ A valid Cuckatoo proofsize=12 cycle exists in the bipartite pair-graph only when
 the pair-graph girth ≤ 12. With N/2 = 2^(edgebits-1) pair values per side and
 mean pair-degree 2, the expected girth is approximately log₂(N/2). For
 proofsize=12, this requires edgebits ≤ 12-13. At edgebits=10 (N/2=512) cycles
-exist and solve in ~1 second. At edgebits ≥ 14, 12-cycles essentially vanish.
+exist and the bundled `solve_cuckoo.py` finds them. At edgebits ≥ 14,
+12-cycles essentially vanish.
 
 **Cannot solve production Cuckatoo** (L=42, edgebits≥29). Pure Python cannot
 allocate or search the required ~1 GB+ graph in usable time. Production requires

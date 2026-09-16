@@ -11,6 +11,7 @@ entries already below.
 
 ### Changed
 
+- **Three sentences priced the toy solve at «~1 second» with no machine named (K-1698).** The figure is gone; `rake solve_parity` prints its own timing.
 - **The packaged solver drops a scalar SipHash and a parameter nothing called, and stops narrating a version that no longer exists (K-1685, K-1686).**
 - **Two comments stated a salt length the base64 literal beside them refutes (K-1684).** The numbers are removed rather than corrected.
 - **`verify` answers false for seven more malformed-input shapes where it used to raise (K-1683).** Its own comment and the sibling Equihash backend already promised that.

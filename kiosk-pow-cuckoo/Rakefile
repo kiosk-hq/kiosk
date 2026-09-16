@@ -26,7 +26,7 @@ task default: :spec
 #   (N/2 nodes per side, N edges) to have girth ≤ 12. For edgebits ≥ 13,
 #   the expected girth exceeds 12 and 12-cycles essentially don't exist.
 #   edgebits=10 (N=1024, pairs=512, girth ≈ 9) is the right demo size for
-#   proofsize=12 and solves in ~1 second.
+#   proofsize=12.
 # ---------------------------------------------------------------------------
 task :solve_parity do
   require_relative "lib/kiosk/pow/cuckoo"

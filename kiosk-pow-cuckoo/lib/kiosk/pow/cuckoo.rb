@@ -313,6 +313,36 @@ module Kiosk
         { edgebits:, proofsize:, target: }
       end
 
+      # Read the three challenge parameters as the numbers the verifier's
+      # arithmetic needs, or answer all-nil when any of them cannot be read.
+      #
+      # The sibling of {Equihash.coerce_params}, and for the same reason: a
+      # verifier that cannot evaluate the question must answer `false`, never
+      # raise. `params` reaches {.verify} from the challenge object, so a
+      # degenerate value is an operator misconfiguration rather than something
+      # a caller chose — but a raise out of a backend leaves
+      # `Challenge.verify`'s Symbol contract through the floor, so it is the
+      # verifier's job to stay inside it either way.
+      #
+      # `target` is nil-or-Integer by the {.params} contract; nil means «accept
+      # any valid cycle» and is passed through, anything uncoercible fails the
+      # whole read.
+      #
+      # @return [Array(Integer, Integer, Integer), Array(nil, nil, nil)]
+      def self.coerce_params(params)
+        return [nil, nil, nil] unless params.is_a?(Hash)
+
+        edgebits  = Integer(params[:edgebits]  || params["edgebits"])
+        proofsize = Integer(params[:proofsize] || params["proofsize"] || 42)
+        target    = params[:target] || params["target"]
+        target    = Integer(target) unless target.nil?
+
+        [edgebits, proofsize, target]
+      rescue ArgumentError, TypeError
+        [nil, nil, nil]
+      end
+      private_class_method :coerce_params
+
       # Verify a Cuckatoo proof-of-work.
       #
       # @param salt   [String] raw bytes (the provider's per-challenge salt)
@@ -327,9 +357,14 @@ module Kiosk
         cycle        = nonce[:cycle]        || nonce["cycle"]
         return false if header_nonce.nil? || cycle.nil?
 
-        edgebits  = Integer(params[:edgebits]  || params["edgebits"])
-        proofsize = Integer(params[:proofsize] || params["proofsize"] || 42)
-        target    = params[:target] || params["target"]
+        # A cycle that is not an Array is a malformed proof, and it is the one
+        # shape of it a CALLER supplies: an Integer has no #each_with_index, and
+        # a String of the right #length walks straight past {verify_cycle}'s
+        # first guard into the same NoMethodError.
+        return false unless cycle.is_a?(Array)
+
+        edgebits, proofsize, target = coerce_params(params)
+        return false if edgebits.nil?
 
         # Build the header: salt bytes ‖ header_nonce as LE u32 (4 bytes). Its
         # length is salt.bytesize + 4 — 80 bytes only for a 76-byte salt (the

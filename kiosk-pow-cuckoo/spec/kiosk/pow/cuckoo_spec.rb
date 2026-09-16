@@ -339,6 +339,45 @@ RSpec.describe Kiosk::Pow::Cuckoo do
             nonce: { header_nonce: 0, cycle: ["x", 2] })).to be(false)
         }.not_to raise_error
       end
+
+      # K-1683. The four examples above cover the shapes this verifier already
+      # guarded; these are the ones where it RAISED while the sibling Equihash
+      # backend answered false for every matching input. Two of them (a cycle
+      # that is an Integer, and one that is a String of the right length) are
+      # CALLER-supplied on an unauthenticated POST /auth/register; the rest are
+      # operator-supplied params. A raise here leaves `Challenge.verify`'s
+      # `@return [Symbol]` contract through the floor and reaches the wire as a
+      # 500 rather than the 403 a bad proof earns.
+      #
+      # `salt` is deliberately NOT in this table: BOTH backends raise
+      # NoMethodError on a non-String salt (measured), so they already agree,
+      # and the salt is minted by the server rather than submitted with the
+      # proof — it is not part of the malformed-PROOF contract.
+      {
+        "params missing edgebits"           => [{ proofsize: 42 }, { header_nonce: 1, cycle: [1] }],
+        "params that is a String"           => ["edgebits=19", { header_nonce: 1, cycle: [1] }],
+        "params that is nil"                => [nil, { header_nonce: 1, cycle: [1] }],
+        "a non-numeric edgebits"            => [{ edgebits: "abc", proofsize: 4 }, { header_nonce: 1, cycle: [1] }],
+        "a non-numeric proofsize"           => [{ edgebits: 19, proofsize: "abc" }, { header_nonce: 1, cycle: [1] }],
+        "a non-numeric target"              => [{ edgebits: 19, proofsize: 1, target: "abc" }, { header_nonce: 1, cycle: [1] }],
+        "a cycle that is an Integer"        => [{ edgebits: 19, proofsize: 1 }, { header_nonce: 1, cycle: 7 }],
+        "a cycle that is a matching String" => [{ edgebits: 19, proofsize: 4 }, { header_nonce: 1, cycle: "abcd" }],
+      }.each do |label, (bad_params, bad_nonce)|
+        it "returns false (not raise) for #{label}" do
+          expect {
+            expect(described_class.verify(salt: KAT_SALT, params: bad_params, nonce: bad_nonce)).to be(false)
+          }.not_to raise_error
+        end
+      end
+
+      it "answers the same as the sibling Equihash backend does for its matching shapes" do
+        # The contract is one contract: `Backends` documents `.verify` as
+        # returning a Boolean and `Challenge.verify` turns it straight into
+        # :ok / :bad_proof without a rescue. This is the control that the
+        # guards above did not buy their `false` by breaking a VALID proof.
+        expect(described_class.verify(salt: KAT_SALT, params: params,
+          nonce: { header_nonce: KAT_NONCE, cycle: KAT_CYCLE })).to be(true)
+      end
     end
 
     # -------------------------------------------------------------------------

@@ -11,6 +11,7 @@ entries already below.
 
 ### Changed
 
+- **`verify` answers false for seven more malformed-input shapes where it used to raise (K-1683).** Its own comment and the sibling Equihash backend already promised that.
 - The gemspec stops labelling itself with private roadmap phases (T1, T2/T3) that nothing an adopter can open resolves.
 
 ### Added

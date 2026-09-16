@@ -199,13 +199,19 @@ RSpec.describe "demo descriptor cross-references" do
       start = header.index(/^[ \t]*#{macro}[ \t]/)
       return nil if start.nil?
 
-      rest  = header[start..]
-      body  = rest[/\A[^\n]*\n/] ? rest : rest
-      # The next macro at line start, after this one's first line.
+      rest = header[start..]
+      # Where the NEXT macro (or the `def`) starts, looked for after this
+      # macro's first line so the macro's own name cannot match itself.
+      #
+      # There is no one-line/multi-line fork to take here, and a `body` local
+      # that looked like one used to stand where this comment does: when
+      # nothing follows, the region is the whole remainder whether the macro
+      # occupied one line or twenty, so the only question the method answers is
+      # WHERE TO CUT.
       first_line_end = rest.index("\n") || rest.length
       following = rest[first_line_end..].to_s
       stop = following.index(/^[ \t]*(?:#{MACRO_NAMES.join("|")})[ \t]|^[ \t]*def[ \t]/)
-      stop.nil? ? body : rest[0, first_line_end + stop]
+      stop.nil? ? rest : rest[0, first_line_end + stop]
     end
 
     # {name:, description:, params: [declared param names]} per verb, read out
@@ -562,6 +568,42 @@ RSpec.describe "demo descriptor cross-references" do
       expect(r[:undeclared]).to eq(["#{root}/app/packs/orphan_controller.rb"])
       expect(DescriptorSource.demo_verbs(root).map { |v| v[:name] }).to eq(%w[ring_up])
     end
+  end
+
+  # K-1704. `macro_region` is the extractor the params half of this lint stands
+  # on, and it carried a conditional whose two branches were the same
+  # expression — reading as though it distinguished a one-line macro from a
+  # multi-line one, which is precisely the question it exists to answer, and
+  # deciding nothing. The distinction is not real, and the four inputs below
+  # are what say so to the next reader who is tempted to "restore" a branch:
+  # the cut is decided by what FOLLOWS, never by the macro's own shape.
+  it "cuts a macro region at what follows it, not at its own line count" do
+    one_line = <<~RB
+      kind :query
+      input_schema type: "object"
+      def ring_up = nil
+    RB
+    multi_line = <<~RB
+      input_schema type: "object",
+                   properties: { basket_id: { type: "string" } }
+      output_schema type: "array"
+    RB
+    trailing = 'input_schema type: "object"'
+
+    # Followed by a `def`: cut there, and the one-line macro keeps its own line.
+    expect(DescriptorSource.macro_region(one_line, "input_schema"))
+      .to eq(%(input_schema type: "object"\n))
+    # Followed by another macro, over several lines: every line of THIS macro
+    # and none of the next.
+    expect(DescriptorSource.macro_region(multi_line, "input_schema"))
+      .to eq(%(input_schema type: "object",\n             properties: { basket_id: { type: "string" } }\n))
+    # Followed by nothing at all, no trailing newline: the whole remainder.
+    expect(DescriptorSource.macro_region(trailing, "input_schema")).to eq(trailing)
+    # THE CASE THE DELETED BRANCH PRETENDED TO DECIDE, and the only one where a
+    # "one-line macros yield their own line" rule would differ: several lines,
+    # with nothing after them. The answer is still the whole remainder.
+    last = multi_line[0, multi_line.index("output_schema")]
+    expect(DescriptorSource.macro_region(last, "input_schema")).to eq(last)
   end
 
   # ── ADR-0023: a description may not carry a parameter list (K-846) ────────

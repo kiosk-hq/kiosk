@@ -203,6 +203,51 @@
 # comment prose in this repository -- were in no class and every other arm here
 # was blind to them. They are read now, by shebang (K-1723).
 #
+# A SPELT-OUT CARDINAL IN FRONT OF A LOADABLE CONSTANT IS DERIVABLE TOO (CD-1,
+# K-1738). RS-1 above derives a size from an enumeration in the SAME file. There
+# is a second shape where the derivation exists and is not in the file at all:
+# prose that states how big a named, loadable CONSTANT is. Six shipped files --
+# five demo `app/operations/operation_result.rb` and one gem spec -- stated the
+# size of the wire's closed refusal vocabulary as a number it had outgrown two
+# days after the sentence was first written, and carried it for a fortnight.
+# Every one of them was TRUE the day it was typed and the table grew under it,
+# which is the whole class: nothing joined the prose to
+# `Kiosk::Server::Errors::CODES`, so nothing could notice.
+#
+# CD-1 joins them. `CONST_COUNTS` below binds a POPULATION -- a constant, and
+# the one-line command that loads it -- to the noun phrases that name that
+# population AS A WHOLE, each capturing the cardinal beside it. The command runs
+# once per run; every phrase match is compared with what it returned.
+#
+# WHY IT IS A HAND-KEPT PHRASE LIST AND NOT A NOUN, and the numbers that settled
+# it. English states SUBSETS of a closed vocabulary constantly, and this
+# repository does it more than most. MEASURED 2026-09-17 with `git grep -P`
+# over the tracked tree before the arm was written, and a dated figure rather
+# than a live one: a cardinal within two words of `codes` is about SIXTY lines,
+# nearly all of them correct prose about a subset -- three codes share one
+# status, two share another, the two answers an assistant can still meet here.
+# A cardinal hyphenated straight onto `-code` is six, and one of those six is
+# about a spec section's closing list rather than about the vocabulary at all.
+# So a rule keyed on the NOUN would have arrived red on correct prose, which is
+# the trade K-1097 measured and this header has already taken twice. Keyed on
+# the phrase that names the whole population, the same tree answers THREE live
+# statements and no false one. Those three are also the arm's vacuity subject:
+# `--self-test` fails when an entry's phrases reach nothing live, because a
+# pattern that matches nothing reads as coverage and says so to nobody.
+#
+# DIGITS ARE DELIBERATELY OUT OF THIS ARM. Only the spelt-out cardinals are
+# read. A digit in this neighbourhood is overwhelmingly an HTTP status, a
+# section number or a protocol version, which is the same thing
+# `digit_in_context?` exists three hundred lines down to unlearn; a number
+# spelled in words is a QUANTITY almost every time anyone writes one.
+#
+# `CHANGELOG.md` IS OUT, for the reason `classify` already gives it: an entry is
+# a dated record of the tree AS IT WAS, so an entry that states the vocabulary's
+# size in 2026-09 stays right on the day the next code is added, and editing it
+# is forbidden anyway. Every OTHER readable tracked text file is read, extension
+# or none -- the six sites this arm was built from were five Ruby comments and a
+# JSON `description`, which between them sit in one gated class and in no class.
+#
 # WHAT IT WOULD NOT CATCH. This list is the header's most useful paragraph, so
 # nothing here is overtrusted:
 #
@@ -445,6 +490,46 @@ ARMS = [
       path = File.join(dir, "bin/fixture-guard")
       File.write(path, File.read(path).sub("WHAT IT CHECKS. Four arms",
                                            "WHAT IT CHECKS. Three arms"))
+    },
+  },
+  {
+    id: "CD-1",
+    what: "prose that states the SIZE of a loadable constant, where the constant says otherwise " \
+          "(K-1738 -- six shipped files stating a vocabulary size the table had outgrown two " \
+          "days after the sentence was written)",
+    plant: lambda { |dir|
+      path = File.join(dir, "docs/vocabulary.md")
+      File.write(path, File.read(path).sub("these #{CD_GREEN_WORD} codes",
+                                           "these #{CD_PLANT_WORD} codes"))
+    },
+  },
+  {
+    id: "CD-2",
+    what: "the command that loads a bound constant stopped answering -- an arm that cannot " \
+          "derive its number must SAY so rather than compare every sentence with nothing",
+    plant: lambda { |dir| File.delete(File.join(dir, "kiosk-server/lib/kiosk/server/errors.rb")) },
+  },
+  {
+    id: "CD-3",
+    reports: "CD-1",
+    what: "THE K-1738 SENTENCE ITSELF, in the spelling five demo files carried: a cardinal " \
+          "hyphenated straight onto the vocabulary it names",
+    plant: lambda { |dir|
+      FileUtils.mkdir_p(File.join(dir, "app"))
+      File.write(File.join(dir, "app/statuses.rb"),
+                 "# Deliberately NOT the full #{CD_PLANT_WORD}-code wire vocabulary: a code this " \
+                 "app never produces\n# has no business having a mapping here.\nSTATUSES = {}.freeze\n")
+    },
+  },
+  {
+    id: "CD-4",
+    reports: "CD-1",
+    what: "the sibling spelling, where the noun is elided and the cardinal ends the clause -- " \
+          "and WRAPPED over two comment lines, so the join is what finds it and not a line scan",
+    plant: lambda { |dir|
+      FileUtils.mkdir_p(File.join(dir, "app"))
+      File.write(File.join(dir, "app/statuses_spec.rb"),
+                 "# Two codes here, deliberately not the\n# wire's #{CD_PLANT_WORD}.\nX = 1\n")
     },
   },
   {
@@ -878,6 +963,113 @@ def rule_set_findings(rel, text, stats)
   out
 end
 
+# ── constant-derived cardinals (CD-1, CD-2) ──────────────────────────────────
+#
+# See the header. Nothing here is a grep for a noun: a POPULATION is declared
+# with the command that loads it and with the phrases that name it AS A WHOLE,
+# and the cardinal each phrase captures is compared with what the command said.
+
+# Words only. The header says why; `digit_in_context?` is the other half of the
+# same lesson.
+CD_WORD = /(?:#{CARDINAL_WORDS.join('|')})/i.freeze
+
+# The two words the self-test's control and its plants are built from. They are
+# CONSTANTS rather than literals for a reason that is not style: this script is
+# itself a tracked text file that this arm reads, so a plant sentence spelled
+# out here would be a live instance of the very defect, in the guard, forever.
+CD_GREEN_WORD = "three"     # and the fixture's stub constant carries three keys
+CD_PLANT_WORD = "fourteen"  # what the six shipped sites said while the table held seventeen
+
+CONST_COUNTS = [
+  {
+    key:     "wire vocabulary",
+    names:   "Kiosk::Server::Errors::CODES",
+    what:    "the wire's closed refusal-code vocabulary",
+    command: %q(ruby -Ikiosk-server/lib -e 'require "kiosk/server/errors"; ) +
+             %q(puts Kiosk::Server::Errors::CODES.size'),
+    phrases: [
+      # "the full <N>-code wire vocabulary" -- the spelling five demos carried.
+      /\b(#{CD_WORD})-code[ ]+(?:wire|error)[ ]+(?:refusal[ ]+)?vocabulary\b/i,
+      # "deliberately not the wire's <N>." -- the noun elided, so the cardinal
+      # must END the clause: "the wire's three payment/PoW codes" is a SUBSET
+      # sentence and correct, and the lookahead is what separates the two.
+      /\bwire's[ ]+(#{CD_WORD})\b(?![ ]+[a-z])/i,
+      # "these <N> codes ARE the spec's Error vocabulary table"
+      /\bthese[ ]+(#{CD_WORD})[ ]+codes\b/i,
+      # "binds each of the <N> vocabulary entries to exactly one status"
+      /\b(#{CD_WORD})[ ]+vocabulary[ ]+entries\b/i,
+      # "narrative, formal and the schema all carry the same <N>"
+      /\bcarry[ ]+the[ ]+same[ ]+(#{CD_WORD})\b/i,
+    ],
+  },
+].freeze
+
+# A comment marker is stripped and the lines are joined, so a phrase WRAPPED
+# across two comment lines is one string when it is judged -- the same reason
+# `prose_units` joins paragraphs, and the trap K-1202 and K-1217 both fell into.
+CD_LEAD = %r{\A\s*(?:\#+|//+|--|\*)\s?}.freeze
+
+def cd_joined(text)
+  offsets = []
+  buf     = +""
+  text.lines.each_with_index do |line, i|
+    offsets << [buf.length, i + 1]
+    buf << line.chomp.sub(CD_LEAD, "") << " "
+  end
+  [buf, offsets]
+end
+
+def cd_line_at(offsets, pos)
+  offsets.reverse_each { |start, no| return no if pos >= start }
+  1
+end
+
+def const_count_findings(rel, text, values, stats)
+  # An entry is a dated record of the tree as it was, and is never edited.
+  return [] if File.basename(rel) == "CHANGELOG.md"
+
+  joined, offsets = cd_joined(text)
+  out = []
+  CONST_COUNTS.each do |entry|
+    entry[:phrases].each do |re|
+      joined.to_enum(:scan, re).map { Regexp.last_match }.each do |m|
+        stats[:const_statements] += 1
+        stats[:"const_live_#{entry[:key].tr(' ', '_')}"] += 1
+        got = values[entry[:key]]
+        next if got.nil?   # the command failed; CD-2 already says so, once
+
+        said = cardinal_value(m[1])
+        if said == got
+          stats[:const_statements_ok] += 1
+        else
+          out << { path: rel, id: "CD-1",
+                   what: "line #{cd_line_at(offsets, m.begin(0))}: this states #{said} where " \
+                         "`#{entry[:names]}` carries #{got} -- #{entry[:what]}",
+                   extra: m[0].strip }
+        end
+      end
+    end
+  end
+  out
+end
+
+def const_count_values(root, findings, stats)
+  values = {}
+  CONST_COUNTS.each do |entry|
+    got, why = run_command(root, entry[:command])
+    if got.nil?
+      findings << { path: "bin/#{File.basename(SELF_PATH)}", id: "CD-2",
+                    what: "the command that loads `#{entry[:names]}` #{why}. Until it answers, " \
+                          "every sentence stating the size of #{entry[:what]} is compared with " \
+                          "nothing" }
+    else
+      values[entry[:key]] = got
+      stats[:const_entries_resolved] += 1
+    end
+  end
+  values
+end
+
 # ── declarations ─────────────────────────────────────────────────────────────
 
 def markers_in(sentence)
@@ -963,6 +1155,10 @@ def scan(root)
 
   stats = Hash.new(0)
   listing = []
+  # Once per run, not once per sentence: the populations CD-1 binds are loaded
+  # before the walk, and a command that cannot answer is a finding of its own
+  # rather than an arm that silently compares nothing.
+  const_values = const_count_values(root, findings, stats)
 
   tracked(root).each do |rel|
     abs = File.join(root, rel)
@@ -975,6 +1171,10 @@ def scan(root)
     # the guards this class lives in are extensionless and `classify` returns
     # nil for all of them. Its own scoping is the enumeration it needs to find.
     findings.concat(rule_set_findings(rel, text, stats))
+    # CD-1 is scoped the same way and for the same reason: the sites it was
+    # built from were Ruby comments and a JSON `description`, one of which is in
+    # a gated class and the other in no class at all.
+    findings.concat(const_count_findings(rel, text, const_values, stats))
 
     kind = classify(rel, text)
     if kind.nil?
@@ -1119,6 +1319,15 @@ def report(result, quiet:)
     puts "  rule-set sizes (RS-1): #{s[:rule_enumerations]} enumeration(s) of " \
          "#{RULE_MIN}+ ids, #{s[:rule_phrases]} comment(s) naming a rule-set size, " \
          "#{s[:rule_introducers_ok]} of them standing above the enumeration they count"
+    # CD-1's reach, derived on every run for the same reason: an arm whose
+    # phrases have stopped matching anything exits 0 forever and reads as
+    # coverage, and the only honest way to say so is a number.
+    puts "  constant-derived sizes (CD-1): #{CONST_COUNTS.length} population(s) bound to a " \
+         "loadable constant, #{s[:const_entries_resolved]} resolved by their own command; " \
+         "#{s[:const_statements]} live statement(s) of one, #{s[:const_statements_ok]} agreeing " \
+         "(" + CONST_COUNTS.map { |e|
+           "#{e[:key]}: #{s[:"const_live_#{e[:key].tr(' ', '_')}"]}"
+         }.join(", ") + ")"
   end
 
   if result[:findings].empty?
@@ -1144,6 +1353,8 @@ def report(result, quiet:)
   warn "  one-line reason, and a `from:` command if one exists."
   warn "  For [RS-1] the repair is the first of those and nothing else: DELETE the cardinal. The"
   warn "  enumeration under it is the derivation, and a second copy of a number is what rots."
+  warn "  For [CD-1] the same: the constant named beside the finding IS the derivation, so elide"
+  warn "  the cardinal rather than bumping it -- bumping only resets the clock on the next drift."
   warn "  Inside a FENCED block: <!-- fence-count: <N> <text from the block> ¦ from: <command> -->"
   warn "  on the line above the fence, or the same with `why:` for a figure nothing re-derives."
   1
@@ -1227,6 +1438,25 @@ GREEN = {
     # than a size: it must not be read as a total.
     exit 0
   GUARD
+  # THE CD-1 CONTROL, IN ITS TWO HALVES. A loadable constant, and a document
+  # that states its size CORRECTLY -- `#{CD_GREEN_WORD}` below is the number of
+  # keys in the stub, and the two are kept in step by the plants that move one
+  # of them. Both halves have to be here: an arm proved only by a plant measures
+  # that a pattern matches something, never that it separates right from wrong,
+  # and the real tree's own statements are checked by the vacuity arm instead.
+  "kiosk-server/lib/kiosk/server/errors.rb" => <<~RB,
+    # frozen_string_literal: true
+
+    module Kiosk
+      module Server
+        module Errors
+          CODES = { "bad_request" => 400, "unauthenticated" => 401, "forbidden" => 403 }.freeze
+        end
+      end
+    end
+  RB
+  "docs/vocabulary.md" => "The closed table is the one thing an assistant branches on: " \
+                          "these #{CD_GREEN_WORD} codes ARE the vocabulary, and nothing else is.\n",
   # An excused count, with the entry that excuses it below.
   "docs/allowed.md" => "The upstream standard defines seven sections, which are not ours to count.\n",
   # A gemspec, carrying a count in BOTH published spellings -- the one-line
@@ -1292,6 +1522,13 @@ def self_test_fixture(failures)
                   "own rule-table size correctly, so the run must report at least one enumeration " \
                   "and at least one introducer AGREEING with it. A control nothing looked at is " \
                   "not a control:\n#{out}"
+    end
+    unless out =~ /constant-derived sizes \(CD-1\): \d+ population\(s\) bound to a loadable constant, [1-9]\d* resolved/ &&
+           out =~ /[1-9]\d* live statement\(s\) of one, [1-9]\d* agreeing/
+      failures << "the green tree did not READ the CD-1 control: the fixture ships a loadable " \
+                  "constant and a document stating its size CORRECTLY, so the run must resolve " \
+                  "at least one population and report at least one live statement AGREEING with " \
+                  "it. A control nothing looked at is not a control:\n#{out}"
     end
     unless out.include?("2 declared in their own sentence")
       failures << "the green tree did not excuse BOTH declared counts -- the wrapped one and the " \
@@ -1399,6 +1636,30 @@ def run_self_test
   puts "  real tree: #{s[:rule_enumerations].to_i} rule enumeration(s), " \
        "#{s[:rule_phrases].to_i} size-naming comment(s), " \
        "#{s[:rule_introducers_ok].to_i} introducer(s) agreeing with what they introduce"
+
+  # CD-1's vacuity, per POPULATION rather than for the arm as a whole, because
+  # an arm that is non-vacuous on average is still blind on the entry nobody
+  # noticed had gone quiet. Two halves: the command must still resolve to a
+  # number, and the phrases must still reach a live statement of it. The
+  # EARLIER_WIRES failure recorded in the umbrella constitution is exactly the
+  # second half going unmeasured -- a pattern that matched nothing, anywhere,
+  # for its whole existence, and nothing said so.
+  CONST_COUNTS.each do |entry|
+    live = s[:"const_live_#{entry[:key].tr(' ', '_')}"].to_i
+    next if live.positive?
+
+    failures << "CD-1's `#{entry[:key]}` entry reaches NO live statement in this repository. " \
+                "Its phrases match nothing, so the arm exits 0 whatever #{entry[:names]} grows " \
+                "to -- re-point the phrases at whatever states the size now, or delete the entry."
+  end
+  if s[:const_entries_resolved].to_i < CONST_COUNTS.length
+    failures << "CD-1 resolved #{s[:const_entries_resolved].to_i} of #{CONST_COUNTS.length} bound " \
+                "constant(s) in this repository: a population whose command cannot answer is " \
+                "compared with nothing."
+  end
+  puts "  real tree: #{CONST_COUNTS.length} constant-bound population(s), " \
+       "#{s[:const_entries_resolved].to_i} resolved, #{s[:const_statements].to_i} live " \
+       "statement(s) of a size, #{s[:const_statements_ok].to_i} agreeing with their constant"
 
   # Every declared file class must have a subject here. A class whose extractor
   # returns nothing is a class that has been switched off, and it reads as

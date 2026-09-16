@@ -8,7 +8,7 @@
 # STATUSES map.
 class OperationResult < Kiosk::OperationResult
   # The codes skooti's verbs refuse with, and the Rails status symbol each
-  # renders as. Deliberately NOT the full fourteen-code wire vocabulary: a code
+  # renders as. Deliberately NOT the full wire refusal vocabulary: a code
   # this app never produces has no business having a mapping here, and `fetch`
   # turning a typo into a loud KeyError is the point of writing it out.
   # `kyc_required` and `forbidden` are BOTH 403, so the code — not the status —

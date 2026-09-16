@@ -4,7 +4,7 @@ require "spec_helper"
 
 RSpec.describe Kiosk::OperationResult do
   # The shape every operator writes: subclass, declare the codes THIS app
-  # refuses with. Two codes here, deliberately not the wire's fourteen.
+  # refuses with. Two codes here, deliberately not the wire's whole vocabulary.
   #
   # (`const_set` rather than a `STATUSES = …` line inside the block: a constant
   # assigned in a `Class.new do … end` block lands in the LEXICAL scope — here,

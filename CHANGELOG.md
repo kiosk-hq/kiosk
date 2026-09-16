@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-17: **Six shipped files stated the wire's refusal vocabulary as fourteen codes; it has been seventeen since 2026-08-31.** The cardinal is gone and `check-prose-counts` now derives it.
 - 2026-09-16: **The one generated oracle a reader of this repository cannot regenerate did not say so.** Its header and its guard now name the repair that is actually available.
 - 2026-09-16: **Two demo READMEs listed what their walkthrough prints and both omitted the binding ceremony; stylish counted the list.** Both lists carry it now, the cardinal is gone.
 - 2026-09-16: **A shipped initializer told adopters the PoW toll reaches `:query` only, while three of its four modes toll actions too — the production default included.** Scoped now.

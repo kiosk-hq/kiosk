@@ -10,7 +10,7 @@
 # of the shape guard and the ownership sentence (see {ListingAccess}).
 class OperationResult < Kiosk::OperationResult
   # The two codes philslist's writes refuse with, and the Rails status symbol
-  # each renders as. Deliberately NOT the full fourteen-code wire vocabulary: a
+  # each renders as. Deliberately NOT the full wire refusal vocabulary: a
   # code this app never produces has no business having a mapping, and `fetch`
   # turning a typo into a loud KeyError is the point of writing it out. There is
   # no `not_found` and must not be — a listing that does not exist and one that

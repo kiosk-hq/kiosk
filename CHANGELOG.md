@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **getgrocery's `Stripe.api_base` rationale rested on two wrong facts.** It now names `config/environments/production.rb` and why the SDK constant is absent elsewhere.
 - 2026-09-16: **Nothing here ever parsed Ruby in warning mode, so ten dead bindings stood in shipped source.** Fixed, and a kiosk-test-support spec now holds the whole tracked corpus at zero.
 - 2026-09-16: **A guard header may no longer state the size of the rule table under it.** `check-prose-counts` gains RS-1, and now reads the extensionless scripts it had never classified.
 - 2026-09-16: **Three public methods in two gems had no caller and no test.** Two are deleted; `DeviseSession#sign_out!` gets the client half's first spec, over a real socket.

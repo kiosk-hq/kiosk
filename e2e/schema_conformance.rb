@@ -3,9 +3,11 @@
 # THE PUBLISHED JSON SCHEMAS, RUN AGAINST THIS ORIGIN'S LIVE WIRE BYTES.
 #
 # WHY THIS FILE EXISTS. `kiosk.tech/spec/schemas/validate.sh` is a real merge
-# gate — it compiles all six normative schemas and checks fifteen example
+# gate — it compiles every normative schema and checks a set of example
 # payloads, including a `rejected/` set that must be REFUSED so a schema that
-# quietly went vacuous fails. But every one of those payloads is HAND-WRITTEN.
+# quietly went vacuous fails. How many of each is a figure that moves with the
+# spec, so it is left to `validate.sh`'s own output rather than written down
+# here. But every one of those payloads is HAND-WRITTEN.
 # Nothing joined the schemas to a SERVED byte, so the two artifacts could drift
 # apart indefinitely with both suites green: the schemas checked against a
 # fiction, the code checked against its own specs, and the pair never met. That
@@ -74,9 +76,10 @@ SERVER  = ENV.fetch("SERVER_URL")
 LIVE = ENV["KIOSK_LIVE"] == "1"
 E2E_DIR = __dir__
 SCHEMA_DIR = File.join(E2E_DIR, "schemas")
-# The sixth schema is not copied here — kiosk-server vendors it already, for
+# `pow.schema.json` is not copied here — kiosk-server vendors it already, for
 # its own request-shape validation, and one repo holding two copies of one file
-# is the drift this whole exercise is about.
+# is the drift this whole exercise is about. `bin/check-spec-schemas` prints how
+# many vendored copies it matched, across both directories.
 POW_SCHEMA = File.expand_path(
   "../kiosk-server/lib/kiosk/server/schemas/pow.schema.json", E2E_DIR
 )

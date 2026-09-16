@@ -27,7 +27,7 @@
 #                                                    its published conformance
 #                                                    anchor had been claiming
 #                                                    for them)
-#   kiosk-server/lib/kiosk/server/schemas/pow.schema.json  (the sixth — vendored
+#   kiosk-server/lib/kiosk/server/schemas/pow.schema.json  (vendored
 #                                                    long before this check, for
 #                                                    RequestValidation's own use)
 #

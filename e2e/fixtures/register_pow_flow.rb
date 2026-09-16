@@ -7,7 +7,8 @@
 # Proves, in one run against the live server:
 #   1. A no-proof register is REJECTED with 402 pow_required + challenges[].
 #   2. Solving every challenge (bundled numpy solver) and re-POSTing register
-#      with the Kiosk-PoW header carrying [...] SUCCEEDS (201) and mints a usable token.
+#      with the Kiosk-PoW header carrying the solved `{challenge, nonce}`
+#      proofs as raw JSON SUCCEEDS (201) and mints a usable token.
 #   3. The minted token authenticates a real wire verb.
 #
 # Same mechanism the demos use (kiosk-demo-skooti). Emits ONE JSON line on
@@ -69,7 +70,7 @@ results[:challenge_params_nk] = [challenge_params["n"], challenge_params["k"]].j
 # real solved proof against the published `pow.schema.json`. Until this
 # existed, `#/$defs/proof` — where `indices`, its Zcash canonical order and the
 # inclusive u64 `maximum` live — had no over-the-wire coverage at all.
-reg_key, reg = equihash_register(
+_reg_key, reg = equihash_register(
   server:    SERVER,
   issuer:    ISSUER,
   get_json:  ->(url) { get_json(url) },

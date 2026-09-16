@@ -17,8 +17,9 @@ class Kiosk::BookingsController < ApplicationController
   # THE EXAMPLE SLOT IS RESOLVED, NOT WRITTEN DOWN. A literal instant in a
   # descriptor goes into the past on its own, with nothing edited, in a
   # document whose whole promise is «copy this verbatim» — so the value is
-  # computed at read time instead, and the guard that enforces that scans this
-  # file as well as the seven demos.
+  # computed at read time instead, and the spec that enforces it
+  # (`kiosk-test-support/spec/no_dated_literals_spec.rb`) reads this file by
+  # name alongside every tracked demo.
   #
   # `example_params`, `example_row` and `input_schema` are RESOLVABLE SLOTS
   # (see {Kiosk::Server::SchemaSlots}), so a zero-arity proc in a declaration

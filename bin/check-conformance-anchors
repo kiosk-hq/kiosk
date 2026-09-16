@@ -33,10 +33,12 @@
 # WHEN IT FAILS you have two honest repairs, and which one is right depends on
 # what you were doing:
 #   * the rename was incidental — put the label back, or
-#   * the rename was the point — update the citation that names it and
-#     regenerate this manifest.
-# The manifest is GENERATED, so hand-editing it to make this pass only moves the
-# failure to whoever regenerates it next.
+#   * the rename was the point — the citation that names it is updated where
+#     the matrices live, and the manifest is re-exported from there.
+# The manifest is GENERATED, and NOT by any command in this repository: there is
+# nothing here to run after a hand-edit, so hand-editing it to make this pass
+# only moves the failure to whoever re-exports it next — and leaves nothing on
+# this side able to tell them.
 #
 # Usage: bin/check-conformance-anchors     # exits 0 clean, 1 on any mismatch
 

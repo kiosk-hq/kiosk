@@ -1,4 +1,5 @@
-# conformance-anchors.tsv -- GENERATED. Do not edit by hand.
+# conformance-anchors.tsv -- GENERATED, and NOT by any command in this
+# repository. Do not edit by hand.
 #
 # One `path<TAB>anchor` pair per citation that the Kiosk convergence matrices
 # make against this repository. There are two of them: the CONFORMANCE matrix,
@@ -12,8 +13,14 @@
 #
 # `bin/check-conformance-anchors` asserts that each anchor below occurs
 # EXACTLY ONCE in the file beside it. If it fails, something this repository
-# publishes as evidence has been renamed or removed: rename it back, or update
-# the citation that names it and regenerate this file.
+# publishes as evidence has been renamed or removed, and THE REPAIR IS IN THE
+# CITED FILE: rename the text back, or -- if the rename was the point -- have
+# the citation that names it updated where the matrices live, which is also
+# where this index is exported from. NO COMMAND HERE REGENERATES IT. The other
+# generated oracles in this directory name their generator on their first line;
+# this one has none to name, so hand-editing it is the one repair that is never
+# right -- it moves the failure to whoever re-exports the index next, and
+# nothing on this side can tell them.
 #
 # Every pair below is a fact about this repository's own files, and that is all
 # that leaves the matrices: which row cites which pair, what it claims and how
@@ -635,7 +642,7 @@ kiosk-demo-stylish/README.md	1. **First contact (claim)** — an assistant with 
 kiosk-demo-stylish/README.md	2. **Human-initiated (link)** — the signed-in human mints a link code, a second assistant redeems it at `/kiosk/aut
 kiosk-demo-stylish/README.md	Deliberate, and the point of the line's absence.
 kiosk-demo-stylish/README.md	The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` for the bound key equals the human's 
-kiosk-demo-stylish/README.md	The walkthrough (`bin/demo`) prints four sections:
+kiosk-demo-stylish/README.md	The walkthrough (`bin/demo`) prints these sections:
 kiosk-demo-stylish/README.md	`rake demo` creates the Postgres database, runs migrations + seeds, boots the Rails server, and walks through 
 kiosk-demo-stylish/README.md	cd kiosk-demo-stylish
 kiosk-demo-stylish/README.md	| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence.

@@ -3,9 +3,12 @@
 #
 # WHY THIS EXISTS
 # ---------------
-# Three failure classes are PRODUCTION-ONLY and invisible to dev-mode CI and to
-# the demo rake gates, because those boot the server in RAILS_ENV=development
-# (lazy autoload, no proxy, no Origin check). Each has reached the hosted demos:
+# The failure classes below are PRODUCTION-ONLY and invisible to dev-mode CI and
+# to the demo rake gates, because those boot the server in RAILS_ENV=development
+# (lazy autoload, no proxy, no Origin check). Each has reached the hosted demos,
+# and this list is the one the rest of this header means when it says «the
+# classes above» — a count was written beside it twice and went stale the day a
+# fourth was added, so there is no count here now.
 #
 #   EAGER-LOAD      a lib/ helper whose constant name does not match Zeitwerk's
 #                   expectation makes `config.eager_load = true` (production
@@ -17,23 +20,24 @@
 #                   the Rails 8.1 CSRF Origin check rejects the browser's
 #                   `Origin: https://` POST as forgery → 422 + a silent Devise
 #                   sign-in failure.
+#   BODYLESS ERROR  an error answered with a status and NOTHING for the caller
+#                   to act on. It exists only in production, where
+#                   ShowExceptions/PublicExceptions replace the debug page, so
+#                   no dev-mode suite or demo rake gate can see a regression of
+#                   it. The ASSISTANT-shaped requests this script drives at the
+#                   human surfaces are what reach it.
 #
 # This boots a demo exactly like the deploy — RAILS_ENV=production
 # (config.eager_load=true, config.assume_ssl=true) — and drives it through
 # proxy+browser-shaped requests (X-Forwarded-Proto + a real https Origin) to
-# catch all three classes at once. Any assertion miss exits non-zero.
-#
-# It also drives ASSISTANT-shaped requests at the human surfaces, for the
-# same reason: the bodyless-error class exists ONLY
-# in production, where ShowExceptions/PublicExceptions replace the debug page,
-# so no dev-mode suite or demo rake gate can see a regression of it.
+# catch every one of them. Any assertion miss exits non-zero.
 #
 # COVERAGE
 # --------
 # One demo per UNIQUE human-facing HTML surface, PLUS any app whose HTML is
-# rendered from a HAND-WRITTEN SQL projection. Booting all seven in prod would
-# be heavier CI for little marginal signal; booting only two was measurably too
-# few. Today three:
+# rendered from a HAND-WRITTEN SQL projection. Booting the whole fleet in prod
+# would be heavier CI for little marginal signal; booting only two was
+# measurably too few. Today three:
 #
 #   stylish  — Devise sign-in, roles, the manage page. Exercises the exact
 #              surfaces the three original bugs touched (assume_ssl sign-in +
@@ -61,7 +65,7 @@
 # per-verb conformance proof is each demo's own task list, which runs in
 # development where the flag is on, and duplicating it against a smoke database
 # would be a second, slower copy of a check that already exists. What this
-# script is for is the four PRODUCTION-ONLY classes above, none of which is
+# script is for is the PRODUCTION-ONLY classes above, none of which is
 # about descriptor conformance. If a future assertion here does drive a verb to
 # a 200, note that it is doing so with response validation OFF — the same
 # posture the deployed fleet runs.
@@ -72,10 +76,10 @@
 # prod-only classes are per-surface, not per-app», and that premise has a
 # measured counterexample — which is the surface the second clause covers.
 #
-# It holds for THREE of the four classes this script gates — the Zeitwerk
+# It holds for every class this script gates BUT ONE — the Zeitwerk
 # eager-load crash, the assume_ssl/CSRF-Origin rejection and the bodyless-error
 # class are all properties of a SURFACE SHAPE, and one demo per shape really
-# does cover them. It does NOT hold for the fourth, which is the class this
+# does cover them. It does NOT hold for MISSING COLUMN, which is the class this
 # script was built for: «the code SELECTs something this app's database has not
 # got». That one is per-APP by
 # construction, because the SQL is per-app — and tudu is the fleet's only HTML
@@ -84,7 +88,7 @@
 # four-table join over memberships/lists/memberships/users with an aliased
 # `owner_u.display_name`). Not one column of that projection is validated by a
 # model, a scope or a structure.sql-derived attribute set. tudu also carries a
-# genuinely unique surface on the first three classes: it is the ONLY demo in
+# genuinely unique surface on the other three classes: it is the ONLY demo in
 # the fleet offering open Devise REGISTRATION, with its own
 # Users::RegistrationsController — a second form POST under the proxy-CSRF
 # condition,

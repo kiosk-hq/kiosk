@@ -186,7 +186,7 @@
 #     tracked root set from git and fails when a file lands there that this
 #     scope neither reads nor names, so a new front-door document costs a
 #     decision rather than becoming a silent gap.
-#   * all seven rules. Nothing about this reader differs from the gem reader:
+#   * every rule above. Nothing about this reader differs from the gem reader:
 #     they hold the repository and nothing else.
 #
 # ── WHAT IS EXEMPT, DECLARED WITH ITS REASON — AND SIZED BY THE RUN ─────────

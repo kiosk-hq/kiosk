@@ -15,7 +15,7 @@
 # `kiosk-redteam`'s README promises «it can be pointed at any Kiosk origin»;
 # that promise is this guard's subject.
 #
-# THE TWO RULES, AND WHY BOTH ARE NEEDED
+# THE RULES BELOW, AND WHY EACH IS NEEDED
 # --------------------------------------
 #   TS-1  Every `Net::HTTP.new` call site must decide TLS from a URI's SCHEME.
 #         Either the site goes through `Kiosk::Redteam::Wire.http_for`, which

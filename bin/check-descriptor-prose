@@ -138,8 +138,9 @@
 #             out here so that a widened pattern reddens THIS file rather than a
 #             shipped descriptor). Every run re-proves them against fixtures
 #             that are not in the tree at all.
-#   STRUCTURE three arms, every one of them DERIVED from the filesystem rather
-#             than from a list of what this file happens to know — a vacuity arm
+#   STRUCTURE the arms lettered below, every one DERIVED from the filesystem
+#             rather than from a list of what this file happens to know — a
+#             vacuity arm
 #             that names what it knows is a blind spot waiting for the corpus to
 #             grow, which is the failure this workspace has on record four times.
 #             (a) EVERY HANDLER CONTROLLER any origin declares — resolved from

@@ -161,7 +161,7 @@
 #
 # ── IN-BAND VACUITY, and the polarity is deliberate (K-1262) ─────────────────
 #
-# Two of the six rules are BANS, and for a ban «this rule matched something» is
+# Two of the rules above are BANS, and for a ban «this rule matched something» is
 # backwards: a ban whose violations match nothing is the ban being OBEYED. So
 # their liveness is asserted on the DECLARATIONS instead -- on the extractors
 # still finding entries to judge. Every run reports, and fails on:

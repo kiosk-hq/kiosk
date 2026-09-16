@@ -49,12 +49,12 @@
 # gem does not have to be remembered, and a changelog that fits none of the
 # three is a failure rather than a shrug.
 #
-# WHAT IT CHECKS. Six arms, over `git ls-files` in the repository this script
-# lives in -- what ships is what git carries. STRUCTURE ONLY. Entry text,
-# entry ordering, the order the kinds appear in, and the old ordinals inside
-# entries are all deliberately out of scope: this repository keeps changelog
-# entries' original numbers on purpose (K-646), and a gate that reflows prose
-# would fight that decision.
+# WHAT IT CHECKS. The arms enumerated below, over `git ls-files` in the
+# repository this script lives in -- what ships is what git carries. STRUCTURE
+# ONLY. Entry text, entry ordering, the order the kinds appear in, and the old
+# ordinals inside entries are all deliberately out of scope: this repository
+# keeps changelog entries' original numbers on purpose (K-646), and a gate that
+# reflows prose would fight that decision.
 #
 #   CL-1  At most one subsection heading of each Keep-a-Changelog kind
 #         (Added/Changed/Deprecated/Removed/Fixed/Security) per release section.

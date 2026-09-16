@@ -69,12 +69,13 @@ needs. It is not shorter under containers; it is unnecessary.
 
 ## What the demo shows
 
-The walkthrough (`bin/demo`) prints four sections:
+The walkthrough (`bin/demo`) prints these sections:
 
-1. **Discovery** — well-known + JWKS payloads, so an AI-assistant host like claude.ai sees what's behind the URL
-2. **A query** — `GET /kiosk/salons` and `GET /kiosk/availability`, each answering a bare JSON array scoped by app-layer authz
-3. **An Action** — `POST /kiosk/book_appointment` (the demo's lone registered Action), arguments in the JSON body, answering the booking object itself
-4. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
+1. **Binding** — Alice's and Bob's assistants each earn a token through the real ceremony: register under the Equihash toll, the human signs in, link, claim
+2. **Discovery** — well-known + JWKS payloads, so an AI-assistant host like claude.ai sees what's behind the URL
+3. **A query** — `GET /kiosk/salons` and `GET /kiosk/availability`, each answering a bare JSON array scoped by app-layer authz
+4. **An Action** — `POST /kiosk/book_appointment` (the demo's lone registered Action), arguments in the JSON body, answering the booking object itself
+5. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs are at `/tmp/kiosk-demo.log` if you want to inspect what hit the HTTP surface.
 

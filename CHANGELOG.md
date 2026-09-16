@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-16: **Two demo READMEs listed what their walkthrough prints and both omitted the binding ceremony; stylish counted the list.** Both lists carry it now, the cardinal is gone.
 - 2026-09-16: **A shipped initializer told adopters the PoW toll reaches `:query` only, while three of its four modes toll actions too — the production default included.** Scoped now.
 - 2026-09-16: **getgrocery's `Stripe.api_base` rationale rested on two wrong facts.** It now names `config/environments/production.rb` and why the SDK constant is absent elsewhere.
 - 2026-09-16: **Nothing here ever parsed Ruby in warning mode, so ten dead bindings stood in shipped source.** Fixed, and a kiosk-test-support spec now holds the whole tracked corpus at zero.

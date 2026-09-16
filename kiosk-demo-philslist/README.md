@@ -142,9 +142,10 @@ needs. It is not shorter under containers; it is unnecessary.
 The walkthrough (`rake demo:walkthrough` — what `rake demo` runs after
 `demo:setup`; `bin/demo` under the hood) prints:
 
-1. **Discovery** — the well-known capabilities, asserting `pay` is **absent**
-2. **Browse** — `browse_listings` across the open, cross-owner board
-3. **Post → edit → close** — the full owned-listing lifecycle over the three
+1. **Binding** — Alice's assistant earns a token through the real ceremony: register under the Equihash toll, Alice signs in, link, claim
+2. **Discovery** — the well-known capabilities, asserting `pay` is **absent**
+3. **Browse** — `browse_listings` across the open, cross-owner board
+4. **Post → edit → close** — the full owned-listing lifecycle over the three
    action endpoints, with `my_listings` reflecting the final state
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs

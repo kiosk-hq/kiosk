@@ -71,7 +71,6 @@ kiosk-demo-skooti/RENTAL_TOKEN.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_
 kiosk-demo-skooti/appclip/README.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the same firmware constant, quoted in the app-clip status table.
 kiosk-demo-skooti/firmware/README.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the same firmware constant, in the document that belongs to it.
 
-kiosk-demo-stylish/README.md ¦ four sections ¦ how many sections the walkthrough script prints; the four are listed immediately below the sentence and the run prints them.
 kiosk-demo-stylish/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
 
 kiosk-demo-tudu/README.md ¦ one verbs ¦ not a count: "not one of the verbs in the table above" is a negation, and the numeral counts nothing.

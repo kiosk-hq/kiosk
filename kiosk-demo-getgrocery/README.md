@@ -236,6 +236,12 @@ local stripe-mock — the tasks self-start one when no key is set; export
 seeded `stripe_customers` mapping served by the mock's card fixture, so no
 real customer exists to charge.
 
+A test-mode key, where an operator has one, belongs in this demo's own
+gitignored `mise.toml` (copy `mise.toml.example`) and is for hand-driven demo
+runs only. It is never used by an automated test — `stripe-mock` is the double
+there — and it is not copied into another demo: getgrocery is the only one that
+wires the Stripe adapter, and the rest resolve a placeholder and take no money.
+
 The human side of the claim ceremony (verify page, link mint, unlink)
 authenticates through a **real Devise session** — `kiosk-user-idp-devise`
 reading the Warden user, the same channel every other demo uses. The seeded

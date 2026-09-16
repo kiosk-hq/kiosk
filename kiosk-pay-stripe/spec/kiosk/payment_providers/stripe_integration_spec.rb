@@ -3,6 +3,30 @@
 # Real Stripe test-mode round-trip. Skipped unless STRIPE_SECRET_KEY is set
 # (an sk_test_… key). Never moves real money.
 #
+# ── THE KEY RULE, AND IT IS THE MAINTAINER'S, NOT A PREFERENCE (T-207) ───────
+#
+# A real Stripe key MUST NOT reach an automated test, and this file is the one
+# a later session will be tempted to feed. There IS a live sk_test_ key on the
+# maintainer's machine, in getgrocery's gitignored `mise.toml`; the ruling is
+# to leave it alone. Three clauses, all three binding:
+#
+#   1. The real key is never used by an automated test. If it is in your shell
+#      — mise exports it inside the getgrocery tree — unset it before running
+#      this suite rather than letting the skip above turn into a live call.
+#   2. `stripe-mock` is the test double. It is Stripe's own fixture server, it
+#      is what the group in stripe_setup_reuse_spec.rb drives, and it is what
+#      the demo tasks self-start when no key is set.
+#   3. The key is not copied to another demo. Only getgrocery wires the Stripe
+#      adapter at all; the other operator demos resolve a placeholder and take
+#      no money.
+#
+# The question this file exists to answer — does a saved card survive, so a
+# returning customer is not asked for it twice — is ANSWERED, by the
+# maintainer's own hand-driven verification rather than by a run here: repeat
+# payment works and the card details are retained. A re-check against the live
+# API is owed after 0.4 ships, and until then this file's skip is the correct
+# outcome rather than a gap.
+#
 # NOTE: real `pi_…` verification needs the operator's test key. Without it,
 # these examples are skipped. The mocked suite (stripe_spec.rb) runs without
 # a key and covers the adapter's public methods with plain RSpec doubles

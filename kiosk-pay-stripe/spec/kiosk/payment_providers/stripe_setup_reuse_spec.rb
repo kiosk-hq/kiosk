@@ -25,6 +25,16 @@ require_relative "../../support/stripe_mock"
 #   * `stripe_integration_spec.rb`        — the only place Stripe's real
 #     semantics (does an outstanding setup session really list as `open`?) are
 #     checked. Needs STRIPE_SECRET_KEY; skips without one, including in CI.
+#
+# AND THE KEY RULE BINDS THIS FILE TOO (T-207): a real Stripe key must not
+# reach an automated test, `stripe-mock` is the test double here, and the key
+# that exists on the maintainer's machine is not copied into another demo. The
+# reuse question itself is ANSWERED — repeat payment works and the card details
+# are retained, verified by the maintainer by hand rather than by a run — with a
+# re-check against the live API owed after 0.4. So the layers above are the
+# coverage, and a skipped live group is the intended state rather than a hole
+# to plug with a key. `stripe_integration_spec.rb`'s header carries the whole
+# ruling.
 RSpec.describe Kiosk::PaymentProviders::Stripe, "setup-session reuse (K-492)" do
   # ── against a stateful local Stripe API ──────────────────────────────────────
   describe "over the real SDK against a stateful local Stripe API" do

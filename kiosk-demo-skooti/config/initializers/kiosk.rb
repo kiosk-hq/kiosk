@@ -88,10 +88,9 @@ Kiosk.configure do |c|
   # ── Where the wire verbs live ──────────────────────────────────────────────
   # Ordinary Rails controllers under app/controllers/kiosk/. This line only
   # NAMES them; the engine loads and registers them, re-running after every
-  # development reload so an edited verb needs no restart.
-  # restart). A verb registers when its class LOADS and nothing loads a handler
-  # on its own, so an origin whose controllers are not named here serves
-  # nothing at all.
+  # development reload so an edited verb needs no restart. A verb registers when
+  # its class LOADS and nothing loads a handler on its own, so an origin whose
+  # controllers are not named here serves nothing at all.
   c.handlers = %w[Kiosk::FleetController Kiosk::RentalsController]
 
   c.guc_namespace  = "app"

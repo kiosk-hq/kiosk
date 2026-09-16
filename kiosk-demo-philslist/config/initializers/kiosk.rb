@@ -42,7 +42,6 @@ Kiosk.configure do |c|
   # Ordinary Rails controllers under app/controllers/kiosk/. This line only
   # NAMES them; the engine loads and registers them, re-running after every
   # development reload so an edited verb needs no restart.
-  # restart).
   c.handlers = %w[Kiosk::BoardController Kiosk::ListingsController]
 
   c.guc_namespace  = "app"

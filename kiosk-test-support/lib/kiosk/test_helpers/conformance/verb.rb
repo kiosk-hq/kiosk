@@ -45,8 +45,11 @@ module Kiosk
                 example_params: example_params)
         end
 
-        def query?  = kind == :query
-        def action? = kind == :action
+        # `other_http_method` is the only caller, and `kind` is a public Data
+        # member for anything else — so there is no `action?` beside it. A
+        # predicate pair where only one half is ever reached is a surface
+        # nothing exercises.
+        def query? = kind == :query
 
         # The HTTP method this verb's kind requires.
         def http_method = HTTP_METHODS.fetch(kind)

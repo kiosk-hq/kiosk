@@ -21,6 +21,9 @@ module Kiosk
       # It exists so a caller inspecting an Outcome programmatically — the
       # gem's own suite does — can assert on the facts rather than on the
       # prose.
+      #
+      # There is deliberately no `to_s` alias for `message`: an adapter that
+      # wants the sentence asks for it by name, and every one of them does.
       Outcome = Data.define(:ok, :check, :subject, :message, :details) do
         def initialize(ok:, check:, subject: nil, message: "", details: {})
           super(ok: ok ? true : false, check: check.to_sym, subject: subject,
@@ -30,8 +33,6 @@ module Kiosk
         def ok? = ok
 
         def failed? = !ok
-
-        def to_s = message
       end
 
       # Build a passing Outcome.

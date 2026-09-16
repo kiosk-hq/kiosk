@@ -11,6 +11,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Removed
+
+- **`Conformance::Verb#action?` and `Conformance::Outcome#to_s`, neither of which had a caller anywhere (K-1703).** `kind` and `message` are public and say the same.
+
 ### Changed
 
 - **`have_a_route_for_every_verb` took no block parameter, so `origin:` was accepted and discarded (K-1702).** It now honours the keyword its Minitest twin honours.

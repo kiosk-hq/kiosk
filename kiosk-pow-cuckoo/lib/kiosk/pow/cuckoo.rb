@@ -368,8 +368,8 @@ module Kiosk
 
         # Build the header: salt bytes ‖ header_nonce as LE u32 (4 bytes). Its
         # length is salt.bytesize + 4 — 80 bytes only for a 76-byte salt (the
-        # Grin KAT); the gem's own solve_parity uses an 8-byte salt (12-byte
-        # header).
+        # Grin KAT). The gem's own solve_parity salt is shorter, so its header
+        # is shorter too; nothing here assumes either size.
         # header_nonce is client-supplied. A non-numeric/non-coercible value
         # means a malformed proof, which must return false, never raise
         # Integer() throws ArgumentError/TypeError on "abc", [1], {}.

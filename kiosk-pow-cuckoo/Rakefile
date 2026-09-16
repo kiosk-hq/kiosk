@@ -34,7 +34,7 @@ task :solve_parity do
   # TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
   PARITY_EDGEBITS  = 10
   PARITY_PROOFSIZE = 12
-  # Fixed 8-byte salt (base64: "cGFyaXR5IQ==")
+  # Fixed salt, carried as base64 — the decode on the next line is the length.
   PARITY_SALT_B64 = "cGFyaXR5IQ=="
   PARITY_SALT     = Base64.strict_decode64(PARITY_SALT_B64)
 

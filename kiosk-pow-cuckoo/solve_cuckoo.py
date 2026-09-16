@@ -182,40 +182,6 @@ def siphash_vec(k0: int, k1: int, k2: int, k3: int, nonces: np.ndarray) -> np.nd
 
 
 # ---------------------------------------------------------------------------
-# Scalar SipHash (same algorithm) — reference / testing.
-# ---------------------------------------------------------------------------
-
-def _rotl64(x: int, n: int) -> int:
-    return ((x << n) | (x >> (64 - n))) & 0xFFFFFFFFFFFFFFFF
-
-
-def _sipround(v0, v1, v2, v3):
-    v0 = (v0 + v1) & 0xFFFFFFFFFFFFFFFF
-    v1 = _rotl64(v1, 13) ^ v0
-    v0 = _rotl64(v0, 32)
-    v2 = (v2 + v3) & 0xFFFFFFFFFFFFFFFF
-    v3 = _rotl64(v3, 16) ^ v2
-    v0 = (v0 + v3) & 0xFFFFFFFFFFFFFFFF
-    v3 = _rotl64(v3, 21) ^ v0
-    v2 = (v2 + v1) & 0xFFFFFFFFFFFFFFFF
-    v1 = _rotl64(v1, 17) ^ v2
-    v2 = _rotl64(v2, 32)
-    return v0, v1, v2, v3
-
-
-def siphash_scalar(k0: int, k1: int, k2: int, k3: int, nonce: int) -> int:
-    """Cuckatoo non-standard SipHash-2-4 (scalar, for testing)."""
-    v0, v1, v2, v3 = k0, k1, k2, k3 ^ nonce
-    v0, v1, v2, v3 = _sipround(v0, v1, v2, v3)
-    v0, v1, v2, v3 = _sipround(v0, v1, v2, v3)
-    v0 ^= nonce
-    v2 ^= 0xFF
-    for _ in range(4):
-        v0, v1, v2, v3 = _sipround(v0, v1, v2, v3)
-    return ((v0 ^ v1) ^ (v2 ^ v3)) & 0xFFFFFFFFFFFFFFFF
-
-
-# ---------------------------------------------------------------------------
 # Key derivation
 # ---------------------------------------------------------------------------
 
@@ -281,7 +247,7 @@ def trim_edges(U: np.ndarray, V: np.ndarray, edgebits: int, rounds: int = 20) ->
 # Takes sorted cycle_edges (list of edge indices, length proofsize).
 # ---------------------------------------------------------------------------
 
-def verify_cuckatoo_cycle(U_arr, V_arr, cycle_edges, _mask=0) -> bool:
+def verify_cuckatoo_cycle(U_arr, V_arr, cycle_edges) -> bool:
     """Returns True iff cycle_edges is a valid Cuckatoo proofsize-cycle.
 
     Works for any proofsize (not just 42).  The cycle-walk algorithm is
@@ -346,11 +312,9 @@ def verify_cuckatoo_cycle(U_arr, V_arr, cycle_edges, _mask=0) -> bool:
 # recursion limit.  We restart DFS from each node so every component is
 # searched even when part of it was visited on a non-cycle path earlier.
 #
-# Correctness vs. the old iterative version:
-#   The old version never removed nodes from depth_map on backtrack, so
-#   stale depths corrupted cycle-length calculations and valid cycles were
-#   rejected or never extracted.  This version removes each node from
-#   path_depth exactly on unwind, giving exact depths at every step.
+# Each node leaves path_depth exactly on unwind, so the depth recorded for a
+# node is always its depth on the CURRENT path — a stale depth left behind by
+# an abandoned branch would corrupt every cycle length computed after it.
 # ---------------------------------------------------------------------------
 
 def find_cycle(U: np.ndarray, V: np.ndarray, alive_mask: np.ndarray, proofsize: int = 42):

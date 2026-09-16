@@ -171,9 +171,10 @@ Kiosk.configure do |c|
   # the SDK at a local stripe-mock instead: shaped fixtures, so the full
   # pay→settlement flow and the Kiosk ownership and settlement-exists gates run
   # end to end without hitting Stripe. `Stripe.api_base` is the one thing that
-  # could NOT move to the environment file, because that file is byte-identical
-  # across the seven operator demos and the SDK constant does not exist in the
-  # six that bundle no payment adapter.
+  # could NOT move to config/environments/production.rb, because that file is
+  # byte-identical across the seven operator demos and the SDK constant is never
+  # loaded in the six of them that build no Stripe adapter — kiosk-pay-stripe
+  # requires the gem inside its constructor, so bundling it defines nothing.
   key = Rails.configuration.x.kiosk.stripe_secret_key
   if (mock = Rails.configuration.x.kiosk.stripe_mock_url).present?
     require "stripe"

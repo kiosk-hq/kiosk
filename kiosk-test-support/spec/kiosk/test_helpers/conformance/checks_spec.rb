@@ -381,4 +381,28 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       expect(conformance.routes).to be_ok
     end
   end
+
+  # K-1701. `require_schemer!` is the only raiser of SchemaValidatorMissing
+  # anywhere in the repository, and nothing had ever run the raising branch —
+  # so the class shipped five lines of wiring advice no run had produced. It is
+  # a private module function, which is why it can be driven directly.
+  describe "the JSON Schema seam" do
+    it "returns without raising while a validator is loaded" do
+      # CONTROL: the early return is the branch every other example takes, so a
+      # green raise example below cannot be green because the seam is dead.
+      expect(defined?(JSONSchemer)).to eq("constant")
+      expect { described_class.send(:require_schemer!) }.not_to raise_error
+    end
+
+    it "raises the wiring hint when json_schemer cannot be loaded" do
+      loaded = Object.send(:remove_const, :JSONSchemer) if defined?(JSONSchemer)
+      allow(described_class).to receive(:require).with("json_schemer").and_raise(LoadError)
+
+      expect { described_class.send(:require_schemer!) }
+        .to raise_error(Kiosk::TestHelpers::Errors::SchemaValidatorMissing,
+                        /gem "json_schemer"/)
+    ensure
+      Object.const_set(:JSONSchemer, loaded) if loaded
+    end
+  end
 end

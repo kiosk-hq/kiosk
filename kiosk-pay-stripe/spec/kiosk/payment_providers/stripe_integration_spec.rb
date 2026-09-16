@@ -8,18 +8,27 @@
 # a key and covers the adapter's public methods with plain RSpec doubles
 # (no WebMock — the SDK classes are stubbed directly).
 RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
-  before do
+  before do |example|
+    next if example.metadata[:no_key_needed]
+
     skip "set STRIPE_SECRET_KEY (sk_test_…) to run" unless ENV["STRIPE_SECRET_KEY"]
   end
 
   # In-memory principal→customer store (replaces the app's stripe_customers table).
   let(:customer_store) { {} }
 
+  # `return_url:` is not optional here. A hosted SetupIntent with no resolvable
+  # success_url fails LOUD before any Stripe call, and this adapter is built
+  # outside a configured Kiosk host, so `Kiosk.configuration.issuer` is nil and
+  # there is nothing to derive one from. Without it both `#setup_url` examples
+  # below raise instead of running — and a raise inside a file that skips
+  # without a key is invisible, which is how they went unrun.
   subject(:adapter) do
     described_class.new(
       api_key:           ENV["STRIPE_SECRET_KEY"],
       customer_resolver: ->(uid) { customer_store[uid] },
       customer_saver:    ->(uid, cid) { customer_store[uid] = cid },
+      return_url:        "https://shop.example/payment/return",
     )
   end
 
@@ -32,6 +41,16 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
       line_items: [{ sku: "pizza", qty: 1 }], total_amount_cents: 1599,
       currency: "eur", expires_at: nil, created_at: nil, raw_jws: "jws",
     )
+  end
+
+  # The ONE example in this file that does not skip, and the only reason the
+  # rest can be trusted to fail for Stripe's reasons rather than for ours: a
+  # subject that raises before any network call is indistinguishable from a
+  # skip, and a skip is the same colour as a pass. It touches no network.
+  describe "the subject itself" do
+    it "resolves a success_url without reaching Stripe", :no_key_needed do
+      expect(adapter.send(:resolved_return_url)).to eq("https://shop.example/payment/return")
+    end
   end
 
   describe "#attach_test_card + #capture (full off_session round-trip)" do

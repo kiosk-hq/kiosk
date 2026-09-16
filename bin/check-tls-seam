@@ -22,8 +22,9 @@
 #         is the seam, or it carries a `use_ssl` assignment reading a `.scheme`
 #         within a few lines of itself. A site that does neither is the defect.
 #   TS-2  A site that spells the decision OUT rather than taking the seam must
-#         be DECLARED below with a reason. TS-1 alone permits sixty-eight
-#         correct copies of one line, which is the state this seam replaced:
+#         be DECLARED below with a reason. TS-1 alone permits one correct copy
+#         of that line at every call site, which is the state this seam
+#         replaced (the census below counts them; no figure is frozen here):
 #         every copy is a place the next omission can happen, and the omission
 #         is silent. The declaration is what makes a new copy an argument
 #         somebody has to win rather than a diff nobody notices.

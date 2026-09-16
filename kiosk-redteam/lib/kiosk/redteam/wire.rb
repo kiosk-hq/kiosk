@@ -66,19 +66,23 @@ module Kiosk
       # driver reaches a local app and a deployed origin without being told
       # which it is talking to.
       #
-      # WHY IT IS A SEAM RATHER THAN A LINE EACH DRIVER WRITES. This repository
-      # ships sixty-seven client-side `Net::HTTP` call sites across thirty
-      # files: the demo flow drivers and red-team suites, the `e2e/` fixtures
-      # and `schema_conformance.rb`, this gem's own {Client}, and
-      # `kiosk-user-idp-devise`'s `DeviseSession`. Sixty-six of them are here;
-      # `DeviseSession` writes the line out because an IdP adapter may not
-      # depend on this gem to open a socket, and `bin/check-tls-seam` declares
-      # that copy by name. A decision that must come out the same way in
-      # sixty-seven places is a decision that belongs in one: while each site
-      # carried it, a single omission was the whole client side of the tree
-      # unable to dial anything but `127.0.0.1`, under a README promising «any
-      # Kiosk origin». That guard is what keeps a sixty-eighth hand-written
-      # site from appearing.
+      # WHY IT IS A SEAM RATHER THAN A LINE EACH DRIVER WRITES. `Net::HTTP`
+      # call sites are spread across the demo flow drivers and red-team suites,
+      # the `e2e/` fixtures and `schema_conformance.rb`, this gem's own
+      # {Client}, and `kiosk-user-idp-devise`'s `DeviseSession`. Most take this
+      # seam; each site that spells the line out instead — an IdP adapter that
+      # may not depend on this gem to open a socket, a guard, a server-side
+      # outbound client — is DECLARED by name in `bin/check-tls-seam` with its
+      # reason. No count is written here on
+      # purpose (K-1276, K-1710): that guard prints the whole census on every
+      # run — seam sites, declared hand-written copies, declared cleartext
+      # sites, and the size of the Ruby corpus it walked — so run it for
+      # today's numbers instead of reading yesterday's out of a comment.
+      # A decision that must come out the same way at every one of those sites
+      # is a decision that belongs in one: while each site carried it, a single
+      # omission was the whole client side of the tree unable to dial anything
+      # but `127.0.0.1`, under a README promising «any Kiosk origin». That
+      # guard is what keeps the next hand-written site from appearing unargued.
       #
       # Timeouts default to Net::HTTP's own: this returns a CONFIGURED socket
       # factory, not a policy. {Wire} passes its own pair; a driver that has

@@ -26,10 +26,10 @@ module Kiosk
     #   - `seed(table, attrs, count:)` — bulk-insert factory; runs as
     #     `system_role`, so it can populate tables under RLS.
     #
-    # Pre-load deterministic results with `enqueue_query`, `enqueue_run_query`,
-    # `enqueue_action`, `enqueue_pay_action`, `enqueue_seed`. If no queued
-    # result, returns `[]` for either flavour of query and `nil` for actions /
-    # seeds.
+    # Pre-load a deterministic result with the helper named for the kind the
+    # verb records: one `enqueue_<kind>` per kind, no exceptions. If nothing
+    # is queued, returns `[]` for either flavour of query and `nil` for
+    # actions / seeds.
     #
     # Pre-load deterministic errors with `enqueue_error(:rls_denied)` /
     # `:quota_exceeded` — the next matching call raises.
@@ -40,7 +40,7 @@ module Kiosk
       # `as_anonymous` / unscoped calls.
       Call = Data.define(:kind, :args, :identity)
 
-      attr_reader :calls, :identity_stack
+      attr_reader :calls
 
       def initialize
         @calls          = []
@@ -87,10 +87,11 @@ module Kiosk
 
       # --- Test-rig helpers ----------------------------------------------------
 
-      # Queue a result for the next call of `kind`.
+      # Queue a result for the next call of `kind`. One helper per kind,
+      # spelled `enqueue_<kind>` for the kind that verb stamps on its Call.
       def enqueue_query(result)       = @queues[:query]       << result
       def enqueue_run_query(result)   = @queues[:run_query]   << result
-      def enqueue_action(result)      = @queues[:run_action]  << result
+      def enqueue_run_action(result)  = @queues[:run_action]  << result
       def enqueue_pay_action(result)  = @queues[:pay_action]  << result
       def enqueue_seed(result)        = @queues[:seed]        << result
 
@@ -104,7 +105,9 @@ module Kiosk
       #   executor.calls_of(:run_action).map { |c| c.args[:name] }
       def calls_of(kind) = @calls.select { |c| c.kind == kind }
 
-      # The current identity (top of stack) or `nil` if nothing scoped.
+      # The current identity (top of stack) or `nil` if nothing scoped. This is
+      # the way to ask: the stack itself is private, and a call's identity at
+      # the time it ran is on the recorded {Call}.
       def current_identity = @identity_stack.last
 
       private

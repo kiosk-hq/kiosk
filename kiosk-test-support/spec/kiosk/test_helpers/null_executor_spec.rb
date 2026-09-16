@@ -164,4 +164,80 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
       expect { executor.query("x") }.to raise_error(custom)
     end
   end
+
+  # K-1708. THE RIG HELPER NAMES ARE DERIVED FROM THE EXECUTOR, NEVER TYPED
+  # HERE. Each verb below is invoked once on a fresh rig; the `kind` it stamps
+  # on the Call it records is read back off `calls.last`, and the helper that
+  # must queue for it is spelled `"enqueue_#{kind}"` from that kind.
+  #
+  # That mismatch is the defect this block was written for, and it shipped:
+  # `enqueue_action` queued `:run_action`, so an adopter who read the executor
+  # contract — one helper per kind — and wrote `enqueue_run_action` got a
+  # NoMethodError, while the mismatched name sat with no caller anywhere in
+  # the repository. A list of helper names in a spec would have restated the
+  # mistake; only reading the kind off the rig can catch it.
+  #
+  # WHAT THE ROLL-CALL EXAMPLE ADDS, and why the invocation table is not the
+  # whole mechanism: that table is hand-written, so a verb nobody adds a row
+  # for is invisible to the per-verb examples. The roll-call is held against
+  # `public_instance_methods(false)`, so any public method the class gains or
+  # loses — a verb, a helper, a reader — reddens it and has to be placed by
+  # hand. That is also what holds the second half of K-1708: re-exposing the
+  # identity stack fails the roll-call, not only the example that names it.
+  describe "the enqueue_<kind> naming rule" do
+    # Invocations, not assertions. The key is the VERB METHOD the lambda
+    # calls; it is never used as the kind, which is always read back off the
+    # rig, because a helper whose name matches a hand-typed kind is exactly
+    # the defect above wearing a correct spelling.
+    verb_invocations = {
+      "query"      => ->(x) { x.query("select 1") },
+      "run_query"  => ->(x) { x.run_query(:rooms, {}) },
+      "run_action" => ->(x) { x.run_action(:book, {}) },
+      "pay_action" => ->(x) { x.pay_action(:buy, {}) },
+      "seed"       => ->(x) { x.seed(:rooms, {}, count: 1) },
+    }.freeze
+
+    def kind_recorded_by(invoke)
+      probe = described_class.new
+      invoke.call(probe)
+      probe.calls.last.kind
+    end
+
+    verb_invocations.each do |verb, invoke|
+      it "queues for ##{verb} through the helper named after the kind it records" do
+        expect(executor).to respond_to(verb)
+
+        helper = "enqueue_#{kind_recorded_by(invoke)}"
+        expect(executor).to respond_to(helper)
+
+        # And the helper really feeds THAT verb: a name that exists but queues
+        # for a different kind is the same defect wearing a correct spelling.
+        rig = described_class.new
+        rig.public_send(helper, :sentinel)
+        expect(invoke.call(rig)).to eq(:sentinel)
+      end
+    end
+
+    it "has one public method per verb, per kind helper, and per named reader — and no others" do
+      kinds = verb_invocations.values.map { |invoke| kind_recorded_by(invoke) }
+      expect(kinds.uniq.size).to eq(verb_invocations.size)
+
+      # `enqueue_error` is the one helper that is not per-kind — it takes the
+      # kind as its first argument. The rest of the tail is the rig's reading
+      # surface, named here so that anything the class gains has to be placed.
+      expect(described_class.public_instance_methods(false).map(&:to_s))
+        .to match_array(
+          verb_invocations.keys +
+            kinds.map { |kind| "enqueue_#{kind}" } +
+            %w[enqueue_error with_identity calls calls_of current_identity]
+        )
+    end
+
+    # The stack behind `current_identity` is not public surface (K-1708): the
+    # question a rig user asks is the current identity, and the identity a call
+    # ran under is stamped on the recorded Call.
+    it "does not expose the identity stack" do
+      expect(executor).not_to respond_to(:identity_stack)
+    end
+  end
 end

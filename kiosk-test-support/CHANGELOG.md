@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Removed
 
+- **`NullExecutor#identity_stack` is no longer public, and `enqueue_action` is now `enqueue_run_action` (K-1708).** Ask `current_identity`; every rig helper is named for the kind it queues.
+
 - **`Conformance::Verb#action?` and `Conformance::Outcome#to_s`, neither of which had a caller anywhere (K-1703).** `kind` and `message` are public and say the same.
 
 ### Changed

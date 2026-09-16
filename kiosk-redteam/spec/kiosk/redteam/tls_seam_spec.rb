@@ -2,8 +2,12 @@
 
 require "spec_helper"
 
-# THE ONE THING EVERY DRIVER IN THIS REPOSITORY NEEDS AND ONLY THIS GEM HAS:
-# a socket whose TLS is decided by the target's own scheme.
+# THE ONE THING EVERY DRIVER IN THIS REPOSITORY NEEDS, AND THE SEAM MOST OF
+# THEM TAKE TO GET IT: a socket whose TLS is decided by the target's own
+# scheme. A driver that may not depend on this gem — `kiosk-user-idp-devise`'s
+# `DeviseSession` is the case — spells the same line out, and every such copy
+# is declared by name in `bin/check-tls-seam`, which is what keeps the next one
+# an argument rather than a diff.
 #
 # These examples are behavioural on purpose. A unit assertion that
 # `http.use_ssl?` is true proves the attribute was set; it does not prove the
@@ -60,8 +64,10 @@ RSpec.describe "the TLS seam" do
   end
 
   # THE K-1622 REPRODUCTION. `Client` is what `Runner` builds and what the
-  # gem's README points an adopter at, so these four are the published
-  # portability claim expressed as assertions.
+  # gem's README points an adopter at, so the examples below are the published
+  # portability claim expressed as assertions; the last of them is the control,
+  # the same `Client` still reaching a cleartext origin. No count is written
+  # here — the block is the enumeration (K-1712).
   describe Kiosk::Redteam::Client do
     subject(:client) { described_class.new(base_url: HTTPS) }
 

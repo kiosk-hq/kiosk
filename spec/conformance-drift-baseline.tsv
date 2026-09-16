@@ -29,7 +29,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-13 at cba1eb2d -- K-1551 re-judged headers_spec.rb's 11 anchors (SPEC-008/011/012/013/016)
+# recorded: 2026-09-16 at c89b87a2
 # 1664 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	ede32f70	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	ede32f70	run: ./e2e/run.sh
@@ -983,11 +983,11 @@ kiosk-rls-minitest/README.md	2bc8b97caf1d55a4	ede32f70	- Spec-DSL: `proc { ... }
 kiosk-rls-minitest/README.md	ab712237961efbd5	ede32f70	require "kiosk/server/test_executor"
 kiosk-rls-minitest/lib/kiosk/rls_minitest/assertions.rb	fbe123916577b0c0	ede32f70	      def assert_quota_exceeded(msg = nil, &block)
 kiosk-rls-minitest/lib/kiosk/rls_minitest/assertions.rb	a97244eb25c13914	ede32f70	      def assert_rls_denied(msg = nil, &block)
-kiosk-rls-rspec/README.md	c55f0a8e5aad9135	ede32f70	- Matchers: `be_rls_denied`, `be_quota_exceeded`.
-kiosk-rls-rspec/README.md	eb2e28d10ffe5449	ede32f70	- `type: :kiosk_agent` metadata — same DSL today; the optional `kiosk-agent-test` gem later upgrades it to live-LLM mode
-kiosk-rls-rspec/README.md	6f2425f084e43298	ede32f70	- `type: :kiosk_journey` metadata — auto-includes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymo
-kiosk-rls-rspec/README.md	ab712237961efbd5	ede32f70	require "kiosk/server/test_executor"
-kiosk-rls-rspec/kiosk-rls-rspec.gemspec	8f7c54008a9bf3a3	ede32f70	    `type: :kiosk_journey` (or `type: :kiosk_agent`, which `kiosk-agent-test`
+kiosk-rls-rspec/README.md	c55f0a8e5aad9135	c89b87a2	- Matchers: `be_rls_denied`, `be_quota_exceeded`.
+kiosk-rls-rspec/README.md	c8fa3a2c6bc4f22a	c89b87a2	- `type: :kiosk_agent` metadata — the same journey DSL under a second tag.
+kiosk-rls-rspec/README.md	2dec79a645c3cadb	c89b87a2	- `type: :kiosk_journey` metadata — auto-includes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymo
+kiosk-rls-rspec/README.md	ab712237961efbd5	c89b87a2	require "kiosk/server/test_executor"
+kiosk-rls-rspec/kiosk-rls-rspec.gemspec	b1358976e59dd91e	c89b87a2	    `type: :kiosk_journey` (or `type: :kiosk_agent`, the same DSL under a
 kiosk-rls-rspec/lib/kiosk/rls_rspec.rb	d5ae1f709c3de896	ede32f70	    # the optional `kiosk-agent-test` companion gem, which
 kiosk-rls-rspec/lib/kiosk/rls_rspec/matchers.rb	498fed56c26a3951	ede32f70	RSpec::Matchers.define :be_rls_denied do
 kiosk-rls/CHANGELOG.md	a45a83d02936ef7e	ede32f70	- `rake kiosk:rls:{show,check}` rake tasks (need PG connection — land later).

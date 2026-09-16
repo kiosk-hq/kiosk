@@ -18,8 +18,8 @@ Rails.application.routes.draw do
   # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
   draw(:kiosk)
 
-  # KYC broker callback — the broker → operator leg. `run
-  # request_kyc` calls the broker's intake with THIS callback; on the human's
+  # KYC broker callback — the broker → operator leg. `request_kyc` calls the
+  # broker's intake with THIS callback; on the human's
   # approve, the broker POSTs the signed anonymized {age_over_18} claim here.
   # getgrocery verifies it against the trusted ProveKey, checks the
   # nonce/operator/request_id it stored, and parks the jws for the agent to

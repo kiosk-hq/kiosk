@@ -40,10 +40,11 @@ class Product < ApplicationRecord
   # fails OPEN against any other: one adapter, cast or schema change yielding
   # "TRUE" or 1, and the unrecognised value is treated as unrestricted — alcohol
   # sold past the age gate that exists to stop exactly that. So only a value
-  # Rails recognises as literally FALSE (false, "f", "false", "0", 0, "") is
-  # unrestricted; NULL, an unexpected spelling, or an `age_restricted` that
-  # stopped being a boolean column is restricted, flagged in the catalog and
-  # refused at the gate. On today's NOT NULL boolean column every reachable
+  # Rails recognises as literally FALSE (false, "f", "false", "0", 0) is
+  # unrestricted; NULL, the EMPTY STRING — which `cast` answers nil for rather
+  # than false — an unexpected spelling, or an `age_restricted` that stopped
+  # being a boolean column is restricted, flagged in the catalog and refused at
+  # the gate. On today's NOT NULL boolean column every reachable
   # value answers exactly as a hand-written list would.
   def self.age_restricted?(value)
     ActiveRecord::Type::Boolean.new.cast(value) != false

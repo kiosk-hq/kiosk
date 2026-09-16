@@ -7,9 +7,11 @@
 # with no macros above it is a helper the wire cannot see.
 #
 # THE SUPERCLASS IS `ActionController::API` by decision, not omission: the mixin
-# leaves the base class to the operator, and getgrocery has no
-# `ApplicationController` at all — the HTML surfaces it DOES serve name
-# `ActionController::Base` themselves, because they render views.
+# leaves the base class to the operator, and this app's own
+# `ApplicationController` is an `ActionController::Base` — its human pages need
+# cookies, flash and CSRF, and Devise's session controllers inherit from it. A
+# wire verb needs none of that, so the two halves take different superclasses
+# and nothing below ever reaches that class.
 #
 # `kind :query` above each declaration is what puts it on `GET`; the kind belongs
 # to the DECLARATION, not to the class, so splitting the read and write

@@ -155,10 +155,13 @@ class Kiosk::FleetController < ActionController::API
   # cannot publish rival arithmetic, and `demo:schema` asserts the SERVED
   # descriptor still carries both numbers.
   kind :query
-  description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
-              "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
-              "submit to `POST <endpoint>/agents/kyc` before asking for the motorcycle again; and " \
-              "DECLINED, which is terminal. " \
+  description "Poll a verification `request_kyc` opened, until the human has acted on it. TWO " \
+              "answers and that is the whole set: still waiting, and APPROVED — carrying the " \
+              "broker's signed attestation, which you submit to `POST <endpoint>/agents/kyc` " \
+              "before asking for the motorcycle again. There is no third: an anonymizing broker " \
+              "reports an approval to this operator and nothing else, so a verification your " \
+              "human REFUSED reads as still waiting here, for ever, and the polling horizon " \
+              "below is your stop condition. " \
               "POLLING: while your human is completing the check, re-check every ~5 seconds for the " \
               "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
               "check can legitimately take that long, but if it is still waiting by then, stop and " \
@@ -181,8 +184,8 @@ class Kiosk::FleetController < ActionController::API
                   oneOf: [
                     { type: "object", additionalProperties: false,
                       description: "Not yet approved.",
-                      properties: { status: { enum: %w[pending declined],
-                                              description: "pending = the human has not acted; declined is terminal." } },
+                      properties: { status: { const: "pending",
+                                              description: "pending = this operator has not been told the human approved it. A refusal is never reported here, so a check they turned down reads as this too; the polling horizon in the description is your stop condition." } },
                       required: ["status"] },
                     { type: "object", additionalProperties: false,
                       description: "Approved — the signed attestation is here.",

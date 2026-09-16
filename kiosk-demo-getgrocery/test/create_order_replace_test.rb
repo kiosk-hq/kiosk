@@ -38,7 +38,7 @@ class CreateOrderReplaceTest < ActiveSupport::TestCase
     paid = place
     Order.where(id: paid["order_id"]).update_all(status: Order::PAID)
 
-    refusal = assert_refused { place(order_id: paid["order_id"]) }
+    refusal = assert_kiosk_refused { place(order_id: paid["order_id"]) }
     assert_equal "forbidden", refusal.code
     assert_equal 403, refusal.http_status
     assert_equal 1, Order.where(user_id: @shopper.id).count, "nothing may be created by a refused replace"
@@ -49,21 +49,21 @@ class CreateOrderReplaceTest < ActiveSupport::TestCase
     paying = place
     Order.where(id: paying["order_id"]).update_all(status: Order::PAYING)
 
-    refusal = assert_refused { place(order_id: paying["order_id"]) }
+    refusal = assert_kiosk_refused { place(order_id: paying["order_id"]) }
     assert_equal "forbidden", refusal.code
     assert_equal 1, Order.where(user_id: @shopper.id).count
   end
 
   test "a well-formed order_id that exists nowhere is REFUSED, not turned into a new order" do
-    refusal = assert_refused { place(order_id: "99999999-9999-4999-8999-999999999999") }
+    refusal = assert_kiosk_refused { place(order_id: "99999999-9999-4999-8999-999999999999") }
     assert_equal "forbidden", refusal.code
     assert_equal 0, Order.where(user_id: @shopper.id).count
   end
 
   test "another principal's order is refused in the SAME words as an unknown one" do
     theirs = place(as: @other)
-    mine   = assert_refused { place(order_id: theirs["order_id"]) }
-    absent = assert_refused { place(order_id: "99999999-9999-4999-8999-999999999999") }
+    mine   = assert_kiosk_refused { place(order_id: theirs["order_id"]) }
+    absent = assert_kiosk_refused { place(order_id: "99999999-9999-4999-8999-999999999999") }
 
     assert_equal absent.message, mine.message,
                  "distinguishing the two would let a caller enumerate other principals' order ids"
@@ -72,21 +72,12 @@ class CreateOrderReplaceTest < ActiveSupport::TestCase
 
   private
 
-  def origin = Kiosk::TestHelpers::Conformance.require_origin!
-
   def place(order_id: nil, qty: 1, as: nil)
     params = { items: [{ sku: "sourdough-bread", qty: qty }],
                delivery_slot_id: 3,
                delivery_date:    DeliverySlots.example_date.iso8601,
                delivery_address: ADDRESS }
     params[:order_id] = order_id if order_id
-    origin.call("create_order", kind: :action, params: params, as: as || @shopper)
-  end
-
-  # A refusal reaches a caller as the wire's typed error, not as a return value.
-  def assert_refused
-    error = assert_raises(StandardError) { yield }
-    assert_respond_to error, :code, "a refusal must carry the wire's own code (got #{error.class})"
-    error
+    kiosk_origin.call("create_order", kind: :action, params: params, as: as || @shopper)
   end
 end

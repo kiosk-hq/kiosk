@@ -5202,7 +5202,21 @@ FRAGMENTS = {
     ships: KYC_DEMOS,
     why:   "The count that cap is applied to: PENDING rows scoped by `owned_by_current_principal`, " \
            "i.e. by the transaction GUC rather than by an argument. The scoping is the load-bearing " \
-           "half — a copy that counted globally would refuse one principal for another's queue.",
+           "half — a copy that counted globally would refuse one principal for another's queue. " \
+           "The WINDOW beside it is the other load-bearing half: a copy that dropped it would " \
+           "count conversations the broker will never report the end of, which walls an account " \
+           "out of its own KYC gate for good.",
+  },
+  "app/operations/request_kyc_operation.rb#OUTSTANDING_WINDOW" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "How long one unfinished intake holds a slot, and it is the same number for the same " \
+           "reason in both: neither operator is ever told that a human REFUSED a check — the " \
+           "broker reports an approval and nothing else — so a cap counting `pending` rows with " \
+           "no horizon is a permanent lockout in both apps. Held with the count above because the " \
+           "two are one rule split over a constant and a scope; the refusal hint quotes this " \
+           "value, so a copy that moved it would have one demo promising a limit it does not " \
+           "apply.",
   },
   "app/operations/request_kyc_operation.rb#REQUESTED_CLAIMS" => {
     rule:  :per_demo,
@@ -5854,6 +5868,15 @@ DEMO_SPEC_SUBDIRS = %w[spec test].freeze
 #               name whose copies have ALL converged is an error, not a pass:
 #               that is the entry describing a state the tree has left.
 SPEC_UNITS = {
+  "test" => {
+    rule: :per_file,
+    why:  "MINITEST'S OWN DECLARATION MACRO, not a hand-copied helper: `test \"…\" do` names one " \
+          "example, so every file that holds examples at all defines this name and each body is " \
+          "its own assertion. It is declared rather than exempted because the discovery half " \
+          "above keys on the NAME and cannot tell a framework macro from a copied method — and " \
+          "`:per_file` still says something true, since the day all of these agreed would mean " \
+          "several files asserting one thing.",
+  },
   "FAILURES" => {
     rule: :code,
     why:  "The accumulator that makes each of these files a SPEC rather than a script: every " \

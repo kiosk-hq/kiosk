@@ -22,13 +22,29 @@ class RequestKycOperation
   # proof buys unlimited broker intakes: a budget hole the day a paid issuer
   # sits behind the KYC broker.
   #
-  # PENDING requests only, and that IS the design: an approved or declined
-  # request is a finished conversation and must never wall its principal out,
-  # while a pending one is exactly the intake a paid issuer would bill for — so
-  # the cap is self-clearing, with no TTL to tune and no sweeper to run. Three
-  # and not one because a human who closes the broker tab leaves a pending row
-  # behind, and a cap of one would wall the account out of its only remedy.
+  # A pending request is exactly the intake a paid issuer would bill for, and a
+  # finished one must never wall its principal out. Three and not one because a
+  # human who closes the broker tab leaves a pending row behind, and a cap of
+  # one would wall the account out of its only remedy.
   MAX_OUTSTANDING_REQUESTS = 3
+
+  # HOW LONG AN UNFINISHED INTAKE COUNTS — AND IT CANNOT BE «FOR EVER».
+  #
+  # A row leaves `pending` when the BROKER CALLS BACK, and the broker calls back
+  # on an APPROVAL and on nothing else: a human who refuses the check tells the
+  # broker so, and the broker tells this operator nothing, which is the whole of
+  # what it promises that human. Counting `pending` rows with no horizon
+  # therefore counts conversations that have ENDED — three refusals, or three
+  # closed tabs, and the account is shut out of the age gate for good, by the
+  # one verb that could have reopened it.
+  #
+  # So the cap meters intakes over a WINDOW, which clears itself with no TTL to
+  # agree with the broker and no sweeper to run: an intake holds a slot while a
+  # human could still plausibly be on the page, and stops holding one after
+  # that. It is this operator's own metering rule and claims nothing about how
+  # long the broker keeps a page alive — a page that outlives the window is
+  # still perfectly pollable, it simply no longer counts against the next call.
+  OUTSTANDING_WINDOW = 15.minutes
 
   # @param principal_id [String] the account the wire resolved — the subject the
   #   broker binds its signed claim's `sub` to, and the owner this row is stored
@@ -40,9 +56,11 @@ class RequestKycOperation
       return OperationResult.refused(
         code:    "quota_exceeded",
         message: "too many age verifications are already open for this account",
-        hint:    "at most #{MAX_OUTSTANDING_REQUESTS} may be pending at once. Have your human " \
-                 "finish or abandon one of the broker pages you were already given, then poll " \
-                 "`kyc_status` — a request that is approved or declined stops counting.",
+        hint:    "at most #{MAX_OUTSTANDING_REQUESTS} may be open at once. One stops counting " \
+                 "the moment your human approves it, and in any case #{OUTSTANDING_WINDOW.inspect} " \
+                 "after it was opened — so poll `kyc_status` on a broker page you were already " \
+                 "given rather than opening another, and if your human has abandoned all of " \
+                 "them, this call works again shortly.",
       )
     end
 
@@ -125,12 +143,16 @@ class RequestKycOperation
     end
   end
 
-  # Live intakes this principal is already holding. Counted through the SAME
-  # isolation predicate `kyc_status` reads with, so the cap is per principal by
-  # construction rather than by a `user_id` argument a caller could forget.
+  # Live intakes this principal is already holding — pending AND opened inside
+  # the window, which is what makes them live: a `pending` row older than that
+  # is a conversation the broker will never report the end of. Counted through
+  # the SAME isolation predicate `kyc_status` reads with, so the cap is per
+  # principal by construction rather than by a `user_id` argument a caller could
+  # forget.
   def self.outstanding_for_current_principal
     KycVerificationRequest.owned_by_current_principal
                           .where(status: KycVerificationRequest::PENDING)
+                          .where(created_at: OUTSTANDING_WINDOW.ago..)
                           .count
   end
   private_class_method :outstanding_for_current_principal, :broker_refusal

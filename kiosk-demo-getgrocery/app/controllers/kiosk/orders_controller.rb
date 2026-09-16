@@ -269,9 +269,13 @@ class Kiosk::OrdersController < ActionController::API
               "for it, and never hands this operator the documents behind it. Once the human has " \
               "approved, `kyc_status` is where the signed attestation appears; submit it to " \
               "`POST <endpoint>/agents/kyc`, then place the order again. No pre-shared issuer key is " \
-              "needed. At most three verifications may be pending for one account at a time — a " \
-              "fourth is refused until one of them finishes, and a request that has been approved " \
-              "or declined stops counting, so poll `kyc_status` rather than opening another."
+              "needed. At most three verifications may be open for one account at a time — a " \
+              "fourth is refused until one of them is approved, or until it has been open long " \
+              "enough that nobody is still on the page, so poll `kyc_status` on a page you were " \
+              "already given rather than opening another. A human's REFUSAL never reaches this " \
+              "operator — the broker reports an approval and nothing else — so a check your human " \
+              "turned down reads as unfinished here, and ages out of that count instead of " \
+              "closing the account down."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "object",
                 description: "The opened verification.",

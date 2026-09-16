@@ -18,7 +18,8 @@
 #                   binds it to the SAME identity (cross-subject theft defense).
 #   broker_nonce  — the callback anti-replay nonce the broker returned at intake;
 #                   POST /kyc/callback rejects a callback whose nonce differs.
-#   status        — 'pending' → 'approved' | 'declined'.
+#   status        — 'pending' → 'approved'. The broker reports an approval and
+#                   nothing else, so a check the human refused stays 'pending'.
 #   kyc_jws       — the broker's signed anonymized claim, NULL until the
 #                   callback lands. Only booleans are ever carried — never
 #                   DOB/licence number.

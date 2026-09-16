@@ -34,5 +34,30 @@ module ActiveSupport
     # workers would each need their own seeded database for a scoping assertion
     # that is about two principals sharing one.
     include Kiosk::TestHelpers::Conformance::Assertions
+
+    # ── What a REGRESSION example needs beside those four matchers ──────────
+    #
+    # The conformance checks ask whether a verb is reachable and whether its
+    # answer has the declared SHAPE. This demo's own examples ask the other
+    # question — what a verb actually ANSWERS, and what it wrote while doing it
+    # — and they reach a handler through the same origin, so the two kinds of
+    # example run against one wiring. Both helpers live here rather than in each
+    # example file so that two files cannot come to disagree about how a refusal
+    # is recognised.
+
+    # The origin this suite is wired to: the registry, the router, and a
+    # GUC-scoped session with the verb's own `input_schema` validated first.
+    def kiosk_origin = Kiosk::TestHelpers::Conformance.require_origin!
+
+    # A refusal reaches a caller as the wire's own typed error rather than as a
+    # return value, so an example asserts on the RAISE and reads the `code` off
+    # it. The CODE and not the status: two of this origin's refusals are both
+    # 403, so the status cannot tell them apart.
+    def assert_kiosk_refused
+      error = assert_raises(StandardError) { yield }
+      assert_respond_to error, :code,
+                        "a refusal must carry the wire's own code (got #{error.class})"
+      error
+    end
   end
 end

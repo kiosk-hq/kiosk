@@ -17,16 +17,19 @@
 #                   binds it to the SAME identity (cross-subject theft defense).
 #   broker_nonce  — the callback anti-replay nonce the broker returned at intake;
 #                   POST /kyc/callback rejects a callback whose nonce differs.
-#   status        — 'pending' → 'approved' | 'declined'.
+#   status        — 'pending' → 'approved'. The broker reports an approval and
+#                   nothing else, so a check the human refused stays 'pending'.
 #   kyc_jws       — the broker's signed anonymized claim, NULL until the callback
 #                   lands. Only booleans are ever carried — never DOB.
 class KycVerificationRequest < ApplicationRecord
   self.primary_key = "request_token"
 
-  STATUSES = %w[pending approved declined].freeze
-  # The two `request_kyc` writes and `kyc_status` branches on. `declined` is a
-  # real state the broker can reach and is listed above; it is not named here
-  # because nothing in this app compares against it.
+  # THE TWO STATES THIS COLUMN EVER HOLDS, and the second one is the only thing
+  # the broker ever tells this operator. A human who REFUSES the check tells the
+  # broker so and the broker reports nothing — that silence is what it promises
+  # the human — so a refused verification stays `pending` here, and a third
+  # state would be one no code path can write and this validation would refuse.
+  STATUSES = %w[pending approved].freeze
   PENDING, APPROVED = STATUSES
   # The column is a bare varchar with no CHECK constraint (db/structure.sql), so
   # until this validation nothing enforced the set the constant names — and a

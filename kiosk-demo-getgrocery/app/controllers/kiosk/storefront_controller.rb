@@ -316,11 +316,14 @@ class Kiosk::StorefrontController < ActionController::API
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
   kind :query
-  description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
-              "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
-              "submit to `POST <endpoint>/agents/kyc` before placing the order again; and DECLINED, " \
-              "which is TERMINAL — do not keep polling it, start a fresh verification if the human " \
-              "wants another try. The attestation is a full compact JWS: a long, single-line, " \
+  description "Poll a verification `request_kyc` opened, until the human has acted on it. TWO " \
+              "answers and that is the whole set: still waiting, and APPROVED — carrying the " \
+              "broker's signed attestation, which you submit to `POST <endpoint>/agents/kyc` " \
+              "before placing the order again. There is no third: an anonymizing broker reports " \
+              "an approval to this operator and nothing else, so a verification your human " \
+              "REFUSED reads as still waiting here, for ever. That is what the polling horizon " \
+              "below is for — when it runs out, ask your human what happened instead of polling " \
+              "on. The attestation is a full compact JWS: a long, single-line, " \
               "dot-separated token, and you submit the ENTIRE value, never a truncated console echo. " \
               "POLLING: while your human is completing the check, re-check every ~5 seconds for the " \
               "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
@@ -345,8 +348,8 @@ class Kiosk::StorefrontController < ActionController::API
                   oneOf: [
                     { type: "object", additionalProperties: false,
                       description: "Not yet approved.",
-                      properties: { status: { enum: %w[pending declined],
-                                              description: "pending = the human has not acted; declined is TERMINAL — start a new request_kyc instead of polling." } },
+                      properties: { status: { const: "pending",
+                                              description: "pending = this operator has not been told the human approved it. A refusal is never reported here, so a check they turned down reads as this too; the polling horizon in the description is your stop condition." } },
                       required: ["status"] },
                     { type: "object", additionalProperties: false,
                       description: "Approved — the signed attestation is here.",

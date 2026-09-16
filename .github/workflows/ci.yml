@@ -72,20 +72,28 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      # Two gem jobs need the bundled numpy-vectorised solver (solve.py):
-      # kiosk-redteam's client solves a real Equihash PoW, and
-      # kiosk-pow-equihash's :parity specs live-solve the shipped 168/7 params
-      # to prove the solver and Ruby verifier agree end-to-end (T-013). Without
-      # numpy solve.py errors "this solver requires numpy" (redteam) or the
-      # :parity roundtrips silently skip (pow-equihash), so install it for both.
-      - name: Set up Python (Equihash solver)
-        if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-pow-equihash'
+      # THREE gem jobs need a Python solver, and they do not all need the SAME
+      # package. kiosk-redteam's client solves a real Equihash PoW, and
+      # kiosk-pow-equihash's :parity examples live-solve the shipped 168/7
+      # params to prove the solver and Ruby verifier agree end-to-end (T-013);
+      # both go through the bundled numpy-vectorised solve.py, which errors
+      # "this solver requires numpy" (redteam) or skips the roundtrips
+      # (pow-equihash) without it. kiosk-pow is the third and numpy does it no
+      # good: its packaged solve.py imports argon2.low_level and nothing else,
+      # so its two :parity examples -- the only thing anywhere comparing that
+      # shipped solver with the Ruby verifier beside it -- were pending in every
+      # CI run this file has ever produced (K-1687).
+      - name: Set up Python (PoW solvers)
+        if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-pow-equihash' || matrix.gem == 'kiosk-pow'
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install numpy (Equihash solver)
         if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-pow-equihash'
         run: python -m pip install numpy
+      - name: Install argon2-cffi (Argon2id solver)
+        if: matrix.gem == 'kiosk-pow'
+        run: python -m pip install argon2-cffi
 
       # kiosk-pay-stripe's K-492 setup-reuse spec has THREE coverage layers, and
       # until now CI ran only the weakest: the doubles/FakeStripeApi ones.
@@ -110,6 +118,14 @@ jobs:
 
       - name: Run suite
         working-directory: ${{ matrix.gem }}
+        env:
+          # Fail-closed for the two gems this job UNDERTOOK to provision above:
+          # a missing interpreter now fails by name instead of reporting pending
+          # examples, which read as passing ones. The spec-side arms are inert
+          # until something sets this, and nothing did until K-1687. Every other
+          # matrix entry gets the empty string, because no other gem has a
+          # :parity group to promise anything about.
+          KIOSK_REQUIRE_PARITY: ${{ (matrix.gem == 'kiosk-pow' || matrix.gem == 'kiosk-pow-equihash') && '1' || '' }}
         run: ${{ matrix.cmd }}
 
   demos:
@@ -1135,13 +1151,16 @@ jobs:
       # numpy solver, and kiosk-pow-equihash's :parity specs live-solve the
       # shipped params. Without numpy the first ERRORS and the second silently
       # skips, so the leg would be quieter than the 4.0.1 one for a reason that
-      # has nothing to do with Ruby.
-      - name: Set up Python (Equihash solver)
+      # has nothing to do with Ruby. This leg runs EVERY gem suite, so it owes
+      # kiosk-pow's Argon2id solver its argon2-cffi for the same reason (K-1687)
+      # -- and it is the half the gems matrix above cannot cover, because that
+      # one gates per entry and this one does not.
+      - name: Set up Python (PoW solvers)
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install numpy (Equihash solver)
-        run: python -m pip install numpy
+      - name: Install numpy and argon2-cffi (PoW solvers)
+        run: python -m pip install numpy argon2-cffi
 
       - name: Every gem suite, on the floor
         env:
@@ -1149,6 +1168,11 @@ jobs:
           # the running interpreter against the gemspecs rather than against a
           # number typed here.
           FLOOR: ${{ steps.floor.outputs.version }}
+          # Both solvers are installed above, so a :parity group that cannot
+          # reach one is a provisioning failure of THIS job and says so rather
+          # than going quiet (K-1687). Only kiosk-pow and kiosk-pow-equihash
+          # read it; the other twelve suites ignore it.
+          KIOSK_REQUIRE_PARITY: "1"
         run: |
           set -uo pipefail
           ruby -v

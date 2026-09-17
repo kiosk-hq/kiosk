@@ -234,8 +234,15 @@ namespace :demo do
     check.call("the label NAMES the zone it is written in",             r["due_label_names_zone"])
     check.call("a caller that declares no zone gets the household's, stated in the row",
                r["no_header_zone"].to_s.include?("/"))
-    check.call("a zoneless due_at is REFUSED 400, never completed on somebody's clock",
-               r["zoneless_due_status"] == 400 && r["zoneless_due_code"] == "bad_request")
+    # THE STATUS AND THE CODE ARE THE OPERATOR'S, WHATEVER THIS APP DOES: every
+    # typed refusal on this wire carries a 400 and a `bad_request`, so a beat
+    # reading only those two cannot tell a refusal of the DEADLINE from a
+    # refusal of anything else on the call — and it stays ticked with the app's
+    # own guard defeated. The `detail` is the part that names the argument, so
+    # it is asserted beside them.
+    check.call("a zoneless due_at is REFUSED 400 whose detail NAMES due_at, never completed on somebody's clock",
+               r["zoneless_due_status"] == 400 && r["zoneless_due_code"] == "bad_request" &&
+               r["zoneless_due_detail"].to_s.include?("due_at"))
 
     if failures.empty?
       puts "\n  All collaboration assertions passed — membership-based sharing + attribution hold."

@@ -221,10 +221,11 @@ assert(ReaderClock.publish(summer, ReaderClock.default_zone) == "2026-07-14T13:0
 # ── 8. THE PUBLISHED EXAMPLE DEADLINE IS ONE THIS VERB WOULD ACCEPT ─────────
 #
 # {AddTodoOperation.example_due_at} is the one instant this demo publishes as
-# «here is a value that works»: the `due_at` descriptor quotes it and so do both
-# of `add_todo`'s `due_at` refusals. An example that the verb itself would refuse
-# is worse than no example, and a calendar literal in shipped code goes on saying
-# «e.g.» about a day that has gone.
+# «here is a value that works»: `add_todo` carries it as the `due_at` of its
+# `example_params` and both of the verb's `due_at` refusals quote it back. An
+# example that the verb itself would refuse is worse than no example, and a
+# calendar literal in shipped code goes on saying «e.g.» about a day that has
+# gone.
 example = AddTodoOperation.example_due_at
 example_at = ReaderClock.parse(example)
 assert(!ReaderClock.zoneless?(example),
@@ -244,6 +245,76 @@ assert(Time.iso8601(example).utc_offset ==
        "#{Time.iso8601(example).utc_offset / 3600}")
 assert(example_at > Time.now,
        "…and it is still in the future, so the deadline it illustrates is one a caller could set")
+
+# ── 9. THE TWO `due_at` REFUSALS, DRIVEN ───────────────────────────────────
+#
+# WHY THEY ARE DRIVEN HERE RATHER THAN OVER THE WIRE. `add_todo` declares
+# `due_at` with `format: "date-time"`, so an assistant's zoneless or
+# unparseable value is refused by the argument validation before any handler
+# runs — that is the refusal `demo:collab` asserts, and it is the operator's,
+# not this app's. The branches below are the SECOND door, for a caller with no
+# schema in front of it, and a driver that only reads a status and a code stays
+# ticked with both of them deleted. A direct call is the only thing that can
+# hold them, so this is one.
+#
+# IT COSTS TWO STAND-INS AND NO DATABASE, the same trick list_access_spec plays
+# on {Membership.reachable?}: {ListAccess.check} is the gate in front of these
+# branches and it reads a table, so it answers «granted» here, and {Todo} stands
+# in for the INSERT so the accepted case — the control, without which every arm
+# below would pass on a verb that refused everything — can be driven too.
+require "kiosk/operation_result"
+require_relative "../app/operations/operation_result"
+
+Object.const_set(:ListAccess, Module.new do
+  def self.check(_list_id, require_owner: false)
+    nil
+  end
+end)
+Object.const_set(:Todo, Module.new do
+  class << self
+    attr_accessor :inserted
+  end
+
+  def self.insert!(attrs, returning:)
+    self.inserted = attrs
+    [{ "id" => "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" }]
+  end
+end)
+
+LIST_ID = "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70"
+
+def add_todo_with(due_at)
+  AddTodoOperation.call(agent_id: nil, list_id: LIST_ID, title: "Book campsite", due_at: due_at)
+end
+
+zoneless = guard("add_todo(a zoneless due_at)") { add_todo_with("2026-09-18T14:00:00") }
+assert(zoneless.is_a?(OperationResult) && !zoneless.ok? && zoneless.code == "bad_request",
+       "a zoneless due_at is REFUSED with a typed bad_request, got #{zoneless.inspect[0, 70]}")
+assert(zoneless.is_a?(OperationResult) && zoneless.message.to_s.include?("names no time zone"),
+       "…and the sentence says WHY rather than only that something was wrong")
+assert(zoneless.is_a?(OperationResult) &&
+       zoneless.message.to_s.include?(AddTodoOperation.example_due_at),
+       "…and it quotes the published example as the shape to retry")
+
+# CARRIES AN OFFSET AND IS STILL NOT A DATE — a thirteenth month. A value with
+# no offset at all never reaches this branch: the zone refusal above answers it
+# first, which is why the two sentences are asserted on two different values.
+unparseable = guard("add_todo(an unparseable due_at)") { add_todo_with("2026-13-01T14:00:00+01:00") }
+assert(unparseable.is_a?(OperationResult) && !unparseable.ok? && unparseable.code == "bad_request",
+       "a thirteenth month is REFUSED rather than resolved here, got #{unparseable.inspect[0, 70]}")
+assert(unparseable.is_a?(OperationResult) && unparseable.message.to_s.start_with?("invalid due_at"),
+       "…with the PARSE sentence, not the zone one — the two say different things to a caller")
+
+# THE CONTROL. Without it every arm above passes on a verb that refuses
+# everything, which is the vacuous green this section exists to avoid.
+accepted = guard("add_todo(the published example)") { add_todo_with(AddTodoOperation.example_due_at) }
+assert(accepted.is_a?(OperationResult) && accepted.ok?,
+       "the published example is ACCEPTED, got #{accepted.inspect[0, 70]}")
+assert(Todo.inserted && Todo.inserted[:due_at].respond_to?(:utc_offset),
+       "…and what is stored is an INSTANT, not the string the caller sent: #{Todo.inserted&.fetch(:due_at, nil).inspect}")
+omitted = guard("add_todo(no due_at at all)") { add_todo_with(nil) }
+assert(omitted.is_a?(OperationResult) && omitted.ok? && Todo.inserted[:due_at].nil?,
+       "a todo with no deadline is a todo with no deadline, not one due at some default")
 
 puts
 if FAILURES.empty?

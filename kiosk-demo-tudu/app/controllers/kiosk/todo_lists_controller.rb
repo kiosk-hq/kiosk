@@ -81,6 +81,15 @@ class Kiosk::TodoListsController < ApplicationController
                   todo_id: { type: "string", description: "uuid. Pass to complete_todo as `todo_id`." },
                 },
                 required: ["todo_id"]
+  # The deadline is RESOLVED, not written down: a calendar literal here would go
+  # on saying «e.g. 2026-09-08» long after that day is gone, and an assistant
+  # copying it would set a deadline in the past. `example_params` takes a
+  # resolvable slot ({Kiosk::Server::SchemaSlots}), so the served bytes
+  # re-resolve; the instant itself lives in the Operation, which quotes it back
+  # from both of its `due_at` refusals.
+  example_params({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Book campsite",
+                   due_at: -> { AddTodoOperation.example_due_at } })
+  example_row({ todo_id: "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" })
   def add_todo
     render_operation AddTodoOperation.call(
       agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],

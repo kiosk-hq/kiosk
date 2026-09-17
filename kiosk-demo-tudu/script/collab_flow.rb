@@ -114,6 +114,11 @@ rc_zoneless, zless = post_json("/kiosk/add_todo",
                                reader(alice[:token], ALICE_TZ))
 results[:zoneless_due_status] = rc_zoneless
 results[:zoneless_due_code]   = zless["code"]
+# THE SENTENCE, not only the status: a 400/`bad_request` is what every typed
+# refusal on this wire carries, so those two alone do not say WHICH argument was
+# refused. `due_at` is declared `format: "date-time"`, so the argument
+# validation answers first and its detail names the argument.
+results[:zoneless_due_detail] = zless["detail"].to_s
 
 rc, inv = post_json("/kiosk/invite", { list_id: list_id }, bearer(alice[:token]))
 abort "invite failed (#{rc}): #{JSON.generate(inv)}" unless rc == 200

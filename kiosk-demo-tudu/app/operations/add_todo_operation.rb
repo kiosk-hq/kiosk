@@ -13,6 +13,15 @@ class AddTodoOperation
   #   the human who said it, before it ever reaches this wire. Completing it
   #   here would complete it on somebody else's clock — and on a SHARED list
   #   that somebody else is a real second reader.
+  #
+  #   WHERE THAT REFUSAL COMES FROM ON THE WIRE: `add_todo` declares `due_at`
+  #   with `format: "date-time"`, which is RFC 3339 and so carries the offset
+  #   demand in the DECLARATION, and a verb's arguments are validated before any
+  #   handler runs. An assistant therefore meets the operator's own typed 400
+  #   naming the argument, and the two refusals below are the second door — for
+  #   a caller with no schema in front of it (a console, a rake task, a web form
+  #   an operator wires onto this Operation). `rake demo:clock_spec` drives both
+  #   of them directly; `demo:collab` asserts the wire's.
   def self.call(agent_id:, list_id:, title:, due_at: nil)
     # Membership BEFORE the title check: a non-member learns nothing about the
     # list from a title complaint.
@@ -58,8 +67,10 @@ class AddTodoOperation
   end
 
   # THE ONE «here is a value that works» INSTANT this demo publishes, read from
-  # two places that must not disagree: the catalogue's `due_at` description and
-  # the two `due_at` refusals above.
+  # two places that must not disagree: the catalogue, which carries it as the
+  # `due_at` of `add_todo`'s `example_params` (a resolvable slot, so the served
+  # bytes re-resolve rather than freeze at boot), and the two `due_at` refusals
+  # above, which quote it back as the shape to retry.
   #
   # RESOLVED, NOT WRITTEN DOWN. A calendar literal in shipped code ages: it goes
   # on saying «e.g. 2026-09-08» long after that day is gone, and an assistant

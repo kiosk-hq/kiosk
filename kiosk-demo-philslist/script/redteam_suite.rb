@@ -14,7 +14,8 @@
 #   CrossOwnerEdit   — Bob edit_listing on Alice's listing → 403
 #   CrossOwnerClose  — Bob close_listing on Alice's listing → 403
 #   MalformedUuidArg — a junk listing_id on edit_listing/close_listing is a
-#                      typed 400 with no SQL internals on the wire — never a 500
+#                      typed 400 whose detail NAMES the argument, with no SQL
+#                      internals on the wire — never a 500
 #   MissingAuth      — a request with no Authorization → 401
 #   GarbageToken     — an unparseable bearer token → 401
 #   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
@@ -156,13 +157,18 @@ rc, _ = WIRE.post_json("/kiosk/close_listing",
 BATTERY.record("CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk listing_id must be a typed 400, never a 500 ────
-# edit_listing and close_listing cast their listing_id `::uuid`. Without the
-# Kiosk::UuidCheck guard a malformed value makes Postgres raise
-# InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500
-# carrying the PG message. Three properties are asserted, not one: the status is
-# 400 (a client mistake reported as such), the problem document's top-level
-# `code` is the typed `bad_request` an assistant can branch on, and NO SQL
-# internals reach the wire.
+# THIS BEAT READS THE WIRE, AND ON THE WIRE THE DECLARATION ANSWERS FIRST:
+# edit_listing and close_listing declare `listing_id` with `format: "uuid"`, and
+# a verb's arguments are validated on every call, so the refusal is the
+# operator's own typed 400 and no handler runs. The app's shape guard
+# ({ListingAccess.listing_id}) is the second door, for a caller that is not the
+# wire; `rake demo:access_spec` is what holds THAT, and deleting the guard
+# leaves this beat green — which is why the two are asserted apart rather than
+# one being read as proof of the other. Four properties are asserted here: the
+# status is 400 (a client mistake reported as such), the problem document's
+# top-level `code` is the typed `bad_request` an assistant can branch on, the
+# `detail` NAMES the offending argument so a caller knows what to fix rather
+# than only that something was wrong, and NO SQL internals reach the wire.
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE listings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
@@ -180,14 +186,15 @@ uuid_probes = %w[edit_listing close_listing].flat_map do |verb|
     args     = { listing_id: junk }
     rc, body = WIRE.post_json("/kiosk/#{verb}", args, ALICE.bearer)
     scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
-    ok = rc == 400 && body["code"] == "bad_request" && !scan.leak?
+    ok = rc == 400 && body["code"] == "bad_request" &&
+         body["detail"].to_s.include?("listing_id") && !scan.leak?
     [ok, "#{verb}(#{junk.inspect})→#{rc}/#{body['code'].inspect}" \
          "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
 BATTERY.record("MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
                "malformed listing_id → #{uuid_probes.map(&:last).join(', ')} " \
-               "(want 400/\"bad_request\" and no SQL internals)")
+               "(want 400/\"bad_request\", a detail naming listing_id, and no SQL internals)")
 
 # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
 rc, _ = WIRE.get_json("/kiosk/browse_listings")

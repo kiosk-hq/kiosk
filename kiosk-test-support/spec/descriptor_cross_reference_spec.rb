@@ -66,6 +66,65 @@ RSpec.describe "demo descriptor cross-references" do
   module DescriptorSource
     module_function
 
+    # Ruby line comments removed; everything else byte-identical, newlines
+    # included, so every line-anchored regex below still sees the same lines.
+    #
+    # WHY THIS EXISTS AT ALL (K-1772). Every extractor in this module reads
+    # SOURCE TEXT with a regex, and a comment is not source. {top_level_keys}
+    # looked for `word:` at brace depth 0 of a `properties:` body and found two
+    # of them inside a comment philslist writes BETWEEN two properties — "the
+    # only one of the three that is:" and "a title or a body cannot be
+    # cleared:" — so `is` and `cleared` (and, from the sibling controller,
+    # `has`) entered the demo's union of declared params. The ADR-0023
+    # prohibition then fired on every philslist description carrying the
+    # ordinary English word "is", and CI was red on `main` for nine commits.
+    #
+    # THE COMMENTS ARE NOT THE DEFECT, so rewording them is not the fix: a lint
+    # that cannot tell code from comment is one comment away from the same
+    # failure in any of the seven demos, and it reports the failure as an
+    # ADR-0023 violation rather than as a parser bug. {brace_body_at} has the
+    # same blindness with a worse consequence — an unbalanced `{` or an odd
+    # number of `"` inside a comment moves the end of the body it hands back,
+    # silently, to somewhere in the middle of the next macro.
+    #
+    # WHAT IT UNDERSTANDS, stated rather than assumed. It is applied to a
+    # descriptor's MACRO RUN (the text between the previous method's `end` and
+    # the `def` that claims the run) — `kind`, `description`, `input_schema`,
+    # `output_schema`, `example_*`, and the comments between them. It knows
+    # double- and single-quoted literals and their backslash escapes, which
+    # covers every literal the fleet's handler controllers contain: measured at
+    # this commit, no macro run holds a single-quoted literal at all, and `#{…}`
+    # interpolation occurs only inside double-quoted ones, where it is string
+    # content and correctly left alone. It does NOT know heredocs, percent
+    # literals or the `?#` character literal; none occurs in a macro run, and a
+    # method BODY — the one place in these files where heredocs and regexp
+    # literals do occur — is read by nothing here.
+    def without_comments(text)
+      out = +""
+      i = 0
+      quote = nil
+      while i < text.length
+        ch = text[i]
+        if quote
+          if ch == "\\"
+            out << ch << text[i + 1].to_s
+            i += 2
+            next
+          end
+          quote = nil if ch == quote
+          out << ch
+        elsif ch == "#"
+          i += 1 while i < text.length && text[i] != "\n" # the newline itself is kept
+          next
+        else
+          quote = ch if ch == '"' || ch == "'"
+          out << ch
+        end
+        i += 1
+      end
+      out
+    end
+
     # Same, for the MACRO spelling a handler controller uses: `description "…"`
     # on its own line, no colon. Anchored to the start of a line so a
     # `description:` INSIDE an input_schema property, and the word in a comment,
@@ -109,16 +168,16 @@ RSpec.describe "demo descriptor cross-references" do
       start = m.end(0)
       i = start
       depth = 1
-      in_str = false
+      quote = nil
       while i < text.length && depth.positive?
         ch = text[i]
-        if in_str
+        if quote
           if ch == "\\" then i += 1
-          elsif ch == '"' then in_str = false
+          elsif ch == quote then quote = nil
           end
         else
           case ch
-          when '"' then in_str = true
+          when '"', "'" then quote = ch
           when "{", "[" then depth += 1
           when "}", "]" then depth -= 1
           end
@@ -129,22 +188,28 @@ RSpec.describe "demo descriptor cross-references" do
     end
 
     # `key:` symbol keys at brace/bracket depth 0 of a hash body.
+    #
+    # It reads CODE, and the two things that are not code are excluded at
+    # opposite ends: a quoted literal is skipped here, in either quote, and the
+    # body it is handed has already had its comments removed by
+    # {without_comments} — without which a `word:` in a sentence between two
+    # properties becomes a property (K-1772).
     def top_level_keys(body)
       return [] if body.nil?
 
       keys = []
       depth = 0
       i = 0
-      in_str = false
+      quote = nil
       while i < body.length
         ch = body[i]
-        if in_str
+        if quote
           if ch == "\\" then i += 1
-          elsif ch == '"' then in_str = false
+          elsif ch == quote then quote = nil
           end
         else
           case ch
-          when '"' then in_str = true
+          when '"', "'" then quote = ch
           when "{", "[" then depth += 1
           when "}", "]" then depth -= 1
           else
@@ -238,8 +303,11 @@ RSpec.describe "demo descriptor cross-references" do
       while (m = src.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
         method_name = m[1]
         region      = src[previous_end...m.begin(0)].to_s
-        # Everything after the previous method's terminator — the macro run.
-        header       = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+        # Everything after the previous method's terminator — the macro run,
+        # with its comments stripped before any extractor below reads it
+        # (K-1772; {without_comments} says why that is the layer).
+        macro_run    = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+        header       = without_comments(macro_run)
         offset       = m.end(0)
         previous_end = offset
 
@@ -604,6 +672,56 @@ RSpec.describe "demo descriptor cross-references" do
     # with nothing after them. The answer is still the whole remainder.
     last = multi_line[0, multi_line.index("output_schema")]
     expect(DescriptorSource.macro_region(last, "input_schema")).to eq(last)
+  end
+
+  # K-1772, and it is the reason {without_comments} exists. Every extractor
+  # above reads source TEXT with a regex, so a comment inside a descriptor is
+  # read as descriptor. philslist wrote two sentences ending in a colon inside
+  # an `input_schema`'s `properties:` block — "the only one of the three that
+  # is:" and "a title or a body cannot be cleared:" — and `top_level_keys`
+  # returned `is` and `cleared` as declared params. `is` then made every
+  # philslist description carrying the ordinary English word an ADR-0023
+  # offence, and `main` was red for nine commits over a lint bug reported as a
+  # descriptor violation. Two more phantoms sat unnoticed in getgrocery
+  # (`format`, `strict`, out of one comment line) and one more in philslist
+  # (`has`) — five across the fleet, waiting for a description to utter one.
+  #
+  # The fixture is SYNTHETIC on purpose. Asserting against the fleet's own
+  # comments would let this example go quietly green the day somebody rewords
+  # one, which is precisely the cheap repair this fix was chosen over.
+  it "reads code out of a descriptor, never comments or string literals (K-1772)" do
+    src = <<~'RB'
+      class Kiosk::PhantomController < ApplicationController
+        kind :action
+        description "Edit one listing."
+        input_schema type: "object",
+                     properties: {
+                       listing_id: { type: "string" },
+                       # NULLABLE, and the only one of the three that is: an
+                       # explicit null clears it. A title cannot be cleared:
+                       # a listing with neither is not a listing. An unbalanced
+                       # brace { and a lone quote " belong to this prose too.
+                       price_text: { type: %w[string null] },
+                     },
+                     required: ["listing_id"]
+        def edit_listing = nil
+
+        kind :query
+        description "Ranking is by recency; a # in prose is not a comment."
+        input_schema type: "object", properties: { keyword: { type: "string" } }
+        def browse_listings = nil
+      end
+    RB
+
+    verbs = DescriptorSource.controller_verbs(src)
+
+    # The comment contributes no params, and its stray `{` and `"` do not move
+    # the end of the body — `price_text`, which FOLLOWS the comment, still reads.
+    expect(verbs.map { |v| v[:name] }).to eq(%w[edit_listing browse_listings])
+    expect(verbs.first[:params]).to eq(%w[listing_id price_text])
+    expect(verbs.last[:params]).to eq(%w[keyword])
+    # …and a `#` inside a string literal is content, not the start of a comment.
+    expect(verbs.last[:description]).to eq("Ranking is by recency; a # in prose is not a comment.")
   end
 
   # ── ADR-0023: a description may not carry a parameter list (K-846) ────────

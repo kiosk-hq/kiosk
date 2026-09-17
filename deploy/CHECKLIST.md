@@ -94,15 +94,27 @@ For EACH of the 7 apps:
       `config/environments/production.rb` is byte-identical across the operator demos and so must not name a demo — while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
       operator from the `operator_id` in the intake body.
-- [ ] **Grep every operator env for the RETIRED operator-side name, on any box that predates 2026-08-13.** The operator side was
+- [ ] **RUN `deploy/kyc-pairing-audit.sh` ON THE BOX — nothing else reads the values, and a tick taken by eye is a guess.**
+      ```
+      ssh <deploy-user>@<box> 'sudo bash -s' < deploy/kyc-pairing-audit.sh
+      ssh <deploy-user>@<box> 'sudo bash -s' -- --fix-retired-names < deploy/kyc-pairing-audit.sh
+      ```
+      It pairs each operator's `KIOSK_PROVE_INTAKE_SECRET` against the broker's `KIOSK_PROVE_<OP>_SECRET` BY VALUE,
+      checks the pinned broker key against the key the broker actually signs with, and names any operator env still
+      carrying the RETIRED operator-side spelling. It prints no value: pairing comes out PAIRED or MISMATCH, a key as a
+      public SPKI fingerprint. Run it before the restart, and again after.
+- [ ] **The RETIRED operator-side name, on any box that predates 2026-08-13.** The operator side was
       `KIOSK_PROVE_<OP>_SECRET` until then and is `KIOSK_PROVE_INTAKE_SECRET` now. Nothing reads the old spelling any
       more, so an env file still carrying it leaves the app with NO secret — and `request_kyc` then answers a cacheable
-      `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. Grep each
-      `/etc/kiosk-demo/<op>.env` for the old name before the restart.
+      `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. That is not
+      hypothetical: it is what BOTH deployed KYC operators did from 2026-08-13 to 2026-09-17, with a correct secret
+      stored under the dead name on each box, until a live third-party assistant reported the alcohol in its getgrocery
+      basket as unbuyable by any route. The audit above is the box-side control; `bin/check-kyc-operator-pairing` is the
+      tree-side one and says in its own header that it cannot see a box.
       **What a missed pair looks like from outside, so it is not mistaken for a design choice:** the origin still
       ADVERTISES `request_kyc` and `kyc_status` in `/kiosk/schema` — the descriptor is static — and answers the verb
       `501 module_not_served`. No unauthenticated probe can tell that apart from an operator that genuinely serves no
-      KYC module, so the three boxes above are the only control there is.
+      KYC module.
 
 ## 5. Build + boot each app
 - [ ] **Eager-load gate FIRST, on every changed app:**
@@ -238,6 +250,10 @@ For EACH of the 7 apps:
       flow lives in `deploy/README.md` §"Poke it"; no landing page carries one.
 - [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
 - [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
+- [ ] **KYC pairing — `deploy/kyc-pairing-audit.sh` exits 0 on the box.** Nothing probed from outside can stand in for
+      it: `request_kyc` is reach `principal`, so an unauthenticated call answers 401 whatever the module is doing, and a
+      misconfigured operator answers the authenticated call a cacheable `501 module_not_served` indistinguishable from an
+      operator that serves no KYC at all. A green descriptor is not evidence — the verb list is static.
 
 ## Notes
 - Everything is OFF by default in code — nothing here changes local/CI behavior.

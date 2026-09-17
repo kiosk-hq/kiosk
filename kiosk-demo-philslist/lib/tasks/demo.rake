@@ -494,8 +494,15 @@ namespace :demo do
       check.call("register with proof → 201",         result["http_register_solved"] == 201)
       check.call("solved 1 proof",                    result["proofs_solved"].to_i >= 1)
       check.call("fresh token posts a listing → 200", result["http_post"] == 200 && !result["listing_id"].to_s.empty?)
-      check.call("bad category_slug → clean 400 (not 500)", result["http_post_bad_cat"] == 400)
-      check.call("bad-category 400 names every valid category slug", result["bad_cat_lists_valid"] == true)
+      # ONE BEAT, NOT TWO. The status and the `code` are the operator's whatever
+      # this app does, so a beat reading only `== 400` cannot tell a refusal of
+      # the CATEGORY from a refusal of anything else on the call, and it stays
+      # ticked while the sentence a caller recovers from goes missing. Since 0.4
+      # that sentence is the schema layer's — `category_slug` is declared as an
+      # `enum` — so what is asserted is the SLUGS, which is what an assistant
+      # recovers from, rather than a phrasing (script/register_flow.rb).
+      check.call("bad category_slug → clean 400 (not 500) whose sentence names every valid slug",
+                 result["http_post_bad_cat"] == 400 && result["bad_cat_lists_valid"] == true)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)

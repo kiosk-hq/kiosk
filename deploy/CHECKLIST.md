@@ -94,7 +94,7 @@ For EACH of the 7 apps:
       `config/environments/production.rb` is byte-identical across the operator demos and so must not name a demo — while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
       operator from the `operator_id` in the intake body.
-- [ ] **A box that predates 2026-08-13 carries the RETIRED operator-side name.** The operator side was
+- [ ] **Grep every operator env for the RETIRED operator-side name, on any box that predates 2026-08-13.** The operator side was
       `KIOSK_PROVE_<OP>_SECRET` until then and is `KIOSK_PROVE_INTAKE_SECRET` now. Nothing reads the old spelling any
       more, so an env file still carrying it leaves the app with NO secret — and `request_kyc` then answers a cacheable
       `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. Grep each

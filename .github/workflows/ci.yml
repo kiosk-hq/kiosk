@@ -1903,6 +1903,37 @@ jobs:
       - name: check-redteam-headers self-test
         run: ./bin/check-redteam-headers --self-test
 
+  # A driver beat that claims a 400 REFUSAL of a named argument must read the
+  # refusal's own words (T-210 item (u), from K-1762/K-1764/K-1767). The status
+  # and the `code` are the OPERATOR's, whatever the app does, so a beat that
+  # reads only those two ticks green for a refusal of anything else on the call
+  # — measured three times in one day, once with the app guard deleted.
+  # Stdlib Ruby only: no bundle, no services, no database.
+  refusal-assertions:
+    name: a 400-refusal beat reads the refusal's own words (bin/check-refusal-assertions)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every beat claiming a 400 refusal reads the sentence it claims
+        run: ./bin/check-refusal-assertions
+
+      # Its own step, for the sibling guards' reason: RA-1's violation set is
+      # EMPTY when the tree is healthy, so an extractor broken by an edit leaves
+      # the bare run at exit 0 and says nothing. The vacuity arms assert liveness
+      # on the DECLARATIONS rather than on the violations (K-1262's polarity).
+      - name: check-refusal-assertions self-test
+        run: ./bin/check-refusal-assertions --self-test
+
   # Does the declarative Caddy deploy still decide correctly? (T-171, K-1295)
   #
   # THIS JOB REPLACED `deploy-edge-ratelimit`, WHICH RAN THE RETIRED

@@ -229,7 +229,13 @@ def uuid_guard_verdict(path, body_for)
     args     = body_for.call(junk)
     rc, body = WIRE.post_json(path, args, WIRE.bearer(TOKEN_A))
     scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
-    ok = rc == 400 && body["code"] == "bad_request" && !scan.leak?
+    # THE DETAIL MUST NAME THE ARGUMENT this probe corrupted. A 400 and a
+    # `bad_request` are what EVERY typed refusal on this wire carries, so
+    # without this line the beat ticks green for a refusal of something else on
+    # the call — and since the schema layer is usually what answers here (see
+    # the header), the status alone says nothing about the id at all.
+    ok = rc == 400 && body["code"] == "bad_request" &&
+         body["detail"].to_s.include?(args.key(junk).to_s) && !scan.leak?
     [ok, "#{junk.inspect}→#{rc}/#{body['code'].inspect}" \
          "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
@@ -238,7 +244,7 @@ end
 cancel_probes = uuid_guard_verdict("/kiosk/cancel_booking", ->(junk) { { booking_id: junk } })
 BATTERY.record("MalformedUuidArg", cancel_probes.all? { |ok, _| ok },
                "cancel_booking with a malformed booking_id → #{cancel_probes.map(&:last).join(', ')} " \
-               "(want 400/\"bad_request\" and no SQL internals)")
+               "(want 400/\"bad_request\", a detail naming the argument, and no SQL internals)")
 
 # ── RegisterWithoutPoP — register with no proof-of-possession → not 201 ──────
 require "openssl"

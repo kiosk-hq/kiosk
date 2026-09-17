@@ -179,13 +179,15 @@ SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 uuid_probes = MALFORMED_IDS.flat_map do |junk|
   [
     # list_id via the membership guard — a QUERY, so the junk rides the query string.
-    [-> { get_json("/kiosk/list_todos", { list_id: junk }, WIRE.bearer(owner[:token])) },     "list_todos"],
-    # todo_id — no other guard in front of the cast.
-    [-> { post_json("/kiosk/complete_todo", { todo_id: junk }, WIRE.bearer(owner[:token])) }, "complete_todo"],
+    [-> { get_json("/kiosk/list_todos", { list_id: junk }, WIRE.bearer(owner[:token])) },
+     "list_todos", "list_id"],
+    # todo_id — the id the web door hands over raw.
+    [-> { post_json("/kiosk/complete_todo", { todo_id: junk }, WIRE.bearer(owner[:token])) },
+     "complete_todo", "todo_id"],
     # account_id — the second id, on a verb whose FIRST id is well-formed.
     [-> { post_json("/kiosk/remove_member", { list_id: list_id, account_id: junk }, WIRE.bearer(owner[:token])) },
-     "remove_member"],
-  ].map do |probe, verb|
+     "remove_member", "account_id"],
+  ].map do |probe, verb, arg|
     rc, resp = probe.call
     # THE SCAN IS TOLD WHAT THIS PROBE SENT. tudu answers a bad id by
     # NAMING it back (`list_id "…" is not a uuid`), so the bytes searched for
@@ -196,14 +198,20 @@ uuid_probes = MALFORMED_IDS.flat_map do |junk|
     # lie inside one contiguous run the probe supplied — not a blind `gsub`,
     # which could erase a real leak instead.
     scan = Kiosk::Redteam::LeakScan.scan(resp, SQL_INTERNALS, supplied: junk)
-    ok = rc == 400 && resp["code"] == "bad_request" && !scan.leak?
+    # THE DETAIL MUST NAME THE ARGUMENT. A 400 and a `bad_request` are what
+    # EVERY typed refusal on this wire carries, so without this line the beat
+    # ticks green for a refusal of something else on the call — and on these
+    # verbs the id is declared `format: "uuid"`, so the argument validation is
+    # what answers and it names the argument it refused.
+    ok = rc == 400 && resp["code"] == "bad_request" &&
+         resp["detail"].to_s.include?(arg) && !scan.leak?
     [ok, "#{verb}(#{junk.inspect})→#{rc}/#{resp['code'].inspect}" \
          "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
 BATTERY.record("MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
                "malformed list_id/todo_id/account_id → #{uuid_probes.map(&:last).join(', ')} " \
-               "(want 400/\"bad_request\" and no SQL internals)")
+               "(want 400/\"bad_request\", a detail naming the argument, and no SQL internals)")
 
 # ── MissingAuth / GarbageToken → 401 ────────────────────────────────────────
 rc, = get_json("/kiosk/my_lists")

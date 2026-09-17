@@ -1,0 +1,595 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# KYC operator pairing guard — an operator that ADVERTISES `request_kyc` must be
+# deployable, and that takes a matched pair of values on TWO different boxes
+# (K-1775).
+#
+# WHAT BREAKS WITHOUT IT
+# ----------------------
+# The KYC leg of this fleet is the only capability whose configuration spans two
+# hosts. The operator box holds one role-named `KIOSK_PROVE_INTAKE_SECRET`; the
+# broker box holds a per-operator `KIOSK_PROVE_<OP>_SECRET` and a
+# `KIOSK_PROVE_<OP>_CALLBACK_HOST`. Neither side has a default — deliberately,
+# because a default in a public repository is a credential anybody can present —
+# so BOTH sides fail closed, and fail closed SILENTLY:
+#
+#   * the operator's `request_kyc` answers `501 module_not_served`, which is the
+#     same answer an operator that genuinely serves no KYC module gives, and 501
+#     is cacheable by default, so a well-behaved assistant stops asking;
+#   * the descriptor keeps advertising `request_kyc` and `kyc_status` either
+#     way, because it is static — the verb list does not consult the config;
+#   * the broker answers an unregistered operator `401 unknown operator or bad
+#     credential`, which is byte-identical to what it answers a caller with a
+#     wrong secret, so nothing an outsider probes can tell the two apart.
+#
+# The combination — advertising a verb the deployment cannot serve — is what
+# reached a real third-party assistant on 2026-09-17 against the deployed
+# getgrocery: it reported that the origin advertises `request_kyc`, answers 501,
+# and that the alcohol in its basket was therefore unbuyable by any route. It
+# was right on every point.
+#
+# WHY IT IS A SHIPPED-DOCUMENT GUARD AND NOT A LIVE PROBE
+# -------------------------------------------------------
+# A live probe was measured and is impossible from a read-only position.
+# `request_kyc` is `reach: principal`, so reaching it at all requires a
+# registration, and a registration is a WRITE to somebody's deployment — the
+# one thing `deploy/live-fleet-drive.rb`'s header forbids, for the reason it
+# gives. Unauthenticated, the verb answers 401 whatever its module is doing, so
+# there is no read-only signal to assert on. `deploy/production-smoke.sh` is not
+# a candidate either: it boots a throwaway database and refuses to run on a box
+# carrying deploy markers.
+#
+# What IS ours, and what this guard holds, is the shipped deploy documentation:
+# a deployment built strictly from `deploy/env/*.env.example` and
+# `deploy/CHECKLIST.md` must be able to serve every verb this repository
+# advertises. That failed here in the most ordinary way — getgrocery became a
+# broker operator on 2026-08-05 and the broker's own env template never gained
+# its two registration lines, so nobody following the runbook could have
+# registered it, ever.
+#
+# WHAT IT DOES NOT AND CANNOT SEE, said plainly: the VALUES on the boxes. No
+# guard in this repository reads `/etc/kiosk-demo/*.env`. A deployment can
+# satisfy every rule below and still have an operator whose secret was never
+# set, or was set under the pre-2026-08-13 name `KIOSK_PROVE_<OP>_SECRET` that
+# the operator side stopped reading (K-694). The CHECKLIST item this guard
+# requires is the only control over that half, and it is a human one.
+#
+# THE RULES, AND WHY EACH IS NEEDED
+# ---------------------------------
+#   KP-1  The roster is DERIVED, three ways, and the three must agree. A demo is
+#         a KYC operator iff it ships `app/services/prove_broker_client.rb`; it
+#         must then route `request_kyc`, and no demo may route it without the
+#         client. Its `ProveTrust.operator_id` default must be its own directory
+#         handle, because that string is the key the broker's registry is looked
+#         up by — rename it and every pairing below still reads correct while
+#         every intake 401s.
+#   KP-2  Each roster demo's env template assigns all four operator-side
+#         variables, and its `config/environments/production.rb` reads the
+#         role-named secret.
+#   KP-3  No operator env template assigns `KIOSK_PROVE_<OP>_SECRET`. That is
+#         the spelling the operator side read until 2026-08-13 and reads no
+#         more; a file still carrying it looks configured and leaves the app
+#         with nothing. This rule is the rename regression's own shape.
+#   KP-4  The broker's env template assigns `KIOSK_PROVE_<OP>_SECRET` and
+#         `KIOSK_PROVE_<OP>_CALLBACK_HOST` for EXACTLY the roster — a missing
+#         pair is an operator nobody can register, a surplus pair is a
+#         permission for an operator that no longer exists.
+#   KP-5  The allow-listed callback host equals the host of that operator's own
+#         `KIOSK_ISSUER`. `request_kyc` builds its `callback_url` from the
+#         issuer, and the broker's SSRF guard compares the URL's host against
+#         the registered one, so a disagreement 403s every intake while both
+#         secrets match and both boxes look configured.
+#   KP-6  The broker's `config/environments/production.rb` reads the same two
+#         variables for exactly the roster. This is the other direction: a demo
+#         that GAINS a broker client and whose entry the broker never learns.
+#   KP-7  `deploy/CHECKLIST.md` names both broker-side variables for every
+#         roster member, so the human step exists for each of them rather than
+#         for whichever one was first.
+#
+# COMMENTS ARE STRIPPED BEFORE ANY RUBY SOURCE IS SCANNED (K-1772). The broker's
+# production.rb names `KIOSK_PROVE_SKOOTI_CALLBACK_HOST` in a comment; a scanner
+# that counted it would read a registry entry that is not there. `#` inside a
+# string literal is not a comment, so the masker tracks quotes.
+#
+# Stdlib Ruby only: no bundle, no services, no database, no network.
+#
+# Usage: bin/check-kyc-operator-pairing [--self-test]
+
+require "uri"
+
+REPO = File.expand_path("..", __dir__)
+
+CLIENT_REL   = "app/services/prove_broker_client.rb"
+TRUST_REL    = "app/services/prove_trust.rb"
+ROUTES_REL   = "config/routes/kiosk.rb"
+REGISTRY_REL = "app/models/operator_registry.rb"
+PROD_ENV_REL = "config/environments/production.rb"
+
+CHECKLIST_REL = "deploy/CHECKLIST.md"
+ENV_DIR_REL   = "deploy/env"
+
+# The one assignment that identifies the BROKER's env template, so the
+# operator/broker split is read off the templates rather than off a filename
+# this script would otherwise have to know (the broker's app dir is
+# `kiosk-demo-prove` and its template is `kyc-demo.env.example` — a mapping no
+# rule here should carry).
+BROKER_ENV_MARKER = "PROVE_KEY_PEM"
+
+# What an operator app needs in its own env file. All four have no default on
+# the operator side or are pinned so a moved broker is a config change.
+OPERATOR_ENV_VARS = %w[
+  KIOSK_PROVE_ISSUER
+  KIOSK_PROVE_BROKER_URL
+  KIOSK_PROVE_INTAKE_SECRET
+  KIOSK_PROVE_PUBLIC_KEY_PEM
+].freeze
+
+# The role-named variable every operator app reads (K-694).
+ROLE_SECRET = "KIOSK_PROVE_INTAKE_SECRET"
+
+FAILURES = []
+
+def fail!(message)
+  FAILURES << message
+  puts "  x #{message}"
+end
+
+def pass(message)
+  puts "  ok #{message}"
+end
+
+# ── Ruby comment masking (K-1772) ────────────────────────────────────────────
+#
+# Blank out every `#`-to-end-of-line run that is not inside a string literal.
+# Newlines are kept so line numbers do not move. Heredocs and percent literals
+# are NOT understood; none occurs in the two files this walks, and a false
+# BLANK is the safe direction here — it can only hide a hit, and every rule
+# below fails on an ABSENT hit.
+def without_comments(source)
+  out = +""
+  source.each_line do |line|
+    quote = nil
+    cut = nil
+    line.each_char.with_index do |char, index|
+      if quote
+        quote = nil if char == quote
+      elsif char == '"' || char == "'"
+        quote = char
+      elsif char == "#"
+        cut = index
+        break
+      end
+    end
+    out << (cut ? "#{line[0...cut]}\n" : line)
+  end
+  out
+end
+
+# ── Reading the tree into a plain world hash ─────────────────────────────────
+#
+# Everything below operates on this hash and nothing else, which is what lets
+# the self-test plant a real defect into a copy of the REAL tree rather than
+# into a synthetic fixture.
+def read_world
+  dirs = Dir[File.join(REPO, "kiosk-demo-*")]
+         .select { |path| File.directory?(path) }
+         .map { |path| File.basename(path) }.sort
+
+  broker_dirs = dirs.select { |dir| File.exist?(File.join(REPO, dir, REGISTRY_REL)) }
+
+  clients = dirs.select { |dir| File.exist?(File.join(REPO, dir, CLIENT_REL)) }
+  routed  = dirs.select do |dir|
+    path = File.join(REPO, dir, ROUTES_REL)
+    File.exist?(path) && without_comments(File.read(path)).include?('kiosk_verb: "request_kyc"')
+  end
+
+  operator_ids = {}
+  dirs.each do |dir|
+    path = File.join(REPO, dir, TRUST_REL)
+    next unless File.exist?(path)
+
+    match = without_comments(File.read(path))
+            .match(/ENV\.fetch\(\s*["']KIOSK_PROVE_OPERATOR_ID["']\s*,\s*["']([^"']+)["']/)
+    operator_ids[dir] = match && match[1]
+  end
+
+  envs = {}
+  Dir[File.join(REPO, ENV_DIR_REL, "*.env.example")].sort.each do |path|
+    envs[File.basename(path)] = env_assignments(File.read(path))
+  end
+
+  prod_envs = {}
+  dirs.each do |dir|
+    path = File.join(REPO, dir, PROD_ENV_REL)
+    prod_envs[dir] = without_comments(File.read(path)) if File.exist?(path)
+  end
+
+  { dirs: dirs, broker_dirs: broker_dirs, clients: clients, routed: routed,
+    operator_ids: operator_ids, envs: envs, prod_envs: prod_envs,
+    checklist: File.read(File.join(REPO, CHECKLIST_REL)) }
+end
+
+# `NAME=VALUE` assignments in a shell-source-safe env template. Comment lines
+# and blanks are skipped; the first `=` splits.
+def env_assignments(source)
+  source.lines.each_with_object({}) do |line, acc|
+    stripped = line.strip
+    next if stripped.empty? || stripped.start_with?("#")
+    next unless stripped.include?("=")
+
+    name, value = stripped.split("=", 2)
+    next unless name.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
+
+    acc[name] = value
+  end
+end
+
+def operator_env_name(dir)
+  "#{dir.sub(/\Akiosk-demo-/, "")}.env.example"
+end
+
+def broker_env_name(world)
+  world[:envs].keys.find { |name| world[:envs][name].key?(BROKER_ENV_MARKER) }
+end
+
+# Every `KIOSK_PROVE_<OP>_<SUFFIX>` handle named in a bag of keys or in source.
+#
+# `INTAKE` is filtered out because it is not an operator handle at all — it is
+# the ROLE the operator side reads (`KIOSK_PROVE_INTAKE_SECRET`), and the
+# wildcard in the middle cannot tell a role from a name. Filtering it here
+# rather than at each caller is why KP-4 holds separately that the BROKER's
+# template does not assign the role-named secret: that would be a real defect
+# this filter would otherwise swallow.
+ROLE_WORDS = %w[intake].freeze
+
+def named_operators(haystack, suffix)
+  haystack.scan(/KIOSK_PROVE_([A-Z0-9]+)_#{suffix}\b/)
+          .flatten.map(&:downcase).uniq.reject { |word| ROLE_WORDS.include?(word) }.sort
+end
+
+# ── The rules ────────────────────────────────────────────────────────────────
+def evaluate(world) # rubocop:disable Metrics/AbcSize
+  roster = world[:clients].sort
+
+  puts "── KP-1: the KYC roster is derived three ways, and they agree ──"
+  if roster.empty?
+    fail! "no demo ships #{CLIENT_REL} — either the broker integration was deleted " \
+          "or this walker stopped matching; a roster of nobody is not a clean tree."
+  end
+  missing_route = roster - world[:routed]
+  surplus_route = world[:routed] - roster
+  missing_route.each do |dir|
+    fail! "#{dir} ships #{CLIENT_REL} but its #{ROUTES_REL} routes no `request_kyc` — " \
+          "the client is unreachable from the wire."
+  end
+  surplus_route.each do |dir|
+    fail! "#{dir} routes `request_kyc` but ships no #{CLIENT_REL} — the verb is " \
+          "advertised with nothing behind it."
+  end
+  roster.each do |dir|
+    handle = dir.sub(/\Akiosk-demo-/, "")
+    actual = world[:operator_ids][dir]
+    if actual.nil?
+      fail! "#{dir}/#{TRUST_REL} declares no KIOSK_PROVE_OPERATOR_ID default — the " \
+            "broker's registry is keyed by that string."
+    elsif actual != handle
+      fail! "#{dir}/#{TRUST_REL} defaults KIOSK_PROVE_OPERATOR_ID to #{actual.inspect}, " \
+            "not #{handle.inspect}. The broker looks an operator up by this handle, so " \
+            "every pairing below would read correct while every intake answered 401."
+    end
+  end
+  pass "roster: #{roster.join(", ")}" if missing_route.empty? && surplus_route.empty? && !roster.empty?
+
+  broker_env = broker_env_name(world)
+  broker_dir = world[:broker_dirs].first
+  if broker_env.nil?
+    fail! "no #{ENV_DIR_REL}/*.env.example assigns #{BROKER_ENV_MARKER}, so the broker's " \
+          "template cannot be identified — every rule below is vacuous."
+    return FAILURES.empty?
+  end
+  if world[:broker_dirs].size != 1
+    fail! "#{world[:broker_dirs].size} demo(s) ship #{REGISTRY_REL}; this guard assumes one broker."
+    return FAILURES.empty?
+  end
+
+  puts
+  puts "── KP-2: each operator's env template carries the operator side ──"
+  roster.each do |dir|
+    name = operator_env_name(dir)
+    assignments = world[:envs][name]
+    if assignments.nil?
+      fail! "#{dir} is a KYC operator with no #{ENV_DIR_REL}/#{name} to configure."
+      next
+    end
+    absent = OPERATOR_ENV_VARS.reject { |var| assignments.key?(var) }
+    if absent.empty?
+      pass "#{name}: #{OPERATOR_ENV_VARS.size} operator-side variable(s) assigned"
+    else
+      absent.each do |var|
+        fail! "#{ENV_DIR_REL}/#{name} assigns no #{var} — a deploy built from this " \
+              "template cannot open a verification."
+      end
+    end
+
+    source = world[:prod_envs][dir]
+    if source.nil?
+      fail! "#{dir} ships no #{PROD_ENV_REL}."
+    elsif !source.include?(%(ENV["#{ROLE_SECRET}"]))
+      fail! "#{dir}/#{PROD_ENV_REL} does not read ENV[#{ROLE_SECRET.inspect}] — the " \
+            "operator side reads ONE role-named variable and this app reads something else."
+    end
+  end
+
+  puts
+  puts "── KP-3: no operator template carries the retired per-operator name ──"
+  retired = []
+  world[:envs].each do |name, assignments|
+    next if name == broker_env
+
+    assignments.each_key do |var|
+      next if var == ROLE_SECRET
+
+      retired << "#{ENV_DIR_REL}/#{name}: #{var}" if var.match?(/\AKIOSK_PROVE_[A-Z0-9]+_SECRET\z/)
+    end
+  end
+  if retired.empty?
+    pass "no operator template assigns a KIOSK_PROVE_<OP>_SECRET"
+  else
+    retired.each do |hit|
+      fail! "#{hit} is the OPERATOR-side spelling retired on 2026-08-13 (K-694). " \
+            "Nothing reads it any more, so a box carrying it has no intake secret at " \
+            "all and answers 501 module_not_served. Use #{ROLE_SECRET}."
+    end
+  end
+
+  puts
+  puts "── KP-4: the broker's template registers exactly the roster ──"
+  broker_keys = world[:envs][broker_env].keys.join("\n")
+  secret_ops   = named_operators(broker_keys, "SECRET")
+  callback_ops = named_operators(broker_keys, "CALLBACK_HOST")
+  handles = roster.map { |dir| dir.sub(/\Akiosk-demo-/, "") }.sort
+
+  (handles - secret_ops).each do |handle|
+    fail! "#{ENV_DIR_REL}/#{broker_env} assigns no KIOSK_PROVE_#{handle.upcase}_SECRET — " \
+          "#{handle} is a KYC operator that nobody following this runbook can register, " \
+          "so its request_kyc answers 501 for ever."
+  end
+  (secret_ops - handles).each do |handle|
+    fail! "#{ENV_DIR_REL}/#{broker_env} assigns KIOSK_PROVE_#{handle.upcase}_SECRET for " \
+          "#{handle}, which is not a KYC operator in this tree — delete the entry rather " \
+          "than leaving a registration nobody uses."
+  end
+  (handles - callback_ops).each do |handle|
+    fail! "#{ENV_DIR_REL}/#{broker_env} assigns no KIOSK_PROVE_#{handle.upcase}_CALLBACK_HOST — " \
+          "with no allow-listed host the broker refuses #{handle}'s intakes even with a " \
+          "matching secret."
+  end
+  (callback_ops - handles).each do |handle|
+    fail! "#{ENV_DIR_REL}/#{broker_env} allow-lists a callback host for #{handle}, which is " \
+          "not a KYC operator in this tree."
+  end
+  if world[:envs][broker_env].key?(ROLE_SECRET)
+    fail! "#{ENV_DIR_REL}/#{broker_env} assigns #{ROLE_SECRET}, which is the OPERATOR side's " \
+          "role-named variable. The broker reads none — it keys its registry per operator — so " \
+          "a value here registers nobody while looking like it does."
+  end
+  if (handles - secret_ops).empty? && (secret_ops - handles).empty? &&
+     (handles - callback_ops).empty? && (callback_ops - handles).empty?
+    pass "#{broker_env}: a secret and a callback host for each of #{handles.join(", ")}"
+  end
+
+  puts
+  puts "── KP-5: the allow-listed callback host is the operator's own issuer host ──"
+  roster.each do |dir|
+    handle = dir.sub(/\Akiosk-demo-/, "")
+    allowed = world[:envs][broker_env]["KIOSK_PROVE_#{handle.upcase}_CALLBACK_HOST"]
+    issuer  = world[:envs].dig(operator_env_name(dir), "KIOSK_ISSUER")
+    next if allowed.nil? || issuer.nil?
+
+    issuer_host = begin
+      URI.parse(issuer).host
+    rescue URI::InvalidURIError
+      nil
+    end
+    if issuer_host.nil?
+      fail! "#{ENV_DIR_REL}/#{operator_env_name(dir)}: KIOSK_ISSUER=#{issuer} has no host."
+    elsif allowed == issuer_host
+      pass "#{handle}: callback host #{allowed} is its own issuer host"
+    else
+      fail! "#{ENV_DIR_REL}/#{broker_env} allow-lists #{allowed.inspect} for #{handle}, whose " \
+            "KIOSK_ISSUER host is #{issuer_host.inspect}. request_kyc builds its callback_url " \
+            "from the issuer and the broker's SSRF guard compares hosts, so every intake 403s " \
+            "while both secrets match and both boxes look configured."
+    end
+  end
+
+  puts
+  puts "── KP-6: the broker's production config reads exactly the roster ──"
+  broker_source = world[:prod_envs][broker_dir]
+  if broker_source.nil?
+    fail! "#{broker_dir} ships no #{PROD_ENV_REL}."
+  else
+    code_secret_ops   = named_operators(broker_source, "SECRET")
+    code_callback_ops = named_operators(broker_source, "CALLBACK_HOST")
+    (handles - code_secret_ops).each do |handle|
+      fail! "#{broker_dir}/#{PROD_ENV_REL} never reads KIOSK_PROVE_#{handle.upcase}_SECRET — " \
+            "#{handle} ships a broker client the broker has no registry entry for."
+    end
+    (code_secret_ops - handles).each do |handle|
+      fail! "#{broker_dir}/#{PROD_ENV_REL} reads KIOSK_PROVE_#{handle.upcase}_SECRET for " \
+            "#{handle}, which ships no #{CLIENT_REL} — a live registry entry for an operator " \
+            "that cannot call the intake."
+    end
+    (handles - code_callback_ops).each do |handle|
+      fail! "#{broker_dir}/#{PROD_ENV_REL} never reads KIOSK_PROVE_#{handle.upcase}_CALLBACK_HOST."
+    end
+    if (handles - code_secret_ops).empty? && (code_secret_ops - handles).empty? &&
+       (handles - code_callback_ops).empty?
+      pass "#{broker_dir}/#{PROD_ENV_REL}: a registry entry for each of #{handles.join(", ")}"
+    end
+  end
+
+  puts
+  puts "── KP-7: the deploy checklist names both broker-side variables per operator ──"
+  handles.each do |handle|
+    %W[KIOSK_PROVE_#{handle.upcase}_SECRET KIOSK_PROVE_#{handle.upcase}_CALLBACK_HOST].each do |var|
+      if world[:checklist].include?(var)
+        pass "#{CHECKLIST_REL} names #{var}"
+      else
+        fail! "#{CHECKLIST_REL} never names #{var}, so the human step that sets it does not " \
+              "exist for #{handle} — which is exactly how an operator ends up advertising a " \
+              "verb its deployment cannot serve."
+      end
+    end
+  end
+
+  puts
+  puts "── the census this guard exists to hold ──"
+  puts "  #{world[:dirs].size} demo app(s); #{roster.size} KYC operator(s); " \
+       "broker #{broker_dir} via #{ENV_DIR_REL}/#{broker_env}; " \
+       "#{world[:envs].size} env template(s) read"
+
+  FAILURES.empty?
+end
+
+# ── self-test ────────────────────────────────────────────────────────────────
+#
+# Every arm plants its defect into a DEEP COPY OF THE REAL TREE's world, so the
+# control is the tree itself and a plant is the real defect rather than a
+# fixture that resembles it.
+def self_test # rubocop:disable Metrics/AbcSize
+  failures = []
+  check = lambda do |name, ok|
+    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
+    failures << name unless ok
+  end
+
+  base = read_world
+
+  plant = lambda do |&block|
+    world = Marshal.load(Marshal.dump(base))
+    block.call(world)
+    FAILURES.clear
+    silence { evaluate(world) }
+    FAILURES.dup
+  end
+
+  # CONTROL — the tree as it stands.
+  FAILURES.clear
+  clean = silence { evaluate(Marshal.load(Marshal.dump(base))) }
+  check.call("CONTROL: the tree as it stands is clean", clean && FAILURES.empty?)
+
+  broker_env = broker_env_name(base)
+  check.call("the broker's env template is identified by #{BROKER_ENV_MARKER}", !broker_env.nil?)
+  gg = base[:clients].find { |dir| dir.include?("getgrocery") }
+  check.call("getgrocery is on the derived roster", !gg.nil?)
+
+  if broker_env && gg
+    # ── THE ORIGINAL DEFECT, PLANTED (K-1775): the broker's template with no
+    #    getgrocery secret. This is the tree as it actually stood from
+    #    2026-08-05 until this guard was written.
+    hits = plant.call { |w| w[:envs][broker_env].delete("KIOSK_PROVE_GETGROCERY_SECRET") }
+    check.call("KP-4 reddens on the K-1775 defect (no broker-side secret for an operator)",
+               hits.any? { |m| m.include?("KIOSK_PROVE_GETGROCERY_SECRET") })
+
+    hits = plant.call { |w| w[:envs][broker_env].delete("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST") }
+    check.call("KP-4 reddens on a missing broker-side callback host",
+               hits.any? { |m| m.include?("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST") })
+
+    hits = plant.call { |w| w[:envs][broker_env]["KIOSK_PROVE_ATABLEFOR_SECRET"] = "x" }
+    check.call("KP-4 reddens on a registration for a non-operator",
+               hits.any? { |m| m.include?("atablefor") })
+
+    hits = plant.call { |w| w[:envs][broker_env]["KIOSK_PROVE_GETGROCERY_CALLBACK_HOST"] = "skooti.demo.kiosk.tech" }
+    check.call("KP-5 reddens when the allow-listed host is not the operator's issuer host",
+               hits.any? { |m| m.include?("403") })
+
+    hits = plant.call do |w|
+      env = w[:envs][operator_env_name(gg)]
+      env["KIOSK_PROVE_GETGROCERY_SECRET"] = env.delete(ROLE_SECRET)
+    end
+    check.call("KP-2 reddens when an operator template loses the role-named secret",
+               hits.any? { |m| m.include?("assigns no #{ROLE_SECRET}") })
+    check.call("KP-3 reddens on the retired per-operator spelling in an operator template",
+               hits.any? { |m| m.include?("retired on 2026-08-13") })
+
+    hits = plant.call { |w| w[:routed] -= [gg] }
+    check.call("KP-1 reddens when a client ships with no request_kyc route",
+               hits.any? { |m| m.include?("routes no `request_kyc`") })
+
+    hits = plant.call { |w| w[:clients] -= [gg] }
+    check.call("KP-1 reddens when a verb is routed with no client behind it",
+               hits.any? { |m| m.include?("ships no #{CLIENT_REL}") })
+
+    hits = plant.call { |w| w[:operator_ids][gg] = "grocery" }
+    check.call("KP-1 reddens on a renamed operator handle",
+               hits.any? { |m| m.include?("KIOSK_PROVE_OPERATOR_ID") })
+
+    hits = plant.call do |w|
+      broker = w[:broker_dirs].first
+      w[:prod_envs][broker] = w[:prod_envs][broker].gsub("KIOSK_PROVE_GETGROCERY_SECRET", "REMOVED")
+    end
+    check.call("KP-6 reddens when the broker's config forgets an operator",
+               hits.any? { |m| m.include?("never reads KIOSK_PROVE_GETGROCERY_SECRET") })
+
+    hits = plant.call { |w| w[:checklist] = w[:checklist].gsub("KIOSK_PROVE_GETGROCERY_SECRET", "REMOVED") }
+    check.call("KP-7 reddens when the checklist stops naming a broker-side variable",
+               hits.any? { |m| m.include?("never names KIOSK_PROVE_GETGROCERY_SECRET") })
+  end
+
+  # ── COMMENT BLINDNESS (K-1772): a registry entry that is only a comment is
+  #    not a registry entry, and the broker's own file carries one in prose.
+  commented = without_comments(<<~RUBY)
+    # CHECKLIST 4b: KIOSK_PROVE_PHANTOM_SECRET=...
+    config.x.prove.skooti_secret = ENV["KIOSK_PROVE_SKOOTI_SECRET"]
+  RUBY
+  check.call("a commented-out operator name is not a registry entry",
+             named_operators(commented, "SECRET") == ["skooti"])
+  check.call("a `#` inside a string literal is not a comment",
+             without_comments(%(x = "a#b"\n)).include?("a#b"))
+
+  # ── VACUITY: every pattern this guard depends on must match something here.
+  check.call("the demo walk finds demos", base[:dirs].size > 1)
+  check.call("the roster is non-empty", !base[:clients].empty?)
+  check.call("exactly one demo ships #{REGISTRY_REL}", base[:broker_dirs].size == 1)
+  check.call("the routed set is non-empty", !base[:routed].empty?)
+  check.call("every roster demo declares an operator_id default",
+             base[:clients].all? { |dir| base[:operator_ids][dir] })
+  check.call("env templates were read", base[:envs].size > 1)
+  check.call("the checklist names at least one broker-side secret",
+             base[:checklist].match?(/KIOSK_PROVE_[A-Z0-9]+_SECRET/))
+  check.call("the broker's production config names at least one registry variable",
+             base[:prod_envs][base[:broker_dirs].first].to_s.match?(/KIOSK_PROVE_[A-Z0-9]+_SECRET/))
+
+  if failures.empty?
+    puts "SELF-TEST OK"
+    0
+  else
+    puts "SELF-TEST FAILED: #{failures.size} arm(s)"
+    1
+  end
+end
+
+# Run a block with stdout discarded — the self-test calls `evaluate`, which
+# prints, a dozen times over.
+def silence
+  original = $stdout
+  $stdout = File.open(File::NULL, "w")
+  yield
+ensure
+  $stdout.close
+  $stdout = original
+end
+
+if ARGV.include?("--self-test")
+  exit self_test
+elsif evaluate(read_world)
+  puts
+  puts "OK kyc operator pairing: every advertised KYC operator is deployable from the shipped templates"
+  exit 0
+else
+  puts
+  puts "x kyc operator pairing: #{FAILURES.size} finding(s)"
+  exit 1
+end

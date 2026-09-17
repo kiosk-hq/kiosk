@@ -366,8 +366,8 @@ created yet, and if one is ever added it must serve TLS.
 
 **Why a script and not a checklist line, said plainly.** The other half of this
 class -- the edge rate limit -- got a script and it landed; HSTS got a line in
-<!-- count: 41 ¦ from: grep -c '^ *- \[ \]' deploy/CHECKLIST.md -->
-`CHECKLIST.md`, whose 41 boxes are unticked in the repository and always
+<!-- count: 42 ¦ from: grep -c '^ *- \[ \]' deploy/CHECKLIST.md -->
+`CHECKLIST.md`, whose 42 boxes are unticked in the repository and always
 will be — the tracked copy is a template and an operator ticks their own —
 so its tick state carried no information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
 because a config check run against this template would have said OK for the

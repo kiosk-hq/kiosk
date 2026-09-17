@@ -1621,6 +1621,44 @@ jobs:
       - name: Every registered verb has its explicit route, with the right method
         run: ./bin/check-verb-routes
 
+  # The KYC leg is the only capability in this fleet whose configuration spans
+  # TWO boxes — one role-named secret on the operator, a per-operator secret and
+  # an allow-listed callback host on the broker — and both sides fail closed
+  # SILENTLY: the operator answers a cacheable `501 module_not_served`, which is
+  # what an operator that serves no KYC module answers too, while its descriptor
+  # goes on advertising `request_kyc`. A live third-party assistant hit exactly
+  # that on the deployed getgrocery (K-1775) and was right to give up.
+  #
+  # A live probe cannot exist: `request_kyc` is reach `principal`, so touching it
+  # needs a registration, and a registration is a WRITE to somebody's
+  # deployment. What IS checkable is the shipped deploy documentation — a
+  # deployment built strictly from deploy/env/*.env.example and
+  # deploy/CHECKLIST.md must be able to serve every verb this repository
+  # advertises. getgrocery became a broker operator on 2026-08-05 and the
+  # broker's own template never gained its two registration lines, so nobody
+  # following the runbook could have registered it. Stdlib Ruby only: no bundle,
+  # no services, no database, no network.
+  kyc-operator-pairing:
+    name: an advertised KYC operator is deployable (bin/check-kyc-operator-pairing)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every rule, and non-vacuous here
+        run: ./bin/check-kyc-operator-pairing --self-test
+
+      - name: Both sides of every KYC operator's pairing are in the shipped templates
+        run: ./bin/check-kyc-operator-pairing
+
   # These gems are not on RubyGems, so every install snippet in every gem README
   # says its `gem` lines carry `github: "kiosk-hq/kiosk"` — the only thing that
   # makes a copied line resolve today. That sentence was false on twelve of

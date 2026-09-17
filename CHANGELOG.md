@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-17: **The KYC broker's env template never registered getgrocery, so no deploy from the runbook could serve its advertised `request_kyc`.** A guard now holds both sides of the pairing.
 - 2026-09-17: **The descriptor lint read `word:` inside Ruby comments as declared params — five phantoms, and a false ADR-0023 verdict that held `main` red.** It strips comments now.
 - 2026-09-17: **`bin/check-refusal-assertions` holds a beat claiming a 400 refusal to reading the refusal's own words.** Its first run found two more, in tudu and atablefor.
 - 2026-09-17: **Three demo beats claimed a refusal of a named argument and tested only the status and the code, which the engine supplies whatever the app does.** They read the sentence now.

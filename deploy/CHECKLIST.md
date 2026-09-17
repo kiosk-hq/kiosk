@@ -84,13 +84,25 @@ For EACH of the 7 apps:
       broker refuses to start in production without it (and rejects a PEM that does not parse as a private key), because
       the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
       forge attestations, and the pin flows below would faithfully pin its forgeable public half.
-- [ ] **Operator allow-list:** `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`.
-- [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_SKOOTI_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
+- [ ] **Operator allow-list — ONE PAIR PER KYC OPERATOR, and an operator with no pair is silently not registered:**
+      `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`;
+      `KIOSK_PROVE_GETGROCERY_SECRET=<a DIFFERENT shared intake secret>`, `KIOSK_PROVE_GETGROCERY_CALLBACK_HOST=getgrocery.demo.kiosk.tech`.
+      The KYC operators are the demos that ship `app/services/prove_broker_client.rb`; `bin/check-kyc-operator-pairing`
+      derives that roster and fails when either template stops carrying a pair for one of them.
+- [ ] **Wire each operator to it:** in THAT operator's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_<OP>_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
       The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET` — their
-      `config/environments/production.rb` is byte-identical across the seven demos and so must not name a demo — while
+      `config/environments/production.rb` is byte-identical across the operator demos and so must not name a demo — while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
-      operator from the `operator_id` in the intake body. Same for getgrocery when it is allow-listed
-      (`KIOSK_PROVE_GETGROCERY_SECRET` at the broker ↔ `KIOSK_PROVE_INTAKE_SECRET` in getgrocery's env).
+      operator from the `operator_id` in the intake body.
+- [ ] **A box that predates 2026-08-13 carries the RETIRED operator-side name.** The operator side was
+      `KIOSK_PROVE_<OP>_SECRET` until then and is `KIOSK_PROVE_INTAKE_SECRET` now. Nothing reads the old spelling any
+      more, so an env file still carrying it leaves the app with NO secret — and `request_kyc` then answers a cacheable
+      `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. Grep each
+      `/etc/kiosk-demo/<op>.env` for the old name before the restart.
+      **What a missed pair looks like from outside, so it is not mistaken for a design choice:** the origin still
+      ADVERTISES `request_kyc` and `kyc_status` in `/kiosk/schema` — the descriptor is static — and answers the verb
+      `501 module_not_served`. No unauthenticated probe can tell that apart from an operator that genuinely serves no
+      KYC module, so the three boxes above are the only control there is.
 
 ## 5. Build + boot each app
 - [ ] **Eager-load gate FIRST, on every changed app:**

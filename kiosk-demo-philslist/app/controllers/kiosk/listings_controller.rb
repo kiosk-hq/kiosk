@@ -91,7 +91,17 @@ class Kiosk::ListingsController < ApplicationController
                                             "my_listings or browse_listings, verbatim." },
                  title:      { type: "string", description: "New headline." },
                  body:       { type: "string", description: "New description." },
-                 price_text: { type: "string", description: "New display price." },
+                 # NULLABLE, and the only one of the three that is: a listing may
+                 # be posted with no price at all (`post_listing` does not require
+                 # one) and both output schemas publish `price_text` as
+                 # string-or-null, so «no price» is a state a listing can be in
+                 # and an edit has to be able to return it there. An explicit
+                 # `null` is how — an OMITTED key leaves the value alone, which is
+                 # a different instruction. A title or a body cannot be cleared:
+                 # a listing with neither is not a listing.
+                 price_text: { type: %w[string null],
+                               description: "New display price, or an explicit `null` to clear it. " \
+                                            "Omit the key to leave the current price unchanged." },
                },
                required: ["listing_id"]
   output_schema type: "object",
@@ -106,7 +116,10 @@ class Kiosk::ListingsController < ApplicationController
     # An ALLOWLIST, not a loop over caller keys: `permit` keeps `status`,
     # `owner_id` and `created_by_agent_id` unwritable from the wire. Absent keys
     # arrive ABSENT rather than as nils — that is what keeps "an explicit null
-    # clears price_text" a distinct instruction.
+    # clears price_text" a distinct instruction. The other half of that
+    # instruction is the DECLARATION: `price_text` is `["string", "null"]` above,
+    # so the null reaches this handler instead of being refused as an argument
+    # of the wrong type, and `title`/`body` are not, so neither can be cleared.
     render_operation EditListingOperation.call(
       listing_id: params[:listing_id],
       changes:    params.permit(:title, :body, :price_text).to_h,

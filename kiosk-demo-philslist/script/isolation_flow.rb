@@ -196,6 +196,40 @@ abort "B post_listing failed (#{rc}): #{JSON.generate(legit)}" unless rc == 200
 owner_probe_listing_id = legit["listing_id"]
 STDERR.puts "  B posted (owner from token): #{owner_probe_listing_id}"
 
+# ── Step 7: the OWNER's own edit — the positive control, and the two patch
+# instructions (Assertion 7) ─────────────────────────────────────────────────
+#
+# WHY IT IS HERE. Assertions 3 and 4 are refusals, and a refusal passes
+# vacuously if the verb refuses EVERYBODY: `edit_listing` answering 403 to its
+# own owner would tick both of them green. So the owner's own edit is driven
+# too, and while it is being driven it is worth driving the part a caller is
+# most likely to get wrong — philslist publishes TWO patch instructions and they
+# are different: an OMITTED `price_text` leaves the current price alone, an
+# EXPLICIT null clears it. The second is a state a listing can legitimately be
+# in (`post_listing` does not require a price and both output schemas publish
+# `price_text` as string-or-null), and it is reachable only because the input
+# declares the field `["string", "null"]`.
+own_price = lambda do
+  prc, rows = WIRE.get_json("/kiosk/my_listings", {}, alice.bearer)
+  abort "A my_listings failed (#{prc}): #{JSON.generate(rows)}" unless prc == 200
+  row = Array(rows).find { |r| r["listing_id"] == alice_listing_id }
+  abort "A my_listings no longer carries her own listing #{alice_listing_id}" unless row
+  row["price_text"]
+end
+
+absent_rc, absent_body = WIRE.post_json("/kiosk/edit_listing",
+                                        { listing_id: alice_listing_id, title: "Alice bookshelf (pine)" },
+                                        alice.bearer)
+price_after_absent_key = own_price.call
+null_rc, null_body = WIRE.post_json("/kiosk/edit_listing",
+                                    { listing_id: alice_listing_id, price_text: nil },
+                                    alice.bearer)
+price_after_null = own_price.call
+STDERR.puts "  A edit(title only) → #{absent_rc} #{absent_body['code'].inspect}, " \
+            "price #{price_after_absent_key.inspect}; " \
+            "edit(price_text: null) → #{null_rc} #{null_body['code'].inspect}, " \
+            "price #{price_after_null.inspect}"
+
 puts JSON.generate(
   user_id_a:          alice.user_id,
   user_id_b:          bob.user_id,
@@ -211,4 +245,6 @@ puts JSON.generate(
   cross_owner_close:  [close_rc, close_body["code"]],
   forged_refusal:     [forged_rc, forged["code"], forged["detail"]],
   owner_probe_listing_id: owner_probe_listing_id,
+  own_edit_absent_key:    [absent_rc, price_after_absent_key],
+  own_edit_explicit_null: [null_rc, price_after_null],
 )

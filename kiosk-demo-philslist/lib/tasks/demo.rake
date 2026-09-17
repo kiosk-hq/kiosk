@@ -185,6 +185,12 @@ namespace :demo do
         none of the answers may carry Alice's listing — so deleting
         `reach :published` moves browse_listings into that probe set and fails
         here with Alice's row in hand.
+      Assertion 7 (the owner CAN, and the two patch instructions differ):
+        Alice edit_listing on her OWN listing → 200 — the positive control
+        without which assertions 3 and 4 would pass on a verb that refused
+        everybody — and philslist's two patch instructions are driven side by
+        side: an omitted `price_text` leaves the price alone, an explicit null
+        CLEARS it.
 
     Off the wire, before any server starts: the owner scope with no Kiosk
     session open REFUSES (401 unauthenticated) rather than answering an empty
@@ -403,6 +409,25 @@ namespace :demo do
         puts "  x  Assertion 6b FAILED: #{leaked.map(&:first).join(', ')} claim principal reach " \
              "and returned Alice's listing"
       end
+    end
+
+    # Assertion 7: the OWNER can edit her own — without which assertions 3 and 4
+    # pass on a verb that refuses everybody — and the two patch instructions are
+    # DISTINCT. An omitted `price_text` leaves the price alone; an explicit null
+    # clears it, which is reachable only because the input declares the field
+    # `["string", "null"]` (a plain `type: "string"` refuses the null as an
+    # argument of the wrong type, before the handler runs).
+    absent_rc, price_after_absent = result["own_edit_absent_key"] || []
+    null_rc, price_after_null     = result["own_edit_explicit_null"] || []
+    if absent_rc == 200 && price_after_absent == "€80" && null_rc == 200 && price_after_null.nil?
+      puts "  OK  Assertion 7: the owner's own edit_listing → 200 (positive control); an omitted " \
+           "price_text left €80 alone, an explicit null CLEARED it"
+    else
+      failures << "owner patch semantics: absent-key #{[absent_rc, price_after_absent].inspect} " \
+                  "(want [200, \"€80\"]), explicit-null #{[null_rc, price_after_null].inspect} " \
+                  "(want [200, nil])"
+      puts "  x  Assertion 7 FAILED: absent-key #{[absent_rc, price_after_absent].inspect}, " \
+           "explicit-null #{[null_rc, price_after_null].inspect}"
     end
 
     if failures.empty?

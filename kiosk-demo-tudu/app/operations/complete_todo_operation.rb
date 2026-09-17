@@ -6,8 +6,11 @@ class CompleteTodoOperation
   # This verb takes no `list_id`, so it never passes through {ListAccess}: the
   # membership test is folded into the write, against the todo's list.
   def self.call(todo_id:)
-    # The one wire-supplied id in tudu with no other guard in front of it — see
-    # {ListAccess.check} for why the shape check matters.
+    # `complete_todo` declares `todo_id` with `format: "uuid"`, so on the wire
+    # the argument validation has already refused a malformed one. The door this
+    # check is for is the web UI's "Done" button, which hands over a raw URL
+    # segment ({TodosController#complete}) with no schema anywhere in front of
+    # it — see {ListAccess.check} for what a missing shape check costs there.
     unless Kiosk::UuidCheck.valid?(todo_id)
       return OperationResult.refused(
         code:    "bad_request",

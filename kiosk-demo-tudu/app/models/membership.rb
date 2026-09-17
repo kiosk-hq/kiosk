@@ -57,8 +57,10 @@ class Membership < ApplicationRecord
   # Shape is NOT checked here, and that is load-bearing: `where(list_id:)` casts
   # an unparseable value to NULL and simply answers false — it never raises, so
   # a malformed id reads here as a foreign one. {ListAccess} checks the shape
-  # FIRST and answers 400, so nothing reaches here malformed, and that guard is
-  # the only thing standing between a typo and a 403.
+  # FIRST and answers 400, so nothing reaches here malformed. On the wire the
+  # verb's own `format: "uuid"` has already answered; on the WEB door, which has
+  # no schema in front of it, that guard is the only thing standing between a
+  # typo and a 403.
   #
   # @param list_id [String] a canonical uuid (see Kiosk::UuidCheck)
   # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)

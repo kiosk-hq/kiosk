@@ -15,11 +15,16 @@ module ListAccess
   # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)
   # @return [OperationResult, nil] a refusal, or nil when access is granted
   #
-  # `list_id` arrives from the wire and its shape is load-bearing:
-  # `where(list_id: junk)` does not raise — ActiveRecord's uuid type quietly casts
-  # an unparseable value to NULL, which matches no row — so without this check a
-  # typo would be reported as an ACCESS refusal (403) instead of a shape one
-  # (400). A well-formed but foreign id still gets the 403.
+  # WHICH DOOR THE SHAPE CHECK IS FOR. Not the wire: every verb that takes a
+  # `list_id` declares it `format: "uuid"` and a verb's arguments are validated
+  # before any handler runs, so an assistant that sends a typo already has a 400
+  # naming the argument. tudu's SECOND door has no schema in front of it —
+  # {ListsController#show} hands this the raw `params[:id]` off a URL — and
+  # there this check is the only thing between a typo and the wrong answer:
+  # `where(list_id: junk)` does not raise, ActiveRecord's uuid type quietly casts
+  # an unparseable value to NULL, which matches no row, so the typo would be
+  # reported as an ACCESS refusal (403) instead of the shape one (400) it is. A
+  # well-formed but foreign id still gets the 403, on either door.
   def self.check(list_id, require_owner: false)
     unless Kiosk::UuidCheck.valid?(list_id)
       return OperationResult.refused(

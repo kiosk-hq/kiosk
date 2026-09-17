@@ -1016,8 +1016,8 @@ PLANTS = [
     expect: /LABEL kiosk-demo-hoteling/ },
   { rule: "LABEL / MID-STRING — the spelling a start-anchored literal cannot see",
     file: "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
-    find: /description: "uuid of an unpaid order to replace\."/,
-    with: 'description: "uuid of an unpaid order to replace. Optional; pass it to amend."',
+    find: /it keeps that id, and the answer echoes it back\./,
+    with: 'it keeps that id, and the answer echoes it back. Optional; pass it to amend.',
     expect: %r{LABEL kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller\.rb} },
   { rule: "LABEL / UPPERCASE — the spelling a case-sensitive pattern cannot see",
     file: "kiosk-demo-tudu/app/controllers/kiosk/todo_lists_controller.rb",
@@ -1065,12 +1065,12 @@ FOIL_PLANTS = [
     with: 'description: "Licence-required rooms included. Hotel name."' },
   { what: "the consequence of omitting",
     file: "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
-    find: /description: "uuid of an unpaid order to replace\."/,
-    with: 'description: "uuid of an unpaid order to replace. Unchanged if omitted."' },
+    find: /it keeps that id, and the answer echoes it back\./,
+    with: 'it keeps that id, and the answer echoes it back. Unchanged if omitted.' },
   { what: "a precondition",
     file: "kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
-    find: /description: "uuid of an unpaid order to replace\."/,
-    with: 'description: "uuid of an order (requires the order to be unpaid) to replace."' },
+    find: /it keeps that id, and the answer echoes it back\./,
+    with: 'it keeps that id (requires the order to be unpaid), and the answer echoes it back.' },
 ].freeze
 
 def plant_and_run(root, plant)

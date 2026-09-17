@@ -33,11 +33,15 @@ require "base64"
 # reader, RentalTokenIssuer.verify and the C verifier, and fails on any
 # disagreement.
 #
-# Durable jti store: @consumed_jtis is a { jti => exp } map.
+# In-process jti store: @consumed_jtis is a { jti => exp } map.
 #   - Replay check: reject if jti present AND stored_exp >= now (still in window).
 #   - On accept: record jti => exp.
 #   - Opportunistic pruning: remove entries whose exp < now on each unlock call.
-# This models the firmware's NVS jti store: bounded set, exp-scoped, reboot-durable.
+# This models the firmware's jti store: bounded set, exp-scoped, and — like the
+# shipped C one — held in memory, so it is empty again in a new process exactly
+# as the lock's table is empty again after a power cycle. Durability across a
+# restart is the adopter's NVS step (firmware/jti_store.c), not something either
+# this simulator or the flashed sketch already does.
 #
 # This simulator reproduces that exact logic so the agent-side driver can be
 # tested without real hardware.

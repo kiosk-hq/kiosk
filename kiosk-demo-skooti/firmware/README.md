@@ -6,7 +6,7 @@ This directory contains:
 |------|---------|
 | `skooti_lock.ino` | Arduino-ESP32 firmware (ESP32-C3 + NimBLE-Arduino) |
 | `verify.h/c` | `skooti_verify_token()` and `skooti_verify_wire()` — portable Ed25519 token verify; shared by firmware and host test |
-| `jti_store.h/c` | `jti_seen_or_insert()` — durable one-shot `jti` store; in-memory on the host, NVS-backed on the board |
+| `jti_store.h/c` | `jti_seen_or_insert()` — one-shot `jti` store; an in-RAM table on the host AND on the board, emptied by a power cycle until you wire the NVS block it documents |
 | `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
 | `crosscheck_main.c` | Ruby-signed token → C verify helper, taking the token as an argument or as a file's bytes (invoked by `make crosscheck`) |
 | `token_vectors.rb` | The rental-token conformance vectors — the grammar, and what the vectors do not cover, stated in its header |
@@ -65,7 +65,8 @@ lock verifies:
      is already spent
   9. jti (field[5]) is 32 lowercase hex characters
  10. jti not yet consumed — jti_seen_or_insert(jti, exp, now) == 0
-     (NVS-backed durable store; entries retained until exp; survives reboot)
+     (in-RAM store; entries retained until exp; EMPTIED BY A POWER CYCLE —
+     see "Replay prevention" below for the NVS step that changes that)
 ```
 
 The whole grammar — every field's charset, the signature's encoding, the
@@ -95,10 +96,10 @@ hypothetical: `strnlen` is POSIX.1-2008, glibc declares it only when the macro
 is set, and the firmware's first CI run failed to compile for want of it after
 months of clean local builds.
 
-Expected output (84 assertions pass, crosscheck MATCH, coverage clean). The
+Expected output (88 assertions pass, crosscheck MATCH, coverage clean). The
 `...` lines are elisions in this quotation, not in the run:
 
-<!-- fence-count: 84 passed ¦ from: grep -c '    check(' kiosk-demo-skooti/firmware/host_test.c -->
+<!-- fence-count: 88 passed ¦ from: grep -c '    check(' kiosk-demo-skooti/firmware/host_test.c -->
 <!-- fence-count: 0 failed ¦ why: the failure tally of the same line; zero by construction on a run that prints ALL PASS, and the run is what this block quotes -->
 <!-- fence-count: C verify result: 1 ¦ why: the C verifier's boolean return value, not a quantity -->
 <!-- fence-count: 85 live-signed vectors ¦ from: ruby -r./kiosk-demo-skooti/firmware/token_vectors.rb -e 'puts SkootiTokenVectors::VECTORS.length' -->
@@ -121,7 +122,7 @@ Expected output (84 assertions pass, crosscheck MATCH, coverage clean). The
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 84 passed, 0 failed ===
+=== Results: 88 passed, 0 failed ===
 ALL PASS
 
 --- Ruby ↔ C crosscheck ---
@@ -173,7 +174,8 @@ is `ed25519/` + `verify.c` + `jti_store.c` + the test harness.
    field, domain tag (`kiosk-rental-v1`), scooter_code match, plain-digit iat
    and exp, exp > now, and a 32-lowercase-hex jti.
 5. Lock calls `jti_seen_or_insert(jti, exp, now)` — rejects if jti already consumed
-   (durable NVS-backed store; survives reboot; entries retained until their exp).
+   (in-RAM store; entries retained until their exp; cleared by a power cycle
+   until the NVS wiring is added — see "Replay prevention").
 6. On all-pass: records jti, drives GPIO HIGH for 3 s = unlocked.
 7. On any failure: stays locked; logs reason to Serial.
 
@@ -289,19 +291,30 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 
 ## Replay prevention
 
-The lock uses a durable jti store (`jti_store.c` / `jti_store.h`) that retains each
-consumed jti until its `exp` passes, then prunes it.  Two properties do the work,
-and both are what a volatile or small cache would give away:
+The lock uses a jti store (`jti_store.c` / `jti_store.h`) that retains each
+consumed jti until its `exp` passes, then prunes it.  Two properties close the
+replay path, and a volatile or small cache gives away one each.  **This
+directory ships one of the two:**
 
-| Property | Why it closes a replay path |
-|----------|-----------------------------|
-| **Durable across power-cycles.** The store is NVS-backed (`nvs_set_blob` / `nvs_get_blob`), so a consumed jti is remembered until its exp passes whatever the lock does in between. | A lock a thief can power-cycle is a lock whose replay window is «until someone pulls the battery», not «until exp». |
-| **Sized past the window, and evicts by expiry.** 64 entries (`JTI_STORE_SIZE = 64`), expired entries pruned on every call, and — if the table is genuinely full — the entry soonest to expire is the one evicted, never a random or arbitrary one. | The 15-min TTL bounds the table at one entry per token accepted in that window, so 64 is headroom rather than a limit; and if it were ever reached, dropping the shortest-lived record is the choice that leaves the least replay time on the table. |
+| Property | Why it closes a replay path | Shipped here? |
+|----------|-----------------------------|---------------|
+| **Sized past the window, and evicts by expiry.** 64 entries (`JTI_STORE_SIZE = 64`), expired entries pruned on every call, and — if the table is genuinely full — the entry soonest to expire is the one evicted, never a random or arbitrary one. | The 15-min TTL bounds the table at one entry per token accepted in that window, so 64 is headroom rather than a limit; and if it were ever reached, dropping the shortest-lived record is the choice that leaves the least replay time on the table. | **Yes** — `make test` |
+| **Durable across power-cycles.** A consumed jti is remembered until its exp passes whatever the lock does in between. | A lock a thief can power-cycle is a lock whose replay window is «until someone pulls the battery», not «until exp». | **No — you add it.** `jti_store.c` contains no NVS call; every `nvs_*` name in it is inside a comment. |
 
-**Host test:** the in-memory backend is used for `make test` / `make test-asan`; the
-NVS wiring (`nvs_set_blob` / `nvs_get_blob`) is documented in `jti_store.c` and
-activates on the ESP32 board when the NVS calls are uncommented. The host-tested
-semantics are identical to the NVS-backed version.
+**Flash this as it stands and a power cycle empties the store.**  The table is a
+plain C array in RAM, on the board exactly as on the host, so a token still
+inside its 15-minute window unlocks a second time after a restart.  `make test`
+runs both halves: test [14] that a replay is refused within one boot, test [15]
+that a process which has just started accepts the jti the previous one
+consumed.
+
+**To make it durable** — the step to take before a lock of yours leaves the
+bench — uncomment and complete the NVS WIRING block at the top of
+`jti_store.c` (`nvs_open` / `nvs_get_blob` at startup, `nvs_set_blob` /
+`nvs_commit` after each insert), or do the same job with the Preferences
+library.  The check-and-record semantics are unchanged by that; what changes is
+what survives a restart, and test [15] is the assertion you will then need to
+turn around.
 
 ---
 
@@ -350,7 +363,8 @@ so, and the table below is where that status is tracked.
 | The C verifier, `RentalTokenIssuer.verify` and `LockSim#unlock` give the declared answer on every vector in `token_vectors.rb` | **PROVEN** (`make crosscheck`) |
 | Every rule `../RENTAL_TOKEN.md` states names a vector axis, and every axis is named by a rule | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
-| Durable replay prevention across reboot (NVS backend, host-tested semantics) | **PROVEN** on host (in-memory backend); NVS wiring documented in `jti_store.c`, activates on board |
+| The jti store is RAM-only as shipped — a process that has just started accepts the jti the previous one consumed, inside its exp window | **PROVEN** (`make test` test [15]) |
+| Durable replay prevention ACROSS a reboot | **NOT SHIPPED** — `jti_store.c` has no NVS call; the NVS WIRING block at its top is the adopter's step |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board (`../bin/ble-unlock` is the no-Apple harness for this row) |
 | GPIO drives relay on valid token | **Not yet** — needs board |
 | App Clip → lock BLE end-to-end | **Not yet** — needs board + Apple account |

@@ -71,12 +71,15 @@
  * =========================================================================
  * ANTI-REPLAY
  * =========================================================================
- * jti durable-replay check is performed by the CALLER (lock firmware or
+ * The one-shot jti check is performed by the CALLER (lock firmware or
  * lock-sim) via jti_store.h:
  *   jti_seen_or_insert(jti, exp, now)
  * skooti_verify_token() verifies the signature and checks the claims but does
- * NOT maintain the consumed-jti set — that belongs in the caller's jti_store
- * (NVS-backed on the board; in-memory table for host tests).
+ * NOT maintain the consumed-jti set — that belongs in the caller's jti_store,
+ * which as shipped is an in-memory table on the host and on the board alike:
+ * it refuses a replay within one boot and forgets everything on a power
+ * cycle.  Making it durable is the adopter's step, spelled out in the NVS
+ * WIRING block at the top of jti_store.c.
  */
 
 #ifndef VERIFY_H

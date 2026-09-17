@@ -21,7 +21,8 @@
  *          valid, the six fields hold their charsets, scooter_code matches,
  *          exp > now — all within the write's own byte count.
  *       2. Checks the jti has not been consumed before (one-shot anti-replay,
- *          small in-RAM set — see JTI_CACHE_SIZE).
+ *          small in-RAM set — JTI_STORE_SIZE entries, cleared by a power
+ *          cycle; see ANTI-REPLAY below).
  *       3. On all-pass: adds jti to the consumed set, drives LED_GPIO HIGH for
  *          UNLOCK_DURATION_MS (3 s), then LOW (= unlocked).
  *       4. On any failure: stays locked, logs reason to Serial.
@@ -88,10 +89,10 @@
  *   The scooter syncs time once online (WiFi or cellular) and uses it offline.
  *
  * =========================================================================
- * ANTI-REPLAY (jti durable store — NVS-backed on the board)
+ * ANTI-REPLAY (jti store — IN RAM, AND A POWER CYCLE EMPTIES IT)
  * =========================================================================
- * The lock uses jti_store (jti_store.c / jti_store.h) to durably remember
- * consumed jtis until their exp passes.  On a valid token:
+ * The lock uses jti_store (jti_store.c / jti_store.h) to remember consumed
+ * jtis until their exp passes.  On a valid token:
  *   jti_seen_or_insert(jti, exp, now)
  * returns 0 (new, accept) or 1 (seen, REJECT replay).
  *
@@ -99,10 +100,18 @@
  * token TTL = 900 s (15 min) and each entry is removed after exp <= now,
  * the table is bounded: ≤ 64 distinct tokens in any 15-min window.
  *
- * On the ESP32 board the table is persisted in NVS (nvs_set_blob /
- * nvs_get_blob) so it survives reboots/power-cycles — see the NVS WIRING
- * comment block in jti_store.c for exact wiring instructions.
- * Replay is therefore impossible within the exp window, even across reboot.
+ * WHAT THIS SKETCH GIVES YOU IF YOU FLASH IT AS IT STANDS: replay refusal
+ * for as long as the lock stays powered, and NOTHING ACROSS A RESTART.  The
+ * table is a plain C array in RAM — jti_store.c contains no NVS call at all,
+ * only a comment block showing where the calls go — so cutting the power
+ * empties it and a token still inside its 15-minute window unlocks a second
+ * time.  `cd firmware && make test` demonstrates both halves (test [15]).
+ *
+ * BEFORE A LOCK OF YOURS LEAVES A BENCH, wire the durable store: uncomment
+ * and complete the NVS WIRING block at the top of jti_store.c (nvs_open /
+ * nvs_get_blob at startup, nvs_set_blob / nvs_commit after each insert), or
+ * use the Preferences library for the same job.  Once that is done, and only
+ * then, replay is impossible within the exp window even across a reboot.
  *
  * =========================================================================
  * CRYPTO CONTRACT (proven on host without the board)
@@ -305,13 +314,15 @@ public:
             return;
         }
 
-        /* 3. Durable replay prevention via jti_store (NVS-backed on board).
+        /* 3. Replay prevention via jti_store — an in-RAM table, emptied by a
+         *    power cycle until the NVS WIRING block in jti_store.c is wired.
          *    jti_seen_or_insert prunes expired entries, then checks + records.
          *    Returns 1 (seen → REJECT) or 0 (new → ACCEPT).
-         *    Replay is impossible within the exp window, even across reboot.
+         *    Replay is impossible within the exp window FOR AS LONG AS THIS
+         *    BOARD STAYS POWERED; see ANTI-REPLAY at the top of this file.
          */
         int replay = jti_seen_or_insert(jti, /* exp parsed from token */
-                                        /* parse exp: skooti_verify_token already
+                                        /* parse exp: skooti_verify_wire already
                                          * validated it; we need the raw value.
                                          * For the .ino we pass DEMO_NOW + 900 as
                                          * a safe upper bound — in production parse

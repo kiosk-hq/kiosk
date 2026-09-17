@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-17: **skooti's flashed sketch promised the jti replay store survives a power cycle; it is a RAM array, no NVS call.** Every site says so now and `make test` proves it.
 - 2026-09-17: **skooti's `kyc_status` comment said `demo:schema` pins its poll NUMBERS; the gate pins the shape and the rake file says so.** Corrected, with what nothing checks named.
 - 2026-09-17: **Three refused age checks locked an account out of `request_kyc` for ever: the cap counted pending rows, and a broker never reports a refusal.** It meters a window now.
 - 2026-09-17: **getgrocery's `create_order` silently placed a SECOND billable order when its `order_id` named one it could not replace.** It refuses now, writing nothing.

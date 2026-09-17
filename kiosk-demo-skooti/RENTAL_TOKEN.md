@@ -34,7 +34,7 @@ The left side (everything before the last `.`) is the signed message — UTF-8 b
 | `reservation_id` | 2 | `550e8400-…` | **Reservation binding.** Ties the token to a specific reservation so the issued capability is auditable and scope-limited to one trip. |
 | `iat` | 3 | `1750000000` | Unix issue timestamp (decimal seconds). Together with `exp`, establishes the token's validity window. |
 | `exp` | 4 | `1750000900` | **Bounded window.** `exp = iat + 900` (15 min). The lock checks `exp > now` before accepting. Limits how long a captured token remains usable. |
-| `jti` | 5 | `a3f1…` (32 hex chars) | **Single-use / replay prevention.** A unique token ID (`SecureRandom.hex(16)`). The lock records the jti on first use and rejects any second attempt — even within the 15-min window and even across a lock reboot (NVS-backed jti store, 64 entries, entries pruned after their `exp`). |
+| `jti` | 5 | `a3f1…` (32 hex chars) | **Single-use / replay prevention.** A unique token ID (`SecureRandom.hex(16)`). The lock records the jti on first use and rejects any second attempt within the 15-min window (in-RAM jti store, 64 entries, entries pruned after their `exp`). The shipped firmware's store does NOT survive a power cycle — making it durable is the adopter's NVS step, spelled out in `firmware/jti_store.c`. |
 
 ---
 

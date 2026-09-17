@@ -37,6 +37,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>     /* fork, execv — test [15]'s fresh-boot probe   */
+#include <sys/wait.h>  /* waitpid      — test [15]'s fresh-boot probe   */
 
 /* --------------------------------------------------------------------------
  * Test harness
@@ -847,7 +849,7 @@ static void test_pubkey_canonical(void)
 }
 
 /*
- * Test 15 — low-order public keys: the forgery, refused
+ * Test 16 — low-order public keys: the forgery, refused
  *
  * A low-order public key is a CANONICAL encoding — skooti_pubkey_is_canonical
  * answers 1 for it, correctly, because RFC 8032 does not require the refusal —
@@ -879,7 +881,7 @@ static void test_pubkey_low_order(void)
     "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|00000000000000000000000000000013." \
     "WGZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmYBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
-    printf("\n[15] Low-order public keys: the K-1617 forgery, refused\n");
+    printf("\n[16] Low-order public keys: the K-1617 forgery, refused\n");
 
     /* The order-8 key IS canonical — that is the whole trap. */
     check(skooti_pubkey_is_canonical(ORDER8_PUBKEY) == 1,
@@ -994,12 +996,111 @@ static void test_jti_store(void)
     check(r == -1, "jti_store: jti too long (33 chars) → -1 (invalid arg)");
 }
 
+/*
+ * Test 15 — jti_store is IN RAM: what a power cycle does to it
+ *
+ * WHY THIS TEST EXISTS, AND WHY IT ASSERTS THAT A REPLAY IS *ACCEPTED*.
+ * Three shipped files used to state, in the indicative, that the table «is
+ * persisted in NVS … so it survives reboots/power-cycles» and that «replay
+ * is therefore impossible within the exp window, even across reboot».  It is
+ * not: jti_store.c contains no NVS call at all — every nvs_* name in it sits
+ * inside a comment — and the storage is a static array that is empty at every
+ * program start.  The honest sentence is «refused within one boot, forgotten
+ * across one», and this is the run that holds the tree to it.
+ *
+ * A power cycle restarts the program, so the faithful host analogue is a
+ * SECOND PROCESS rather than jti_store_reset(): fork + exec of this same
+ * binary gives a genuinely fresh static table, laid out by the loader exactly
+ * as the board's is at boot.  The child consumes nothing and asserts nothing;
+ * it reports through its exit status.
+ *
+ * THIS ASSERTION IS A LIMIT, NOT A FEATURE, AND IT IS MEANT TO GO RED.  Wire
+ * the NVS block at the top of jti_store.c and the child starts REFUSING the
+ * jti — at which point this test fails and tells you to turn it around, in
+ * the same commit as the documentation that describes the store.  That
+ * coupling is the point: it is what stops the sentence and the code drifting
+ * apart a second time.
+ */
+#define REBOOT_PROBE_ARG "--fresh-boot-jti-probe"
+#define REBOOT_PROBE_JTI "c0ffee00c0ffee00c0ffee00c0ffee00"
+#define REBOOT_PROBE_EXP 1750000900ULL
+#define REBOOT_PROBE_NOW 1750000800ULL
+
+/* Exit codes the child reports its single jti_seen_or_insert answer with.
+ * Distinct from 0/1 so that a child which died before reaching the call, or
+ * whose exec never happened, cannot be read as either answer. */
+#define PROBE_EXIT_NEW      70  /* store was EMPTY  -> not durable          */
+#define PROBE_EXIT_SEEN     71  /* store SURVIVED   -> durable              */
+#define PROBE_EXIT_INVALID  72  /* jti_seen_or_insert refused the input     */
+#define PROBE_EXIT_NOEXEC   73  /* execv() failed — nothing was measured    */
+#define PROBE_EXIT_NONE     -1  /* the child never reported at all          */
+
+/* The child half: a process that has only just started, exactly as the lock's
+ * firmware has only just started after the power came back. */
+static int fresh_boot_probe(void)
+{
+    int r = jti_seen_or_insert(REBOOT_PROBE_JTI, REBOOT_PROBE_EXP, REBOOT_PROBE_NOW);
+    if (r == 0) return PROBE_EXIT_NEW;
+    if (r == 1) return PROBE_EXIT_SEEN;
+    return PROBE_EXIT_INVALID;
+}
+
+static void test_jti_store_reboot(const char *self)
+{
+    pid_t pid;
+    int   status     = 0;
+    int   child_code = PROBE_EXIT_NONE;
+    int   r;
+
+    printf("\n[15] jti_store: RAM-only — a power cycle empties it\n");
+
+    jti_store_reset();
+
+    r = jti_seen_or_insert(REBOOT_PROBE_JTI, REBOOT_PROBE_EXP, REBOOT_PROBE_NOW);
+    check(r == 0, "jti_store: first use in this boot → 0 (new)");
+
+    r = jti_seen_or_insert(REBOOT_PROBE_JTI, REBOOT_PROBE_EXP, REBOOT_PROBE_NOW);
+    check(r == 1, "jti_store: replay inside the SAME boot → 1 (rejected)");
+
+    /* Every way this can go wrong — fork, exec, an abnormal exit — funnels
+     * into the two checks below rather than into checks of its own, so the
+     * number of assertions this function makes does not depend on which path
+     * it took.  PROBE_EXIT_NONE is the value that survives when the child
+     * never reported at all. */
+    fflush(stdout);
+    pid = fork();
+    if (pid == 0) {
+        char *const child_argv[] = { (char *)"host_test",
+                                     (char *)REBOOT_PROBE_ARG,
+                                     NULL };
+        execv(self, child_argv);
+        _exit(PROBE_EXIT_NOEXEC);   /* exec failed — say so, do not guess */
+    }
+    if (pid > 0 && waitpid(pid, &status, 0) == pid && WIFEXITED(status)) {
+        child_code = WEXITSTATUS(status);
+    }
+
+    printf("  fresh process (= power cycle) answered with exit %d\n", child_code);
+    check(child_code != PROBE_EXIT_NONE && child_code != PROBE_EXIT_NOEXEC,
+          "jti_store: a fresh process really ran this binary (fork + execv of argv[0])");
+    check(child_code == PROBE_EXIT_NEW,
+          "jti_store: a JUST-BOOTED process ACCEPTS the jti the previous boot "
+          "consumed, still inside its exp window — the store is in RAM and is "
+          "NOT durable across a power cycle (NVS wiring is the adopter's step)");
+}
+
 /* --------------------------------------------------------------------------
  * main
  * -------------------------------------------------------------------------- */
 
-int main(void)
+int main(int argc, char **argv)
 {
+    /* The fresh-boot child of test [15]: answer and exit before anything
+     * else in this binary runs or prints. */
+    if (argc > 1 && strcmp(argv[1], REBOOT_PROBE_ARG) == 0) {
+        return fresh_boot_probe();
+    }
+
     printf("=== skooti firmware Ed25519 host test (offline Ed25519 rental token) ===\n");
     printf("Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4\n");
     printf("Scooter    : %s\n", SCOOTER_CODE);
@@ -1019,6 +1120,7 @@ int main(void)
     test_expiry_boundary();
     test_pubkey_canonical();
     test_jti_store();
+    test_jti_store_reboot(argv[0]);
     test_pubkey_low_order();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

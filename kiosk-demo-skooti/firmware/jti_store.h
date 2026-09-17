@@ -1,36 +1,46 @@
 /*
- * jti_store.h — durable jti (JWT ID) replay-prevention store.
+ * jti_store.h — one-shot jti (JWT ID) replay-prevention store, RAM-only.
  *
  * Portable C99.  No ESP32/Arduino-specific dependencies in this header.
  * Compiles on host (clang/gcc) and ESP32-C3 toolchain.
  *
  * =========================================================================
- * PURPOSE
+ * PURPOSE, AND THE HALF OF IT THIS MODULE DOES NOT DO
  * =========================================================================
- * The rental-token lock must reject a replayed jti within its exp window,
- * even across a reboot (power-cycle) of the ESP32.  Two properties are
- * load-bearing, and a RAM-only or under-sized cache gives away one each: a
- * store cleared on reboot re-opens the whole validity window, and a store
- * small enough to wrap in normal use evicts a jti that is still live.
+ * The rental-token lock must reject a replayed jti within its exp window.
+ * Two properties are load-bearing, and a RAM-only or under-sized cache gives
+ * away one each: a store cleared on reboot re-opens the whole validity
+ * window, and a store small enough to wrap in normal use evicts a jti that is
+ * still live.
+ *
+ * THIS MODULE AS SHIPPED HOLDS THE SECOND AND NOT THE FIRST.  The table is a
+ * static C array, empty at every program start, so a power cycle forgets
+ * every consumed jti and a token still inside its 15-minute window unlocks a
+ * second time.  Closing that is an ADOPTER'S STEP, not something the flashed
+ * sketch already does: the NVS WIRING block at the top of jti_store.c is the
+ * exact code to add, and nothing here is durable until it is added.
  *
  * This module provides a fixed-size table of {jti, exp} entries:
- *   - Entries are retained until their exp passes.
+ *   - Entries are retained, for as long as the process lives, until their
+ *     exp passes.
  *   - jti_seen_or_insert() atomically checks + records a jti.
  *   - Expired entries (exp <= now) are pruned on each call, bounding the
  *     table to at most one entry per token in the active 15-min window.
  *
  * =========================================================================
- * STORAGE BACKENDS
+ * STORAGE BACKEND
  * =========================================================================
- * HOST TEST (in-memory):
- *   A static C array of JTI_STORE_SIZE entries.  Zero-initialized.
- *   Used by host_test.c — no NVS or board required.
+ * SHIPPED (in-memory, on the host AND on the board):
+ *   A static C array of JTI_STORE_SIZE entries.  Zero-initialized at every
+ *   start.  Used by host_test.c and by skooti_lock.ino as flashed — no NVS,
+ *   no board required, and no durability across a restart.
  *
- * ESP32 / NVS (production):
- *   The same fixed-size table is persisted via NVS (nvs_set_blob /
- *   nvs_get_blob).  See the "NVS:" comment blocks in jti_store.c showing
- *   exactly where nvs_set_blob / nvs_get_blob wire in.
- *   Use the Preferences library or esp_partition API on the board.
+ * ESP32 / NVS (the adopter adds this; it is NOT in the shipped sources):
+ *   The same fixed-size table, persisted with nvs_set_blob / nvs_get_blob.
+ *   The "NVS:" comment blocks in jti_store.c show exactly where those calls
+ *   wire in; the Preferences library or the esp_partition API does the same
+ *   job.  Until they are wired, jti_seen_or_insert forgets on reboot, and
+ *   `make test` asserts exactly that — see host_test.c test [15].
  *
  * =========================================================================
  * BOUNDING ARGUMENT

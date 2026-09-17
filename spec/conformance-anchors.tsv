@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1710 anchors.
+# 1711 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -747,6 +747,7 @@ kiosk-demo-tudu/script/redteam_suite.rb	#   PreLinkTokenAfterLink — a token mi
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("NoLoginAddressOnTheRoster",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("PreLinkTokenAfterLink", rc == 401,
+kiosk-demo-tudu/spec/reader_clock_spec.rb	THE TWO `due_at` REFUSALS, DRIVEN
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 kiosk-pay-stripe/README.md	that, the `test_payment_method` (default `pm_card_visa`) — no SetupIntent,

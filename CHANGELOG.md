@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-17: **tudu shipped two identical btree indexes on `todos(list_id)`: `if_not_exists:` is keyed on the NAME, so the guard never fired.** A new migration drops one.
 - 2026-09-17: **philslist documented that an explicit `null` clears `price_text`, and the wire refused it 400.** `edit_listing` declares the field nullable now, so the instruction works.
 - 2026-09-17: **The fleet re-pins to `skill-v0.4.15.md`, whose KYC poll no longer names an answer the broker cannot send.** All seven demos and the engine default move URL and digest together.
 - 2026-09-17: **skooti's flashed sketch promised the jti replay store survives a power cycle; it is a RAM array, no NVS call.** Every site says so now and `make test` proves it.

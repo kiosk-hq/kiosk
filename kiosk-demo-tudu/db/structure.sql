@@ -678,13 +678,6 @@ CREATE UNIQUE INDEX index_memberships_on_list_id_and_account_id ON public.member
 
 
 --
--- Name: index_todos_on_list; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_todos_on_list ON public.todos USING btree (list_id);
-
-
---
 -- Name: index_todos_on_list_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -801,6 +794,7 @@ ALTER TABLE ONLY public.memberships
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260917000001'),
 ('20260910000001'),
 ('20260827000002'),
 ('20260827000001'),

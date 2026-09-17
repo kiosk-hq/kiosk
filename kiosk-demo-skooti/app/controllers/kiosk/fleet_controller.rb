@@ -151,9 +151,12 @@ class Kiosk::FleetController < ActionController::API
   # The cadence and the give-up horizon are part of the contract: the wire has
   # no server→assistant push, so a descriptor that stops at "poll until the
   # human acts" leaves an agent to invent a loop with no exit.
-  # The schedule below is QUOTED from kiosk.tech/skill.md so the two surfaces
-  # cannot publish rival arithmetic, and `demo:schema` asserts the SERVED
-  # descriptor still carries both numbers.
+  # The schedule below is QUOTED from kiosk.tech/skill.md's KYC-poll paragraph
+  # so the two surfaces cannot publish rival arithmetic. `demo:schema` asserts
+  # the SHAPE of it on the SERVED descriptor — two tiers, the second slower than
+  # the first, and a horizon in minutes — and DELIBERATELY not the numbers, so
+  # that the rake file is not a third place the schedule lives. Nothing checks
+  # these digits against the skill: keeping them equal is this comment's job.
   kind :query
   description "Poll a verification `request_kyc` opened, until the human has acted on it. TWO " \
               "answers and that is the whole set: still waiting, and APPROVED — carrying the " \

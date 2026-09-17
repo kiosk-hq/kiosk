@@ -20,8 +20,8 @@
 # WHY A NEW FILE AND NOT A DELETED LINE. 20260719000001 is recorded in the
 # `schema_migrations` of every deployed database, so `db:migrate` never runs it
 # again; editing it would reach `db/structure.sql` and every from-zero database
-# and no running one — the shape that cost four HTTP 500s on the live tudu box
-# (K-1074).
+# and no running one — the failure mode that has already served HTTP 500s from a
+# live demo box while every gate stayed green.
 #
 # GUARDED with `if_exists:`, because a database built from a structure.sql dumped
 # after this lands never had the duplicate, and an error there would strand every

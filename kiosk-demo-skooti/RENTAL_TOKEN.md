@@ -7,7 +7,7 @@ The skooti unlock flow uses two distinct tokens that never cross roles.
 | | Agent token | Rental token |
 |---|---|---|
 | **What it is** | RS256 JWT issued by the Kiosk authorization server | Ed25519 capability issued by the skooti provider |
-| **Who holds it** | The AI assistant (running the rental flow) | The assistant → passes it to the App Clip → App Clip writes it to the lock |
+| **Who holds it** | The AI assistant (running the rental flow) | The assistant, which relays it to its human → the human's phone (App Clip) → written to the lock |
 | **Where it goes** | `Authorization: Bearer` header on every Kiosk API call | BLE write to the lock's Unlock characteristic — never sent back to the Kiosk API |
 | **Lifetime** | Longer-lived, reusable across multiple API calls | Single-use, ≤ 15 min (`exp = iat + 900`) |
 | **Verified by** | Kiosk server (online) | The scooter lock, offline — no server round-trip at unlock time |
@@ -220,14 +220,21 @@ Assistant (agent token → Kiosk API)
          RentalTokenIssuer.issue(scooter_code, reservation_id, now, ttl: 900)
          reservation status → 'active'
        │
-       Returns: { scooter_code:, rental_token:, exp: }
+       Returns: { scooter_code:, rental_token:, exp: } — and nothing else.
+                No launch link is on the wire, so an assistant driving this
+                origin relays the token to its human and stops there.
        │
        ▼
-  Assistant puts rental_token into App Clip launch URL:
+  Operator side, in this checkout: bin/make-qr turns a token into the
+  App Clip launch link and renders its QR —
     https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded token>
+  In the shipped product that tag is on the vehicle. The link is the App
+  Clip's association URL, resolved by iOS; it is not a web page and this
+  origin serves none at that path.
        │
        ▼
-  App Clip launches (NFC / QR / push)
+  The human taps the tag, scans the QR, or opens a pushed link
+  App Clip launches
     Parses scooter= and rt= from URL
     BLE scan → connect to skooti-SK-001
     Writes rental token (UTF-8) to Unlock characteristic
@@ -260,5 +267,7 @@ The rental token is a **bearer capability**: any party that holds the wire token
 - **Single scooter** — the token is bound to one scooter code; it cannot unlock any other.
 - **≤ 15 min** — the window closes quickly.
 - **Single-use** — the lock rejects the token after first use, so intercepting a token that has already been used gives nothing.
+
+**It reaches the human as a plain string, and that is where it is most exposed.** The wire hands the token to the assistant and the assistant relays it onward, so it travels whatever channel that assistant uses to talk to its human — a hosted model's chat transcript included. Anyone who can read that channel inside the window holds the capability. A deployment that cares should hand the token to the human's device rather than to their conversation; the delivery options below are the same answer from the other end.
 
 What is not yet in place: the token is not bound to the device or principal that requested it. A production deployment may add device attestation (e.g., bind the token to the App Clip installation's device key) or deliver it via a Shared App Group Keychain rather than a URL parameter, reducing exposure further.

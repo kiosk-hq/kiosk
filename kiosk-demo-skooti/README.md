@@ -4,11 +4,15 @@ Scooter rental demo operator for Kiosk.
 
 `skooti` is a fake-but-realistic micromobility operator that rents scooters —
 and a KYC-gated combustion motorcycle — over the Kiosk wire. An AI assistant
-self-registers, reserves a vehicle, pays, and unlocks it, with no human at the
-keyboard. Payment settles through a **stub PSP** (`StubPsp`), so the demo runs
-end-to-end with no real card processor. The physical last mile is a
-software-simulated lock that verifies an offline Ed25519 rental token — no
-server round-trip.
+self-registers, reserves a vehicle and pays for it with no account of its
+human's and no sign-in anywhere, and comes away with a short-lived signed
+token that opens that one vehicle. The last step is the human's, because it is
+physical: they present the token at the scooter — a tap on its NFC tag or a
+scan of its QR opens the App Clip, which writes the token to the lock over
+Bluetooth. Payment settles through a **stub PSP** (`StubPsp`), so the demo
+runs end-to-end with no real card processor. The lock verifies the offline
+Ed25519 token by itself, with no server round-trip; here it is a software
+simulation of the firmware in `firmware/`.
 
 ## Wire surface
 

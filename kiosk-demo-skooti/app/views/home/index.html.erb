@@ -78,11 +78,11 @@
     <section class="sec">
       <div class="sec-k">🤖 Try it with your own assistant</div>
       <div class="tryit">
-        <h2>Rent a scooter — and unlock it, no human at the keyboard</h2>
+        <h2>Rent a scooter — your assistant pays, you just walk up and tap</h2>
         <p>Tell your AI assistant:</p>
-        <p class="say">“Rent a scooter from skooti.demo.kiosk.tech and unlock it.”</p>
-        <p>It discovers the fleet, registers itself, reserves a licence-free scooter, pays, and unlocks it. A combustion motorcycle is available too — but it's <strong>KYC-gated</strong>, so the assistant must clear identity checks first.</p>
-        <p class="note">Payment settles through a <strong>stub PSP</strong> (no real card). The physical last mile is a software-simulated lock that verifies an <strong>offline Ed25519 rental token</strong> — no server round-trip to open the vehicle.</p>
+        <p class="say">“Rent a scooter from skooti.demo.kiosk.tech and give me the unlock token.”</p>
+        <p>It discovers the fleet, registers itself, reserves a licence-free scooter and pays — no account of yours, no sign-in, no app to install. What it hands back is a short-lived signed token that opens that scooter and nothing else. The last step is yours, because it is physical: tap the scooter's NFC tag or scan its QR, and the App Clip writes the token to the lock over Bluetooth. A combustion motorcycle is available too — but it's <strong>KYC-gated</strong>, so the assistant must clear identity checks first.</p>
+        <p class="note">Payment settles through a <strong>stub PSP</strong> (no real card). The lock verifies the <strong>offline Ed25519 rental token</strong> by itself — <strong>no server round-trip</strong>; here it is a software simulation of the shipped firmware.</p>
       </div>
     </section>
 

@@ -5,10 +5,17 @@
 #
 # HOW THIS FITS THE DEMO:
 #   The AI assistant (agent) calls `start_rental` and receives a short-lived
-#   Ed25519 rental token.  The assistant then calls THIS script to produce a
-#   QR code encoding the App Clip launch URL.  The user scans the QR; iOS
-#   shows the App Clip banner; the clip launches, parses `rt=`, connects to
-#   the ESP32-C3 over BLE, and writes the token to the unlock characteristic.
+#   Ed25519 rental token, which it relays to its human.  THIS SCRIPT IS THE
+#   OPERATOR'S SIDE and runs in this checkout: the wire answers the token and
+#   no launch link, so an assistant driving the deployed origin cannot reach
+#   this script and cannot build the URL itself.  What it does here is turn a
+#   token into the App Clip launch URL and render its QR, so a demo can be
+#   shown on a screen; in the shipped product the tag is on the vehicle.
+#
+#   Then it is the human's move: they scan or tap; iOS shows the App Clip
+#   banner; the clip launches, parses `rt=`, connects to the ESP32-C3 over
+#   BLE, and writes the token to the unlock characteristic.  That last part
+#   needs a board and an Apple account — see firmware/README.md.
 #
 #   The token is dynamic (15-min TTL, issued per rental) — it is NOT printed
 #   on the scooter.  The QR must be freshly generated for each rental.

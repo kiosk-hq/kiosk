@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-20: **getgrocery's `create_order` no longer takes an `order_id` to amend an order in place.** Changing your mind before paying is a NEW order; the unpaid one is never delivered or charged.
 - 2026-09-20: **skooti claimed an AI assistant unlocks the scooter with no human present.** It cannot: the lock opens over Bluetooth at the vehicle, so the copy now says the human presents the token.
 - 2026-09-17: **Nothing here could read a deployed box, so both KYC operators kept a correct secret under a dead name for weeks.** `deploy/kyc-pairing-audit.sh` audits the pairing on the box.
 - 2026-09-17: **The KYC broker's env template never registered getgrocery, so no deploy from the runbook could serve its advertised `request_kyc`.** A guard now holds both sides of the pairing.

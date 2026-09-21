@@ -4,10 +4,10 @@
 # check — `Kiosk::UuidCheck`, which ships in kiosk-core. Run with:
 #   bundle exec rake demo:cashier_spec   (or: ruby spec/cashier_order_ref_spec.rb)
 #
-# `Kiosk::UuidCheck` guards the three places an agent-supplied id reaches an `::uuid`
-# cast: the cashier's cart reference (here), create_order's replace path and
-# reschedule_delivery (both in config/initializers/kiosk.rb, so they need a
-# booted app — `rake demo:race` drives those over the real DB). Before the guard
+# `Kiosk::UuidCheck` guards the two places an agent-supplied id reaches an `::uuid`
+# cast: the cashier's cart reference (here) and
+# reschedule_delivery (in config/initializers/kiosk.rb, so it needs a
+# booted app — `rake demo:race` drives it over the real DB). Before the guard
 # a malformed value made Postgres raise InvalidTextRepresentation, which is not
 # a Kiosk::Server::Errors::Base and so escaped the wire controller as an HTTP
 # 500. This spec pins, without a database:

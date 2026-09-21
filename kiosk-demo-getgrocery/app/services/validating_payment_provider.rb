@@ -21,21 +21,20 @@
 # ── Per-order serialization ───────────────────────────────────────────────
 # The engine settles across two short DB transactions with the irreversible PSP
 # capture BETWEEN them (executor P1→P2→P3), and the only "paid" marker is the
-# settlement row written in P3, AFTER capture. That leaves two races open, both
-# of which let a payer be charged for goods they did not sign:
+# settlement row written in P3, AFTER capture. That leaves DOUBLE CAPTURE open,
+# and it charges a payer twice for goods they signed for once: two /pay for the
+# same order O both read zero settlements and both capture, under two
+# idempotency keys.
 #
-#   (a) SWAP — while a /pay for order O is mid-capture, a concurrent
-#       create_order{order_id:O, items:[expensive]} rewrites O's items+total,
-#       and the settlement marks the now-expensive O paid though the cart only
-#       charged the cheap total. Pay €1, get €500.
-#   (b) DOUBLE CAPTURE — two /pay for the same O both read zero settlements and
-#       both capture, charging twice under two idempotency keys.
-#
-# Both close by giving the order a tiny lifecycle — `created → paying → paid` —
+# It closes by giving the order a tiny lifecycle — `created → paying → paid` —
 # and CLAIMING it atomically before validating or charging, with one conditional
 # `… WHERE status='created' RETURNING …` UPDATE: a row-locked, race-free
-# compare-and-set. Once O is `paying`, a second /pay's claim matches zero rows
-# (closes b) and create_order excludes `paying` under `FOR UPDATE` (closes a).
+# compare-and-set. Once O is `paying`, a second /pay's claim matches zero rows.
+#
+# The sibling race — an order's items rewritten under a capture the cashier has
+# already checked them against, "pay €1, get €500" — is closed a layer up and
+# by construction: the only write that touches an order's items is the one that
+# CREATES it, and no verb on this origin takes an existing order to amend.
 class ValidatingPaymentProvider
   def initialize(provider, currency:)
     @provider = provider
@@ -127,8 +126,8 @@ class ValidatingPaymentProvider
   # True iff a settlement (capture receipt) references this order — the
   # authoritative local "this was charged" marker, written by executor phase 3.
   # {CartMandate.referencing} is ONE containment for the whole origin, shared
-  # with `create_order`'s replace guard and `reschedule_delivery`'s payment gate
-  # — and it matters most here, because THIS is the reader the claim consults
+  # with `reschedule_delivery`'s payment gate — and it matters most here,
+  # because THIS is the reader the claim consults
   # before deciding whether money has already moved.
   def self.settled?(order_id)
     Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).exists?

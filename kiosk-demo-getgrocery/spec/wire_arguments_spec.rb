@@ -305,7 +305,7 @@ end
   assert(refusal.hint.to_s.include?("split the cart"), "  … carries a recoverable hint: #{refusal.hint}")
 end
 
-# ── 5. order_id/1 — the uuid shape guard, and its two tails ──────────────────
+# ── 5. order_id/1 — the uuid shape guard, and the tail it carries ────────────
 #
 # ActiveRecord does not refuse junk, it CASTS it: `where(id: junk)` becomes NULL
 # and matches no row, so without this a typo comes back as an OWNERSHIP refusal
@@ -336,25 +336,23 @@ assert(refusal_of(pair).nil?, "order_id accepts an UPPER-CASE uuid (Postgres doe
   [],
   { "a" => 1 },
 ].each do |bad|
-  [WireArguments::HINT_ORDER_ID_REPLACE, WireArguments::HINT_ORDER_ID_MOVE].each do |hint|
-    pair    = guard("order_id(#{bad.inspect})") { WireArguments.order_id(bad, hint: hint) }
-    refusal = refusal_of(pair)
-    assert_typed_400(refusal, "order_id(#{bad.inspect})")
-    next unless refusal.is_a?(OperationResult)
+  hint    = WireArguments::HINT_ORDER_ID_MOVE
+  pair    = guard("order_id(#{bad.inspect})") { WireArguments.order_id(bad, hint: hint) }
+  refusal = refusal_of(pair)
+  assert_typed_400(refusal, "order_id(#{bad.inspect})")
+  next unless refusal.is_a?(OperationResult)
 
-    assert(value_of(pair).nil?, "  … and yields NO value alongside the refusal")
-    assert(refusal.message == "order_id #{bad.to_s.inspect} is not a uuid — #{hint}",
-           "  … echoes the value and carries the CALLER's tail: #{refusal.message.inspect}")
+  assert(value_of(pair).nil?, "  … and yields NO value alongside the refusal")
+  assert(refusal.message == "order_id #{bad.to_s.inspect} is not a uuid — #{hint}",
+         "  … echoes the value and carries the CALLER's tail: #{refusal.message.inspect}")
 
-    leaks = ["::uuid", "PG::", "ActiveRecord", "22P02", "SELECT", "UPDATE", "invalid input syntax"]
-            .select { |needle| refusal.message.include?(needle) }
-    assert(leaks.empty?, "  … leaks no SQL/PG internals (found #{leaks.inspect})")
-  end
+  leaks = ["::uuid", "PG::", "ActiveRecord", "22P02", "SELECT", "UPDATE", "invalid input syntax"]
+          .select { |needle| refusal.message.include?(needle) }
+  assert(leaks.empty?, "  … leaks no SQL/PG internals (found #{leaks.inspect})")
 end
 
-assert(WireArguments::HINT_ORDER_ID_REPLACE != WireArguments::HINT_ORDER_ID_MOVE,
-       "the two tails are different sentences — create_order may still REPLACE, " \
-       "reschedule_delivery needs one that is already paid for")
+assert(WireArguments::HINT_ORDER_ID_MOVE.include?("my_orders"),
+       "the tail tells a caller where to GET an order_id, rather than only that theirs is wrong")
 
 # ── 6. delivery_date/3 — the day, the default, and ONE clock ──────────────────
 #

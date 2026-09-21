@@ -157,9 +157,10 @@ namespace :demo do
   # It is `bin/rails test` and not one file, so it also runs this shop's OWN
   # DB-backed regressions beside the conformance suite — a verb driven through
   # the same GUC-scoped session, asserting what it answers rather than which
-  # shape it answers in. `test/create_order_replace_test.rb` is the first: the
-  # replace path may end in exactly the two outcomes its descriptor names, and a
-  # third one there is a second billable order.
+  # shape it answers in. `test/create_order_inputs_test.rb` is the first:
+  # `create_order` places an order and takes no existing one to amend, so an
+  # `order_id` argument is refused by name rather than silently ignored — which
+  # on this verb would be a second billable order answered `ok`.
   #
   # It is the ORDINARY Rails test runner on purpose. An adopting operator opens
   # a demo to find out what testing a Kiosk integration looks like, and what
@@ -933,6 +934,8 @@ namespace :demo do
       • capabilities is the MODULE set schema/queries/actions/pay and NOT events
       • schema.queries includes catalog, delivery_slots, my_orders (each with description)
       • schema.actions includes create_order, reschedule_delivery (each with description)
+      • `create_order` declares NO `order_id` and closes its input object, so a sent
+        one is a typed 400 rather than a silently ignored second billable order
       • schema.queries does NOT include stores, products_by_store, substitution_options
       • schema.actions does NOT include add_to_cart, apply_substitution, confirm_delivery
       • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon
@@ -1165,16 +1168,21 @@ namespace :demo do
       end
     end
 
-    # Both verbs that take an `order_id` must DECLARE its uuid shape, not merely
-    # describe it in prose. Since 0.4 the declaration is also ENFORCED:
+    # The one verb that takes an `order_id` must DECLARE its uuid shape, not
+    # merely describe it in prose. Since 0.4 the declaration is also ENFORCED:
     # `input_schema` is validated on every call, unconditionally, so the pattern
     # asserted below is what refuses a malformed order_id at the wire.
     # `Kiosk::UuidCheck` in the handler remains the floor for the values the pattern
     # admits — demo:race pins that side, in-process. Asserted by BEHAVIOUR, not
     # by string equality: the published pattern must accept the ids create_order
     # hands out and reject the junk that would otherwise reach a `::uuid` cast.
+    #
+    # AND `create_order` MUST NOT DECLARE ONE. It places an order and takes no
+    # existing one to amend; with `additionalProperties: false` in front of it,
+    # an `order_id` sent anyway is a typed 400 naming the argument rather than a
+    # silent second billable order.
     require "securerandom"
-    %w[create_order reschedule_delivery].each do |aname|
+    %w[reschedule_delivery].each do |aname|
       prop = (actions.find { |a| a["name"] == aname } || {})
              .dig("input_schema", "properties", "order_id") || {}
       pattern = prop["pattern"]
@@ -1201,6 +1209,17 @@ namespace :demo do
         failures << "#{aname}.order_id missing format: uuid (got #{prop["format"].inspect})"
         puts "  ✗  #{aname}.order_id missing format: uuid"
       end
+    end
+
+    create_inputs = (actions.find { |a| a["name"] == "create_order" } || {})["input_schema"] || {}
+    if (create_inputs["properties"] || {}).key?("order_id")
+      failures << "create_order declares an order_id — it takes no existing order to amend"
+      puts "  ✗  create_order declares an order_id"
+    elsif create_inputs["additionalProperties"] != false
+      failures << "create_order's input_schema is not closed — a sent order_id would be ignored, not refused"
+      puts "  ✗  create_order's input_schema is not closed"
+    else
+      puts "  ✓  create_order declares no order_id and closes its object — a sent one is a typed 400"
     end
 
     # queries must NOT include old names
@@ -1464,15 +1483,16 @@ namespace :demo do
     Resets the DB, then runs script/race_flow.rb IN-PROCESS (real Postgres, real
     threads on pooled connections, a controllable PSP stub) to prove:
 
-      (a) SWAP         — once a /pay for order O has begun (O is `paying`), a
-                         concurrent create_order{order_id:O, items:[expensive]}
-                         cannot rewrite O's items ("pay €1, get €500" is out).
+      (a) NO SWAP      — an in-flight /pay for order O cannot have O's items
+                         rewritten under it ("pay €1, get €500" is out):
+                         create_order names no existing order, so a concurrent
+                         expensive cart lands on its OWN row and O is untouched.
       (b) AT-MOST-ONCE — under N racing /pay for one order, exactly ONE
                          captures; the rest are cleanly rejected.
-      (c) TYPED 4xx    — a malformed order_id is a 400 bad_request at each of
-                         the three sites that cast one to `::uuid` (the cart,
-                         create_order's replace path, reschedule_delivery),
-                         never a raw 500, and nothing reaches the PSP.
+      (c) TYPED 4xx    — a malformed order_id is a 400 bad_request at both of
+                         the sites that cast one to `::uuid` (the cart and
+                         reschedule_delivery), never a raw 500, and nothing
+                         reaches the PSP.
       (d) RECONCILED   — an order stranded in `paying` heals to `paid` from its
                          settlement row, while one whose outcome only the PSP
                          knows is reported UNRESOLVED and keeps its claim.

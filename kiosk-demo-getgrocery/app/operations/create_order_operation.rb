@@ -1,19 +1,21 @@
 # frozen_string_literal: true
 
-# create_order — place (or REPLACE) one grocery order for the authenticated
-# principal, with its delivery window and address, and quote the total a cart
-# mandate must be signed against.
+# create_order — place one grocery order for the authenticated principal, with
+# its delivery window and address, and quote the total a cart mandate must be
+# signed against.
 #
-# SEVEN GATES, in the order they are written below, and the order is behaviour
+# It places an order and does nothing else. There is no amend path and no
+# argument naming an existing order: a change of mind before any money moves is
+# a fresh call with the parameters the human now wants, and the unpaid row left
+# behind is never delivered and never charged.
+#
+# SIX GATES, in the order they are written below, and the order is behaviour
 # rather than tidiness — each one is the answer a caller gets when a later one
 # would also have refused: the cart's shape, delivery given and in-zone, the
-# window still bookable, the skus, the age gate, the priceable total, the
-# replace lock. Gate 5 comes AFTER the sku
-# resolution because it is a fact about the RESOLVED products, and BEFORE the
-# order_id shape check because an un-attested agent should be told to go and get
-# attested rather than told its id is malformed. Gate 6 can only be asked once
-# gate 4 has resolved the prices — it bounds their SUM — and it is asked BEFORE
-# the replace path so a cart nobody can price never takes a row lock.
+# window still bookable, the skus, the age gate, the priceable total. Gate 5
+# comes AFTER the sku resolution because it is a fact about the RESOLVED
+# products. Gate 6 can only be asked once gate 4 has resolved the prices — it
+# bounds their SUM — and it is asked before anything is written.
 class CreateOrderOperation
   # The anonymized booleans an age-restricted cart demands. Named once, so the
   # gate, its refusal sentence and its hint cannot come to disagree.
@@ -27,7 +29,7 @@ class CreateOrderOperation
   # @param items [Object] the raw cart, already unwrapped from
   #   ActionController::Parameters by the controller — its ELEMENT TYPE is a
   #   decision gate 1 makes, so it may not arrive as a controller type.
-  def self.call(principal_id:, items:, delivery_slot_id:, delivery_date:, delivery_address:, order_id:)
+  def self.call(principal_id:, items:, delivery_slot_id:, delivery_date:, delivery_address:)
     # ── Gate 1: the cart ───────────────────────────────────────────────────
     items, refusal = WireArguments.items(items)
     return refusal if refusal
@@ -67,12 +69,12 @@ class CreateOrderOperation
     )
     return refusal if refusal
 
-    # ONE transaction: the replace path reads a row under a lock and then
-    # rewrites its items, and those must not be separable. It joins the
-    # SessionContext transaction the wire already opened (where the GUCs
-    # `owned_by_current_principal` reads are SET LOCAL), so it states what
-    # belongs together rather than opening a second unit of atomicity. `next` and
-    # never `return`: nothing here needs a non-local exit out of the block.
+    # ONE transaction: the order row and its items are written together or not
+    # at all. It joins the SessionContext transaction the wire already opened
+    # (where the GUCs `owned_by_current_principal` reads are SET LOCAL), so it
+    # states what belongs together rather than opening a second unit of
+    # atomicity. `next` and never `return`: nothing here needs a non-local exit
+    # out of the block.
     ApplicationRecord.transaction do
       # ── Gate 4: every sku exists ─────────────────────────────────────────
       # Deliberately NOT `Product.in_stock`: the catalogue HIDES an out-of-stock
@@ -119,78 +121,10 @@ class CreateOrderOperation
       refusal = WireArguments.priceable_total(total_cents)
       next refusal if refusal
 
-      # The APP clock, not `now()`: `insert_all`/`update_all` type-cast their
-      # values and cannot pass an SQL expression through. App and database run on
-      # one host here, so it is the same clock `my_orders` then orders by.
+      # The APP clock, not `now()`: `insert_all` type-casts its values and
+      # cannot pass an SQL expression through. App and database run on one host
+      # here, so it is the same clock `my_orders` then orders by.
       now = Time.current
-
-      replaced = nil
-      if order_id.present?
-        # ActiveRecord does not refuse junk, it CASTS it — an unparseable uuid
-        # becomes NULL and matches nothing, so without this check the caller
-        # hears "not replaceable" rather than "that is not an id".
-        order_id, refusal = WireArguments.order_id(order_id, hint: WireArguments::HINT_ORDER_ID_REPLACE)
-        next refusal if refusal
-
-        # ── Gate 7: replaceable, AND held while we replace it ──────────────
-        # Two conditions and one lock, and all three ARE the pay-race guard:
-        #   · `replaceable` excludes `paying` as well as the terminal states — a
-        #     /pay mid-flight has already checked its cart against these items,
-        #     so swapping them now is "pay cheap, receive expensive";
-        #   · the NOT EXISTS refuses an order some settled cart already
-        #     references, whatever its local status says;
-        #   · `lock` is `FOR UPDATE` on the orders row, serializing this replace
-        #     against the pay path's atomic `created → paying` claim.
-        # {CartMandate.referencing} is the same predicate the pay path and the
-        # operator's back office read.
-        settled = Settlement.select(Arel.sql("1"))
-                            .joins(:cart_mandate)
-                            .merge(CartMandate.referencing(order_id))
-        replaced = Order.owned_by_current_principal
-                        .replaceable
-                        .where(id: order_id)
-                        .where.not(settled.arel.exists)
-                        .lock
-                        .pick(:id)
-
-        # NAMING AN ORDER THAT CANNOT BE REPLACED IS REFUSED, NOT CREATED
-        # ANYWAY. `order_id` is the caller SAYING which of this verb's two
-        # published outcomes it means, so falling through to the create is a
-        # third outcome nothing declares — and on this verb the third outcome
-        # is a second BILLABLE order, answered `ok`, with only the returned
-        # `order_id` differing from the one that was sent. Nothing tells a
-        # caller to compare those. The ordinary way to meet it needs no race: an
-        # assistant reads `my_orders`, the human pays in between, and the
-        # replace it sends is a duplicate delivery and a duplicate charge.
-        #
-        # ONE SENTENCE FOR THREE CASES, exactly as `reschedule_delivery`'s gate
-        # 3 words it and for the same reason: unknown, not yours and no longer
-        # replaceable are one answer here, because telling them apart would let
-        # a caller enumerate other principals' order ids.
-        if replaced.nil?
-          next OperationResult.refused(
-            code:    "forbidden",
-            message: "order not found, not yours, or no longer replaceable (it is paid, being " \
-                     "paid, or its delivery already moved) — NOTHING was created and nothing was charged. " \
-                     "Re-read my_orders: an order that is already paid moves with " \
-                     "reschedule_delivery, and a SEPARATE order is placed by calling create_order " \
-                     "without order_id.",
-          )
-        end
-
-        OrderItem.where(order_id: replaced).delete_all
-        Order.where(id: replaced).update_all(
-          total_cents: total_cents,
-          slot_at:     slot_at,
-          address:     delivery_address.to_s,
-          # THE CLOCK THIS WINDOW IS QUOTED ON, RECORDED BESIDE IT. A replace
-          # may move the delivery to a different address, so the zone moves
-          # with it: the row carries the clock of the door this order is going
-          # to, and every surface that renders the window reads it from there.
-          timezone:    zone.name,
-          updated_at:  now,
-        )
-      end
 
       # `insert!` and NOT `create!`, and the reason is a wire answer rather than
       # taste: `create!` interposes validations, so `belongs_to :user` would turn
@@ -199,7 +133,7 @@ class CreateOrderOperation
       # `RecordInvalid`, which Rails maps to 422 and the mixin's floor renders as
       # a 400. No `id` is supplied either: generating it belongs to the column
       # DEFAULT (`gen_random_uuid()`), not to a caller-facing verb.
-      new_order_id = replaced || Order.insert!(
+      new_order_id = Order.insert!(
         { user_id:     principal_id,
           status:      Order::CREATED,
           total_cents: total_cents,

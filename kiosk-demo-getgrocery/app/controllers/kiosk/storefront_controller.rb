@@ -238,8 +238,9 @@ class Kiosk::StorefrontController < ActionController::API
               "stands (scoped to the authenticated account). This is the query to re-read after a " \
               "payment whose response never arrived: an order whose charge is still outstanding says " \
               "so rather than reporting itself unpaid, so a lost response can be reconciled instead of " \
-              "guessed at. An order that has not been paid can still be changed in place with " \
-              "`create_order`; a PAID one moves only through `reschedule_delivery`."
+              "guessed at. An order nobody has paid for is never delivered and never charged, so a " \
+              "change of mind is a NEW `create_order`; a PAID one moves only through " \
+              "`reschedule_delivery`."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # `slot_at` and `address` are the two nullable columns on `orders` and travel
   # as null rather than being dropped, so the row shape does not change with the
@@ -249,7 +250,7 @@ class Kiosk::StorefrontController < ActionController::API
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
-                    order_id:      { type: "string", description: "Pass to reschedule_delivery (or to create_order, to replace an unpaid order) as `order_id`." },
+                    order_id:      { type: "string", description: "Pass to reschedule_delivery as `order_id` once this order is paid." },
                     status:        { type: "string", description: "The operator's order status — where the BASKET stands (created, paying, paid, rescheduled). Read payment_state for where the money stands." },
                     total_cents:   { type: "integer", description: "EUR cents." },
                     slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null. " \

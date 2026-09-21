@@ -1096,8 +1096,8 @@ end
 #   UNDER  the page DECLARES a parameter getgrocery requires and leaves it
 #          optional -- a cart an operator's own origin would refuse.
 # A parameter the page does not declare at all is neither: the page teaches a
-# deliberately smaller surface (it does not show `create_order`'s replace-an-
-# unpaid-order `order_id`), and that is a simplification, not drift.
+# deliberately smaller surface than the origin it is derived from, and that is
+# a simplification rather than the two sides disagreeing.
 def rule_write_required(page, sources)
   shared = shared_verbs(page, sources)
   return vacuous!("WRITE_REQUIRED", "no verb is declared on both sides") if shared.empty?

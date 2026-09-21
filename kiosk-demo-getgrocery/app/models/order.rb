@@ -25,13 +25,6 @@ class Order < ApplicationRecord
   SCHEDULED   = "scheduled"
   RESCHEDULED = "rescheduled"
 
-  # The states `create_order` will NOT swap the items of. `paying` is in this
-  # list for a reason that is not tidiness: a /pay for the order is mid-flight
-  # and its cart has already been checked against these items, so replacing them
-  # under it is exactly the swap this list exists to stop — pay for the cheap
-  # basket, receive the expensive one.
-  UNREPLACEABLE = [PAID, PAYING, SCHEDULED, RESCHEDULED].freeze
-
   # One reschedule per order; further changes go through the operator.
   ALREADY_SCHEDULED = [SCHEDULED, RESCHEDULED].freeze
 
@@ -74,10 +67,9 @@ class Order < ApplicationRecord
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
 
-  # The rows whose items `create_order` may still replace, and the rows
-  # `reschedule_delivery` may still move. Written here because both verbs and
-  # the pay path read the same lifecycle and must not each keep their own list.
-  scope :replaceable,   -> { where.not(status: UNREPLACEABLE) }
+  # The rows `reschedule_delivery` may still move. Written here because the
+  # verb and the pay path read the same lifecycle and must not each keep their
+  # own list.
   scope :reschedulable, -> { where.not(status: ALREADY_SCHEDULED) }
 
   # ── THE settled-cart containment, correlated to the row being selected ─────
@@ -96,8 +88,8 @@ class Order < ApplicationRecord
   # interpolation is exempt from the no-raw-SQL rule rather than an exception to
   # it. Expressed as Arel it would be four nested NamedFunction nodes spelling
   # out CAST/json_build_array/json_build_object, and the one property that has
-  # to survive any rewrite — that the replace/pay race is guarded by EXACTLY
-  # this containment — would be harder to read, not easier.
+  # to survive any rewrite — that "has this order been charged" is answered by
+  # EXACTLY this containment — would be harder to read, not easier.
   SETTLED_CART_REFERENCES_THIS_ROW = Arel.sql(
     "kiosk.cart_mandates.line_items @> " \
     "json_build_array(json_build_object('order_id', orders.id::text))::jsonb",

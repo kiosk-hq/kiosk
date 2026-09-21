@@ -22,12 +22,11 @@
 # depth while being nothing of the kind. Both go through {#whole_number}, which
 # is JSON Schema's own `integer` and nothing looser.
 module WireArguments
-  # The two "where do I get one of these" tails. Both verbs take an `order_id`
-  # but ask for different things — create_order one it may still replace,
-  # reschedule_delivery one that is already paid for.
-  HINT_ORDER_ID_REPLACE = "pass the `order_id` a previous create_order returned " \
-                          "(or omit it to place a new order)"
-  HINT_ORDER_ID_MOVE    = "pass the `order_id` from my_orders or create_order"
+  # The "where do I get one of these" tail. One verb on this surface takes an
+  # `order_id` — `reschedule_delivery`, which wants one that is already paid
+  # for — and the tail travels as an argument so the refusal sentence and the
+  # verb that asks for it cannot come to disagree.
+  HINT_ORDER_ID_MOVE = "pass the `order_id` from my_orders or create_order"
 
   module_function
 
@@ -57,8 +56,8 @@ module WireArguments
   # two — the schema declares the half it can (`maximum` on `qty`) and
   # `create_order`'s own description states this half in words — and this is the
   # half that has to be a handler refusal. It is asked as soon as the prices are
-  # resolved and BEFORE the replace path, so an unpriceable cart never takes a
-  # row lock.
+  # resolved and before anything is written, so an unpriceable cart never
+  # reaches the table.
   #
   # @return [OperationResult, nil] a refusal, or nil when the cart can be totalled
   def priceable_total(total_cents)

@@ -26,7 +26,7 @@ class CartMandate < ApplicationRecord
   # that a defence in depth rather than the only defence. No `::jsonb` cast is
   # needed on the right operand — Postgres resolves the untyped literal to jsonb
   # from the left one — but the CONTAINMENT OPERATOR must stay exactly what it
-  # is: the replace guard and the pay race both rest on these semantics.
+  # is: the pay race rests on these semantics.
   #
   # The correlated form of the same predicate — "the cart references the order
   # row this SELECT is looking at", which has no caller value in it at all —

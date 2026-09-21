@@ -103,8 +103,8 @@ class RescheduleDeliveryOperation
                    "order (it reuses the existing settlement, it does not settle now). Pay for " \
                    "the order first via the normal pay flow (a cart mandate whose line_items " \
                    "include {\"order_id\": \"#{order_id}\"}), THEN call reschedule_delivery — or, " \
-                   "if you have not paid, just change the order in place with " \
-                   "create_order(order_id: \"#{order_id}\", …)",
+                   "if the window is what you want to change before paying, place the order you " \
+                   "want with create_order and leave this one unpaid",
         )
       end
 

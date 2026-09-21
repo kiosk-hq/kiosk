@@ -12,16 +12,16 @@
 # serialization, not Stripe.
 #
 # It proves the invariants the pay path has to hold:
-#   (a) SWAP: once a /pay for order O has begun (O is `paying`), a concurrent
-#       create_order{order_id:O, items:[expensive]} CANNOT rewrite O's items —
-#       so "pay €1, get €500" is impossible.
+#   (a) NO SWAP: an in-flight /pay for order O cannot have O's items rewritten
+#       under it — "pay €1, get €500" is impossible. `create_order` declares no
+#       `order_id` and its input_schema is closed, so no request names O at
+#       all; a concurrent expensive cart gets its OWN order and O is untouched.
 #   (b) AT-MOST-ONCE: under N racing /pay for one order, exactly ONE captures;
 #       the rest are cleanly rejected.
-#   (c) TYPED REJECTION: a malformed order_id is a 400 bad_request at
-#       every place one reaches an `::uuid` cast — the cart (before anything is
-#       claimed or charged), create_order's replace path and reschedule_delivery
-#       — never a raw 500, which an assistant cannot distinguish from "the
-#       charge may have run".
+#   (c) TYPED REJECTION: a malformed order_id is a 400 bad_request at both
+#       places one reaches an `::uuid` cast — the cart (before anything is
+#       claimed or charged) and reschedule_delivery — never a raw 500, which an
+#       assistant cannot distinguish from "the charge may have run".
 #   (d) RECONCILIATION: an order stranded in `paying` because the
 #       paid-flip was lost heals to `paid` from the settlement row (both at the
 #       next /pay and via the sweep), while one whose outcome only the PSP knows
@@ -188,7 +188,20 @@ class CountingPsp
   def setup_required?(*) = false
 end
 
-puts "\n== (a) items cannot be swapped once /pay has begun =="
+puts "\n== (a) an in-flight /pay cannot have its order's items swapped =="
+
+# THE SWAP IS NOT REFUSED — IT CANNOT BE EXPRESSED, and that is a stronger
+# property than a refusal. `create_order` places an order and takes no existing
+# one: nothing in a request can name O. Read off the REGISTRY rather than the
+# source file, because the registry is what `/kiosk/schema` publishes and what
+# `RequestValidation` validates every wire call against.
+declared_inputs = Kiosk::Server::Actions.describe("create_order")[:input_schema] || {}
+declared_props  = declared_inputs[:properties] || declared_inputs["properties"] || {}
+declared_closed = declared_inputs.key?(:additionalProperties) ? declared_inputs[:additionalProperties] : declared_inputs["additionalProperties"]
+check(declared_props.keys.none? { |name| name.to_s == "order_id" },
+      "create_order declares no `order_id` — no request can point at an order that already exists")
+check(declared_closed == false,
+      "…and its input_schema is CLOSED, so a sent `order_id` is a typed 400 at the wire, never ignored")
 
 # Create the cheap order O.
 o = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
@@ -216,32 +229,20 @@ claimed = false
 end
 check(claimed, "pay claimed order O (status → paying) before capture")
 
-# ATTACK: while the pay is blocked mid-capture, try to swap O's items to an
-# expensive line via create_order{order_id: O}.
+# THE BEHAVIOURAL HALF. While the pay is blocked mid-capture, the same caller
+# places an expensive order. It gets its OWN row: O is untouched, so the cart
+# the cashier already checked is the cart it charges for.
 orders_before = orders_held
-swap_refusal = begin
-  create_order!(items: [{ sku: DEAR_SKU, qty: 100 }], delivery_slot_id: 3,
-                delivery_date: FUTURE, delivery_address: ADDRESS, order_id: order_id)
-  nil
-rescue StandardError => e
-  e
-end
+other = create_order!(items: [{ sku: DEAR_SKU, qty: 100 }], delivery_slot_id: 3,
+                      delivery_date: FUTURE, delivery_address: ADDRESS)
 
 o_after = order_row(order_id)
 check(o_after["total_cents"].to_i == CHEAP_PRICE,
-      "order O still holds the CHEAP total (#{o_after["total_cents"]}c == #{CHEAP_PRICE}c) — swap rejected")
-# AND THE REFUSAL IS THE WHOLE ANSWER. A swap this origin will not perform is a
-# typed 403 with NOTHING written — an attack that ends in a second billable
-# order is an attack that succeeded at the till, whatever it failed to swap.
-# The same answer reaches an assistant whose human paid between a `my_orders`
-# read and this call, which is how an honest caller meets it without any race.
-check(swap_refusal.respond_to?(:code) && swap_refusal.code == "forbidden" &&
-      swap_refusal.http_status == 403,
-      "create_order REFUSED the swap with a typed 403 forbidden " \
-      "(got #{swap_refusal.class}#{swap_refusal.respond_to?(:code) ? "/#{swap_refusal.code}" : ""})")
-check(orders_held == orders_before,
-      "…and minted NO order doing it (#{orders_held} orders, was #{orders_before}) — a refused " \
-      "replace is not a duplicate the human pays for twice")
+      "order O still holds the CHEAP total (#{o_after["total_cents"]}c == #{CHEAP_PRICE}c) — untouched by the second order")
+check(other["order_id"] != order_id,
+      "…and the expensive cart landed on a DIFFERENT order (#{other["order_id"]}), never on O")
+check(orders_held == orders_before + 1,
+      "…as one new row and not a rewrite of an old one (#{orders_held} orders, was #{orders_before})")
 
 # ── IN-FLIGHT: what my_orders publishes about O RIGHT NOW ────────────────────
 # The capture has STARTED and its outcome is unknown. protocol.md §11.6 forbids
@@ -365,10 +366,10 @@ end
 check(unknown_error.is_a?(Kiosk::Server::Errors::Forbidden),
       "a well-formed but foreign order_id still gets the ownership rejection (got #{unknown_error.class})")
 
-# The cashier is one of THREE places a wire-supplied id reaches an `::uuid`
-# cast; the same `Kiosk::UuidCheck` guard covers the other two, and they are actions,
-# so drive them through the real registry here rather than trusting the shape of
-# the code. (A DB-free unit pass over the guard itself is `rake demo:cashier_spec`.)
+# The cashier is one of TWO places a wire-supplied id reaches an `::uuid` cast;
+# the same `Kiosk::UuidCheck` guard covers the other, and it is an action, so
+# drive it through the real registry here rather than trusting the shape of the
+# code. (A DB-free unit pass over the guard itself is `rake demo:cashier_spec`.)
 def action_error(name, args)
   Kiosk::Server::CurrentRequest.with(identity: identity) do
     Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
@@ -380,17 +381,11 @@ rescue StandardError => e
   e
 end
 
-replace_error = action_error("create_order",
-                             { order_id: "not-a-uuid", items: [{ sku: CHEAP_SKU, qty: 1 }],
-                               delivery_slot_id: 3, delivery_date: FUTURE, delivery_address: ADDRESS })
 # The CODE and the STATUS are the contract, not the exception class: a handler
 # RENDERS its refusal and the dispatch seam turns that into a `WireError`
 # carrying the same code and status a raised `Errors::BadRequest` would.
 # Asserting the class here would be asserting how the answer is constructed
 # rather than what it says.
-check(replace_error.respond_to?(:code) && replace_error.code == "bad_request" && replace_error.http_status == 400,
-      "create_order's replace path rejects a malformed order_id with a 400 bad_request (got #{replace_error.class})")
-
 reschedule_error = action_error("reschedule_delivery",
                                 { order_id: "not-a-uuid", delivery_slot_id: 3, delivery_date: FUTURE })
 check(reschedule_error.respond_to?(:code) && reschedule_error.code == "bad_request" && reschedule_error.http_status == 400,
@@ -398,21 +393,16 @@ check(reschedule_error.respond_to?(:code) && reschedule_error.code == "bad_reque
 
 # AND A WELL-FORMED ID THAT NAMES NOTHING IS THE OTHER HALF. The shape guard
 # above answers "that is not an id"; this answers "that is not an order I can
-# replace", which is what a stale or mistyped id actually produces — and it must
-# answer it rather than placing a second billable order. The wording is
+# move", which is what a stale or mistyped id actually produces. The wording is
 # deliberately the same sentence an id belonging to someone else gets, so a
 # caller cannot enumerate other principals' orders with it.
-held_before = orders_held
-absent_error = action_error("create_order",
+absent_error = action_error("reschedule_delivery",
                             { order_id: "00000000-0000-4000-8000-0000000000ff",
-                              items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
-                              delivery_date: FUTURE, delivery_address: ADDRESS })
+                              delivery_slot_id: 3, delivery_date: FUTURE })
 check(absent_error.respond_to?(:code) && absent_error.code == "forbidden" &&
       absent_error.http_status == 403,
-      "create_order refuses a well-formed order_id it cannot replace with a 403 forbidden " \
+      "reschedule_delivery refuses a well-formed order_id it cannot move with a 403 forbidden " \
       "(got #{absent_error.class})")
-check(orders_held == held_before,
-      "…and writes nothing doing it (#{orders_held} orders, was #{held_before})")
 
 puts "\n== an order stuck in `paying` is reconciled from local evidence =="
 

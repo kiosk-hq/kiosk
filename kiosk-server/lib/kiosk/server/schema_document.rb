@@ -179,7 +179,8 @@ module Kiosk
         end
 
         def build(config, key: nil)
-          document = { queries: Queries.catalog, actions: Actions.catalog }.freeze
+          document = { queries: Queries.catalog, actions: Actions.catalog,
+                       events: Events.catalog }.freeze
           inputs   = digest_inputs(config, document)
           digest   = Digest::SHA256.hexdigest(JSON.generate(inputs))[0, DIGEST_LENGTH]
 
@@ -191,7 +192,12 @@ module Kiosk
         # change, and it is a constant `0` unless some declaration carries a
         # proc — see the header note.
         def cache_key(config)
-          [config.object_id, Queries.known.sort, Actions.known.sort,
+          # `Events.known` belongs here for the same reason the two verb
+          # registries do, and it is load-bearing rather than tidy: this catalogue
+          # is cacheable for a YEAR at its digest-bearing URL, so a topic that
+          # does not move the digest is a topic no cached client ever learns
+          # about.
+          [config.object_id, Queries.known.sort, Actions.known.sort, Events.known.sort,
            Array(config.capabilities), SchemaSlots.epoch]
         end
 

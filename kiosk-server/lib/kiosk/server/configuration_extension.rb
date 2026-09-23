@@ -631,17 +631,24 @@ module Kiosk
       private
 
       # Compute the advertised module list from the live registry, in the
-      # canonical order schema, queries, actions, pay. See {#capabilities}.
+      # canonical order schema, queries, actions, pay, events.
+      # See {#capabilities}.
+      #
+      # `events` is LAST and it is fifth, not inserted among the four: the spec
+      # pins the order, and an origin that has never served events must keep
+      # advertising exactly the string it advertised before this member existed.
       def computed_capabilities
         has_queries = Kiosk::Server::Queries.known.any?
         has_actions = Kiosk::Server::Actions.known.any?
         has_pay     = !payment_provider.nil?
+        has_events  = Kiosk::Server::Events.known.any?
 
         caps = []
         caps << "schema"  if has_queries || has_actions
         caps << "queries" if has_queries
         caps << "actions" if has_actions
         caps << "pay"     if has_pay
+        caps << "events"  if has_events
         caps.freeze
       end
 

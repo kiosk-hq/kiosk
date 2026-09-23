@@ -107,6 +107,18 @@ module Kiosk
           issuer:       config.issuer,
           owner:        config.owner,
         }
+        # WHERE THE EVENT STREAM IS, present iff this origin registers a topic
+        # — the same «advertise what you actually serve» rule `capabilities`
+        # follows, so an origin with no topics publishes no key rather than a
+        # URL that answers nothing.
+        #
+        # Derived from `endpoint` rather than written beside it: the socket IS
+        # that endpoint under a different scheme, and a second copy of the host
+        # is a second thing to get wrong behind a proxy.
+        if Kiosk::Server::Events.known.any?
+          kiosk[:events_url] = "#{endpoint.sub(/\Ahttp/, "ws")}/events"
+        end
+
         if config.skill_sha256
           kiosk[:skill] = { url: config.skill_url, sha256: config.skill_sha256 }
         end

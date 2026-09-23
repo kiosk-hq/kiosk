@@ -164,6 +164,40 @@ CREATE TABLE kiosk.device_authorizations (
 
 
 --
+-- Name: events; Type: TABLE; Schema: kiosk; Owner: -
+--
+
+CREATE TABLE kiosk.events (
+    id bigint NOT NULL,
+    identity_key text NOT NULL,
+    topic text NOT NULL,
+    subject text,
+    occurred_at timestamp with time zone NOT NULL,
+    data jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: events_id_seq; Type: SEQUENCE; Schema: kiosk; Owner: -
+--
+
+CREATE SEQUENCE kiosk.events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: events_id_seq; Type: SEQUENCE OWNED BY; Schema: kiosk; Owner: -
+--
+
+ALTER SEQUENCE kiosk.events_id_seq OWNED BY kiosk.events.id;
+
+
+--
 -- Name: intent_mandates; Type: TABLE; Schema: kiosk; Owner: -
 --
 
@@ -368,6 +402,13 @@ CREATE TABLE public.users (
 
 
 --
+-- Name: events id; Type: DEFAULT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.events ALTER COLUMN id SET DEFAULT nextval('kiosk.events_id_seq'::regclass);
+
+
+--
 -- Name: restaurant_tables id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -427,6 +468,14 @@ ALTER TABLE ONLY kiosk.cart_mandates
 
 ALTER TABLE ONLY kiosk.device_authorizations
     ADD CONSTRAINT device_authorizations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: events events_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.events
+    ADD CONSTRAINT events_pkey PRIMARY KEY (id);
 
 
 --
@@ -610,6 +659,20 @@ CREATE INDEX idx_device_authorizations_expiry ON kiosk.device_authorizations USI
 --
 
 CREATE UNIQUE INDEX idx_device_authorizations_user_code_pending ON kiosk.device_authorizations USING btree (user_code_hash) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: idx_events_created_at; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE INDEX idx_events_created_at ON kiosk.events USING btree (created_at);
+
+
+--
+-- Name: idx_events_identity_key_id; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE INDEX idx_events_identity_key_id ON kiosk.events USING btree (identity_key, id);
 
 
 --
@@ -812,6 +875,7 @@ ALTER TABLE ONLY public.restaurant_tables
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260920000001'),
 ('20260910000001'),
 ('20260827000002'),
 ('20260820130117'),

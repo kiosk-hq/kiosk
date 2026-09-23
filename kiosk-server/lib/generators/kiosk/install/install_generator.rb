@@ -19,8 +19,9 @@ module Kiosk
     #   - db/migrate/<ts+3>_create_kiosk_device_authorizations.rb
     #   - db/migrate/<ts+4>_create_kiosk_mandates.rb
     #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
+    #   - db/migrate/<ts+6>_create_kiosk_events.rb
     #
-    # SIX `create` migrations and NO amendments. Every table is created in
+    # SEVEN `create` migrations and NO amendments. Every table is created in
     # its final shape by the file that creates it, numbered 001-006, so a
     # fresh adopter installs a schema outright instead of replaying a
     # migration HISTORY to arrive at one.
@@ -39,7 +40,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the six base migrations (001-006)."
+      desc "Generate Kiosk initializer and the seven base migrations (001-007)."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -51,7 +52,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in the session GUC names"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the six migrations
+      # next_migration_number. We bump a counter so the seven migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0
@@ -96,6 +97,11 @@ module Kiosk
       def create_kyc_attributes_migration
         migration_template "create_kiosk_kyc_attributes.rb.tt",
                            "db/migrate/create_kiosk_kyc_attributes.rb"
+      end
+
+      def create_events_migration
+        migration_template "create_kiosk_events.rb.tt",
+                           "db/migrate/create_kiosk_events.rb"
       end
     end
   end

@@ -1,0 +1,22 @@
+# frozen_string_literal: true
+
+# Migration 007 — create kiosk.events.
+# The per-identity EVENT TAIL an operator serving any topic needs. `id` is a
+# bigserial, and that is what makes the wire's event id a per-origin monotonic
+# integer — one cursor then resumes every subscription on a socket with one
+# integer comparison.
+# `identity_key` is a user_id, not an agent_id: a human's second assistant must
+# read the same tail, and a revoked assistant is stopped at the socket.
+# Laid down unconditionally, like kiosk.kyc_attributes: the route is drawn
+# whether or not this origin declares a topic, and an empty table costs nothing.
+class CreateKioskEvents < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute Kiosk::Server::SchemaDefinitions.events_sql(
+      schema: <%= options[:schema].inspect %>,
+    )
+  end
+
+  def down
+    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".events)
+  end
+end

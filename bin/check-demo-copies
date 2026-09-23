@@ -1956,6 +1956,11 @@ COPIES = {
     rule: :identical, why: "kiosk:install 006 — kiosk.kyc_attributes, one row per granted " \
                            "anonymized boolean (K-656; it was a jsonb column on agents before).",
   },
+  "db/migrate/20260920000001_create_kiosk_events.rb" => {
+    rule: :identical, why: "kiosk:install 007 — kiosk.events, the per-identity event tail " \
+                           "(T-169). Canonical rather than opt-in for kyc_attributes' reason: " \
+                           "the route is drawn whether or not this origin declares a topic.",
+  },
   "db/migrate/20260718000001_add_devise_columns_to_users.rb" => {
     rule: :identical, why: "Devise columns for the demos that ship a human login. NOT generator " \
                            "output — the demos' own, which is why it keeps its own timestamp.",
@@ -2230,6 +2235,7 @@ GENERATOR_TEMPLATES = {
   "create_kiosk_device_authorizations.rb.tt" => { emits: "create_kiosk_device_authorizations.rb" },
   "create_kiosk_mandates.rb.tt"              => { emits: "create_kiosk_mandates.rb" },
   "create_kiosk_kyc_attributes.rb.tt"        => { emits: "create_kiosk_kyc_attributes.rb" },
+  "create_kiosk_events.rb.tt"                => { emits: "create_kiosk_events.rb" },
 }.freeze
 
 # ── Cross-demo singleton pairs (K-648) ───────────────────────────────────────

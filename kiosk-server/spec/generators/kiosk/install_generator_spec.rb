@@ -203,9 +203,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the six canonical migrations (001-006)" do
+    it "creates exactly the seven canonical migrations (001-007)" do
       invoke!
-      expect(migrations.size).to eq(6)
+      expect(migrations.size).to eq(7)
       basenames = migrations.map { |p| File.basename(p) }
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
@@ -214,6 +214,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         a_string_ending_with("_create_kiosk_device_authorizations.rb"),
         a_string_ending_with("_create_kiosk_mandates.rb"),
         a_string_ending_with("_create_kiosk_kyc_attributes.rb"),
+        a_string_ending_with("_create_kiosk_events.rb"),
       )
     end
 
@@ -230,11 +231,31 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       expect(basenames).not_to include(a_string_starting_with("rebuild_"), a_string_starting_with("add_"))
     end
 
-    it "orders the migration timestamps in 001 → 006 sequence" do
+    it "orders the migration timestamps in 001 → 007 sequence" do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(6) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(7) # strictly ascending, no collisions
+    end
+
+    describe "007 create_kiosk_events" do
+      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_events.rb") } }
+
+      it "is generated" do
+        invoke!
+        expect(file).not_to be_nil
+      end
+
+      it "calls SchemaDefinitions.events_sql with the configured schema" do
+        invoke!(%w[--schema=ksk])
+        expect(File.read(file)).to include("Kiosk::Server::SchemaDefinitions.events_sql")
+        expect(File.read(file)).to include(%(schema: "ksk"))
+      end
+
+      it "drops the table on down" do
+        invoke!(%w[--schema=ksk])
+        expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".events))
+      end
     end
 
     describe "001 create_kiosk_schema" do

@@ -320,6 +320,29 @@ module Kiosk
           end
       end
 
+      # WHERE THE PER-IDENTITY EVENT TAIL LIVES.
+      #
+      # The default below is IN-PROCESS and is correct for the suite and for a
+      # single-process development boot and for nothing that is deployed: it is
+      # gone on restart. That matters more than it does for the two stores
+      # above, because `delivery` and `todo` are read back ACROSS an assistant's
+      # sessions through the cursor — nothing holds a socket that long, in any
+      # harness — so a lost tail makes those topics unanswerable rather than
+      # merely degraded, and `truncated: true` stops being the rare case.
+      #
+      # A deployed operator sets
+      #
+      #   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
+      #
+      # which `rails generate kiosk:install` writes into the initializer.
+      #
+      # @return [EventStore]
+      attr_writer :event_store
+      def event_store
+        @event_store ||
+          LAZY_STORE_MUTEX.synchronize { @event_store ||= Kiosk::Server::EventStore.new }
+      end
+
       # Operator sign-in path the engine redirects a browser to when an
       # UNAUTHENTICATED human hits the manage-assistants page
       # (`<mount>/auth/assistants`). Optional, default nil.

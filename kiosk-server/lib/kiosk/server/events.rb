@@ -79,6 +79,47 @@ module Kiosk
           end
         end
 
+        # Append one event to the tail of every identity in +identity_scope+ —
+        # the ONE line an operator writes at the transition.
+        #
+        #   Kiosk::Server::Events.emit(
+        #     topic: :todo, subject: list_id, identity_scope: members_of(list_id),
+        #     data: { "todo_id" => todo.id, "done" => true, "action" => "completed" },
+        #   )
+        #
+        # THE SCOPE IS NOT DERIVED FROM `reach`, and the separation is
+        # deliberate. `reach` authorises a SUBSCRIPTION — may this identity hold
+        # a feed of this topic at all — and is answered at the socket, where the
+        # topic's `subject_reachable` can be re-run on a timer. This decides a
+        # DELIVERY: who, concretely, is to be told about THIS transition, which
+        # only the operation that made it knows. Conflating them would mean
+        # recomputing a membership set inside a socket callback that has no
+        # request to read it from.
+        #
+        # @param identity_scope [Array<String>] user_ids; empty writes nothing
+        # @param occurred_at [Time, nil] defaults to now, rendered ISO 8601 UTC
+        # @return [Integer, nil] the id of the last append, nil for an empty scope
+        def emit(topic:, data:, identity_scope:, subject: nil, occurred_at: nil)
+          name = topic.to_s
+          unless fetch(name)
+            raise ArgumentError,
+              "#{name.inspect} is not a declared topic on this origin. Declare it with " \
+              "`topic #{name.to_sym.inspect} do … end` on the controller that owns the " \
+              "transition it reports; known topics: " \
+              "#{known.empty? ? "(none)" : known.join(", ")}."
+          end
+
+          event = {
+            "topic" => name,
+            "subject" => subject,
+            "occurred_at" => (occurred_at || Time.now).utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "data" => data,
+          }
+
+          store = Kiosk.configuration.event_store
+          Array(identity_scope).map { |identity_key| store.append(identity_key, event) }.last
+        end
+
         def reset! = registry.clear
 
         private

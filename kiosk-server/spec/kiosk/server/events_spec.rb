@@ -189,3 +189,81 @@ RSpec.describe Kiosk::Server::Events do
     expect(described_class.known).to eq(%w[delivery todo])
   end
 end
+
+# `emit` — the one line an operator writes at the transition (T-169 phase A
+# task 2). The scope it takes is the OPERATOR's answer to "who may read this",
+# computed where the domain knows it; `reach` authorises a SUBSCRIPTION and is a
+# different question, answered at the socket.
+RSpec.describe "Kiosk::Server::Events.emit" do
+  let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
+  let(:store) { Kiosk::Server::EventStore.new }
+
+  before do
+    Kiosk.configure { |c| c.event_store = store }
+    controller.class_eval do
+      topic :delivery do
+        description "Your order moved."
+        payload_schema type: "object"
+      end
+    end
+  end
+
+  it "appends one event per identity in scope and returns the last id" do
+    id = Kiosk::Server::Events.emit(
+      topic: :delivery, subject: "ord_1", identity_scope: %w[u1 u2],
+      data: { "status" => "dispatched" },
+    )
+
+    expect(store.since("u1", 0).first).to include(
+      "topic" => "delivery", "subject" => "ord_1", "data" => { "status" => "dispatched" }
+    )
+    expect(store.since("u2", 0).length).to eq(1)
+    expect(id).to eq(store.head)
+  end
+
+  it "stamps occurred_at as ISO 8601 UTC when the caller gives none" do
+    Kiosk::Server::Events.emit(topic: :delivery, subject: nil, identity_scope: %w[u1], data: {})
+
+    expect(store.since("u1", 0).first["occurred_at"]).to match(/\A\d{4}-\d{2}-\d{2}T[\d:]+Z\z/)
+  end
+
+  it "honours an occurred_at the caller supplies, rendered the same way" do
+    Kiosk::Server::Events.emit(
+      topic: :delivery, subject: nil, identity_scope: %w[u1], data: {},
+      occurred_at: Time.utc(2026, 9, 25, 11, 4, 18),
+    )
+
+    expect(store.since("u1", 0).first["occurred_at"]).to eq("2026-09-25T11:04:18Z")
+  end
+
+  it "carries the five closed members and no others" do
+    Kiosk::Server::Events.emit(topic: :delivery, subject: "ord_1", identity_scope: %w[u1], data: {})
+
+    expect(store.since("u1", 0).first.keys)
+      .to contain_exactly("id", "topic", "subject", "occurred_at", "data")
+  end
+
+  it "accepts a nil subject — a topic with no subject says so" do
+    Kiosk::Server::Events.emit(topic: :delivery, subject: nil, identity_scope: %w[u1], data: {})
+
+    expect(store.since("u1", 0).first["subject"]).to be_nil
+  end
+
+  it "refuses a topic nobody declared, rather than inventing one on the wire" do
+    expect {
+      Kiosk::Server::Events.emit(topic: :nope, subject: nil, identity_scope: %w[u1], data: {})
+    }.to raise_error(ArgumentError, /not a declared topic/)
+  end
+
+  it "writes nothing when the scope is empty" do
+    Kiosk::Server::Events.emit(topic: :delivery, subject: nil, identity_scope: [], data: {})
+
+    expect(store.head).to eq(0)
+  end
+
+  it "defaults the store to the in-process one" do
+    Kiosk.reset!
+
+    expect(Kiosk.configuration.event_store).to be_a(Kiosk::Server::EventStore)
+  end
+end

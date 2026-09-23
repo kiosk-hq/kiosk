@@ -252,6 +252,54 @@ module Kiosk
         kind == :action ? Actions : Queries
       end
 
+      # The scope a `topic` block is evaluated in, and its whole job is to keep
+      # a topic's `reach` and `description` OUT of `kiosk_pending`.
+      #
+      # `kiosk_pending` belongs to verbs: `method_added` drains it onto the next
+      # method defined in the class. So a topic declared the way a verb is —
+      # `topic :todo` followed by bare `reach` / `description` — would attach
+      # those values to whatever verb happened to be defined after it, silently
+      # and with no error anywhere. The block is what closes that, and it is why
+      # this macro reads differently from its neighbours.
+      class TopicDeclaration
+        attr_reader :reach_value, :description_value, :payload_schema_value,
+                    :subject_reachable_value
+
+        def reach(value)
+          unless REACHES.include?(value)
+            raise ArgumentError,
+              "a topic declared `reach #{value.inspect}`, which is not a Kiosk reach. " \
+              "It is :principal (the default — only the calling principal's own events), " \
+              ":published (the operator publishes to everyone, by intent), :consented (a " \
+              "principal shared the subject, and the operator can point at the artefact " \
+              "that says so) or :role (the reach follows the caller's operator-assigned " \
+              "role claim)."
+          end
+
+          @reach_value = value
+        end
+
+        def description(text) = @description_value = text
+
+        def payload_schema(schema = nil, **kwargs) = @payload_schema_value = schema || kwargs
+
+        # `(subject, identity) -> Boolean`, re-run on every subscribe AND on the
+        # re-authorisation timer — never reading {CurrentRequest}, which is
+        # fiber-local and does not reach a socket callback.
+        def subject_reachable(callable) = @subject_reachable_value = callable
+
+        def validate!(owner:, name:)
+          missing = Events::REQUIRED.reject { |field| public_send(:"#{field}_value") }
+          return if missing.empty?
+
+          raise ArgumentError,
+            "#{owner} declared `topic #{name.inspect}` without " \
+            "#{missing.join(" and ")}. A topic carries `description` for semantics and " \
+            "`payload_schema` for shape; a subscriber with neither has to receive a " \
+            "message to find out what it is."
+        end
+      end
+
       module ClassMethods
         # ── the macros ─────────────────────────────────────────────────
 
@@ -309,6 +357,58 @@ module Kiosk
 
         def wire_name(name)
           kiosk_pending[:wire_name] = name.to_s
+        end
+
+        # Declare an EVENT TOPIC — a standing feed a subscriber holds, rather
+        # than a verb a caller invokes.
+        #
+        #   topic :todo do
+        #     reach :consented
+        #     description "A todo on a list you can reach was added, completed " \
+        #                 "or reopened — by another member's assistant or by a " \
+        #                 "human in the browser."
+        #     payload_schema type: "object", additionalProperties: false,
+        #                    properties: { todo_id: { type: "string" },
+        #                                  done:    { type: "boolean" } },
+        #                    required: %w[todo_id done]
+        #     subject_reachable ->(subject, identity) { Membership.reachable?(subject, identity) }
+        #   end
+        #
+        # IT TAKES A BLOCK, unlike every macro above it, and the difference is
+        # load-bearing rather than stylistic — see {HandlerMixin::TopicDeclaration}.
+        #
+        # The name is validated HERE, at declaration time, against the same two
+        # rules a verb name meets: it is a path-legal wire name, and it is not a
+        # segment the engine itself draws. A topic is not routed, but it IS a
+        # `topic` argument on the subscribe frame and a name in the published
+        # catalogue, so the same vocabulary applies and a clash with a reserved
+        # segment would be a name an operator can declare and nothing can reach.
+        def topic(name, &block)
+          name = name.to_s
+
+          unless name.match?(NAME_PATTERN)
+            raise ArgumentError,
+              "#{self} declared `topic #{name.inspect}`, which is not a legal Kiosk name. " \
+              "A topic name is a wire name: #{NAME_PATTERN.inspect}."
+          end
+
+          if RESERVED_NAMES.include?(name)
+            raise ArgumentError,
+              "#{self} declared `topic #{name.inspect}`, but that name is reserved by the " \
+              "engine itself: #{RESERVED_NAMES.join(", ")}. Give the topic a name of its own."
+          end
+
+          declaration = TopicDeclaration.new
+          declaration.instance_eval(&block) if block
+          declaration.validate!(owner: self, name: name)
+
+          Events.register(
+            name: name,
+            reach: declaration.reach_value || :principal,
+            description: declaration.description_value,
+            payload_schema: declaration.payload_schema_value,
+            subject_reachable: declaration.subject_reachable_value,
+          )
         end
 
         # ── binding ────────────────────────────────────────────────────

@@ -1,0 +1,90 @@
+# frozen_string_literal: true
+
+module Kiosk
+  module Server
+    # The topic registry — the events half of what {Queries} and {Actions} are
+    # for verbs, and deliberately the same shape.
+    #
+    # THE REUSE IS THE POINT. A topic declares `reach` from the same four values
+    # a verb does, so an operator who has already decided who may READ a verb's
+    # rows has answered the same question for the topic beside it. What a topic
+    # adds is `subject_reachable`: a verb authorises A CALL, and a subscription
+    # authorises A STANDING FEED, so the check has to be re-runnable without a
+    # request — it takes the subject and the identity rather than reading
+    # {CurrentRequest}, which is fiber-local and never reaches a socket callback.
+    #
+    # Process-global, like the two verb registries, and reset the same way in
+    # tests. A topic is declared ONCE per origin: a second declaration of one
+    # name is a bug rather than an override, because a name is one wire name and
+    # one payload shape.
+    module Events
+      # Declared per topic and not defaultable. `description` carries semantics
+      # as prose and `payload_schema` carries shape, for the reason the wire
+      # already requires `output_schema` on every verb: with neither, a
+      # subscriber cannot learn what a message contains without receiving one
+      # and observing what arrived.
+      REQUIRED = %i[description payload_schema].freeze
+
+      class << self
+        # @param name [String, Symbol] a wire name, validated by the caller
+        # @param reach [Symbol] one of {HandlerMixin::REACHES}
+        # @param subject_reachable [#call, nil] `(subject, identity) -> Boolean`
+        # @return [void]
+        def register(name:, reach:, description:, payload_schema:, subject_reachable:)
+          name = name.to_s
+          if registry.key?(name)
+            raise ArgumentError,
+              "topic #{name.inspect} is already declared on this origin. A topic name is one " \
+              "wire name and one payload shape; declare it once, on the controller that owns " \
+              "the transition it reports."
+          end
+
+          registry[name] = {
+            name: name,
+            reach: reach,
+            description: description,
+            payload_schema: payload_schema,
+            subject_reachable: subject_reachable,
+          }.freeze
+        end
+
+        # @return [Hash, nil] the declaration, or nil when nothing declared it
+        def fetch(name) = registry[name.to_s]
+
+        # @return [Array<String>] declared topic names, sorted
+        def known = registry.keys.sort
+
+        # What `GET <endpoint>/schema` publishes beside `queries` and `actions`.
+        #
+        # SYMBOL keys with STRING values, which is not a style choice: it is
+        # exactly what {Queries.describe} and {Actions.describe} return, and all
+        # three end up in one JSON document. Two key conventions inside one
+        # document read identically on the wire and diverge the moment anything
+        # in the suite compares them.
+        #
+        # `subject_reachable` is deliberately ABSENT. It is the operator's
+        # authorisation rule rather than a fact about the wire; publishing the
+        # predicate would describe to a caller where to look for a gap in it,
+        # and a subscriber could not act on it either way — the operator runs
+        # it, at subscribe time and again on the re-authorisation timer.
+        def catalog
+          known.map do |name|
+            declaration = registry[name]
+            {
+              name: declaration[:name],
+              description: declaration[:description],
+              reach: declaration[:reach].to_s,
+              payload_schema: declaration[:payload_schema],
+            }
+          end
+        end
+
+        def reset! = registry.clear
+
+        private
+
+        def registry = (@registry ||= {})
+      end
+    end
+  end
+end

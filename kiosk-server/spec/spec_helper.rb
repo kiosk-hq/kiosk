@@ -20,6 +20,7 @@ RSpec.configure do |config|
     Kiosk.reset!
     Kiosk::Server::Actions.reset!
     Kiosk::Server::Queries.reset!
+    Kiosk::Server::Events.reset!
     # The "this origin has a data-derived slot" latch and the resolved-value
     # memo behind it (K-922). Both are process-global, exactly like the two
     # registries above, so an example that declares a proc slot would leave

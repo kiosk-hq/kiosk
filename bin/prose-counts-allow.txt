@@ -81,8 +81,6 @@ kiosk-pow-equihash/README.md ¦ 10 proofs ¦ an illustrative quotation of what a
 
 kiosk-server/README.md ¦ two endpoints ¦ the two reserved endpoints are named in full in the same sentence, and they are routes of this engine rather than a file set.
 
-kiosk-server/lib/generators/kiosk/install/install_generator.rb ¦ six migrations ¦ from: git ls-files 'kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_*.rb.tt' | wc -l ¦ the schema migrations this generator emits; the description is what `rake -T` prints to an adopter.
-
 deploy/CHECKLIST.md ¦ six demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | grep -v skooti | wc -l ¦ the operator demos other than skooti, which is the only one with firmware locks.
 deploy/README.md ¦ seven demos ¦ from: git grep -l 'Kiosk::Pow::Equihash::Difficulty' -- 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the demos that honour the difficulty knob, counted by the initializers that read it.
 deploy/README.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything provisioned on the box, one environment template each.

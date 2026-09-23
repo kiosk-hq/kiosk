@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1711 anchors.
+# 1712 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1031,13 +1031,14 @@ kiosk-server/README.md	in this directory runs it and prints how many examples th
 kiosk-server/README.md	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/kiosk-server.gemspec	spec.license       = "Apache-2.0"
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_device_authorizations.rb.tt",
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_events.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_identity_tables.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_kyc_attributes.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_mandates.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_reservations.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_schema.rb.tt",
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # SIX `create` migrations and NO amendments. Every table is created in
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc "Generate Kiosk initializer and the six base migrations (001-006)."
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # EVERY canonical migration is a `create` and NONE is an amendment: each
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc "Generate the Kiosk initializer and its canonical base migrations."
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_kyc_attributes.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_schema.rb.tt",
 kiosk-server/lib/kiosk/server/account_binding.rb	        # object and run the operator's `assistant_claimed` /

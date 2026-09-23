@@ -21,10 +21,16 @@ module Kiosk
     #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
     #   - db/migrate/<ts+6>_create_kiosk_events.rb
     #
-    # SEVEN `create` migrations and NO amendments. Every table is created in
-    # its final shape by the file that creates it, numbered 001-006, so a
+    # EVERY canonical migration is a `create` and NONE is an amendment: each
+    # table is created in its final shape by the file that creates it, so a
     # fresh adopter installs a schema outright instead of replaying a
     # migration HISTORY to arrive at one.
+    #
+    # THE LIST ABOVE IS THE COUNT, and no cardinal is written beside it. A
+    # number here is a second copy of that list, and a second copy is what
+    # rots: this comment and the `desc` below both said SIX for as long as it
+    # took a seventh template to land, while the list itself was already
+    # right.
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
@@ -40,7 +46,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the seven base migrations (001-007)."
+      desc "Generate the Kiosk initializer and its canonical base migrations."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -52,7 +58,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in the session GUC names"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the seven migrations
+      # next_migration_number. We bump a counter so the migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0

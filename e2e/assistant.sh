@@ -1350,6 +1350,20 @@ assert "a bad bearer is disconnected with reconnect: false" \
   "$(grep '"type":"disconnect"' "$EV_ANON" | head -1 | jq -r '.reconnect')" "false"
 assert "…and the listener says the credential is finished" "$anon_rc" "3"
 
+# …UNLESS IT WAS GIVEN A WAY TO MINT ANOTHER. A token expires while a stream is
+# held — that is the ordinary case, not the exceptional one — and an assistant
+# that has to notice the exit code and start the whole thing again has a gap in
+# its stream for as long as that takes. `--token-command` is the seam: the
+# listener never holds a credential of its own, it asks for a fresh one and
+# reconnects. Driven with a DEAD bearer and a command that prints a live one,
+# so the branch under test is the recovery rather than the happy path.
+EV_REFRESH="$TMP_DIR/listener-refresh.jsonl"
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "not-a-token" \
+  --topic appointment_confirmed --token-command "printf %s $ALICE_AGENT_TOKEN" \
+  --max-seconds 12 >"$EV_REFRESH" 2>&1 || true
+assert "…and with --token-command it mints a fresh one and carries on" \
+  "$(grep -c '"type":"subscribed"' "$EV_REFRESH")" "1"
+
 # ─── summary ────────────────────────────────────────────────────────────
 
 printf "\n\033[1m=== summary ===\033[0m\n"

@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-24: **The `json < 3.0` pin comes off: activesupport 8.1.4 calls `JSON.parse` with a keyword splat.** The four declarations, the check that watched the condition and its CI job all go.
 - 2026-09-24: **Entries are grouped by the release that carries them, version and date in the heading.** A patch cut is as visible as a minor; `CHANGELOG-RULE.md` carries the rules.
 
 ## Before release sections

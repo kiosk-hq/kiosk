@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1713 anchors.
+# 1712 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -76,7 +76,6 @@ e2e/README.md	## Run locally
 e2e/README.md	- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a 
 e2e/README.md	- **Multi-agent revocation** flows.
 e2e/README.md	- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface.
-e2e/README.md	- **Streaming.**
 e2e/README.md	- The `kiosk:install` Rails generator produces working migrations
 e2e/README.md	- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payme
 e2e/README.md	- `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query r

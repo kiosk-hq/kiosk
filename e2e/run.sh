@@ -224,25 +224,6 @@ gem "devise"
 # not carry it raises a ConfigurationError naming the gem at the first
 # validation, deliberately fail-loud.
 gem "json_schemer"
-
-# THE ONE PIN IN THIS GENERATED GEMFILE, AND IT IS NOT OURS TO NEED.
-# json 3.0.0 (published 2026-09-07) dropped the POSITIONAL options argument from
-# JSON.parse: it is now JSON.parse(source, **opts), so JSON.parse(str, {}) raises
-# ArgumentError (wrong number of arguments (given 2, expected 1)). activesupport
-# 8.1.3.1 -- the NEWEST release, and the only line kiosk-server's gemspec allows
-# -- still spells it positionally in ActiveSupport::JSON.decode. Two Rails paths
-# go through that call on every request: the encrypted cookie jar, so every
-# Devise sign-in answers 500 and this harness dies at the binding ceremony, and
-# ActionDispatch's default JSON parameter parser, so every wire POST answers 400.
-# Nothing in this repo pins json and this Gemfile is generated fresh on every
-# run, so the breakage arrived from the registry rather than from a commit.
-#
-# REMOVAL CONDITION: rails/rails main already spells it JSON.parse(json,
-# **options); no RELEASE carries that yet. The pin comes off the day a released
-# activesupport this repo can resolve carries the keyword-splat form -- and
-# bin/check-json-pin reads that line out of the resolved gem and turns RED the
-# day it changes, so this comment cannot be the thing that has to be remembered.
-gem "json", "< 3.0"
 RUBY
 
 # Splice the sibling-checkout path into the block just written. Fails loudly

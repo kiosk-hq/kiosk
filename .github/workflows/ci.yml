@@ -1231,45 +1231,6 @@ jobs:
       - name: Every demo task is either gated or opted out with a reason
         run: ./bin/check-ci-tasks
 
-  # The `json < 3.0` pin exists because json 3.0.0 removed JSON.parse's
-  # positional options argument and the newest released activesupport still
-  # passes it that way, so every encrypted-cookie read and every JSON request
-  # body in a Rails 8.1 app raises (K-1384). A pin whose removal condition lives
-  # only in a comment is a pin nobody removes: this job READS the condition out
-  # of the activesupport that is actually resolved, and goes red the day a
-  # release carries the fix. It also holds every committed Gemfile.lock — the
-  # eight demos are green today only because their locks predate json 3, and the
-  # next `bundle update` in any of them reddens here instead of in a 500.
-  #
-  # It needs a real activesupport, which is why it installs kiosk-server's
-  # bundle rather than running on a bare checkout: "the activesupport this repo
-  # can resolve" is the claim, so it is the gem the check must read.
-  json-pin:
-    name: the json pin still has its reason (bin/check-json-pin)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard catches its own planted breaks
-        run: ./bin/check-json-pin --self-test
-
-      - name: Install kiosk-server's bundle (for a resolved activesupport)
-        working-directory: kiosk-server
-        run: bundle install
-
-      - name: The pin is spelled one way, says why, and is still needed
-        working-directory: kiosk-server
-        run: bundle exec ../bin/check-json-pin
-
   # The published conformance matrix cites THIS repo's tests by name, and this
   # job is what makes a rename that invalidates a citation fail here rather than
   # somewhere nobody looks (K-1007).

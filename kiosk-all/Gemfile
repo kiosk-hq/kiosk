@@ -5,19 +5,3 @@ gemspec
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
 gem "kiosk-core",   path: "../kiosk-core"
 gem "kiosk-server", path: "../kiosk-server"
-
-# K-1384 -- json 3.0.0 (published 2026-09-07) dropped the POSITIONAL options
-# argument from JSON.parse -- it is now JSON.parse(source, **opts), so
-# JSON.parse(str, {}) raises ArgumentError (wrong number of arguments (given 2,
-# expected 1)). activesupport 8.1.3.1 is the NEWEST release and still spells it
-# positionally in ActiveSupport::JSON.decode, which the encrypted cookie jar and
-# ActionDispatch's default JSON parameter parser both reach on every request.
-# This bundle has no committed lockfile, so CI resolves it fresh and picks up
-# json 3.0.0; without this line kiosk-server's suite is 19 examples red.
-#
-# REMOVAL CONDITION: rails/rails main already spells it JSON.parse(json,
-# **options); no RELEASE carries that yet. The pin comes off when a released
-# activesupport this repo can resolve carries the keyword-splat form, and
-# bin/check-json-pin reads that line out of the resolved gem and turns RED the
-# day it changes.
-gem "json", "< 3.0"

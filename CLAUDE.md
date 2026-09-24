@@ -25,6 +25,19 @@ universal agent skill is `skill.md` on the same site.
    the findings ledger. Do not fix it inline.
 4. **Merge gate.** Tests covering the change must be green before merge; for
    `reference` that means the touched gem's own suite + `e2e/run.sh`.
+   **AND `kiosk-test-support`'s SUITE IS A GATE ON ANY RUBY CHANGE ANYWHERE,
+   including a demo's (2026-09-24).** «The touched gem's own suite» reads as
+   «the gem you edited», and a wave that edits a DEMO runs that demo's task
+   list and stops. But that suite walks the WHOLE tracked Ruby corpus — every
+   tracked `.rb`, counted on each run and printed in its own failure text — so
+   it is the only thing holding
+   properties no single gem owns: no parse warning, no dead binding, no dated
+   literal, no cross-app require, every demo's skill pin. MEASURED: a
+   `rescue nil` in `kiosk-demo-hoteling/lib/tasks/demo.rake` left `result`
+   assigned and unread, the demo's own task list was green because the beat
+   asserted only that an untouched row was untouched, and CI went red on TWO
+   pushed heads with `assigned but unused variable - result` (K-1793). Run it
+   whenever any `.rb` in this repository moves.
 5. **Changelog rule.** Significant changes — anything altering behavior, spec
    text, skill instructions, or claims — get an entry in the touched repo's
    `CHANGELOG.md` stating the essence and intent of the change, not its

@@ -48,7 +48,7 @@ class Kiosk::RentalsController < ActionController::API
   # way to learn was to re-read `my_reservations` on a guess.
   topic :booking_payment do
     description "A reservation of yours was paid — possibly by somebody else settling it on " \
-                "your behalf. Unlock once this says `paid`."
+                "your behalf. Activate the rental once this says `paid`."
     payload_schema type: "object", additionalProperties: false,
                    properties: { reservation_id: { type: "string", format: "uuid" },
                                  payment_state:  { enum: %w[paid] } },
@@ -116,7 +116,8 @@ class Kiosk::RentalsController < ActionController::API
               "cashier re-counts both against its own quote before it charges anything, so a cart " \
               "that disagrees is refused outright rather than partly honoured. Reserving is open to " \
               "EVERY vehicle, licence-free and licence-required alike — whether you may ride the one " \
-              "you booked is decided later, by the verb that unlocks it."
+              "you booked is decided later, by the verb that activates the rental and issues its token: " \
+              "start_rental for a licence-free scooter, rent_motorcycle for a licence-required one."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

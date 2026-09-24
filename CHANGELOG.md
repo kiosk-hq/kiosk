@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-25: **skooti told an assistant a verb unlocks the vehicle, on the same served document that says nothing on this wire opens a lock (K-1777).** Both sentences now name activation.
 - 2026-09-24: **There is always a default role: an origin declaring `c.roles` and no `registration_role` is refused at boot (ADR-0036).** One declaring no roles is untouched.
 - 2026-09-24: **A rebind resolves its role the way a fresh key does — the operator's default, never the assistant's previous one (K-1791).** No role outlives the principal it was resolved for.
 - 2026-09-24: **The `json < 3.0` pin comes off: activesupport 8.1.4 calls `JSON.parse` with a keyword splat.** The four declarations, the check that watched the condition and its CI job all go.

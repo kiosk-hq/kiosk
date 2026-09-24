@@ -267,3 +267,99 @@ RSpec.describe "Kiosk::Server::Events.emit" do
     expect(Kiosk.configuration.event_store).to be_a(Kiosk::Server::EventStore)
   end
 end
+
+# The events surface as an operator and an assistant SEE it: a third catalogue
+# array, a fifth capability, and a discovery field (T-169 phase A task 4).
+RSpec.describe "the events surface in the catalogue and discovery" do
+  let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
+
+  def declare_topic!
+    controller.class_eval do
+      topic :todo do
+        description "A todo on a list you can reach changed."
+        payload_schema type: "object", properties: { done: { type: "boolean" } }
+      end
+    end
+  end
+
+  def declare_verb!
+    controller.class_eval do
+      kind :query
+      description "Lists things."
+      input_schema type: "object", additionalProperties: false, properties: {}
+      output_schema type: "array", items: { type: "object" }
+      def list_things
+        render json: []
+      end
+    end
+  end
+
+  describe "GET <endpoint>/schema" do
+    it "publishes an events array beside queries and actions" do
+      declare_topic!
+
+      document = Kiosk::Server::SchemaDocument.document
+      expect(document[:events].map { |e| e[:name] }).to eq(%w[todo])
+    end
+
+    it "publishes an EMPTY events array on an origin that declares no topic" do
+      declare_verb!
+
+      document = Kiosk::Server::SchemaDocument.document
+      expect(document[:events]).to eq([])
+    end
+
+    # The catalogue is cacheable for a YEAR at its digest-bearing URL, so a
+    # topic that does not move the digest is a topic no cached client ever
+    # learns about.
+    it "moves the digest when a topic is declared" do
+      declare_verb!
+      before_digest = Kiosk::Server::SchemaDocument.digest
+      declare_topic!
+      after_digest = Kiosk::Server::SchemaDocument.digest
+
+      expect(after_digest).not_to eq(before_digest)
+    end
+  end
+
+  describe "capabilities" do
+    it "gains `events` when a topic is registered, last in the canonical order" do
+      declare_verb!
+      declare_topic!
+
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema queries events])
+    end
+
+    it "does NOT advertise events on an origin that declares no topic" do
+      declare_verb!
+
+      expect(Kiosk.configuration.capabilities).not_to include("events")
+    end
+
+    # An explicit list is returned verbatim — the override the accessor already
+    # documents, and a fifth member must not start overriding the override.
+    it "leaves an operator's explicit list alone" do
+      declare_topic!
+      Kiosk.configure { |c| c.capabilities = %w[schema queries] }
+
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema queries])
+    end
+  end
+
+  describe "/.well-known/kiosk.json" do
+    before { Kiosk.configure { |c| c.issuer = "https://shop.example" } }
+
+    it "carries events_url when a topic is registered" do
+      declare_topic!
+
+      built = Kiosk::Server::WellKnown.build(base_url: "https://shop.example")
+      expect(built[:kiosk][:events_url]).to eq("wss://shop.example/kiosk/events")
+    end
+
+    it "omits events_url entirely when no topic is registered" do
+      built = Kiosk::Server::WellKnown.build(base_url: "https://shop.example")
+
+      expect(built[:kiosk]).not_to have_key(:events_url)
+    end
+  end
+end

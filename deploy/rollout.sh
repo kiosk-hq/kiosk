@@ -39,6 +39,12 @@
 # TEMPLATE AND RE-RUN THIS. There is no second place to edit, and no step where
 # a human retypes a name.
 #
+# AND THE DECLARATION IS THE CHECKOUT ON THE BOX, NOT `main`. That is the right
+# pairing — an env file belongs to the code that reads it, and /srv/kiosk is the
+# code the units are running — but it means a box behind `main` is checked
+# against templates that are behind it too. If the answer you want is «does the
+# fleet match HEAD», deploy first and run this after.
+#
 # The unit name is the template's name, with the one documented exception:
 # `kyc-demo.env.example` configures the unit `prove`, because the KYC broker's
 # gem directory is `kiosk-demo-prove` while it serves kyc.demo.kiosk.tech.

@@ -48,6 +48,12 @@ ssh <deploy-user>@<box> 'sudo bash -s' -- --check < deploy/rollout.sh   # is the
 ssh <deploy-user>@<box> 'sudo bash -s' -- --apply < deploy/rollout.sh   # make it so
 ```
 
+The declaration it reads is the checkout **on the box** (`/srv/kiosk`), not
+`main` — an env file belongs to the code that reads it, and that is the code the
+units are running. So a box behind `main` is checked against templates that are
+behind it too; deploy first if the question you mean is «does the fleet match
+head».
+
 `--check` changes nothing and exits 1 when a declared variable is missing,
 empty, still a placeholder or carrying a value the tree disagrees with, when a
 retired name is still assigned, or when the two sides of the shared KYC secret

@@ -7,6 +7,14 @@ gem "pg", "~> 1.1"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
+# Action Cable's pubsub adapter, for the Kiosk event stream. NOT `async`: that
+# adapter delivers only inside ONE process, so the moment this app runs a second
+# Puma worker an event reaches whichever worker happened to emit it and no
+# other — silently, with nothing in any log. A demo is the worked example an
+# operator copies, and `adapter: async` in a copied cable.yml teaches a
+# single-process posture that breaks without saying so.
+gem "solid_cable"
+
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 

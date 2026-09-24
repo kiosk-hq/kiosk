@@ -1449,6 +1449,7 @@ EXTRA_SCANNED = [
   "public/422.html",
   "public/500.html",
   "config/puma.rb",
+  "config/cable.yml",
   "config/environments/test.rb",
   "config/environments/production.rb",
   "bin/setup",
@@ -1583,6 +1584,17 @@ COPIES = {
   # statement nothing enforced, so a seventh copy drifting would have been
   # silent. The observation is now the rule: :identical across the operator
   # seven, prove the declared exception.
+  "config/cable.yml" => {
+    rule:   :identical,
+    why:  "One pubsub posture for the operator seven, and the file an adopter copies. " \
+          "kiosk-demo-prove does not ship it at all and needs no `except:` for that: the KYC " \
+          "broker mounts no Kiosk engine, so it serves no event stream and has no pubsub to " \
+          "configure. It reads " \
+          "`solid_cable` on the PRIMARY database in production — NOT `async`, which delivers " \
+          "only inside one process, so a second Puma worker loses events silently and with " \
+          "nothing in any log. A demo that drifts to `async` here is a demo teaching the " \
+          "posture the fleet chose against (T-169).",
+  },
   "config/puma.rb" => {
     rule:   :identical,
     except: { "prove" => PROVE_SKELETON },
@@ -1955,6 +1967,12 @@ COPIES = {
   "db/migrate/20260820130117_create_kiosk_kyc_attributes.rb" => {
     rule: :identical, why: "kiosk:install 006 — kiosk.kyc_attributes, one row per granted " \
                            "anonymized boolean (K-656; it was a jsonb column on agents before).",
+  },
+  "db/migrate/20260920000002_create_solid_cable_messages.rb" => {
+    rule: :identical, why: "Action Cable's pubsub queue, taken on the PRIMARY database rather " \
+                           "than the separate `cable` database Rails' template assumes (T-169). " \
+                           "It is a TRANSPORT that `message_retention` sweeps; the durable tail " \
+                           "an assistant resumes from is kiosk.events, above.",
   },
   "db/migrate/20260920000001_create_kiosk_events.rb" => {
     rule: :identical, why: "kiosk:install 007 — kiosk.events, the per-identity event tail " \

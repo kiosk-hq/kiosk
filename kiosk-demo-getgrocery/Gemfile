@@ -6,6 +6,14 @@ gem "pg", "~> 1.1"
 # sqlite store on the PoW demo path, NOT a second application database.
 gem "sqlite3", "~> 2.7"
 gem "puma", ">= 5.0"
+
+# Action Cable's pubsub adapter, for the Kiosk event stream. NOT `async`: that
+# adapter delivers only inside ONE process, so the moment this app runs a second
+# Puma worker an event reaches whichever worker happened to emit it and no
+# other — silently, with nothing in any log. A demo is the worked example an
+# operator copies, and `adapter: async` in a copied cable.yml teaches a
+# single-process posture that breaks without saying so.
+gem "solid_cable"
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "bootsnap", require: false
 

@@ -1,0 +1,24 @@
+# Action Cable's pubsub, for the Kiosk event stream at <endpoint>/events.
+#
+# The engine builds its OWN Action Cable server and reads this file for the
+# adapter, so an operator configures pubsub in the one place Rails already
+# taught them and Kiosk adds no second setting.
+#
+# `solid_cable` on the PRIMARY database, deliberately. Rails' own install
+# template puts it in a separate `cable` database; this fleet provisions one
+# database and one least-privilege role per app, so a second database would be
+# a second thing to provision, grant and back up for one table. Omitting
+# `connects_to` keeps it beside everything else this app owns.
+#
+# Development and test run in one process against one thread, so `async` is
+# correct there and needs no table.
+development:
+  adapter: async
+
+test:
+  adapter: test
+
+production:
+  adapter: solid_cable
+  polling_interval: 0.1.seconds
+  message_retention: 1.day

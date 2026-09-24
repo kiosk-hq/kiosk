@@ -966,6 +966,33 @@ namespace :demo do
     else
       puts "  ✓  discovery capabilities do NOT include `pay` (#{capabilities.inspect}) — not-only-commerce proof"
     end
+
+    # ── THE EVENT MODULE, ABSENT — the other half of «advertise what you serve»
+    #
+    # This origin declares no topic, so it must advertise no module and publish
+    # no url — and yet the catalogue MUST still carry an `events` array, empty.
+    # Those two are a pair on purpose: the array is always there so a reader
+    # never has to branch on whether the member exists, and `capabilities` is
+    # the one place that answers «is it served at all». Asserting both together
+    # is what would catch either drifting to the other's answer.
+    if capabilities.include?("events")
+      failures << "discovery capabilities advertise `events` (got #{capabilities.inspect}) — philslist declares no topic"
+      puts "  ✗  discovery capabilities include `events` — must be ABSENT"
+    else
+      puts "  ✓  discovery capabilities do NOT include `events` (#{capabilities.inspect}) — this origin declares no topic"
+    end
+    if result["discovery_events_url"]
+      failures << "discovery publishes events_url (#{result['discovery_events_url'].inspect}) on an origin with no topics"
+      puts "  ✗  discovery publishes events_url — must be ABSENT"
+    else
+      puts "  ✓  discovery publishes NO events_url, matching the absent module"
+    end
+    if (result["schema_event_topics"] || []).empty?
+      puts "  ✓  the catalogue carries an events array and it is EMPTY — present, not omitted"
+    else
+      failures << "the catalogue names topics (#{result['schema_event_topics'].inspect}) on an origin that declares none"
+      puts "  ✗  the catalogue names topics this origin does not declare"
+    end
     %w[schema queries actions].each do |cap|
       if capabilities.include?(cap)
         puts "  ✓  discovery capabilities include #{cap}"

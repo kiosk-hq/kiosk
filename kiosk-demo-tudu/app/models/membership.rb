@@ -95,6 +95,36 @@ class Membership < ApplicationRecord
   # the wire and fails on an address appearing ANYWHERE in the body, not merely
   # in this field.
   #
+  # ── WHAT THE EVENT SURFACE READS, and why neither of these is
+  # {.of_current_principal} ──────────────────────────────────────────────────
+  #
+  # Every membership read above resolves the principal from `CurrentRequest`,
+  # which is FIBER-LOCAL. Both callers below run where there is no request to
+  # read it from: one inside a socket callback that re-authorises a standing
+  # subscription on a timer, the other after a write, deciding who is to be
+  # told. So both take what they need as arguments and ask the table.
+
+  # Who is to receive an event about this list — every member, including the
+  # one whose action caused it. Deliberately NOT «everyone except the actor»:
+  # an assistant learning that its own human ticked something off in the
+  # browser is the tudu scenario, not noise.
+  #
+  # @return [Array<String>] account ids
+  def self.account_ids_on(list_id)
+    where(list_id: list_id).pluck(:account_id)
+  end
+
+  # May this account hold a standing subscription to this list? The
+  # request-free twin of {.reachable?}, and the predicate `subject_reachable`
+  # calls.
+  #
+  # @return [Boolean]
+  def self.readable_by?(list_id, account_id)
+    return false if list_id.to_s.empty? || account_id.to_s.empty?
+
+    where(list_id: list_id, account_id: account_id).exists?
+  end
+
   # @return [Array<Hash>]
   def self.rows_on(list_id)
     where(list_id: list_id).joins(:account)

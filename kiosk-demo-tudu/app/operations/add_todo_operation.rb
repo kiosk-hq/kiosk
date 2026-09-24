@@ -63,6 +63,15 @@ class AddTodoOperation
       returning: %i[id],
     ).first["id"]
 
+    # ONE LINE AT THE TRANSITION. The scope is every member of the list —
+    # including the one who just acted, because an assistant learning that its
+    # own human added something in the browser is the point, not noise.
+    Kiosk::Server::Events.emit(
+      topic: :todo, subject: list_id,
+      identity_scope: Membership.account_ids_on(list_id),
+      data: { "todo_id" => todo_id, "title" => text, "done" => false, "action" => "added" },
+    )
+
     OperationResult.ok({ "todo_id" => todo_id })
   end
 

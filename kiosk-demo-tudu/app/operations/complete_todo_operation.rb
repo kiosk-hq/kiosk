@@ -39,6 +39,19 @@ class CompleteTodoOperation
       )
     end
 
+    # The list and the title are re-read ONLY for the event: the answer below
+    # still echoes the id verbatim. `pick` is one statement and unscoped by
+    # principal on purpose — the membership test above has already run, and the
+    # row is the one it just wrote.
+    list_id, title = Todo.where(id: todo_id).pick(:list_id, :title)
+    if list_id
+      Kiosk::Server::Events.emit(
+        topic: :todo, subject: list_id,
+        identity_scope: Membership.account_ids_on(list_id),
+        data: { "todo_id" => todo_id, "title" => title, "done" => true, "action" => "completed" },
+      )
+    end
+
     # The id is echoed back VERBATIM as the caller sent it, never re-read.
     OperationResult.ok({ "todo_id" => todo_id, "done" => true })
   end

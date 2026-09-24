@@ -38,6 +38,13 @@ class AcceptInviteOperation
       # (whose RecordInvalid the floor renders 422) and no callbacks.
       invite.update_columns(redeemed_at: Time.current, redeemed_by_account_id: principal_id)
 
+      Kiosk::Server::Events.emit(
+        topic: :list_membership, subject: invite.list_id,
+        identity_scope: Membership.account_ids_on(invite.list_id),
+        data: { "account_id" => principal_id, "role" => Membership::MEMBER,
+                "action" => "joined" },
+      )
+
       OperationResult.ok({ "list_id" => invite.list_id, "joined" => true })
     end
   end

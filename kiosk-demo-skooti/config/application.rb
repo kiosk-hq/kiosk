@@ -3,10 +3,20 @@ require_relative "boot"
 require "rails"
 # Pick the frameworks you want:
 require "active_model/railtie"
-# active_job/railtie is NOT loaded: no demo in the fleet defines a job or
-# enqueues one, and the frameworks this app does not use stay unloaded the same
-# way active_storage/action_mailer/action_mailbox/action_text do below. Re-add
-# the require in the same commit that adds the first job class.
+# active_job/railtie IS loaded, and the trigger was the sentence this comment
+# used to end with: «re-add the require in the same commit that adds the first
+# job class». Nothing here named a job class — the GEM did. `solid_cable` ships
+# `app/jobs/solid_cable/trim_job.rb` (`class TrimJob < ActiveJob::Base`) and its
+# engine puts that directory on the eager-load path, so the constant is resolved
+# at boot wherever `config.eager_load` is true.
+#
+# WHICH IS PRODUCTION AND NOT DEVELOPMENT, and that asymmetry is the whole
+# reason this is written out rather than just fixed: development does not eager
+# load, so every task, spec and local boot stayed green while `bin/rails
+# runner 'Rails.application.eager_load!'` raised `uninitialized constant
+# SolidCable::ActiveJob` and a production boot died. Caught by demo:isolation,
+# whose probe eager-loads on purpose.
+require "active_job/railtie"
 require "active_record/railtie"
 # require "active_storage/engine"
 require "action_controller/railtie"

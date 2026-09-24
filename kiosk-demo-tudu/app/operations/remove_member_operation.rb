@@ -45,6 +45,16 @@ class RemoveMemberOperation
       )
     end
 
+    # Emitted AFTER the delete, so the removed account is no longer in the
+    # scope and does not receive an event about losing access it can no longer
+    # subscribe to — its standing subscription is torn down by the socket's own
+    # re-authorisation, which is where that belongs.
+    Kiosk::Server::Events.emit(
+      topic: :list_membership, subject: list_id,
+      identity_scope: Membership.account_ids_on(list_id),
+      data: { "account_id" => target, "action" => "removed" },
+    )
+
     OperationResult.ok({ "removed" => true })
   end
 end

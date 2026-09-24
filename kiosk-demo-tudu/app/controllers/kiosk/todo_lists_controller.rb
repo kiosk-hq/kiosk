@@ -22,6 +22,48 @@ class Kiosk::TodoListsController < ApplicationController
   # in the SAME transaction, an `owner` membership for the caller. Ownership is
   # read from the resolved identity, never from params: `input_schema` declares
   # `title` as the only property, so a forged owner_id is refused 400, not ignored.
+  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
+  #
+  # A shared list is the case the event stream exists for that is NOT a
+  # completion of anything the subscriber started: another member's assistant
+  # adds a todo, a HUMAN ticks one off in the browser, somebody redeems an
+  # invite. None of those is an answer to a call, so there is nothing to poll
+  # for and no cadence to invent — before events the only way to learn any of
+  # them was to re-read `list_todos` on a guess.
+  #
+  # Both topics take the LIST as their subject and `reach :consented`, exactly
+  # as the verbs beside them do: membership is the consent artefact, and a
+  # non-member is refused the subscription rather than handed a filtered one.
+  #
+  # `subject_reachable` is re-run on every subscribe AND while the subscription
+  # stands, so it must not read `CurrentRequest` — see
+  # {Membership.readable_by?}, which is the request-free twin written for it.
+
+  topic :todo do
+    reach :consented
+    description "A todo on a list you can reach was added or completed — by another " \
+                "member's assistant, or by a human clicking Done in the browser."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { todo_id: { type: "string", format: "uuid" },
+                                 title:   { type: "string" },
+                                 done:    { type: "boolean" },
+                                 action:  { enum: %w[added completed] } },
+                   required: %w[todo_id done action]
+    subject_reachable ->(list_id, identity) { Membership.readable_by?(list_id, identity.user_id) }
+  end
+
+  topic :list_membership do
+    reach :consented
+    description "Somebody joined or left a list you can reach — a third principal redeemed " \
+                "an invite, or an owner removed a member."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { account_id: { type: "string", format: "uuid" },
+                                 role:       { type: "string" },
+                                 action:     { enum: %w[joined removed] } },
+                   required: %w[account_id action]
+    subject_reachable ->(list_id, identity) { Membership.readable_by?(list_id, identity.user_id) }
+  end
+
   kind :action
   description "Create a new todo list for the authenticated principal, who becomes its owner in the " \
               "same transaction. Ownership is NOT an input: it is taken from the identity the operator " \

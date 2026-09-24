@@ -257,11 +257,19 @@ assert(example_at > Time.now,
 # ticked with both of them deleted. A direct call is the only thing that can
 # hold them, so this is one.
 #
-# IT COSTS TWO STAND-INS AND NO DATABASE, the same trick list_access_spec plays
+# IT COSTS FOUR STAND-INS AND NO DATABASE, the same trick list_access_spec plays
 # on {Membership.reachable?}: {ListAccess.check} is the gate in front of these
 # branches and it reads a table, so it answers «granted» here, and {Todo} stands
 # in for the INSERT so the accepted case — the control, without which every arm
 # below would pass on a verb that refused everything — can be driven too.
+#
+# THE OTHER TWO ARE THE EVENT EMIT, and they were added the day the verb grew
+# one (T-169). `add_todo` now ends by telling every member of the list, which
+# reads the membership table and calls into the engine — so a spec that boots
+# neither raises `uninitialized constant` on the ACCEPTED arms and leaves only
+# the refusals passing. That is the shape worth naming: the arms that still
+# worked were the ones that return BEFORE the new line, so the failure looked
+# like a clock bug rather than a missing stand-in.
 require "kiosk/operation_result"
 require_relative "../app/operations/operation_result"
 
@@ -280,6 +288,23 @@ Object.const_set(:Todo, Module.new do
     [{ "id" => "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" }]
   end
 end)
+Object.const_set(:Membership, Module.new do
+  def self.account_ids_on(_list_id) = []
+end)
+unless defined?(Kiosk::Server::Events)
+  Object.const_set(:Kiosk, Module.new) unless defined?(Kiosk)
+  Kiosk.const_set(:Server, Module.new) unless Kiosk.const_defined?(:Server, false)
+  Kiosk::Server.const_set(:Events, Module.new do
+    class << self
+      attr_accessor :emitted
+    end
+
+    def self.emit(**attrs)
+      self.emitted = attrs
+      nil
+    end
+  end)
+end
 
 LIST_ID = "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70"
 

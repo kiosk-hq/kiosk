@@ -746,6 +746,35 @@ namespace :demo do
     check.call("agents.json was READ: carries the v1.0 required keys version/standard/site",
                (%w[version standard site] - (r["agents_json_keys"] || [])).empty?)
 
+    # ── THE EVENT SURFACE ────────────────────────────────────────────────────
+    #
+    # This beat served the stream before it asserted anything about it: the new
+    # `events` capability rode through the pay-absence check unremarked, and the
+    # catalogue's third array was not read at all. These four close that, and
+    # each one is a different half of «advertise what you actually serve».
+    events_url = r["discovery_events_url"]
+    topics     = r["schema_event_topics"] || []
+
+    # tudu DOES declare topics, so the module is advertised and the URL is
+    # published — the pair that says an assistant can find the stream at all.
+    check.call("discovery capabilities include `events` (#{capabilities.inspect})",
+               capabilities.include?("events"))
+    check.call("discovery publishes events_url on the wire's own origin and mount (#{events_url.inspect})",
+               events_url.to_s.match?(%r{\Awss?://[^/]+/kiosk/events\z}))
+
+    # The catalogue names the topics, so a subscriber learns them the same way
+    # it learns verbs — by reading one public document, not by trying names.
+    check.call("the catalogue names both topics this demo declares (#{topics.inspect})",
+               topics == %w[list_membership todo])
+
+    # AND A TOPIC DESCRIPTOR IS CLOSED, exactly as a verb descriptor is. The
+    # member this asserts the ABSENCE of is the one that matters: the operator's
+    # `subject_reachable` rule is deliberately unpublished, because publishing it
+    # describes where to look for a gap in it while telling a conformant
+    # subscriber nothing it can act on.
+    check.call("a topic descriptor carries the four published members and NO subject rule (#{(r['schema_event_member_keys'] || []).inspect})",
+               (r["schema_event_member_keys"] || []) == %w[description name payload_schema reach])
+
     # ── §8.3 — THE PUBLISHED EXAMPLES, AGAINST THEIR OWN SCHEMAS ─────────────
     #
     # Matrix SPEC-084, on the bytes script/schema_flow.rb GOT off

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-25: **The fleet re-pins to `skill-v0.4.16.md`, the cut that puts the two out-of-band waits on the event stream.** All seven demos and the engine default move URL and digest together.
+- 2026-09-25: **`bin/check-listener-pin` now asks the ALIAS whether the current skill pins the listener, not "some published cut".** A cut is immutable, so the wide question answers yes for ever.
 - 2026-09-25: **`deploy/rollout.sh` makes `deploy/env/*.env.example` drive the boxes, which nothing in any repository did before.** A missing secret stops the run rather than writing a blank.
 - 2026-09-25: **An origin that declares an event topic and leaves the in-process store in place is refused at production boot (K-1804).** One declaring no topic is untouched.
 - 2026-09-25: **skooti told an assistant a verb unlocks the vehicle, on the same served document that says nothing on this wire opens a lock (K-1777).** Both sentences now name activation.

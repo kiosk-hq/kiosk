@@ -66,14 +66,15 @@ STABLE_URL = "https://kiosk.tech/events/listen.py"
 
 # WHETHER A PUBLISHED SKILL CUT PINS THIS YET, declared rather than inferred.
 #
-# It does not: the listener ships in T-169 wave 1 and the skill cut that pins
-# it is wave 2. A guard that merely looked and found nothing would be green
-# both before the pin exists AND on the day somebody deletes it, which is the
-# same vacuous pass this repo has been bitten by before. So the expectation is
-# WRITTEN DOWN and checked in BOTH directions: while this is false, a skill
-# file that DOES reference the URL fails the guard and asks for this line to
-# be flipped; once it is true, a skill file that does not fails it.
-SKILL_PINS_EXPECTED = false
+# It does: skill-v0.4.16.md is the wave-2 cut, and its Step 3b tells an
+# assistant to fetch this listener, verify this digest and run it. A guard that
+# merely looked and found something would be green both after the pin exists
+# AND on the day somebody deletes it, which is the same vacuous pass this repo
+# has been bitten by before. So the expectation is WRITTEN DOWN and checked in
+# BOTH directions: while this is true, a skill file that does NOT reference the
+# URL fails the guard and asks for this line to be flipped; while it was false,
+# one that did failed it.
+SKILL_PINS_EXPECTED = true
 # ─────────────────────────────────────────────────────────────────────────────
 
 ROOT      = File.expand_path("..", __dir__)
@@ -164,18 +165,40 @@ def check_sibling
 
   pinning = Dir[File.join(SITE_ROOT, "*.md")].sort.select { File.read(_1).include?(PINNED_URL) }
   if SKILL_PINS_EXPECTED
-    if pinning.empty?
-      fail! "no kiosk.tech skill file references #{PINNED_URL}, but SKILL_PINS_EXPECTED says one " \
-            "should — either the URL moved or the skill stopped steering to the listener"
+    # THE POSITIVE DIRECTION ASKS ABOUT THE ALIAS BY NAME, NOT ABOUT "some .md"
+    # (K-1808, measured). A published cut is IMMUTABLE, so the moment one of
+    # them names this URL the wide question is answered "yes" for ever — and a
+    # LATER cut that drops the listener leaves an older cut matching and this
+    # guard green. MEASURED by plant-and-restore: a next cut with the versioned
+    # URL and the digest taken out, with skill-v0.4.16.md untouched beside it,
+    # gave EXIT 0 on the wide question. That is precisely the vacuous pass the
+    # header above says this expectation exists to prevent, one cut later.
+    #
+    # `skill.md` is the alias, and kiosk.tech's own check-skill-immutability
+    # holds it byte-identical to the newest cut — so asking the alias is asking
+    # what the CURRENT skill tells an assistant, which is the claim.
+    alias_path = File.join(SITE_ROOT, "skill.md")
+    alias_text = File.exist?(alias_path) ? File.read(alias_path) : ""
+    if !alias_text.include?(PINNED_URL)
+      fail! "kiosk.tech/skill.md does not reference #{PINNED_URL}, but SKILL_PINS_EXPECTED says " \
+            "the current skill steers assistants to the listener — either the URL moved, or the " \
+            "skill stopped pinning it and this line should be flipped back"
+    elsif !alias_text.include?(PINNED_SHA256)
+      fail! "kiosk.tech/skill.md references #{PINNED_URL} but does NOT pin #{PINNED_SHA256} — " \
+            "assistants following it will refuse the file we serve"
     else
-      pinning.each do |path|
-        name = File.basename(path)
-        if File.read(path).include?(PINNED_SHA256)
-          pass "#{name} pins #{PINNED_SHA256[0, 12]}… for #{PINNED_URL}"
-        else
-          fail! "#{name} references #{PINNED_URL} but does NOT pin #{PINNED_SHA256} — " \
-                "assistants following it will refuse the file we serve"
-        end
+      pass "skill.md (the alias, == the newest cut) pins #{PINNED_SHA256[0, 12]}… for #{PINNED_URL}"
+    end
+
+    # Every OTHER file that names the URL still has to carry the right digest:
+    # an old cut with a stale digest is a live instruction to refuse our bytes.
+    (pinning - [alias_path]).each do |path|
+      name = File.basename(path)
+      if File.read(path).include?(PINNED_SHA256)
+        pass "#{name} pins #{PINNED_SHA256[0, 12]}… for #{PINNED_URL}"
+      else
+        fail! "#{name} references #{PINNED_URL} but does NOT pin #{PINNED_SHA256} — " \
+              "assistants following it will refuse the file we serve"
       end
     end
   elsif pinning.empty?

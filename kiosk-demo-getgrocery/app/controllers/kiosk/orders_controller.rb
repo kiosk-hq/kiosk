@@ -61,6 +61,24 @@ class Kiosk::OrdersController < ActionController::API
     }
   end
 
+  # The card-setup wait, and the one topic whose state lives at the PSP rather
+  # than here. `payment_setup` re-derives readiness from Stripe on every call,
+  # so an assistant polling it costs a round trip to a third party per ask —
+  # the skill's cadence prescribes roughly 28 of them over five minutes, for
+  # one bit this operator holds the moment the human's browser comes back.
+  #
+  # The subject is the PRINCIPAL rather than any row: card setup is a property
+  # of the account, and there is no order, no request and no reservation it
+  # belongs to.
+  topic :payment_setup do
+    description "The human finished saving a card. `pay` will now be accepted — no further " \
+                "payment_setup call is needed."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { status: { enum: %w[ready] } },
+                   required: %w[status]
+    subject_reachable ->(subject, identity) { subject.to_s == identity.user_id.to_s }
+  end
+
   # An order reaches `paid` on the OPERATOR's clock, not the caller's: the
   # reconcile sweep resolves a claimed capture minutes to hours after the call
   # that made it returned. Nothing the assistant did causes this transition, so

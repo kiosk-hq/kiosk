@@ -689,7 +689,7 @@ These are the lines the two named files actually carry, verbatim:
       customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
       customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
       test_autocard:     Rails.configuration.x.kiosk.test_autocard,
-      return_url:        "#{Kiosk.configuration.issuer}/payment/return",
+      return_url:        "#{Kiosk.configuration.issuer}/payment/return?session_id={CHECKOUT_SESSION_ID}",
     ),
 ```
 

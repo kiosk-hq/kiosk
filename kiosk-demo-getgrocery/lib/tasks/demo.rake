@@ -1128,10 +1128,10 @@ namespace :demo do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    if (result["schema_event_topics"] || []) == ["kyc_verification", "order_payment"]
+    if (result["schema_event_topics"] || []) == ["kyc_verification", "order_payment", "payment_setup"]
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[kyc_verification order_payment].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[kyc_verification order_payment payment_setup].inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 

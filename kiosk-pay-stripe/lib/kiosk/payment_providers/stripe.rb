@@ -360,6 +360,23 @@ module Kiosk
       #      SetupIntent with no valid return target is a misconfiguration, not
       #      something to paper over with a localhost address a real human's
       #      browser would follow.
+      #
+      # IF THE RETURN PAGE HAS TO KNOW WHO CAME BACK, the operator puts Stripe's
+      # own placeholder in the url it injects:
+      #
+      #   return_url: "\#{Kiosk.configuration.issuer}/payment/return?session_id={CHECKOUT_SESSION_ID}"
+      #
+      # Stripe substitutes the id on the redirect, and the page retrieves the
+      # session to learn the customer. Without it the page is ANONYMOUS — the
+      # url is one constant for every principal, so a handler that wanted to
+      # record readiness, or push an event about it, has nothing to address.
+      #
+      # This adapter does NOT add the placeholder itself, and that is the
+      # boundary rather than an omission: the return page is the operator's
+      # own, its shape is theirs, and an adapter that rewrote their url would be
+      # deciding what their page needs. Note the literal is STABLE — it is the
+      # same bytes for every caller — so {#outstanding_setup_session}'s
+      # `success_url` equality still matches and session reuse is unaffected.
       def resolved_return_url
         return @return_url if @return_url && !@return_url.to_s.strip.empty?
 

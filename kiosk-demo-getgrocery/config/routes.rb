@@ -35,13 +35,5 @@ Rails.application.routes.draw do
   # here after they save a card. Without this route the human hit a 404
   # post-card-entry (a demo gap this route closes). Production providers point at
   # kiosk.tech/payment/return; a self-hosted demo serves its own.
-  get "/payment/return", to: ->(_env) {
-    [200, { "content-type" => "text/html; charset=utf-8" },
-     ["<!DOCTYPE html><html><head><meta charset='utf-8'><title>Card saved</title></head>" \
-      "<body style='font-family:system-ui,sans-serif;text-align:center;padding:64px'>" \
-      "<h1>Card saved ✓</h1><p>Your assistant can now pay on your behalf. " \
-      "You can close this tab.</p>" \
-      "<p style='color:#888;font-size:14px'>getgrocery · Stripe test mode</p>" \
-      "</body></html>"]]
-  }
+  get "/payment/return", to: "payment_return#show"
 end

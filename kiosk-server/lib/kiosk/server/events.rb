@@ -117,7 +117,15 @@ module Kiosk
           }
 
           store = Kiosk.configuration.event_store
-          Array(identity_scope).map { |identity_key| store.append(identity_key, event) }.last
+          Array(identity_scope).map do |identity_key|
+            id = store.append(identity_key, event)
+            # The append is what makes the event RESUMABLE; the broadcast is
+            # what makes it PROMPT. Both, in that order: a socket woken before
+            # the row exists would hand out an id a reconnecting client could
+            # not then ask for.
+            EventsCable.broadcast(identity_key, event.merge("id" => id))
+            id
+          end.last
         end
 
         def reset! = registry.clear

@@ -97,10 +97,19 @@ Gem::Specification.new do |spec|
   # 2026-08-11 that dependency was undeclared and satisfied only by accident,
   # because every consumer happens to be a Rails app.
   #
-  # We depend on the four Rails components we actually reference, not on the
-  # `rails` meta-gem: nothing here touches Action Mailer, Action Cable, Active
-  # Job, Active Storage, Action Text or Action Mailbox, so requiring a host to
-  # install them would be a false claim.
+  # We depend on the Rails components we actually reference, not on the
+  # `rails` meta-gem: nothing here touches Action Mailer, Active Job, Active
+  # Storage, Action Text or Action Mailbox, so requiring a host to install them
+  # would be a false claim.
+  #
+  # **ACTION CABLE JOINED THAT LIST ON 2026-09-25 (T-169) and the sentence above
+  # used to exclude it.** It is not an optional extra any more: the engine draws
+  # a WebSocket route under the mount, so an operator who bundles this gem gets
+  # Action Cable whether or not they ever declare a topic, exactly as they get
+  # the `pay` route whether or not they configure a payment provider. Declaring
+  # it is the honest reading of that; leaving it undeclared would be the same
+  # accident the Rails dependency itself was until 2026-08-11 — satisfied only
+  # because every consumer happens to be a Rails app.
   #
   # `~> 8.1` is the version the demos, the e2e fixture and CI actually run
   # (Rails 8.1.3 on Ruby 4.0.1). Older Rails lines are untested, so they are
@@ -111,6 +120,13 @@ Gem::Specification.new do |spec|
   spec.add_dependency "railties",      "~> 8.1"
   # actionpack    — ActionController::{API,Base,InvalidAuthenticityToken}.
   spec.add_dependency "actionpack",    "~> 8.1"
+  # actioncable   — the event stream: ActionCable::Server::{Base,Configuration},
+  #                 Connection::Base and Channel::Base, mounted at
+  #                 `<endpoint>/events`. The engine builds its OWN server rather
+  #                 than using `ActionCable.server`, so a host that already runs
+  #                 channels of its own keeps its connection class and its
+  #                 forgery protection untouched.
+  spec.add_dependency "actioncable",   "~> 8.1"
   # activerecord  — ActiveRecord::Base.lease_connection is how the auth plane,
   #                 the wire and the durable stores reach the database (NOT
   #                 `.connection`, which Rails 8.1 soft-deprecates and which
@@ -124,6 +140,12 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rspec",    "~> 3.13"
   spec.add_development_dependency "rake",     "~> 13.2"
   spec.add_development_dependency "rack",     "~> 3.0"
+  # puma — the events socket cannot be exercised without a server that supports
+  # `rack.hijack`: Action Cable's connection takes the socket away from Rack,
+  # and a handler that cannot give it up answers the upgrade with an ordinary
+  # HTTP response. So the one spec that drives a real WebSocket boots Puma in a
+  # subprocess. Development only; nothing at runtime depends on a server.
+  spec.add_development_dependency "puma",     "~> 6.0"
   # TestExecutor (lib/kiosk/server/test_executor.rb) implements the
   # Kiosk::TestHelpers::Journey contract; we need the error classes
   # at test time. Host apps depending on TestExecutor will have

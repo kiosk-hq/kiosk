@@ -962,7 +962,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     # pins the names the mixin refuses today so a silent shrink is visible.
     it "reserves every first path segment the engine draws under the mount" do
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
-        .to contain_exactly("agents", "auth", "oauth", "pay", "schema")
+        .to contain_exactly("agents", "auth", "events", "oauth", "pay", "schema")
     end
 
     it "404s a verb whose method stopped being a public action" do

@@ -111,7 +111,16 @@ if routes_block.empty?
   errors << "could not read the engine's `routes do` block out of engine.rb — has it moved?"
 end
 
-drawn = routes_block.scan(/^\s*(?:get|post|put|patch|delete)\s+"([^"]+)"/).flatten
+# TWO route forms, because the engine draws two kinds of thing. The verb-shaped
+# lines are `get "schema"` / `post "pay"`; the event stream is a MOUNTED rack app
+# (`mount Kiosk::Server::EventsCable::RACK_APP => "events"`), and a parser that
+# only knew the first form read `events` as reserved-but-undrawn and failed on a
+# route that was right there (T-169). A `mount` under this block occupies its
+# first segment exactly as a `get` does — more completely, in fact, since it
+# anchors a whole app there.
+verb_routes  = routes_block.scan(/^\s*(?:get|post|put|patch|delete)\s+"([^"]+)"/).flatten
+mount_routes = routes_block.scan(/^\s*mount\s+\S+\s*=>\s*"([^"]+)"/).flatten
+drawn = verb_routes + mount_routes
 first_segments = drawn.map { |path| path.delete_prefix("/").split("/").first.to_s }
 # `:kiosk_verb` is the per-verb pair itself — the thing the reserved plane sits
 # above — and `.well-known` cannot match a verb name, so neither is reservable.
@@ -119,7 +128,7 @@ reservable = first_segments.reject { |seg| seg.start_with?(":") }
                            .select { |seg| NAME_PATTERN.match?(seg) }
                            .uniq.sort
 
-listing << ["engine routes", drawn.length.to_s]
+listing << ["engine routes", "#{drawn.length} (#{verb_routes.length} verb-shaped, #{mount_routes.length} mounted)"]
 listing << ["reservable first segments", reservable.join(" ")]
 listing << ["RESERVED_NAMES", declared_reserved.sort.join(" ")]
 

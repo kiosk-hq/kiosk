@@ -196,7 +196,7 @@ module Kiosk
       # name that is, in fact, free. An operator may declare a verb called
       # `query` or `run`; none does, and one that did would be served at
       # `<endpoint>/query` like any other.
-      RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
+      RESERVED_NAMES = %w[agents auth events oauth pay schema].freeze
 
       # The descriptor fields 0.4 makes REQUIRED on every verb. Both are
       # contracts a caller acts on — `input_schema` is what the wire coerces

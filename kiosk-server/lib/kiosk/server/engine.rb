@@ -320,6 +320,25 @@ module Kiosk
         get  "schema", to: "wire#schema"
         post "pay",    to: "wire#pay"
 
+        # THE EVENT STREAM — drawn here for the reason `schema` and `pay` are:
+        # its path and its answers are the spec's, not the operator's.
+        #
+        # The mounted app is OURS ({EventsCable}) rather than
+        # `ActionCable.server`, so a host already running channels of its own
+        # keeps its connection class and its forgery protection untouched — we
+        # never write to the app-global Action Cable config at all.
+        #
+        # `internal: true, anchor: true` are Action Cable's own mount flags
+        # (its engine.rb uses the same pair) and neither is decorative: the
+        # route is not part of the operator's named surface, and the upgrade
+        # must match at exactly this path rather than as a prefix.
+        #
+        # `events` is in {HandlerMixin::RESERVED_NAMES} in the same commit —
+        # `bin/check-kiosk-names` holds that list against THIS table in both
+        # directions, so either half alone is a build failure.
+        mount Kiosk::Server::EventsCable::RACK_APP => "events",
+              internal: true, anchor: true, as: :kiosk_events
+
         # kiosk-pop auth plane (challenge-response proof-of-possession).
         get  "auth/challenge", to: "auth#challenge"
         post "auth/register",  to: "auth#register"

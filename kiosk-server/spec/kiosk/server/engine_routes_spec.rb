@@ -140,9 +140,11 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     it "reserves exactly the first segments it draws — and `query`/`run` left both" do
       # `RESERVED_NAMES` is the declaration-time half of the same rule, and
       # `bin/check-kiosk-names` holds it equal to the engine's drawn first
-      # segments. The cutover deleted two routes, so it shed the two names.
+      # segments. The cutover deleted two routes, so it shed the two names;
+      # `events` joined when the stream was mounted (T-169), which is the same
+      # rule running the other way.
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
-        .to eq(%w[agents auth oauth pay schema])
+        .to eq(%w[agents auth events oauth pay schema])
     end
 
     it "does not swallow the multi-segment reserved routes" do

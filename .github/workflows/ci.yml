@@ -2576,6 +2576,39 @@ jobs:
       - name: Check the served solver against the pin
         run: ./bin/check-solver-pin --network
 
+  # ── The event-stream listener's pin, same split and same reasoning ────────
+  #
+  # kiosk-server/listen.py is the reference client for the event stream, and
+  # the published skill pins its sha256 so an assistant verifies the digest and
+  # REFUSES to execute a mismatch. A drift is one notch less severe than the
+  # solver's — the poll fallback still works, so nothing errors — which is
+  # exactly why it needs a gate: the symptom is that assistants quietly stop
+  # using the stream, and no operator dashboard shows that.
+  #
+  # The OFFLINE half already blocks every push, inside the kiosk-server suite
+  # in the gems matrix above (spec/listener_pin_spec.rb), which is also the
+  # merge gate for a listen.py edit. This job is the half that needs the
+  # network, and it is scheduled-only for the two reasons stated above the
+  # solver's job: the drift is introduced by commits in the kiosk.tech repo,
+  # and gating unrelated merges on a third-party fetch is a bad trade.
+  listener-pin-live:
+    name: listener pin (live kiosk.tech)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      # Stdlib only (digest + net/http) — no bundle, no services.
+      - name: Check the served listener against the pin
+        run: ./bin/check-listener-pin --network
+
   e2e:
     name: kiosk OSS end-to-end
     runs-on: ubuntu-latest

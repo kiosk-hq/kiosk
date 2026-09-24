@@ -1,0 +1,236 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Event-stream listener pin drift guard (T-169).
+#
+# Modelled on bin/check-solver-pin, deliberately: the two artefacts have the
+# same shape — one file, published on kiosk.tech, pinned by SHA-256 in the
+# skill, fetched and verified by an assistant that REFUSES to execute a
+# mismatch — so they get the same machinery rather than a second invention.
+#
+# WHAT BREAKS IF THESE DRIFT
+# --------------------------
+# An assistant that cannot run the listener cannot hold an event stream at
+# all. It falls back to polling, which still works, so nothing 500s and
+# nothing appears in any log — the operator's only symptom is that assistants
+# went back to asking every few seconds for an answer this origin would have
+# pushed. That is the same silent-degradation shape as the solver's, one
+# notch less severe because the fallback exists.
+#
+# The same bytes exist in three places that must never diverge:
+#
+#   1. kiosk-server/listen.py                  — the SOURCE OF TRUTH (this repo)
+#   2. kiosk.tech/events/listen-v<version>.py  — the frozen, pinned cut
+#      and kiosk.tech/events/listen.py         — always-current, never pinned
+#   3. the sha256 pinned in the published skill, once a cut carries it
+#
+# Only (1) lives in THIS repo, so the guard is split by what can honestly be
+# verified from where — same three modes as check-solver-pin:
+#
+#   --offline  (default)  no network. Checks (1) against the pin below, and,
+#                         when the umbrella layout happens to be present
+#                         (../kiosk.tech beside this repo), (2) as well.
+#                         Otherwise it SAYS it skipped rather than pretending.
+#   --network             fetches what kiosk.tech actually serves and checks
+#                         it against (1). The only mode that can catch a drift
+#                         introduced by a commit in the OTHER repo, which by
+#                         definition never triggers this repo's CI.
+#   --all                 both.
+#
+# WHEN THIS FAILS ON YOU
+# ----------------------
+# If you deliberately changed listen.py, the pin below is not the thing to
+# "just update". The published cut is immutable — kiosk.tech's
+# check-skill-immutability protects events/listen-v*.py in the same two passes
+# that protect skill-v*.md — so a listener change means publishing a NEW
+# events/listen-vX.Y.Z.py, refreshing events/listen.py, and cutting a new
+# skill that pins it. Update PINNED_SHA256 and PINNED_URL as the LAST step of
+# that sequence, not the first.
+#
+# Usage: bin/check-listener-pin [--offline | --network | --all]
+
+require "digest"
+require "net/http"
+require "uri"
+
+# ── THE PIN ──────────────────────────────────────────────────────────────────
+PINNED_VERSION = "0.5.0"
+PINNED_SHA256  = "370b05579aeb04c9a9dfc0fe328cc90806f0d5166b2657d5a17b854ab23661ad"
+# TWO published URLs, the same split the solver uses and for the same reason —
+# except that this one is VERSIONED rather than content-addressed (Phil,
+# 2026-09-24: «будем версионировать ровно как kiosk и как skill.md, а не
+# sha12»). A version-named file is not immutable by construction, so
+# kiosk.tech's check-skill-immutability enforces it instead.
+PINNED_URL = "https://kiosk.tech/events/listen-v#{PINNED_VERSION}.py"
+STABLE_URL = "https://kiosk.tech/events/listen.py"
+
+# WHETHER A PUBLISHED SKILL CUT PINS THIS YET, declared rather than inferred.
+#
+# It does not: the listener ships in T-169 wave 1 and the skill cut that pins
+# it is wave 2. A guard that merely looked and found nothing would be green
+# both before the pin exists AND on the day somebody deletes it, which is the
+# same vacuous pass this repo has been bitten by before. So the expectation is
+# WRITTEN DOWN and checked in BOTH directions: while this is false, a skill
+# file that DOES reference the URL fails the guard and asks for this line to
+# be flipped; once it is true, a skill file that does not fails it.
+SKILL_PINS_EXPECTED = false
+# ─────────────────────────────────────────────────────────────────────────────
+
+ROOT      = File.expand_path("..", __dir__)
+LISTENER  = File.join(ROOT, "kiosk-server", "listen.py")
+SITE_ROOT = File.expand_path("../kiosk.tech", ROOT)
+
+FAILURES = []
+SKIPS    = []
+
+def pass(msg)  = puts("  ok:   #{msg}")
+def fail!(msg) = (FAILURES << msg) && puts("  FAIL: #{msg}")
+def skip!(msg) = (SKIPS << msg) && puts("  SKIP: #{msg}")
+
+def sha256_of(path) = Digest::SHA256.hexdigest(File.binread(path))
+
+def fetch(url, attempts: 3)
+  last = nil
+  attempts.times do |i|
+    sleep(2**i) if i.positive?
+    begin
+      res = Net::HTTP.get_response(URI(url))
+      return [res.body, nil] if res.is_a?(Net::HTTPOK)
+
+      last = "HTTP #{res.code}"
+    rescue StandardError => e
+      last = "#{e.class}: #{e.message}"
+    end
+  end
+  [nil, "unreachable after #{attempts} attempts (#{last})"]
+end
+
+def check_offline
+  puts "── Offline: the pin vs this repo ──"
+
+  unless File.exist?(LISTENER)
+    fail! "source-of-truth listener not found at #{LISTENER}"
+    return
+  end
+
+  actual = sha256_of(LISTENER)
+  if actual == PINNED_SHA256
+    pass "kiosk-server/listen.py sha256 == pin (#{PINNED_SHA256[0, 12]}…)"
+  else
+    fail! "kiosk-server/listen.py hashes to #{actual}, pin says #{PINNED_SHA256} — publish a " \
+          "NEW events/listen-vX.Y.Z.py and move the pin as the LAST step, never the first"
+  end
+
+  # The accessor is what an installed gem resolves; a rename that leaves it
+  # pointing at nothing is invisible until an assistant asks for the path.
+  server_rb = File.join(ROOT, "kiosk-server", "lib", "kiosk", "server.rb")
+  if File.exist?(server_rb) && File.read(server_rb).include?("def self.listener_path")
+    pass "Kiosk::Server.listener_path is declared"
+  else
+    fail! "Kiosk::Server.listener_path is gone from #{server_rb} — nothing resolves the " \
+          "listener inside an INSTALLED gem any more"
+  end
+
+  gemspec = File.join(ROOT, "kiosk-server", "kiosk-server.gemspec")
+  if File.exist?(gemspec) && File.read(gemspec).include?("listen.py")
+    pass "listen.py is in the gemspec's packaged files"
+  else
+    fail! "listen.py is not named in kiosk-server.gemspec — it would be missing from the " \
+          "built gem, where only path: consumers would notice"
+  end
+end
+
+def check_sibling
+  puts
+  puts "── Offline: the kiosk.tech copies (umbrella checkout) ──"
+
+  unless File.directory?(SITE_ROOT)
+    skip! "no sibling kiosk.tech checkout at #{SITE_ROOT} — the published cut and the skill " \
+          "pin are NOT verified here; `--network` is what covers them in CI"
+    return
+  end
+
+  [File.basename(URI(PINNED_URL).path), "listen.py"].each do |basename|
+    copy = File.join(SITE_ROOT, "events", basename)
+    if !File.exist?(copy)
+      fail! "kiosk.tech/events/#{basename} is missing — the URL would 404"
+    elsif File.binread(copy) == File.binread(LISTENER)
+      pass "kiosk.tech/events/#{basename} is byte-identical to the source of truth"
+    else
+      fail! "kiosk.tech/events/#{basename} differs from kiosk-server/listen.py " \
+            "(#{sha256_of(copy)} vs #{sha256_of(LISTENER)})"
+    end
+  end
+
+  pinning = Dir[File.join(SITE_ROOT, "*.md")].sort.select { File.read(_1).include?(PINNED_URL) }
+  if SKILL_PINS_EXPECTED
+    if pinning.empty?
+      fail! "no kiosk.tech skill file references #{PINNED_URL}, but SKILL_PINS_EXPECTED says one " \
+            "should — either the URL moved or the skill stopped steering to the listener"
+    else
+      pinning.each do |path|
+        name = File.basename(path)
+        if File.read(path).include?(PINNED_SHA256)
+          pass "#{name} pins #{PINNED_SHA256[0, 12]}… for #{PINNED_URL}"
+        else
+          fail! "#{name} references #{PINNED_URL} but does NOT pin #{PINNED_SHA256} — " \
+                "assistants following it will refuse the file we serve"
+        end
+      end
+    end
+  elsif pinning.empty?
+    pass "no skill cut pins the listener yet, as SKILL_PINS_EXPECTED declares (the cut that " \
+         "pins it is the next wave)"
+  else
+    fail! "#{pinning.map { File.basename(_1) }.join(', ')} already reference #{PINNED_URL} — " \
+          "flip SKILL_PINS_EXPECTED to true in this file so the digest is checked against " \
+          "them, instead of leaving a pin nothing verifies"
+  end
+end
+
+def check_network
+  puts
+  puts "── Network: the live published surfaces ──"
+
+  body, err = fetch(PINNED_URL)
+  if err
+    fail! "GET #{PINNED_URL} #{err}"
+  else
+    actual = Digest::SHA256.hexdigest(body)
+    if actual == PINNED_SHA256
+      pass "served #{PINNED_URL} hashes to the pin"
+    else
+      fail! "served #{PINNED_URL} hashes to #{actual}, pin says #{PINNED_SHA256} — an assistant " \
+            "following the skill is refusing to execute it RIGHT NOW"
+    end
+  end
+
+  stable, stable_err = fetch(STABLE_URL)
+  if stable_err
+    fail! "GET #{STABLE_URL} #{stable_err} — the always-current copy an error hint may name"
+  elsif Digest::SHA256.hexdigest(stable) == sha256_of(LISTENER)
+    pass "served #{STABLE_URL} is byte-identical to the source of truth"
+  else
+    fail! "served #{STABLE_URL} differs from kiosk-server/listen.py — the always-current copy " \
+          "was not refreshed with the last listener change"
+  end
+end
+
+mode = ARGV[0] || "--offline"
+case mode
+when "--offline" then (check_offline; check_sibling)
+when "--network" then check_network
+when "--all"     then (check_offline; check_sibling; check_network)
+else
+  warn "usage: #{$PROGRAM_NAME} [--offline | --network | --all]"
+  exit 2
+end
+
+puts
+SKIPS.each { puts "  (skipped: #{_1})" }
+if FAILURES.empty?
+  puts "check-listener-pin: OK — the pinned listener agrees everywhere this mode can see."
+  exit 0
+end
+puts "check-listener-pin: FAIL — #{FAILURES.size} drift(s)."
+exit 1

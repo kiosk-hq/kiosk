@@ -53,8 +53,13 @@ Gem::Specification.new do |spec|
   # every consumer in this monorepo uses `path:`, which serves the working
   # tree: no test here could have noticed, and only someone installing from
   # RubyGems would have. bin/check-gem-packaging is the standing guard.
+  # `listen.py` rides along for the same reason `solve.py` does in
+  # kiosk-pow-equihash: it is the pinned reference client for a wire this gem
+  # serves, and {Kiosk::Server.listener_path} resolves it inside the INSTALLED
+  # gem. Leaving it out makes that accessor answer a path that does not exist
+  # everywhere but a checkout.
   spec.files = Dir.glob("app/**/*") + Dir.glob("lib/**/*") +
-               %w[README.md LICENSE.txt CHANGELOG.md]
+               %w[listen.py README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "kiosk-core", "~> 0.4.0"

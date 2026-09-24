@@ -167,6 +167,20 @@ Kiosk.configure do |c|
   c.registration_pow_params = SKOOTI_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
 
+  # ── The event tail lives in the DATABASE, not in this process ────────────
+  # Set rather than defaulted, and the reason is the protocol's rather than
+  # this shop's scale. Some topics are WAITS — the assistant asked and is
+  # holding on for the answer. Others are SUBSCRIPTIONS: a delivery event
+  # arrives hours after the order, a property's answer minutes after the
+  # money. NOTHING holds a socket that long; an assistant is turn-based and
+  # has no process that outlives its session, so it reconnects later and asks
+  # for everything after the id it last saw. A tail that was in memory is gone
+  # by then, and the only honest answer is `truncated: true` — which tells the
+  # assistant to re-read state through an ordinary verb. That is the rare
+  # degraded case; with the in-process default it is the answer after every
+  # restart. Same seam as `pow_spent_store` above, opposite call.
+  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
+
   # ── One process today. Before this origin ever runs two, read this ───────
   # `pow_spent_store` is left at its IN-PROCESS default, which is correct only
   # because each demo origin runs a SINGLE process. Two Puma workers, two pods,

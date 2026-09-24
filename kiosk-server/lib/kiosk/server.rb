@@ -206,5 +206,22 @@ module Kiosk
     #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token (device_code grant)
     #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify (HTML, overridable views)
     #   - {Kiosk::Server::AssistantsController}        — «Link an assistant» page (HTML, overridable views)
+
+    # Absolute path to the pinned reference listener shipped inside this gem.
+    #
+    # The event stream is a WebSocket, and an assistant that hand-rolls a
+    # client for it gets the subprotocol token, the string-inside-a-string
+    # `identifier` or the resume contract wrong and is dropped with no
+    # diagnostic. So the same posture as the Equihash solver: ONE file, pinned
+    # by SHA-256 in the published skill, fetched from kiosk.tech.
+    #
+    # This accessor exists so nothing hardcodes a checkout path — the gem is
+    # installed, not cloned, and only the running file's own directory knows
+    # where it landed. Same spelling as the Equihash solver's, same reason.
+    #
+    # @return [String]
+    def self.listener_path
+      File.expand_path("../../listen.py", __dir__)
+    end
   end
 end

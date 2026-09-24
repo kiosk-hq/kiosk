@@ -160,34 +160,44 @@ namespace :demo do
     # executor phase 3 — a cart mandate carrying the booking id, and a capture
     # receipt against it — because `settled_reference` reads exactly that, and
     # stubbing it instead would prove only that a stub was called.
+    # The chain the engine writes in executor phase 3, in the order the foreign
+    # keys demand: an intent, the cart that references this booking, then the
+    # capture receipt. Written out rather than stubbed because
+    # `settled_reference` and `confirm_booking`'s payment gate both read
+    # exactly these rows, and a stub would prove only that a stub was called.
+    settle = lambda { |booking|
+      charge = "stub_pi_#{SecureRandom.uuid}"
+      conn   = ActiveRecord::Base.lease_connection
+      intent_id = conn.exec_query(
+        "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
+        "cap_amount_cents, currency, expires_at, raw_jws) " \
+        "VALUES ($1, $2::uuid, gen_random_uuid(), $3, 'booking', $4, 'eur', " \
+        "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
+        "seed intent", ["intent-#{SecureRandom.hex(6)}", booking.user_id,
+                        Kiosk.configuration.issuer, booking.total_cents],
+      ).first["id"]
+      cart_id = conn.exec_query(
+        "INSERT INTO kiosk.cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, " \
+        "issuer, line_items, total_amount_cents, currency, expires_at, raw_jws) " \
+        "VALUES ($1, $2::uuid, $3::uuid, gen_random_uuid(), $4, $5::jsonb, $6, 'eur', " \
+        "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
+        "seed cart", ["cart-#{SecureRandom.hex(6)}", intent_id, booking.user_id,
+                      Kiosk.configuration.issuer, [{ booking_id: booking.id }].to_json,
+                      booking.total_cents],
+      ).first["id"]
+      conn.exec_query(
+        "INSERT INTO kiosk.settlements (cart_mandate_id, user_id, agent_id, issuer, " \
+        "psp_reference, settled_amount_cents, currency, settled_at) " \
+        "VALUES ($1::uuid, $2::uuid, gen_random_uuid(), $3, $4, $5, 'eur', now())",
+        "seed settlement", [cart_id, booking.user_id, Kiosk.configuration.issuer, charge,
+                            booking.total_cents],
+      )
+      charge
+    }
+
     puts "\n── the property DECLINES a booking that WAS paid ──"
     paid   = seed.call
-    charge = "stub_pi_#{SecureRandom.uuid}"
-    conn   = ActiveRecord::Base.lease_connection
-    # The chain the engine writes, in the order the foreign keys demand: an
-    # intent, the cart that references this booking, then the capture receipt.
-    intent_id = conn.exec_query(
-      "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
-      "cap_amount_cents, currency, expires_at, raw_jws) " \
-      "VALUES ($1, $2::uuid, gen_random_uuid(), $3, 'booking', $4, 'eur', " \
-      "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
-      "seed intent", ["intent-#{SecureRandom.hex(6)}", paid.user_id, Kiosk.configuration.issuer,
-                      paid.total_cents],
-    ).first["id"]
-    cart_id = conn.exec_query(
-      "INSERT INTO kiosk.cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, " \
-      "line_items, total_amount_cents, currency, expires_at, raw_jws) " \
-      "VALUES ($1, $2::uuid, $3::uuid, gen_random_uuid(), $4, $5::jsonb, $6, 'eur', " \
-      "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
-      "seed cart", ["cart-#{SecureRandom.hex(6)}", intent_id, paid.user_id,
-                    Kiosk.configuration.issuer, [{ booking_id: paid.id }].to_json, paid.total_cents],
-    ).first["id"]
-    conn.exec_query(
-      "INSERT INTO kiosk.settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, " \
-      "settled_amount_cents, currency, settled_at) " \
-      "VALUES ($1::uuid, $2::uuid, gen_random_uuid(), $3, $4, $5, 'eur', now())",
-      "seed settlement", [cart_id, paid.user_id, Kiosk.configuration.issuer, charge, paid.total_cents],
-    )
+    charge = settle.call(paid)
 
     head_paid = store.head
     Rails.configuration.x.hoteling.decline_rate = 1
@@ -207,14 +217,29 @@ namespace :demo do
                refund && refund["psp_reference"] == paid.refund_psp_reference)
 
     puts "\n── the guest does NOT confirm their own booking ──"
+    # PAID FOR REAL, so the payment gates are satisfied and the refusal this
+    # asserts is the one about the property's silence rather than about money.
+    # A row that merely READS `paid` would stop at the settlement gate, which
+    # is `demo:book`'s SKIP_PAY beat and not this one.
     pending = seed.call
+    settle.call(pending)
     pending.update_columns(status: Booking::RESERVED)
-    result = Kiosk::Server::CurrentRequest.with(
-      Kiosk::Identity.new(user_id: pending.user_id, role: "customer", actor: "agent",
-                          agent_id: SecureRandom.uuid),
-    ) { ConfirmBookingOperation.call(booking_id: pending.id) } rescue nil
+    # Both gates read the principal from the DB session rather than from an
+    # argument (that is what makes a forged `user_id` in the body inert), so
+    # off the wire the session has to be opened by hand — which is exactly what
+    # the engine's own refusal tells a rake task to do.
+    identity = Kiosk::Identity.new(user_id: pending.user_id, role: "customer", actor: "agent",
+                                   agent_id: SecureRandom.uuid)
+    answer = Kiosk::Server::SessionContext.open(
+      connection: ActiveRecord::Base.lease_connection, identity: identity,
+    ) { ConfirmBookingOperation.call(booking_id: pending.id) }
     check.call("confirm_booking writes nothing while the property is silent",
                pending.reload.status == Booking::RESERVED && pending.confirmation_code.nil?)
+    # AND IT SAYS WHY. «not found or not yours» over a booking that is both
+    # would send an assistant to re-read `my_bookings` and find it there, so
+    # the refusal names the thing that has not happened yet.
+    check.call("…and the refusal names the property's silence",
+               !answer.ok? && answer.message.include?("the property has not answered"))
 
     puts "\n── a decision that arrives twice changes nothing ──"
     PropertyDecisionJob.new.perform(accepted.id)

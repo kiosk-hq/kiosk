@@ -2652,13 +2652,16 @@ jobs:
 
       # The e2e golden path registers with a real register-time Equihash PoW,
       # solved by the bundled numpy-vectorised solver (solve.py); the harness
-      # needs numpy or it errors "this solver requires numpy".
-      - name: Set up Python (Equihash solver)
+      # needs numpy or it errors "this solver requires numpy". Its event-stream
+      # leg runs the PINNED listener (kiosk-server/listen.py), which needs
+      # `websockets` — the same one line the skill tells an assistant to add to
+      # the venv it already makes.
+      - name: Set up Python (Equihash solver + event listener)
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install numpy (Equihash solver)
-        run: python -m pip install numpy
+      - name: Install numpy and websockets
+        run: python -m pip install numpy 'websockets>=12'
 
       # Retries for the reason written out on the demos job's copy (K-795).
       - name: Install PostgreSQL 17 client (PG17-format structure.sql / postgres:17 service)

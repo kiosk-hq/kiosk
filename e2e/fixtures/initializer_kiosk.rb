@@ -138,6 +138,16 @@ Kiosk.configure do |c|
   # advertises `"capabilities": []`.
   c.handlers = %w[Kiosk::CatalogController Kiosk::BookingsController]
 
+  # ── The event tail lives in the DATABASE ────────────────────────────────
+  # The same line `rails generate kiosk:install` writes into an operator's
+  # initializer, kept here because this harness OVERWRITES the generated file
+  # with this fixture and would otherwise fall back to the in-process default.
+  # That default is a Hash in ONE process: correct for a unit suite and wrong
+  # for anything deployed, because an assistant reconnecting between sessions
+  # resumes from the id it last saw and a tail that died with the process can
+  # only answer `truncated: true`.
+  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
+
   # Request-shape validation ON, as all seven demos have it. Two things ride
   # on it: a malformed Kiosk-PoW proof answers a clear 400 instead of a silent
   # re-challenge loop, and a verb's

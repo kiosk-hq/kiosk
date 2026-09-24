@@ -21,6 +21,7 @@ RSpec.describe Kiosk::Server::Events do
         subject_reachable ->(subject, identity) { subject == identity[:user_id] }
       end
     end
+    controller.kiosk_register!
 
     decl = described_class.fetch("todo")
     expect(decl[:reach]).to eq(:consented)
@@ -36,6 +37,7 @@ RSpec.describe Kiosk::Server::Events do
         payload_schema type: "object"
       end
     end
+    controller.kiosk_register!
 
     expect(described_class.fetch("order_payment")[:reach]).to eq(:principal)
   end
@@ -60,10 +62,53 @@ RSpec.describe Kiosk::Server::Events do
         render json: []
       end
     end
+    controller.kiosk_register!
 
     verb = Kiosk::Server::Queries.describe("my_verb")
     expect(verb[:reach]).to eq("principal")
     expect(verb[:description]).to eq("A verb.")
+  end
+
+  # ── RELOAD, which is where the first spelling of this was wrong ──────────
+  #
+  # `topic` used to call `Events.register` from the class body, so the SECOND
+  # read of that body — a Zeitwerk reload, or an eager load following a lazy
+  # one — met its own first registration and raised «already declared on this
+  # origin» at boot. Measured in e2e, where `db:seed` loads the controller
+  # twice in one process. The declaration is held on the class now and drained
+  # by `kiosk_register!`, exactly as a verb is.
+  it "survives the class body being read twice, as every reload reads it" do
+    declaring = lambda do
+      controller.class_eval do
+        topic :todo do
+          description "A todo on a list you can reach changed."
+          payload_schema type: "object", properties: { done: { type: "boolean" } }
+        end
+      end
+      controller.kiosk_register!
+    end
+
+    declaring.call
+    expect { declaring.call }.not_to raise_error
+    expect(described_class.known).to eq(%w[todo])
+  end
+
+  # The other direction, and the reason the fix is a REBUILD rather than an
+  # idempotent register: a registry that is only ever added to keeps serving a
+  # topic whose declaration is gone.
+  it "drops a topic that is no longer declared, on the next rebuild" do
+    controller.class_eval do
+      topic :todo do
+        description "A todo on a list you can reach changed."
+        payload_schema type: "object"
+      end
+    end
+    controller.kiosk_register!
+    expect(described_class.known).to eq(%w[todo])
+
+    Kiosk::Server::HandlerRegistrations.clear!
+
+    expect(described_class.known).to eq([])
   end
 
   it "refuses a name that is not a legal wire name" do
@@ -74,6 +119,7 @@ RSpec.describe Kiosk::Server::Events do
           payload_schema type: "object"
         end
       end
+      controller.kiosk_register!
     }.to raise_error(ArgumentError, /not a legal Kiosk name/)
   end
 
@@ -85,6 +131,7 @@ RSpec.describe Kiosk::Server::Events do
           payload_schema type: "object"
         end
       end
+      controller.kiosk_register!
     }.to raise_error(ArgumentError, /reserved/)
   end
 
@@ -97,6 +144,7 @@ RSpec.describe Kiosk::Server::Events do
           payload_schema type: "object"
         end
       end
+      controller.kiosk_register!
     }.to raise_error(ArgumentError, /not a Kiosk reach/)
   end
 
@@ -109,6 +157,7 @@ RSpec.describe Kiosk::Server::Events do
           description "x"
         end
       end
+      controller.kiosk_register!
     }.to raise_error(ArgumentError, /payload_schema/)
   end
 
@@ -119,6 +168,7 @@ RSpec.describe Kiosk::Server::Events do
           payload_schema type: "object"
         end
       end
+      controller.kiosk_register!
     }.to raise_error(ArgumentError, /description/)
   end
 
@@ -129,6 +179,7 @@ RSpec.describe Kiosk::Server::Events do
         payload_schema type: "object"
       end
     end
+    controller.kiosk_register!
 
     expect {
       controller.class_eval do
@@ -137,6 +188,7 @@ RSpec.describe Kiosk::Server::Events do
           payload_schema type: "object"
         end
       end
+      controller.kiosk_register!
     }.to raise_error(ArgumentError, /already declared/)
   end
 
@@ -152,6 +204,7 @@ RSpec.describe Kiosk::Server::Events do
         payload_schema type: "object"
       end
     end
+    controller.kiosk_register!
 
     expect(described_class.catalog.map { |e| e[:name] }).to eq(%w[delivery todo])
     expect(described_class.catalog.first.keys)
@@ -169,6 +222,7 @@ RSpec.describe Kiosk::Server::Events do
         subject_reachable ->(_subject, _identity) { true }
       end
     end
+    controller.kiosk_register!
 
     expect(described_class.catalog.first).not_to have_key(:subject_reachable)
   end
@@ -185,6 +239,7 @@ RSpec.describe Kiosk::Server::Events do
         payload_schema type: "object"
       end
     end
+    controller.kiosk_register!
 
     expect(described_class.known).to eq(%w[delivery todo])
   end
@@ -206,6 +261,7 @@ RSpec.describe "Kiosk::Server::Events.emit" do
         payload_schema type: "object"
       end
     end
+    controller.kiosk_register!
   end
 
   it "appends one event per identity in scope and returns the last id" do
@@ -280,6 +336,7 @@ RSpec.describe "the events surface in the catalogue and discovery" do
         payload_schema type: "object", properties: { done: { type: "boolean" } }
       end
     end
+    controller.kiosk_register!
   end
 
   def declare_verb!
@@ -292,6 +349,7 @@ RSpec.describe "the events surface in the catalogue and discovery" do
         render json: []
       end
     end
+    controller.kiosk_register!
   end
 
   describe "GET <endpoint>/schema" do

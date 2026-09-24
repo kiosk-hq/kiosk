@@ -92,7 +92,7 @@ module Kiosk
         # mixin — there is no other way in — so nothing here needs to tell one
         # kind of entry from another.
         def clear!
-          [Actions, Queries].each do |registry|
+          [Actions, Queries, Events].each do |registry|
             # `known` returns a fresh Array, so deleting while iterating is safe.
             registry.known.each { |name| registry.unregister(name) }
           end

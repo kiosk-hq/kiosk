@@ -224,7 +224,7 @@ e2e/assistant.sh	…not a problem document
 e2e/assistant.sh	…public, one minute at the bare path
 e2e/assistant.sh	…status restates the HTTP status
 e2e/assistant.sh	…the catalog is the body itself
-e2e/assistant.sh	…the events array is present and EMPTY on an origin with no topics
+e2e/assistant.sh	…the events array carries this origin's one topic
 e2e/assistant.sh	…title is the code's, not the incident's
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store

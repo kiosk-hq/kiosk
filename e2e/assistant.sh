@@ -137,7 +137,7 @@ assert "kiosk.auth.kind kiosk-pop" "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   
 assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_url')" "$SERVER_URL/kiosk/auth/challenge"
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
 # `capabilities` names the MODULES this origin serves, not its verbs.
-assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
+assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay,events"
 # THE CACHE-BUSTED CATALOG LINK. This document is the SHORT-lived half of the
 # pair: it expires in ONE MINUTE — the length of the post-deploy staleness
 # window, not a load knob — and republishes the link,
@@ -918,16 +918,29 @@ assert "…and the catalogue says it is an action" \
 # about, and a comparison between two renderings of one call can only ever pass.
 assert "schema publishes {queries, actions, events} and nothing else" \
   "$(echo "$schema_body" | jq -r 'keys_unsorted | join(",")')" "queries,actions,events"
-# AND THE THIRD ARRAY IS PRESENT WHILE THE MODULE IS NOT, which is the pair the
-# spec asks for: `events` is REQUIRED and may be EMPTY, so a reader never has to
-# branch on whether the member exists, while `capabilities` is where «does this
-# origin serve the module at all» is answered — once. This origin declares no
-# topic, so the array is empty and the capability is absent, and asserting both
-# together is what would catch either half drifting to the other's answer.
-assert "…the events array is present and EMPTY on an origin with no topics" \
-  "$(echo "$schema_body" | jq -r '.events | length')" "0"
+# AND THE THIRD ARRAY CARRIES THIS ORIGIN'S ONE TOPIC, with the module in
+# `capabilities` beside it — the pair the spec asks for, asserted together
+# because either half drifting to the other's answer is the failure. The
+# catalogue publishes a topic's NAME, its DESCRIPTION and its PAYLOAD SCHEMA,
+# and nothing about who may read it: `reach` and `subject_reachable` are
+# authorisation, they are answered at subscribe time, and publishing them would
+# hand a prober the shape of the rule.
+assert "…the events array carries this origin's one topic" \
+  "$(echo "$schema_body" | jq -r '.events | length')" "1"
+assert "…named, described, and carrying its payload schema" \
+  "$(echo "$schema_body" | jq -r '.events[0] | [.name, (.description | length > 0), (.payload_schema.required | join("+"))] | join("|")')" \
+  "appointment_confirmed|true|appointment_id+salon_id+slot"
+# `reach` IS published — it is the shape of the audience, and an assistant
+# reads it to know whether a subject narrows anything. The PREDICATE is not:
+# `subject_reachable` is the operator's own rule, a subscriber could not act on
+# it, and publishing it would describe where to look for a gap in it.
+assert "…publishing the reach but never the predicate behind it" \
+  "$(echo "$schema_body" | jq -r '.events[0] | [.reach, (has("subject_reachable") | tostring)] | join("|")')" \
+  "principal|false"
 assert "…and the module set lives in kiosk.json alone" \
-  "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
+  "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay,events"
+assert "…with the stream's own URL published beside it" \
+  "$(echo "$wk" | jq -r '.kiosk.events_url | test("^wss?://.+/kiosk/events$")')" "true"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #
@@ -1209,6 +1222,133 @@ assert "audit: kiosk.action_log does not exist in a freshly migrated origin" \
   "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.action_log') IS NULL")" "t"
 assert "audit: …and neither does kiosk.actions" \
   "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.actions') IS NULL")" "t"
+
+# ─── the event stream, driven by the PINNED listener ────────────────────
+#
+# THE POSITIVE CASE, over a real socket. Everything else in this file is a
+# request and its answer; this is the one transition nobody asked for — a salon
+# marking an appointment confirmed in its own back office — reaching a
+# subscriber that was already waiting.
+#
+# It runs `kiosk-server/listen.py`, which is the SAME FILE an assistant fetches
+# from kiosk.tech and verifies by SHA-256 before executing. Driving the shipped
+# client rather than a bespoke one is the point: a harness that spoke the socket
+# its own way would prove the server and say nothing about the thing every
+# assistant actually runs.
+
+printf "\n\033[1m=== the event stream (pinned listener) ===\033[0m\n"
+
+LISTENER="$KIOSK_OSS/kiosk-server/listen.py"
+# run.sh has already proved this interpreter can import `websockets`; see the
+# KIOSK_PYTHON block there for why the listener gets its own and the solver
+# does not.
+: "${KIOSK_PYTHON:=python3}"
+EVENTS_URL=$(echo "$wk" | jq -r '.kiosk.events_url')
+
+# Wait for a line matching a pattern to appear in the listener's output, or
+# give up. A fixed sleep would either be slow or flaky; this is neither.
+await_line() {
+  local file="$1" pattern="$2" deadline=$((SECONDS + 25))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    grep -q "$pattern" "$file" 2>/dev/null && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+confirm_at_the_desk() {
+  curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/salon_desk/confirm/$1"
+}
+
+EV_LOG="$TMP_DIR/listener-alice.jsonl"
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic appointment_confirmed --max-seconds 30 >"$EV_LOG" 2>&1 &
+listener_pid=$!
+
+if await_line "$EV_LOG" '"type":"subscribed"'; then
+  assert "the pinned listener opened the stream and subscribed" "true" "true"
+else
+  assert "the pinned listener opened the stream and subscribed" "$(cat "$EV_LOG")" "true"
+fi
+# `head` is the operator's tail cursor at subscribe time — what an assistant
+# records so a later session can ask for everything after it.
+assert "…the subscription confirmation carries a tail cursor" \
+  "$(grep '"type":"subscribed"' "$EV_LOG" | head -1 | jq -r 'has("head") and (.truncated == false)')" "true"
+
+assert "the salon confirms Alice's appointment at its own desk" \
+  "$(confirm_at_the_desk "$alice_appt_id")" "200"
+
+if await_line "$EV_LOG" '"type":"event"'; then
+  ev=$(grep '"type":"event"' "$EV_LOG" | head -1)
+  assert "…and it arrives on the socket, unasked" \
+    "$(echo "$ev" | jq -r '.topic')" "appointment_confirmed"
+  assert "…naming the appointment as its subject" \
+    "$(echo "$ev" | jq -r '.subject')" "$alice_appt_id"
+  assert "…carrying the payload the catalogue published" \
+    "$(echo "$ev" | jq -r '[.data.appointment_id, (.data.salon_id|tostring)] | join("|")')" \
+    "$alice_appt_id|$salon_id"
+  assert "…and a monotonic id to resume from" \
+    "$(echo "$ev" | jq -r '.id > 0')" "true"
+  alice_event_id=$(echo "$ev" | jq -r '.id')
+else
+  assert "…and it arrives on the socket, unasked" "$(cat "$EV_LOG")" "an event"
+  alice_event_id=0
+fi
+
+# THE REACH BOUNDARY, over the live socket rather than in a unit test. Bob's
+# appointment is confirmed while Alice's subscription stands: the topic is
+# hers to read, the ROW is not, and the per-event subject filter is what keeps
+# it off her stream. This is the assertion that would catch a broadcast going
+# to a topic instead of to an identity.
+assert "the salon confirms BOB's appointment too" \
+  "$(confirm_at_the_desk "$bob_appt_id")" "200"
+sleep 2
+assert "…and nothing of Bob's reaches Alice's stream" \
+  "$(grep -c "$bob_appt_id" "$EV_LOG")" "0"
+
+wait "$listener_pid" 2>/dev/null || true
+
+# RESUME. A turn-based assistant has no process that outlives its session, so
+# the cursor IS the delivery mechanism for anything it was not holding a socket
+# for. A SECOND listener, started cold with `--since` one below the id it last
+# saw, must be handed that event again — from the DATABASE, because the process
+# that broadcast it is gone.
+EV_REPLAY="$TMP_DIR/listener-replay.jsonl"
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic appointment_confirmed --since "$((alice_event_id - 1))" --max-seconds 6 \
+  >"$EV_REPLAY" 2>&1 || true
+assert "a cold listener resuming with since is handed the event again" \
+  "$(grep '"type":"event"' "$EV_REPLAY" | jq -r --arg id "$alice_appt_id" 'select(.subject == $id) | .subject' | head -1)" \
+  "$alice_appt_id"
+assert "…and says the tail was not truncated under it" \
+  "$(grep '"type":"subscribed"' "$EV_REPLAY" | head -1 | jq -r '.truncated')" "false"
+
+# A SUBJECT THAT IS NOT YOURS IS REFUSED AT SUBSCRIBE TIME, not filtered
+# afterwards — and the listener exits 4 rather than sitting on a socket that
+# can never deliver anything, which is the silence it exists to stop an
+# assistant reading as "nothing happened".
+EV_DENIED="$TMP_DIR/listener-denied.jsonl"
+set +e
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic "appointment_confirmed:$bob_appt_id" --max-seconds 10 >"$EV_DENIED" 2>&1
+denied_rc=$?
+set -e
+assert "subscribing to another principal's row is REFUSED" \
+  "$(grep -c '"type":"rejected"' "$EV_DENIED")" "1"
+assert "…and the listener stops instead of waiting forever" "$denied_rc" "4"
+
+# AND AN UNAUTHENTICATED SOCKET NEVER GETS ONE. The upgrade is answered — the
+# handshake completes before `connect` runs — so the discriminator is the
+# typed disconnect, not the HTTP status, and the listener reports exactly that.
+EV_ANON="$TMP_DIR/listener-anon.jsonl"
+set +e
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "not-a-token" \
+  --topic appointment_confirmed --max-seconds 10 >"$EV_ANON" 2>&1
+anon_rc=$?
+set -e
+assert "a bad bearer is disconnected with reconnect: false" \
+  "$(grep '"type":"disconnect"' "$EV_ANON" | head -1 | jq -r '.reconnect')" "false"
+assert "…and the listener says the credential is finished" "$anon_rc" "3"
 
 # ─── summary ────────────────────────────────────────────────────────────
 

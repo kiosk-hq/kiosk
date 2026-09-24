@@ -32,6 +32,25 @@ module Kiosk
         # @return [void]
         def register(name:, reach:, description:, payload_schema:, subject_reachable:)
           name = name.to_s
+          declaration = {
+            name: name,
+            reach: reach,
+            description: description,
+            payload_schema: payload_schema,
+            subject_reachable: subject_reachable,
+          }.freeze
+
+          # RE-REGISTERING THE SAME DECLARATION IS A NO-OP, and that is not a
+          # softening of the rule below. A class holds its topic declarations
+          # and hands the SAME frozen hashes over on every `kiosk_register!`,
+          # which the engine may run more than once per reload cycle — so
+          # identity here means «this is the same declaration arriving again»,
+          # not «two declarations that happen to look alike». Two controllers
+          # declaring one name still differ in at least their
+          # `subject_reachable` object, and a second declaration of a name with
+          # a different shape is the bug this refusal is for.
+          return if registry[name] == declaration
+
           if registry.key?(name)
             raise ArgumentError,
               "topic #{name.inspect} is already declared on this origin. A topic name is one " \
@@ -39,14 +58,16 @@ module Kiosk
               "the transition it reports."
           end
 
-          registry[name] = {
-            name: name,
-            reach: reach,
-            description: description,
-            payload_schema: payload_schema,
-            subject_reachable: subject_reachable,
-          }.freeze
+          registry[name] = declaration
         end
+
+        # Drops one topic. The engine's `to_prepare` clears all three registries
+        # and rebuilds them from `c.handlers`, so a topic REMOVED from a
+        # controller leaves the catalogue on the next reload instead of
+        # outliving the declaration that put it there.
+        #
+        # @return [void]
+        def unregister(name) = registry.delete(name.to_s)
 
         # @return [Hash, nil] the declaration, or nil when nothing declared it
         def fetch(name) = registry[name.to_s]

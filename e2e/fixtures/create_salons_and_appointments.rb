@@ -19,6 +19,12 @@ class CreateSalonsAndAppointments < ActiveRecord::Migration[ActiveRecord::Migrat
       t.references :user,  null: false, foreign_key: true, type: :uuid
       t.references :salon, null: false, foreign_key: true
       t.timestamp  :slot,  null: false
+      # The salon's own answer, and the reason the event stream is worth
+      # anything on this origin: booking is the caller's call, confirming is
+      # not. NULL until a salon says yes; see Kiosk::BookingsController's
+      # `appointment_confirmed` topic and SalonDeskController, the back-office
+      # surface that writes it.
+      t.timestamp  :confirmed_at
       t.timestamps
     end
   end

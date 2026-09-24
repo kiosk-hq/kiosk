@@ -104,6 +104,22 @@ command -v jq       >/dev/null || fail "jq not on PATH"
 # the bundled numpy-vectorised solver (kiosk-pow-equihash/solve.py).
 command -v python3  >/dev/null || fail "python3 not on PATH (needed by the Equihash register-PoW solver)"
 python3 -c "import numpy" 2>/dev/null || fail "python numpy missing (pip install numpy) — needed by the Equihash register-PoW solver"
+# The event-stream leg runs the PINNED listener — the same file an assistant
+# fetches from kiosk.tech and verifies by SHA-256 — so the harness needs what
+# that file needs. `websockets` is one pure-Python package with no transitive
+# dependencies; the alternative measured at 2.8x the code, 117 lines of it a
+# hand-rolled RFC 6455 frame parser.
+#
+# IT GETS ITS OWN INTERPRETER KNOB, and the reason is the one every macOS
+# developer meets: PEP 668 makes a Homebrew or system python refuse
+# `pip install` outright, so «just install it» is not available there. The
+# skill already tells an assistant to make a venv for `pyjwt`, `cryptography`
+# and `numpy`; `KIOSK_PYTHON` is how this harness is pointed at one. The
+# SOLVER keeps using plain `python3` — numpy is normally installed system-wide
+# and the two requirements are separate.
+KIOSK_PYTHON="${KIOSK_PYTHON:-python3}"
+command -v "$KIOSK_PYTHON" >/dev/null || fail "KIOSK_PYTHON=$KIOSK_PYTHON is not on PATH"
+"$KIOSK_PYTHON" -c "import websockets" 2>/dev/null || fail "python websockets missing — needed by the pinned event-stream listener. Either install it (pip install 'websockets>=12') or point the harness at an interpreter that has it: python3 -m venv .venv && .venv/bin/pip install 'websockets>=12' && KIOSK_PYTHON=.venv/bin/python ./e2e/run.sh"
 
 pg_isready -q || fail "postgres not accepting connections (run: brew services start postgresql)"
 
@@ -304,6 +320,11 @@ cp "$FIXTURES/create_salons_and_appointments.rb" \
 # ::API does not have. This is the controller half of leaving api_only behind
 # (the middleware half is the config.api_only patch below).
 cp "$FIXTURES/application_controller.rb" app/controllers/application_controller.rb
+# The salon's back office: one operator-side page, OUTSIDE the mount and
+# outside `c.handlers`, that marks an appointment confirmed and pushes the
+# `appointment_confirmed` topic. It is what makes the event-stream leg a PUSH
+# rather than a reply — nothing the assistant calls produces that transition.
+cp "$FIXTURES/salon_desk_controller.rb" app/controllers/salon_desk_controller.rb
 cp "$FIXTURES/user.rb"               app/models/user.rb
 cp "$FIXTURES/salon.rb"              app/models/salon.rb
 cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
@@ -521,6 +542,9 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        AUDIT_EVENTS_REDACTED="$AUDIT_EVENTS_REDACTED" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
+       KIOSK_OSS="$KIOSK_OSS" \
+       TMP_DIR="$TMP_DIR" \
+       KIOSK_PYTHON="$KIOSK_PYTHON" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
   log "assistant failed — last 80 lines of server log ($SERVER_LOG):"
   tail -80 "$SERVER_LOG"

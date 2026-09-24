@@ -27,6 +27,8 @@ turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
 - 2026-09-25: **The engine serves an event stream at `<endpoint>/events`.** Topics are declared beside the verbs they report on; a durable tail lets a subscriber resume with `since`.
+- 2026-09-24: **A topic is registered by the rebuild, not by the class body.** Reading a handler twice raised «already declared»; a topic removed from one now leaves the catalogue.
+- 2026-09-24: **e2e drives the pinned listener over a real socket.** A salon confirms at its own desk; the event reaches a waiting subscriber, resumes from `since`, and refuses a foreign row.
 - 2026-09-24: **The event stream gets a pinned reference client.** `kiosk-server/listen.py` holds one socket, resumes with `since`, and an assistant verifies its SHA-256 before running it.
 - 2026-09-24: **The durable event store is configured, not defaulted.** Every demo that declares topics now keeps its tail in Postgres, so a restart no longer answers `truncated: true`.
 - 2026-09-24: **getgrocery pushes the delivery itself.** A courier leaves 10–15 minutes before the published window and the basket arrives inside it; no call of the assistant's makes either happen.

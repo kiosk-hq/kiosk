@@ -402,13 +402,24 @@ module Kiosk
           declaration.instance_eval(&block) if block
           declaration.validate!(owner: self, name: name)
 
-          Events.register(
+          # HELD ON THE CLASS, REGISTERED BY {#kiosk_register!} — the same two
+          # steps a verb takes, and for the reason a verb takes them. Declaring
+          # STRAIGHT into the process-wide registry looked simpler and was
+          # wrong: a class body is read again on every Zeitwerk reload and
+          # again by an eager load after a lazy one, and the second read met
+          # its own first and raised «already declared on this origin» at boot.
+          # Worse in the other direction — a topic DELETED from a controller
+          # would have stayed in the catalogue until the process restarted,
+          # because nothing re-derives a registry that is only ever added to.
+          # The engine's `to_prepare` drops all three registries and rebuilds
+          # them from `c.handlers`; topics ride that same rebuild now.
+          kiosk_topic_declarations[name] = {
             name: name,
             reach: declaration.reach_value || :principal,
             description: declaration.description_value,
             payload_schema: declaration.payload_schema_value,
             subject_reachable: declaration.subject_reachable_value,
-          )
+          }
         end
 
         # ── binding ────────────────────────────────────────────────────
@@ -434,11 +445,19 @@ module Kiosk
           @kiosk_declarations ||= {}
         end
 
-        # Re-registers this class's verbs in the process-wide registry. Runs
-        # automatically as the class body is read; call it directly only to
-        # restore registrations after a test reset.
+        # This class's topic declarations, by wire name. Same shape and same
+        # lifecycle as {#kiosk_declarations}: filled as the class body is read,
+        # drained into the process-wide registry by {#kiosk_register!}.
+        def kiosk_topic_declarations
+          @kiosk_topic_declarations ||= {}
+        end
+
+        # Re-registers this class's verbs AND topics in the process-wide
+        # registries. Runs automatically as the class body is read; call it
+        # directly only to restore registrations after a test reset.
         def kiosk_register!
           kiosk_declarations.each_value { |declaration| kiosk_register_one(declaration) }
+          kiosk_topic_declarations.each_value { |declaration| Events.register(**declaration) }
           self
         end
 

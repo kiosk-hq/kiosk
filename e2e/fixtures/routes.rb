@@ -12,6 +12,14 @@ Rails.application.routes.draw do
   # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
   draw(:kiosk)
 
+  # ── the salon's own back office ──────────────────────────────────────────
+  # One operator-side page, OUTSIDE the mount and outside `c.handlers`,
+  # standing in for a salon employee marking an appointment confirmed. It is
+  # what makes the `appointment_confirmed` topic a push rather than a reply —
+  # nothing the assistant calls produces this transition. See
+  # app/controllers/salon_desk_controller.rb.
+  post "/salon_desk/confirm/:appointment_id", to: "salon_desk#confirm"
+
   # ── the responses RAILS composes, not Kiosk ──────────────────────────────
   #
   # §3.6 binds every response under the mount "on success and on error alike",

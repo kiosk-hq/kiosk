@@ -6703,12 +6703,30 @@ E2E_FIXTURES = {
           "argument and same handle as create_users.rb above.",
   },
   "create_salons_and_appointments.rb" => {
-    rule: :code,
-    why:  "stylish's own demo schema, comment-identical to its copy. The harness stages stylish's " \
-          "domain (see salon.rb), so this is that demo's migration rather than a fixture of its own.",
+    rule: :per_demo,
+    why:  "IT WAS `:code`-IDENTICAL TO STYLISH'S MIGRATION, AND STOPPED BEING SO ON PURPOSE. The " \
+          "harness stages stylish's domain (see salon.rb), so this began as that demo's migration " \
+          "rather than a fixture of its own. It now carries one column stylish does not: " \
+          "`appointments.confirmed_at`, which the event-stream leg needs because a salon " \
+          "CONFIRMING is the one transition on this origin that nobody asked for, and that is the " \
+          "whole case for a stream. Adding the column to stylish to restore the match would put a " \
+          "field in a shipped demo that nothing reads — and a shipped migration is never edited " \
+          "anyway. Its SHAPE is still held: the harness migrates from zero on every run and every " \
+          "later assertion reads these tables.",
   },
 
   # ── installed by run.sh, and legitimately their own ───────────────────────
+  "salon_desk_controller.rb" => {
+    rule:  :per_demo,
+    pairs: nil,
+    why:   "NO COUNTERPART, and the absence is the point. It is the salon's back office — an " \
+           "operator-side page OUTSIDE the mount and outside `c.handlers` — that marks an " \
+           "appointment confirmed and pushes the `appointment_confirmed` topic. The harness needs " \
+           "it because an event stream is only worth anything for a transition the caller did not " \
+           "ask for, and every other surface here answers a request. The demos reach the same " \
+           "shape through their own domains (hoteling's PropertyDecisionJob, getgrocery's courier " \
+           "jobs, its /payment/return), so there is nothing to hold in lockstep with.",
+  },
   "application_controller.rb" => {
     rule: :per_demo,
     why:  "The harness's generated app is `rails new --api`, so this file exists to move it OFF " \

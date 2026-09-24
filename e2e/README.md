@@ -42,6 +42,21 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **`curl`** and **`jq`** on the PATH
 - **`python3` with `numpy`** — the golden path registers by paying a real
   register-time Equihash toll, and the bundled solver needs both
+- **a python with `websockets`** — the event-stream leg runs
+  `kiosk-server/listen.py`, the SAME file an assistant fetches from kiosk.tech
+  and verifies by SHA-256 before executing, so the harness needs what that file
+  needs. On a Homebrew or system python PEP 668 refuses `pip install`
+  outright, so point the harness at an interpreter that has it rather than
+  fighting that:
+
+  ```bash
+  python3 -m venv .venv && .venv/bin/pip install 'websockets>=12'
+  KIOSK_PYTHON=.venv/bin/python bash e2e/run.sh
+  ```
+
+  `KIOSK_PYTHON` defaults to `python3` and is read for the listener only; the
+  Equihash solver keeps using plain `python3`, because numpy is normally
+  installed system-wide and the two requirements are separate.
 
 ## Run locally
 

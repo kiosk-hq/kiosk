@@ -39,6 +39,31 @@ class Kiosk::BookingsController < ApplicationController
     (Time.current + 7.days).utc.change(hour: 14).iso8601
   end
 
+  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
+  #
+  # Booking is the caller's own call and needs no event: the answer comes back
+  # in the response. CONFIRMING is not — a salon looks at its book and says yes
+  # some time later, on nobody's schedule, and until it does there is no
+  # question an assistant could usefully ask. That is the whole case for a
+  # stream on this origin, and it is why the topic is `appointment_confirmed`
+  # and not `appointment_booked`.
+  #
+  # `subject_reachable` is re-run while the subscription stands, with no
+  # request and therefore no session GUC, so it takes the principal from the
+  # identity it is handed rather than from `kiosk.current_user_id()`.
+  topic :appointment_confirmed do
+    description "The salon confirmed an appointment of yours. Nothing to call back: this is " \
+                "the salon acting, not an answer to a request of yours."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { appointment_id: { type: "string", format: "uuid" },
+                                 salon_id:       { type: "integer" },
+                                 slot:           { type: "string", format: "date-time" } },
+                   required: %w[appointment_id salon_id slot]
+    subject_reachable lambda { |appointment_id, identity|
+      Appointment.where(id: appointment_id, user_id: identity.user_id).exists?
+    }
+  end
+
   # my_appointments — per-user appointment list scoped by the session GUC.
   # The WHERE is provider-controlled; the agent supplies no user filter.
   # App-layer per-user isolation without RLS: the principal sees only rows

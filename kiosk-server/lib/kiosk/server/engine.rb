@@ -320,6 +320,11 @@ module Kiosk
         get  "schema", to: "wire#schema"
         post "pay",    to: "wire#pay"
 
+        # The connect TICKET (§4.6). Drawn ABOVE the mount so it is reached by
+        # first-match regardless of how the mount anchors, and because it is an
+        # ordinary tolled-free HTTP endpoint rather than part of the socket.
+        post "events/ticket", to: "events_ticket#create"
+
         # THE EVENT STREAM — drawn here for the reason `schema` and `pay` are:
         # its path and its answers are the spec's, not the operator's.
         #

@@ -24,13 +24,13 @@ RSpec.describe Kiosk::Server::SchemaDocument do
   def digest = described_class.digest
 
   describe ".document" do
-    it "is exactly {queries, actions} — sorted descriptors, and NO `verbs`" do
+    it "is exactly {queries, actions, events} — sorted descriptors, and NO `verbs`" do
       declare_query("menu", description: "Browse the menu")
       declare_action("place_order", description: "Place an order")
 
       document = described_class.document
 
-      expect(document.keys).to eq(%i[queries actions])
+      expect(document.keys).to eq(%i[queries actions events])
       expect(document[:queries].map { |d| d[:name] }).to eq(%w[menu])
       expect(document[:actions].map { |d| d[:name] }).to eq(%w[place_order])
     end
@@ -47,7 +47,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
     end
 
     it "answers an origin with nothing registered, rather than refusing" do
-      expect(described_class.document).to eq(queries: [], actions: [])
+      expect(described_class.document).to eq(queries: [], actions: [], events: [])
     end
   end
 

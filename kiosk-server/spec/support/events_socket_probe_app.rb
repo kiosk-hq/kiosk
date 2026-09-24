@@ -24,6 +24,8 @@ require "puma"
 require "puma/configuration"
 require "puma/launcher"
 require "websocket/driver"
+require "net/http"
+require "openssl"
 
 REPORT = {}
 
@@ -76,6 +78,10 @@ Kiosk.configure do |c|
   c.issuer    = "http://127.0.0.1:#{ENV.fetch("PROBE_PORT")}"
   c.handlers  = ["ProbeController"]
   c.agent_idp = ProbeIdp.new
+  # A real key, generated here: the ticket is an RS256 JWT and the engine
+  # crashes rather than inventing a key outside development, which is the
+  # posture we want and the reason a fixture has to bring its own.
+  c.signing_key = Kiosk::Server::SigningKey.from_pem(OpenSSL::PKey::RSA.new(2048).to_pem)
 end
 
 ProbeApp.initialize!
@@ -275,6 +281,66 @@ begin
   truncated.pump_until { truncated.messages.any? { |m| m["type"] == "subscribed" } }
   REPORT[:truncated_frame] = truncated.messages.find { |m| m["type"] == "subscribed" }
   truncated.close
+
+  # ── the connect ticket and URL-declared subscriptions, both ───────────────
+
+  def post_ticket(port, token)
+    http = Net::HTTP.new("127.0.0.1", port)
+    req = Net::HTTP::Post.new("/kiosk/events/ticket")
+    req["Authorization"] = "Bearer #{token}" if token
+    res = http.request(req)
+    [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  end
+
+  # 12 — the ticket endpoint refuses an unauthenticated caller.
+  code, _body = post_ticket(port, nil)
+  REPORT[:ticket_unauth_status] = code
+
+  # 13 — and mints for the ordinary chain.
+  code, body = post_ticket(port, GOOD_TOKEN)
+  REPORT[:ticket_status] = code
+  REPORT[:ticket_expires_in] = body["expires_in"]
+  ticket = body["ticket"]
+  REPORT[:ticket_minted] = !ticket.nil?
+
+  # 14 — a receive-only client: NO Authorization header, topics declared in the
+  #      URL, and it never sends a frame. This is the whole point of the pair —
+  #      a ticket alone would leave such a client subscribed to nothing.
+  urlsub = ProbeSocket.new(
+    port,
+    "/kiosk/events?ticket=#{ticket}&topic=order_payment&topic=todo:list_ok",
+    { "Origin" => Kiosk.configuration.issuer },
+  )
+  urlsub.pump_until { urlsub.messages.count { |m| m["type"] == "subscribed" } >= 2 }
+  REPORT[:url_welcomed] = urlsub.frames.any? { |f| f["type"] == "welcome" }
+  REPORT[:url_subscribed_topics] =
+    urlsub.messages.select { |m| m["type"] == "subscribed" }.map { |m| m["topic"] }.sort
+
+  # DELIBERATELY emitting on the `subscribed` frame and NOT on Action Cable's
+  # later `confirm_subscription`: that window is where an event used to be lost,
+  # and this is the assertion that it no longer is.
+  url_id = Kiosk::Server::Events.emit(
+    topic: :order_payment, subject: "ord_3", identity_scope: %w[u1], data: { "status" => "paid" },
+  )
+  urlsub.pump_until(seconds: 6) { urlsub.messages.any? { |m| m["id"] == url_id } }
+  REPORT[:url_delivered] = urlsub.messages.any? { |m| m["id"] == url_id }
+
+  urlsub.close
+
+  # 15 — the SAME ticket a second time is refused: single use, so a copy in an
+  #      access log loses even inside its 30-second window.
+  replay = ProbeSocket.new(port, "/kiosk/events?ticket=#{ticket}",
+                           { "Origin" => Kiosk.configuration.issuer })
+  replay.pump_until(seconds: 2) { replay.frames.any? || replay.closed? }
+  REPORT[:ticket_replay_welcomed] = replay.frames.any? { |f| f["type"] == "welcome" }
+  replay.close
+
+  # 16 — a made-up ticket is refused.
+  bogus = ProbeSocket.new(port, "/kiosk/events?ticket=not-a-ticket",
+                          { "Origin" => Kiosk.configuration.issuer })
+  bogus.pump_until(seconds: 2) { bogus.frames.any? || bogus.closed? }
+  REPORT[:bogus_ticket_welcomed] = bogus.frames.any? { |f| f["type"] == "welcome" }
+  bogus.close
 
   REPORT[:ok] = true
 rescue StandardError => e

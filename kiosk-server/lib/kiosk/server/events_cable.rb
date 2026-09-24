@@ -12,7 +12,7 @@ module Kiosk
     # `ActionCable.server` is the host application's singleton: one connection
     # class, one `allowed_request_origins`, one forgery-protection setting for
     # every channel the operator will ever add. Taking it over would mean the
-    # engine deciding those for the host — which is what made §4.2's option (a)
+    # engine deciding those for the host — which is what made the app-global option
     # (`disable_request_forgery_protection = true`) unacceptable: an app-global
     # switch disarming channels the operator writes later.
     #
@@ -63,7 +63,7 @@ module Kiosk
             config.connection_class = -> { Kiosk::Server::EventsConnection }
             config.cable = cable_config
             config.logger = resolved_logger
-            # §4.2(b). The listener sends `Origin: <issuer>`, and this is the
+            # The listener sends `Origin: <issuer>`, and this is the
             # only value that satisfies Action Cable's own forgery check — which
             # is hostile to non-browser clients by design: a request with NO
             # Origin header matches neither the host nor this list and is

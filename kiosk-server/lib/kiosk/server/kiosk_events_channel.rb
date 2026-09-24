@@ -20,7 +20,8 @@ require "action_cable"
 #    "identifier":"{\"channel\":\"KioskEvents\",\"topic\":\"todo\",\"subject\":\"list_4f1e…\"}"}
 #
 class KioskEvents < ActionCable::Channel::Base
-  # §4.4. The revocation watermark is checked inside `JwtIssuer.verify`, i.e.
+  # Spec Section 8.5.6 requires re-authorisation at least every 60 seconds, and
+  # this is why. The revocation watermark is checked inside `JwtIssuer.verify`, i.e.
   # once per token verification, i.e. once per HTTP request — so a socket
   # verified only at connect would never observe a later `revoke_all`, and an
   # unlinked assistant would keep receiving its human's data for the rest of
@@ -49,6 +50,12 @@ class KioskEvents < ActionCable::Channel::Base
 
     return reject unless reachable?(declaration)
 
+    # HEAD IS READ BEFORE THE STREAM IS OPENED, and that ordering is the whole
+    # of the race fix below. Read it after and there is a window in which an
+    # event is newer than the head we published and older than the stream we
+    # opened — belonging to neither, and therefore lost.
+    @head = store.head
+
     # `coder:` is REQUIRED with a block. Without it the handler is handed the
     # raw broadcast STRING rather than the decoded event, so every filter below
     # reads a String as a Hash — `event["subject"]` becomes a substring search —
@@ -59,6 +66,20 @@ class KioskEvents < ActionCable::Channel::Base
     end
 
     transmit(subscribed_frame)
+  end
+
+  # THE POINT AT WHICH THE STREAM IS ACTUALLY LIVE, and therefore the only
+  # correct place to replay from.
+  #
+  # `stream_from` POSTS the pubsub subscribe to Action Cable's event loop and
+  # defers this confirmation until it succeeds — so between the end of
+  # `subscribed` and this call there is a window in which the client holds our
+  # `subscribed` frame and no stream. MEASURED 2026-09-25: an event emitted in
+  # that window reached nobody at all. Replaying HERE closes it, because
+  # everything after the head we captured before opening the stream is sent
+  # once the stream exists.
+  def transmit_subscription_confirmation
+    super
     replay!
   end
 
@@ -83,15 +104,27 @@ class KioskEvents < ActionCable::Channel::Base
       "type" => "subscribed",
       "topic" => @topic,
       "subject" => @subject,
-      "head" => store.head,
+      "head" => @head,
       "truncated" => since ? store.truncated?(identity_key, since) : false,
     }
   end
 
+  # REPLAY ALWAYS RUNS, and not only when the caller sent a `since`. The floor
+  # is `since` when the caller gave one and the head captured before the stream
+  # was opened when it did not: either way, everything after the cursor the
+  # client is about to hold.
+  #
+  # An event may therefore arrive twice — once from here and once from the
+  # stream. That costs nothing and is not a defect: delivery is at-least-once
+  # by construction, and the wire already requires a client to ignore an `id`
+  # it has seen. Losing one, which is what the conditional replay did, has no
+  # such remedy.
   def replay!
-    return unless since
+    return if @head.nil?
 
-    store.since(identity_key, since).each do |event|
+    floor = since || @head
+
+    store.since(identity_key, floor).each do |event|
       transmit(event) if for_this_subscription?(event)
     end
   end
@@ -112,7 +145,8 @@ class KioskEvents < ActionCable::Channel::Base
     event["subject"].to_s == @subject.to_s
   end
 
-  # §4.5. `reach` authorises the SUBSCRIPTION, exactly as it authorises a call
+  # Spec Section 8.5.6. `reach` authorises the SUBSCRIPTION, exactly as it
+  # authorises a call
   # to the verb beside it; `subject_reachable` answers the operator's own
   # question about THIS subject, and takes the subject and the identity rather
   # than reading CurrentRequest — which is fiber-local and does not reach here.

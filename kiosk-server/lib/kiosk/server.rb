@@ -43,6 +43,8 @@ require "kiosk/server/queries"
 require "kiosk/server/events"
 require "kiosk/server/event_store"
 require "kiosk/server/event_stores"
+require "kiosk/server/events_ticket"
+require "kiosk/server/events_ticket_controller"
 require "kiosk/server/events_cable"
 require "kiosk/server/events_connection"
 require "kiosk/server/kiosk_events_channel"
@@ -163,10 +165,32 @@ module Kiosk
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (kiosk-pop access tokens)
     #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json
     #
+    #   Event plane:
+    #   - {Kiosk::Server::Events}           — topic registry (name → reach + payload
+    #                                         schema + the operator's subject rule),
+    #                                         and `emit`, the one line an operator
+    #                                         writes at the transition
+    #   - {Kiosk::Server::EventStore}       — the per-identity tail, in process:
+    #                                         the TEST implementation of the seam
+    #   - {Kiosk::Server::EventStores}      — ActiveRecord-backed tail, the default
+    #                                         a deployed operator gets
+    #   - {Kiosk::Server::EventsCable}      — this engine's OWN Action Cable server,
+    #                                         its origin allowance and stream naming
+    #   - {Kiosk::Server::EventsConnection} — the socket's identity, resolved by the
+    #                                         same chain every verb uses
+    #   - {KioskEvents}                     — the channel, deliberately TOP-LEVEL:
+    #                                         Action Cable constantizes the name
+    #                                         straight out of the subscribe frame,
+    #                                         so it is a wire constant
+    #   - {Kiosk::Server::EventsTicket}     — the single-use connect ticket, for a
+    #                                         client that cannot send a header
+    #   - {Kiosk::Server::EventsTicketController} — Rails controller serving
+    #                                         POST <mount>/events/ticket
+    #
     #   Infra:
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
-    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-006
+    #   - {Kiosk::Server::SchemaDefinitions}— SQL for the canonical migrations
     #   - {Kiosk::Server::Engine}           — Rails engine
     #
     #   Account-binding ceremony (the RFC 8628 machinery revived

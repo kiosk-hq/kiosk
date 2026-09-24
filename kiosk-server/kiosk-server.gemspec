@@ -102,8 +102,7 @@ Gem::Specification.new do |spec|
   # Storage, Action Text or Action Mailbox, so requiring a host to install them
   # would be a false claim.
   #
-  # **ACTION CABLE JOINED THAT LIST ON 2026-09-25 (T-169) and the sentence above
-  # used to exclude it.** It is not an optional extra any more: the engine draws
+  # **ACTION CABLE JOINED THAT LIST and the sentence above used to exclude it.** It is not an optional extra any more: the engine draws
   # a WebSocket route under the mount, so an operator who bundles this gem gets
   # Action Cable whether or not they ever declare a topic, exactly as they get
   # the `pay` route whether or not they configure a payment provider. Declaring

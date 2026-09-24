@@ -100,6 +100,13 @@ CLEARTEXT_OK = {
     "as the literal `http://\#{host}:\#{port}` of a Rails server it has just " \
     "spawned on 127.0.0.1. The scheme is a constant here and cannot be https, " \
     "so a scheme-derived line would be a branch with one arm.",
+  "kiosk-server/spec/support/events_socket_probe_app.rb" =>
+    "The events socket probe spawns Puma on 127.0.0.1 at an ephemeral port and " \
+    "dials only that, through the literal `http://127.0.0.1:` it configures as " \
+    "the origin's own issuer. It is a spec fixture with no deployment, no " \
+    "configuration and nothing an operator can repoint; the one HTTP call it " \
+    "makes is to its own `events/ticket` endpoint, on the same loopback port " \
+    "the WebSocket it is testing already uses.",
 }.freeze
 
 # What a CLEARTEXT_OK declaration has to be able to point at: a literal

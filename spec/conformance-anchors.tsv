@@ -1045,7 +1045,7 @@ kiosk-server/lib/kiosk/server/account_binding.rb	        # object and run the op
 kiosk-server/lib/kiosk/server/account_binding.rb	      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(public_key_pem:, user_id:, requested_role: nil)
 kiosk-server/lib/kiosk/server/account_binding.rb	    #     ceremony can carry), `allowed_roles` is REMAPPED to
-kiosk-server/lib/kiosk/server/account_binding.rb	effective_role = new_role
+kiosk-server/lib/kiosk/server/account_binding.rb	role ? [", allowed_roles = ARRAY[$3]::text[]", [role]]
 kiosk-server/lib/kiosk/server/actions.rb	    # Process-wide registry of Action handlers: a name -> callable map plus the
 kiosk-server/lib/kiosk/server/assistants_controller.rb	class AssistantsController < ::ActionController::Base
 kiosk-server/lib/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)

@@ -430,7 +430,7 @@ jobs:
             # same assertion goes red with the cap-arithmetic control beside it.
             # It goes with demo:search and demo:browse at the end: `task
             # spending_cap: :setup` reseeds.
-            tasks: demo:wire_args_spec demo:conformance demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse demo:spending_cap
+            tasks: demo:wire_args_spec demo:conformance demo:property_decision demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse demo:spending_cap
             # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
             # single Kiosk-PoW header, which is the multi-proof half of the
             # retry that getgrocery's flat one-proof toll never reaches.

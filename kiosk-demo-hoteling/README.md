@@ -112,6 +112,7 @@ From this directory:
 
 ```
 bin/rails demo:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
+bin/rails demo:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting writes the same row confirm_booking writes, so the two paths converge instead of racing; declining refunds through this demo's own StubPsp, frees the room-nights by status alone, and the event names where the money went
 bin/rails demo:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
 bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
@@ -163,6 +164,7 @@ assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
+| `demo:property_decision` | yes |  |
 | `demo:wire_args_spec` | yes |  |
 | `demo:conformance` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |

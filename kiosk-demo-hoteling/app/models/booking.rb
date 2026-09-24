@@ -7,6 +7,10 @@
 class Booking < ApplicationRecord
   RESERVED  = "reserved"
   CONFIRMED = "confirmed"
+  # The property said no. A real desk sometimes does, minutes after the money
+  # arrived, and this demo says so at a rate it publishes rather than pretending
+  # every booking is accepted.
+  DECLINED  = "declined"
   # The statuses that still HOLD the room-night. A cancelled or expired booking
   # frees its nights again, which is why the overlap exclusion — here and in the
   # `bookings_no_overlapping_room_nights` EXCLUDE constraint — is scoped to
@@ -23,6 +27,10 @@ class Booking < ApplicationRecord
   UNPAID = "unpaid"
   PAYING = "paying"
   PAID   = "paid"
+  # The money went back. Kept as a payment state rather than as the absence of
+  # one, because «never paid» and «paid and returned» are different facts and an
+  # assistant telling its human about the second must not read the first.
+  REFUNDED = "refunded"
 
   # What `my_bookings` publishes, and the three answers §11.6 allows. `PENDING`
   # is the third state the spec REQUIRES: a capture has been started and its

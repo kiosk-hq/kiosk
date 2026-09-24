@@ -76,6 +76,91 @@ def hoteling_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
+  desc "The property's own decision — both branches, forced, with the wait collapsed."
+  task property_decision: :environment do
+    # WHY THIS TASK EXISTS. The decision is 80/20 on a random draw after a
+    # two-to-five minute wait, so no flow that drives the wire can assert it:
+    # a suite that waited would be a suite nobody runs, and one that did not
+    # force the branch would be green four times in five for the wrong reason.
+    # Both knobs are configuration precisely so this task can pin them.
+    failures = []
+    check = lambda { |label, ok|
+      puts(ok ? "  ✓  #{label}" : "  ✗  #{label}")
+      failures << label unless ok
+    }
+
+    store = Kiosk::Server::EventStore.new
+    Kiosk.configure { |c| c.event_store = store }
+
+    # RE-RUNNABLE, because a task that only passes the first time is a task
+    # nobody trusts the second. The rows below live in a window no seed and no
+    # flow ever touches, so clearing exactly that window clears this task's own
+    # leftovers and nothing else.
+    horizon = Date.current + 3650
+    Booking.where("check_in >= ?", horizon).delete_all
+
+    # Far-future, DISJOINT windows: the room-night overlap constraint is real
+    # (that is the point of `bookings_no_overlapping_room_nights`), so two
+    # seeded bookings on one room type must not collide — and neither may
+    # collide with whatever demo:setup left behind.
+    offset = 0
+    seed = lambda {
+      property  = Property.first || abort("run demo:setup first — no properties seeded")
+      room_type = property.room_types.first
+      user      = User.first || abort("run demo:setup first — no users seeded")
+      offset += 1
+      Booking.create!(user: user, property: property, room_type: room_type,
+                      check_in: Date.current + (3650 + (offset * 10)),
+                      check_out: Date.current + (3650 + (offset * 10) + 2),
+                      total_cents: 24_000, status: Booking::RESERVED,
+                      payment_status: Booking::PAID)
+    }
+
+    puts "\n── the property ACCEPTS (rate 0) ──"
+    accepted = seed.call
+    Rails.configuration.x.hoteling.decline_rate = 0
+    PropertyDecisionJob.new.perform(accepted.id)
+    accepted.reload
+    check.call("status is confirmed", accepted.status == Booking::CONFIRMED)
+    check.call("a confirmation code was persisted", accepted.confirmation_code.present?)
+    event = store.since(accepted.user_id, 0).find { |e| e["subject"] == accepted.id }
+    check.call("one booking_confirmation event, status=confirmed",
+               event && event["topic"] == "booking_confirmation" && event["data"]["status"] == "confirmed")
+    check.call("the event carries the code the row holds",
+               event && event["data"]["confirmation_code"] == accepted.confirmation_code)
+
+    puts "\n── the property DECLINES (rate 1) ──"
+    declined = seed.call
+    head_before = store.head
+    Rails.configuration.x.hoteling.decline_rate = 1
+    PropertyDecisionJob.new.perform(declined.id)
+    declined.reload
+    check.call("status is declined", declined.status == Booking::DECLINED)
+    check.call("payment_status is refunded", declined.payment_status == Booking::REFUNDED)
+    check.call("a refund reference was persisted", declined.refund_psp_reference.present?)
+    # THE NIGHTS COME BACK, and nothing wrote a second row to say so: the
+    # overlap constraint and the `live` scope are both scoped to
+    # reserved+confirmed, so the status alone frees the room.
+    check.call("the declined booking no longer holds its nights",
+               !Booking.live.where(id: declined.id).exists?)
+    devent = store.since(declined.user_id, head_before).find { |e| e["subject"] == declined.id }
+    check.call("one booking_confirmation event, status=declined",
+               devent && devent["data"]["status"] == "declined")
+    check.call("the event names where the money went",
+               devent && devent["data"].dig("refund", "psp_reference") == declined.refund_psp_reference)
+
+    puts "\n── a decision that arrives twice changes nothing ──"
+    PropertyDecisionJob.new.perform(accepted.id)
+    check.call("a second run leaves the confirmed booking alone",
+               accepted.reload.status == Booking::CONFIRMED)
+
+    if failures.empty?
+      puts "\n  All property-decision assertions passed."
+    else
+      abort("\n  FAILED: #{failures.join('; ')}")
+    end
+  end
+
   desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
   task :wire_args_spec do
     spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
@@ -1163,10 +1248,10 @@ namespace :demo do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    if (result["schema_event_topics"] || []) == ["booking_payment"]
+    if (result["schema_event_topics"] || []) == ["booking_confirmation", "booking_payment"]
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_confirmation booking_payment].inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 

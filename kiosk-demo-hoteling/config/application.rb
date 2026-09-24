@@ -38,6 +38,35 @@ module KioskDemoHoteling
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
 
+    # ── ACTIVE JOB: the `:async` adapter, in process ──────────────────────
+    #
+    # Zero tables and zero worker processes, against a durable queue's
+    # thirteen tables — in a demo that currently has eighteen of its own, so
+    # the schema an operator reads would have grown by most of itself to
+    # schedule one delayed decision.
+    #
+    # THE TRADE, STATED: an enqueued job is lost if this process stops before
+    # it runs, which on the live box means a deploy inside the two-to-five
+    # minute window leaves one booking waiting for an answer that never comes.
+    # That is acceptable HERE and would not be for the event stream itself,
+    # and the difference is the one that matters: scheduling the hotel's own
+    # decision is this demo's DOMAIN work, not a step of the Kiosk wire. An
+    # operator copying it copies «plan your own work however you like», which
+    # is true. `config/cable.yml` takes the opposite choice for the opposite
+    # reason.
+    config.active_job.queue_adapter = :async
+
+    # ── THE PROPERTY'S DECISION, as published numbers ─────────────────────
+    #
+    # Both are configuration rather than literals in the job, because a suite
+    # has to be able to force the branch and collapse the wait: a demo whose
+    # outcome is a coin toss with no seam is a flaky gate, and a flaky gate is
+    # one somebody switches off. The shipped values are what a live viewer
+    # meets; a flow run sets its own.
+    config.x.hoteling.decline_rate            = ENV.fetch("HOTELING_DECLINE_RATE", "0.2").to_f
+    config.x.hoteling.decision_delay_seconds  =
+      ENV.fetch("HOTELING_DECISION_DELAY_SECONDS", rand(120..300).to_s).to_i
+
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.

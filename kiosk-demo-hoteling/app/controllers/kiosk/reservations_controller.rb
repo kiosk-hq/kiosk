@@ -45,6 +45,30 @@ class Kiosk::ReservationsController < ActionController::API
   # `subject_reachable` is re-run while the subscription stands, with no
   # request and therefore no GUC, so it calls {Booking.readable_by?} rather
   # than the per-request isolation scope beside it.
+  # THE PROPERTY'S OWN ANSWER, and the clearest case on this wire for a stream.
+  # Every other transition here is something the caller asked for; this one is
+  # not. The guest has paid and is waiting on a hotel desk, so there is no call
+  # to re-try and no cadence to invent — the operator answers when it answers,
+  # and sometimes the answer is no and the money goes back.
+  topic :booking_confirmation do
+    description "The property answered your paid booking: confirmed with a code to give at " \
+                "the desk, or declined — in which case the money has been returned and the " \
+                "room-nights are free again."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { booking_id:        { type: "string", format: "uuid" },
+                                 status:            { enum: %w[confirmed declined] },
+                                 confirmation_code: { type: "string" },
+                                 reason:            { type: "string" },
+                                 refund:            { type: "object", additionalProperties: false,
+                                                      properties: {
+                                                        amount_cents:  { type: "integer" },
+                                                        currency:      { type: "string" },
+                                                        psp_reference: { type: "string" },
+                                                      } } },
+                   required: %w[booking_id status]
+    subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
+  end
+
   topic :booking_payment do
     description "A booking of yours was paid — possibly by somebody else settling it on " \
                 "your behalf. Confirm it once this says `paid`."

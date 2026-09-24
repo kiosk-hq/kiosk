@@ -84,6 +84,23 @@ class ValidatingBookingProvider
     @provider.setup_url(user_id: user_id)
   end
 
+  # THE REVERSAL. It does NOT reach the wrapped provider, and that is the honest
+  # shape rather than a shortcut: `StubPsp` is held in lockstep with skooti's
+  # copy and the e2e fixture, neither of which has an answer to reverse, so the
+  # reversal is hoteling's own service — see {StubRefund} for where the boundary
+  # against the payment PORT is drawn and why.
+  #
+  # It carries NO cashier check, and that asymmetry is the point rather than an
+  # omission. `capture` is guarded because it moves the guest's money OUT on an
+  # amount the assistant signed, so the operator re-derives that amount from
+  # its own catalogue before trusting it. A refund moves money BACK, the amount
+  # is the operator's own `total_cents` read from its own row, and there is no
+  # counterparty claim to validate. Guarding it would be ceremony over a value
+  # the operator already owns.
+  def refund(booking_id:, amount_cents:)
+    StubRefund.call(booking_id: booking_id, amount_cents: amount_cents, currency: @currency)
+  end
+
   # True iff a settlement (capture receipt) references this booking — the
   # engine's own marker, written in executor phase 3. It lands AFTER the
   # capture, so a false here proves nothing on its own.
@@ -230,9 +247,30 @@ class ValidatingBookingProvider
         data: { "booking_id" => booking_id, "payment_state" => "paid" },
       )
     end
+
+    # AND THE PROPERTY STARTS DECIDING. The guest has paid and is now waiting on
+    # somebody else's clock — the one transition in this demo that no call of
+    # theirs will produce, and the reason the event stream is worth having here.
+    schedule_property_decision!(booking_id)
   rescue StandardError
     # A successful charge is already on its way to the engine's settlement (P3);
     # a failed local flip must never surface as an error over a paid booking.
+    nil
+  end
+
+  # The delay is configuration so a suite can collapse it: a flow that waited
+  # two real minutes for an assertion is a flow nobody runs, and a gate nobody
+  # runs is a gate that is not there. `decision_due_at` is written beside the
+  # enqueue so the wait is VISIBLE in the row — an operator reading the table
+  # can see what is pending without reading a queue.
+  def schedule_property_decision!(booking_id)
+    wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
+    Booking.where(id: booking_id).update_all(decision_due_at: Time.current + wait)
+    PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
+  rescue StandardError => e
+    # A lost decision must never surface as a failed CHARGE: the money moved,
+    # and that fact is already on its way to the engine's settlement.
+    Rails.logger.warn("[hoteling] could not schedule the property decision: #{e.class}")
     nil
   end
 

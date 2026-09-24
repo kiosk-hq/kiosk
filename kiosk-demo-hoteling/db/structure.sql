@@ -324,7 +324,10 @@ CREATE TABLE public.bookings (
     updated_at timestamp(6) without time zone NOT NULL,
     confirmation_code character varying,
     payment_status character varying DEFAULT 'unpaid'::character varying NOT NULL,
-    paid_by_user_id uuid
+    paid_by_user_id uuid,
+    decision_due_at timestamp(6) without time zone,
+    refunded_at timestamp(6) without time zone,
+    refund_psp_reference character varying
 );
 
 
@@ -977,6 +980,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260920000003'),
 ('20260920000002'),
 ('20260920000001'),
 ('20260910000001'),

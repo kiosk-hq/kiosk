@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-24: **A rebind resolves its role the way a fresh key does — the operator's default, never the assistant's previous one (K-1791).** No role outlives the principal it was resolved for.
 - 2026-09-24: **The `json < 3.0` pin comes off: activesupport 8.1.4 calls `JSON.parse` with a keyword splat.** The four declarations, the check that watched the condition and its CI job all go.
 - 2026-09-24: **Entries are grouped by the release that carries them, version and date in the heading.** A patch cut is as visible as a minor; `CHANGELOG-RULE.md` carries the rules.
 

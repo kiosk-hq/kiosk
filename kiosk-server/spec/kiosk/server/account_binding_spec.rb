@@ -140,8 +140,10 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(sql).to include("WHERE id = $2")
       expect(binds).to eq([user_id, "agent-known"])
       expect(con.bound(/INSERT/i)).to be_empty
-      # Reputation carry-over = the binding touches ONLY agents.user_id.
-      expect(con.all_sql).not_to match(/reputation|allowed_roles\s*=/i)
+      # Reputation carry-over = the binding touches the agents row and nothing
+      # else. Reputation is keyed on `agent_id`, which is what stays stable
+      # here; `allowed_roles` moves with the principal and always has.
+      expect(con.all_sql).not_to match(/reputation/i)
       expect(con).not_to have_received(:quote)
     end
 
@@ -166,7 +168,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
         .to raise_error(RuntimeError, /vertical migration failed/)
     end
 
-    it "mints the token with the agent's OWN registered role" do
+    it "mints the token with the role the ceremony resolves, not the pre-link one" do
+      Kiosk.configure { |c| c.registration_role = :customer }
       idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
       allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
         expect(agent_id).to eq("agent-known")
@@ -211,35 +214,45 @@ RSpec.describe Kiosk::Server::AccountBinding do
       end
     end
 
-    it "leaves allowed_roles untouched on a role-less rebind (no-IdP providers)" do
+    # ── The role a rebind lands on is RESOLVED, never inherited (K-1791) ─────
+    #
+    # A rebind resolves its role exactly as a fresh key does — the ceremony's
+    # role, else the operator's `registration_role` — so the two branches of
+    # `bind!` cannot disagree. The agent's PREVIOUS role is not an input on
+    # either of them: it belonged to the principal the key is leaving.
+    it "resets allowed_roles to the operator's registration role on a role-less rebind" do
+      Kiosk.configure { |c| c.registration_role = :customer }
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
-      expect(con.all_sql).not_to match(/allowed_roles\s*=/i)
+
+      sql, binds = con.bound(/UPDATE/i).first
+      expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
+      expect(binds).to eq([user_id, "agent-known", "customer"])
     end
 
-    # ── K-1124: what the clause above COSTS, pinned so it cannot move by
-    # accident ───────────────────────────────────────────────────────────────
+    # The one shape that cannot resolve a role: an operator that assigns none.
+    # The EMPTY role set is what a fresh key gets there, so it is what a rebind
+    # gets too — never the role the key happens to be carrying.
+    it "writes the EMPTY role set when the operator assigns no role at all" do
+      Kiosk.configure { |c| c.registration_role = nil }
+      described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
+
+      sql, binds = con.bound(/UPDATE/i).first
+      expect(sql).to include("allowed_roles = '{}'::text[]")
+      expect(sql).not_to include("NULL")
+      expect(binds).to eq([user_id, "agent-known"])
+    end
+
+    # ── The escalation this resolution exists to make impossible (K-1791,
+    # inverting the K-1124 characterization) ─────────────────────────────────
     #
-    # "Leaves allowed_roles untouched" is ADR-0011's explicit no-regression
-    # clause and it is not being changed here. But read it on a MULTI-ROLE
-    # origin and it says something sharper than "single-role providers keep
-    # today's behavior": an agent already carrying the privileged role, rebound
-    # to a DIFFERENT human who has none, keeps the privilege while `sub` becomes
-    # that human's. The example below is a CHARACTERIZATION — it asserts what
-    # the engine does, not what it ought to do — so that any future change to
-    # this branch is a deliberate edit to a red test rather than a silent one.
-    #
-    # WHY IT IS NOT A LIVE HOLE, AND WHERE THAT SAFETY ACTUALLY LIVES. Post-K-072
-    # a `:claim` row can only be role-less if the approving human's IdP reports
-    # no role, and a `:link` row carries the minter's role by construction. In
-    # this fleet every ceremony therefore carries one — but that is a property of
-    # the HOST's user model, not of the engine and not even of the shipped Devise
-    # adapter, whose `#role_for` returns `user.kiosk_role` VERBATIM and will hand
-    # back whatever that method answers, `nil` included
-    # (`kiosk-user-idp-devise`'s own suite pins that, deliberately). A host whose
-    # `#kiosk_role` can answer nil re-arms this branch on the day it declares a
-    # second role.
-    it "KEEPS a privileged role across a change of principal when the ceremony carries none" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
+    # Read on a MULTI-ROLE origin, the old retention said something sharper
+    # than "single-role providers keep today's behavior": an agent already
+    # carrying the privileged role, rebound to a human who has none, kept the
+    # privilege while `sub` became that human's. There is always a default
+    # role and never a nil, which closes it at the one place that can:
+    # resolution does not read the agent's current row (K-1791).
+    it "RESETS a privileged role across a change of principal when the ceremony carries none" do
+      Kiosk.configure { |c| c.roles = %i[customer owner]; c.registration_role = :customer }
       route_exec_query(con) do |sql, _binds|
         sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
                               "allowed_roles" => "{owner}" }] : []
@@ -255,10 +268,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
       # The principal moved...
       expect(result[:user_id]).to eq(user_id)
-      expect(con.bound(/UPDATE/i).first.last).to eq([user_id, "agent-known"])
-      # ...and the role did not.
-      expect(con.all_sql).not_to match(/allowed_roles\s*=/i)
-      expect(minted).to eq(["agent-known", "owner"])
+      # ...and the role moved with it, down to what registration would assign.
+      sql, binds = con.bound(/UPDATE/i).first
+      expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
+      expect(binds).to eq([user_id, "agent-known", "customer"])
+      expect(minted).to eq(["agent-known", "customer"])
     end
 
     # ── THE MISCONFIGURATION WARNING (T-165, on K-1134) ──────────────────────

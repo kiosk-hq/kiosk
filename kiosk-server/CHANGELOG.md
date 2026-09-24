@@ -14,6 +14,7 @@ already written is edited.
 
 ### Changed
 
+- **BREAKING (small): a role-less rebind no longer keeps the assistant's existing role.** It binds at `registration_role`, or the empty role set, exactly as a fresh key does (K-1791).
 - **The install template stops calling the external agent-IdP seam «planned».** It names the one subclass the engine actually ships (K-1673).
 - **The gemspec named `ActiveRecord::Base.connection`; the engine uses `lease_connection` everywhere.** The install template stops naming the deleted query/run endpoints.
 - **SUPERSEDES the 0.2.0 note that the `user_code` alphabet is «8-char Crockford (no 0/O/1/I/L/U)».** It is 31 chars and KEEPS U; the brute-force space is 31^8.

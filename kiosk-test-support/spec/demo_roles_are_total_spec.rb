@@ -124,7 +124,8 @@ RSpec.describe "no shipped host hands the binding ceremony a nil role (K-1124)" 
     expect(empty).to be_empty,
                      "these hosts declare no role: #{empty.join(", ")}. A model without " \
                      "`#kiosk_role` then resolves to no role at all, and a role-less " \
-                     "ceremony is what leaves a rebind's allowed_roles untouched (K-1124)."
+                     "ceremony binds at `registration_role` — so a human the IdP cannot " \
+                     "answer for gets an assistant that cannot act for them (K-1124, K-1791)."
   end
 
   # Invariant 2 — every #kiosk_role is declared, with a reason, at a pinned body.

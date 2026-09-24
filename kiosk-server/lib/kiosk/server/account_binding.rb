@@ -24,7 +24,8 @@ module Kiosk
     #     ceremony can carry), `allowed_roles` is REMAPPED to
     #     it — the agent adopts the role of the principal it is now bound to,
     #     the same "adopt the new principal's context" rule reputation-carry
-    #     follows; a role-less ceremony leaves `allowed_roles` untouched. The
+    #     follows; a role-less ceremony remaps it to the operator's
+    #     `registration_role`, exactly as a fresh key would land. The
     #     `assistant_claimed` hook then lets the vertical migrate domain data
     #     (core never touches provider rows) — but ONLY when the holder
     #     actually changed: re-binding a key to the human it is already bound
@@ -73,7 +74,7 @@ module Kiosk
         # or the device-authorization row the caller populated), so it travels
         # as a bind and never as SQL text.
         existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem]).to_a.first
-          SELECT id, user_id, allowed_roles FROM #{config.schema}.agents
+          SELECT id, user_id FROM #{config.schema}.agents
           WHERE public_key = $1 AND revoked_at IS NULL
           LIMIT 1
         SQL
@@ -147,43 +148,24 @@ module Kiosk
         # key's pre-link tokens are watermark-revoked (like `unlink!`) — only
         # the freshly minted token below survives.
         #
-        # Role on rebind (roles-from-IdP, Path A): when the ceremony carries a
-        # `requested_role` (the NEW human's role, validated against
-        # `config.roles`), `allowed_roles` is REMAPPED to it in the same
-        # UPDATE — the agent adopts the role of the principal it is now bound
-        # to. A role-less ceremony (`requested_role` nil) leaves the existing
-        # `allowed_roles` untouched, so single-role / no-IdP providers keep
-        # today's behavior with no regression.
+        # Role on rebind (roles-from-IdP, Path A): `allowed_roles` is REMAPPED
+        # in the same UPDATE, always, to whatever {.resolved_role} answers —
+        # the ceremony's role when it carries one (the NEW human's, validated
+        # against `config.roles`), else the operator's `registration_role`,
+        # else the empty set. The agent adopts the role of the principal it is
+        # now bound to, and the role the key arrived with is not an input:
+        # it belonged to the principal the key is leaving.
         #
-        # THE INVARIANT THAT MAKES THE RETENTION SAFE IS NOT IN THIS FILE.
-        # Read the clause above on an origin declaring more than one role and
-        # it says: an agent already carrying the privileged role, rebound to a
-        # DIFFERENT human who holds none, KEEPS the privilege while `sub`
-        # becomes that human's. Nothing here prevents that — the retention is
-        # the deliberate no-regression branch above, and does not.
-        #
-        # What prevents it is upstream, and it is worth stating because it is
-        # the kind of precondition that expires quietly: a `:claim` row
-        # acquires its role from the approving human at the verify page and
-        # a `:link` row from its minter, so `requested_role` is nil here ONLY
-        # when the configured `user_idp` reported no role for a signed-in
-        # human. That is a property of the HOST's identity system, not of this
-        # engine and not even of the shipped Devise adapter, whose `#role_for`
-        # hands back `user.kiosk_role` verbatim — `nil` included. A host whose
-        # `#kiosk_role` can answer nil re-arms this branch the day it declares a
-        # second role, and no gate in the engine would notice.
-        #
-        # Pinned rather than argued: `account_binding_spec.rb` characterises the
-        # retention on a two-role config, `kiosk-user-idp-devise`'s suite pins
-        # the verbatim return, and `kiosk-test-support`'s
-        # `demo_roles_are_total_spec.rb` fails the build if any demo grows a
-        # `#kiosk_role` whose nil-ness nobody has reasoned about.
+        # THAT IS WHY THE ROW IS NEVER READ FOR ITS ROLE. Resolve from the
+        # agent's own `allowed_roles` instead and an agent already carrying the
+        # privileged role, rebound to a human who holds none, keeps the
+        # privilege while `sub` becomes that human's — the engine would be
+        # deciding a privilege from a principal that is no longer there.
+        # There is always a default role, and never a nil.
         def rebind(conn, config, existing, user_id, requested_role = nil)
           agent_id = existing.fetch("id")
           previous = existing.fetch("user_id")
-          new_role = validated_role(config, requested_role)
-          # nil requested_role → keep the agent's own registered role.
-          effective_role = new_role || primary_role(existing.fetch("allowed_roles"))
+          role     = resolved_role(config, requested_role)
 
           # A re-bind to the SAME principal transitions nothing, so the hook
           # does not fire. `assistant_claimed` is a NOTIFICATION —
@@ -210,12 +192,14 @@ module Kiosk
           # protocol.md §6.3 says so, and says the response is
           # indistinguishable from any other rebind's.
           transition = previous.to_s != user_id.to_s
-          # The role remap is a STATEMENT SHAPE, not a value (the same
-          # distinction `executor.rb#settled_total_cents` draws about its
-          # window): a role-less ceremony has no assignment at all, so THAT
-          # stays a branch on the text while the role itself is `$3`.
+          # "No role" is a STATEMENT SHAPE, not a value (the same distinction
+          # `executor.rb#settled_total_cents` draws about its window, and the
+          # same split `register_linked` makes below): the empty array cannot
+          # travel as a bind, so THAT stays a branch on the text while a role
+          # itself is `$3`. Either way the column is assigned — the old row's
+          # value never survives a rebind.
           role_set, role_binds =
-            new_role ? [", allowed_roles = ARRAY[$3]::text[]", [new_role]] : ["", []]
+            role ? [", allowed_roles = ARRAY[$3]::text[]", [role]] : [", allowed_roles = '{}'::text[]", []]
           conn.transaction do
             conn.exec_query(<<~SQL, "Kiosk agent rebind", [user_id, agent_id, *role_binds])
               UPDATE #{config.schema}.agents
@@ -254,17 +238,15 @@ module Kiosk
           # rather than in each caller.
           config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
 
-          token = issue_token(agent_id, effective_role)
+          token = issue_token(agent_id, role)
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: false }
         end
 
         # Fresh key: a new linked assistant account under the approving
-        # human's principal. Role: the ceremony's requested_role (the bound
-        # human's role under roles-from-IdP, validated against the provider's
-        # declared roles) or the provider's registration_role default; the
-        # EMPTY role set when neither is set (roles are hook-or-absent).
+        # human's principal. Role: whatever {.resolved_role} answers, the same
+        # call the rebind branch makes.
         def register_linked(conn, config, pem, user_id, requested_role)
-          role = validated_role(config, requested_role || config.registration_role)
+          role = resolved_role(config, requested_role)
 
           # `'{}'::text[]` is a statement shape (no role at all),
           # `ARRAY[$3]::text[]` a bound value — same split as the rebind UPDATE
@@ -286,6 +268,23 @@ module Kiosk
 
           token = issue_token(agent_id, role)
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: true }
+        end
+
+        # THE ROLE A BINDING LANDS ON, and the ONE place either branch asks.
+        # The ceremony's role when it carries one, else the operator's
+        # configured default, else the empty role set for an operator that
+        # assigns roles to nobody. Never the role the key is already carrying:
+        # that one was the previous principal's, and a binding whose whole
+        # product is a human's consent may not hand out a privilege resolved
+        # from somebody else's account.
+        #
+        # Fresh key and rebind share the call rather than each spelling it,
+        # because they disagreeing is precisely the defect this closes: the
+        # rebind branch used to fall back to the agent's own `allowed_roles`,
+        # so the one path on which a role can NARROW would otherwise be the one
+        # path that did not reach for the configured default.
+        def resolved_role(config, requested_role)
+          validated_role(config, requested_role || config.registration_role)
         end
 
         # Normalise a candidate role to a String (or nil when absent/blank)
@@ -321,28 +320,38 @@ module Kiosk
         # origin or catch nothing. The one moment it IS decidable with
         # certainty is this one: a ceremony arriving with no role at an origin
         # that declares more than one is the unsupported mixture and nothing
-        # else, because a single-role origin cannot exhibit it (retaining and
-        # resetting are the same value there) and a role-less origin has
-        # nothing to resolve.
+        # else, because a single-role origin cannot exhibit it (its default IS
+        # its only role) and a role-less origin has nothing to resolve.
         #
-        # It does not raise. The ENGINE keeps its behaviour and the operator
-        # fixes the configuration, so this is a loud, actionable line in the
-        # operator's log and no change on the wire. It fires per ceremony
-        # rather than once: a misconfiguration that shows up in one log line
-        # and never again is one nobody reads.
+        # WHAT IT IS NOT. It is not a stand-in for a fix: the ceremony does
+        # nothing surprising with a role it cannot resolve — it applies the
+        # operator's configured default exactly as registration would. What the
+        # operator still cannot see without this line is the OTHER direction —
+        # a member of staff whose identity system answers nothing gets an
+        # assistant at the customer default, quietly, and every privileged verb
+        # then reads as if they had no standing. That is worth one line per
+        # ceremony rather than one at boot: a misconfiguration that shows up
+        # once and never again is one nobody reads.
         def warn_role_resolution_not_total(config, requested_role)
           return unless requested_role.nil? || requested_role.to_s.strip.empty?
           return unless config.roles.to_a.size > 1
 
+          landing =
+            if config.registration_role.to_s.strip.empty?
+              "this binding lands on NO role at all, since this origin configures no " \
+                "`registration_role` either"
+            else
+              "this binding lands on #{config.registration_role.inspect}, the role " \
+                "registration would assign"
+            end
           message =
             "[kiosk-server] an account-binding ceremony resolved NO role for the approving " \
             "human, and this origin declares more than one role " \
             "(#{config.roles.inspect}). Role resolution must be TOTAL: an operator that " \
             "assigns roles at all assigns one to EVERY human who can approve a binding. A " \
             "role for staff and nothing for customers is not a supported configuration — " \
-            "this binding leaves the assistant's existing role in place, so an assistant " \
-            "already holding the privileged role keeps it while its principal becomes a " \
-            "human who may hold none. Fix the identity system, not the ceremony: a " \
+            "#{landing}, so a human who should hold a privileged one gets an assistant " \
+            "that cannot act for them. Fix the identity system, not the ceremony: a " \
             "`#kiosk_role` that can answer nil is the usual cause, and returning the " \
             "least-privileged declared role instead makes it total."
           # Rails.logger is nil until the host app boots (rake tasks, console
@@ -356,16 +365,6 @@ module Kiosk
         # DefaultAgentIdp path as /auth/login and /auth/register.
         def issue_token(agent_id, role)
           AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
-        end
-
-        # `allowed_roles` comes back as a Postgres text[] literal
-        # ("{customer}") or an Array depending on adapter casting — same
-        # parsing as {AgentLogin}.
-        def primary_role(allowed_roles)
-          case allowed_roles
-          when Array then allowed_roles.first
-          else allowed_roles.to_s.delete("{}").split(",").first
-          end
         end
       end
     end

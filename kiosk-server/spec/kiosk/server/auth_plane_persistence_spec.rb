@@ -196,10 +196,37 @@ RSpec.describe "auth plane persistence (real Postgres)" do
         .to eq(1)
     end
 
-    it "leaves allowed_roles untouched on a role-less rebind" do
+    # K-1791 against a real database: a role-less rebind resolves the role from
+    # the OPERATOR's default, never from the row. The privileged role the key
+    # arrived with belonged to the principal it is leaving, so it does not
+    # survive the move — and the column is a one-element `text[]` afterwards,
+    # not a widened set.
+    it "resets allowed_roles to registration_role on a role-less rebind" do
+      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: other, requested_role: "owner")
+      expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1), [fresh[:agent_id]]))
+        .to eq("owner")
+
       Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+
       expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1), [fresh[:agent_id]]))
         .to eq("customer")
+      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
+                   [fresh[:agent_id]])).to eq(1)
+    end
+
+    # The other shape, and the one that cannot be faked: an operator that
+    # assigns roles to nobody. The rebind writes the EMPTY `text[]` — the same
+    # statement shape the fresh-key branch writes — and not a literal NULL into
+    # a `NOT NULL` column (K-788).
+    it "writes an empty text[] on a role-less rebind when no role is configured" do
+      Kiosk.configure { |c| c.registration_role = nil }
+
+      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+
+      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
+                   [fresh[:agent_id]])).to eq("text[]")
+      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
+                   [fresh[:agent_id]])).to eq(0)
     end
 
     # K-783 against a real database rather than a fake: the destructive case is

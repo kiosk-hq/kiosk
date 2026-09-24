@@ -70,14 +70,13 @@ module Kiosk
       # cannot; a surface that dropped it would make the ceremony's outcome
       # depend on which door the human walked through.
       #
-      # Both halves of {AccountBinding.bind!} depend on it, and the REBIND half
-      # is the subtler one: a fresh key would merely be provisioned at
-      # `registration_role` (at stylish, an OWNER minting from this page
-      # provisioned a `:customer` assistant), but a rebind with a nil
-      # `requested_role` omits the `allowed_roles` assignment altogether and
-      # the agent KEEPS its previous role while its principal changes —
-      # silently contradicting "the agent adopts the role of the principal it
-      # is now bound to". Passing the role is what makes the remap happen.
+      # Both halves of {AccountBinding.bind!} depend on it, and dropping it
+      # costs the human their own access rather than merely defaulting it: at
+      # stylish, an OWNER minting from this page provisioned a `:customer`
+      # assistant, on a fresh key and on a rebind alike, because the ceremony
+      # then has nothing to remap `allowed_roles` FROM and falls back to what
+      # registration would assign. Passing the role is what carries the
+      # human's own standing onto the assistant that acts for them.
       #
       # `nil` stays meaningful and is NOT normalized here: a role-less
       # `user_idp` (or a single-role provider) reports no role, and the binding

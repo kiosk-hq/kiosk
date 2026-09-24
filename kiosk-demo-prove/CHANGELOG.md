@@ -1,11 +1,19 @@
 # Changelog
 
-**Keep the entries short, always under 200 characters and one-two sentences.
-Only keep the essence of the change. git commit messages will keep the details.
-In the CHANGELOG, only keep the essence.** (Phil, 2026-09-11.) The rule binds
-every `CHANGELOG.md` in this repository; `bin/check-changelog` holds it on
-entries that are new against its declared baseline commit, and never on the
-entries already below.
+How to write an entry, and what a release section means: `CHANGELOG-RULE.md` at
+the root of this repository —
+<https://github.com/kiosk-hq/kiosk/blob/main/CHANGELOG-RULE.md>. In short: under
+200 characters, one or two sentences, the essence rather than the content; write it
+under `## [Unreleased]`; a cut renames that heading to
+`## [MAJOR.MINOR.PATCH] — <date>` and opens a fresh empty one above it; nothing
+already written is edited.
+
+## [Unreleased]
+
+## Before release sections
+
+Entries written before this file grouped them by release. They are not a cut, and
+they carry no version; none of them is ever edited.
 
 - 2026-08-04: new anonymizing KYC broker demo — a standalone issuer
   (not a Kiosk operator; mounts none of the four verbs) that generalizes

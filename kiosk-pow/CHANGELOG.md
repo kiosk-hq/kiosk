@@ -1,13 +1,14 @@
 # Changelog
 
-**Keep the entries short, always under 200 characters and one-two sentences.
-Only keep the essence of the change. git commit messages will keep the details.
-In the CHANGELOG, only keep the essence.** (Phil, 2026-09-11.) The rule binds
-every `CHANGELOG.md` in this repository; `bin/check-changelog` holds it on
-entries that are new against its declared baseline commit, and never on the
-entries already below.
-
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
+
+How to write an entry, and what a release section means: `CHANGELOG-RULE.md` at
+the root of this repository —
+<https://github.com/kiosk-hq/kiosk/blob/main/CHANGELOG-RULE.md>. In short: under
+200 characters, one or two sentences, the essence rather than the content; write it
+under `## [Unreleased]`; a cut renames that heading to
+`## [MAJOR.MINOR.PATCH] — <date>` and opens a fresh empty one above it; nothing
+already written is edited.
 
 ## [Unreleased]
 

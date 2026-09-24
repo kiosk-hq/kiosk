@@ -58,6 +58,21 @@ universal agent skill is `skill.md` on the same site.
    CL-9 sentences) holds the rule on entries that are NEW against its declared
    baseline commit, printing the backlog as a census that never reddens.
 
+   **AND THE ENTRY SAYS WHICH VERSION CARRIES IT, NOT ONLY WHEN IT LANDED (Phil,
+   2026-09-24).** An entry is grouped by the release that carries it:
+   `## [Unreleased]` holds what is not cut yet, and a cut renames it to
+   `## [MAJOR.MINOR.PATCH] — YYYY-MM-DD` and opens a fresh empty one above — **a
+   PATCH cut getting a section exactly as a MINOR one does**, since a patch is a
+   release here and a date cannot say which version has a change. A cut is a TREE
+   event: every gem's version moves to the same number, the root record names it,
+   and each gem record with entries under `[Unreleased]` gets the same heading.
+   The entries written before the grouping sit below the
+   `## Before release sections` heading, unedited and naming no version.
+   **`CHANGELOG-RULE.md` at the root is the authority for how** — where a line
+   goes, the shape of a section, the order of a cut — and every changelog here
+   points at it instead of repeating it. `bin/check-changelog` holds the shape
+   (CL-11 heading grammar, CL-12 an open section, CL-13 no ungrouped entry).
+
 ## Repo specifics
 
 - Ruby 4.0.1 — what `.github/workflows/ci.yml` installs at every `setup-ruby`

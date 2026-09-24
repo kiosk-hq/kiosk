@@ -72,12 +72,30 @@
 #         file is inside the package it publishes.
 #   CL-7  Every top-level entry of the REPOSITORY record opens with its ISO
 #         date. This is the one arm that reads an entry, and it reads exactly
-#         one thing about it: whether it says WHEN. The repository record has
-#         no release sections -- it is a flat, newest-first journal -- so the
-#         date is its only ordering affordance, and two entries had quietly
+#         one thing about it: whether it says WHEN. Two entries had quietly
 #         lost theirs among 459 that had one (K-1330). It is scoped to that
-#         file on purpose: a gem record carries its date on the `## [x.y.z] -
-#         DATE` release heading, where the same rule would be wrong.
+#         file on purpose: a gem record dates its RELEASE heading instead, and
+#         the same rule on every bullet there would be wrong.
+#         THE REPOSITORY RECORD IS NO LONGER A FLAT JOURNAL and this arm is
+#         unchanged by that (T-223): its entries are grouped by the release
+#         that carries them, and the two facts are different questions -- the
+#         section says WHICH VERSION has a change, the date says WHEN it
+#         landed and still orders the entries inside the section.
+#
+#   CL-11 A level-2 heading that is none of the three shapes a record may
+#         carry: `[Unreleased]`, a version section `[MAJOR.MINOR.PATCH] --
+#         YYYY-MM-DD`, or the one declared pre-grouping heading. A section
+#         named for a MAJOR.MINOR alone, or carrying no date, is the whole
+#         reason this arm exists: dates alone cannot answer "which version has
+#         this change", and a two-number heading cannot either, because a
+#         PATCH cut is a release here and has to be as visible as a MINOR one.
+#   CL-12 A record with no `[Unreleased]` section, or with one that is not its
+#         FIRST section. That section is where the next entry goes, and a
+#         record that lacks it has no answer to "where do I write this" --
+#         which is exactly how K-1015 grew a second `### Added` at the top of
+#         a file that already had one.
+#   CL-13 A top-level entry ABOVE the first section. Nothing groups it, so it
+#         names no release; this is CL-4's defect one level out.
 #
 #   CL-8  A NEW entry is under 200 characters.
 #   CL-9  A NEW entry runs to at most two sentences.
@@ -151,13 +169,22 @@
 # tell that a sentence has become false, only that a sentence somebody already
 # retired has come back -- and its `correcting` marker is an OPT-OUT a writer
 # can type: an entry carrying that marker is exempt whatever else it says.
+# CL-11/CL-12/CL-13 are STRUCTURE too: they hold the shape of a section
+# heading and where an entry sits, and they read neither the version nor the
+# tree. That a section names a version this repository actually carries is
+# `bin/check-version-parity`'s question, not this one, and an entry filed
+# under the wrong release is invisible here.
 #
-# THE TWIN. `kiosk.tech/bin/check-changelog` holds CL-7/CL-8/CL-9 over that
-# repository's single changelog. It is a different script with a different
-# scope -- there are no releases and no packages there -- but the RULE the two
-# share must not drift, so the block between the SHARED NEW-ENTRY RULE markers
-# below is byte-identical in both and the sibling script compares itself
-# against this copy whenever `../reference` is beside it.
+# THE TWIN. `kiosk.tech/bin/check-changelog` holds CL-7/CL-8/CL-9 and
+# CL-11/CL-12/CL-13 over that repository's single changelog. It is a different
+# script with a different scope -- there are no packages there, and a release
+# is a published skill cut rather than a tree event -- but the RULES the two
+# share must not drift, so the blocks between the SHARED NEW-ENTRY RULE and
+# SHARED RELEASE-SECTION RULE markers below are byte-identical in both, and the
+# sibling script compares itself against this copy whenever `../reference` is
+# beside it. CL-7/CL-8/CL-9 and CL-11/CL-12/CL-13 mean the same thing in both
+# scripts; CL-10 does NOT -- here it is the RETIRED-claim arm, there it is the
+# shared-block drift arm.
 #
 # USAGE
 #   bin/check-changelog                 # check this repository, exit 0/1
@@ -259,6 +286,31 @@ def sentence_count(text)
   n.zero? ? 1 : n
 end
 # <<< SHARED NEW-ENTRY RULE -- END
+
+# >>> SHARED RELEASE-SECTION RULE -- BEGIN
+# Byte-identical to the block of the same name in the SIBLING repository's
+# `bin/check-changelog`, for the reason the block above is: one rule must not
+# have two spellings. Edit both, or neither.
+#
+# The three shapes a level-2 heading may take, and nothing else:
+#
+#   ## [Unreleased]               where the next entry goes
+#   ## [0.4.1] — 2026-09-24       a cut: the version AND the date it was cut
+#   ## Before release sections    the entries written before this file grouped them
+#
+# THE VERSION IS THREE NUMBERS BECAUSE A PATCH CUT IS A RELEASE HERE. A heading
+# naming a MAJOR.MINOR alone cannot say which version carries a patch-sized
+# change, and saying that is the whole reason the sections exist -- a date could
+# never say it, which is what this rule was written to fix. The date is required
+# beside the version for the mirror reason: a version with no date says when
+# nothing.
+UNRELEASED_HEADING   = "[Unreleased]"
+PRE_GROUPING_HEADING = "Before release sections"
+# Either dash is accepted and the em dash is what to write: a writer copying the
+# shape off an existing heading must not be refused over the hyphen that Keep a
+# Changelog itself uses.
+RELEASE_HEADING = /\A\[\d+\.\d+\.\d+\][ \t]+(?:—|--?)[ \t]+\d{4}-\d{2}-\d{2}\z/
+# <<< SHARED RELEASE-SECTION RULE -- END
 
 # >>> ARM TABLE -- BEGIN
 #
@@ -370,7 +422,9 @@ ARMS = [
       write(dir, "CHANGELOG.md", <<~MD)
         # Changelog
 
-        The repository record: a dated journal, newest entry first.
+        The repository record, newest entry first.
+
+        ## [Unreleased]
 
         - 2026-01-03: **a later thing.** Intent: it says why.
         - an entry that never says when it happened, filed above one that does.
@@ -395,7 +449,9 @@ ARMS = [
       write(dir, "CHANGELOG.md", <<~MD)
         # Changelog
 
-        The repository record: a dated journal, newest entry first.
+        The repository record, newest entry first.
+
+        ## [Unreleased]
 
         - 2026-01-04: #{"a very long single sentence about one small change " * 6}.
         #{BACKLOG_ENTRY}
@@ -411,7 +467,9 @@ ARMS = [
       write(dir, "CHANGELOG.md", <<~MD)
         # Changelog
 
-        The repository record: a dated journal, newest entry first.
+        The repository record, newest entry first.
+
+        ## [Unreleased]
 
         - 2026-01-05: One thing changed. A second sentence explains it. A third one runs on.
         #{BACKLOG_ENTRY}
@@ -434,11 +492,75 @@ ARMS = [
 
         - the user_code alphabet is 8-char Crockford (no 0/O/1/I/L/U), a claim retired long ago.
 
-        ## [0.1.0]
+        ## [0.1.0] — 2026-01-01
 
         ### Added
 
         #{RETIRED_BACKLOG_ENTRY}
+      MD
+    },
+  },
+  {
+    id: "CL-11",
+    what: "a level-2 heading that is neither `[Unreleased]`, nor a version section " \
+          "`[MAJOR.MINOR.PATCH] — YYYY-MM-DD`, nor `Before release sections`",
+    repair: "name the section for the cut that carries it -- the version AND the date, as " \
+            "`## [0.4.1] — 2026-09-24`; a MAJOR.MINOR alone cannot say which version has a " \
+            "patch-sized change, which is what the sections are for",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ## [Unreleased]
+
+        ### Added
+
+        - a thing filed under a section that names a series instead of a cut.
+
+        ## [0.1]
+
+        ### Fixed
+
+        - a release nobody can match to a version this tree ever carried.
+      MD
+    },
+  },
+  {
+    id: "CL-12",
+    what: "a record whose first section is not `[Unreleased]`",
+    repair: "open a `## [Unreleased]` section above every other section: it is where the next " \
+            "entry goes, and a record without one has no answer to that question",
+    plant: lambda { |dir|
+      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+        # Changelog
+
+        ## [0.1.0] — 2026-01-01
+
+        ### Added
+
+        - a record that closed its last cut and never opened the next one.
+      MD
+    },
+  },
+  {
+    id: "CL-13",
+    what: "a top-level entry above the first section, which no release groups",
+    repair: "move the entry inside `## [Unreleased]`, or inside the section that carries it",
+    plant: lambda { |dir|
+      write(dir, "CHANGELOG.md", <<~MD)
+        # Changelog
+
+        The repository record: one entry per significant change, newest first.
+
+        - 2026-01-06: **an entry filed above every section.** Intent: nothing groups it.
+
+        ## [Unreleased]
+
+        - 2026-01-02: **something changed.** Intent: it says why.
+
+        ## #{PRE_GROUPING_HEADING}
+
+        #{BACKLOG_ENTRY}
       MD
     },
   },
@@ -645,6 +767,9 @@ def scan(root, baseline)
   covered    = Hash.new(0)
   roles      = Hash.new(0)
   releases   = 0
+  versioned  = 0
+  unreleased = 0
+  ungrouped  = 0
   subsects   = 0
   entries    = 0
   dated      = 0
@@ -724,14 +849,59 @@ def scan(root, baseline)
       end
     end
 
+    # WHERE THE NEXT ENTRY GOES is a property of the file, so it is read before the
+    # walk rather than during it: the FIRST section has to be the open one.
+    abs      = File.join(root, rel)
+    hs       = headings(abs)
+    first_h2 = hs.find { |h| h.level == 2 }
+
+    if first_h2.nil? || first_h2.text != UNRELEASED_HEADING
+      arm = arm_for("CL-12")
+      findings << {
+        path: rel, line: first_h2&.line || 1, id: arm[:id], repair: arm[:repair],
+        what: if first_h2.nil?
+                "no section at all, so there is nowhere for the next entry to go"
+              else
+                "the first section is `#{first_h2.text}`, not `#{UNRELEASED_HEADING}`"
+              end,
+      }
+    else
+      unreleased += 1
+    end
+
+    # An entry ABOVE the first section names no release. Scoped to a file that HAS
+    # a section: one with none is CL-12's finding already, and reporting every
+    # bullet of it a second time would bury that one line under the whole file.
+    if first_h2
+      top_level_entries(abs).each do |e|
+        next if e.line > first_h2.line
+
+        ungrouped += 1
+        arm = arm_for("CL-13")
+        findings << {
+          path: rel, line: e.line, id: arm[:id], repair: arm[:repair],
+          what: "entry `#{e.text[0, 58].strip}` sits above the first section",
+        }
+      end
+    end
+
     release      = nil
     seen_release = {}
     seen_sub     = {}
 
-    headings(File.join(root, rel)).each do |h|
+    hs.each do |h|
       case h.level
       when 2
         releases += 1
+        if h.text == UNRELEASED_HEADING || h.text == PRE_GROUPING_HEADING
+          nil
+        elsif h.text.match?(RELEASE_HEADING)
+          versioned += 1
+        else
+          arm = arm_for("CL-11")
+          findings << { path: rel, line: h.line, id: arm[:id], repair: arm[:repair],
+                        what: "section `#{h.text}` is none of the three shapes a heading may take" }
+        end
         key = normalise_heading(h.text)
         if seen_release.key?(key)
           arm = arm_for("CL-3")
@@ -789,6 +959,7 @@ def scan(root, baseline)
 
   { findings: findings, covered: covered, roles: roles, files: changelogs.length,
     gems: gem_dirs.length, releases: releases, subsections: subsects,
+    versioned: versioned, unreleased: unreleased, ungrouped: ungrouped,
     entries: entries, dated: dated, baseline: baseline[:rev],
     baseline_files: baseline[:files], baseline_set: baseline[:set].length,
     fresh: fresh, backlog: backlog, long_back: long_back, multi_back: multi_back,
@@ -808,6 +979,9 @@ def report(result, quiet:)
          "#{r[:repository]} repository record, #{r[:gem]} gem package record(s) " \
          "for #{result[:gems]} gem(s), #{r[:courtesy]} declared courtesy record(s)"
     puts "  #{result[:releases]} release section(s), #{result[:subsections]} subsection heading(s)"
+    puts "  #{result[:versioned]} of those name a version and its date, " \
+         "#{result[:unreleased]} record(s) open with `#{UNRELEASED_HEADING}`, " \
+         "#{result[:ungrouped]} entry(ies) sit above a first section"
     puts "  #{result[:entries]} top-level entry(ies) in the repository record, " \
          "#{result[:dated]} carrying an ISO date"
     puts "  baseline #{result[:baseline][0, 12]} -- #{result[:baseline_set]} entry(ies) over " \
@@ -828,10 +1002,12 @@ def report(result, quiet:)
   if result[:findings].empty?
     unless quiet
       puts
-      puts "check-changelog: OK -- every release section answers each kind once, every tracked " \
-           "changelog has a declared role, every repository-record entry says when, and every " \
-           "entry newer than the baseline is under #{LENGTH_CAP} characters, at most " \
-           "#{SENTENCE_CAP} sentences, and free of every claim the RETIRED table records."
+      puts "check-changelog: OK -- every release section answers each kind once and is named for " \
+           "the cut it carries, every record opens with `#{UNRELEASED_HEADING}` and groups every " \
+           "entry under a section, every tracked changelog has a declared role, every " \
+           "repository-record entry says when, and every entry newer than the baseline is under " \
+           "#{LENGTH_CAP} characters, at most #{SENTENCE_CAP} sentences, and free of every claim " \
+           "the RETIRED table records."
       puts "(The standing backlog is counted above and never failed -- a changelog is " \
            "append-only. See the header for what this cannot see.)"
     end
@@ -876,7 +1052,8 @@ end
 # >>> GREEN FIXTURES -- BEGIN
 #
 # Shapes that must NOT fire. Each is a real form that ships here today: the
-# bullet-list repository record with no release sections at all, a full
+# repository record with its open section, one cut naming a version and its date
+# and the tail of entries written before the file grouped them, a full
 # Keep-a-Changelog gem record with every kind once plus non-canonical
 # subsections, a courtesy record, and -- the one that is not obvious -- a
 # release section containing a FENCED BLOCK that itself contains headings,
@@ -905,7 +1082,15 @@ GREEN = {
 
     Significant changes only: one line per change.
 
+    ## [Unreleased]
+
     - 2026-01-02: **something changed.** Intent: it says why.
+
+    ## [0.1.1] — 2026-01-02
+
+    - 2026-01-02: **a patch cut is a release here.** Intent: as visible as a minor.
+
+    ## #{PRE_GROUPING_HEADING}
 
     #{BACKLOG_ENTRY}
   MD
@@ -949,7 +1134,7 @@ GREEN = {
 
     - one deferral.
 
-    ## [0.1.0]
+    ## [0.1.0] — 2026-01-01
 
     ### Added
 
@@ -957,8 +1142,8 @@ GREEN = {
 
     #{RETIRED_BACKLOG_ENTRY}
   MD
-  "kiosk-demo-atablefor/CHANGELOG.md" => "# Changelog\n\n## Unreleased\n\n- a courtesy record.\n",
-  "kiosk-demo-prove/CHANGELOG.md" => "# Changelog\n\n- a courtesy record.\n",
+  "kiosk-demo-atablefor/CHANGELOG.md" => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n",
+  "kiosk-demo-prove/CHANGELOG.md" => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n",
 }.freeze
 # <<< GREEN FIXTURES -- END
 
@@ -1016,6 +1201,17 @@ def self_test_fixture(failures)
     end
     unless out.include?("carrying an ISO date")
       failures << "the guard printed no entry-date census, so CL-7's non-vacuity cannot be read off it"
+    end
+
+    # CL-11's GREEN side lives here rather than in the real tree, and deliberately:
+    # a well-formed version section must pass, and this repository has not cut one
+    # yet, so the fixture is the only place the shape can be proved at all.
+    versioned = out[/(\d+) of those name a version and its date/, 1].to_i
+    if versioned.positive?
+      puts "  fixture: #{versioned} section(s) naming a version and its date, still exit 0 -- OK"
+    else
+      failures << "the fixture counted no version section, so CL-11's green side is proved by " \
+                  "nothing:\n#{out}"
     end
 
     # THE BACKLOG PROPERTY, and it has to be proved rather than asserted: the
@@ -1154,6 +1350,15 @@ def run_self_test
   if result[:entries] < 100
     failures << "the real tree found #{result[:entries]} repository-record entry(ies) -- CL-7 is vacuous here"
   end
+  # The count of VERSION sections is NOT asserted over the real tree, and that is
+  # a measurement rather than an oversight: no cut has been made here yet, so it
+  # is legitimately zero and an assertion would be red on arrival. The fixture
+  # above is where CL-11's green side is proved. What holds here is the property
+  # that does not wait for a release -- every record opens with its section.
+  if result[:unreleased] < result[:files]
+    failures << "#{result[:files] - result[:unreleased]} record(s) do not open with " \
+                "`#{UNRELEASED_HEADING}`, so CL-12 is red over this repository"
+  end
   if result[:backlog] < 100
     failures << "the real tree found #{result[:backlog]} pre-baseline entry(ies) -- the baseline " \
                 "resolved to something that is not this repository's history"
@@ -1176,6 +1381,9 @@ def run_self_test
   puts "  real tree: #{result[:files]} changelog(s), #{result[:releases]} release section(s), " \
        "#{result[:subsections]} subsection heading(s), #{result[:dated]} of " \
        "#{result[:entries]} repository entry(ies) dated -- non-vacuous"
+  puts "  real tree: #{result[:versioned]} section(s) name a version and its date, " \
+       "#{result[:unreleased]} of #{result[:files]} record(s) open with " \
+       "`#{UNRELEASED_HEADING}`, #{result[:ungrouped]} entry(ies) above a first section"
   puts "  real tree: baseline #{result[:baseline][0, 12]}, #{result[:backlog]} entry(ies) at or " \
        "before it (#{result[:long_back]} over the length cap, #{result[:multi_back]} over the " \
        "sentence cap, all census only), #{result[:fresh]} newer and held"
@@ -1186,7 +1394,7 @@ def run_self_test
 
   if failures.empty?
     puts
-    puts "check-changelog --self-test: OK -- red on a plant of every arm (CL-1..CL-10) and on " \
+    puts "check-changelog --self-test: OK -- red on a plant of every arm (CL-1..CL-13) and on " \
          "an unresolvable baseline, green on every legitimate shape including headings inside a " \
          "fence, an undated bullet in a GEM record, a committed entry over both caps, a " \
          "committed entry asserting a retired claim and a new entry superseding one by name, " \

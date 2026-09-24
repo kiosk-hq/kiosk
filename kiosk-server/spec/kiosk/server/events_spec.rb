@@ -111,6 +111,37 @@ RSpec.describe Kiosk::Server::Events do
     expect(described_class.known).to eq([])
   end
 
+  # THE PROPERTY HOLDING THE DECLARATION ON THE CLASS ACTUALLY BUYS, and the one
+  # neither example above asserts (K-1805). Re-registering an identical frozen
+  # declaration is a no-op, and `clear!` empties the registry however the macro
+  # wrote into it — so the cheaper spelling, `topic` calling `Events.register`
+  # as the class body runs, passes both of them and looks equally green. What it
+  # cannot do is survive a REBUILD. The engine's `to_prepare` drops all three
+  # registries and re-derives them from `c.handlers`; a class body is NOT read
+  # again on that pass, so a topic that only ever registered from the body would
+  # be gone from the catalogue for the rest of the process. In an eager-loading
+  # production boot that is every class, and the origin would serve an empty
+  # `events` array while still emitting.
+  it "re-registers its topics on a rebuild, with the class body never read again" do
+    controller.class_eval do
+      topic :todo do
+        description "A todo on a list you can reach changed."
+        payload_schema type: "object"
+      end
+    end
+    controller.kiosk_register!
+    expect(described_class.known).to eq(%w[todo])
+
+    # What `to_prepare` does, in its order. Nothing re-reads the class body
+    # between these two lines, which is the whole point of the example.
+    Kiosk::Server::HandlerRegistrations.clear!
+    controller.kiosk_register!
+
+    expect(described_class.known).to eq(%w[todo])
+    expect(described_class.fetch("todo")[:description])
+      .to eq("A todo on a list you can reach changed.")
+  end
+
   it "refuses a name that is not a legal wire name" do
     expect {
       controller.class_eval do

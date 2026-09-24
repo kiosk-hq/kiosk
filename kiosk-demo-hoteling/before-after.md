@@ -477,9 +477,11 @@ class Kiosk::ReservationsController < ActionController::API
     )
   end
 
-  # confirm_booking — the two gates and the durable confirmation code. See
-  # {ConfirmBookingOperation}; the principal is NOT passed in, because both gates
-  # express it as a WHERE predicate over `kiosk.current_user_id()`.
+  # confirm_booking — READS the property's answer. It writes nothing: a guest
+  # does not confirm their own booking, a hotel does, and {PropertyDecisionJob}
+  # is the only thing that mints a confirmation code. See
+  # {ConfirmBookingOperation}; the principal is NOT passed in, because the
+  # ownership test is a WHERE predicate over `kiosk.current_user_id()`.
   kind :action
   description "…"   # elided — see the shipped file
   input_schema type: "object",

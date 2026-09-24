@@ -84,21 +84,20 @@ class ValidatingBookingProvider
     @provider.setup_url(user_id: user_id)
   end
 
-  # THE REVERSAL. It does NOT reach the wrapped provider, and that is the honest
-  # shape rather than a shortcut: `StubPsp` is held in lockstep with skooti's
-  # copy and the e2e fixture, neither of which has an answer to reverse, so the
-  # reversal is hoteling's own service — see {StubRefund} for where the boundary
-  # against the payment PORT is drawn and why.
+  # THE REVERSAL, forwarded explicitly for the reason the paragraph above gives:
+  # a decision somebody made in this file, not whatever the wrapped object
+  # happens to answer. The PSP is what reverses — the money goes back to the
+  # card it came from — and it is told WHICH CHARGE to undo, because that is
+  # what a reversal is against at any real provider.
   #
-  # It carries NO cashier check, and that asymmetry is the point rather than an
-  # omission. `capture` is guarded because it moves the guest's money OUT on an
-  # amount the assistant signed, so the operator re-derives that amount from
-  # its own catalogue before trusting it. A refund moves money BACK, the amount
-  # is the operator's own `total_cents` read from its own row, and there is no
-  # counterparty claim to validate. Guarding it would be ceremony over a value
-  # the operator already owns.
-  def refund(booking_id:, amount_cents:)
-    StubRefund.call(booking_id: booking_id, amount_cents: amount_cents, currency: @currency)
+  # It carries NO cashier check, and that asymmetry is deliberate. `capture` is
+  # guarded because it moves the guest's money OUT on an amount the ASSISTANT
+  # signed, so the operator re-derives that amount from its own catalogue before
+  # trusting it. A refund moves money BACK, against a charge the operator itself
+  # made, for an amount it reads off its own row. There is no counterparty claim
+  # here to check.
+  def refund(psp_reference:, amount_cents:)
+    @provider.refund(psp_reference: psp_reference, amount_cents: amount_cents)
   end
 
   # True iff a settlement (capture receipt) references this booking — the
@@ -266,6 +265,15 @@ class ValidatingBookingProvider
   def schedule_property_decision!(booking_id)
     wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
     Booking.where(id: booking_id).update_all(decision_due_at: Time.current + wait)
+
+    # A ZERO WAIT DECIDES INLINE, and that is not a shortcut — it is what makes
+    # a flow assertable. The `:async` adapter runs a job on a thread pool, so
+    # «enqueue with no delay» and «the next HTTP call» race, and a flow that
+    # confirmed straight after paying would pass or fail on scheduler timing.
+    # Inline is also the truer reading of the setting: a profile that says the
+    # property answers immediately is asking for an answer, not for a queue.
+    return PropertyDecisionJob.new.perform(booking_id) if wait.zero?
+
     PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
   rescue StandardError => e
     # A lost decision must never surface as a failed CHARGE: the money moved,

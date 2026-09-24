@@ -14,7 +14,12 @@ module Kiosk
       #   4. BLOCKED iff the second invocation is denied.
       #
       # Skipped when: profile.gated_action, profile.create_owned, or
-      # profile.pay_for is nil.
+      # profile.pay_for is nil — or when profile.gated_action_consumes is
+      # false, which says the gated action SPENDS NOTHING. An origin whose
+      # gated action reads back a decision the operator made on its own is
+      # correct to answer it twice, and there is no C3 surface on it at all;
+      # running the beat anyway would report a breach against the intended
+      # behaviour.
       class SpentResourceReuse < Scenario
         def initialize
           super(
@@ -28,6 +33,7 @@ module Kiosk
           return skip_verdict("no gated_action") unless profile.gated_action
           return skip_verdict("no create_owned") unless profile.create_owned
           return skip_verdict("no pay_for")      unless profile.pay_for
+          return skip_verdict("gated_action spends nothing") unless profile.gated_action_consumes
 
           a = register_principal(client, name: "redteam-srr-a", profile:)
 

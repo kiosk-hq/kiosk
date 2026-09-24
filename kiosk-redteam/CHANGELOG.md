@@ -13,6 +13,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- **`Profile#gated_action_consumes` — whether the gated action SPENDS the resource.** A verb that only reads back the operator's own decision is right to answer twice, so C3 skips there.
+
 - **`Wire.http_for` — the one place http vs https is decided, read off the target's scheme.** `Client` could not dial a TLS origin at all, so `Runner` reached none.
 
 - **`Client#query` and `#run` take `headers:`.** A beat that attacks with a request header — a declared clock, or a source an operator must not read one from — could not send one.

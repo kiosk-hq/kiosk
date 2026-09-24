@@ -3,9 +3,15 @@
 # hoteling redteam battery
 #
 # Exercises the hoteling chain: register (PoW-gated) → no KYC → reserve_room →
-# pay → confirm_booking (2-gate: ownership / payment). Headline scenarios:
+# pay → confirm_booking (ownership, then payment, then the property's answer).
+# Headline scenario:
 #   C2  PayForOtherUseSelf  — B pays for A's booking, B tries confirm_booking
-#   C3  SpentResourceReuse  — re-confirm an already-confirmed booking
+#
+# C3 SpentResourceReuse is SKIPPED here, and the profile says so in one flag
+# rather than this file quietly leaving the beat out. `confirm_booking` spends
+# nothing: the property decides, and the verb reads that decision back. Reading
+# it twice is the intended behaviour, so there is no consumed resource to
+# re-activate and the beat would score correct behaviour a breach.
 #
 # Three cashier-check beats attack ValidatingBookingProvider (the monetary
 # check run at capture, before StubPsp settles) — the first from the shared
@@ -177,11 +183,16 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # ── gated_action / gated_args — UnpaidGatedAction, C2, C3 ───────────────
+  # ── gated_action / gated_args — UnpaidGatedAction, C2 ───────────────────
   gated_action: "confirm_booking",
   gated_args:   ->(ref) { { booking_id: ref[:id] } },
 
-  # ── pay_for — MandatePrincipalSwap, MandateReplay, C2, C3 ───────────────
+  # …but it CONSUMES nothing, so C3 has no surface here: the verb reads the
+  # property's answer and a second read returns the same answer. Declared
+  # rather than omitted, so the skip carries a reason into the printed run.
+  gated_action_consumes: false,
+
+  # ── pay_for — MandatePrincipalSwap, MandateReplay, C2 ───────────────────
   # Shape mirrors script/hoteling_flow.rb: scope=lodging, line_items with
   # sku + qty + booking_id as required by Gate-2 of confirm_booking.
   pay_for: lambda { |_client, principal, owned_ref|
@@ -1048,14 +1059,14 @@ end
 #
 # The generic Kiosk::Redteam battery plus hoteling's own beats (3 cashier-check
 # + 2 input-shape + 1 date + 1 inventory + the 2 wire-shape beats, per the
-# header above). The 3 KYC variants are the
-# only expected skips — RegistrationWithoutPow runs, because register PoW is ON.
+# header above). The expected skips are the 3 KYC variants and C3
+# SpentResourceReuse — RegistrationWithoutPow runs, because register PoW is ON.
 # NO TOTALS ARE WRITTEN DOWN HERE: the run prints `scenarios.size` and the skip
 # count below, and a total written here is a total that rots.
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
-  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,      # C3 — re-confirm
+  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,      # C3 — skips: see header
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
@@ -1085,14 +1096,16 @@ scenarios = [
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
 #
-# hoteling has no KYC — these 3 KYC variants are expected to be skipped.
-# RegistrationWithoutPow is NOT skipped: register PoW is ON, so it runs and must
-# be BLOCKED. If this set changes, a profile key was silently set to nil,
-# disabling a gate scenario that should be applicable.
+# hoteling has no KYC — these 3 KYC variants are expected to be skipped, and so
+# is C3, whose gated action spends nothing here (`gated_action_consumes: false`
+# on the profile above). RegistrationWithoutPow is NOT skipped: register PoW is
+# ON, so it runs and must be BLOCKED. If this set changes, a profile key was
+# silently set to nil, disabling a gate scenario that should be applicable.
 EXPECTED_SKIP_NAMES = %w[
   ExpiredKyc
   ForgedKyc
   MissingKyc
+  SpentResourceReuse
 ].freeze
 
 # ── Run ───────────────────────────────────────────────────────────────────────

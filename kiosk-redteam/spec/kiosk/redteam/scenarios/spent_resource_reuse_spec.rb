@@ -67,6 +67,29 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
         expect(verdict.detail).to include("first gated_action failed")
       end
     end
+
+    # An origin whose gated action READS a decision it makes on its own —
+    # hoteling's `confirm_booking`, once the property became the only thing
+    # that confirms — answers a second call exactly as it answered the first,
+    # and is right to. Without this the beat calls that a breach and the demo
+    # goes red for behaving as designed.
+    context "when the profile says the gated action spends nothing" do
+      it "skips instead of scoring the idempotent second answer a breach" do
+        stub_registers("a")
+        stub_pay(status: 200)
+        stub_action("start_rental", status: 200, body: rental_ok("rt-1"))
+
+        verdict = scenario.call(client, minimal_profile(
+          gated_action:          "start_rental",
+          gated_action_consumes: false,
+          gated_args:            ->(ref) { { reservation_id: ref[:id] } },
+          pay_for:               pay_for_callable,
+        ))
+
+        expect(verdict.skipped).to be(true)
+        expect(verdict.detail).to include("spends nothing")
+      end
+    end
   end
 
   # ── K-728 ────────────────────────────────────────────────────────────────

@@ -6,10 +6,10 @@
 # Kiosk::Handler` — with `kind :action` above each declaration, which is what
 # puts it on `POST`.
 #
-# The two writes hand straight to an Operation: `reserve_room` is a transaction
-# with a three-part inventory guard and `confirm_booking` one with two gates and
-# a COALESCE'd UPDATE, neither of which wants a `render` in the middle.
-# `payment_setup` stays HERE because it writes nothing.
+# `reserve_room` hands straight to an Operation: a transaction with a three-part
+# inventory guard, which does not want a `render` in the middle. `confirm_booking`
+# hands to one too, for the gates rather than for a write — it reads the
+# property's answer. `payment_setup` stays HERE because it writes nothing.
 #
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
@@ -51,19 +51,25 @@ class Kiosk::ReservationsController < ActionController::API
   # to re-try and no cadence to invent — the operator answers when it answers,
   # and sometimes the answer is no and the money goes back.
   topic :booking_confirmation do
-    description "The property answered your paid booking: confirmed with a code to give at " \
-                "the desk, or declined — in which case the money has been returned and the " \
-                "room-nights are free again."
+    description "The property answered your paid booking: confirmed, with the code to give at " \
+                "the desk — or cancelled, in which case the charge has been reversed to the card " \
+                "that paid and the room-nights are free again. This is the answer; " \
+                "confirm_booking reads it back and mints nothing."
     payload_schema type: "object", additionalProperties: false,
                    properties: { booking_id:        { type: "string", format: "uuid" },
-                                 status:            { enum: %w[confirmed declined] },
+                                 status:            { enum: %w[confirmed cancelled] },
                                  confirmation_code: { type: "string" },
                                  reason:            { type: "string" },
                                  refund:            { type: "object", additionalProperties: false,
+                                                      description: "Present when money had been " \
+                                                                   "taken and has been sent back.",
                                                       properties: {
                                                         amount_cents:  { type: "integer" },
                                                         currency:      { type: "string" },
                                                         psp_reference: { type: "string" },
+                                                        reverses:      { type: "string",
+                                                                         description: "The charge " \
+                                                                           "this reversal undid." },
                                                       } } },
                    required: %w[booking_id status]
     subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
@@ -185,30 +191,37 @@ class Kiosk::ReservationsController < ActionController::API
     )
   end
 
-  # confirm_booking — the two gates and the durable confirmation code. See
-  # {ConfirmBookingOperation}; the principal is NOT passed in, because both gates
-  # express it as a WHERE predicate over `kiosk.current_user_id()`.
+  # confirm_booking — READS the property's answer. It writes nothing: a guest
+  # does not confirm their own booking, a hotel does, and {PropertyDecisionJob}
+  # is the only thing that mints a confirmation code. See
+  # {ConfirmBookingOperation}; the principal is NOT passed in, because the
+  # ownership test is a WHERE predicate over `kiosk.current_user_id()`.
   kind :action
-  description "Confirm a reserved booking (requires payment mandate referencing this booking). " \
-              "Returns the `confirmation_code` the hotel stores against the booking — the " \
-              "reference the guest gives at the desk. It is durable: the same code is listed " \
-              "by my_bookings afterwards, and confirming again never mints a different one."
+  description "Collect the property's answer to a booking you have paid for. THE HOTEL " \
+              "CONFIRMS, NOT YOU: paying starts it deciding, and it answers on its own clock — " \
+              "minutes, not milliseconds — so this call is forbidden with «the property has not " \
+              "answered yet» until it has, and forbidden naming the reversed charge if the " \
+              "property could not honour the booking. On an accepted booking it returns the " \
+              "`confirmation_code` the hotel stored — the reference the guest gives at the desk, " \
+              "the same one my_bookings lists. Do not poll this: subscribe to the " \
+              "`booking_confirmation` topic on this origin's event stream instead."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
                  booking_id: { type: "string", format: "uuid",
-                               description: "The booking to confirm — a `booking_id` from " \
-                                            "reserve_room or my_bookings, verbatim; it must " \
-                                            "belong to the principal and still be reserved." },
+                               description: "The booking to collect the answer for — a " \
+                                            "`booking_id` from reserve_room or my_bookings, " \
+                                            "verbatim; it must belong to the principal and be " \
+                                            "paid." },
                },
                required: ["booking_id"]
   output_schema type: "object",
-                description: "The confirmed booking and its durable desk reference.",
+                description: "The confirmed booking and the desk reference the property stored.",
                 additionalProperties: false,
                 properties: {
                   booking_id:        { type: "string", description: "The booking that was confirmed, echoed." },
                   status:            { const: "confirmed", description: "confirmed." },
-                  confirmation_code: { type: "string", description: "The reference the guest gives at the desk. Durable: my_bookings lists the same code afterwards, and confirming again never mints a different one." },
+                  confirmation_code: { type: "string", description: "The reference the guest gives at the desk — minted by the property, not by this call. Durable: my_bookings lists the same code, and reading it again returns the same one." },
                 },
                 required: %w[booking_id status confirmation_code]
   def confirm_booking

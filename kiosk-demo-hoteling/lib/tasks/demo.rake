@@ -135,19 +135,86 @@ namespace :demo do
     Rails.configuration.x.hoteling.decline_rate = 1
     PropertyDecisionJob.new.perform(declined.id)
     declined.reload
-    check.call("status is declined", declined.status == Booking::DECLINED)
-    check.call("payment_status is refunded", declined.payment_status == Booking::REFUNDED)
-    check.call("a refund reference was persisted", declined.refund_psp_reference.present?)
+    check.call("status is cancelled", declined.status == Booking::CANCELLED)
     # THE NIGHTS COME BACK, and nothing wrote a second row to say so: the
     # overlap constraint and the `live` scope are both scoped to
     # reserved+confirmed, so the status alone frees the room.
     check.call("the declined booking no longer holds its nights",
                !Booking.live.where(id: declined.id).exists?)
     devent = store.since(declined.user_id, head_before).find { |e| e["subject"] == declined.id }
-    check.call("one booking_confirmation event, status=declined",
-               devent && devent["data"]["status"] == "declined")
-    check.call("the event names where the money went",
-               devent && devent["data"].dig("refund", "psp_reference") == declined.refund_psp_reference)
+    check.call("one booking_confirmation event, status=cancelled",
+               devent && devent["data"]["status"] == "cancelled")
+    # A booking seeded here was never charged, so there is no settlement to
+    # reverse and no refund block — which is the honest answer rather than an
+    # invented receipt. The CHARGED path is asserted by demo:book, which pays
+    # for real before the property answers.
+    check.call("no refund is claimed for a booking that was never charged",
+               devent && !devent["data"].key?("refund") && declined.refund_psp_reference.nil?)
+
+    # ── AND THE SAME DECLINE WHEN MONEY ACTUALLY MOVED ────────────────────
+    #
+    # The booking above was seeded, not bought, so there was no charge to
+    # reverse. THIS is the case Phil's flow is about: the guest paid, the
+    # property could not honour it, and the money goes back to the card it came
+    # from. The settlement below is written the way the engine writes one in
+    # executor phase 3 — a cart mandate carrying the booking id, and a capture
+    # receipt against it — because `settled_reference` reads exactly that, and
+    # stubbing it instead would prove only that a stub was called.
+    puts "\n── the property DECLINES a booking that WAS paid ──"
+    paid   = seed.call
+    charge = "stub_pi_#{SecureRandom.uuid}"
+    conn   = ActiveRecord::Base.lease_connection
+    # The chain the engine writes, in the order the foreign keys demand: an
+    # intent, the cart that references this booking, then the capture receipt.
+    intent_id = conn.exec_query(
+      "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
+      "cap_amount_cents, currency, expires_at, raw_jws) " \
+      "VALUES ($1, $2::uuid, gen_random_uuid(), $3, 'booking', $4, 'eur', " \
+      "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
+      "seed intent", ["intent-#{SecureRandom.hex(6)}", paid.user_id, Kiosk.configuration.issuer,
+                      paid.total_cents],
+    ).first["id"]
+    cart_id = conn.exec_query(
+      "INSERT INTO kiosk.cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, " \
+      "line_items, total_amount_cents, currency, expires_at, raw_jws) " \
+      "VALUES ($1, $2::uuid, $3::uuid, gen_random_uuid(), $4, $5::jsonb, $6, 'eur', " \
+      "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
+      "seed cart", ["cart-#{SecureRandom.hex(6)}", intent_id, paid.user_id,
+                    Kiosk.configuration.issuer, [{ booking_id: paid.id }].to_json, paid.total_cents],
+    ).first["id"]
+    conn.exec_query(
+      "INSERT INTO kiosk.settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, " \
+      "settled_amount_cents, currency, settled_at) " \
+      "VALUES ($1::uuid, $2::uuid, gen_random_uuid(), $3, $4, $5, 'eur', now())",
+      "seed settlement", [cart_id, paid.user_id, Kiosk.configuration.issuer, charge, paid.total_cents],
+    )
+
+    head_paid = store.head
+    Rails.configuration.x.hoteling.decline_rate = 1
+    PropertyDecisionJob.new.perform(paid.id)
+    paid.reload
+    check.call("status is cancelled", paid.status == Booking::CANCELLED)
+    check.call("payment_status is refunded", paid.payment_status == Booking::REFUNDED)
+    check.call("a refund reference was persisted", paid.refund_psp_reference.present?)
+    pevent = store.since(paid.user_id, head_paid).find { |e| e["subject"] == paid.id }
+    refund = pevent && pevent["data"]["refund"]
+    check.call("the event carries the refund", !refund.nil?)
+    check.call("the refund REVERSES the charge this operator made",
+               refund && refund["reverses"] == charge)
+    check.call("the refund is for the amount that was taken",
+               refund && refund["amount_cents"] == paid.total_cents)
+    check.call("the row and the event name the same reversal",
+               refund && refund["psp_reference"] == paid.refund_psp_reference)
+
+    puts "\n── the guest does NOT confirm their own booking ──"
+    pending = seed.call
+    pending.update_columns(status: Booking::RESERVED)
+    result = Kiosk::Server::CurrentRequest.with(
+      Kiosk::Identity.new(user_id: pending.user_id, role: "customer", actor: "agent",
+                          agent_id: SecureRandom.uuid),
+    ) { ConfirmBookingOperation.call(booking_id: pending.id) } rescue nil
+    check.call("confirm_booking writes nothing while the property is silent",
+               pending.reload.status == Booking::RESERVED && pending.confirmation_code.nil?)
 
     puts "\n── a decision that arrives twice changes nothing ──"
     PropertyDecisionJob.new.perform(accepted.id)
@@ -314,8 +381,16 @@ namespace :demo do
     # Helper: spawn the server, wait for readiness, yield, then kill.
     boot_server = lambda do |&blk|
       File.truncate(log, 0) if File.exist?(log)
+      # THE PROPERTY ANSWERS IMMEDIATELY, AND ALWAYS YES, for every flow this
+      # task drives. Both are the shipped behaviour with its two knobs turned:
+      # a live viewer meets a two-to-five minute wait and a one-in-five refusal,
+      # and a flow that met either would be asserting a coin toss behind a
+      # sleep. `demo:property_decision` is where both branches are driven on
+      # purpose, with the same knobs turned the other way.
       server_pid = spawn(
-        { "KIOSK_ISSUER" => kiosk_issuer },
+        { "KIOSK_ISSUER" => kiosk_issuer,
+          "HOTELING_DECISION_DELAY_SECONDS" => "0",
+          "HOTELING_DECLINE_RATE" => "0" },
         "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
         out: log, err: log,
       )

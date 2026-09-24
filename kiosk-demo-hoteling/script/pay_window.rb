@@ -47,6 +47,21 @@ require "json"
 # the claim look seconds late. Loading everything up front removes it.
 Rails.application.eager_load!
 
+# ── THE PROPERTY ANSWERS IMMEDIATELY, AND ALWAYS YES ─────────────────────────
+#
+# This script's subject is the CAPTURE window — the moments between a charge
+# returning and the engine writing its settlement row — and nothing else. Since
+# the property's own decision landed, a returned capture also starts the hotel
+# deciding, on a two-to-five minute clock with a one-in-five refusal, and either
+# of those would turn the assertions below into a race or a coin toss about a
+# different subject.
+#
+# Pinned HERE rather than in the environment because this script runs
+# IN-PROCESS, so the env the rake task sets for the spawned server never
+# reaches it.
+Rails.configuration.x.hoteling.decision_delay_seconds = 0
+Rails.configuration.x.hoteling.decline_rate           = 0
+
 FAILURES = []
 
 def check(cond, msg)

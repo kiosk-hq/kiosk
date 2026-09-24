@@ -40,7 +40,7 @@ settle the AP2 mandate chain (intent → cart → payment) via the stub PSP — 
 `GET /kiosk/schema`, the public catalog of everything above (no token, no
 toll), with `GET /kiosk/openapi.json` rendering the same registry as OpenAPI.
 
-Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
+Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
 this origin serves, never the registered verb names. That is a MODELLING rule,
 not a security one (spec §4.2): `GET /kiosk/schema` is public, so there is
 nothing to withhold — this document is a POINTER and the catalog is the

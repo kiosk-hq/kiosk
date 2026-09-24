@@ -7,10 +7,11 @@
 class Booking < ApplicationRecord
   RESERVED  = "reserved"
   CONFIRMED = "confirmed"
-  # The property said no. A real desk sometimes does, minutes after the money
-  # arrived, and this demo says so at a rate it publishes rather than pretending
-  # every booking is accepted.
-  DECLINED  = "declined"
+  # The booking is off. A property that cannot honour what it sold says so
+  # minutes after the money arrived, and the booking is CANCELLED — the third
+  # word `my_bookings` has always published («reserved | confirmed |
+  # cancelled»), not a fourth one invented for this path.
+  CANCELLED = "cancelled"
   # The statuses that still HOLD the room-night. A cancelled or expired booking
   # frees its nights again, which is why the overlap exclusion — here and in the
   # `bookings_no_overlapping_room_nights` EXCLUDE constraint — is scoped to

@@ -462,7 +462,7 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	redteam-onerender-a
 kiosk-demo-getgrocery/script/redteam_suite.rb	the two clocks are 90000s apart
 kiosk-demo-getgrocery/spec/wire_arguments_spec.rb	caller_day: a day the caller is still in is not past
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
-kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
+kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
 kiosk-demo-hoteling/README.md	Hotel booking demo operator for Kiosk.
 kiosk-demo-hoteling/README.md	always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
 kiosk-demo-hoteling/README.md	bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the paym

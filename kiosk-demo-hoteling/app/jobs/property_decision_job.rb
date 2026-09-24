@@ -17,21 +17,20 @@ class PropertyDecisionJob < ApplicationJob
   def perform(booking_id)
     booking = Booking.find_by(id: booking_id)
     return unless booking
-    # Somebody already resolved it — the guest confirmed, or this job ran
-    # before. Both are fine and neither is an error: the decision is a
-    # transition, not a schedule, and it happens once.
+    # Already answered — this job ran before. The decision is a transition, not
+    # a schedule: it happens once, and the PROPERTY is the only thing that makes
+    # it. Nothing else in this demo writes `confirmed` or `cancelled`.
     return unless booking.status == Booking::RESERVED
     return unless booking.payment_status == Booking::PAID
 
-    declined? ? decline!(booking) : accept!(booking)
+    declines? ? decline!(booking) : accept!(booking)
   end
 
   private
 
-  # ACCEPTING WRITES EXACTLY WHAT `confirm_booking` WRITES, and that is on
-  # purpose: the guest may confirm first, and then this job finds the booking
-  # already `confirmed` and returns above. The two paths converge on one row
-  # rather than racing to two meanings of the word.
+  # ACCEPTING IS WHAT MINTS THE CONFIRMATION CODE. The guest does not confirm
+  # their own booking — a hotel does — so this is the only place the code comes
+  # from, and `confirm_booking` reads it back rather than writing it.
   def accept!(booking)
     code = booking.confirmation_code.presence || SecureRandom.uuid
     booking.update_columns(status: Booking::CONFIRMED, confirmation_code: code,
@@ -40,34 +39,55 @@ class PropertyDecisionJob < ApplicationJob
     emit(booking, "confirmed", { "confirmation_code" => code })
   end
 
-  # DECLINING RETURNS THE MONEY, through this demo's own {StubRefund} rather
-  # than through the payment PORT. That boundary is deliberate and the reason is
-  # written there: a reversal on `Kiosk::PaymentProviders::Base` is framework,
-  # and what the framework absorbs owes a sentence in the published
-  # specification describing it as wire behaviour. A hotel changing its mind is
-  # this hotel's domain, not the protocol's.
+  # DECLINING CANCELS THE BOOKING AND GIVES THE MONEY BACK — to the card it came
+  # from, by reversing the CHARGE this operator made. The reversal is told which
+  # charge to undo (`psp_reference` off the settlement the engine wrote), which
+  # is what a refund is against at any real provider and what makes «the buyer
+  # was paid back» a checkable fact rather than a status word.
   #
   # The nights are freed by the status alone: the overlap constraint and the
-  # `live` scope are both scoped to reserved+confirmed, so a declined booking
+  # `live` scope are both scoped to reserved+confirmed, so a cancelled booking
   # stops holding its room without a second write.
+  #
+  # A booking with no settlement to reverse is cancelled anyway and says so with
+  # no `refund` block. It is the shape of a capture that never landed, and
+  # leaving the guest holding a cancelled booking they were never charged for is
+  # the right answer — inventing a refund receipt for a charge that does not
+  # exist would not be.
   def decline!(booking)
-    receipt = Kiosk.configuration.payment_provider.refund(
-      booking_id: booking.id, amount_cents: booking.total_cents,
-    )
+    charge  = settled_reference(booking)
+    receipt = charge && refund!(charge, booking.total_cents)
+
     booking.update_columns(
-      status:               Booking::DECLINED,
-      payment_status:       Booking::REFUNDED,
-      refunded_at:          Time.current,
-      refund_psp_reference: receipt[:psp_reference],
-      updated_at:           Time.current,
+      { status:         Booking::CANCELLED,
+        payment_status: receipt ? Booking::REFUNDED : booking.payment_status,
+        refunded_at:    (Time.current if receipt),
+        refund_psp_reference: receipt&.fetch(:psp_reference, nil),
+        updated_at:     Time.current }.compact,
     )
 
-    emit(booking, "declined", {
-           "reason" => "property_declined",
-           "refund" => { "amount_cents" => receipt[:amount_cents],
-                         "currency" => receipt[:currency],
-                         "psp_reference" => receipt[:psp_reference] },
-         })
+    refund_block = receipt && {
+      "amount_cents"  => booking.total_cents,
+      "currency"      => "eur",
+      "psp_reference" => receipt[:psp_reference],
+      "reverses"      => charge,
+    }
+    emit(booking, "cancelled",
+         { "reason" => "property_declined" }.merge(refund_block ? { "refund" => refund_block } : {}))
+  end
+
+  # The engine writes the settlement in executor phase 3, AFTER the capture
+  # returns, so this is the operator's own record of the charge it made.
+  def settled_reference(booking)
+    Settlement.joins(:cart_mandate)
+              .merge(CartMandate.referencing(booking.id))
+              .order(:created_at).pick(:psp_reference)
+  end
+
+  def refund!(psp_reference, amount_cents)
+    Kiosk.configuration.payment_provider.refund(
+      psp_reference: psp_reference, amount_cents: amount_cents,
+    )
   end
 
   def emit(booking, status, extra)
@@ -78,7 +98,7 @@ class PropertyDecisionJob < ApplicationJob
     )
   end
 
-  def declined?
+  def declines?
     rate = Rails.configuration.x.hoteling.decline_rate
     return false if rate.to_f <= 0
     return true  if rate.to_f >= 1

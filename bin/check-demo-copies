@@ -4636,6 +4636,17 @@ SEEDED_HUMAN =
 FLOW_DEMOS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 
 FRAGMENTS = {
+  "app/models/booking.rb#CANCELLED" => {
+    rule:  :code,
+    ships: %w[atablefor hoteling],
+    why:   "The booking is off, and it is the SAME WORD in both demos because it is the same " \
+           "word on the wire: each publishes `reserved | confirmed | cancelled` in its own " \
+           "`my_bookings` descriptor, so a second spelling here would be a demo telling an " \
+           "assistant a status its sibling never sends. atablefor cancels on the guest's own " \
+           "`cancel_booking`; hoteling cancels when the PROPERTY declines a paid booking and " \
+           "the charge is reversed (T-169). Different reasons, one vocabulary — which is " \
+           "exactly the case a per-demo file cannot hold on its own.",
+  },
   "app/operations/wire_arguments.rb#MAX_INT4" => {
     rule:  :code,
     ships: %w[atablefor getgrocery hoteling],

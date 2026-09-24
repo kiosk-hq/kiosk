@@ -3,10 +3,16 @@
 # confirm_booking — turn a paid-for hold into a confirmed stay and hand back the
 # reference the guest gives at the desk.
 #
-# TWO GATES, and they are separable on purpose: Gate 1 is OWNERSHIP (this
-# booking, this principal, still reserved) and Gate 2 is PAYMENT (a settlement
-# whose cart references this booking). The isolation flow proves Gate 1 alone by
-# having B genuinely satisfy Gate 2 for A's booking and still be refused.
+# TWO GATES AND AN ANSWER, in that order. Gate 1 is OWNERSHIP (this booking,
+# this principal) and Gate 2 is PAYMENT (a settlement whose cart references this
+# booking). The isolation flow proves Gate 1 alone by having B genuinely satisfy
+# Gate 2 for A's booking and still be refused.
+#
+# WHAT COMES AFTER THEM IS NOT A GATE — it is the property's answer, and this
+# verb only reads it. A guest does not confirm their own booking; a hotel does.
+# Paying is what starts it deciding, {PropertyDecisionJob} is the only thing
+# that mints a confirmation code or cancels the booking, and this call hands
+# back whatever it wrote.
 class ConfirmBookingOperation
   def self.call(booking_id:)
     return WireArguments.missing("booking_id") if booking_id.blank?
@@ -25,17 +31,19 @@ class ConfirmBookingOperation
 
     # Joins the request's SessionContext transaction; opens no second one.
     Booking.transaction do
-      # ── Gate 1: booking belongs to principal AND status = 'reserved' ────────
+      # ── Gate 1: the booking belongs to this principal ───────────────────────
       # Owner-scoped by the GUC predicate, so a cross-principal confirm finds
       # nothing. Deliberately ONE answer for "no such booking", "not yours" and
       # "already confirmed": distinguishing them would let a caller enumerate
       # other principals' booking ids. `exists?` and not `find_by!` — the bang
       # form's RecordNotFound renders as `not_found`, telling a prober the id is
       # unknown.
-      mine = Booking.owned_by_current_principal.where(id: booking_id, status: Booking::RESERVED)
-      unless mine.exists?
+      mine = Booking.owned_by_current_principal.where(id: booking_id)
+      row  = mine.pick(:status, :confirmation_code, :refund_psp_reference)
+      unless row
         return OperationResult.refused(code: "forbidden", message: "booking not found or not yours")
       end
+      status, code, refund_reference = row
 
       # ── Gate 2: THIS principal has paid for THIS booking ────────────────────
       # TWO WITNESSES, and the order matters. The engine's settlement row
@@ -75,24 +83,56 @@ class ConfirmBookingOperation
         return OperationResult.refused(code: "forbidden", message: "no settlement for this booking")
       end
 
-      # ── All gates passed: confirm ───────────────────────────────────────────
-      # The code is PERSISTED by this UPDATE and read back OUT of the row,
-      # so what the assistant is handed is provably what the hotel stored. The
-      # COALESCE keeps an already-coded booking's code stable. The read-back is a
-      # second statement because Rails 8.1's `update_all` has no `returning:`.
-      code = SecureRandom.uuid
-      mine.update_all(
-        status:            Booking::CONFIRMED,
-        confirmation_code: Arel::Nodes::NamedFunction.new(
-          "COALESCE", [Booking.arel_table[:confirmation_code], Arel::Nodes.build_quoted(code)],
-        ),
-        updated_at:        Time.current,
-      )
+      # ── THE PROPERTY'S ANSWER, read AFTER the payment gates ─────────────────
+      #
+      # The order is the point. An unpaid booking is `reserved` too, so putting
+      # this first answered «the property has not answered yet» to a caller
+      # whose real problem was that nothing had been charged — a true sentence
+      # that sends an assistant to wait for an event that will never come. The
+      # payment gates are more specific and they go first; only a caller who HAS
+      # paid is waiting on the hotel.
+      # ── THE PROPERTY HAS NOT ANSWERED YET ───────────────────────────────────
+      # This verb no longer confirms anything: a guest does not confirm their
+      # own booking, a hotel does. Paying starts the property deciding, and it
+      # answers on its own clock — minutes, not milliseconds. So `reserved` here
+      # is not a refusal about this caller at all; it is «not yet», and the
+      # answer says where the answer will come from rather than inviting a poll
+      # loop nobody specified.
+      if status == Booking::RESERVED
+        return OperationResult.refused(
+          code:    "forbidden",
+          message: "the property has not answered this booking yet",
+          hint:    "Subscribe to the `booking_confirmation` topic on this origin's event stream " \
+                   "and wait; it carries the confirmation code, or the cancellation and the " \
+                   "refund. Re-reading my_bookings shows the same answer once it arrives.",
+        )
+      end
 
+      # ── THE PROPERTY SAID NO ────────────────────────────────────────────────
+      # The room-nights are free again and the money has gone back to the card
+      # it came from. Naming the reversal here matters: an assistant telling its
+      # human «that fell through» must be able to say what became of the money.
+      if status == Booking::CANCELLED
+        return OperationResult.refused(
+          code:    "forbidden",
+          message: "the property could not honour this booking and it was cancelled",
+          hint:    refund_reference ? "The charge was reversed (#{refund_reference}); the money is " \
+                                      "on its way back to the card that paid. Search again for " \
+                                      "another room." \
+                                    : "Nothing was charged. Search again for another room.",
+        )
+      end
+
+      # ── The property confirmed: hand over what it wrote ─────────────────────
+      # NOTHING IS WRITTEN HERE. The code was minted by {PropertyDecisionJob}
+      # when the hotel accepted, so what the assistant is handed is provably
+      # what the hotel stored rather than what this call happened to generate —
+      # and calling twice cannot mint a second code, because this call mints
+      # none.
       OperationResult.ok({
         booking_id:        booking_id,
-        status:            "confirmed",
-        confirmation_code: Booking.owned_by_current_principal.where(id: booking_id).pick(:confirmation_code),
+        status:            Booking::CONFIRMED,
+        confirmation_code: code,
       })
     end
   end

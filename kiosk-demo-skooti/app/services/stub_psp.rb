@@ -12,4 +12,23 @@ class StubPsp < Kiosk::PaymentProviders::Base
       settled_at:           Time.now.utc,
     }
   end
+
+  # REVERSE A CAPTURE, on the operator's signal — the money goes back to the
+  # card it came from. A stub PSP that could only take money would be a stub of
+  # half a payment provider, and the half it left out is the one an operator
+  # needs the day it cannot honour what it sold.
+  #
+  # It names the ORIGINAL charge rather than a booking or an order, because that
+  # is what a reversal is against at any real provider (`Stripe::Refund.create`
+  # takes a `payment_intent:`) and it is what makes «the buyer got their money
+  # back» checkable: the receipt points at the charge it undid.
+  def refund(psp_reference:, amount_cents:)
+    {
+      psp_reference:        "stub_re_#{psp_reference}",
+      refunded_psp_reference: psp_reference,
+      refunded_amount_cents: amount_cents,
+      refunded_at:          Time.now.utc,
+    }
+  end
+
 end

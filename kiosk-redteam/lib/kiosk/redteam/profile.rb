@@ -87,6 +87,17 @@ module Kiosk
     #   {ForgedKyc}, {SpentResourceReuse}, {PayForOtherUseSelf}; skipped
     #   when nil.
     #
+    # @!attribute gated_action_consumes [Boolean]
+    #   Whether invoking `gated_action` SPENDS the owned resource, so that a
+    #   second invocation must be refused. True for an action that turns a paid
+    #   hold into a delivered thing — an unlock token, a dispatched order.
+    #   False when the action is a READ of a decision the operator makes on its
+    #   own: calling it twice is then correct behaviour and there is no C3
+    #   surface to attack, so {SpentResourceReuse} is skipped rather than
+    #   reporting a breach against an idempotent verb. Defaults to true,
+    #   because an action reached through a payment gate usually does consume
+    #   something; an origin whose does not must say so.
+    #
     # @!attribute gated_args [#call, nil]
     #   Callable: `(owned_ref) -> Hash`.
     #   Returns the arguments for `gated_action` given an owned_ref.
@@ -124,6 +135,7 @@ module Kiosk
                   :forge_action,
                   :forge_args,
                   :gated_action,
+                  :gated_action_consumes,
                   :gated_args,
                   :pay_for,
                   :kyc_valid,
@@ -142,6 +154,7 @@ module Kiosk
         forge_action: nil,
         forge_args: nil,
         gated_action: nil,
+        gated_action_consumes: true,
         gated_args: nil,
         pay_for: nil,
         kyc_valid: nil,
@@ -159,6 +172,7 @@ module Kiosk
         @forge_action   = forge_action
         @forge_args     = forge_args
         @gated_action   = gated_action
+        @gated_action_consumes = gated_action_consumes
         @gated_args     = gated_args
         @pay_for        = pay_for
         @kyc_valid      = kyc_valid

@@ -260,6 +260,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Removed
 
+- **The connect ticket for the event stream is gone (ADR-0034).** `POST <endpoint>/events/ticket` and `?ticket=` are removed; the upgrade takes the `Authorization` header.
+
 - **`Kiosk::Server::Result#ok?` is gone.** A constant-true predicate on a type this gem calls internal, with no caller anywhere; `#http_status` is the whole of what a Result answers with.
 
 - **`kiosk.actions` and `kiosk.action_log` leave the canonical migration set (K-828).** Canonical migration 003 is retired and the install generator emits nine migrations instead of ten (004-010 keep their ordinals). With the audit trail now the operator's, a shipped migration that creates two audit tables nothing ever fills is exactly the dead schema K-791 objected to. `SchemaDefinitions.actions_log_sql`, the `create_kiosk_actions_log` template and `Kiosk::Server::ActionLog` (with `c.audit_log` / `c.audit_log_args`) are gone rather than deprecated: there are no adopters to carry a shim for, and an existing installation drops the two tables by hand.

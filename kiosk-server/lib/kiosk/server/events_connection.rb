@@ -3,7 +3,6 @@
 require "action_cable"
 require "json"
 require "rack"
-require "kiosk/server/events_ticket"
 
 module Kiosk
   module Server
@@ -48,7 +47,7 @@ module Kiosk
       BEATS_PER_PING = 10
 
       def connect
-        identity = resolve_identity || redeem_ticket || reject_unauthorized_connection
+        identity = resolve_identity || reject_unauthorized_connection
         @kiosk_identity = identity
         self.kiosk_identity_key = identity.user_id.to_s
       end
@@ -59,7 +58,7 @@ module Kiosk
       # socket receiving nothing, forever. Everything such a client needs to
       # say, it therefore says in the URL:
       #
-      #   wss://<origin>/kiosk/events?ticket=…&topic=todo:list_4f1e&topic=delivery&since=880
+      #   wss://<origin>/kiosk/events?topic=todo:list_4f1e&topic=delivery&since=880
       #
       # These are SYNTHESISED into exactly the commands the client would have
       # sent, through Action Cable's own `subscriptions`, so there is ONE code
@@ -113,15 +112,6 @@ module Kiosk
         return nil if value.nil? || value.to_s.empty?
 
         value.to_i
-      end
-
-      # THE HEADER IS TRIED FIRST AND THE TICKET ONLY AFTER IT, so a client
-      # that can send a header never puts a credential in a URL, and the
-      # recommended path stays the recommended path.
-      def redeem_ticket
-        value = ::Rack::Utils.parse_query(request.query_string)["ticket"]
-        value = value.last if value.is_a?(Array)
-        Kiosk::Server::EventsTicket.redeem(value)
       end
 
       # An adapter returns nil for a credential it does not recognise; it does

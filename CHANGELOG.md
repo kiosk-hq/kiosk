@@ -26,6 +26,7 @@ to a gem's published surface gets its release note in that gem's own
 turned out to be wrong is superseded by a new entry that says so and names it,
 never rewritten. The entries below the baseline are long; they stay as written.
 
+- 2026-09-24: **The event stream's connect ticket is removed (ADR-0034).** A socket is authenticated one way now: the `Authorization` header on the upgrade.
 - 2026-09-25: **The engine serves an event stream at `<endpoint>/events`.** Topics are declared beside the verbs they report on; a durable tail lets a subscriber resume with `since`.
 - 2026-09-24: **A topic is registered by the rebuild, not by the class body.** Reading a handler twice raised «already declared»; a topic removed from one now leaves the catalogue.
 - 2026-09-24: **e2e drives the pinned listener over a real socket.** A salon confirms at its own desk; the event reaches a waiting subscriber, resumes from `since`, and refuses a foreign row.

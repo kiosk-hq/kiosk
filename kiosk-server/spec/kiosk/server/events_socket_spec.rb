@@ -91,41 +91,15 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     end
   end
 
-  # BOTH ways, deliberately: a single-use connect ticket AND subscriptions
-  # declarable in the URL. Neither is removed until there is a real harness on
-  # the other end to choose with — and the measurement that produced the pair
-  # says a ticket ALONE buys nothing, because a receive-only client still could
-  # not issue a `subscribe` command.
-  describe "the connect ticket" do
-    it "refuses to mint for an unauthenticated caller" do
-      expect(report["ticket_unauth_status"]).to eq(401)
-    end
-
-    it "mints for the ordinary identity chain, short-lived" do
-      expect(report["ticket_status"]).to eq(200)
-      expect(report["ticket_minted"]).to be(true)
-      expect(report["ticket_expires_in"]).to eq(30)
-    end
-
-    it "opens a socket that sends NO Authorization header" do
+  describe "subscriptions declared in the URL" do
+    # Action Cable streams nothing until the client SENDS a subscribe command,
+    # and a client that can set a header on the upgrade may still be unable to
+    # send a frame — it would hold an open socket and receive nothing, forever.
+    # So everything such a client has to say, it says in the URL.
+    it "welcomes a socket whose topics arrive only in the query string" do
       expect(report["url_welcomed"]).to be(true)
     end
 
-    # The property that makes a ticket in an access log worthless even inside
-    # its thirty seconds.
-    it "is SINGLE USE — the same ticket a second time is refused" do
-      expect(report["ticket_replay_welcomed"]).to be(false)
-    end
-
-    it "refuses a ticket nobody minted" do
-      expect(report["bogus_ticket_welcomed"]).to be(false)
-    end
-  end
-
-  describe "subscriptions declared in the URL" do
-    # Without this half the ticket is pointless: Action Cable streams nothing
-    # until the client SENDS a subscribe command, and a receive-only client
-    # never can — it would hold an open socket and receive nothing, forever.
     it "subscribes to every topic in the query string without the client sending a frame" do
       expect(report["url_subscribed_topics"]).to eq(%w[order_payment todo])
     end

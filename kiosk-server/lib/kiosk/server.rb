@@ -43,8 +43,6 @@ require "kiosk/server/queries"
 require "kiosk/server/events"
 require "kiosk/server/event_store"
 require "kiosk/server/event_stores"
-require "kiosk/server/events_ticket"
-require "kiosk/server/events_ticket_controller"
 require "kiosk/server/events_cable"
 require "kiosk/server/events_connection"
 require "kiosk/server/kiosk_events_channel"
@@ -182,10 +180,6 @@ module Kiosk
     #                                         Action Cable constantizes the name
     #                                         straight out of the subscribe frame,
     #                                         so it is a wire constant
-    #   - {Kiosk::Server::EventsTicket}     — the single-use connect ticket, for a
-    #                                         client that cannot send a header
-    #   - {Kiosk::Server::EventsTicketController} — Rails controller serving
-    #                                         POST <mount>/events/ticket
     #
     #   Infra:
     #   - {Kiosk::Server::Headers}          — composes the three response headers

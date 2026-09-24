@@ -97,6 +97,16 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     # Roles are hook-or-absent in 0.1. registration_role is OPTIONAL — when
     # unset, the code writes the EMPTY role set.
     #
+    # THE OPERATOR THIS DESCRIBES DECLARES NO ROLE VOCABULARY, and both
+    # examples below now say so rather than inheriting `%i[customer]` from the
+    # outer block (T-225). ADR-0011's protected case is «assigns roles to
+    # nobody», and since ADR-0036 that is the only operator for whom
+    # `registration_role` may be unset at all: an origin that declares roles and
+    # configures no default is refused at BOOT, so this branch would not be
+    # reachable for it. Nothing about the branch itself moved — it is the
+    # configuration reaching it that narrowed, and these examples follow it
+    # rather than pinning a state a booted app cannot be in.
+    #
     # WHAT THIS EXAMPLE DOES NOT PROVE, and the reason it is named here rather
     # than left implied: a fake accepts any statement, so nothing here can tell
     # you the row is acceptable to a real `agents` table. It used to assert the
@@ -108,7 +118,7 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     # auth_plane_persistence_spec.rb. All that survives here is the STATEMENT
     # SHAPE — that no role means no third bind.
     it "writes an empty allowed_roles with registration_role unset (K-788)" do
-      Kiosk.configure { |c| c.registration_role = nil }
+      Kiosk.configure { |c| c.roles = []; c.registration_role = nil }
       results = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
       route_exec_query(con) { |_sql, _binds| results.shift || [] }
 
@@ -124,7 +134,7 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     end
 
     it "treats an empty-string registration_role as unset (no ConfigurationError)" do
-      Kiosk.configure { |c| c.registration_role = "" }
+      Kiosk.configure { |c| c.roles = []; c.registration_role = "" }
       results = [[], [{ "id" => "agent-1" }]]
       route_exec_query(con) { |_sql, _binds| results.shift || [] }
 

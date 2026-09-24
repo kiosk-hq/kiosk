@@ -87,6 +87,12 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
 
     it "falls back to registration_role, and the empty role set when neither is set" do
+      # THE EMPTY-SET HALF IS AN ORIGIN THAT DECLARES NO ROLES, and the
+      # vocabulary is set here rather than inherited (T-225): an origin that
+      # declares roles and configures no default is refused at BOOT now, so
+      # «neither is set» is reachable only for the operator ADR-0011 protects —
+      # the one that assigns roles to nobody.
+      Kiosk.configure { |c| c.roles = [] }
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       sql, binds = con.bound(/INSERT/i).first
       # The empty array is a statement SHAPE (no role at all), so it has no
@@ -97,7 +103,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(sql).not_to include("NULL")
       expect(binds).to eq([user_id, pem])
 
-      Kiosk.configure { |c| c.registration_role = :customer }
+      Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :customer }
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       sql, binds = con.bound(/INSERT/i).last
       expect(sql).to include("ARRAY[$3]::text[]")
@@ -231,9 +237,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
     # The one shape that cannot resolve a role: an operator that assigns none.
     # The EMPTY role set is what a fresh key gets there, so it is what a rebind
-    # gets too — never the role the key happens to be carrying.
+    # gets too — never the role the key happens to be carrying. That operator
+    # declares no role VOCABULARY either: since T-225 the two go together, and a
+    # declared vocabulary with no default is refused at boot.
     it "writes the EMPTY role set when the operator assigns no role at all" do
-      Kiosk.configure { |c| c.registration_role = nil }
+      Kiosk.configure { |c| c.roles = []; c.registration_role = nil }
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
 
       sql, binds = con.bound(/UPDATE/i).first
@@ -298,7 +306,10 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
 
     it "warns the operator when a role-less ceremony lands on a multi-role origin" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      # A declared vocabulary comes with a default since ADR-0036 — an origin
+      # without one does not boot — so the warning has exactly one landing to
+      # name, and names it.
+      Kiosk.configure { |c| c.roles = %i[customer owner]; c.registration_role = :customer }
       route_exec_query(con) do |sql, _binds|
         sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
                               "allowed_roles" => "{owner}" }] : []
@@ -311,13 +322,16 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(output).to include("resolved NO role for the approving human")
       expect(output).to include("must be TOTAL")
       expect(output).to include("kiosk_role")
+      # It says where the binding LANDS, which is the half that names who is
+      # hurt: a member of staff gets an assistant at the customer default.
+      expect(output).to include("lands on :customer")
       # It names the vocabulary, so the operator can see which origin this is.
       expect(output).to include("customer")
       expect(output).to include("owner")
     end
 
     it "prefers Rails.logger for that warning when a Rails logger is present" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      Kiosk.configure { |c| c.roles = %i[customer owner]; c.registration_role = :customer }
       route_exec_query(con) do |sql, _binds|
         sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
                               "allowed_roles" => "{owner}" }] : []

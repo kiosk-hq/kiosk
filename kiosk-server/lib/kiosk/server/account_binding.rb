@@ -309,14 +309,20 @@ module Kiosk
         # ceremony has to define. kiosk.tech `protocol.md` §6.3 and
         # `specification.html` state the contract.
         #
-        # WHY THIS WARNS INSTEAD OF CRASHING AT BOOT. The `signing_key`
-        # precedent crashes on a fact the engine can settle with certainty
-        # before serving a request: the value is configured or it is not.
-        # Totality is not that fact. It is a property of the host's
+        # WHY THIS WARNS INSTEAD OF CRASHING AT BOOT — AND WHAT DOES CRASH
+        # THERE. The contract has two halves and they are decidable in
+        # different places. The CONFIGURATION half — that an origin declaring a
+        # role vocabulary also configures a default to fall back to — is two
+        # settings in the operator's own initializer, and the engine refuses to
+        # start without it ({Engine.default_role_configuration_error}). That is
+        # why `config.registration_role` is known to be a declared role by the
+        # time this method runs at all.
+        #
+        # The half LEFT is not that fact. It is a property of the host's
         # `#kiosk_role` over every row in the host's users table, and nothing
         # in the initializer, the schema or the adapter can decide it — an
         # origin declaring two roles and defining `#kiosk_role` is the CORRECT
-        # multi-role shape, so a boot check would either accuse every such
+        # multi-role shape, so a boot check THERE would either accuse every such
         # origin or catch nothing. The one moment it IS decidable with
         # certainty is this one: a ceremony arriving with no role at an origin
         # that declares more than one is the unsupported mixture and nothing
@@ -336,14 +342,12 @@ module Kiosk
           return unless requested_role.nil? || requested_role.to_s.strip.empty?
           return unless config.roles.to_a.size > 1
 
+          # An origin reaching this line always HAS a default role: a declared
+          # vocabulary with none is refused at boot, so there is no second
+          # landing to describe and no branch here.
           landing =
-            if config.registration_role.to_s.strip.empty?
-              "this binding lands on NO role at all, since this origin configures no " \
-                "`registration_role` either"
-            else
-              "this binding lands on #{config.registration_role.inspect}, the role " \
-                "registration would assign"
-            end
+            "this binding lands on #{config.registration_role.inspect}, the role " \
+            "registration would assign"
           message =
             "[kiosk-server] an account-binding ceremony resolved NO role for the approving " \
             "human, and this origin declares more than one role " \

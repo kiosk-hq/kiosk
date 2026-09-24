@@ -30,7 +30,11 @@ require "kiosk/user_identity_providers/devise"
 
 Kiosk.configure do |c|
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
-  c.roles    = %i[customer]   # at least one — the first is the default
+  c.roles    = %i[customer]
+  # Required whenever `c.roles` is set, and refused at boot without it: the
+  # default role an assistant lands on when nothing else resolves one. Declaring
+  # no roles at all is the other supported shape, and then neither line is set.
+  c.registration_role = :customer
 end
 ```
 

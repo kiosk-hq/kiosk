@@ -231,13 +231,24 @@ module Kiosk
       # every RLS policy trusts). Privileged roles are obtainable only through
       # the human-approved device-grant flow.
       #
-      # OPTIONAL: roles are hook-or-absent, and registration MUST NOT fail when
-      # this is unset. When unset, self-registered agents get NO role —
-      # `agents.allowed_roles` is the EMPTY array, never NULL, because the
-      # shipped migration declares that column `NOT NULL` — and a provider that
-      # needs roles may assign them inside its `assistant_creation` hook
-      # instead. When set, it must be one of {#roles}.
-      #   Kiosk.configure { |c| c.registration_role = :customer }
+      # REQUIRED WHENEVER {#roles} IS NON-EMPTY, and unused otherwise. There is
+      # always a default role: this value is what a binding falls back to when
+      # the ceremony resolves none, and what a self-registration — which has no
+      # human in it at all — is pinned to. An origin that declares a role
+      # vocabulary and leaves this unset would land both on the EMPTY role set
+      # and mint tokens with no `role` claim while its verbs branch on one, so
+      # {Engine.default_role_configuration_error} REFUSES that origin at boot,
+      # naming this setting (kiosk.tech `protocol.md` §6.3).
+      #
+      # An origin that declares NO roles is untouched, and nothing here is
+      # required of it. It leaves this unset, its agents get NO role
+      # (`agents.allowed_roles` is the EMPTY array, never NULL, because the
+      # shipped migration declares that column `NOT NULL`), and it boots. A
+      # provider that needs roles on only some accounts may still assign them
+      # inside its `assistant_creation` hook.
+      #
+      # When set, it must be one of {#roles}.
+      #   Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :customer }
       attr_accessor :registration_role
 
       # Provider-supplied factory that creates the assistant account backing a

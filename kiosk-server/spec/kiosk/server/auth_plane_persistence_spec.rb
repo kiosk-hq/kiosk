@@ -92,9 +92,11 @@ RSpec.describe "auth plane persistence (real Postgres)" do
       c.issuer = "https://provider.example"
       c.roles  = %i[customer owner]
       # A role is configured throughout; the two examples that turn it OFF say
-      # so themselves and assert the empty-`text[]` shape the role-less path
-      # writes (K-788 — it used to write a literal `NULL` into a `NOT NULL`
-      # column and 500 the register door for every role-less provider).
+      # so themselves — clearing the role VOCABULARY in the same breath, because
+      # since T-225 the two go together — and assert the empty-`text[]` shape
+      # the role-less path writes (K-788 — it used to write a literal `NULL`
+      # into a `NOT NULL` column and 500 the register door for every role-less
+      # provider).
       c.registration_role = :customer
     end
     connection.execute(%(TRUNCATE #{table('agents')} CASCADE))
@@ -163,7 +165,11 @@ RSpec.describe "auth plane persistence (real Postgres)" do
     # SAME INSERT, so a provider with no `registration_role` could not complete
     # an account binding either.
     it "binds a fresh key with no role at all — an empty text[], not NULL (K-788)" do
-      Kiosk.configure { |c| c.registration_role = nil }
+      # The role vocabulary goes with the default (T-225): «no role at all» is
+      # the operator that assigns roles to NOBODY, which is the only one that
+      # may leave `registration_role` unset since ADR-0036. A declared
+      # vocabulary with no default is refused at boot.
+      Kiosk.configure { |c| c.roles = []; c.registration_role = nil }
 
       result = Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
 
@@ -219,7 +225,7 @@ RSpec.describe "auth plane persistence (real Postgres)" do
     # statement shape the fresh-key branch writes — and not a literal NULL into
     # a `NOT NULL` column (K-788).
     it "writes an empty text[] on a role-less rebind when no role is configured" do
-      Kiosk.configure { |c| c.registration_role = nil }
+      Kiosk.configure { |c| c.roles = []; c.registration_role = nil }
 
       Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
 
@@ -294,8 +300,9 @@ RSpec.describe "auth plane persistence (real Postgres)" do
     # ── THE ROLE-LESS PROVIDER, END TO END (K-788) ──────────────────────────
     #
     # Roles are "hook-or-absent" in this series and ADR-0011 is explicit that
-    # «registration MUST NOT fail when [registration_role] is unset»; the spec
-    # says a single-role operator simply omits the role. The code used to write
+    # «registration MUST NOT fail when [registration_role] is unset» — narrowed
+    # by ADR-0036 to the operator that declares NO role vocabulary, which is the
+    # one it was written for and the one configured here. The code used to write
     # a literal `NULL` into `allowed_roles`, which the SHIPPED migration
     # declares `text[] NOT NULL DEFAULT '{}'`, so every register and every
     # fresh-key bind 500'd for exactly the operator the ADR protects. No demo
@@ -307,7 +314,7 @@ RSpec.describe "auth plane persistence (real Postgres)" do
     # `executor.rb` writes its `"on_file"` sentinel rather than a NULL into a
     # NOT NULL column.
     it "registers with no registration_role at all, and the row LOGS IN (K-788)" do
-      Kiosk.configure { |c| c.registration_role = nil }
+      Kiosk.configure { |c| c.roles = []; c.registration_role = nil }
       issued = []
       allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
         .to receive(:issue) { |_instance, **kw| issued << kw; "kiosk-pop-jwt" }

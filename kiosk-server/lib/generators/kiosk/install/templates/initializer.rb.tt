@@ -112,17 +112,25 @@ Kiosk.configure do |c|
   #
   # In practice the only way to acquire the mixture is to write `#kiosk_role`
   # on your user model and let it answer nil. Make it TOTAL: return your
-  # least-privileged declared role instead. Nothing can check this at boot —
-  # whether a method is total over your humans is not a fact a configuration
-  # file holds — so kiosk-server warns in your log the first time a ceremony
-  # resolves no role on a multi-role origin. That warning is the only signal
-  # you get, and it arrives at the first binding rather than at deploy.
+  # least-privileged declared role instead. Whether a Ruby METHOD is total over
+  # your humans is not a fact a configuration file holds, so nothing can check
+  # that half at boot — kiosk-server warns in your log the first time a ceremony
+  # resolves no role on a multi-role origin, and that warning arrives at the
+  # first binding rather than at deploy. The CONFIGURATION half below is
+  # checked at boot, and refused.
+  #
+  # UNCOMMENT THESE TWO TOGETHER OR NEITHER. A declared role vocabulary with no
+  # `registration_role` is refused at boot: there is always a default role, and
+  # without one every assistant admitted with no role of its own would carry
+  # none at an origin whose verbs branch on one.
   # c.roles = %i[customer]
 
-  # Role pinned to every self-registered agent (agents cannot choose their
-  # own). OPTIONAL: when unset, self-registered agents get no role — assign
-  # roles inside the `c.assistant_creation` hook instead if your app
-  # branches on them. When set, must be one of `c.roles`.
+  # The DEFAULT ROLE — what a self-registered assistant is pinned to (assistants
+  # cannot choose their own), and what a binding falls back to when the ceremony
+  # resolves no role. REQUIRED whenever `c.roles` above is set, and it must be
+  # one of them; name your least-privileged role. If you assign roles to nobody,
+  # leave both commented out — then no binding carries a role and no token has
+  # one, which is the other supported shape.
   # c.registration_role = :customer
 
   # Owner block surfaced in /.well-known/kiosk.json.

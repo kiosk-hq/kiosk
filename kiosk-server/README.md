@@ -65,6 +65,13 @@ Kiosk.configure do |c|
   c.user_model    = "User"
   c.user_id_type  = :uuid
   c.roles         = %i[customer master support]
+  # The DEFAULT ROLE. Required whenever `c.roles` is set, and refused at boot
+  # when it is missing: there is always a default role, so an assistant
+  # admitted with no role of its own — a self-registration, or a binding whose
+  # approving human resolves none — lands on this one rather than on nothing.
+  # Name your least-privileged role. An origin that assigns roles to nobody
+  # sets neither line, and then no token carries a `role` claim.
+  c.registration_role = :customer
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
   # The controllers that declare this origin's verbs — see
   # "Declaring queries and actions". Without them the origin serves no verbs.

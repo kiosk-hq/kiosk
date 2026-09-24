@@ -272,6 +272,75 @@ module Kiosk
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
+      # ── THERE IS ALWAYS A DEFAULT ROLE ────────────────────────────────────
+      #
+      # `registration_role` is what every role resolution in this engine falls
+      # back to: {AccountBinding.bind!} applies it on both branches when the
+      # ceremony carries no role, and {AgentRegistration} pins it on a
+      # self-registration, which has no human in it at all. An origin that
+      # declares a role vocabulary and configures no default has nowhere for
+      # those to land — every such assistant gets the EMPTY role set and a token
+      # with no `role` claim, while the origin's own verbs branch on one. So the
+      # engine refuses to start on that configuration, naming the setting.
+      #
+      # THE REQUIREMENT IS CONDITIONAL, AND THAT IS THE WHOLE OF IT. An origin
+      # that declares NO roles is untouched: it configures no default, no
+      # binding carries a role, its tokens omit the `role` claim, and it boots
+      # exactly as before. Both shapes are total; the MIXTURE is what is
+      # refused, which is the contract kiosk.tech `protocol.md` Section 6.3
+      # already states for the ceremony, applied to the one path that has no
+      # human in it.
+      #
+      # WHY AT BOOT RATHER THAN AT THE CEREMONY, where the OTHER half of the
+      # same contract is only warned about (see
+      # {AccountBinding.warn_role_resolution_not_total}). That half asks whether
+      # the HOST's `#kiosk_role` is total over the host's users table, which no
+      # configuration file can answer, so a boot check there would accuse every
+      # multi-role origin or none. This one reads two settings out of the
+      # operator's own initializer and is settled before a request exists.
+      #
+      # IT RAISES rather than warns, on the `signing_key` precedent: a fact
+      # settled at boot whose silent wrong answer is invisible afterwards —
+      # assistants that quietly cannot act, with nothing in the operator's logs
+      # or metrics to say why. The condition is a CLASS METHOD for
+      # {.shared_spent_store_warning}'s reason — an `after_initialize` body is
+      # reachable only by booting a real application, and a control whose
+      # condition cannot be unit-tested is a control nobody can prove fires.
+      # Returns the message, or nil when this origin has nothing to answer for.
+      #
+      # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
+      # @return [String, nil]
+      def self.default_role_configuration_error(config:)
+        declared = Array(config.roles).map(&:to_s).reject(&:empty?)
+        return nil if declared.empty?
+
+        configured = config.registration_role.to_s.strip
+        return nil if declared.include?(configured)
+
+        head =
+          if configured.empty?
+            "[kiosk-server] this origin declares roles (#{declared.join(', ')}) and configures no " \
+              "`registration_role`."
+          else
+            "[kiosk-server] this origin declares roles (#{declared.join(', ')}) and its " \
+              "`registration_role` is #{config.registration_role.inspect}, which is not one of them."
+          end
+
+        "#{head} There is always a default role: an AI assistant admitted with no role of its own " \
+          "— a self-registration, or a binding whose approving human resolves none — lands on the " \
+          "EMPTY role set and gets a token with NO role claim, at an origin whose verbs branch on " \
+          "one. Configure the default, naming the least-privileged role you declare: " \
+          "Kiosk.configure { |c| c.registration_role = :#{declared.first} }. Or assign roles to " \
+          "nobody — `c.roles = []` — which is the other supported shape: then no binding carries a " \
+          "role and no token has one. Both are total; the mixture is what is refused " \
+          "(kiosk.tech protocol.md Section 6.3)."
+      end
+
+      config.after_initialize do
+        message = Kiosk::Server::Engine.default_role_configuration_error(config: Kiosk.configuration)
+        raise Kiosk::Server::Errors::ConfigurationError, message if message
+      end
+
       # Root-relative discovery surface. `routes.append` blocks run when the
       # host's route set is FINALIZED — after config/routes.rb has been
       # drawn — so the mount is already visible when the gate below asks

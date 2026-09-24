@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1716 anchors.
+# 1727 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1295,6 +1295,17 @@ kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 401 for a foreign
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves ?v=<digest> immutable, and a stale ?v= short-lived
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves GET /kiosk/schema with no credential whatsoever
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	…and a token it cannot verify changes nothing, because it is not read
+kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	boots with no role vocabulary and no default — nothing was made mandatory
+kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	boots — this is what all seven demos and the e2e fixture configure
+kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	does not come up at all
+kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	names the setting the operator has to add
+kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	refuses with a ConfigurationError, not with whatever raised first
+kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	is silent once a default role is configured
+kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	is silent with no default role configured — nothing has changed for it
+kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	names the other supported shape, so the operator has both exits
+kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	names the setting to add and a value it would accept
+kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	refuses a configuration that names no default role
+kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	refuses a default that is not one of the declared roles
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	captures the public key the ceremony will bind
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	computes expires_at as now + expires_in
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	defaults expires_in to the canonical 900s (15 min)

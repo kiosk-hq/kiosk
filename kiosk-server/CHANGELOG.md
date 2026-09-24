@@ -14,6 +14,7 @@ already written is edited.
 
 ### Changed
 
+- **BREAKING (small): an origin that declares `c.roles` must configure `c.registration_role`, or it does not boot (ADR-0036).** An origin that declares no roles is untouched.
 - **BREAKING (small): a role-less rebind no longer keeps the assistant's existing role.** It binds at `registration_role`, or the empty role set, exactly as a fresh key does (K-1791).
 - **The install template stops calling the external agent-IdP seam «planned».** It names the one subclass the engine actually ships (K-1673).
 - **The gemspec named `ActiveRecord::Base.connection`; the engine uses `lease_connection` everywhere.** The install template stops naming the deleted query/run endpoints.

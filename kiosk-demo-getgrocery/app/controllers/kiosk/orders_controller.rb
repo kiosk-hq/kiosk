@@ -93,6 +93,33 @@ class Kiosk::OrdersController < ActionController::API
     subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
   end
 
+  # THE DELIVERY ITSELF, which is the shop's end of the bargain and the part no
+  # call of the assistant's produces. A courier leaves ten to fifteen minutes
+  # before the published window and arrives inside it; both instants are the
+  # shop's, both matter to the human waiting at the door, and neither has a
+  # cadence an assistant could have invented — «is it here yet» over a window
+  # hours wide is the poll this topic replaces.
+  topic :order_delivery do
+    description "Your order is on its way, or has arrived. `out_for_delivery` carries the ETA — " \
+                "the delivery window this order was booked for, with the clock it was quoted " \
+                "on — and `delivered` means it is at the door. Nothing to call back: this is " \
+                "the shop acting, not an answer to a request of yours."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { order_id:  { type: "string", format: "uuid" },
+                                 status:    { enum: %w[out_for_delivery delivered] },
+                                 eta:       { type: "string", format: "date-time",
+                                              description: "When the window opens. Present on " \
+                                                           "`out_for_delivery` only." },
+                                 eta_label: { type: "string",
+                                              description: "The same window as a human reads " \
+                                                           "it, on the clock below." },
+                                 timezone:  { type: "string",
+                                              description: "The delivery district's clock — the " \
+                                                           "one `eta_label` is written on." } },
+                   required: %w[order_id status]
+    subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
+  end
+
   kind :action
   description "Check whether the authenticated principal has a saved card on file. " \
               "Returns {status: \"ready\"} if a card is already saved and the assistant can proceed to `pay`. " \

@@ -120,6 +120,9 @@ class ValidatingPaymentProvider
             data: { "order_id" => order_id, "payment_state" => "paid" },
           )
         end
+        # The heal is a paid order arriving late; it gets its courier like any
+        # other, and an order whose window has already passed departs at once.
+        CourierDispatchJob.arm!(order_id)
         healed << order_id
       else
         unresolved << {
@@ -288,6 +291,11 @@ class ValidatingPaymentProvider
 
   def mark_paid!(order_id)
     set_status(order_id, from: "paying", to: "paid")
+    # AND THE COURIER IS ARMED. The basket is bought; from here the shop acts
+    # on its own clock, and nothing the assistant calls will produce either of
+    # the two transitions that follow. {CourierDispatchJob} swallows its own
+    # failures for the same reason this method does.
+    CourierDispatchJob.arm!(order_id)
   rescue StandardError
     # The engine settlement (P3) already records the charge; a failed local flip
     # must never surface as an error over a paid order.

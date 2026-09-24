@@ -1828,6 +1828,16 @@ COPIES = {
           "T-083 split the renderers out to this path so all seven are under the gate, and left " \
           "the membership guard, which is tudu's alone, next door.",
   },
+  "app/jobs/application_job.rb" => {
+    rule: :identical,
+    why:  "Rails' own base class, and the file an adopter expects to find. The two demos that " \
+          "schedule anything — hoteling's hotel desk answering, getgrocery's courier leaving — " \
+          "have identical bodies and identical comments on purpose: what the comment says is " \
+          "that the adapter is chosen in config/application.rb and that a demo's jobs are its " \
+          "own DOMAIN work rather than a step of the Kiosk wire, and neither half is about " \
+          "either domain. A per-demo justification here was the original spelling and it made " \
+          "the wrong thing look per-demo: the SETTING is per-demo, the base class is not.",
+  },
   "app/models/settlement.rb" => {
     rule: :code,
     why:  "kiosk.settlements — the engine's capture receipt, which the engine ships no reader for. " \

@@ -1128,10 +1128,11 @@ namespace :demo do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    if (result["schema_event_topics"] || []) == ["kyc_verification", "order_payment", "payment_setup"]
+    declared_topics = %w[kyc_verification order_delivery order_payment payment_setup]
+    if (result["schema_event_topics"] || []) == declared_topics
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[kyc_verification order_payment payment_setup].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{declared_topics.inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 
@@ -2072,4 +2073,119 @@ namespace :demo do
     end
   end
   # ── end demo:agecheck ──────────────────────────────────────────────────────
+
+  desc <<~DESC
+    The shop's own two transitions — the courier leaving and the basket arriving.
+
+    WHY IT IS A TASK AND NOT PART OF demo:shop. The courier departs ten to
+    fifteen minutes before a window that is itself hours away, so no flow that
+    drives the wire can reach either transition: a suite that waited would be a
+    suite nobody runs. `courier_lead_seconds` is configuration exactly so this
+    task can pin it, and the orders below are seeded onto a window that has
+    already opened, which is what makes both departures due at once.
+  DESC
+  task delivery: :environment do
+    failures = []
+    check = lambda { |label, ok|
+      puts(ok ? "  ✓  #{label}" : "  ✗  #{label}")
+      failures << label unless ok
+    }
+
+    store = Kiosk::Server::EventStore.new
+    Kiosk.configure { |c| c.event_store = store }
+
+    user = User.first || abort("run demo:setup first — no users seeded")
+    zone = DeliverySlots.default_zone
+    # A lead LONGER than the distance to the window, so the departure is due
+    # and the arrival is not. That is not a contrivance: it is an order placed
+    # for the very next window, which is exactly when a courier leaves at once.
+    lead   = 2 * 60 * 60
+    window = Time.current + (60 * 60)
+    Rails.configuration.x.getgrocery.courier_lead_seconds = lead
+
+    # RE-RUNNABLE, because a task that only passes the first time is a task
+    # nobody trusts the second. These rows carry a total no seed and no flow
+    # writes, so clearing exactly that clears this task's own leftovers.
+    marker_cents = 991_100
+    Order.where(total_cents: marker_cents).delete_all
+
+    seed = lambda { |slot_at|
+      Order.create!(user: user, status: Order::PAID, total_cents: marker_cents,
+                    slot_at: slot_at, timezone: zone.name,
+                    address: "1 Demo Street, Dublin 2")
+    }
+
+    puts "\n── the courier LEAVES, and the ETA is the published window ──"
+    order = seed.call(window)
+    head  = store.head
+    CourierDispatchJob.arm!(order.id)
+    order.reload
+    check.call("dispatch_at is the window minus the shop's lead",
+               order.dispatch_at && (window - order.dispatch_at).round == lead)
+    check.call("status is out_for_delivery", order.status == Order::OUT_FOR_DELIVERY)
+    left = store.since(user.id, head).find { |e| e["subject"] == order.id }
+    check.call("one order_delivery event, status=out_for_delivery",
+               left && left["topic"] == "order_delivery" &&
+               left["data"]["status"] == "out_for_delivery")
+    check.call("the event carries the window as the ETA",
+               left && left["data"]["eta"] == window.utc.iso8601)
+    check.call("…with the clock it was quoted on, and a human's spelling of it",
+               left && left["data"]["timezone"] == zone.name &&
+               left["data"]["eta_label"] == DeliverySlots.label(window, zone))
+    # THE BASKET HAS NOT ARRIVED YET, and nothing said it had. The arrival is
+    # the window itself, which is an hour off.
+    check.call("the departure alone pushes no `delivered`",
+               store.since(user.id, head).none? { |e| e["data"]["status"] == "delivered" })
+
+    puts "\n── a basket the courier is carrying cannot be moved ──"
+    # Two refusals live in `reschedulable` and they are not the same one: «you
+    # have already moved this once» is a quota, «the courier has left» is the
+    # physical world. This asserts the second.
+    check.call("reschedulable excludes an order out for delivery",
+               !Order.reschedulable.where(id: order.id).exists?)
+
+    puts "\n── the basket ARRIVES ──"
+    head_arrival = store.head
+    OrderDeliveredJob.new.perform(order.id)
+    order.reload
+    check.call("status is delivered", order.status == Order::DELIVERED)
+    arrived = store.since(user.id, head_arrival).find { |e| e["subject"] == order.id }
+    check.call("one order_delivery event, status=delivered",
+               arrived && arrived["data"]["status"] == "delivered")
+
+    head_again = store.head
+    OrderDeliveredJob.new.perform(order.id)
+    check.call("a delivered basket does not arrive twice",
+               store.since(user.id, head_again).none? { |e| e["subject"] == order.id })
+
+    puts "\n── a window the shop has not reached yet ──"
+    # Arming is not departing. A courier is due and the row says when, in a
+    # column an operator can read without opening a queue.
+    future = seed.call(Time.current + (2 * 24 * 60 * 60))
+    CourierDispatchJob.arm!(future.id)
+    future.reload
+    check.call("a window two days out arms a courier and does NOT depart",
+               future.status == Order::PAID && future.dispatch_at > Time.current)
+
+    # AND THE OLD SCHEDULE ARRIVING AFTER A MOVE DEPARTS NOTHING. Re-arming
+    # rewrote `dispatch_at`; this run re-reads it, finds it in the future, and
+    # hands itself back to the new schedule rather than sending a courier a day
+    # early.
+    head_stale = store.head
+    CourierDispatchJob.new.perform(future.id)
+    future.reload
+    check.call("a stale run against a future window departs nothing",
+               future.status == Order::PAID)
+    check.call("…and pushes no event",
+               store.since(user.id, head_stale).none? { |e| e["subject"] == future.id })
+
+    puts ""
+    if failures.empty?
+      puts "  All assertions passed."
+    else
+      puts "  FAILED: #{failures.size} assertion(s) — #{failures.join(", ")}"
+      exit 1
+    end
+  end
+  # ── end demo:delivery ──────────────────────────────────────────────────────
 end

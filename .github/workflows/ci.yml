@@ -335,7 +335,7 @@ jobs:
             # immediately ahead of demo:race for the reason below.
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
-            tasks: demo:slots_spec demo:cashier_spec demo:wire_args_spec demo:conformance demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
+            tasks: demo:slots_spec demo:cashier_spec demo:wire_args_spec demo:conformance demo:shop demo:delivery demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
             ungated:
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it

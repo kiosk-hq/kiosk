@@ -72,7 +72,8 @@ class RescheduleDeliveryOperation
       if order.nil?
         next OperationResult.refused(
           code:    "forbidden",
-          message: "order not found, not yours, or already rescheduled (one reschedule per order)",
+          message: "order not found, not yours, already rescheduled (one reschedule per order), " \
+                   "or already with the courier",
         )
       end
 
@@ -136,6 +137,12 @@ class RescheduleDeliveryOperation
              timezone:   zone.name,
              updated_at: Time.current,
            )
+
+      # AND THE COURIER IS RE-ARMED AGAINST THE NEW WINDOW. The departure is
+      # `slot_at` minus the shop's lead, so moving the window moves it; the run
+      # the OLD schedule still produces finds the row not yet due and hands
+      # itself back to the new one.
+      CourierDispatchJob.arm!(row_id)
 
       # The label travels beside the instant here for the same reason it does
       # on `delivery_slots`, `create_order` and `my_orders`: this is the fourth

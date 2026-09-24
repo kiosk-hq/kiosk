@@ -38,6 +38,34 @@ module KioskDemoGetgrocery
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
 
+    # ── ACTIVE JOB: the `:async` adapter, in process ──────────────────────
+    #
+    # Zero tables and zero worker processes, against a durable queue's
+    # thirteen. THE TRADE, STATED: an enqueued job is lost if this process
+    # stops before it runs, so a deploy between a courier leaving and the
+    # basket arriving leaves an order reading `out_for_delivery` for good.
+    # That is acceptable HERE and would not be for the event stream itself,
+    # and the difference is the one that matters: carrying a basket across
+    # Dublin is this shop's DOMAIN work, not a step of the Kiosk wire. An
+    # operator copying it copies «plan your own work however you like», which
+    # is true. `config/cable.yml` takes the opposite choice for the opposite
+    # reason.
+    config.active_job.queue_adapter = :async
+
+    # ── THE COURIER'S LEAD, as a published number ─────────────────────────
+    #
+    # Ten to fifteen minutes before the window opens, drawn once per order.
+    # Configuration rather than a literal in the job because a suite has to be
+    # able to pin it: a flow that waited a real twelve minutes for an
+    # assertion is a flow nobody runs, and a gate nobody runs is a gate that
+    # is not there. The shipped value is what a live viewer meets.
+    #
+    # There is deliberately no second number for the road. The courier arrives
+    # as the window opens, and that instant is the window this shop already
+    # published — see {OrderDeliveredJob}.
+    config.x.getgrocery.courier_lead_seconds =
+      ENV.fetch("GETGROCERY_COURIER_LEAD_SECONDS", rand(600..900).to_s).to_i
+
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.

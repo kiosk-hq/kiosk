@@ -93,6 +93,7 @@ guards, run through the `demo:slots_spec` / `demo:cashier_spec` /
 |---|---|
 | `rake demo:setup` | idempotent db drop / create / load / seed |
 | `rake demo:shop` | no-human happy path: register → catalog → delivery_slots (in-zone Dublin address required; a district-less/out-of-zone address → clean 400) → create_order (delivery slot + in-zone address required) → payment_setup → pay (cart mirrors the order at catalog EUR prices, off_session PaymentIntent) → my_orders (paid) |
+| `rake demo:delivery` | the shop's own two transitions, which no call of the assistant's produces: a courier leaves ten to fifteen minutes before the published window and the basket arrives inside it, each pushed on the `order_delivery` topic — the departure carrying the window as its ETA, on the clock the order was quoted on. Asserts the lead lands in `dispatch_at`, that an order the courier holds can no longer be rescheduled, that a delivered basket does not arrive twice, and that a departure whose window moved after it was scheduled defers instead of sending a courier early |
 | `rake demo:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
 | `rake demo:isolation` | adversarial cross-tenant + order-ownership denial |
 | `rake demo:schema` | self-discovery over the schema verb |
@@ -133,6 +134,7 @@ assertions cannot go ungated and unexplained.
 | `demo:pow` | yes |  |
 | `demo:rls` | yes |  |
 | `demo:agecheck` | yes |  |
+| `demo:delivery` | yes |  |
 <!-- CI-TASKS:END -->
 
 See `before-after.md` for why AI assistants stall at grocery delivery today and

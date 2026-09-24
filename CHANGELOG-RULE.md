@@ -7,7 +7,7 @@ what it cannot see.
 
 ## The entry
 
-Phil's rule, in his words (2026-09-11):
+The rule every entry is held to, and it is a MUST:
 
 > Keep the entries short, always under 200 characters and one-two sentences.
 > Only keep the essence of the change. git commit messages will keep the

@@ -28,7 +28,7 @@
     },
     "events": {
       "type": "array",
-      "description": "Topic descriptors, sorted by name. REQUIRED even when EMPTY: an origin that serves no topics answers [], exactly as one with no actions answers []. A member that appears only sometimes is a member every reader has to branch on, and whether the module is served at all is stated once, in `capabilities`.",
+      "description": "Topic descriptors, sorted by name. An origin that serves no topics answers [], exactly as one with no actions answers []: a member that appears only sometimes is a member every reader has to branch on, and whether the module is served at all is stated once, in `capabilities`.",
       "items": {
         "$ref": "#/$defs/topic"
       }
@@ -128,7 +128,7 @@
           "description": "Whose events a subscriber may read. The same four values, with the same meanings, as a verb's reach."
         },
         "payload_schema": {
-          "description": "JSON Schema for the event's `data`. REQUIRED for the reason a verb's output_schema is: without it a message cannot be consumed without receiving one and observing what arrived."
+          "description": "JSON Schema for the event's `data`. It is declared for the reason a verb's output_schema is: without it a message cannot be consumed without receiving one and observing what arrived."
         }
       }
     }

@@ -7,7 +7,8 @@
   "type": "object",
   "required": [
     "queries",
-    "actions"
+    "actions",
+    "events"
   ],
   "additionalProperties": false,
   "properties": {
@@ -23,6 +24,13 @@
       "description": "Action descriptors, sorted by name.",
       "items": {
         "$ref": "#/$defs/descriptor"
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Topic descriptors, sorted by name. REQUIRED even when EMPTY: an origin that serves no topics answers [], exactly as one with no actions answers []. A member that appears only sometimes is a member every reader has to branch on, and whether the module is served at all is stated once, in `capabilities`.",
+      "items": {
+        "$ref": "#/$defs/topic"
       }
     }
   },
@@ -84,6 +92,43 @@
         },
         "example_row": {
           "description": "Example of one result element -- a representative row for a query, or the example return value for an action. It ILLUSTRATES output_schema and is not the contract."
+        }
+      }
+    },
+    "topic": {
+      "type": "object",
+      "description": "One event topic this origin publishes. CLOSED, exactly as a verb descriptor is: a descriptor carrying any other member is not conformant. The operator's rule for deciding whether a particular SUBJECT is readable by a particular subscriber is deliberately absent -- it runs on every subscribe and again while the subscription stands, and publishing it would describe where to look for a gap in it while telling a conformant subscriber nothing it can act on.",
+      "required": [
+        "name",
+        "description",
+        "reach",
+        "payload_schema"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "The topic name -- a wire name, drawn from the same vocabulary as a verb name."
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Prose semantics, on the same terms as a verb's."
+        },
+        "reach": {
+          "enum": [
+            "principal",
+            "published",
+            "consented",
+            "role"
+          ],
+          "description": "Whose events a subscriber may read. The same four values, with the same meanings, as a verb's reach."
+        },
+        "payload_schema": {
+          "description": "JSON Schema for the event's `data`. REQUIRED for the reason a verb's output_schema is: without it a message cannot be consumed without receiving one and observing what arrived."
         }
       }
     }

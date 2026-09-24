@@ -65,6 +65,7 @@ COPIES = {
   File.join(REPO, "e2e/schemas/kyc.schema.json")               => "kyc.schema.json",
   File.join(REPO, "e2e/schemas/auth.schema.json")              => "auth.schema.json",
   File.join(REPO, "e2e/schemas/binding.schema.json")           => "binding.schema.json",
+  File.join(REPO, "e2e/schemas/event.schema.json")             => "event.schema.json",
   File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/pow.schema.json") => "pow.schema.json",
 }.freeze
 

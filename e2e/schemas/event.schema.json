@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/event.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/event.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed; bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech beside this repository.",
+  "title": "Kiosk event",
+  "description": "One message the operator pushes on the event stream at <endpoint>/events. The root is CLOSED: an event carries the five members declared here and no others. `data` is typed by the topic's own `payload_schema`, published in the catalog's `events` array, and this schema deliberately does not constrain it -- the shape is the operator's to declare, per topic.",
+  "type": "object",
+  "required": [
+    "id",
+    "topic",
+    "subject",
+    "occurred_at",
+    "data"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "A PER-ORIGIN monotonic integer -- not per topic and not per subscriber. One integer therefore resumes every subscription a socket holds, and a subscriber compares integers instead of keeping a cursor per topic. A subscriber MUST ignore an id it has already seen: delivery is at-least-once."
+    },
+    "topic": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "The topic this event belongs to, as declared in the catalog."
+    },
+    "subject": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "What the event is ABOUT within the topic -- an order id, a list id. Null for a topic that has no subject. A subject-scoped subscription sees only its own."
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the operator's state actually changed, RFC 3339 in UTC. Not when the message was delivered: a replayed event carries the time of the transition, which is what a subscriber reasons about."
+    },
+    "data": {
+      "description": "The payload, validating against the topic's payload_schema."
+    }
+  }
+}

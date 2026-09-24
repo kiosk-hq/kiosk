@@ -40,7 +40,8 @@
               "schema",
               "queries",
               "actions",
-              "pay"
+              "pay",
+              "events"
             ]
           },
           "uniqueItems": true
@@ -111,6 +112,10 @@
               "pattern": "^[0-9a-f]{64}$"
             }
           }
+        },
+        "events_url": {
+          "type": "string",
+          "description": "Where to open the event stream. Present IFF `capabilities` carries `events`. An absolute wss:// URL -- the same origin and mount as `endpoint` under the WebSocket scheme, never a second copy of the host."
         }
       }
     }

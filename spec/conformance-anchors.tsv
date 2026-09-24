@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1712 anchors.
+# 1713 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -191,7 +191,7 @@ e2e/assistant.sh	register-pow: solve+proof → registered
 e2e/assistant.sh	register-pow: the expected (n,k) was READ from the initializer
 e2e/assistant.sh	reserved limit/cursor accepted → 200
 e2e/assistant.sh	salon name is Combette
-e2e/assistant.sh	schema publishes {queries, actions} and nothing else
+e2e/assistant.sh	schema publishes {queries, actions, events} and nothing else
 e2e/assistant.sh	status restates the HTTP status
 e2e/assistant.sh	the OPERATOR's own 200 outside the mount carries none
 e2e/assistant.sh	the body is a bare array
@@ -224,6 +224,7 @@ e2e/assistant.sh	…not a problem document
 e2e/assistant.sh	…public, one minute at the bare path
 e2e/assistant.sh	…status restates the HTTP status
 e2e/assistant.sh	…the catalog is the body itself
+e2e/assistant.sh	…the events array is present and EMPTY on an origin with no topics
 e2e/assistant.sh	…title is the code's, not the incident's
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
@@ -1600,7 +1601,7 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	answers an origin with no
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	does not republish the module set the discovery document owns
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	is 32 lowercase hex characters
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	is STABLE across reads — the derivation happens once
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	is exactly {queries, actions} — sorted descriptors, and NO `verbs`
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	is exactly {queries, actions, events} — sorted descriptors, and NO `verbs`
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	is the digest, quoted, and STRONG — no `W/` prefix
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when a verb is ADDED
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when a verb is REMOVED

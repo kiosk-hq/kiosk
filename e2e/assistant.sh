@@ -911,13 +911,21 @@ assert "…with no Allow header"             "$mna_allow" ""
 assert "…and the catalogue says it is an action" \
   "$(echo "$schema_body" | jq -r '.actions | map(.name) | index("book_appointment") != null')" "true"
 
-# THE MODULE SET HAS ONE HOME, and these two assertions pin both halves of it.
-# `/kiosk/schema` publishes `{queries, actions}` and nothing else; the modules
-# this origin serves are published once, by `/.well-known/kiosk.json`. A second
-# name for the same value would be a field two documents have to agree about,
-# and a comparison between two renderings of one call can only ever pass.
-assert "schema publishes {queries, actions} and nothing else" \
-  "$(echo "$schema_body" | jq -r 'keys_unsorted | join(",")')" "queries,actions"
+# THE MODULE SET HAS ONE HOME, and these assertions pin both halves of it.
+# `/kiosk/schema` publishes `{queries, actions, events}` and nothing else; the
+# modules this origin serves are published once, by `/.well-known/kiosk.json`. A
+# second name for the same value would be a field two documents have to agree
+# about, and a comparison between two renderings of one call can only ever pass.
+assert "schema publishes {queries, actions, events} and nothing else" \
+  "$(echo "$schema_body" | jq -r 'keys_unsorted | join(",")')" "queries,actions,events"
+# AND THE THIRD ARRAY IS PRESENT WHILE THE MODULE IS NOT, which is the pair the
+# spec asks for: `events` is REQUIRED and may be EMPTY, so a reader never has to
+# branch on whether the member exists, while `capabilities` is where «does this
+# origin serve the module at all» is answered — once. This origin declares no
+# topic, so the array is empty and the capability is absent, and asserting both
+# together is what would catch either half drifting to the other's answer.
+assert "…the events array is present and EMPTY on an origin with no topics" \
+  "$(echo "$schema_body" | jq -r '.events | length')" "0"
 assert "…and the module set lives in kiosk.json alone" \
   "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
 

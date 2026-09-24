@@ -117,7 +117,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       # A public document must not vary on headers it does not read.
       expect(res["headers"]).not_to have_key("vary")
       body = JSON.parse(res["body"])
-      expect(body.keys).to eq(%w[queries actions])
+      expect(body.keys).to eq(%w[queries actions events])
       expect(body["queries"]).not_to be_empty
     end
 
@@ -316,7 +316,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       expect(res["headers"]["content-type"]).to include("application/json")
       # The WIRE's catalogue, not the verb wire's answer for a verb called
       # `schema` (which is 401 anonymous, and could never be registered anyway).
-      expect(JSON.parse(res["body"]).keys).to eq(%w[queries actions])
+      expect(JSON.parse(res["body"]).keys).to eq(%w[queries actions events])
     end
   end
 

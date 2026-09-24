@@ -42,6 +42,39 @@ class Kiosk::OrdersController < ActionController::API
   # session already outstanding for this principal, so every poll returns the
   # SAME setup_url and a relayed link cannot bounce the human off the page they
   # are filling in.
+  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
+
+  # THE WAIT THE EVENT STREAM EXISTS FOR. `request_kyc` hands the human a link
+  # and then there is nothing to do but wait for a person to finish on somebody
+  # else's page. This operator knows the instant they do; before this topic an
+  # assistant found out by polling, at a cadence nobody specified and a proof of
+  # work per ask — measured live at thirty polls in 2m19s.
+  topic :kyc_verification do
+    description "An identity check you opened with request_kyc was answered. Submit the " \
+                "attestation to /kiosk/agents/kyc and retry what you were doing."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { request_id: { type: "string", format: "uuid" },
+                                 status:     { enum: %w[approved] } },
+                   required: %w[request_id status]
+    subject_reachable lambda { |request_id, identity|
+      KycVerificationRequest.readable_by?(request_id, identity.user_id)
+    }
+  end
+
+  # An order reaches `paid` on the OPERATOR's clock, not the caller's: the
+  # reconcile sweep resolves a claimed capture minutes to hours after the call
+  # that made it returned. Nothing the assistant did causes this transition, so
+  # there was never a right moment to re-read `my_orders`.
+  topic :order_payment do
+    description "An order of yours settled. Its delivery is now scheduled and " \
+                "reschedule_delivery will accept it."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { order_id:      { type: "string", format: "uuid" },
+                                 payment_state: { enum: %w[paid] } },
+                   required: %w[order_id payment_state]
+    subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
+  end
+
   kind :action
   description "Check whether the authenticated principal has a saved card on file. " \
               "Returns {status: \"ready\"} if a card is already saved and the assistant can proceed to `pay`. " \

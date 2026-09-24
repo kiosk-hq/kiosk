@@ -34,6 +34,27 @@ class Kiosk::ReservationsController < ActionController::API
   # cadence below is the skill's verbatim (skill.md Step 5), because the skill is
   # what assistants actually follow. No CHECK COUNT is stated: a count is derived
   # from cadence and horizon, so it goes silently wrong when either moves.
+  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
+  #
+  # A booking can be paid BY SOMEBODY ELSE. The cashier deliberately lets
+  # principal B settle A's booking — that is a documented property of this
+  # demo, not an accident — and until now the only way A learned of it was to
+  # re-read `my_bookings` on a guess. The subject is the booking and the
+  # audience is its OWNER, never the payer: B already knows it paid.
+  #
+  # `subject_reachable` is re-run while the subscription stands, with no
+  # request and therefore no GUC, so it calls {Booking.readable_by?} rather
+  # than the per-request isolation scope beside it.
+  topic :booking_payment do
+    description "A booking of yours was paid — possibly by somebody else settling it on " \
+                "your behalf. Confirm it once this says `paid`."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { booking_id:    { type: "string", format: "uuid" },
+                                 payment_state: { enum: %w[paid] } },
+                   required: %w[booking_id payment_state]
+    subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
+  end
+
   kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \

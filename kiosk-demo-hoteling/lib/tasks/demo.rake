@@ -1143,11 +1143,31 @@ namespace :demo do
         puts "  FAIL  capabilities missing #{v}"
       end
     end
+    # ── THE EVENT MODULE, PRESENT — this origin declares 1 topic
+    #
+    # The trio below is the shape the fleet uses either way — module, url,
+    # topic names. An origin that declares topics asserts all three present
+    # and names them; one that declares none asserts the module absent, the
+    # url unpublished, and the catalogue's events array present-but-EMPTY.
+    # Asserting all three together is what catches either the capability or
+    # the array drifting to the other's answer.
     if capabilities.include?("events")
-      failures << "capabilities must NOT include events (got #{capabilities.inspect})"
-      puts "  FAIL  capabilities must NOT include events"
+      puts "  OK  capabilities includes events — this origin declares topics"
     else
-      puts "  OK  capabilities does not include events"
+      failures << "capabilities missing events (got #{capabilities.inspect}) — this origin declares topics"
+      puts "  FAIL  capabilities missing events"
+    end
+    if result["discovery_events_url"].to_s.match?(%r{\Awss?://[^/]+/kiosk/events\z})
+      puts "  OK  discovery publishes events_url on the wire's own origin and mount"
+    else
+      failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
+      puts "  FAIL  events_url missing or malformed"
+    end
+    if (result["schema_event_topics"] || []) == ["booking_payment"]
+      puts "  OK  the catalogue names the topic(s) this demo declares"
+    else
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment].inspect}"
+      puts "  FAIL  catalogue topics are not the declared set"
     end
 
     # Queries: properties, availability, my_bookings, search_hotels, hotel_detail

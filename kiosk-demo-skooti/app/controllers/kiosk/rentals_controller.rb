@@ -40,6 +40,24 @@ class Kiosk::RentalsController < ActionController::API
   # The descriptor promises nothing about the setup_url being stable across
   # polls: StubPsp mints no setup session, so that would be a claim about code
   # this never runs.
+  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
+  #
+  # A rental can be settled BY SOMEBODY ELSE — the cashier deliberately lets
+  # principal B pay for A's reservation — so the audience is the reservation's
+  # OWNER and never the payer, who already knows. Before this the owner's only
+  # way to learn was to re-read `my_reservations` on a guess.
+  topic :booking_payment do
+    description "A reservation of yours was paid — possibly by somebody else settling it on " \
+                "your behalf. Unlock once this says `paid`."
+    payload_schema type: "object", additionalProperties: false,
+                   properties: { reservation_id: { type: "string", format: "uuid" },
+                                 payment_state:  { enum: %w[paid] } },
+                   required: %w[reservation_id payment_state]
+    subject_reachable lambda { |reservation_id, identity|
+      Reservation.readable_by?(reservation_id, identity.user_id)
+    }
+  end
+
   kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \

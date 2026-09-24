@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
-# Self-discovery proof driver — schema verb over HTTP.
+# Self-discovery proof driver — the schema verb over HTTP.
 #
-# Boots against a running skooti server and calls, with NO credential at all:
+# Boots against a running hoteling server and calls, with NO credential at
+# all:
 #   GET /kiosk/schema            (unauthenticated — the catalogue is public)
 #   GET /.well-known/kiosk.json  (the one document carrying the module set)
 # and prints one JSON line on stdout.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
-#   SERVER_URL=http://127.0.0.1:3004 \
-#   KIOSK_ISSUER=http://127.0.0.1:3004 \
+#   SERVER_URL=http://127.0.0.1:3003 \
+#   KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby script/schema_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any HTTP failure.
@@ -46,12 +47,24 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
+
+# ── THE EVENT SURFACE ────────────────────────────────────────────────────────
+#
+# Read here, asserted per demo: the flow is shared and what each origin SHOULD
+# advertise differs. One that declares topics asserts the module is present and
+# names them; one that declares none asserts it is absent — and BOTH assert the
+# catalogue still carries an `events` array, because it is present-and-empty
+# rather than omitted. That pair is what catches either half drifting to the
+# other's answer.
+events_url        = wk.dig("kiosk", "events_url")
+schema_events     = (schema_body || {})["events"] || []
+event_topic_names = schema_events.map { |t| t["name"] }.sort
 STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
-# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY: no
-# `{ok, kind, value}` envelope around them.
+# `GET <endpoint>/schema` answers `{verbs, queries, actions}` DIRECTLY, with no
+# envelope around it.
 schema_value = schema_body || {}
 
 puts JSON.generate({
@@ -59,4 +72,6 @@ puts JSON.generate({
   schema_queries:         schema_value["queries"],
   schema_actions:         schema_value["actions"],
   discovery_capabilities: capabilities,
+  discovery_events_url:   events_url,
+  schema_event_topics:    event_topic_names,
 })

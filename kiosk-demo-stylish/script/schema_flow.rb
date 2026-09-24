@@ -46,6 +46,16 @@ schema_value = body || {}
 wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
+
+# ── THE EVENT SURFACE ────────────────────────────────────────────────────────
+#
+# Read here, asserted in the rake task: this origin declares NO topic, so the
+# module must be absent and the url unpublished — while the catalogue STILL
+# carries an `events` array, empty. Present-and-empty rather than omitted is
+# the point: a reader never has to branch on whether the member exists, and
+# `capabilities` is the one place that answers whether it is served at all.
+events_url        = wk.dig("kiosk", "events_url")
+event_topic_names = ((schema_value || {})["events"] || []).map { |t| t["name"] }.sort
 STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── Emit ONE JSON line for the rake task to assert ───────────────────────────
@@ -54,4 +64,6 @@ puts JSON.generate(
   schema_queries:         schema_value["queries"],
   schema_actions:         schema_value["actions"],
   discovery_capabilities: capabilities,
+  discovery_events_url:   events_url,
+  schema_event_topics:    event_topic_names,
 )

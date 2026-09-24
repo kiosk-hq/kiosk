@@ -38,6 +38,21 @@ class Booking < ApplicationRecord
 
   scope :live, -> { where(status: LIVE) }
 
+  # ── WHAT THE EVENT SURFACE READS ───────────────────────────────────────────
+  # The isolation predicate below resolves the principal from a Postgres GUC
+  # set per request. A standing subscription is re-authorised on a timer, with
+  # no request and no GUC, so this twin takes the account as an argument. It is
+  # NOT a second copy of the gate: the gate is what a VERB passes through, and
+  # this answers a different question — may this account hold a feed about this
+  # booking.
+  #
+  # @return [Boolean]
+  def self.readable_by?(booking_id, user_id)
+    return false if booking_id.to_s.empty? || user_id.to_s.empty?
+
+    where(id: booking_id, user_id: user_id).exists?
+  end
+
   # ── THE isolation predicate ────────────────────────────────────────────────
   # The one predicate in this demo deliberately written as SQL rather than as a
   # Ruby comparison. Why:

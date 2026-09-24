@@ -242,6 +242,16 @@ class ValidatingRentalProvider
 
   def mark_paid!(reservation_id)
     set_payment_status(reservation_id, from: Reservation::PAYING, to: Reservation::PAID)
+
+    # THE OWNER, not the payer — the topic exists for the case where they
+    # differ, and the payer already knows: it made the call that returned.
+    owner_id = Reservation.where(id: reservation_id).pick(:user_id)
+    if owner_id
+      Kiosk::Server::Events.emit(
+        topic: :booking_payment, subject: reservation_id, identity_scope: [owner_id],
+        data: { "reservation_id" => reservation_id, "payment_state" => "paid" },
+      )
+    end
   rescue StandardError
     # A successful charge is already on its way to the engine's settlement (P3);
     # a failed local flip must never surface as an error over a paid rental.

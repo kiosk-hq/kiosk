@@ -110,6 +110,16 @@ class ValidatingPaymentProvider
           "WHERE id = $1::uuid AND status = 'paying'",
           "getgrocery reconcile heal", [order_id]
         )
+        # The sweep is the out-of-band trigger: it runs minutes to hours after
+        # the capture, from a rake task rather than from any call this principal
+        # made, so there is nothing for an assistant to poll in the meantime.
+        owner_id = Order.where(id: order_id).pick(:user_id)
+        if owner_id
+          Kiosk::Server::Events.emit(
+            topic: :order_payment, subject: order_id, identity_scope: [owner_id],
+            data: { "order_id" => order_id, "payment_state" => "paid" },
+          )
+        end
         healed << order_id
       else
         unresolved << {

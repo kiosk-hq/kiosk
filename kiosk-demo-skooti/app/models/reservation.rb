@@ -118,4 +118,17 @@ class Reservation < ApplicationRecord
 
     STATE_UNPAID
   end
+
+  # ── WHAT THE EVENT SURFACE READS ───────────────────────────────────────────
+  # The isolation predicate here resolves the principal from a Postgres GUC set
+  # per request. A standing subscription is re-authorised on a timer, with no
+  # request and no GUC, so this twin takes the account as an argument.
+  #
+  # @return [Boolean]
+  def self.readable_by?(reservation_id, user_id)
+    return false if reservation_id.to_s.empty? || user_id.to_s.empty?
+
+    where(id: reservation_id, user_id: user_id).exists?
+  end
+
 end

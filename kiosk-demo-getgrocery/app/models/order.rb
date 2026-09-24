@@ -165,4 +165,17 @@ class Order < ApplicationRecord
                  .arel,
     )
   end
+
+  # ── WHAT THE EVENT SURFACE READS ───────────────────────────────────────────
+  # The per-request scopes resolve the principal from a Postgres GUC. A standing
+  # subscription is re-authorised on a timer, with no request and no GUC, so
+  # this twin takes the account as an argument.
+  #
+  # @return [Boolean]
+  def self.readable_by?(order_id, user_id)
+    return false if order_id.to_s.empty? || user_id.to_s.empty?
+
+    where(id: order_id, user_id: user_id).exists?
+  end
+
 end

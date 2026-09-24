@@ -47,6 +47,18 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
 abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
 capabilities = wk.dig("kiosk", "capabilities") || []
+
+# ── THE EVENT SURFACE ────────────────────────────────────────────────────────
+#
+# Read here, asserted per demo: the flow is shared and what each origin SHOULD
+# advertise differs. One that declares topics asserts the module is present and
+# names them; one that declares none asserts it is absent — and BOTH assert the
+# catalogue still carries an `events` array, because it is present-and-empty
+# rather than omitted. That pair is what catches either half drifting to the
+# other's answer.
+events_url        = wk.dig("kiosk", "events_url")
+schema_events     = (schema_body || {})["events"] || []
+event_topic_names = schema_events.map { |t| t["name"] }.sort
 STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
@@ -60,4 +72,6 @@ puts JSON.generate({
   schema_queries:         schema_value["queries"],
   schema_actions:         schema_value["actions"],
   discovery_capabilities: capabilities,
+  discovery_events_url:   events_url,
+  schema_event_topics:    event_topic_names,
 })

@@ -72,6 +72,16 @@ class KycCallbackController < ActionController::API
     # the existing /agents/kyc (agent contract unchanged; sub-binding preserved).
     row.update!(status: "approved", kyc_jws: kyc_jws)
 
+    # THE WAIT THIS WHOLE SURFACE EXISTS FOR. This operator knows the instant the
+    # human approves — this callback IS that instant — and until now the
+    # assistant discovered it by polling `kyc_status`, on a cadence nobody
+    # specified, paying a proof of work for each ask. Measured live: thirty polls
+    # in two minutes and nineteen seconds. One line ends that.
+    Kiosk::Server::Events.emit(
+      topic: :kyc_verification, subject: row.id, identity_scope: [row.user_id],
+      data: { "request_id" => row.id, "status" => "approved" },
+    )
+
     render json: { ok: true }, status: :ok
   end
 

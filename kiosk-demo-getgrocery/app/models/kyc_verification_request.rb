@@ -57,4 +57,17 @@ class KycVerificationRequest < ApplicationRecord
     Kiosk::Server::SessionContext.require_open!
     where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
+
+  # ── WHAT THE EVENT SURFACE READS ───────────────────────────────────────────
+  # The per-request scopes resolve the principal from a Postgres GUC. A standing
+  # subscription is re-authorised on a timer, with no request and no GUC, so
+  # this twin takes the account as an argument.
+  #
+  # @return [Boolean]
+  def self.readable_by?(request_id, user_id)
+    return false if request_id.to_s.empty? || user_id.to_s.empty?
+
+    where(id: request_id, user_id: user_id).exists?
+  end
+
 end

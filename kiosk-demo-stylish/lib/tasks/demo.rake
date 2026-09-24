@@ -1039,10 +1039,27 @@ namespace :demo do
       end
     end
     if capabilities.include?("events")
-      failures << "capabilities must NOT include events (got #{capabilities.inspect})"
-      puts "  ✗  capabilities must NOT include events"
+      failures << "capabilities advertise `events` (got #{capabilities.inspect}) — this origin declares no topic"
+      puts "  ✗  capabilities include `events` — must be ABSENT"
     else
       puts "  ✓  capabilities does not include events"
+    end
+    # The other two halves of the same pair. An origin with no topics must
+    # advertise no module and publish no url — and MUST still serve an `events`
+    # array, empty. Asserting all three together is what catches either the
+    # capability or the array drifting to the other's answer; the sibling demos
+    # that DO declare topics assert the same three fields inverted.
+    if result["discovery_events_url"]
+      failures << "discovery publishes events_url (#{result['discovery_events_url'].inspect}) on an origin with no topics"
+      puts "  ✗  discovery publishes events_url — must be ABSENT"
+    else
+      puts "  ✓  discovery publishes NO events_url, matching the absent module"
+    end
+    if (result["schema_event_topics"] || []).empty?
+      puts "  ✓  the catalogue carries an events array and it is EMPTY — present, not omitted"
+    else
+      failures << "the catalogue names topics #{result['schema_event_topics'].inspect} on an origin that declares none"
+      puts "  ✗  the catalogue names topics this origin does not declare"
     end
 
     # Queries: salons + my_appointments registered.

@@ -219,6 +219,17 @@ class ValidatingBookingProvider
 
   def mark_paid!(booking_id)
     set_payment_status(booking_id, from: Booking::PAYING, to: Booking::PAID)
+
+    # THE OWNER, not the payer. The whole point of the topic is the case where
+    # those differ: B settles A's booking, and A is the one with nothing to
+    # poll for. B already knows — it made the call that returned.
+    owner_id = Booking.where(id: booking_id).pick(:user_id)
+    if owner_id
+      Kiosk::Server::Events.emit(
+        topic: :booking_payment, subject: booking_id, identity_scope: [owner_id],
+        data: { "booking_id" => booking_id, "payment_state" => "paid" },
+      )
+    end
   rescue StandardError
     # A successful charge is already on its way to the engine's settlement (P3);
     # a failed local flip must never surface as an error over a paid booking.

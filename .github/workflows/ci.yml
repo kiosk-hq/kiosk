@@ -1974,7 +1974,7 @@ jobs:
 
   # ITS SIBLING, FOR THE OTHER HALF OF THE SAME CLASS (K-1295). The edge rate
   # limit got the script above and it landed; HSTS got a line in
-  # deploy/CHECKLIST.md, which is 0 ticked of 45, so its tick state carries no
+  # deploy/CHECKLIST.md, which is 0 ticked of 47, so its tick state carries no
   # information at all — and MEASURED 2026-09-05, all eight deployed origins
   # send no `Strict-Transport-Security` at all while deploy/Caddyfile has
   # shipped it ENABLED since K-916. A checklist line is not a mechanism.
@@ -1997,6 +1997,34 @@ jobs:
 
       - name: check-live-hsts self-test
         run: ./deploy/check-live-hsts.sh --self-test
+
+  # THE THIRD OF THE SAME FAMILY, AND THE ONE THAT HOLDS THE ENV FILES.
+  # /etc/kiosk-demo/*.env was driven by NO repository file until deploy/rollout.sh:
+  # box-prep-2026-08-11.sh says so in its own header, and the cost was thirty-five
+  # days of `501 module_not_served` from both KYC operators, each holding a correct
+  # secret under a name the app had stopped reading.
+  #
+  # ONLY THE --self-test RUNS HERE, for the reason the two jobs above give: the real
+  # run needs a shell on a box this repository does not deploy. What CI can honestly
+  # hold is that the script still decides correctly, and it holds a lot — the arms
+  # build their own tree under mktemp -d and prove the env-file parser, that a wiped
+  # box with no vault REFUSES and writes not one blank, that a second --apply leaves
+  # every file byte-identical, that --check reddens on a changed declared value and
+  # on a retired name, that both sides of the shared KYC secret are written from one
+  # value and a half-pair is refused, that each operator pins exactly the broker's
+  # own public half, and that a sentinel secret reaches the FILE and never the
+  # OUTPUT. Plus a vacuity arm: every REPLACE_ slot in every shipped template must
+  # be classified, so a new secret in deploy/env/ cannot slip past unclassified.
+  deploy-rollout:
+    name: the declarative env rollout works (deploy/rollout.sh)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: rollout self-test
+        run: ./deploy/rollout.sh --self-test
 
   # What a `gem install` gets is NOT what this repo contains, and until now
   # nothing checked the difference. kiosk-server's spec.files globbed lib/ only,

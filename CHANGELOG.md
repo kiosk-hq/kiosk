@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-25: **`deploy/rollout.sh` makes `deploy/env/*.env.example` drive the boxes, which nothing in any repository did before.** A missing secret stops the run rather than writing a blank.
 - 2026-09-25: **An origin that declares an event topic and leaves the in-process store in place is refused at production boot (K-1804).** One declaring no topic is untouched.
 - 2026-09-25: **skooti told an assistant a verb unlocks the vehicle, on the same served document that says nothing on this wire opens a lock (K-1777).** Both sentences now name activation.
 - 2026-09-24: **There is always a default role: an origin declaring `c.roles` and no `registration_role` is refused at boot (ADR-0036).** One declaring no roles is untouched.

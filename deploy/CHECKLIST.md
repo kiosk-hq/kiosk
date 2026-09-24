@@ -32,8 +32,23 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 - [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… -f deploy/postgres-init.sql`  → 8 app DBs + least-priv roles (7 demos + `kiosk_prove`). (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
 - [ ] **Only if you renamed something:** the DB/role names default to the shipped ones. If you changed `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_USER` in an app's env (§4), pass the SAME value here as `-v <xx>_db=` / `-v <xx>_user=` (`gg af ho sk st pl td pv`) — otherwise provisioning creates one name and the app connects to another. See `deploy/README.md` §"Database names".
 
-## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
-For EACH of the 7 apps:
+## 4. Per-app env (`deploy/env/<app>.env.example` DECLARES it; `deploy/rollout.sh` places it)
+- [ ] **Put your secrets in `/etc/kiosk-demo/secrets.env` (mode 0600) as `<UNIT>__<VARIABLE>=…`, then run the rollout.**
+      ```
+      ssh <deploy-user>@<box> 'sudo bash -s' -- --apply < deploy/rollout.sh
+      ssh <deploy-user>@<box> 'sudo bash -s' -- --check < deploy/rollout.sh
+      ```
+      It writes every unit's env file from the templates — every name, every order, every value this repository
+      decides — fills the `REPLACE_*` slots from the vault or from what the box already has, backs up what it
+      changes, and **names anything it cannot obtain instead of writing a blank**. `--check` exits 1 when the box
+      is not what the tree declares, which is the question no tick-box can answer. On a rebuilt box add
+      `--generate-missing`: it mints what nothing off the box holds the other half of, and still refuses the four
+      that are somebody else's (the DB passwords, the Stripe test key, skooti's unlock key, the broker's signing
+      key). See `deploy/README.md` §"Configuration is DECLARED".
+- [ ] Copying a template by hand still works and the boxes below are what it must produce — but then nothing joins
+      the box to this tree, which is how both KYC operators served `501` for thirty-five days. Tick the rollout above.
+
+What each unit must carry. For EACH of the 7 apps:
 - [ ] `RAILS_ENV=production`, a generated `SECRET_KEY_BASE`, `PGHOST`, `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_{USER,PASSWORD}`, `PORT` (3001–3007). `KIOSK_<APP>_DB` and `KIOSK_<APP>_DB_USER` default to `kiosk_<app>_production` / `kiosk_<app>` — keep the shipped values and §3 needs no extra flags.
 - [ ] **Issuer + signing key (all 7 demos):** `KIOSK_ISSUER` and `KIOSK_SIGNING_KEY_B64` are crash-if-absent
       outside dev/test — the app refuses to boot without them, and so does `zeitwerk:check` in §5. The example ships
@@ -52,18 +67,14 @@ For EACH of the 7 apps:
       single-mode aliases — drop them (setting more than one RAISES at boot). At `high` a fresh visitor pays its reputation
       count of ~2 proofs (~20 s) at first contact, dropping to 1 then a free pass as its bookings confirm. Other modes:
       `demo` / `backoff` / `off`.
-- [ ] ⚠ **UPGRADING AN EXISTING BOX — run `deploy/box-prep-2026-08-11.sh` BEFORE the first `prod-demo` deploy:**
-      ```
-      ssh <deploy-user>@<box> 'sudo bash -s' < deploy/box-prep-2026-08-11.sh
-      ```
-      The `/etc/kiosk-demo/*.env` files are hand-maintained and no repo file drives them, so an env written before the
+- [ ] ⚠ **UPGRADING AN EXISTING BOX — `deploy/rollout.sh --apply` is the whole of it.** An env written before the
       single `KIOSK_POW_MODE` selector can still set two or more of `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` /
-      `KIOSK_POW_BACKOFF_DEMO`, which current code **REFUSES at boot** — deploying first takes that app down. The script
-      drops those and the dead `KIOSK_POW_REGISTER_DEMO` (nothing reads it; register PoW is unconditional via
-      `c.registration_pow_count = 1`). A FRESH box built from this checklist needs none of it — the examples in
-      `deploy/env/` are already clean. The script edits only the `/etc/kiosk-demo/*.env` files and touches
-      nothing else on the box — it does NOT touch Caddy or any throttle (there is deliberately none; see
-      `deploy/README.md` §"Edge rate-limit"). `deploy/README.md`'s file table points at it too.
+      `KIOSK_POW_BACKOFF_DEMO`, which **atablefor's initializer refuses at boot** — deploying first takes that app
+      down — and can still carry the dead `KIOSK_POW_REGISTER_DEMO` (nothing reads it; register PoW is unconditional
+      via `c.registration_pow_count = 1`). The rollout removes a retired name on every run and names it while doing
+      so, so this is no longer a thing to remember before a deploy. It edits only `/etc/kiosk-demo/*.env`; it does
+      NOT touch Caddy or any throttle (there is deliberately none; see `deploy/README.md` §"Edge rate-limit").
+      `deploy/box-prep-2026-08-11.sh` did this once, on that date, and is kept as the record of it — not a step.
 - [ ] **PoW secret (all 7 demos):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
       without it outside dev/test (a shipped default would be world-readable in the public repo, letting anyone forge a
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.
@@ -94,7 +105,12 @@ For EACH of the 7 apps:
       `config/environments/production.rb` is byte-identical across the operator demos and so must not name a demo — while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
       operator from the `operator_id` in the intake body.
-- [ ] **RUN `deploy/kyc-pairing-audit.sh` ON THE BOX — nothing else reads the values, and a tick taken by eye is a guess.**
+- [ ] **The pair is ONE secret and `deploy/rollout.sh` writes both sides of it.** Name it once in the vault as
+      `KYC_INTAKE_SECRET_<OP>`; the script writes the operator's `KIOSK_PROVE_INTAKE_SECRET` and the broker's
+      `KIOSK_PROVE_<OP>_SECRET` from that one value, derives each operator's `KIOSK_PROVE_PUBLIC_KEY_PEM` from the
+      broker's own `PROVE_KEY_PEM`, refuses a vault key that could set one side alone, and refuses a box where both
+      sides are set and disagree. Setting half of this pair is no longer a thing a hand can do.
+- [ ] **RUN `deploy/kyc-pairing-audit.sh` ON THE BOX — it reads what is deployed, and a tick taken by eye is a guess.**
       ```
       ssh <deploy-user>@<box> 'sudo bash -s' < deploy/kyc-pairing-audit.sh
       ssh <deploy-user>@<box> 'sudo bash -s' -- --fix-retired-names < deploy/kyc-pairing-audit.sh
@@ -211,7 +227,9 @@ For EACH of the 7 apps:
       hook and leaves a bare repo that accepts pushes and deploys nothing. Realign with
       `git push --force-with-lease=main:<current-remote-sha> prod-demo main` INTO the existing repo.
       (b) **copy the hook off the box before any rebuild** (`scp box:/srv/kiosk.git/hooks/post-receive .`)
-      — a rebuild from this checklist alone has to reconstruct it from the prose above.
+      — a rebuild from this checklist alone has to reconstruct it from the prose above. `deploy/rollout.sh` reports
+      the hook's presence, size and sha256 on every run, read-only: it will not write a file it has never read, but
+      a wipe is at least something the configuration run SAYS rather than something the next push discovers.
       What it does, as measured on the box: on any push touching `refs/heads/main` it runs
       `git checkout -f main` into the single work-tree `/srv/kiosk`, then per demo `bundle install`,
       `rails db:migrate`, `rails db:seed` and `systemctl restart kiosk-demo@<app>` across all 8 units,

@@ -3,8 +3,12 @@
 # The event-store CONTRACT, exercised through its in-process implementation
 # (T-169 phase A task 2).
 #
-# This is the TEST implementation of the seam and never the shipped default —
-# {Kiosk::Server::EventStores::ActiveRecord} is. Two of the eight topics
+# This is the TEST implementation of the seam. It IS what
+# `Kiosk.configuration.event_store` falls back to when an operator sets
+# nothing, and it is never what a DEPLOYED origin may run on:
+# {Kiosk::Server::EventStores::ActiveRecord} is what the generator writes, and
+# a production origin that declares a topic and leaves this default in place
+# does not boot ({Kiosk::Server::Engine.ephemeral_event_store_error}). Two of the eight topics
 # (`delivery`, `todo`) are read back ACROSS sessions through the cursor rather
 # than over a held socket, so a tail that dies on restart makes those
 # unanswerable rather than degraded. What is asserted here is the contract both

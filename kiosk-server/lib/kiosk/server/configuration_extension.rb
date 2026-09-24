@@ -347,6 +347,13 @@ module Kiosk
       #
       # which `rails generate kiosk:install` writes into the initializer.
       #
+      # AND IT IS NOT LEFT TO THE OPERATOR TO REMEMBER. A production origin
+      # that declares an event topic and leaves the default below in place does
+      # not boot: {Server::Engine.ephemeral_event_store_error} names the topics
+      # it found and the setting to add. An origin that declares NO topic is
+      # untouched — it never emits, so the store below is an object nothing
+      # calls, and the suite and development are untouched in every case.
+      #
       # @return [EventStore]
       attr_writer :event_store
       def event_store

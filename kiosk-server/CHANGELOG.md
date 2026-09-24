@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-25: **An origin that declares an event topic and leaves the in-process store in place is refused at production boot (K-1804).** One declaring no topic is untouched.
 ### Changed
 
 - **BREAKING (small): an origin that declares `c.roles` must configure `c.registration_role`, or it does not boot (ADR-0036).** An origin that declares no roles is untouched.

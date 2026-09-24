@@ -341,6 +341,85 @@ module Kiosk
         raise Kiosk::Server::Errors::ConfigurationError, message if message
       end
 
+      # ── A TAIL THAT DIES WITH THE PROCESS IS NOT A TAIL ───────────────────
+      #
+      # `event_store` lazily instantiates the in-process {EventStore} when an
+      # operator sets none — a Hash and a Mutex inside ONE process. That is the
+      # suite's implementation and a single-process development convenience,
+      # and {EventStores} says in its own first paragraph that it is the wrong
+      # thing to deploy. The published contract is what makes it wrong rather
+      # than merely small: an operator MUST retain at least 24 hours of events
+      # per identity, and a store that is empty after a restart and unshared
+      # between workers retains nothing.
+      #
+      # WHY IT IS THE TOPIC DECLARATION THAT TRIGGERS THIS, and not the store
+      # on its own. An origin that declares no topic never emits, never serves
+      # `events` in its catalogue and never advertises an `events_url`; its
+      # store is an object nothing calls, and accusing it would be the false
+      # warning {.shared_spent_store_warning} takes such care to avoid. The
+      # MIXTURE is the defect — a declared topic and an ephemeral tail — which
+      # is the same conditional shape as {.default_role_configuration_error}
+      # one section up.
+      #
+      # WHY IT RAISES. On {.default_role_configuration_error}'s precedent: a
+      # fact settled at boot whose wrong answer is INVISIBLE afterwards. A lost
+      # tail produces no exception, no metric and no log line — the subscriber
+      # is simply told `truncated: true` every time it resumes, which reads as
+      # an ordinary answer. And the two objections that made the spent store a
+      # warning instead do not transfer: there is no routine operational change
+      # (a `WEB_CONCURRENCY` bump) that flips this condition, and the condition
+      # is EXACT rather than a heuristic — it asks which object the store IS,
+      # not how many processes there are.
+      #
+      # WHY ONLY IN PRODUCTION. The in-process store is the CORRECT store for
+      # the suite and for a one-process `rails server`, so refusing there would
+      # break the thing the default exists for. This still reaches our own tree
+      # on every push: the demo matrix runs `bin/rails zeitwerk:check` under
+      # `RAILS_ENV=production`, which loads the environment and therefore runs
+      # this block.
+      #
+      # The condition is a CLASS METHOD, for the reason its two siblings give:
+      # an `after_initialize` body is reachable only by booting a real
+      # application in production mode, and a control whose condition cannot be
+      # unit-tested is a control nobody can prove fires. `topics` is passed in
+      # rather than read from the process-global registry, so an example can
+      # state the origin's whole shape in its arguments.
+      #
+      # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
+      # @param production [Boolean] normally `Rails.env.production?`
+      # @param topics [Array<String>] normally `Kiosk::Server::Events.known`
+      # @return [String, nil]
+      def self.ephemeral_event_store_error(config:, production:, topics:)
+        return nil unless production
+
+        declared = Array(topics).map { |topic| topic.to_s.strip }.reject(&:empty?)
+        return nil if declared.empty?
+        return nil unless config.event_store.is_a?(Kiosk::Server::EventStore)
+
+        "[kiosk-server] this origin declares event topic(s) (#{declared.sort.join(', ')}) and its " \
+          "`event_store` is the IN-PROCESS default. That store is a Hash in one process: the tail " \
+          "is empty after every restart and deploy, and it is not shared between Puma workers, " \
+          "dynos or pods, so a subscriber resuming from the cursor it recorded is told " \
+          "`truncated: true` every time. A topic that is a WAIT is merely degraded by that. A " \
+          "topic that is a SUBSCRIPTION — an event that arrives hours later, when the assistant " \
+          "is not running and no socket is held — is DELIVERED BY the cursor and has no other " \
+          "mechanism, so it is not delivered at all. Nothing reports it: a lost tail produces no " \
+          "error, no metric and no log line, and the operator learns from a customer. Set the " \
+          "durable store: c.event_store = Kiosk::Server::EventStores::ActiveRecord.new — which " \
+          "`rails generate kiosk:install` writes into the initializer, beside the " \
+          "`#{Kiosk.configuration.schema}.events` migration it writes for it. The published " \
+          "contract is at least 24 hours of events per identity."
+      end
+
+      config.after_initialize do
+        message = Kiosk::Server::Engine.ephemeral_event_store_error(
+          config: Kiosk.configuration,
+          production: ::Rails.env.production?,
+          topics: Kiosk::Server::Events.known,
+        )
+        raise Kiosk::Server::Errors::ConfigurationError, message if message
+      end
+
       # Root-relative discovery surface. `routes.append` blocks run when the
       # host's route set is FINALIZED — after config/routes.rb has been
       # drawn — so the mount is already visible when the gate below asks

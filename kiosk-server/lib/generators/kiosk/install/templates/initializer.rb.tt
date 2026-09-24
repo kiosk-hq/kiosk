@@ -204,6 +204,11 @@ Kiosk.configure do |c|
   # answer is `truncated: true`, which tells it to re-read state through an
   # ordinary verb. That is the rare degraded case; with an in-process store it
   # becomes the answer every time you deploy.
+  #
+  # AND IT IS NOT LEFT TO YOUR MEMORY. Delete this line while any handler
+  # controller of yours declares a `topic`, and a PRODUCTION boot is refused,
+  # naming the topics it found and this setting. An origin that declares no
+  # topic never emits, so it keeps the in-process default and is untouched.
   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
 
   # ─── Opt-in: the audit sink ──────────────────────────────────────────

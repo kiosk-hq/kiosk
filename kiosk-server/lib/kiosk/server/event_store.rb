@@ -4,10 +4,18 @@ module Kiosk
   module Server
     # THE EVENT-STORE CONTRACT, and the in-process implementation of it.
     #
-    # == This is the test implementation, not the shipped default
+    # == This is the test implementation, and a deployed origin may not use it
     #
-    # The shipped default is {EventStores::ActiveRecord}, and the difference is
-    # not a deployment nicety. Two of the topics an operator declares are not
+    # It IS what `Kiosk.configuration.event_store` falls back to when an
+    # operator sets nothing — the suite and a one-process `rails server` want
+    # exactly this store and want no database for it. What a DEPLOYED origin
+    # must set is {EventStores::ActiveRecord}, which `rails generate
+    # kiosk:install` writes into the initializer, and the engine refuses to
+    # boot a production origin that declares a topic and leaves this default in
+    # place ({Kiosk::Server::Engine.ephemeral_event_store_error}). So «the
+    # default» and «what ships in front of a subscriber» are two different
+    # answers here, and the difference between them is not a deployment
+    # nicety. Two of the topics an operator declares are not
     # WAITS but SUBSCRIPTIONS: a delivery event arrives hours after the order,
     # a shared-list event arrives whenever somebody else gets round to it, and
     # nothing holds a socket across an assistant's sessions — in any harness, on

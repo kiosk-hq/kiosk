@@ -54,8 +54,8 @@ require "net/http"
 require "uri"
 
 # ── THE PIN ──────────────────────────────────────────────────────────────────
-PINNED_VERSION = "0.5.0"
-PINNED_SHA256  = "370b05579aeb04c9a9dfc0fe328cc90806f0d5166b2657d5a17b854ab23661ad"
+PINNED_VERSION = "0.5.1"
+PINNED_SHA256  = "2d34ae0cc75a8143ea95f876c003a00e1ca002e6868403630f422ebb8f34c0b5"
 # TWO published URLs, the same split the solver uses and for the same reason —
 # except that this one is VERSIONED rather than content-addressed (Phil,
 # 2026-09-24: «будем версионировать ровно как kiosk и как skill.md, а не
@@ -66,14 +66,12 @@ STABLE_URL = "https://kiosk.tech/events/listen.py"
 
 # WHETHER A PUBLISHED SKILL CUT PINS THIS YET, declared rather than inferred.
 #
-# It does: skill-v0.4.16.md is the wave-2 cut, and its Step 3b tells an
-# assistant to fetch this listener, verify this digest and run it. A guard that
-# merely looked and found something would be green both after the pin exists
-# AND on the day somebody deletes it, which is the same vacuous pass this repo
-# has been bitten by before. So the expectation is WRITTEN DOWN and checked in
-# BOTH directions: while this is true, a skill file that does NOT reference the
-# URL fails the guard and asks for this line to be flipped; while it was false,
-# one that did failed it.
+# It does: the current cut's Step 3b tells an assistant to fetch this listener,
+# verify this digest and run it. Merely LOOKING and finding something would be
+# green both after the pin exists and on the day somebody deletes it, so the
+# expectation is WRITTEN DOWN and checked in BOTH directions: while this is
+# true, a skill file that does NOT reference the URL fails and asks for this
+# line to be flipped; while it is false, one that does fails it.
 SKILL_PINS_EXPECTED = true
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -165,18 +163,13 @@ def check_sibling
 
   pinning = Dir[File.join(SITE_ROOT, "*.md")].sort.select { File.read(_1).include?(PINNED_URL) }
   if SKILL_PINS_EXPECTED
-    # THE POSITIVE DIRECTION ASKS ABOUT THE ALIAS BY NAME, NOT ABOUT "some .md"
-    # (K-1808, measured). A published cut is IMMUTABLE, so the moment one of
-    # them names this URL the wide question is answered "yes" for ever — and a
-    # LATER cut that drops the listener leaves an older cut matching and this
-    # guard green. MEASURED by plant-and-restore: a next cut with the versioned
-    # URL and the digest taken out, with skill-v0.4.16.md untouched beside it,
-    # gave EXIT 0 on the wide question. That is precisely the vacuous pass the
-    # header above says this expectation exists to prevent, one cut later.
-    #
-    # `skill.md` is the alias, and kiosk.tech's own check-skill-immutability
-    # holds it byte-identical to the newest cut — so asking the alias is asking
-    # what the CURRENT skill tells an assistant, which is the claim.
+    # THE POSITIVE DIRECTION ASKS ABOUT THE ALIAS BY NAME, NOT ABOUT "some .md".
+    # A published cut is IMMUTABLE, so the moment one of them names this URL the
+    # wide question answers "yes" for ever, and a LATER cut that drops the
+    # listener leaves an older cut matching and this check green. `skill.md` is
+    # the alias, held byte-identical to the newest cut by kiosk.tech's own
+    # check-skill-immutability, so asking it asks what the CURRENT skill tells
+    # an assistant — which is the claim.
     alias_path = File.join(SITE_ROOT, "skill.md")
     alias_text = File.exist?(alias_path) ? File.read(alias_path) : ""
     if !alias_text.include?(PINNED_URL)

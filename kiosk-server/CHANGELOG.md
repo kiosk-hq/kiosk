@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-25: **`listen.py` gains `--until-event`: it exits 0 on the first event and 5 at the deadline**, so an assistant holds a wait in one foreground call instead of tailing a log.
 - 2026-09-25: **An origin that declares an event topic and leaves the in-process store in place is refused at production boot (K-1804).** One declaring no topic is untouched.
 ### Changed
 

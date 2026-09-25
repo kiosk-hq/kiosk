@@ -1323,6 +1323,90 @@ assert "a cold listener resuming with since is handed the event again" \
 assert "…and says the tail was not truncated under it" \
   "$(grep '"type":"subscribed"' "$EV_REPLAY" | head -1 | jq -r '.truncated')" "false"
 
+# THE ONE-SHOT FOREGROUND WAIT. A WAIT-kind topic — a human finishing something
+# the assistant asked for — is waited on INSIDE one tool call: the listener
+# blocks, and `--until-event` returns the moment the thing arrives. What this
+# asserts is the difference between the two: the run must cost what the human
+# took, not what the deadline was, because a wait that always costs its timeout
+# is what sends an assistant back to backgrounding a log file.
+r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-17T11:00:00Z\"}")
+wait_appt_id=$(echo "$r" | jq -r '.appointment_id')
+EV_ONESHOT="$TMP_DIR/listener-oneshot.jsonl"
+( sleep 3; confirm_at_the_desk "$wait_appt_id" >/dev/null ) &
+oneshot_started=$SECONDS
+set +e
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic "appointment_confirmed:$wait_appt_id" --until-event --max-seconds 60 \
+  >"$EV_ONESHOT" 2>&1
+oneshot_rc=$?
+set -e
+oneshot_elapsed=$((SECONDS - oneshot_started))
+printf "  (the one-shot wait returned after %ss of a 60s deadline)\n" "$oneshot_elapsed"
+assert "a foreground --until-event wait exits 0 when the event arrives" "$oneshot_rc" "0"
+assert "…on the EVENT and not on the deadline" \
+  "$([ "$oneshot_elapsed" -lt 30 ] && echo yes || echo "no(${oneshot_elapsed}s)")" "yes"
+assert "…having printed the event it was waiting for" \
+  "$(grep '"type":"event"' "$EV_ONESHOT" | head -1 | jq -r '.subject')" "$wait_appt_id"
+assert "…and stopped there, because the wait is over" \
+  "$(grep -c '"type":"event"' "$EV_ONESHOT")" "1"
+
+# THE OTHER HALF: a deadline with nothing on it is a distinct exit, so the
+# assistant waits AGAIN rather than reading silence as an answer. Alice's first
+# appointment was confirmed long ago and no cursor is presented, so this
+# subscription is live-only and nothing can arrive on it.
+EV_TIMEOUT="$TMP_DIR/listener-timeout.jsonl"
+set +e
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic "appointment_confirmed:$alice_appt_id" --until-event --max-seconds 6 \
+  >"$EV_TIMEOUT" 2>&1
+timeout_rc=$?
+set -e
+assert "…and a deadline that arrives first is 5, not 0" "$timeout_rc" "5"
+assert "…with the subscription having been live all along" \
+  "$(grep -c '"type":"subscribed"' "$EV_TIMEOUT")" "1"
+
+# A FOREGROUND WAIT WITH NO DEADLINE IS A TOOL CALL THAT NEVER RETURNS, so it is
+# refused at the argument tier rather than entered.
+set +e
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic appointment_confirmed --until-event >/dev/null 2>&1
+unbounded_rc=$?
+set -e
+assert "…and --until-event without a deadline is refused" "$unbounded_rc" "2"
+
+# THE OTHER KIND OF TOPIC. A SUBSCRIPTION lands when the assistant is not there
+# — no socket, no process, nothing to signal — and the CURSOR is what delivers
+# it. Here NOTHING is connected when the salon confirms: the socket is opened
+# afterwards, with the id of the last event the assistant stored.
+oneshot_event_id=$(grep '"type":"event"' "$EV_ONESHOT" | head -1 | jq -r '.id')
+r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-18T09:00:00Z\"}")
+gap_appt_id=$(echo "$r" | jq -r '.appointment_id')
+assert "the salon confirms an appointment with NOBODY connected" \
+  "$(confirm_at_the_desk "$gap_appt_id")" "200"
+EV_GAP="$TMP_DIR/listener-gap.jsonl"
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic appointment_confirmed --since "$oneshot_event_id" --max-seconds 6 \
+  >"$EV_GAP" 2>&1 || true
+assert "…and the stored cursor hands it over on the next connect" \
+  "$(grep '"type":"event"' "$EV_GAP" | head -1 | jq -r '.subject')" "$gap_appt_id"
+assert "…with a higher id than the cursor presented" \
+  "$(grep '"type":"event"' "$EV_GAP" | head -1 | jq -r --argjson c "$oneshot_event_id" '.id > $c')" "true"
+assert "…and nothing at or below the cursor replayed with it" \
+  "$(grep '"type":"event"' "$EV_GAP" | jq -r --argjson c "$oneshot_event_id" 'select(.id <= $c) | .id' | wc -l | tr -d ' ')" "0"
+
+# …UNTIL THE GAP OUTRUNS RETENTION. Then the operator cannot prove the caller
+# saw everything, and says so on the subscription rather than silently handing
+# over a hole. Pruned here directly, because the real trigger is a 24-hour
+# clock this harness does not have.
+psql -X -d "$DB_NAME" -q -c "DELETE FROM kiosk.events WHERE id <= 2" >/dev/null
+EV_TRUNC="$TMP_DIR/listener-truncated.jsonl"
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+  --topic appointment_confirmed --since 1 --max-seconds 5 >"$EV_TRUNC" 2>&1 || true
+assert "a cursor the operator can no longer prove continuity from answers truncated" \
+  "$(grep '"type":"subscribed"' "$EV_TRUNC" | head -1 | jq -r '.truncated')" "true"
+assert "…and it is the SUBSCRIPTION that carries it, not an error" \
+  "$(grep -c '"type":"error"' "$EV_TRUNC" || true)" "0"
+
 # A SUBJECT THAT IS NOT YOURS IS REFUSED AT SUBSCRIBE TIME, not filtered
 # afterwards — and the listener exits 4 rather than sitting on a socket that
 # can never deliver anything, which is the silence it exists to stop an

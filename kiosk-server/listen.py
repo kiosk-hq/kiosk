@@ -2,13 +2,28 @@
 """Kiosk event-stream listener — the pinned reference client.
 
 Opens ONE WebSocket to an operator's `events_url`, subscribes to the topics you
-name, and writes every message it receives as one JSON line on stdout. Run it as
-a background task and tail that file: the operator pushes when something
-happens, so there is nothing to poll and no cadence to invent.
+name, and writes every message it receives as one JSON line on stdout. The
+operator pushes when something happens, so there is nothing to poll and no
+cadence to invent.
 
     python3 listen.py --url wss://shop.example/kiosk/events \
                       --token "$KIOSK_TOKEN" \
                       --topic order_delivery --topic order_payment:<order-id>
+
+WAITING FOR ONE THING to happen -- a human finishing an identity check, a card
+being saved? Add `--until-event` and run it IN THE FOREGROUND: it prints the
+first event and exits 0 the moment it arrives, so a wait costs what the human
+took and not the deadline. At the deadline with nothing it exits 5, and you
+wait again. Do not background it and poll a log file -- a turn-based runtime is
+never woken by a line landing in a file, and an event that arrives between
+turns is an event nobody reads.
+
+    python3 listen.py --url … --token … --topic kyc_verification \
+                      --until-event --max-seconds 300
+
+For an event that lands hours later, when you are not running, the CURSOR is
+the delivery mechanism: record the highest `id` you saw and start again with
+`--since <id>`.
 
 Each line is a JSON object with a `type`:
 
@@ -21,10 +36,12 @@ Each line is a JSON object with a `type`:
     {"type":"reconnecting","in":…,"since":…}
     {"type":"error","message":…}
 
-EXIT CODES: 0 you asked it to stop (--max-seconds); 2 the arguments or the URL
-are wrong; 3 the operator will not have this token back and no --token-command
-was given — mint a fresh one and start it again; 4 every topic you named was
-refused, so this would have waited forever for something that cannot arrive.
+EXIT CODES: 0 you asked it to stop (--max-seconds), or --until-event got its
+event; 2 the arguments or the URL are wrong; 3 the operator will not have this
+token back and no --token-command was given — mint a fresh one and start it
+again; 4 every topic you named was refused, so this would have waited forever
+for something that cannot arrive; 5 --until-event reached the deadline with
+nothing.
 
 It needs `websockets` from PyPI (>= 12, the release that added the threading
 client). Add it to the same venv the skill already has you create:
@@ -83,8 +100,9 @@ def stream_url(url, topics, since):
 def read_frames(socket, state, deadline):
     """Drain one connection, and say what to do next.
 
-    "retry" reconnect · "stop" --max-seconds is up · "credential" the operator
-    will not have this token back · "unreadable" every topic was refused.
+    "retry" reconnect · "stop" --max-seconds is up · "event" --until-event got
+    its event · "credential" the operator will not have this token back ·
+    "unreadable" every topic was refused.
 
     The read is bounded rather than blocking forever: a deadline nothing
     checks is not a deadline, and a socket that died without saying so looks
@@ -99,10 +117,8 @@ def read_frames(socket, state, deadline):
         try:
             raw = socket.recv(timeout=budget)
         except TimeoutError:
-            # Either --max-seconds is up, or three of the operator's beats have
-            # gone missing — a socket that died without saying so. The first is
-            # a clean stop and the second is a reconnect; neither is an error
-            # worth a line, so say which one it was by returning.
+            # The deadline, or three of the operator's beats missed — a socket
+            # that died without saying so. Neither is an error worth a line.
             return "stop" if deadline and time.monotonic() >= deadline else "retry"
         frame = json.loads(raw)
         kind = frame.get("type")
@@ -117,10 +133,8 @@ def read_frames(socket, state, deadline):
         if kind == "reject_subscription":
             emit(type="rejected", topic=topic_of(frame))
             state["rejected"] += 1
-            # EVERY topic refused and none confirmed: there is nothing on this
-            # socket to wait for, ever. Sitting on it would produce exactly the
-            # silence this script exists to stop you reading as "nothing
-            # happened" — so say so and stop.
+            # EVERY topic refused and none confirmed: there is nothing on
+            # this socket to wait for, ever. Say so rather than sit on it.
             if state["confirmed"] == 0 and state["rejected"] >= state["wanted"]:
                 return "unreadable"
             continue
@@ -159,6 +173,10 @@ def read_frames(socket, state, deadline):
         if message.get("id") is not None:
             state["since"] = max(state["since"] or 0, int(message["id"]))
         emit(type="event", **message)
+        # The one-shot wait is over the moment the thing you waited for lands.
+        # A `subscribed` confirmation is not that, and neither is a beat.
+        if state["one_shot"]:
+            return "event"
 
 
 def topic_of(frame):
@@ -180,19 +198,26 @@ def main():
                         help="shell command printing a fresh bearer token; run when the "
                              "operator says this one will not be accepted back")
     parser.add_argument("--max-seconds", type=float, help="stop after this long")
+    parser.add_argument("--until-event", action="store_true",
+                        help="exit 0 on the first event, 5 at --max-seconds with none; "
+                             "run in the foreground to wait for one thing to happen")
     args = parser.parse_args()
 
     if urlsplit(args.url).scheme not in ("ws", "wss"):
         parser.error("--url must be ws:// or wss://")
+    if args.until_event and not args.max_seconds:
+        parser.error("--until-event needs --max-seconds: a foreground wait with no deadline "
+                     "is a tool call that never returns")
 
     state = {"since": args.since, "token": args.token, "refresh": args.token_command,
-             "wanted": len(args.topic), "confirmed": 0, "rejected": 0}
+             "wanted": len(args.topic), "confirmed": 0, "rejected": 0,
+             "one_shot": args.until_event}
     deadline = time.monotonic() + args.max_seconds if args.max_seconds else None
     attempt = 0
 
     while True:
         if deadline and time.monotonic() >= deadline:
-            return 0
+            return 5 if args.until_event else 0
         try:
             with connect(stream_url(args.url, args.topic, state["since"]),
                          subprotocols=[SUBPROTOCOL],
@@ -204,8 +229,10 @@ def main():
                 attempt = 0
                 state["confirmed"] = state["rejected"] = 0
                 verdict = read_frames(socket, state, deadline)
-                if verdict == "stop":
+                if verdict == "event":
                     return 0
+                if verdict == "stop":
+                    return 5 if args.until_event else 0
                 if verdict == "unreadable":
                     return 4
                 if verdict == "credential":

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-25: **`listen.py` gains a one-shot wait: `--until-event` exits 0 on the first event and 5 at the deadline.** A wait held in the foreground costs what the human took.
+- 2026-09-25: **The fleet re-pins to `skill-v0.4.17.md` and `events/listen-v0.5.1.py`.** All seven demos and the engine default move URL and digest together.
 - 2026-09-25: **`deploy/rollout.sh` is 65 lines and takes no arguments: it renders, keeps or mints, names what it cannot, and writes owner and mode as two literal lines.**
 - 2026-09-25: **`deploy/rollout.sh --apply` now gives every env file to the account the deploy hook runs as, at `0640`, instead of preserving what it finds and warning about it.**
 - 2026-09-25: **`deploy/rollout.sh` preserves an env file's owner and mode rather than setting them, and reports who can read it.** Tightening them took the deploy hook's access away on the fleet.

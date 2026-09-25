@@ -557,12 +557,13 @@ jobs:
             # drop the `require_owner:` forwarding and the owner-demand
             # assertion goes red.
             tasks: check:clock_spec check:access_spec check:collab check:link check:isolation check:redteam check:schema
-          # Every demo: task a demo defines must appear either in its `tasks:`
-          # list above (or be demo:setup, which the "Set up demo" step runs) or
-          # in its `ungated:` map with the reason it is not a gate. That is not a
-          # convention anyone has to remember: bin/check-ci-tasks enforces it in
-          # the ci-task-coverage job below, and generates the "Which of these run
-          # in CI" table in each demo's README from these very lists (K-619).
+          # Every check: task a demo defines must appear either in its `tasks:`
+          # list above or in its `ungated:` map with the reason it is not a gate,
+          # and a demo: task may appear in neither — it asserts nothing and cannot
+          # go red. That is not a convention anyone has to remember:
+          # bin/check-ci-tasks enforces it in the ci-task-coverage job below, and
+          # generates the "Which of these run in CI" table in each demo's README
+          # from these very lists.
 
     services:
       postgres:
@@ -947,7 +948,7 @@ jobs:
   # and none of them a step. So `make test` (46 C assertions), `make crosscheck`
   # (63 live-signed vectors through all three readers) and
   # `check_grammar_coverage.rb` were proved only by whoever remembered to type
-  # them. bin/check-ci-tasks cannot see the gap: its subject is `demo:` rake
+  # them. bin/check-ci-tasks cannot see the gap: its subject is a demo's rake
   # tasks and these are `make` targets.
   #
   # The cost was not theoretical. K-1588, K-1590 and K-1591 were each a real
@@ -981,7 +982,7 @@ jobs:
   #
   # ITS OWN JOB RATHER THAN A LEG OF THE DEMOS MATRIX, on that matrix's own cost:
   # every demo entry boots Postgres and installs a Rails bundle, and this needs
-  # neither. Nor is any of it a `demo:` rake task, so joining that matrix would
+  # neither. Nor is any of it a demo rake task, so joining that matrix would
   # put it outside bin/check-ci-tasks's subject while looking like it was inside.
   #
   # Watched fail, MEASURED 2026-09-14 by planting it rather than by reasoning:
@@ -1043,12 +1044,8 @@ jobs:
 
   # Does CI actually run the tasks the demos define? (K-619)
   #
-  # Five ledger rows (K-602/K-614/K-616/K-617/K-618) were spent re-deriving BY
-  # HAND, one rake file at a time, which assertion-bearing `demo:` tasks no gate
-  # invoked — a list no artifact published. The workflow's own comments were the
-  # sole record and had already drifted (they asserted "check:rls moved to
-  # getgrocery" for the whole period before the move happened). This job is the
-  # replacement for remembering: bin/check-ci-tasks reads the demos matrix above
+  # This job is the replacement for remembering which assertion-bearing tasks a
+  # gate actually invokes: bin/check-ci-tasks reads the demos matrix above
   # and every demo's lib/tasks/*.rake, and fails when a task is in neither the
   # `tasks:` list nor the entry's `ungated:` map with a reason — and when the
   # "Which of these run in CI" table it generates in each demo README is stale.
@@ -1454,7 +1451,7 @@ jobs:
   # establish. That directory is what a runbook has and prose does not, which is
   # why check-shipped-archaeology's R7 must exclude the whole `bin/` prefix and
   # this can resolve it: a planted `bin/check-publication-paths-gone` and a
-  # planted `rake demo:nonexistent` each left check-shipped-archaeology,
+  # planted `rake check:nonexistent` each left check-shipped-archaeology,
   # check-publication-paths, check-ci-tasks and check-changelog at exit 0.
   #
   # The EXECUTING half (`--run`) is deliberately NOT here. It runs the blocks

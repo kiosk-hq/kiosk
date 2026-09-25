@@ -15,7 +15,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
-| `rollout.sh` | **The only supported way `/etc/kiosk-demo/*.env` is set.** Run it ON THE BOX. It renders every unit's env file from `env/<app>.env.example` — names, order, comments and every value this repository decides — and fills the `REPLACE_*` slots from the box's own current values or from an operator-supplied vault file. `--check` answers «is the live configuration what this tree says it should be?» and changes nothing; `--apply` brings a drifted box into line, backs up what it changes, names the units to restart and restarts none of them. It carries no secret and prints none. On a box with nothing to source from it NAMES what is missing and writes nothing, rather than writing a blank. `--self-test` builds a throwaway tree and proves the parser, idempotence, drift correction, the refusal, and both directions of the KYC pairing; it touches no host and runs in CI. |
+| `rollout.sh` | **The only supported way `/etc/kiosk-demo/*.env` is set.** Run it ON THE BOX. It renders every unit's env file from `env/<app>.env.example` — names, order, comments and every value this repository decides — and fills the `REPLACE_*` slots from the box's own current values or from an operator-supplied vault file. `--check` answers «is the live configuration what this tree says it should be?» and changes nothing; `--apply` brings a drifted box into line, backs up what it changes, names the units to restart and restarts none of them. It carries no secret and prints none, and it changes no file's owner, group or mode — it reports them instead. On a box with nothing to source from it NAMES what is missing and writes nothing, rather than writing a blank. `--self-test` builds a throwaway tree and proves the parser, idempotence, drift correction, the refusal, and both directions of the KYC pairing; it touches no host and runs in CI. |
 | `box-prep-2026-08-11.sh` | **Spent — a record of what was done on that date, not a step.** It stripped the legacy PoW flags and the long-dead `KIOSK_POW_REGISTER_DEMO` from the hand-maintained env files, one time, before the deploy that followed. Everything it did is now a standing property of `rollout.sh`, which removes a retired name on every `--apply` instead of once. Kept, because a dated one-shot is history; do not run it. |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
 | `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template says OK for as long as the box serves without the header. `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
@@ -90,9 +90,71 @@ set and disagree: choosing between two live secrets is not a configuration
 run's to make.
 
 **What it does not touch.** Caddy (that is `deploy-caddy.sh`, which owns
-`/etc/caddy/Caddyfile` whole), Postgres, migrations, seeds, and the units
+`/etc/caddy/Caddyfile` whole), Postgres, migrations, seeds, the units
 themselves — it prints the `systemctl restart` line for each unit whose file it
-changed and runs none of them.
+changed and runs none of them — and the owner, group and mode of any env file.
+
+**Who reads an env file is not something this repository knows.** The unit gets
+it through `EnvironmentFile=` and runs as `kiosk`; the push-to-deploy hook at
+`/srv/kiosk.git/hooks/post-receive` **also sources every one of them**, as
+whatever account a push arrives as, and nothing on disk records what that
+account is. So `rollout.sh` does not set those attributes at all — an existing
+file keeps exactly what it has, and a new one inherits from a sibling or from
+the directory — and instead every run REPORTS, per file, the owner, the group,
+the mode, and whether the hook's account can read it. That report is never red,
+in any mode: the script did not choose those attributes and cannot repair them,
+so a red exit would be a gate over somebody else's decision.
+
+The account it compares against is the one thing it cannot measure. Give it with
+`--hook-account <user>` when you know it; otherwise it uses the owner of the hook
+file and says in as many words that this is an INFERENCE, and when the hook is
+not there it reports the account as undetermined rather than reporting agreement.
+
+### Give the env files their permissions back
+
+If a run of anything has left `/etc/kiosk-demo/*.env` unreadable to the account
+the deploy hook runs as, the symptom is silent: every unit's `db:migrate` fails
+with `Permission denied` on the hook's own `source`, and the push still prints
+`deploy complete`. The units keep serving, because they read the file as
+`kiosk` through systemd — so nothing looks wrong until a deploy carries a
+migration that never ran.
+
+**The repair derives the right attributes from the box, because we do not know
+what they were.** `rollout.sh` backs a file up with `cp -p` before it writes it,
+once per day per file and never overwriting, so the OLDEST `<unit>.env.bak-*`
+beside each file carries the owner, group and mode that file had before anything
+touched it. Look first, then copy them across:
+
+```sh
+# LOOK FIRST. Nothing below is safe to run without reading this.
+ssh <deploy-user>@<box> '
+  ls -ld /etc/kiosk-demo /srv/kiosk.git/hooks/post-receive
+  ls -l  /etc/kiosk-demo
+  id
+  sudo cat /srv/kiosk.git/hooks/post-receive
+'
+
+# RESTORE each env file from its own oldest backup. GNU chown/chmod copy the
+# attributes off a reference file, so no owner and no mode is typed in here.
+ssh <deploy-user>@<box> 'sudo sh -c "
+  cd /etc/kiosk-demo || exit 1
+  for f in *.env; do
+    b=
+    for c in \$f.bak-*; do [ -e \"\$c\" ] && { b=\$c; break; }; done
+    [ -n \"\$b\" ] || { echo \"no backup beside \$f — nothing to derive from\"; continue; }
+    chown --reference=\"\$b\" \"\$f\" && chmod --reference=\"\$b\" \"\$f\" && echo \"\$f <- \$b\"
+  done
+  ls -l
+"'
+
+# CONFIRM, from the box's own account rather than from this page.
+ssh <deploy-user>@<box> 'sudo bash -s' -- --check --hook-account <deploy-user> < deploy/rollout.sh
+```
+
+If a file has no backup beside it — a box rebuilt since, or a file this fleet
+never wrote — there is nothing to derive from and the answer is a decision
+rather than a command: state the triple yourself, on the DIRECTORY, and re-run
+`--apply`, which gives every file it creates the directory's own posture.
 
 ## Per-demo map
 
@@ -211,8 +273,11 @@ below.) Any other demo is knob-adjustable: set
    getgrocery, skooti's unlock key, the KYC broker's signing key. Put them in
    `/etc/kiosk-demo/secrets.env` (mode `0600`) as `<UNIT>__<VARIABLE>=…` and run
    `deploy/rollout.sh --apply`; it writes every env file from
-   `env/<app>.env.example`, 0600 and owned by `kiosk`, and names anything it
-   could not obtain instead of writing a blank. Copying a template by hand still
+   `env/<app>.env.example` and names anything it could not obtain instead of
+   writing a blank. It edits CONTENT only: a file that already exists keeps its
+   owner, its group and its mode untouched, and a file it creates inherits them
+   from a sibling env file or from `/etc/kiosk-demo` itself — so decide those on
+   the directory, once, and every file follows. Copying a template by hand still
    works and the templates are shell-source-safe as written (`set -a; . file`),
    but then nothing joins the box to the tree — see "Configuration is DECLARED"
    above.

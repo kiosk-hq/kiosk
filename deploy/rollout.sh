@@ -116,7 +116,7 @@
 # stops, and the vault key `KYC_INTAKE_SECRET_<OP>` is how a human says which
 # value is the real one.
 #
-# ── TWO TIERS OF DISAGREEMENT, AND ONLY ONE OF THEM IS RED ──────────────────
+# ── THREE TIERS OF DISAGREEMENT, AND ONLY ONE OF THEM IS RED ────────────────
 #
 # CONFIG — a declared variable missing or empty, a declared non-secret value
 #   that differs from what the tree says, a retired name still assigned, a KYC
@@ -127,6 +127,15 @@
 #   otherwise arrive red for a cosmetic reason and teach nobody anything —
 #   which is how a check gets switched off. `--check --strict` reddens on it
 #   too, and one `--apply` drains it for good.
+# ACCESS — who can READ each env file: its owner, its group, its mode, and
+#   whether the account the push-to-deploy hook runs as is among them. Never
+#   red, in any mode, not even under --strict, and for a reason stronger than
+#   the FORM tier's: this script does not set those attributes and cannot
+#   repair what it reports, so a red exit would be a gate over somebody else's
+#   decision. It is an observation whose whole job is to be READ — the class of
+#   fact that, unobserved, cost eight units their `db:migrate` under a deploy
+#   that still said «deploy complete». `--hook-account` names the reader when
+#   you know it; otherwise the report says what it inferred it from.
 #
 # ── WHAT IT DOES NOT DO ─────────────────────────────────────────────────────
 #
@@ -139,15 +148,61 @@
 # `db:seed` belong to the push-to-deploy hook (deploy/CHECKLIST.md §7).
 # IT DOES NOT READ THE PROVE BROKER OVER THE NETWORK. Everything it needs is in
 # /etc/kiosk-demo and the checkout.
+# IT DOES NOT CHANGE OWNERSHIP OR MODE ON A FILE THAT ALREADY EXISTS. A
+# configuration run edits CONTENT; see the next section for why that is a rule
+# and not a preference.
+#
+# ── OWNERSHIP AND MODE BELONG TO THE BOX, NOT TO THIS SCRIPT ────────────────
+#
+# AN ENV FILE HAS MORE READERS THAN THE UNIT THAT NAMES IT. `kiosk-demo@.service`
+# hands it to Puma through `EnvironmentFile=` as `kiosk`, and
+# /srv/kiosk.git/hooks/post-receive ALSO sources every one of them, as whatever
+# account a push arrives as. This script cannot enumerate the readers of a file
+# it did not create, so it does not get to decide who they are:
+#
+#   * A FILE THAT ALREADY EXISTS KEEPS ITS OWNER, ITS GROUP AND ITS MODE,
+#     exactly. They are read BEFORE the write and re-applied after it, because
+#     the rename that installs the new text replaces the inode and would
+#     otherwise hand the file whatever the running shell's umask says.
+#   * A FILE THIS SCRIPT CREATES has no prior attributes to preserve, and it
+#     still does not invent any. It takes them from a sibling `<unit>.env` in
+#     the same directory when there is one — the strongest evidence there is of
+#     what this box's readers of env files are set up to read — and otherwise
+#     from the directory itself: its owner, its group, and its mode with the
+#     execute bits cleared, which is the file counterpart of the reach the
+#     directory already grants. Both sources are somebody's decision about this
+#     box rather than this script's, and neither can be NARROWER than the
+#     directory a reader already has to traverse, so neither can shut out a
+#     reader this script cannot see. Every create says which of the two it used.
+#
+# AN INHERITED MODE CAN BE WIDER THAN AN ENV FILE DESERVES — a directory left at
+# 0755 yields a 0644 file, and these files carry secrets. The script SAYS SO on
+# the create rather than narrowing it, because the one place a box states who may
+# reach these files is the directory, and an operator who tightens that gets
+# every file with it. Inventing 0600 here is precisely the move that took the
+# deploy hook's read away, and it would be the same move whatever number was
+# invented.
+#
+# THE THIRD OPTION — refuse, and make the operator state the triple — is the one
+# this script does NOT take, and the reason is its own purpose: a wiped box must
+# be rebuildable from the tree, and a create that stops on a question an
+# operator has no better answer to than the directory does would end that.
+#
+# It is written out because the weak version cost a production deploy. A run
+# that ended `chmod 0600` and `chown kiosk` took the hook's access away on all
+# eight units at once; every `db:migrate` then failed with «Permission denied»
+# and the push still printed «deploy complete». The units were unaffected — they
+# read the file as `kiosk` — so nothing went down and nothing was lost, and the
+# next deploy carrying a migration would have skipped it in silence.
 #
 # ── WHAT IT LEAVES BEHIND ───────────────────────────────────────────────────
 #
 # For every file it modifies, a dated sibling `<file>.bak-YYYY-MM-DD`, created
 # once per day per file and never overwritten — the same shape
-# box-prep-2026-08-11.sh leaves. Files are written 0600 and, on a real box where
-# the user exists, owned by `kiosk`. Nothing else: no state file, no lock, no
-# log. A run whose exit code you did not see is not a result, so every mode
-# prints a verdict line and exits 0 (in agreement), 1 (CONFIG drift) or 2
+# box-prep-2026-08-11.sh leaves, and made with `cp -p`, so it carries the
+# attributes the file had before the write. Nothing else: no state file, no
+# lock, no log. A run whose exit code you did not see is not a result, so every
+# mode prints a verdict line and exits 0 (in agreement), 1 (CONFIG drift) or 2
 # (refused: something could not be resolved, parsed, or is not allowed).
 #
 # `--self-test` builds its own throwaway tree under `mktemp -d`, proves the
@@ -322,6 +377,8 @@ rollout.sh — declare the fleet's /etc/kiosk-demo/*.env from deploy/env/*.env.e
   --self-test            prove this script, in a throwaway tree; touches no host
 
   --secrets FILE         the vault (default: <env-dir>/secrets.env)
+  --hook-account USER    the account the push-to-deploy hook runs as, when you know it;
+                         otherwise it is inferred from who owns the hook file
   --repo DIR             the checkout that declares the configuration (default: $KIOSK_REPO or /srv/kiosk)
   --root DIR             treat DIR as / — the env directory becomes DIR/etc/kiosk-demo
 
@@ -334,6 +391,7 @@ STRICT=0
 GENERATE=0
 ROOT=""
 SECRETS=""
+HOOK_ACCOUNT_ARG=""
 
 # WHICH CHECKOUT DECLARES THE CONFIGURATION. On the box it is /srv/kiosk, which
 # is what `kiosk-demo@.service` and `demo-reset.sh` hardcode and what this
@@ -358,6 +416,7 @@ while [ $# -gt 0 ]; do
     --strict)           STRICT=1 ;;
     --generate-missing) GENERATE=1 ;;
     --secrets)          SECRETS=${2:-}; shift ;;
+--hook-account)     HOOK_ACCOUNT_ARG=${2:-}; shift ;;
     --repo)             REPO=${2:-}; shift ;;
     --root)             ROOT=${2:-}; shift ;;
     -h|--help)          usage; exit 0 ;;
@@ -368,6 +427,22 @@ done
 
 ENVDIR="${ROOT}/etc/kiosk-demo"
 [ -n "$SECRETS" ] || SECRETS="$ENVDIR/secrets.env"
+
+# A --hook-account naming nothing is a typo, and it is refused HERE rather than
+# where it is used: the flag only steers a report, so a run that is going to
+# refuse it must refuse before it writes a file.
+HOOK_ACCOUNT_UID=""
+if [ -n "$HOOK_ACCOUNT_ARG" ]; then
+  case "$HOOK_ACCOUNT_ARG" in
+    *[!0-9]*)
+      HOOK_ACCOUNT_UID=$(id -u "$HOOK_ACCOUNT_ARG" 2>/dev/null)
+      if [ -z "$HOOK_ACCOUNT_UID" ]; then
+        echo "REFUSED  --hook-account $HOOK_ACCOUNT_ARG: this box has no such account." >&2
+        exit 2
+      fi ;;
+    *) HOOK_ACCOUNT_UID=$HOOK_ACCOUNT_ARG ;;
+  esac
+fi
 
 # ── State, filled by load_declaration ───────────────────────────────────────
 declare -A TPL_FOR_UNIT=()      # unit -> template path
@@ -713,6 +788,63 @@ report_unit() {   # report_unit <unit> <rendered-file>
   fi
 }
 
+# ── Owner, group and mode: READ, never decided ──────────────────────────────
+#
+# See the header section «OWNERSHIP AND MODE BELONG TO THE BOX». Everything
+# below only ever observes what is there and puts it back.
+#
+# stat(1) is two different programs on the two systems this runs on — the box is
+# Linux (GNU coreutils) and --self-test also runs on macOS (BSD) — and they share
+# no format flag. Ask GNU first, fall back to BSD, print nothing when neither
+# answers, and let every caller treat «nothing» as «I do not know» rather than as
+# an all-clear.
+file_attrs() {   # file_attrs <path> ; "<uid> <gid> <4-digit octal mode>" on stdout
+  local raw uid gid mode
+  raw=$(stat -c '%u %g %a' "$1" 2>/dev/null) || raw=$(stat -f '%u %g %Lp' "$1" 2>/dev/null) || return 1
+  read -r uid gid mode <<<"$raw"
+  [ -n "$mode" ] || return 1
+  printf '%s %s %04o\n' "$uid" "$gid" "$((8#$mode))"
+}
+
+# Where a file this script CREATES takes its attributes from. A sibling env file
+# first, the directory second; both are somebody else's decision about this box.
+new_file_attrs() {   # new_file_attrs <path-to-be-created> ; "<uid> <gid> <mode> <in words>"
+  local f=$1 d s a uid gid mode
+  d=${f%/*}
+  for s in "$d"/*.env; do
+    [ -f "$s" ] || continue
+    [ "$s" = "$f" ] && continue
+    case "${s##*/}" in secrets.env) continue ;; esac
+    a=$(file_attrs "$s") || continue
+    printf '%s the sibling %s\n' "$a" "${s##*/}"
+    return 0
+  done
+  a=$(file_attrs "$d") || return 1
+  read -r uid gid mode <<<"$a"
+  # The file counterpart of a directory's mode: `x` on a directory means «may
+  # traverse», and a file has nothing to traverse.
+  printf '%s %s %04o the directory %s\n' "$uid" "$gid" "$(( 8#$mode & ~8#111 ))" "$d"
+}
+
+# Put back exactly what was read. chmod on a file you own always works; chown
+# does not, so it is attempted only when the triple actually differs and its
+# refusal is REPORTED rather than swallowed — a silently un-restored owner is
+# the whole defect this section exists to end.
+apply_attrs() {   # apply_attrs <path> <uid> <gid> <mode>
+  local f=$1 uid=$2 gid=$3 mode=$4 now nuid ngid _nmode
+  if [ -n "$mode" ] && ! chmod "$mode" "$f"; then
+    echo "    WARNING    could not set mode $mode on $f"
+  fi
+  now=$(file_attrs "$f") || now=""
+  read -r nuid ngid _nmode <<<"$now"
+  if [ -n "$uid" ] && { [ "$uid" != "${nuid:-}" ] || [ "$gid" != "${ngid:-}" ]; }; then
+    if ! chown "$uid:$gid" "$f" 2>/dev/null; then
+      echo "    WARNING    $f is owned by ${nuid:-?}:${ngid:-?} and should be $uid:$gid — chown was refused"
+      echo "               (re-run as root; a reader of this file may have lost access)"
+    fi
+  fi
+}
+
 # ── Writing ─────────────────────────────────────────────────────────────────
 install_unit() {   # install_unit <unit> <rendered-file>
   local unit=$1 rendered=$2
@@ -725,11 +857,42 @@ install_unit() {   # install_unit <unit> <rendered-file>
     cp -p "$f" "$bk" || { echo "    FAILED     could not back $f up to $bk — nothing written" >&2; return 1; }
     echo "    backup     $bk"
   fi
+
+  # READ THE ATTRIBUTES BEFORE THE WRITE. The rename below replaces the inode,
+  # so what is read here is the only record of what the file was.
+  local attrs="" origin="" origin_rest="" auid="" agid="" amode=""
+  if [ -f "$f" ]; then
+    attrs=$(file_attrs "$f") || attrs=""
+    origin="the file as it stood"
+  else
+    attrs=$(new_file_attrs "$f") || attrs=""
+    origin=""
+  fi
+  if [ -n "$attrs" ]; then
+    read -r auid agid amode origin_rest <<<"$attrs"
+    [ -n "$origin" ] || origin=$origin_rest
+  fi
+
   ( umask 077; cat "$rendered" >"$f.rollout-new" ) || return 1
   mv "$f.rollout-new" "$f" || return 1
-  chmod 0600 "$f"
-  if [ -z "$ROOT" ] && id kiosk >/dev/null 2>&1; then chown kiosk "$f" 2>/dev/null || true; fi
-  echo "    WROTE      $f"
+  if [ -n "$attrs" ]; then
+    apply_attrs "$f" "$auid" "$agid" "$amode"
+    echo "    WROTE      $f  ($auid:$agid $amode, from $origin)"
+    # A created file inherits, and an inherited mode can be wider than an env
+    # file's contents deserve. Saying so is this script's whole part in it: the
+    # remedy is to tighten the DIRECTORY, which is the one place a box states
+    # who reaches these files, and NOT for this script to invent 0600 — that
+    # invention is what took the deploy hook's read away on 2026-09-25.
+    if [ "$origin" != "the file as it stood" ] && [ $(( 8#$amode & 8#004 )) -ne 0 ]; then
+      echo "    NOTE       $amode leaves this file readable by every account on the box, and it"
+      echo "               carries secrets. It was inherited from $origin. If that is not what"
+      echo "               you meant, tighten $ENVDIR and re-run — do not hand-edit the file."
+    fi
+  else
+    echo "    WROTE      $f"
+    echo "    WARNING    could not read an owner, group or mode to give this file — it carries"
+    echo "               whatever this shell's umask left. Set it by hand and re-run --check."
+  fi
   CHANGED_UNITS="$CHANGED_UNITS $unit"
 }
 
@@ -741,8 +904,10 @@ install_unit() {   # install_unit <unit> <rendered-file>
 # honestly do is say whether it is still there and what its fingerprint is, so
 # that a wipe is something the fleet's own configuration run REPORTS rather than
 # something discovered on the next push.
+HOOK_FILE=""
 observe_hook() {
-  local h=${ROOT}/srv/kiosk.git/hooks/post-receive
+  HOOK_FILE=${ROOT}/srv/kiosk.git/hooks/post-receive
+  local h=$HOOK_FILE
   echo "== push-to-deploy hook (observed, never written) =="
   if [ -f "$h" ]; then
     echo "    present  $h  $(wc -c <"$h" | tr -d ' ') bytes  sha256=$(openssl dgst -sha256 <"$h" | awk '{print $NF}')"
@@ -751,6 +916,124 @@ observe_hook() {
     echo "    ABSENT   $h — nothing turns a push into a deploy, and this repository does not carry a copy"
     echo "             See deploy/CHECKLIST.md §7. Restore it from your own copy; do not re-clone /srv/kiosk.git."
   fi
+  echo ""
+}
+
+# ── Who ELSE reads these files — the ACCESS tier ────────────────────────────
+#
+# The hook above sources every /etc/kiosk-demo/*.env, as whatever account the
+# push authenticated as. That account is NOT on disk anywhere: git runs the hook
+# as the ssh user, and no file records who that is. So this section reports what
+# it can actually measure and names the evidence it measured it from, and when
+# it has none it SAYS SO rather than reporting agreement.
+#
+#   --hook-account <user>  you know the account; the report uses it and says so.
+#   otherwise              the owner of the hook file, which is an INFERENCE:
+#                          a push-to-deploy repository is normally owned by the
+#                          account that receives the push — and «normally» is
+#                          not «always».
+resolve_hook_account() {   # sets HOOK_UID and HOOK_UID_FROM; HOOK_UID empty = undetermined
+  HOOK_UID=""
+  HOOK_UID_FROM=""
+  if [ -n "$HOOK_ACCOUNT_UID" ]; then
+    HOOK_UID=$HOOK_ACCOUNT_UID
+    HOOK_UID_FROM="--hook-account $HOOK_ACCOUNT_ARG, stated on the command line"
+    return
+  fi
+  local a uid gid mode
+  if [ -f "$HOOK_FILE" ] && a=$(file_attrs "$HOOK_FILE"); then
+    read -r uid gid mode <<<"$a"
+    HOOK_UID=$uid
+    HOOK_UID_FROM="INFERRED from who owns $HOOK_FILE — git runs the hook as the account the push arrives as, which is not recorded anywhere"
+  fi
+}
+
+uid_label() {   # uid_label <uid> ; "name (uid N)" or "uid N"
+  local n
+  n=$(id -un "$1" 2>/dev/null)
+  if [ -n "$n" ]; then printf '%s (uid %s)' "$n" "$1"; else printf 'uid %s' "$1"; fi
+}
+
+uid_in_group() {   # uid_in_group <uid> <gid> ; 0 yes · 1 no · 2 cannot tell
+  local n g
+  n=$(id -un "$1" 2>/dev/null) || return 2
+  [ -n "$n" ] || return 2
+  g=$(id -G "$n" 2>/dev/null) || return 2
+  [ -n "$g" ] || return 2
+  case " $g " in *" $2 "*) return 0 ;; esac
+  return 1
+}
+
+has_perm() {   # has_perm <uid> <f-uid> <f-gid> <octal-mode> <4=read|1=execute> ; yes|no|unknown
+  local u=$1 fu=$2 fg=$3 m=$4 b=$5 bits g
+  if [ "$u" = 0 ]; then echo yes; return; fi
+  bits=$((8#$m))
+  if [ "$u" = "$fu" ]; then
+    if [ $(( bits & (b * 64) )) -ne 0 ]; then echo yes; else echo no; fi
+    return
+  fi
+  if [ $(( bits & b )) -ne 0 ]; then echo yes; return; fi
+  uid_in_group "$u" "$fg"; g=$?
+  if [ $(( bits & (b * 8) )) -eq 0 ]; then echo no; return; fi
+  case $g in
+    0) echo yes ;;
+    1) echo no ;;
+    *) echo unknown ;;
+  esac
+}
+
+observe_readers() {
+  echo "== who can READ the env files (observed; never red, in any mode) =="
+  resolve_hook_account
+  if [ -n "$HOOK_UID" ]; then
+    echo "    the deploy hook runs as: $(uid_label "$HOOK_UID")"
+    echo "        $HOOK_UID_FROM"
+  else
+    echo "    the deploy hook runs as: UNDETERMINED — $HOOK_FILE is not here and no"
+    echo "        --hook-account was given, so this run cannot say who reads these files."
+    echo "        THAT IS NOT AGREEMENT. Pass --hook-account <user> to have it checked."
+  fi
+
+  local a duid dgid dmode dx
+  if a=$(file_attrs "$ENVDIR"); then
+    read -r duid dgid dmode <<<"$a"
+    echo "    directory  $ENVDIR  $(uid_label "$duid"):$dgid  $dmode"
+    if [ -n "$HOOK_UID" ]; then
+      dx=$(has_perm "$HOOK_UID" "$duid" "$dgid" "$dmode" 1)
+      if [ "$dx" = no ]; then
+        echo "    WARNING    that account cannot TRAVERSE this directory, so it reaches none of"
+        echo "               the files below whatever their own modes say."
+      fi
+    fi
+  else
+    echo "    directory  $ENVDIR — attributes unreadable"
+  fi
+
+  local unit f r
+  for unit in $(printf '%s\n' "${!TPL_FOR_UNIT[@]}" | sort); do
+    f="$ENVDIR/$unit.env"
+    if [ ! -f "$f" ]; then continue; fi
+    if ! a=$(file_attrs "$f"); then echo "    $unit.env — attributes unreadable"; continue; fi
+    local fuid fgid fmode
+    read -r fuid fgid fmode <<<"$a"
+    if [ -z "$HOOK_UID" ]; then
+      echo "    $unit.env  $(uid_label "$fuid"):$fgid  $fmode"
+      continue
+    fi
+    r=$(has_perm "$HOOK_UID" "$fuid" "$fgid" "$fmode" 4)
+    case "$r" in
+      yes) echo "    $unit.env  $(uid_label "$fuid"):$fgid  $fmode   readable by the deploy hook's account" ;;
+      unknown)
+        echo "    $unit.env  $(uid_label "$fuid"):$fgid  $fmode   readable ONLY through group $fgid, and this"
+        echo "               run could not resolve that account's groups — unverified, not agreement" ;;
+      *)
+        echo "    WARNING    $unit.env  $(uid_label "$fuid"):$fgid  $fmode — NOT readable by $(uid_label "$HOOK_UID")."
+        echo "               The push-to-deploy hook sources this file. If that is the account it runs"
+        echo "               as, its db:migrate for $unit fails with «Permission denied» and the push"
+        echo "               still reports a completed deploy. See deploy/README.md, «Give the env"
+        echo "               files their permissions back»." ;;
+    esac
+  done
   echo ""
 }
 
@@ -822,6 +1105,7 @@ main_run() {
   fi
 
   observe_hook
+  observe_readers
 
   if [ "$MODE" = apply ] && [ -n "$CHANGED_UNITS" ]; then
     echo "== RESTART THESE, when you mean to — this script does not =="
@@ -1013,6 +1297,83 @@ selftest() {
   if [ -n "$broker_pub" ] && [ "$(printf '%b' "$pinned")" = "$broker_pub" ]; then
     ok "A11 each operator pins exactly the public half of the broker's own key"
   else bad "A11 the pinned key is not the broker's public half"; fi
+
+  # ── A12: an EXISTING file keeps its owner, group and mode across --apply ──
+  #
+  # This is the 2026-09-25 regression, in a tree we own. The old code ended
+  # every write with `chmod 0600` and `chown kiosk`, which is how the deploy
+  # hook lost its read on all eight units at once. MODE is tested for real —
+  # 0640 survives, and the old line would have made it 0600. GROUP is tested
+  # for real too, and it is the arm that proves the attributes are re-applied
+  # AFTER the rename rather than merely left alone: the temp file this script
+  # writes takes the DIRECTORY's group, so a rename with no re-apply loses it.
+  # UID is NOT tested, because a sandbox with no privileges cannot chown to a
+  # second account; the uid half of install_unit is covered by reading it.
+  local plf=$root/etc/kiosk-demo/philslist.env before_attrs after_attrs
+  local want_gid="" g
+  chmod 0640 "$plf"
+  for g in $(id -G); do
+    if [ "$g" != "$(file_attrs "$plf" | cut -d' ' -f2)" ]; then want_gid=$g; break; fi
+  done
+  if [ -n "$want_gid" ] && chgrp "$want_gid" "$plf" 2>/dev/null; then
+    ok "A12 the fixture carries a distinctive group ($want_gid) — the arm is not vacuous"
+  else
+    want_gid=""
+    bad "A12 could not give the fixture a second group; the group half of this arm did not run"
+  fi
+  before_attrs=$(file_attrs "$plf")
+  LC_ALL=C sed 's/^PORT=3006$/PORT=9998/' "$plf" >"$plf.mut" && mv "$plf.mut" "$plf"
+  chmod 0640 "$plf"; [ -n "$want_gid" ] && chgrp "$want_gid" "$plf"
+  "$self" --apply --repo "$repo" --root "$root" --secrets "$vault" >"$sandbox/a12.out" 2>&1; rc=$?
+  after_attrs=$(file_attrs "$plf")
+  if [ "$rc" = 0 ]; then ok "A12 --apply ran (exit 0)"; else bad "A12 --apply exit $rc, want 0"; cat "$sandbox/a12.out"; fi
+  if LC_ALL=C grep -q '^PORT=3006$' "$plf"; then ok "A12 the file really was rewritten (the drifted PORT is corrected)"
+  else bad "A12 the file was NOT rewritten, so this arm proves nothing"; fi
+  if [ "$before_attrs" = "$after_attrs" ]; then ok "A12 owner, group and mode are unchanged across the write ($after_attrs)"
+  else bad "A12 attributes moved: $before_attrs -> $after_attrs"; fi
+  case "$after_attrs" in *" 0640") ok "A12 the distinctive mode 0640 survived (the old chmod 0600 would not have)" ;;
+    *) bad "A12 mode is not 0640: $after_attrs" ;; esac
+
+  # ── A12b: a file this script CREATES inherits from a sibling ─────────────
+  local af=$root/etc/kiosk-demo/atablefor.env tf=$root/etc/kiosk-demo/tudu.env
+  chmod 0640 "$af"
+  rm -f "$tf"
+  "$self" --apply --generate-missing --repo "$repo" --root "$root" --secrets "$vault" >"$sandbox/a12b.out" 2>&1; rc=$?
+  if [ "$rc" = 0 ] && [ -f "$tf" ]; then ok "A12b --apply re-created the deleted env file"; else bad "A12b exit $rc; $tf was not re-created"; cat "$sandbox/a12b.out"; fi
+  case "$(file_attrs "$tf")" in *" 0640") ok "A12b the new file took 0640 from a sibling, not a mode this script chose" ;;
+    *) bad "A12b the new file is $(file_attrs "$tf"), not the sibling's 0640" ;; esac
+  if LC_ALL=C grep -q 'from the sibling atablefor.env' "$sandbox/a12b.out"; then ok "A12b and it says where it took them from"
+  else bad "A12b the run does not name the file it inherited from"; fi
+
+  # ── A13: --check REPORTS an env file the hook's account cannot read, and
+  #         does not redden on it ────────────────────────────────────────────
+  mkdir -p "$root/srv/kiosk.git/hooks"
+  printf '#!/bin/sh\n: a stand-in for the box hook\n' >"$root/srv/kiosk.git/hooks/post-receive"
+  chmod +x "$root/srv/kiosk.git/hooks/post-receive"
+  "$self" --check --repo "$repo" --root "$root" --secrets "$vault" >"$sandbox/a13.out" 2>&1; rc=$?
+  if [ "$rc" = 0 ]; then ok "A13 --check is green on the tree (exit 0)"; else bad "A13 --check exit $rc, want 0"; cat "$sandbox/a13.out"; fi
+  if LC_ALL=C grep -q 'INFERRED from who owns' "$sandbox/a13.out"; then ok "A13 with no --hook-account it names the inference it made"
+  else bad "A13 it did not say the hook account was inferred"; fi
+  # The fixture is the old code's own output: `chmod 0600`, which is what took
+  # the hook's read away on the live fleet. 65534 is neither the owner of it
+  # nor in any group of it, so the answer cannot be anything but «cannot read».
+  chmod 0600 "$root/etc/kiosk-demo/skooti.env"
+  "$self" --check --repo "$repo" --root "$root" --secrets "$vault" --hook-account 65534 >"$sandbox/a13b.out" 2>&1; rc=$?
+  if [ "$rc" = 0 ]; then ok "A13 an unreadable-to-the-hook fleet does NOT redden --check (exit 0)"
+  else bad "A13 --check went red at $rc on an ACCESS-tier finding; the tier must never be red"; fi
+  "$self" --check --strict --repo "$repo" --root "$root" --secrets "$vault" --hook-account 65534 >/dev/null 2>&1; rc=$?
+  if [ "$rc" = 0 ]; then ok "A13 nor under --strict (exit 0)"; else bad "A13 --check --strict exit $rc; the ACCESS tier must not redden even there"; fi
+  if LC_ALL=C grep -q 'NOT readable by' "$sandbox/a13b.out"; then ok "A13 and it reports the files that account cannot read"
+  else bad "A13 it reported no unreadable file — the arm proves nothing"; fi
+  if LC_ALL=C grep -q 'db:migrate' "$sandbox/a13b.out"; then ok "A13 and says what that costs on a push"
+  else bad "A13 the warning does not say what the consequence is"; fi
+  "$self" --check --repo "$repo" --root "$root" --secrets "$vault" --hook-account "$(id -u)" >"$sandbox/a13c.out" 2>&1; rc=$?
+  if LC_ALL=C grep -q 'readable by the deploy hook' "$sandbox/a13c.out" && ! LC_ALL=C grep -q 'NOT readable by' "$sandbox/a13c.out"; then
+    ok "A13 an account that CAN read them is reported as reading them (both directions covered)"
+  else bad "A13 exit $rc; an account that can read every file was not reported as such"; fi
+  "$self" --check --repo "$repo" --root "$root" --secrets "$vault" --hook-account nosuchaccount-zz >"$sandbox/a13d.out" 2>&1; rc=$?
+  if [ "$rc" = 2 ]; then ok "A13 --hook-account naming no account on this box refuses (exit 2)"
+  else bad "A13 --hook-account with an unknown name exited $rc, want 2"; fi
 
   echo ""
   if [ "$fails" = 0 ]; then echo "rollout.sh --self-test: all arms passed"; return 0; fi

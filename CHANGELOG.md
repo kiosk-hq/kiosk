@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-25: **`deploy/rollout.sh` preserves an env file's owner and mode rather than setting them, and reports who can read it.** Tightening them took the deploy hook's access away on the fleet.
 - 2026-09-25: **The fleet re-pins to `skill-v0.4.16.md`, the cut that puts the two out-of-band waits on the event stream.** All seven demos and the engine default move URL and digest together.
 - 2026-09-25: **`bin/check-listener-pin` now asks the ALIAS whether the current skill pins the listener, not "some published cut".** A cut is immutable, so the wide question answers yes for ever.
 - 2026-09-25: **`deploy/rollout.sh` makes `deploy/env/*.env.example` drive the boxes, which nothing in any repository did before.** A missing secret stops the run rather than writing a blank.

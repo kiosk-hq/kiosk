@@ -360,7 +360,7 @@ kiosk-demo-atablefor/script/reputation_flow.rb	4385edb5511a2a0a	ede32f70	abort "
 kiosk-demo-getgrocery/README.md	777a26ce52f7148b	ede32f70	Grocery delivery demo operator for Kiosk.
 kiosk-demo-getgrocery/README.md	2b5f7538e183711c	ede32f70	`STRIPE_MOCK_URL=http://localhost:12111` to boot the app secret-free.
 kiosk-demo-getgrocery/README.md	a3b975a5437c2099	ede32f70	kiosk-redteam battery — every applicable attack BLOCKED
-kiosk-demo-getgrocery/README.md	1842a868952933d6	ede32f70	silently booked. `check:shop` asserts a past slot is both hidden and rejected;
+kiosk-demo-getgrocery/README.md	1842a868952933d6	ede32f70	silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	2ce8cf5e940a88a2	ede32f70	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	b443eb6fef40c1ce	ede32f70	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	8a9705a9e142adb9	ede32f70	def delivery_slots
@@ -432,7 +432,7 @@ kiosk-demo-getgrocery/lib/tasks/demo.rake	e1dc459863a6f2cb	ede32f70	psp_referenc
 kiosk-demo-getgrocery/lib/tasks/demo.rake	95e33dfaf35c14c5	ede32f70	task :claim do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	43c83e5c9b8e2e26	ede32f70	task :shop do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	52398882cea3b71a	ede32f70	task agecheck: :setup do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	2f73db04dc72f38b	ede32f70	task demo: ["demo:setup", "check:shop"]
+kiosk-demo-getgrocery/lib/tasks/demo.rake	2f73db04dc72f38b	ede32f70	task demo: ["demo:setup", "demo:shop"]
 kiosk-demo-getgrocery/lib/tasks/demo.rake	0b8a6aed64de6423	ede32f70	task isolation: :setup do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	9740d12f25859a1d	ede32f70	task schema: :setup do
 kiosk-demo-getgrocery/script/claim_flow.rb	07cf6f54bcd60358	ede32f70	#   human's saved card (the seeded stripe_customers mapping; stripe-mock
@@ -463,7 +463,7 @@ kiosk-demo-hoteling/README.md	2b66cd139eda8f90	ede32f70	  stamped with a 15-minu
 kiosk-demo-hoteling/README.md	3c33884461557395	ede32f70	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
 kiosk-demo-hoteling/README.md	b2018ffb60602c32	ede32f70	Hotel booking demo operator for Kiosk.
 kiosk-demo-hoteling/README.md	5d54eaa0e824911e	ede32f70	always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-kiosk-demo-hoteling/README.md	62ba95a61b046c69	ede32f70	bin/rails check:book        # the headline: register → availability → reserve_room → pay → confirm_booking (plus the paym
+kiosk-demo-hoteling/README.md	62ba95a61b046c69	ede32f70	bin/rails demo:book        # the headline: register → availability → reserve_room → pay → confirm_booking (plus the paym
 kiosk-demo-hoteling/README.md	161ffbc50f62cb24	ede32f70	bin/rails demo:setup       # create + load schema + seed the properties and rooms
 kiosk-demo-hoteling/README.md	a185cf92f9869e38	ede32f70	this origin serves, never the registered verb names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/models/room_hold.rb	f76a6b4a998f42d0	ede32f70	  # this as an expiry: nothing enforces it.
@@ -504,7 +504,7 @@ kiosk-demo-hoteling/script/pay_window.rb	97567db5aa4aac36	ede32f70	RoomHold.wher
 kiosk-demo-hoteling/script/redteam_suite.rb	985411f1a0ec8d01	ede32f70	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
 kiosk-demo-hoteling/script/spending_cap_flow.rb	39ccab68e70ce1e2	ede32f70	makes it a cap rather than a suggestion
 kiosk-demo-philslist/README.md	a8f2a64e1240394f	ede32f70	# philslist — Kiosk reference demo (NON-COMMERCE)
-kiosk-demo-philslist/README.md	e25066c5b37afd39	ede32f70	### Adversarial battery (`rake check:redteam`)
+kiosk-demo-philslist/README.md	e25066c5b37afd39	ede32f70	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-philslist/README.md	3bf260233e33d246	ede32f70	**not only for commerce**: it exercises the full query + action + `schema` +
 kiosk-demo-philslist/README.md	e7c89398f5936c33	ede32f70	Asserts every attack is BLOCKED (0 BREACH) — every scenario the suite runs, in
 kiosk-demo-philslist/README.md	2cd4cb5c4eb9e40f	ede32f70	The AP2 mandate and settlement TABLES are present and empty, and that is the
@@ -574,7 +574,7 @@ kiosk-demo-skooti/README.md	28dc937cc5683d41	ede32f70	Reserve a vehicle by its c
 kiosk-demo-skooti/README.md	305294d69b904e3d	ede32f70	Scooter rental demo operator for Kiosk.
 kiosk-demo-skooti/README.md	bc90029bb59e0f12	ede32f70	Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation)
 kiosk-demo-skooti/README.md	ac2ea06e019a5558	ede32f70	attestation proves the assistant is *eligible* — that a valid category-A licence
-kiosk-demo-skooti/README.md	278788dd0170fded	ede32f70	bin/rails check:rideflow    # the headline: register → scooters_available → reserve → pay → start_rental → offline unlock (no KYC leg — see check:kyc; plus the negative gates)
+kiosk-demo-skooti/README.md	278788dd0170fded	ede32f70	bin/rails demo:rideflow    # the headline: register → scooters_available → reserve → pay → start_rental → offline unlock (no KYC leg — see demo:kyc; plus the negative gates)
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	49a38ae1b4c52d27	ede32f70	  REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	495f2a20950de6b4	ede32f70	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	49a38ae1b4c52d27	ede32f70	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
@@ -690,7 +690,7 @@ kiosk-demo-stylish/script/redteam_suite.rb	83543d08af77f2a4	ede32f70	record(resu
 kiosk-demo-stylish/script/redteam_suite.rb	188069f72b63e915	ede32f70	record(results, "DeviceGrantRoleComesFromTheApprover",
 kiosk-demo-stylish/script/redteam_suite.rb	7973c79058530871	ede32f70	record(results, "DeviceGrantVerifyPageNamesTheAccess",
 kiosk-demo-tudu/README.md	72ac0199f330aa3b	ede32f70	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
-kiosk-demo-tudu/README.md	e25066c5b37afd39	ede32f70	### Adversarial battery (`rake check:redteam`)
+kiosk-demo-tudu/README.md	e25066c5b37afd39	ede32f70	### Adversarial battery (`rake demo:redteam`)
 kiosk-demo-tudu/README.md	d22ee40cd2c68328	ede32f70	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 kiosk-demo-tudu/README.md	a8ab6f106cbee2e3	ede32f70	The human web UI, running the SAME registered actions as the wire (one shared world)
 kiosk-demo-tudu/README.md	e4a9fd0764eeb3f3	ede32f70	`PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
@@ -730,7 +730,7 @@ kiosk-demo-tudu/lib/tasks/demo.rake	59bcf7f075ca9ec1	ede32f70	check.call("agents
 kiosk-demo-tudu/lib/tasks/demo.rake	b9d17e4d51b23689	ede32f70	check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
 kiosk-demo-tudu/lib/tasks/demo.rake	dd98b92b00b8a3c4	ede32f70	check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
 kiosk-demo-tudu/lib/tasks/demo.rake	48d8dfaf143acc91	ede32f70	task collab: :setup do
-kiosk-demo-tudu/lib/tasks/demo.rake	1a6fa97bb1ddaa54	ede32f70	task demo: ["demo:setup", "check:collab"]
+kiosk-demo-tudu/lib/tasks/demo.rake	1a6fa97bb1ddaa54	ede32f70	task demo: ["demo:setup", "demo:collab"]
 kiosk-demo-tudu/lib/tasks/demo.rake	57e57e9df92cbccc	ede32f70	task schema: :setup do
 kiosk-demo-tudu/script/redteam_suite.rb	c831e03fe3b4a26c	ede32f70	#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 kiosk-demo-tudu/script/redteam_suite.rb	274c4a7ee69cb819	ede32f70	record(results, "ChosenNameNeverTheAddress",

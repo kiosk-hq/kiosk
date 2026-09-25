@@ -50,7 +50,7 @@
 end
 
 # ── Human account holder with a card on file (claim-rebind walkthrough) ─────
-# One seeded human: `rake demo:claim` re-binds a standalone assistant's key to
+# One seeded human: `rake check:claim` re-binds a standalone assistant's key to
 # THIS account, then pays with the account's saved card. The card is
 # represented the way the app represents every saved card — a
 # `stripe_customers` mapping row (in the live flow the human creates it once
@@ -60,7 +60,7 @@ HUMAN_ID     = "00000000-0000-0000-0000-000000000042"
 HUMAN_CUS_ID = "cus_getgrocery_saved_card"
 # Demo-only credentials (development database, reset by every demo:setup). The
 # shopper signs in at /users/sign_in with a real Devise session — the channel
-# the account-binding surfaces authenticate, and the one `rake demo:claim`
+# the account-binding surfaces authenticate, and the one `rake check:claim`
 # drives. There is no stub user-IdP.
 HUMAN_EMAIL    = "hana@example.com"
 HUMAN_PASSWORD = "getgrocery-demo-password"

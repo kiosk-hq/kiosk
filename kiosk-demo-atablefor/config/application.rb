@@ -14,7 +14,7 @@ require "active_model/railtie"
 # reason this is written out rather than just fixed: development does not eager
 # load, so every task, spec and local boot stayed green while `bin/rails
 # runner 'Rails.application.eager_load!'` raised `uninitialized constant
-# SolidCable::ActiveJob` and a production boot died. Caught by demo:isolation,
+# SolidCable::ActiveJob` and a production boot died. Caught by check:isolation,
 # whose probe eager-loads on purpose.
 require "active_job/railtie"
 require "active_record/railtie"

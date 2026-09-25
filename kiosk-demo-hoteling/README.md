@@ -101,7 +101,7 @@ needs. It is not shorter under containers; it is unnecessary.
 > database on your machine: the compose file sets `PGHOST` to the container beside it
 > rather than passing yours through.
 >
-> **`demo:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
+> **`check:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
 > `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
 > is `kiosk_hoteling_test` — the `test:` database, not `kiosk_hoteling_development`.
 >
@@ -111,27 +111,27 @@ needs. It is not shorter under containers; it is unnecessary.
 From this directory:
 
 ```
-bin/rails demo:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
-bin/rails demo:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting mints the confirmation code — the only thing in this demo that does — and `confirm_booking` reads it back; declining cancels the booking, sends the guest's money back to the card that paid through this demo's own StubPsp, frees the room-nights by status alone, and the event names where the money went
-bin/rails demo:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
+bin/rails check:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
+bin/rails check:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting mints the confirmation code — the only thing in this demo that does — and `confirm_booking` reads it back; declining cancels the booking, sends the guest's money back to the card that paid through this demo's own StubPsp, frees the room-nights by status alone, and the event names where the money went
+bin/rails check:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
-bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
-bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
-bin/rails demo:isolation   # cross-tenant denial (a booking is only yours)
-bin/rails demo:redteam     # adversarial regression battery
-bin/rails demo:schema      # self-discovery over the schema verb
-bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
-bin/rails demo:spending_cap # the per-assistant spending cap: a stay under it settles, one that would cross it is `403 spending_cap_exceeded` with nothing written — and the two are spelled "eur" and "EUR" on purpose, because two spellings of one ISO 4217 code are ONE tally. The operator's cap is written into `kiosk.agents.spending_cap_cents`, the column `ColumnSpendingCap` reads
+bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
+bin/rails check:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
+bin/rails check:isolation   # cross-tenant denial (a booking is only yours)
+bin/rails check:redteam     # adversarial regression battery
+bin/rails check:schema      # self-discovery over the schema verb
+bin/rails check:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
+bin/rails check:spending_cap # the per-assistant spending cap: a stay under it settles, one that would cross it is `403 spending_cap_exceeded` with nothing written — and the two are spelled "eur" and "EUR" on purpose, because two spellings of one ISO 4217 code are ONE tally. The operator's cap is written into `kiosk.agents.spending_cap_cents`, the column `ColumnSpendingCap` reads
 ```
 
 **Every task above that touches the database reseeds first.** Each of them except
 `demo:setup` itself declares `: :setup`, so
 running any of them DROPS and recreates `kiosk_hoteling_development` before it
 starts — nothing you left in the database survives a run, and that is what makes
-each of them repeatable. `demo:wire_args_spec` is outside that sentence entirely:
+each of them repeatable. `check:wire_args_spec` is outside that sentence entirely:
 it boots nothing, opens no connection and declares no prerequisite — it is a bare
 `ruby spec/wire_arguments_spec.rb` over pure functions, which is the whole reason
-it exists. `demo:conformance` is outside it for a different reason: it runs in
+it exists. `check:conformance` is outside it for a different reason: it runs in
 `RAILS_ENV=test` against `kiosk_hoteling_test`, which it drops and rebuilds
 itself, so it neither reads nor disturbs the development data the tasks above
 share.
@@ -144,37 +144,53 @@ Minitest, and the two report the same failure sentence. `spec/wire_arguments_spe
 beside it is NOT an RSpec file: it is a standalone assertion script with its own
 `assert` and its own exit block. That is why `.rspec` sets `--default-path
 spec/conformance` — a bare `bundle exec rspec` over the whole of `spec/` would
-load the script, define no examples from it, and exit 0 having asserted nothing. `demo:book` was the one exception, and it was not
+load the script, define no examples from it, and exit 0 having asserted nothing. `check:book` was the one exception, and it was not
 repeatable: the driver always picks the same property for the same three nights
 and books it twice (happy path, then the payment-gate negative), so one pass took
 that property's whole inventory — the negative's unpaid hold is never released,
-by design — and a second `bin/rails demo:book` aborted with «availability
+by design — and a second `bin/rails check:book` aborted with «availability
 returned empty rows».
 
-`bin/rails demo` runs `demo:setup` then `demo:book`.
+`bin/rails demo` runs `demo:setup` then `check:book`.
+
+### Watch it work
+
+`bin/setup` seeds this demo and leaves the origin running on
+<http://localhost:3000>. Then say this to your AI assistant:
+
+> There is a Kiosk origin at http://localhost:3000 — read its
+> `/.well-known/kiosk.json` and book me a room for two nights next month and pay for it.
+
+It discovers the wire, registers itself and drives the flow. If it asks you to
+approve the link, sign in at <http://localhost:3000/users/sign_in> as
+`ada@example.com` / `hoteling-demo-password` and approve it there.
+
+Everything under `check:` below asserts and exits non-zero when it breaks; that
+is what CI runs. `demo:setup` prepares the database.
 
 <!-- CI-TASKS:BEGIN — generated by bin/check-ci-tasks --write; do not edit by hand -->
 ### Which of these run in CI
 
-`.github/workflows/ci.yml` runs the tasks marked **yes** on every push and pull
-request; the rest are local-only, for the reason given. This table is generated
-from the workflow by `bin/check-ci-tasks`, which fails the build when the
-workflow, this table and `lib/tasks/demo.rake` disagree — so a task that carries
-assertions cannot go ungated and unexplained.
+A `check:` task asserts and goes red; a `demo:` task is one a person runs and
+reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
+and pull request; the rest are local-only, for the reason given. This table is
+generated from the workflow by `bin/check-ci-tasks`, which fails the build when
+the workflow, this table and `lib/tasks/demo.rake` disagree — so a task that
+carries assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
-| `demo:property_decision` | yes |  |
-| `demo:wire_args_spec` | yes |  |
-| `demo:conformance` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
-| `demo:book` | yes |  |
-| `demo:spending_cap` | yes |  |
-| `demo:isolation` | yes |  |
-| `demo:redteam` | yes |  |
-| `demo:schema` | yes |  |
-| `demo:search` | yes |  |
-| `demo:browse` | yes |  |
+| `check:property_decision` | yes |  |
+| `check:wire_args_spec` | yes |  |
+| `check:conformance` | yes |  |
+| `check:book` | yes |  |
+| `check:spending_cap` | yes |  |
+| `check:isolation` | yes |  |
+| `check:redteam` | yes |  |
+| `check:schema` | yes |  |
+| `check:search` | yes |  |
+| `check:browse` | yes |  |
 <!-- CI-TASKS:END -->
 
 See `before-after.md` for why AI assistants stall at hotel booking today and

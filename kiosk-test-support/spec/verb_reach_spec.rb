@@ -33,7 +33,7 @@
 # WHAT THIS CANNOT CATCH, and do not overtrust it. It reads DECLARATIONS, never
 # behaviour: a verb that declares `principal` and leaks anyway is invisible here,
 # because the leak is in a WHERE clause and not in a macro. That half is the
-# demos' live-wire job — philslist's and tudu's `demo:isolation` assert the
+# demos' live-wire job — philslist's and tudu's `check:isolation` assert the
 # SERVED catalog's reach against what two real principals actually observe, in
 # both directions — and this spec is the floor under it: it needs no database
 # and no Rails, runs in a second in the gems matrix, and names the offending

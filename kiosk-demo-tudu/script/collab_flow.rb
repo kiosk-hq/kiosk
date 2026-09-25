@@ -18,7 +18,7 @@
 # Two agents register with real keys → real Kiosk JWTs (UUID agent_ids), so the
 # attribution column is a genuine kiosk.agents.id.
 #
-# Usage (invoked by rake demo:collab):
+# Usage (invoked by rake check:collab):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/collab_flow.rb
 # Prints ONE JSON line on stdout; non-zero exit on any hard transport failure.
 

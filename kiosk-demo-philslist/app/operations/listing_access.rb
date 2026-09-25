@@ -14,7 +14,7 @@
 # refuse a malformed uuid, it CASTS it to NULL, which matches no row, so the
 # typo would read as an OWNERSHIP refusal (403) rather than the shape one (400)
 # it is. A well-formed but foreign id still gets the 403, on either door.
-# `rake demo:access_spec` is what holds this module; `demo:redteam`'s
+# `rake check:access_spec` is what holds this module; `check:redteam`'s
 # MalformedUuidArg beat reads the WIRE, where the declaration answers first.
 #
 # It is NOT an Operation: it writes nothing, and there is no access DECISION to

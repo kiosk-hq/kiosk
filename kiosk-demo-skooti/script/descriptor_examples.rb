@@ -15,7 +15,7 @@
 # as the example for a `uuid` column, so the first call an assistant copies
 # verbatim is refused by the origin that published it.
 #
-# THE BYTES ARE THE SERVED ONES. `demo:schema` hands this the `queries` and
+# THE BYTES ARE THE SERVED ONES. `check:schema` hands this the `queries` and
 # `actions` arrays `script/schema_flow.rb` GOT off `/kiosk/schema` over HTTP,
 # so what is validated is what an assistant actually reads — not what a
 # controller file says. Hand-written examples on one side, code checked against

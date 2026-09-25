@@ -20,8 +20,8 @@ class AddTodoOperation
   #   handler runs. An assistant therefore meets the operator's own typed 400
   #   naming the argument, and the two refusals below are the second door — for
   #   a caller with no schema in front of it (a console, a rake task, a web form
-  #   an operator wires onto this Operation). `rake demo:clock_spec` drives both
-  #   of them directly; `demo:collab` asserts the wire's.
+  #   an operator wires onto this Operation). `rake check:clock_spec` drives both
+  #   of them directly; `check:collab` asserts the wire's.
   def self.call(agent_id:, list_id:, title:, due_at: nil)
     # Membership BEFORE the title check: a non-member learns nothing about the
     # list from a title complaint.

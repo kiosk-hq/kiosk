@@ -2,15 +2,15 @@
 
 # Standalone (no rails boot, no DB) unit spec for `app/operations/wire_arguments.rb`
 # — the shape guard every hoteling verb opens with. Run with:
-#   bundle exec rake demo:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
+#   bundle exec rake check:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
 #
 # WHY IT IS DB-FREE, and why that is the whole point. All six of hoteling's CI
-# tasks (`demo:book`, `demo:isolation`, `demo:redteam`, `demo:schema`,
-# `demo:search`, `demo:browse`) need a booted origin, a seeded database and a
+# tasks (`check:book`, `check:isolation`, `check:redteam`, `check:schema`,
+# `check:search`, `check:browse`) need a booted origin, a seeded database and a
 # live Equihash toll, so without this file the only executable coverage of
 # {WireArguments.integer}'s `max:` arm, of `stay_dates`, `past_stay`,
 # `example_check_in`/`example_check_out` and `priceable_total` would be
-# `demo:redteam` — and that arm is otherwise reached only through the red-team
+# `check:redteam` — and that arm is otherwise reached only through the red-team
 # battery. Every one of those is a PURE FUNCTION: no connection, no clock but
 # the property's, no state.
 #
@@ -39,7 +39,7 @@
 #     stronger statement than a comment saying so. `existing_property`'s
 #     refusal half — {property_not_found}, the sentence and the 404 — has no
 #     lookup in it and IS covered, in section 8. What stays uncovered here is
-#     the two lookups, which `demo:redteam`, `demo:book` and
+#     the two lookups, which `check:redteam`, `check:book` and
 #     `spec/conformance/per_resource_clock_spec.rb` exercise against a real
 #     database.
 #   • {WireArguments.default_zone} is asserted to be a real IANA zone, not that
@@ -502,7 +502,7 @@ puts "\n── existing_property and zone_for: named, measured, deliberately not
     assert(e.message.include?("Property"),
            "#{name} is a DB one, MEASURED: without a boot it cannot resolve `Property` " \
            "(#{e.message.split("\n").first}). existing_property's refusal half is covered in " \
-           "section 8; the lookups themselves are exercised by demo:redteam, demo:book and " \
+           "section 8; the lookups themselves are exercised by check:redteam, check:book and " \
            "spec/conformance/per_resource_clock_spec.rb against a real database.")
   end
 end

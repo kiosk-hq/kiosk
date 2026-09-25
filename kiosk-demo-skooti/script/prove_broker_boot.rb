@@ -3,8 +3,8 @@
 require "net/http"
 require "uri"
 
-# ProveBrokerBoot — shared helper for skooti's two-server demo gates (demo:kyc
-# and demo:redteam). The KYC broker (kyc.demo.kiosk.tech) is a SEPARATE Rails app
+# ProveBrokerBoot — shared helper for skooti's two-server demo gates (check:kyc
+# and check:redteam). The KYC broker (kyc.demo.kiosk.tech) is a SEPARATE Rails app
 # (kiosk-demo-prove); these gates are now genuine two-server integrations. This
 # helper boots the broker on its own port, sets up its DB, wires the intake
 # allow-list to skooti's host, waits for readiness, and returns the env skooti

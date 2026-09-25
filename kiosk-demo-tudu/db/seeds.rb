@@ -16,7 +16,7 @@
 #     assistant later creates + shares a list with Bob, the new shared list
 #     shows up alongside it, so a viewer SEES the collaboration land.
 #
-# The wire flows (demo:collab, demo:link, demo:isolation) create their OWN lists
+# The wire flows (check:collab, check:link, check:isolation) create their OWN lists
 # named "Hike" and assert on those, so the seeded "Flat 3B" household never
 # collides with a flow's assertions.
 

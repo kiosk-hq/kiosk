@@ -1,104 +1,58 @@
-# Before and After — why an AI assistant can't unlock a scooter, and what skooti proves
+# Before and after — scooter rental
 
-**Honesty note up front.** skooti is what a scooter-rental operator (Tier, Lime, Bird) *would* look like if it spoke Kiosk — a fake-but-realistic operator built to demonstrate the two things nobody else does for AI assistants: **accountable registration** (an Equihash proof-of-work, so an operator can drop its bot-wall for sanctioned AI assistants without opening it to scrapers) and the **physical last-mile** (an AI assistant pays and is handed a signed token; the scooter checks that token *offline*, by itself, and opens). Registration has exactly ONE gate and it is the PoW — no identity check is involved in getting an account here. skooti also ships a signed **KYC attestation**, but it gates one verb, `rent_motorcycle`, where a licence is the point; a scooter rents on ownership and payment alone. Nothing below implies any real operator works this way. The demo proves the *mechanism*; whether operators adopt it is an open question.
+**What this file is for.** An operator weighing adoption: what an AI assistant
+cannot do at a micromobility operator today, and what the same errand looks
+like once this demo's wire is installed. The code is in this directory; this is
+the argument, not a listing.
 
----
+skooti is a fake-but-realistic scooter operator built to show two things: an
+accountable registration that lets an operator serve sanctioned assistants
+without opening its bot-wall, and a physical last-mile a lock verifies by
+itself. Nothing here implies any real operator works this way, and whether they
+adopt it is an open question.
 
-## Before — an AI assistant and a physical scooter today
+## Today
 
-A personal AI assistant can find a scooter on a map. It cannot ride one. Every operator gates the unlock behind the same wall:
+An AI assistant can find a scooter on a map. It cannot ride one. The unlock
+happens inside the operator's app, authenticated to the human's account, after
+a scan of that specific scooter; there is no sanctioned API that releases a
+lock. Registration, the stored card and the PSD2 challenge all live with the
+human. And operators fight real fraud — stolen rides, vandalism, multi-account
+promo abuse — with exactly the device fingerprinting that assistant traffic
+trips.
 
-- **A logged-in app session on the human's phone.** The unlock happens *inside* the operator's mobile app, authenticated to the human's account, usually after a camera/QR scan of the specific scooter. There is no sanctioned API an AI assistant can call to release a lock.
-- **An account + payment instrument the AI assistant doesn't hold.** Registration, the stored card, and the PSD2/SCA challenge all live with the human, outside the AI assistant's context.
-- **An anti-fraud posture that treats automation as abuse.** Operators fight real scooter fraud (stolen rides, vandalism, multi-account promo abuse) with device fingerprinting and identity checks — exactly the signals AI-assistant traffic trips.
+So the assistant's contribution ends at "there is a scooter 40 m away". The
+last mile is the wall, and it is a harder wall than in-chat checkout because
+the final step is physical rather than a form post.
 
-The structural result: the AI assistant's contribution ends at *"there's a scooter 40 m away."* The human opens the app, scans, pays, and unlocks. The **last-mile — the physical act — is the wall**, and it is a harder wall than in-chat checkout because the final step is physical, not a form post.
+## With skooti
 
-This mirrors the discovery-only ceiling documented for in-chat commerce connectors (AI assistants surface options, then hand back to the human to transact) — but for a scooter the handback is unavoidable today, because no operator exposes an accountable unlock path to anything but its own app.
+`rake check:rideflow` runs the errand with no human account and no sign-in: the
+assistant generates a keypair, proves possession, pays the Equihash
+registration toll, reserves `SK-001`, signs the three AP2 mandates, pays, and
+calls `start_rental`. The server checks three gates — the reservation is the
+caller's and still held, the vehicle needs no licence, payment settled for this
+reservation — and issues a short-lived Ed25519 rental token. A lock simulator
+verifies it offline: domain-separation tag, signature against a baked-in public
+key, scooter code, expiry, one-shot `jti`. No round-trip, no account session.
 
----
+**The step the assistant does not take, and cannot** — a lock opens on a
+Bluetooth write from something standing beside the scooter. An assistant
+reaching this origin over HTTP has no radio, so it relays the token to its
+human exactly as it relays a card-setup link. The human's tap on the NFC tag
+launches the App Clip, and the clip writes the token to the lock.
 
-## With Kiosk — skooti (`rake demo:rideflow` output)
+A licence-free scooter needs no identity check at all. The signed KYC
+attestation gates `rent_motorcycle` instead (`rake check:kyc`), where a licence
+is the point.
 
-skooti is a Rails app that speaks Kiosk. Below is the RUN 1 section of a
-`rake demo:rideflow` recording — **2026-09-16**, against a booted demo.
-`bin/check-demo-derivations` holds every line in it to a string literal one of
-the declared producers prints; that is a subset test, so what was taken off the
-top and the bottom is the `abridged:` field's claim and a human's signature,
-not this script's. The human said *"rent a scooter"* and touched nothing until
-the lock opened. The task runs four further beats this
-excerpt leaves out: RUN 2 skips the payment and asks for the same unlock, which
-the server refuses `403` — that is what makes RUN 1's `200` mean something; RUN 3
-pins the two query verbs; then a structure check that no ROW LEVEL SECURITY is
-in play on this demo's own tables — read off the generated `db/structure.sql`,
-which is what that beat's own output names — and the capture-anchored paid-state
-regression, which does run against the database.
+## What an operator adds
 
-<!-- derived: transcript | task: bundle exec rake demo:rideflow | from: lib/tasks/demo.rake, script/rental_flow.rb, script/equihash_register.rb, script/lock_sim.rb | keys_from: app/controllers/kiosk/fleet_controller.rb, app/controllers/kiosk/rentals_controller.rb | abridged: above the first line quoted, the /etc/hosts hint the task prints when the demo host does not resolve; below the last, RUN 2 (the SKIP_PAY 403), RUN 3 (the query verbs), the structure check, the capture-anchored paid-state run, and the Assertions banner with its All assertions passed. line -->
-```
-══ RUN 1: Happy path ══
-  Server up at http://127.0.0.1:3004
-  Registering (solving 1 Equihash PoW)...
-  Registered.
-  Browsed fleet: 6 scooter(s) available, picking SK-001
-  Reserved: id=cbc75227-3e9b-4444-a45c-81b5b61ff957 scooter=SK-001 price=€0.15/min
-  payment_setup: "ready"
-  Payment settled: settlement_id=dfe70489-c6e1-48c2-87a0-79b92c982010
-  start_rental: scooter=SK-001 exp=1789515552 unlocked=true
-{"http_register":201,"http_browse":200,"http_reserve":200,"http_payment_setup":200,"payment_setup_status":"ready","http_pay":200,"http_start_rental":200,"user_id":"3c49886b-8b66-44df-a32a-6f914c801554","agent_id":"a82d360a-dd83-4ce3-9ee0-4856ae7d22ae","reservation_id":"cbc75227-3e9b-4444-a45c-81b5b61ff957","browse_rows_count":6,"rental_token":"kiosk-rental-v1|SK-001|cbc75227-3e9b-4444-a45c-81b5b61ff957|1789514652|1789515552|0c2945a443c2dd0e65e258588079279e.B14gAF3eZkNl-WD16eIRcG1a_iZ4WPwskj_2pQep5Wo4dLZstdReEWkxl405qdpWq-P_7rTkasB7ZV37TYh3DQ","exp":1789515552,"unlocked":true}
-  OK  http_browse (query scooters_available) == 200
-  OK  browse_rows_count >= 1 (got 6)
-  OK  payment_setup == 200/ready (called before pay, as the descriptor says)
-  OK  http_start_rental == 200
-  OK  unlocked == true
-  OK  rental_token present (kiosk-rental-v1|SK-001|cbc7522...)
-  OK  exp present (1789515552)
-  OK  this run's reservation is active in the DB (id=cbc75227-3e9b-4444-a45c-81b5b61ff957)
-  OK  exactly one kiosk.settlements row for this run's principal (3c49886b-8b66-44df-a32a-6f914c801554)
+The Kiosk gems and `rails g kiosk:install`; `config/routes/kiosk.rb`;
+`app/controllers/kiosk/{fleet,rentals}_controller.rb`; a fleet Ed25519 keypair
+whose public half is baked into every lock; the lock firmware (`firmware/`, an
+ESP32-C3 reference) and the App Clip (`appclip/`, iOS only).
 
-  -- Offline-token negatives --
-  OK  N1 expired: unlock(now=exp+1) == false
-  OK  N2 wrong-scooter: unlock(SK-999) == false
-  OK  N3 forged-sig: unlock(flipped sig) == false
-  OK  N4 replay-jti: first=true, second=false
-  Server stopped.
-```
-
-**What the AI assistant did — no human account, no human login, nothing for a human to fill in:**
-
-1. **Discover** — `GET /.well-known/kiosk.json` → skooti's issuer + endpoint.
-2. **Self-register, accountably — proof of possession FIRST, then the toll.** The order matters, because an assistant cannot solve anything in advance: the work it must do does not exist until the server hands it out. Generated an RSA-2048 keypair, then `GET /kiosk/auth/challenge?public_key=<urlencoded pem>` (the query parameter is REQUIRED — without it the endpoint answers `400 missing public_key query parameter`) → signed the nonce → `POST /kiosk/auth/register {public_key, signed}` → **HTTP 402**, an RFC 9457 problem document whose top-level `challenges` member carries the SERVER-minted Equihash challenges. Only then does the client solve them, and re-POST the SAME signed body with the proofs in the `Kiosk-PoW` request header → HTTP 201. (The PoP nonce survives the 402, because the toll gate runs before the challenge is spent.) The operator picks its cost with the `KIOSK_POW_DIFFICULTY` knob; skooti ships the `low` setting, lighter than the bundled solver's own default, so a demo run solves in well under a second — which is the line `Registering (solving 1 Equihash PoW)...` in the transcript above. The PoW is the "I'm not a fly-by bot" cost: cheap once for an honest client, expensive at scrape scale. No human account, no OTP, no anti-bot screen. `script/equihash_register.rb` is those thirty lines.
-3. **No identity check — a scooter needs none.** The flow submits no KYC at all: a licence-free scooter rents on ownership + payment alone, which is why no `http_kyc` appears in the transcript above. The signed **KYC attestation** (a credential from a trusted broker, verified against the operator's configured `c.kyc_public_key`) gates the combustion motorcycle instead — `rent_motorcycle`, driven by `rake demo:kyc` / `script/kyc_flow.rb`. The human approves once, on the broker's own page, and the attestation is reusable across later rentals with no further human step.
-4. **Browse + reserve** — `GET /kiosk/scooters_available` → picked `SK-001`; `POST /kiosk/reserve` → a `reservation_id`. The hold has no expiry — it stays until `start_rental` flips it to `active`.
-5. **Pay** — signed all **three** AP2 mandates and sent them together: an intent mandate, a cart mandate (`line_items` bound to the `reservation_id`, tied to the intent by `intent_mandate_id`) and a payment mandate (tied to the cart by `cart_mandate_id`) — RS256 JWS, `iss` = skooti's issuer — then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → settled. All three are REQUIRED: the engine refuses a chain missing any one of them with a typed `400 args.<name>_jws required` before anything is charged.
-6. **Start rental — the signed token** — `POST /kiosk/start_rental`; the server verified three gates (the reservation is the principal's and still reserved, the vehicle is licence-free, payment settled *for this reservation*) and issued a short-lived **Ed25519 rental token** (`kiosk-rental-v1|SK-001|…|exp|jti`). That token is the whole of what the wire gives out — the answer carries the vehicle, the token and its expiry, and no launch link of any kind. In this recorded run `script/lock_sim.rb` stands in for the scooter and is handed the token directly; it verified it **offline — no server round-trip** — checking, in this order, the **domain-separation tag** (`firmware/verify.c`'s Gate 0: the token must begin `kiosk-rental-v1`, compared in constant time, so a token signed with this key for any other purpose is rejected before a single claim is acted on), the signature against a baked-in public key, the scooter code, the 15-minute expiry, and a one-shot `jti`. Lock opened.
-7. **The step the assistant does not take, and cannot** — a lock opens on a Bluetooth write from something standing beside the scooter. An assistant reaching this origin over HTTP is not beside it and has no radio, so what it does with the token is relay it to its human, exactly as it relays a card-setup link or a KYC page. The human tapping the scooter's NFC tag or scanning its QR is what launches the App Clip, and the clip is what writes the token to the lock. `bin/make-qr` builds that launch link here in the operator's own checkout — it is not on the wire, and a third-party assistant driving the deployed origin cannot invoke it. `firmware/README.md` scores the on-device Bluetooth path as still needing a board and an Apple account.
-
-Two things skooti does that the incumbent flow cannot:
-
-1. **Accountability that drops the bot-wall for sanctioned AI assistants only.** The registration PoW gives the operator a real signal — a cost paid — so it can serve accountable AI assistants through a structured API while keeping every anti-bot defence in place for unsanctioned traffic; and where a licence genuinely matters, the KYC attestation adds a second, verb-level signal (`rent_motorcycle`) without touching the account gate. Trust is then *earned by spending*: an operator can demand escalating PoW from a principal with no history and little from a proven one (see the atablefor `demo:reputation` beat). A scraper renting identities pays and pays; a real rider stops paying after the first ride.
-2. **The physical last-mile, offline.** The scooter is its own trust anchor: *"someone paid skooti for ME, < 15 minutes ago, and here is the signature to prove it."* No operator app, no account session and no connectivity at the lock — the human's phone carries the token the last few metres and the scooter checks the signature itself. That is the whole of what is left for a person to do: at an incumbent they install an app, make an account, pass a bot check, enter a card and then scan; here they walk up and tap.
-
-**This is a demo against a fake operator with a stub PSP and a software lock-simulator** (the firmware crypto is host-tested against the same vectors; on-device BLE on an ESP32-C3 is the remaining hardware step). The server chain and the offline verification work; the Bluetooth last metre is simulated, and the human's tap is real work a person still has to do. Whether real operators integrate, and whether riders value a rental their assistant arranges but they still finish by hand, are open questions the demo does not answer.
-
----
-
-## What's needed — the operator adoption recipe
-
-The delta between "today's scooter app" and "skooti" is an operator-side integration plus one piece of lock firmware.
-
-**1. Add the Kiosk satellite gems.** The minimum is `kiosk-core` + `kiosk-server` (the engine) plus `kiosk-pow-equihash`/`kiosk-reputation` for the bot-wall. This demo's `Gemfile` carries nine — those four, plus `kiosk-all`, `kiosk-rls` (the optional Postgres backstop), `kiosk-pay-stripe`, `kiosk-redteam` (the adversarial battery) and `kiosk-user-idp-devise` (the human-session channel) `json_schemer` is not one of the nine and needs no line of its own: `kiosk-server` declares it as a runtime dependency, because every 0.4 verb's `input_schema` is validated before the handler sees an argument, behind no flag at all, so bundler resolves it whether or not a demo names it. KYC needs no extra gem: `kiosk-server` verifies a signed `level:"verified"` attestation against a configured issuer public key (`c.kyc_public_key`); pluggable KYC-broker adapters are roadmap. In production these are versioned RubyGems.
-
-**2. Run the generator** (`rails g kiosk:install`) — emits exactly two things: `config/initializers/kiosk.rb` and the `kiosk.*` schema migrations (the namespace itself, the identity tables — `agents`, `agent_tokens`, `agent_mappings` — `reservations`, `device_authorizations`, the AP2 mandate trail and `kyc_attributes`); `bin/rails db:migrate` applies them. The generator does **not** touch your routes: `kiosk-server` ships the wire controllers, and the wiring lives in `config/routes/kiosk.rb`, which `config/routes.rb` reaches with Rails' own `draw(:kiosk)` — read that file, it is the whole wire in one page. It splits by whose surface it is. **The PROTOCOL PLANE is MOUNTED**, in one line, and **every controller behind it is kiosk-server's**: `/.well-known/kiosk.json` (`kiosk/server/discovery#kiosk_json`), the rest of the discovery surface (`/agents.txt`, `/agents.json`, `/.well-known/agent-configuration`, `/.well-known/api-catalog`, `/auth.md`, `/kiosk/openapi.json`, `/kiosk/.well-known/jwks.json`), the auth handshake (`/kiosk/auth/{challenge,register,login,revoke,link,claim,unlink}` — `register` is where the PoW gate bites), the KYC attestation endpoint `/kiosk/agents/kyc` (`kiosk/server/kyc_attestation#create` — skooti serves it without implementing it), the RFC 8628 device-grant pair, `/kiosk/pay` and `/kiosk/schema`. Not one of those paths is skooti's to choose. **Its own verbs are one explicit line each**, below the mount, with the METHOD following the KIND — GET for a query, POST for an action — so `bin/rails routes` prints skooti's actual wire, and the mount being first is what keeps an operator verb from shadowing a reserved path. Nothing in your database schema changes: the gems live in their own `kiosk.*` namespace. Your MODELS do get a little Kiosk in them — `owned_by_current_principal`, the one place the `kiosk.current_user_id()` predicate is written, is a scope on skooti's own `Reservation` and `KycVerificationRequest` — but it is a few lines, adds no column, and is the sort of thing you would write to expose a model over any API.
-
-**3. Declare the rental verbs in two ordinary Rails controllers** — `app/controllers/kiosk/fleet_controller.rb` (`include Kiosk::Handler`, each declaration marked `kind :query`) carries the three queries `scooters_available` / `my_reservations` / `kyc_status`; `app/controllers/kiosk/rentals_controller.rb` (same mixin, `kind :action`) carries the five actions `reserve` (a hold with no expiry — it stays until `start_rental` flips it to `active`), `payment_setup`, `request_kyc`, `start_rental` and `rent_motorcycle`. Both classes are named in `c.handlers`; the initializer holds configuration, not verbs. `start_rental` issues the unlock token for a LICENCE-FREE scooter behind three gates — (1) the reservation is the caller's own and still `reserved`, (1b) the reserved vehicle is licence-free, so a needs-licence motorcycle is refused here and sent to `rent_motorcycle`, and (2) the caller has a settled payment for THIS reservation. There is deliberately NO KYC gate on `start_rental`: a scooter needs no licence, so the attestation is `rent_motorcycle`'s gate rather than this one. Queries are named queries, never raw SQL, and the user-scoped ones filter by `kiosk.current_user_id()`, server-derived — never an AI-assistant parameter.
-
-**4. Mint a rental-signing keypair + flash the locks.** Generate one Ed25519 keypair for the fleet; the **private** key signs rental tokens server-side, the **public** key is baked into every lock (one key for all locks — no per-lock secrets). The lock firmware (an ESP32-C3 reference is included: `firmware/`) verifies the token offline — domain-separation tag (`kiosk-rental-v1`, `verify.c`'s Gate 0, constant-time) + signature + scooter code + expiry (needs a clock) + one-shot `jti`.
-
-**5. Ship the App Clip** (`appclip/`) — the human taps a passive NFC tag on the vehicle, scans its QR or opens a pushed link, and that gesture is what launches it; it reads no AI-assistant state, and only carries the short-lived rental token its human was given to the lock over BLE. What ships here is iOS only, and it is the SOURCES rather than an Xcode project: the App Clip and container Swift targets (`SkootiClip/`, `Skooti/`), the XcodeGen spec `project.yml` and a `Makefile`. `make project` GENERATES `SkootiDemo.xcodeproj` from `project.yml`; the generated project is gitignored and this repo carries no `.xcodeproj` at all. The Android equivalent is an Instant App, and it is not written — nothing in this repo builds one.
-
-**What this does not require:** a new human-facing login, ceding the customer relationship (the mandate carries skooti's own issuer), or any change to the operator's existing app for human riders. The Kiosk surface is parallel; the bot-wall stays up for everything that has not paid the registration PoW.
-
----
-
-*Two trust primitives are reusable beyond scooters: **PoW + reputation** (the skin-in-the-game layer KYC can't provide) and the **offline signed-capability last-mile** (any lock, gate, or pickup that must verify "this principal paid, recently" without connectivity). The scooter is just the first physical thing an AI assistant can actually open.*
+This is a demo against a fake operator with a stub PSP and a software lock
+simulator; the firmware crypto is host-tested, and on-device Bluetooth is the
+remaining hardware step.

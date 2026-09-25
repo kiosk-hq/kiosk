@@ -4,7 +4,7 @@ Rails.application.routes.draw do
 
   # Human diner sign-in (Devise) — the web session that mints the link code a
   # diner uses to bind their AI assistant to their restaurant account. Walked
-  # end-to-end by `rake demo:binding`. The sessions controller is overridden
+  # end-to-end by `rake check:binding`. The sessions controller is overridden
   # ONLY to answer a JSON-shaped `DELETE /users/sign_out` with a JSON courtesy
   # body pointing at the wire, instead of a bodyless 401. That body is NOT «the
   # Kiosk error envelope»: that phrase names the wire CONTRACT, and the wire's

@@ -3,7 +3,7 @@
 # Adversarial cross-tenant isolation test driver (P6 corrected surface).
 #
 # Drives two fresh principals (A and B) through the adversarial steps and
-# emits ONE JSON line of observations; the demo:isolation rake task consumes
+# emits ONE JSON line of observations; the check:isolation rake task consumes
 # it and asserts (same scheme as the task's desc and its run output):
 #
 #   HEADLINE: B cannot reschedule_delivery on A's PAID order (order-ownership gate)

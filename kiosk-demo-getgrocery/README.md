@@ -49,17 +49,17 @@ needs. It is not shorter under containers; it is unnecessary.
 > database on your machine: the compose file sets `PGHOST` to the container beside it
 > rather than passing yours through.
 >
-> **`demo:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
+> **`check:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
 > `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
 > is `kiosk_getgrocery_test` — the `test:` database, not `kiosk_getgrocery_development`.
 >
-> **`demo:rls` RUNS ITS OWN `db:drop db:create`**, rather than depending on
+> **`check:rls` RUNS ITS OWN `db:drop db:create`**, rather than depending on
 > `demo:setup`, so skipping `demo:setup` does not spare `kiosk_getgrocery_development` — this task
 > drops and recreates it too.
 >
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
 >
-> **AND ONE TASK DROPS A SECOND DATABASE, IN ANOTHER DEMO.** `demo:agecheck`
+> **AND ONE TASK DROPS A SECOND DATABASE, IN ANOTHER DEMO.** `check:agecheck`
 > boots the app in `kiosk-demo-prove` and sets its database up the same destructive
 > way, so running it also **DROPS and recreates** `kiosk_prove_development`. That is another
 > demo's data, and nothing you left in it survives either.
@@ -70,11 +70,12 @@ needs. It is not shorter under containers; it is unnecessary.
 ```sh
 cd kiosk-demo-getgrocery
 bundle install
-rake demo            # setup + shop: no-human register → order (slot+address) → pay
+bin/setup            # seed, then serve the origin — see "Watch it work" below
+rake demo:setup check:shop   # or assert it instead: no-human register → order (slot+address) → pay
 ```
 
 Two test directories, and they are different things. `test/` is an ordinary
-Minitest suite — `bin/rails test`, or `rake demo:conformance`, which prepares
+Minitest suite — `bin/rails test`, or `rake check:conformance`, which prepares
 the test database first. `test/kiosk_conformance_test.rb` is the CONFORMANCE
 suite: the four properties the protocol makes normative of an origin, asserted
 with the matchers `kiosk-test-support` ships. That is the file to copy when you
@@ -85,56 +86,73 @@ answers — `test/create_order_inputs_test.rb` holds `create_order` to placing a
 order and nothing else, so an `order_id` argument is refused by name rather
 than silently ignored. `spec/` here is NOT an RSpec suite: those files
 are standalone Ruby assertion scripts covering this demo's pure argument
-guards, run through the `demo:slots_spec` / `demo:cashier_spec` /
-`demo:wire_args_spec` tasks below, which is exactly how CI runs them. Typing
+guards, run through the `check:slots_spec` / `check:cashier_spec` /
+`check:wire_args_spec` tasks below, which is exactly how CI runs them. Typing
 `bundle exec rspec` will find no runner.
 
 | Task | What it proves |
 |---|---|
 | `rake demo:setup` | idempotent db drop / create / load / seed |
-| `rake demo:shop` | no-human happy path: register → catalog → delivery_slots (in-zone Dublin address required; a district-less/out-of-zone address → clean 400) → create_order (delivery slot + in-zone address required) → payment_setup → pay (cart mirrors the order at catalog EUR prices, off_session PaymentIntent) → my_orders (paid) |
-| `rake demo:delivery` | the shop's own two transitions, which no call of the assistant's produces: a courier leaves ten to fifteen minutes before the published window and the basket arrives inside it, each pushed on the `order_delivery` topic — the departure carrying the window as its ETA, on the clock the order was quoted on. Asserts the lead lands in `dispatch_at`, that an order the courier holds can no longer be rescheduled, that a delivered basket does not arrive twice, and that a departure whose window moved after it was scheduled defers instead of sending a courier early |
-| `rake demo:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
-| `rake demo:isolation` | adversarial cross-tenant + order-ownership denial |
-| `rake demo:schema` | self-discovery over the schema verb |
-| `rake demo:redteam` | kiosk-redteam battery — every applicable attack BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
-| `rake demo:agecheck` | alcohol 18+ age-gate via the KYC broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
-| `rake demo:pow` | catalog-toll PoW: 402 → solve → 200. Runs at TOY parameters by default (Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s `low`), which is what keeps it in CI; `KIOSK_POW_DIFFICULTY=high rake demo:pow` runs the same flow at the SHIPPED n=168 k=7 (~10 s and ~1.3 GiB per proof on the reference solver — that GiB is its sorted-nonce table, not a floor those params impose on every solver; see `kiosk-pow-equihash/README.md`), and the flow pays that per-proof toll more than once because registration is tolled too — the task counts every solve and prints the total beside its verdict rather than promising a number here. Either way the task prints the (n, k) it ran at and asserts it against the challenge the server issued |
-| `rake demo:race` | pay-path regression (real DB, real threads): an in-flight `/pay` can't have its order's items swapped out from under it — `create_order` names no existing order, so a concurrent expensive cart lands on its own row — and N racing `/pay` capture at most once; a malformed cart `order_id` is a typed 400, not a 500, and a well-formed one `reschedule_delivery` cannot move is a 403; an order stranded in `paying` heals from its settlement row while an unprovable one keeps its claim |
+| `rake check:shop` | no-human happy path: register → catalog → delivery_slots (in-zone Dublin address required; a district-less/out-of-zone address → clean 400) → create_order (delivery slot + in-zone address required) → payment_setup → pay (cart mirrors the order at catalog EUR prices, off_session PaymentIntent) → my_orders (paid) |
+| `rake check:delivery` | the shop's own two transitions, which no call of the assistant's produces: a courier leaves ten to fifteen minutes before the published window and the basket arrives inside it, each pushed on the `order_delivery` topic — the departure carrying the window as its ETA, on the clock the order was quoted on. Asserts the lead lands in `dispatch_at`, that an order the courier holds can no longer be rescheduled, that a delivered basket does not arrive twice, and that a departure whose window moved after it was scheduled defers instead of sending a courier early |
+| `rake check:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
+| `rake check:isolation` | adversarial cross-tenant + order-ownership denial |
+| `rake check:schema` | self-discovery over the schema verb |
+| `rake check:redteam` | kiosk-redteam battery — every applicable attack BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `check:agecheck`) |
+| `rake check:agecheck` | alcohol 18+ age-gate via the KYC broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
+| `rake check:pow` | catalog-toll PoW: 402 → solve → 200. Runs at TOY parameters by default (Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s `low`), which is what keeps it in CI; `KIOSK_POW_DIFFICULTY=high rake check:pow` runs the same flow at the SHIPPED n=168 k=7 (~10 s and ~1.3 GiB per proof on the reference solver — that GiB is its sorted-nonce table, not a floor those params impose on every solver; see `kiosk-pow-equihash/README.md`), and the flow pays that per-proof toll more than once because registration is tolled too — the task counts every solve and prints the total beside its verdict rather than promising a number here. Either way the task prints the (n, k) it ran at and asserts it against the challenge the server issued |
+| `rake check:race` | pay-path regression (real DB, real threads): an in-flight `/pay` can't have its order's items swapped out from under it — `create_order` names no existing order, so a concurrent expensive cart lands on its own row — and N racing `/pay` capture at most once; a malformed cart `order_id` is a typed 400, not a 500, and a well-formed one `reschedule_delivery` cannot move is a 403; an order stranded in `paying` heals from its settlement row while an unprovable one keeps its claim |
 | `rake demo:reconcile` | **operator utility, not a gate** — it reports rather than asserts, and cannot go red; resolves orders stuck in `paying` from local evidence — settled ones flip to `paid`, the rest are listed as UNRESOLVED with the cart-mandate ids to check at the processor, and are never blind-released |
-| `rake demo:rls` | the suite's only RLS *enforcement* proof: with RLS applied as an imperative overlay (the `kiosk-rls` emitter, dogfooded), a raw unscoped `SELECT * FROM orders` inside an enforced session returns only that principal's row, with the owner/superuser session that sees BOTH rows as the negative control |
-| `rake demo:slots_spec` | DB-free unit check of the delivery-slot past-filter across a DST boundary — the same rule `demo:shop` exercises over the wire |
-| `rake demo:cashier_spec` | DB-free unit check of the same order-reference shape guard (`Kiosk::UuidCheck`, from kiosk-core): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all |
-| `rake demo:conformance` | the four properties the protocol makes normative of this origin, through `bin/rails test`: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `catalog`, `my_orders`, `delivery_slots` and `kyc_status` answer payloads their own `output_schema` accepts; and `my_orders` and `kyc_status` hand one principal nothing belonging to another — with the positive control that the first principal must actually see something, so a verb that answered everybody with nothing could not pass. It runs the rest of `test/` in the same pass: `create_order` places an order and takes no existing one to amend, so an `order_id` argument is a 400 naming it that writes nothing rather than a silently ignored second billable order, and two ordinary calls are two distinct orders. No server, no PoW, no bearer: it runs in `RAILS_ENV=test` against its own database |
-| `rake demo:wire_args_spec` | DB-free unit check of `app/operations/wire_arguments.rb`, the shape guard every verb opens with — the module that decides whether a hostile wire argument becomes a typed **400 (`bad_request`)** or a booked order. It asserts the TYPE and the SHAPE of each refusal, not merely that one happened: JSON Schema `integer` semantics for `whole_number` (a `2.0` IS one, a `"1"` is not), the SHAPE sentence and the RANGE sentence held apart on `delivery_slot_id`, the cart guard and both ends of `qty`’s declared range, `order_id`, `delivery_date` read off the ORIGIN’s clock and never `Date.today`, and the §9.1 domain refusals. Nothing raises, and it runs with ActiveRecord never loaded |
+| `rake check:rls` | the suite's only RLS *enforcement* proof: with RLS applied as an imperative overlay (the `kiosk-rls` emitter, dogfooded), a raw unscoped `SELECT * FROM orders` inside an enforced session returns only that principal's row, with the owner/superuser session that sees BOTH rows as the negative control |
+| `rake check:slots_spec` | DB-free unit check of the delivery-slot past-filter across a DST boundary — the same rule `check:shop` exercises over the wire |
+| `rake check:cashier_spec` | DB-free unit check of the same order-reference shape guard (`Kiosk::UuidCheck`, from kiosk-core): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all |
+| `rake check:conformance` | the four properties the protocol makes normative of this origin, through `bin/rails test`: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `catalog`, `my_orders`, `delivery_slots` and `kyc_status` answer payloads their own `output_schema` accepts; and `my_orders` and `kyc_status` hand one principal nothing belonging to another — with the positive control that the first principal must actually see something, so a verb that answered everybody with nothing could not pass. It runs the rest of `test/` in the same pass: `create_order` places an order and takes no existing one to amend, so an `order_id` argument is a 400 naming it that writes nothing rather than a silently ignored second billable order, and two ordinary calls are two distinct orders. No server, no PoW, no bearer: it runs in `RAILS_ENV=test` against its own database |
+| `rake check:wire_args_spec` | DB-free unit check of `app/operations/wire_arguments.rb`, the shape guard every verb opens with — the module that decides whether a hostile wire argument becomes a typed **400 (`bad_request`)** or a booked order. It asserts the TYPE and the SHAPE of each refusal, not merely that one happened: JSON Schema `integer` semantics for `whole_number` (a `2.0` IS one, a `"1"` is not), the SHAPE sentence and the RANGE sentence held apart on `delivery_slot_id`, the cart guard and both ends of `qty`’s declared range, `order_id`, `delivery_date` read off the ORIGIN’s clock and never `Date.today`, and the §9.1 domain refusals. Nothing raises, and it runs with ActiveRecord never loaded |
+
+### Watch it work
+
+`bin/setup` seeds this demo and leaves the origin running on
+<http://localhost:3000>. Then say this to your AI assistant:
+
+> There is a Kiosk origin at http://localhost:3000 — read its
+> `/.well-known/kiosk.json` and order me milk, bread and coffee to my Dublin address in the first
+> free evening slot, and pay with my card on file.
+
+It discovers the wire, registers itself and drives the flow. If it asks you to
+approve the link, sign in at <http://localhost:3000/users/sign_in> as
+`hana@example.com` / `getgrocery-demo-password` and approve it there.
+
+Everything under `check:` below asserts and exits non-zero when it breaks; that
+is what CI runs. `demo:setup` prepares the database.
 
 <!-- CI-TASKS:BEGIN — generated by bin/check-ci-tasks --write; do not edit by hand -->
 ### Which of these run in CI
 
-`.github/workflows/ci.yml` runs the tasks marked **yes** on every push and pull
-request; the rest are local-only, for the reason given. This table is generated
-from the workflow by `bin/check-ci-tasks`, which fails the build when the
-workflow, this table and `lib/tasks/demo.rake` disagree — so a task that carries
-assertions cannot go ungated and unexplained.
+A `check:` task asserts and goes red; a `demo:` task is one a person runs and
+reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
+and pull request; the rest are local-only, for the reason given. This table is
+generated from the workflow by `bin/check-ci-tasks`, which fails the build when
+the workflow, this table and `lib/tasks/demo.rake` disagree — so a task that
+carries assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
 | `demo:setup` | yes — the job's own setup step |  |
-| `demo:slots_spec` | yes |  |
-| `demo:cashier_spec` | yes |  |
-| `demo:wire_args_spec` | yes |  |
-| `demo:conformance` | yes |  |
-| `demo:shop` | yes |  |
-| `demo:claim` | yes |  |
-| `demo:isolation` | yes |  |
-| `demo:schema` | yes |  |
-| `demo:redteam` | yes |  |
-| `demo:race` | yes |  |
-| `demo:reconcile` | no | the operator's MANUAL sweep: on a freshly seeded database it prints "nothing stuck" and exits 0 no matter what the code does, and a step that cannot go red is not a gate. Its logic is gated here anyway, by demo:race's reconciliation block, which strands orders first and then sweeps. |
-| `demo:pow` | yes |  |
-| `demo:rls` | yes |  |
-| `demo:agecheck` | yes |  |
-| `demo:delivery` | yes |  |
+| `demo:reconcile` | no | not a gate — a person runs it and reads the output |
+| `check:slots_spec` | yes |  |
+| `check:cashier_spec` | yes |  |
+| `check:wire_args_spec` | yes |  |
+| `check:conformance` | yes |  |
+| `check:shop` | yes |  |
+| `check:claim` | yes |  |
+| `check:isolation` | yes |  |
+| `check:schema` | yes |  |
+| `check:redteam` | yes |  |
+| `check:race` | yes |  |
+| `check:pow` | yes |  |
+| `check:rls` | yes |  |
+| `check:agecheck` | yes |  |
+| `check:delivery` | yes |  |
 <!-- CI-TASKS:END -->
 
 See `before-after.md` for why AI assistants stall at grocery delivery today and
@@ -215,8 +233,8 @@ delivery address, a slot whose start has already passed *there* is dropped
 and the earliest is tomorrow — correct, not a bug). Future dates keep all slots.
 `create_order`/`reschedule_delivery` re-validate the same rule (consistency): a
 past-start slot for today is rejected with a clean **400 (`bad_request`)**, never
-silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
-`rake demo:slots_spec` is a DB-free unit check of the filter across DST.
+silently booked. `check:shop` asserts a past slot is both hidden and rejected;
+`rake check:slots_spec` is a DB-free unit check of the filter across DST.
 
 ## Age-restricted purchases (anonymized KYC)
 
@@ -225,7 +243,7 @@ containing it can only be ordered (`create_order`) by an agent that has
 completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.kiosk.tech)
 (`POST /kiosk/request_kyc` → human approves a broker link → the broker signs
 an anonymized `{age_over_18}` claim → submit it to `POST /kiosk/agents/kyc`).
-Non-restricted groceries need no KYC. `rake demo:agecheck` drives the full
+Non-restricted groceries need no KYC. `rake check:agecheck` drives the full
 two-server flow.
 
 This age-gate is the **proper home** of anonymized KYC: a low-liability
@@ -238,7 +256,7 @@ high-liability actions where the operator needs to know *who* is on the hook.
 Payments need `STRIPE_SECRET_KEY` (sk_test_…, real test-mode charge) or a
 local stripe-mock — the tasks self-start one when no key is set; export
 `STRIPE_MOCK_URL=http://localhost:12111` to boot the app secret-free.
-`demo:claim` always runs against stripe-mock: the human's saved card is a
+`check:claim` always runs against stripe-mock: the human's saved card is a
 seeded `stripe_customers` mapping served by the mock's card fixture, so no
 real customer exists to charge.
 
@@ -251,6 +269,6 @@ wires the Stripe adapter, and the rest resolve a placeholder and take no money.
 The human side of the claim ceremony (verify page, link mint, unlink)
 authenticates through a **real Devise session** — `kiosk-user-idp-devise`
 reading the Warden user, the same channel every other demo uses. The seeded
-shopper `hana@example.com` signs in at `/users/sign_in`, and `demo:claim`
+shopper `hana@example.com` signs in at `/users/sign_in`, and `check:claim`
 drives that form rather than asserting a bearer. Assistants never touch this
 channel — kiosk-pop key possession is their only credential.

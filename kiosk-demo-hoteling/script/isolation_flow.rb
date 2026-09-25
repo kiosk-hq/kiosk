@@ -43,7 +43,7 @@
 #   bundle exec ruby script/isolation_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.
-# (The DB-row assertions run in the demo:isolation rake task, not here.)
+# (The DB-row assertions run in the check:isolation rake task, not here.)
 
 require "date"
 require "json"

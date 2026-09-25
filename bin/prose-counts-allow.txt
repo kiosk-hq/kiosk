@@ -50,11 +50,7 @@ kiosk-all/README.md ¦ two gems ¦ from: grep -c add_dependency kiosk-all/kiosk-
 kiosk-demo-atablefor/README.md ¦ two actions ¦ from: cat kiosk-demo-atablefor/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares; the sentence names the controller each lives in.
 
 kiosk-demo-getgrocery/README.md ¦ 3 scenarios ¦ the cashier-check trio inside one red-team battery; the sentence names all three and the battery's own run prints its totals.
-kiosk-demo-getgrocery/before-after.md ¦ four queries ¦ from: cat kiosk-demo-getgrocery/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
-kiosk-demo-getgrocery/before-after.md ¦ four actions ¦ from: cat kiosk-demo-getgrocery/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares.
-kiosk-demo-getgrocery/before-after.md ¦ three rows ¦ how many catalogue rows the worked example's driver puts in the cart; a property of that driver's run, which the document quotes in full beside it.
 
-kiosk-demo-hoteling/before-after.md ¦ three actions ¦ from: cat kiosk-demo-hoteling/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares.
 
 kiosk-demo-philslist/README.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, every one of which took the post-install migration this paragraph is about.
 kiosk-demo-philslist/README.md ¦ three endpoints ¦ from: cat kiosk-demo-philslist/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ one endpoint per action verb, which is what the lifecycle walk uses.
@@ -64,9 +60,6 @@ kiosk-demo-prove/README.md ¦ two endpoints ¦ the two reserved endpoints of the
 
 kiosk-demo-skooti/README.md ¦ three gates ¦ the gates are enumerated in the same sentence, and they are conditions in one method rather than a countable file set.
 kiosk-demo-skooti/before-after.md ¦ three gates ¦ same three conditions, enumerated in full in the same sentence.
-kiosk-demo-skooti/before-after.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-skooti/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers this demo declares its verbs in.
-kiosk-demo-skooti/before-after.md ¦ three queries ¦ from: cat kiosk-demo-skooti/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
-kiosk-demo-skooti/before-after.md ¦ five actions ¦ from: cat kiosk-demo-skooti/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares.
 kiosk-demo-skooti/RENTAL_TOKEN.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the firmware replay store's capacity, read off the header that defines it.
 kiosk-demo-skooti/appclip/README.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the same firmware constant, quoted in the app-clip status table.
 kiosk-demo-skooti/firmware/README.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the same firmware constant, in the document that belongs to it.
@@ -91,19 +84,10 @@ deploy/env/skooti.env.example ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*
 kiosk-all/README.md ¦ five gems ¦ a hypothetical bundle the paragraph argues against; those gems are named in the sentence and several are not in this tree at all.
 kiosk-demo-atablefor/README.md ¦ two queries ¦ from: cat kiosk-demo-atablefor/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
 kiosk-demo-atablefor/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-atablefor/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
-kiosk-demo-atablefor/before-after.md ¦ 2 proofs ¦ the reputation schedule's first-contact cost at this demo's difficulty, a run-time curve rather than a file set.
-kiosk-demo-getgrocery/before-after.md ¦ two initializers ¦ not a count of initializers: the numeral counts the two artefacts the install generator emits, and the noun is part of the file path naming one of them.
-kiosk-demo-getgrocery/before-after.md ¦ two files ¦ the two files are named in the sentence immediately before this one, and the block below quotes both in full.
-kiosk-demo-hoteling/before-after.md ¦ two initializers ¦ same generator sentence, same reason, as the getgrocery entry above.
-kiosk-demo-hoteling/before-after.md ¦ three beats ¦ how many beats this demo's rake task runs; the task prints them and the document quotes the run.
-kiosk-demo-hoteling/before-after.md ¦ five queries ¦ from: cat kiosk-demo-hoteling/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
+kiosk-demo-atablefor/before-after.md ¦ two proofs ¦ the reputation schedule's first-contact cost at this demo's difficulty, a run-time curve rather than a file set.
 kiosk-demo-philslist/README.md ¦ four tables ¦ the tables the install generator's schema creates; the migrations are counted elsewhere in this file and the tables are named in the paragraph.
 kiosk-demo-philslist/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-philslist/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
 kiosk-demo-skooti/README.md ¦ two endpoints ¦ the two reserved endpoints of the wire are named in full in the same sentence.
-kiosk-demo-skooti/before-after.md ¦ four beats ¦ how many further beats the task runs beyond the excerpt; the task prints them and the document quotes the run.
-kiosk-demo-skooti/before-after.md ¦ 3 pins ¦ not a count: "RUN 3" is a label in a quoted run and "pins" is the verb of that sentence.
-kiosk-demo-skooti/before-after.md ¦ two verbs ¦ the two query verbs that one beat of the run exercises, which is a subset of this demo's three and is named in the sentence.
-kiosk-demo-skooti/before-after.md ¦ two initializers ¦ same generator sentence, same reason, as the getgrocery entry above.
 kiosk-demo-skooti/firmware/README.md ¦ 88 assertions ¦ from: grep -c '    check(' kiosk-demo-skooti/firmware/host_test.c ¦ the assertion total the firmware's own host test prints; it belongs to that binary's output and no file list counts it, so it is derived from the harness calls instead.
 kiosk-demo-stylish/README.md ¦ four beats ¦ the four scenario classes are named one by one in the same sentence.
 kiosk-demo-stylish/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.

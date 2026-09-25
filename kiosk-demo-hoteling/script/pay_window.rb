@@ -35,7 +35,7 @@
 #       only in state (a). Asserted as a collected transcript, so a regression
 #       that reintroduces the settlement-only read fails here loudly.
 #
-# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake demo:book`.
+# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake check:book`.
 
 require "json"
 

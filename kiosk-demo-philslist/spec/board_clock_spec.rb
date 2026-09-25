@@ -2,10 +2,10 @@
 
 # Standalone (no rails boot, no DB) unit spec for {BoardClock} — the clock a
 # listing's publication time is read on. Run with:
-#   bundle exec rake demo:clock_spec   (or: ruby spec/board_clock_spec.rb)
+#   bundle exec rake check:clock_spec   (or: ruby spec/board_clock_spec.rb)
 #
 # WHY IT IS DB-FREE, AND WHY THAT IS THE POINT. Every other task in this demo's
-# rake file boots a server against a seeded Postgres, and `demo:register` pays
+# rake file boots a server against a seeded Postgres, and `check:register` pays
 # an Equihash toll on the way in. So the whole executable proof of this board
 # sat behind three services a contributor may not have — for a module that opens
 # no connection, reads no row, and is a pure function of the instant and the
@@ -19,7 +19,7 @@
 # render every `posted_at` through here. What is provable with no origin is that
 # the module honours the zone it is handed, invents none, and falls back to the
 # board's own only when nobody declared one — sections 1 to 4. That the header
-# reaches it is `demo:redteam` and `demo:walkthrough`, over the wire.
+# reaches it is `check:redteam` and `check:walkthrough`, over the wire.
 #
 # AND WHY THE RAKE TASK RUNS IT TWICE, UNDER TWO `TZ` VALUES. A helper that
 # leaks the SERVER PROCESS's zone into its answer is invisible from inside a
@@ -27,14 +27,14 @@
 # the author meant were the same, and every assertion passed. It only shows when
 # the same input is read under two different `TZ` values and the two answers
 # disagree — so every expectation below is pinned to an absolute instant or to
-# an explicitly named zone, and `demo:clock_spec` runs the file under
+# an explicitly named zone, and `check:clock_spec` runs the file under
 # `TZ=Etc/GMT-11` and `TZ=Etc/GMT+2`, thirteen hours apart and on either side of
 # the board's own clock.
 #
 # WHAT IS DELIBERATELY NOT HERE. {User.public_handle} — the seller pseudonym,
 # and the strongest privacy claim on this board — is a pure derivation too, but
 # the method lives on an ActiveRecord class whose body calls `devise` and
-# `has_many`, so it cannot be loaded without booting Rails. `demo:redteam`'s
+# `has_many`, so it cannot be loaded without booting Rails. `check:redteam`'s
 # open-board beat asserts it over the wire instead.
 
 require "time"

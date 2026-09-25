@@ -54,7 +54,7 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   # inflate anyone else's count. It has NO TTL, and a count that only grows is
   # equally wrong: a production signal needs decay and durability first.
   #
-  # `rake demo:pow` owns the file's location — it wipes it and exports
+  # `rake check:pow` owns the file's location — it wipes it and exports
   # KIOSK_BAD_PROOF_DB to both the server and the driver, so the two cannot
   # drift onto different files and report zero at each other.
   GETGROCERY_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
@@ -90,12 +90,12 @@ Kiosk.configure do |c|
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
 
-  # ── RLS enforce gate (demo:rls only) ─────────────────────────────────────
+  # ── RLS enforce gate (check:rls only) ─────────────────────────────────────
   # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends
   #   SET LOCAL ROLE "kiosk_getgrocery_app"
   # after the GUC statements, dropping the session to the non-owner app role
   # for the duration of the transaction. That non-owner role is subject to the
-  # RLS policies applied by demo:rls (ENABLE + FORCE + per-user SELECT/INSERT
+  # RLS policies applied by check:rls (ENABLE + FORCE + per-user SELECT/INSERT
   # policies on the orders table). When unset (default) there is no role-drop —
   # byte-identical to the normal shop path.
   if ENV["KIOSK_RLS_ENFORCE"] == "1"
@@ -154,7 +154,7 @@ Kiosk.configure do |c|
   #
   # user_idp is the provider's own web session (Devise/Warden): it authenticates
   # the approving human on the account-binding surfaces — device verify page,
-  # link-code mint, unlink. `rake demo:claim` walks the claim-rebind ceremony.
+  # link-code mint, unlink. `rake check:claim` walks the claim-rebind ceremony.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # Payment provider: real Stripe in test mode (sk_test_…), SetupIntent
@@ -166,7 +166,7 @@ Kiosk.configure do |c|
   # CREDENTIALS COME FROM THE ENVIRONMENT FILE, NOT FROM ENV, so there is no
   # `Rails.env` branch here.
   #
-  # Real Stripe by default (demo:shop → a real pi_…). When a mock base URL is
+  # Real Stripe by default (check:shop → a real pi_…). When a mock base URL is
   # configured — the adversarial suites, and CI, which carries no key — point
   # the SDK at a local stripe-mock instead: shaped fixtures, so the full
   # pay→settlement flow and the Kiosk ownership and settlement-exists gates run

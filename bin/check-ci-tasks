@@ -1,52 +1,48 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# CI task-coverage check (K-619).
+# CI task-coverage check: every demo rake task is either a gate CI runs or an
+# opt-out with a reason, and every registered verb is named in its README.
 #
-# WHY THIS EXISTS. Nothing outside `.github/workflows/ci.yml` used to record
-# which `demo:` rake tasks CI actually runs, so a task carrying real assertions
-# could sit in a demo for months with no gate invoking it and no artifact making
-# that visible. Five ledger rows (K-602/K-614/K-616/K-617/K-618) were spent
-# re-deriving that list BY HAND, one rake file at a time, and the workflow's own
-# comments — the only record — had already drifted (they claimed "demo:rls moved
-# to getgrocery" for the whole period before the move actually happened).
+# THE TWO NAMESPACES. A demo's rake tasks say what they are by their namespace:
+#   * `check:<name>` ASSERTS. It exits non-zero when the property it names
+#     breaks, so it is a gate whether or not a runner happens to run it.
+#   * `demo:<name>` is for a person to run and read the output of — `demo:setup`
+#     prepares the database, getgrocery's `demo:reconcile` reports on stuck
+#     orders. Neither can go red, so neither is a gate.
 #
-# A prose list a human must remember to update would drift the same way. So this
-# is a CHECK, not a document: it reads the task lists out of ci.yml, reads the
-# `demo:` tasks each demo actually defines, and FAILS when the two disagree.
-# "Someone must notice" becomes "CI notices".
-#
-# THE RULE IT ENFORCES. Every `demo:` task a demo defines must be exactly one of:
-#   * run in CI — named in that demo's matrix `tasks:` list (or `demo:setup`,
-#     which the job's own "Set up demo" step runs), or
-#   * explicitly opted out — a key in that demo's matrix `ungated:` map, whose
-#     value is the REASON it is not a gate.
-# A task in neither fails the check. So does an opt-out for a task that no longer
-# exists, an opt-out with no reason, a task that is both listed and opted out,
-# a `tasks:` entry the demo does not define, and a demo directory with no matrix
-# entry at all. Every one of those is a way the two lists could silently diverge.
+# THE RULE IT ENFORCES. Every `check:` task must be exactly one of:
+#   * run in CI — named in that demo's matrix `tasks:` list in
+#     `.github/workflows/ci.yml`, or
+#   * explicitly opted out — a key in that entry's `ungated:` map, whose value is
+#     the REASON it is not a gate.
+# A task in neither fails. So does an opt-out for a task that no longer exists,
+# an opt-out with no reason, a task both listed and opted out, a `tasks:` entry
+# the demo does not define, a demo directory with no matrix entry at all, and a
+# `demo:` task in a `tasks:` list — nothing that cannot go red belongs in a gate
+# list. `demo:setup` is the one task CI runs outside `tasks:`, from the job's own
+# "Set up demo" step.
 #
 # THE HUMAN-READABLE HALF. `--write` regenerates a "Which of these run in CI"
 # table inside the CI-TASKS markers in each demo's README — where the operator
-# reading `rake demo:foo` actually is, rather than in a workflow file they will
+# reading `rake check:foo` actually is, rather than in a workflow file they will
 # never open. Without `--write` the same table is CHECKED, so an edit to ci.yml
 # that does not refresh the READMEs fails here rather than rotting.
 #
-# AND IS IT DOCUMENTED? (K-621) The generated table says whether CI runs a task;
-# the README's own hand-written list says what the task PROVES, which cannot be
-# generated. That hand list had drifted in four demos, so this also asserts that
-# every defined task is NAMED somewhere in its README outside the generated
-# block — presence only, never the prose, and blind to which shape the demo
-# documents tasks in.
+# AND IS IT DOCUMENTED? The generated table says whether CI runs a task; the
+# README's own hand-written list says what the task PROVES, which cannot be
+# generated. So this also asserts that every defined task is NAMED somewhere in
+# its README outside the generated block — presence only, never the prose, and
+# blind to which shape the demo documents tasks in. Same for every verb a demo
+# registers: an assistant-callable verb its README never mentions fails here.
 #
 # THE PARSER'S OWN GUARD. The task inventory is derived statically (stdlib only,
-# no bundle, runs in ~0.1 s on a bare checkout). A static parser can go blind to
-# a task defined in a shape it does not recognise — which would fail OPEN, the
-# exact failure mode this check exists to prevent. So `--verify-inventory <dir>`
-# re-derives the same inventory from `bin/rails -AT` (authoritative: it is Rake's
-# own task table) and asserts the two agree. The demos job runs it for its own
-# demo, where the bundle is already installed and it costs ~0.3 s. Any shape this
-# parser misses reddens there.
+# no bundle, ~0.1 s on a bare checkout). A static parser can go blind to a task
+# defined in a shape it does not recognise, which fails OPEN — the exact failure
+# mode this check exists to prevent. So `--verify-inventory <dir>` re-derives the
+# same inventory from `bin/rails -AT` (Rake's own task table) and asserts the two
+# agree. The demos job runs it for its own demo, where the bundle is already
+# installed and it costs ~0.3 s.
 #
 # Usage:
 #   bin/check-ci-tasks                        # check everything (no bundle needed)
@@ -109,30 +105,32 @@ errors = []
 # ── Static task inventory ────────────────────────────────────────────────────
 #
 # Every demo's tasks live in `lib/tasks/*.rake` as `task :name` / `task name: …`
-# lines indented inside a column-0 `namespace :demo do` block. Anything outside
-# that shape (a nested namespace, a namespace other than :demo) is a HARD ERROR
-# rather than a silent skip — see the parser guard note in the header.
+# lines indented inside a column-0 `namespace :check do` or `namespace :demo do`
+# block. Anything outside that shape (a nested namespace, a third namespace) is
+# a HARD ERROR rather than a silent skip — see the parser guard note in the
+# header.
+NAMESPACES = %w[check demo].freeze
 def demo_tasks(dir)
   names = []
   Dir[File.join(dir, "lib", "tasks", "*.rake")].sort.each do |file|
-    in_demo_ns = false
+    namespace = nil
     File.readlines(file).each_with_index do |line, i|
       where = "#{file}:#{i + 1}"
       if (m = line.match(/^namespace\s+:(\w+)\s+do/))
-        abort "#{where}: namespace :#{m[1]} — bin/check-ci-tasks only understands `namespace :demo`" \
-          unless m[1] == "demo"
+        abort "#{where}: namespace :#{m[1]} — bin/check-ci-tasks understands only " \
+              "#{NAMESPACES.map { |n| "`namespace :#{n}`" }.join(' and ')}" unless NAMESPACES.include?(m[1])
 
-        in_demo_ns = true
+        namespace = m[1]
         next
       end
       abort "#{where}: nested namespace — bin/check-ci-tasks does not understand it" if line.match?(/^\s+namespace\s+:/)
 
-      in_demo_ns = false if line.start_with?("end")
-      next unless in_demo_ns
+      namespace = nil if line.start_with?("end")
+      next unless namespace
       # `task :name`, `task name: :prereq`, `task "name"`, `task "name" => :prereq`.
       next unless (m = line.match(/^  task[\s(]+(?::(\w+)|(\w+):|["'](\w+)["'])/))
 
-      names << "demo:#{m[1] || m[2] || m[3]}"
+      names << "#{namespace}:#{m[1] || m[2] || m[3]}"
     end
   end
   names
@@ -143,7 +141,7 @@ end
 # Same disease as the task list above, one shelf over: getgrocery's README opened
 # by naming three queries and three actions where the demo registers four and
 # four, so `kyc_status` — the verb an assistant must poll to clear the alcohol
-# gate — was undocumented in the demo's own README while `demo:agecheck`
+# gate — was undocumented in the demo's own README while `check:agecheck`
 # asserted it. Nothing joined the prose to the registrations, so it rotted the
 # moment a verb was added.
 #
@@ -186,14 +184,18 @@ defined_by_demo = {}
 (matrix.keys & on_disk).sort.each do |demo|
   defined_tasks = demo_tasks(File.join(ROOT, demo))
   defined_by_demo[demo] = defined_tasks
-  errors << "#{demo}: no demo: tasks found in lib/tasks/*.rake" if defined_tasks.empty?
+  errors << "#{demo}: no check:/demo: tasks found in lib/tasks/*.rake" if defined_tasks.empty?
 
   ci      = matrix[demo][:tasks]
   ungated = matrix[demo][:ungated]
   # demo:setup is not in `tasks:` — the job's own "Set up demo" step runs it.
   gated   = Set.new(ci) << "demo:setup"
 
-  (defined_tasks - gated.to_a - ungated.keys).each do |t|
+  ci.grep(/\Ademo:/) do |t|
+    errors << "#{demo}: ci.yml runs `#{t}` as a gate, but a `demo:` task is one a person runs and " \
+              "reads — it asserts nothing and cannot go red. Move it to `check:` or drop it from `tasks:`"
+  end
+  (defined_tasks.grep(/\Acheck:/) - gated.to_a - ungated.keys).each do |t|
     errors << "#{demo}: `#{t}` is defined but neither run in CI nor listed in the matrix entry's " \
               "`ungated:` map with a reason (ci.yml)"
   end
@@ -207,6 +209,8 @@ defined_by_demo = {}
   rows = defined_tasks.map do |t|
     if t == "demo:setup"
       ["`#{t}`", "yes — the job's own setup step", ""]
+    elsif t.start_with?("demo:")
+      ["`#{t}`", "no", "not a gate — a person runs it and reads the output"]
     elsif gated.include?(t)
       ["`#{t}`", "yes", ""]
     else
@@ -217,11 +221,12 @@ defined_by_demo = {}
     #{BEGIN_MARK}
     ### Which of these run in CI
 
-    `.github/workflows/ci.yml` runs the tasks marked **yes** on every push and pull
-    request; the rest are local-only, for the reason given. This table is generated
-    from the workflow by `bin/check-ci-tasks`, which fails the build when the
-    workflow, this table and `lib/tasks/demo.rake` disagree — so a task that carries
-    assertions cannot go ungated and unexplained.
+    A `check:` task asserts and goes red; a `demo:` task is one a person runs and
+    reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
+    and pull request; the rest are local-only, for the reason given. This table is
+    generated from the workflow by `bin/check-ci-tasks`, which fails the build when
+    the workflow, this table and `lib/tasks/demo.rake` disagree — so a task that
+    carries assertions cannot go ungated and unexplained.
 
     | Task | Runs in CI | Why not |
     |---|---|---|
@@ -249,7 +254,7 @@ tables.each do |demo, table|
   # — and that half cannot be generated, because only a human knows it. But the
   # hand list drifted: four demos had grown tasks nobody added to it, and once
   # the generated table landed directly beneath, each README visibly
-  # contradicted itself (`demo:rls | yes` in the table, no demo:rls at all in
+  # contradicted itself (`check:rls | yes` in the table, no check:rls at all in
   # the prose above it, and no way for a reader to tell which is authoritative).
   #
   # So assert PRESENCE only, never the prose: every task the demo defines must
@@ -299,8 +304,8 @@ if (i = ARGV.index("--verify-inventory"))
   static = demo_tasks(File.join(ROOT, demo)).sort
   # -A lists tasks with no `desc` too; a task hidden from `-T` is still a task.
   actual = `cd #{File.join(ROOT, demo).shellescape} && bin/rails -AT 2>/dev/null`
-           .lines.filter_map { |l| l[/^\S+\s+(demo:\S+)/, 1] }.uniq.sort
-  abort "check-ci-tasks: `bin/rails -AT` listed no demo: tasks in #{demo} (bundle installed?)" if actual.empty?
+           .lines.filter_map { |l| l[/^\S+\s+((?:check|demo):\S+)/, 1] }.uniq.sort
+  abort "check-ci-tasks: `bin/rails -AT` listed no check:/demo: tasks in #{demo} (bundle installed?)" if actual.empty?
   if static != actual
     errors << "#{demo}: the static task inventory disagrees with `bin/rails -AT` — " \
               "bin/check-ci-tasks parses lib/tasks/*.rake and missed a task shape.\n" \
@@ -309,12 +314,12 @@ if (i = ARGV.index("--verify-inventory"))
 end
 
 if errors.empty?
-  puts "check-ci-tasks: OK — every demo: task is either run by CI or opted out with a reason, and every registered verb is named in its README" unless write
+  puts "check-ci-tasks: OK — every check: task is either run by CI or opted out with a reason, and every registered verb is named in its README" unless write
   exit 0
 end
 
 warn "\ncheck-ci-tasks FAILED:\n"
 errors.each { |e| warn "  ✗ #{e}" }
-warn "\nEvery `demo:` task must be either in its matrix `tasks:` list in " \
+warn "\nEvery `check:` task must be either in its matrix `tasks:` list in " \
      ".github/workflows/ci.yml or in that entry's `ungated:` map with the reason it is not a gate."
 exit 1

@@ -10,7 +10,7 @@
 # issue/verify contract and the domain-separation tag gate.
 #
 # Run it directly (`ruby script/rental_token_issuer_kat.rb`) or via the wired
-# rake task (`rake demo:kat`). Exit status is nonzero on any failed assertion.
+# rake task (`rake check:kat`). Exit status is nonzero on any failed assertion.
 #
 # Known-answer vector (firmware host-test fixtures — MUST NOT CHANGE):
 #   dev_private_pem  = config/dev_unlock_key.pem (via DevUnlockKey.private_key)

@@ -21,7 +21,7 @@
 #
 # `spec/wire_arguments_spec.rb` beside this directory is NOT an RSpec file: it
 # is a standalone Ruby assertion script with its own `assert` and its own exit
-# block, run by `rake demo:wire_args_spec`. A bare `bundle exec rspec` over the
+# block, run by `rake check:wire_args_spec`. A bare `bundle exec rspec` over the
 # whole of `spec/` would load it, define zero examples from it, and exit 0
 # having asserted nothing this suite meant to assert. `--default-path
 # spec/conformance` is what stops a green run from being a run that never
@@ -42,7 +42,7 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
 
   # `schema_format = :sql`, so the test database is loaded by
-  # `rake demo:conformance` before this runs rather than by a Rails schema
+  # `rake check:conformance` before this runs rather than by a Rails schema
   # check. Each example rolls back, so the fixtures below never accumulate.
   config.use_transactional_fixtures = true
   config.infer_spec_type_from_file_location!

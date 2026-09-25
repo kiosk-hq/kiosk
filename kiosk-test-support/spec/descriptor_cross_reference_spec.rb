@@ -565,7 +565,7 @@ RSpec.describe "demo descriptor cross-references" do
   # not declared therefore serves NO verbs — and until this example existed
   # nothing said so. `engine.rb`'s warning fires only when the list AND both
   # registries are empty, so a demo declaring one of its two controllers was
-  # silent; `demo:schema` catches an omission only when the dropped controller
+  # silent; `check:schema` catches an omission only when the dropped controller
   # owns a verb that demo's HAND-WRITTEN assertion list happens to name, and
   # stylish names four of its six.
   #

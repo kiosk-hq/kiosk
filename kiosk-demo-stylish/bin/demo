@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Kiosk demo walkthrough — a curl-driven tour of the wire surface.
 #
-# Run via `rake demo` (handles DB setup + invokes this script), or
-# directly when the demo DB is already prepared.
+# Run via `rake check:walkthrough` (after `rake demo:setup`), or directly when
+# the demo database is already prepared.
 
 set -euo pipefail
 
@@ -167,7 +167,7 @@ say "DB:                kiosk_stylish_development"
 say ""
 say "Try it yourself (the wire is plain HTTP — curl + jq). \$TOKEN is what an"
 say "assistant earns at /kiosk/auth/register + /kiosk/auth/claim — the ceremony"
-say "run at the top of this walkthrough; 'rake demo:binding' walks it step by"
+say "run at the top of this walkthrough; 'rake check:binding' walks it step by"
 say "step. It is an ordinary kiosk-pop JWT and it expires, so mint a fresh one."
 say "  a query is a GET at its own endpoint, and the body IS the result:"
 say "    curl -sS $SERVER_URL/kiosk/salons \\"

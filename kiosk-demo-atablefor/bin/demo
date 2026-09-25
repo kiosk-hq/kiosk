@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Kiosk atablefor demo walkthrough — a curl-driven tour of the wire surface.
 #
-# Run via `rake demo:walkthrough` (boots the server, runs this script, tears
+# Run via `rake check:walkthrough` (boots the server, runs this script, tears
 # down), or directly when the demo DB is already prepared (rake demo:setup).
-# `rake demo` runs the headline booking (demo:setup + demo:book), not this tour.
 #
 # This tour books one real table under ONE assistant that EARNS its principal:
 # script/mint_agent_token.rb runs the shipped `/kiosk/auth/register` handshake
@@ -177,7 +176,7 @@ say "DB:                kiosk_atablefor_development"
 say ""
 say "To add realistic domain resolution:"
 say "  echo \"127.0.0.1 atablefor.demo.kiosk.tech\" | sudo tee -a /etc/hosts"
-say "  KIOSK_ISSUER=https://atablefor.demo.kiosk.tech KIOSK_DEMO_PORT=443 rake demo:walkthrough"
+say "  KIOSK_ISSUER=https://atablefor.demo.kiosk.tech KIOSK_DEMO_PORT=443 rake check:walkthrough"
 say ""
 say "Production-shape auth — two DIFFERENT seams, neither replacing the other:"
 say "  • AGENT-IdP (c.agent_idp): nothing to wire, and this demo sets nothing."
@@ -189,4 +188,4 @@ say "    subclassing Kiosk::AgentIdentityProviders::Base — whose one hard"
 say "    constraint is that the agent_id it returns must be a uuid."
 say "  • USER-IdP (c.user_idp): the HUMAN account channel — sign-in, link-code"
 say "    mint, unlink. This demo already runs kiosk-user-idp-devise there;"
-say "    rake demo:binding walks a diner linking their assistant."
+say "    rake check:binding walks a diner linking their assistant."

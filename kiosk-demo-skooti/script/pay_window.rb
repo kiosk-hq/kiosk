@@ -34,7 +34,7 @@
 #   (e) NEVER A BARE NO  — across every observation above, `unpaid` is published
 #       only in state (a).
 #
-# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake demo:rideflow`.
+# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake check:rideflow`.
 
 require "json"
 

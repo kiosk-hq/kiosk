@@ -172,7 +172,7 @@ Kiosk.configure do |c|
   #
   # A SEAM NOBODY CONFIGURES IS NOT A CONTROL: `Executor#enforce_spending_cap!`
   # returns at its first line when this is unset, so an origin that leaves it
-  # out has no cap at all, silently. `demo:spending_cap` writes a cap and
+  # out has no cap at all, silently. `check:spending_cap` writes a cap and
   # watches it bite.
   c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 

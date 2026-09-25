@@ -2,13 +2,13 @@
 
 # Standalone (no rails boot, no DB) unit spec for `app/operations/wire_arguments.rb`
 # — the shape guards atablefor's verbs open with. Run with:
-#   bundle exec rake demo:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
+#   bundle exec rake check:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
 #
 # WHY IT IS DB-FREE, and why that is the whole point. Every one of atablefor's
 # CI tasks needs a booted origin, a seeded database and — for half of them — a
 # live Equihash toll, so without this file the only executable coverage of
 # `party_size`, `whole_number`, `seating_time`, `seating_date`, `neighborhood`
-# and `booking_id` would be `demo:redteam`. Every one of them is a PURE
+# and `booking_id` would be `check:redteam`. Every one of them is a PURE
 # FUNCTION: no connection, no clock, no state — proving a table about a handful
 # of literal values should not cost an origin boot.
 #
@@ -34,7 +34,7 @@
 # uncovered here:
 #   • `seating_date(raw, upcoming)` is given a literal roster; the real
 #     `Seatings.upcoming` (which reads the clock and the tables) is exercised by
-#     demo:book and demo:redteam.
+#     check:book and check:redteam.
 #   • `neighborhood(raw, served)` is given a literal list; the `SELECT DISTINCT`
 #     that produces it lives in the controller and is likewise a booted-origin
 #     concern.
@@ -425,7 +425,7 @@ end
 #
 # What is provable WITHOUT a database is that the helpers honour the zone they
 # are handed and invent none. That the zone is READ OFF THE RESTAURANT needs
-# rows in a table, and is exercised by demo:book and demo:redteam against a
+# rows in a table, and is exercised by check:book and check:redteam against a
 # booted origin.
 puts "\n── the roster, the label and the instant all follow the zone they are given ──"
 assert(Seatings::DEFAULT_ZONE_NAME == "Europe/Lisbon",

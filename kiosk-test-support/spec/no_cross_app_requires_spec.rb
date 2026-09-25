@@ -9,7 +9,7 @@
 # own process. Each demo has its own Gemfile, its own initializers and its own
 # autoloader, so a file that crosses that boundary is loaded under a
 # configuration it was never written for; it stayed green in every local gate
-# and was found only by a full runner build of `demo:rideflow`, days after
+# and was found only by a full runner build of `check:rideflow`, days after
 # merge. The four guards that come NEAREST cannot see it, each for a structural
 # reason rather than an oversight: check-demo-copies compares copies at
 # MATCHING relative paths, so a file reaching ACROSS apps is invisible to it;

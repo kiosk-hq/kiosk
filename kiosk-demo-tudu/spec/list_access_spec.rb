@@ -3,7 +3,7 @@
 # Standalone (no rails boot, no DB) unit spec for {ListAccess} — the
 # precondition every list-scoped caller in this demo shares — and for the
 # {OperationResult} status map its refusals resolve through. Run with:
-#   bundle exec rake demo:access_spec   (or: ruby spec/list_access_spec.rb)
+#   bundle exec rake check:access_spec   (or: ruby spec/list_access_spec.rb)
 #
 # WHY IT IS DB-FREE. {ListAccess} is a two-step gate and only the SECOND step
 # reads a table. Step one is a regexp over the wire value; step two asks
@@ -33,7 +33,7 @@
 # is not a pure function and must not be faked into one: what makes it
 # un-bypassable is that the principal comes from the database session rather
 # than from an argument, and nothing a unit spec can set up would exercise that.
-# `demo:isolation` and `demo:redteam` drive it against a real Postgres.
+# `check:isolation` and `check:redteam` drive it against a real Postgres.
 
 require "active_support"
 require "active_support/core_ext/object/blank"

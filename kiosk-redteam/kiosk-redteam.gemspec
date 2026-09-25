@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
     Ships: an HTTP Client (register + Equihash PoW, kyc, query/run/pay with
     RS256 mandate signing), a Scenario/Verdict/Runner framework, and a library
     of generic attack scenarios parameterised by a per-provider Profile.
-    Intended to back a `demo:redteam` rake task in each demo gem.
+    Intended to back a `check:redteam` rake task in each demo gem.
 
     No dependency on kiosk-core or Rails.
   DESC

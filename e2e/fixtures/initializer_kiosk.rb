@@ -87,7 +87,7 @@ Kiosk.configure do |c|
   # nothing produces and nothing consumes, and this harness is a walkthrough an
   # adopter copies — an inert role would teach that `c.roles` is decoration.
   # With all four it is a second copy of `kiosk-demo-stylish`, which exists and
-  # proves exactly that (`demo:roles`, and four binding beats in its redteam
+  # proves exactly that (`check:roles`, and four binding beats in its redteam
   # suite). So the roles-from-IdP demonstration stays in the demo that is built
   # for it, and the assertion here is the one that does NOT need a second role:
   # the ceremony's unauthenticated opening request refuses `role`/`scope` — at

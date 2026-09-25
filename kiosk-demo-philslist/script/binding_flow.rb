@@ -17,7 +17,7 @@
 # The human's side runs over real HTTP against the live Devise session. No test
 # fixtures, no in-process shortcuts.
 #
-# Usage (invoked by rake demo:binding):
+# Usage (invoked by rake check:binding):
 #   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
 #   bundle exec ruby script/binding_flow.rb
 #

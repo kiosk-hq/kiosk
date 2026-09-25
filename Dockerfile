@@ -5,8 +5,8 @@
 # demo depends on them, so a build context that contains only one demo cannot
 # install its dependencies:
 # the context has to be this repository. Once it is, per-demo images buy
-# nothing and cost something real — getgrocery's `demo:agecheck` and skooti's
-# `demo:kyc`/`demo:redteam` boot the KYC broker in `kiosk-demo-prove`, so an
+# nothing and cost something real — getgrocery's `check:agecheck` and skooti's
+# `check:kyc`/`check:redteam` boot the KYC broker in `kiosk-demo-prove`, so an
 # image carrying one demo's bundle could not run three of the headline tasks.
 # This image bundles every demo; each demo's compose.yaml picks the working
 # directory. The gem sets overlap almost entirely, so the eight installs share

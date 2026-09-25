@@ -38,7 +38,7 @@
 #    theirs in prose, four different ways; prose parsing rots. So every fenced
 #    block carries an HTML comment on the line immediately above it:
 #
-#      <!-- derived: transcript | task: bundle exec rake demo:book
+#      <!-- derived: transcript | task: bundle exec rake check:book
 #           | from: lib/tasks/demo.rake, script/book_flow.rb | abridged: none -->
 #      <!-- derived: snippet | from: app/controllers/kiosk/x_controller.rb
 #           | transform: strip_descriptions | abridged: two marked elisions -->
@@ -264,7 +264,7 @@
 #   * it must be a declared PREREQUISITE of the quoted `task:`. If the quoted task
 #     never runs it, its output was never in that task's output and calling it an
 #     abridgement is a category error — which is exactly why atablefor, whose
-#     document quotes `demo:book` and prepares the database with a SEPARATE
+#     document quotes `check:book` and prepares the database with a SEPARATE
 #     `rake demo:setup`, correctly declares `abridged: none`.
 #   * and no line of the BLOCK may be one that cited task's own body prints. A
 #     declaration that a task's output was cut, over a block containing it, is the

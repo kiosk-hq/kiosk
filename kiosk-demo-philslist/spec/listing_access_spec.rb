@@ -3,7 +3,7 @@
 # Standalone (no rails boot, no DB) unit spec for {ListingAccess} — the two
 # sentences philslist's owner-scoped verbs share — and for the {OperationResult}
 # status map they resolve through. Run with:
-#   bundle exec rake demo:access_spec   (or: ruby spec/listing_access_spec.rb)
+#   bundle exec rake check:access_spec   (or: ruby spec/listing_access_spec.rb)
 #
 # WHY IT IS DB-FREE, AND WHY IT CAN BE. This module is the whole of the
 # owner-scoped refusal surface and NOTHING in it touches a table: `edit_listing`
@@ -31,7 +31,7 @@
 # `owner_id = kiosk.current_user_id()` against a transaction-local GUC — is not
 # a pure function and must not be faked into one: what makes it un-bypassable is
 # that the principal comes from the database session rather than from an
-# argument. `demo:isolation` and `demo:redteam` drive it against a real
+# argument. `check:isolation` and `check:redteam` drive it against a real
 # Postgres. This file covers the answer that decision earns.
 
 require "active_support"

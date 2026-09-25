@@ -8,7 +8,7 @@
 # hook (an agent works headless, the human links it, the hook migrates its
 # lists). Like philslist there is NO `payment_provider`, so `capabilities`
 # computes to schema/queries/actions and DROPS `pay` — the discovery documents
-# advertise no payments (`demo:schema` asserts it).
+# advertise no payments (`check:schema` asserts it).
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
 # in config/environments/{development,test,production}.rb; this file reads the
@@ -109,7 +109,7 @@ Kiosk.configure do |c|
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint, unlink, and the manage-assistants page. Walked by
-  # `rake demo:link`.
+  # `rake check:link`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   # Where the engine bounces an unauthenticated browser visitor to the
   # manage-assistants page. The engine stays IdP-neutral, so the URL is supplied

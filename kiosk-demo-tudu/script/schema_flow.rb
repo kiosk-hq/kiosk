@@ -8,7 +8,7 @@
 #   GET /.well-known/kiosk.json
 #   GET /agents.json
 #   GET /agents.txt
-# and emits ONE JSON line the demo:schema rake task asserts on.
+# and emits ONE JSON line the check:schema rake task asserts on.
 #
 # The `pay`-absent proof reads the ONE self-description that carries the module
 # set: `/.well-known/kiosk.json`. `schema` does not publish a second copy of it,

@@ -17,7 +17,7 @@ class EditListingOperation
     # `true` as Postgres' "t". nil is preserved: it is how a caller clears a
     # value. Only `price_text` can ARRIVE nil: it is the one declared
     # `["string", "null"]`, because a listing may be posted with no price and an
-    # edit has to be able to put it back in that state. `demo:isolation` drives
+    # edit has to be able to put it back in that state. `check:isolation` drives
     # the clear and the absent-key case side by side.
     patch = changes.transform_values { |value| value.nil? ? nil : value.to_s }
 

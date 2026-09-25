@@ -7,7 +7,7 @@
 # `payment_provider` here, so `capabilities` computes to schema/queries/actions and
 # DROPS `pay` — `/.well-known/kiosk.json`, `agents.json` and
 # `agents.txt` all advertise no payments. That absence is the not-only-commerce
-# proof (`demo:schema` asserts it).
+# proof (`check:schema` asserts it).
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
 # in config/environments/{development,test,production}.rb; this file reads the
@@ -108,7 +108,7 @@ Kiosk.configure do |c|
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint, unlink, and the manage-assistants page. Walked by
-  # `rake demo:binding`.
+  # `rake check:binding`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   # Where the engine bounces an unauthenticated browser visitor to the
   # manage-assistants page. The engine stays IdP-neutral, so the URL is supplied

@@ -171,7 +171,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
   # because a role is ASSIGNED by the operator and never client-requested.
   #
-  # What holds that claim: five beats of `rake demo:redteam` in THIS demo
+  # What holds that claim: five beats of `rake check:redteam` in THIS demo
   # (script/redteam_suite.rb), against the live wire. The registration one
   # alone does NOT cover it — the binding ceremonies (claim, link) are the
   # other way a role can be asked for — so all five are load-bearing:

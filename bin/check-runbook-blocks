@@ -59,7 +59,7 @@
 # `namespace :demo do` block — deliberately, because its question is which
 # `demo:` tasks CI runs. The first line of most demo READMEs is `rake demo`,
 # which is declared at the TOP LEVEL (`task demo: ["demo:setup",
-# "demo:walkthrough"]`) and is invisible to it. A rule that could not resolve the
+# "check:walkthrough"]`) and is invisible to it. A rule that could not resolve the
 # most-pasted command in the repository would be theatre, so this file reads both
 # shapes and says so here rather than quietly disagreeing with its neighbour.
 #

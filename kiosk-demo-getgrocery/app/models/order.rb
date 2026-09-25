@@ -73,7 +73,7 @@ class Order < ApplicationRecord
   # here; what it would cost is the part that generalises. Spec §7 makes
   # DB-enforced identity scoping a MUST, and this is the seam where the
   # app-layer predicate and the optional DB-layer RLS policy are literally the
-  # same expression — which on THIS demo is not a hypothetical: `demo:rls` is
+  # same expression — which on THIS demo is not a hypothetical: `check:rls` is
   # the fleet's only RLS enforcement proof and it applies its policies to this
   # very table.
   #

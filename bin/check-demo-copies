@@ -1695,7 +1695,7 @@ COPIES = {
           "`example_row` against its `output_schema`'s row shape. `:identical` rather than `:code` " \
           "because NOTHING in it is per-demo — it names no port, no persona, no verb and no " \
           "count; the only per-origin number, the non-vacuity floor, is an argument each " \
-          "`demo:schema` task passes. Two halves make a one-sided edit dangerous rather than " \
+          "`check:schema` task passes. Two halves make a one-sided edit dangerous rather than " \
           "merely untidy: the `limit`/`cursor` exemption must mean what " \
           "{Kiosk::Server::RequestValidation} means, or a copy starts refusing examples its own " \
           "origin accepts; and a copy that quietly stopped counting would leave that demo's floor " \
@@ -2035,7 +2035,7 @@ COPIES = {
         why:  "ONE DISCOVERY DRIVER AT THREE PATHS, AND NOTHING IN IT IS PER-DEMO. It GETs " \
               "`/kiosk/schema`, `/.well-known/kiosk.json`, `/agents.json` and `/agents.txt` with NO " \
               "credential and emits one JSON line; the per-demo part — which capabilities and which " \
-              "verbs that line must carry — lives entirely in each demo's `demo:schema` rake task, " \
+              "verbs that line must carry — lives entirely in each demo's `check:schema` rake task, " \
               "which is where it belongs. The three copies differ only in the operator's name in a " \
               "comment, the port in a usage line and the alignment of one hash. Held rather than " \
               "recorded, because the load-bearing half is an ABSENCE that a one-sided edit would " \
@@ -2051,7 +2051,7 @@ COPIES = {
               "What is left is the half these three always asserted — GET `/kiosk/schema` and " \
               "GET `/.well-known/kiosk.json` with NO credential, one JSON line out — while " \
               "which capabilities and which verbs that line must carry stays in each demo's " \
-              "own `demo:schema` rake task. Held for the same reason as the group above: the " \
+              "own `check:schema` rake task. Held for the same reason as the group above: the " \
               "load-bearing half is an ABSENCE, so a copy that quietly re-added a Bearer " \
               "token would still pass its own demo while proving the opposite of what it " \
               "claims.",
@@ -4236,7 +4236,7 @@ end
 # handed one.
 #
 # TWO TASKS FAILED THIS THE DAY IT WAS WRITTEN and were fixed rather than
-# excepted: getgrocery's `demo:pow` and hoteling's `demo:browse` both spawned a
+# excepted: getgrocery's `check:pow` and hoteling's `check:browse` both spawned a
 # server and hard-coded `http://127.0.0.1:#{port}`, so K-1400's sweep — whose
 # own prose says «every task that boots one opens with the same block» — had
 # missed them, and nothing could have said so. There is no exemption list here
@@ -4827,7 +4827,7 @@ FRAGMENTS = {
     ships: BINDING_DEMOS,
     why:   "The seeded human the binding attaches the assistant to, `fetch`ed from `HOLDER_ID` " \
            "under the same task-to-driver contract as SERVER and ISSUER (all three demos' " \
-           "`demo:binding` passes HOLDER_ID/HOLDER_EMAIL/HOLDER_PASSWORD). It is also the id the " \
+           "`check:binding` passes HOLDER_ID/HOLDER_EMAIL/HOLDER_PASSWORD). It is also the id the " \
            "load-bearing assertion compares the written row's user_id against, so a driver reading " \
            "a different variable would assert against nobody.",
   },
@@ -5068,7 +5068,7 @@ FRAGMENTS = {
   "script/pow_flow.rb#BAD_PROOF_DB" => {
     rule:  :code,
     ships: %w[atablefor getgrocery],
-    why:   "The path to the bad-proof counter's sqlite file, OWNED by `rake demo:pow` and exported " \
+    why:   "The path to the bad-proof counter's sqlite file, OWNED by `rake check:pow` and exported " \
            "to both the spawned server and this driver (K-711), `fetch`ed with no default on " \
            "purpose: a drift between the two spellings once opened an empty database here, read 0 " \
            "for every count, and reported the zeros as a pass.",
@@ -5187,7 +5187,7 @@ FRAGMENTS = {
            "`script/binding_flow.rb#ISSUER` is held on. It was TWO spellings until K-1540: five " \
            "copies with no default and philslist's and stylish's falling back to `SERVER`, while " \
            "those same two demos spelled it with no default one file over. The fallback was " \
-           "never taken — every `demo:isolation` passes the variable on the command line — so " \
+           "never taken — every `check:isolation` passes the variable on the command line — so " \
            "the only run it could fire on is a hand run, which is the run where guessing the " \
            "issuer from the URL dialled is wrong: the deployed origins set " \
            "`KIOSK_ISSUER=https://<app>.demo.kiosk.tech` while the server binds 127.0.0.1, and " \
@@ -6252,7 +6252,7 @@ end
 # host carries a line it did not author, for a capability it does not own, at a
 # load-order position nothing verifies. kiosk-rls now injects the migration
 # verbs itself, from `Kiosk::RLS::Railtie` — which is the extension point Rails
-# provides for exactly this, and which getgrocery's `demo:rls` proves under a
+# provides for exactly this, and which getgrocery's `check:rls` proves under a
 # real boot before it applies its overlay.
 #
 # So the patch must not come back, in any demo, for any framework class. This
@@ -7234,8 +7234,7 @@ end
 # at all, and its `config/routes.rb` carries none of the operator wire-surface
 # prose. It is excluded by `ships:`, not by an exception.
 FRAMEWORK_CORPUS_RUBY = ["config/routes.rb", "config/routes/kiosk.rb"].freeze
-FRAMEWORK_CORPUS_TEXT = ["before-after.md"].freeze
-BEFORE_AFTER_FOUR = %w[atablefor getgrocery hoteling skooti].freeze
+FRAMEWORK_CORPUS_TEXT = [].freeze
 
 FRAMEWORK_CLAIMS = {
   "wire-surface-is-the-engine's" => {
@@ -7310,47 +7309,6 @@ FRAMEWORK_CLAIMS = {
              "the mount-prefixed one. A ban rather than a required sentence, because the defect " \
              "was a sentence that should not exist anywhere rather than one missing somewhere.",
   },
-  "mount-draws-the-protocol-plane-today" => {
-    doc:   "before-after.md",
-    topic: /mount(?:ing|s|ed)?\s+the\s+engine|routes\s+drawer|what\s+the\s+mount\s+installs|
-            protocol\s+plane\s+is\s+mounted/ix,
-    must:  /PROTOCOL PLANE is\s+MOUNTED/i,
-    ships: %w[getgrocery hoteling skooti],
-    source: { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /^\s*routes do\s*$/ },
-    why:   "The PARAPHRASE half of K-1064, and the one leg `text:` structurally cannot carry: the " \
-           "three documents state this fact in three different sentences, so nothing compares " \
-           "them. `topic:` pairs them by SUBJECT and `must:` pins WHAT the mount draws. T-183 " \
-           "changed the answer and this claim with it: the mount used to draw the whole table " \
-           "including the operator's verbs, and three documents said so; it now draws the PROTOCOL " \
-           "PLANE and the operator writes their verbs by hand, so the old `must:` — «mounting the " \
-           "engine draws the table» — would enforce a sentence that is no longer true. atablefor " \
-           "is deliberately out of `ships:`: its recipe says «you mount them yourself» and never " \
-           "claims what the mount draws, so the topic does not fire — and if it ever starts " \
-           "making the claim, it fires and is checked like the other three.",
-  },
-  "generator-does-not-touch-routes" => {
-    doc:   "before-after.md",
-    topic: /rails g kiosk:install|Run the generator/i,
-    must:  /generator does \*\*not\*\* touch your routes/,
-    ships: BEFORE_AFTER_FOUR,
-    source: { file: "kiosk-server/lib/generators/kiosk/install/install_generator.rb",
-              must_not: /routes/i },
-    why:   "K-1066's class: what `rails g kiosk:install` emits, stated in four documents and " \
-           "produced by one generator. The source binding is the strong half — the generator's " \
-           "own code must contain no mention of routes at all, so the day it grows a route " \
-           "injection this claim fails in all four documents at once instead of rotting in them.",
-  },
-  "registration-is-tolled" => {
-    doc:   "before-after.md",
-    text:  "Kiosk-PoW",
-    ships: BEFORE_AFTER_FOUR,
-    source: { file: "kiosk-server/lib/kiosk/server/pow_gate.rb", must: /Kiosk-PoW/ },
-    why:   "K-1065's PoW leg: the register chain was written WITHOUT its toll in hoteling and " \
-           "getgrocery while skooti and atablefor had it right — a defect filed at two demos and " \
-           "true of two others, found only because a fixer grepped past its row's site list. The " \
-           "header name is the cheapest thing that cannot be described away: a recipe that walks " \
-           "registration and never names `Kiosk-PoW` has left the toll out.",
-  },
   "kyc-is-not-a-registration-gate" => {
     doc:     :all,
     forbids: [
@@ -7420,7 +7378,6 @@ e2e_wire = File.join(ROOT, "e2e/fixtures/routes_kiosk.rb")
 # are the corpus, asserted rather than assumed.
 routes_read = corpus.count { |_, d| d.key?("config/routes.rb") }
 wire_read   = corpus.count { |_, d| d.key?("config/routes/kiosk.rb") }
-ba_read     = corpus.count { |_, d| d.key?("before-after.md") }
 if routes_read != OPERATOR_SEVEN.length + 2 # + prove + the e2e fixture
   errors << "check-demo-copies: the K-1069 corpus read #{routes_read} config/routes.rb, expected " \
             "#{OPERATOR_SEVEN.length + 2} (seven operator demos + prove + e2e/fixtures). A corpus " \
@@ -7431,11 +7388,6 @@ if wire_read != OPERATOR_SEVEN.length + 1 # + the e2e fixture; prove serves no K
             "expected #{OPERATOR_SEVEN.length + 1} (seven operator demos + e2e/fixtures). Since " \
             "T-183 every framework sentence about the wire lives in THAT file, so a corpus that " \
             "lost one passes vacuously for the demo whose wire prose nobody is reading."
-end
-if ba_read != BEFORE_AFTER_FOUR.length
-  errors << "check-demo-copies: the K-1069 corpus read #{ba_read} before-after.md, expected " \
-            "#{BEFORE_AFTER_FOUR.length} (#{BEFORE_AFTER_FOUR.join(', ')}). A new one must be " \
-            "declared here, because every framework sentence in it is otherwise uncompared."
 end
 
 framework_claim_checks = 0
@@ -7676,7 +7628,7 @@ end
 # it cannot see.
 #
 # WHAT THIS DOES NOT DO. It compares the accepted SHAPE, not the behaviour: the
-# engine's own suite and each demo's `demo:wire_args_spec` are what dispatch a
+# engine's own suite and each demo's `check:wire_args_spec` are what dispatch a
 # real value and read the answer. It says nothing about the refusal SENTENCE
 # either — the three demos word theirs differently on purpose, each naming the
 # row an assistant gets a right value from, which the FRAGMENTS entry for

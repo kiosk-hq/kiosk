@@ -3,27 +3,26 @@
 # Kiosk demo orchestration (atablefor — restaurant table-booking). Tasks:
 #
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
-#   rake demo:wire_args_spec DB-free unit spec for the WireArguments shape guards —
+#   rake check:wire_args_spec DB-free unit spec for the WireArguments shape guards —
 #                          party_size, whole_number, the two filter guards and
 #                          booking_id, with no origin, no database and no toll
-#   rake demo:walkthrough  boots the server, runs a curl-driven showcase, tears down
-#   rake demo:book         boots the server, runs script/book_flow.rb (no-human table booking),
+#   rake check:walkthrough  boots the server, runs a curl-driven showcase, tears down
+#   rake check:book         boots the server, runs script/book_flow.rb (no-human table booking),
 #                          asserts the confirmed booking, tears down
-#   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs script/pow_flow.rb (402→solve→200)
+#   rake check:pow          boots with KIOSK_POW_DEMO=1, runs script/pow_flow.rb (402→solve→200)
 #                          at TOY params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
-#   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
-#   rake demo:backoff      count-based PoW backoff (solve once → next N calls free →
+#   rake check:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
+#   rake check:backoff      count-based PoW backoff (solve once → next N calls free →
 #                          re-challenge; sets KIOSK_POW_BACKOFF_DEMO=3 — the value
 #                          is the free-call count)
-#   rake demo:binding      account-binding: a diner links their assistant, whose
+#   rake check:binding      account-binding: a diner links their assistant, whose
 #                          booking then ties to the diner's account
-#   rake demo:isolation    adversarial cross-tenant isolation test
-#   rake demo:schema       self-discovery proof — verifies the schema verb + pay-absent
-#   rake demo:redteam      adversarial regression battery
-#   rake demo              setup + book (the full end-to-end proof)
+#   rake check:isolation    adversarial cross-tenant isolation test
+#   rake check:schema       self-discovery proof — verifies the schema verb + pay-absent
+#   rake check:redteam      adversarial regression battery
 #
 # atablefor takes NO payments (a reservation needs none), so there is no
-# demo:rls / demo:order / pay path — the RLS *showcase* lives in getgrocery.
+# check:rls / demo:order / pay path — the RLS *showcase* lives in getgrocery.
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable without
 # going through Rake.
 
@@ -79,13 +78,6 @@ def atablefor_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
-  task :wire_args_spec do
-    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
-    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
-    sh "ruby #{spec}"
-  end
-
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
@@ -97,9 +89,19 @@ namespace :demo do
     # structure.sql is the source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
+end
+
+namespace :check do
+
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
+  task :wire_args_spec do
+    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
+    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
+    sh "ruby #{spec}"
+  end
 
   desc "Boot the server and run the curl demo walkthrough."
-  task walkthrough: :setup do
+  task walkthrough: "demo:setup" do
     exec File.expand_path("../../bin/demo", __dir__)
   end
 
@@ -287,7 +289,7 @@ namespace :demo do
     To exercise the SHIPPED parameters — n=168 k=7, kiosk-pow-equihash's own
     default and what the hosted atablefor serves:
 
-      KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow
+      KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow
 
     Budget ~10 s and ~1.3 GiB of RSS PER PROOF from the reference solver
     (bench/README.md, measured on one M-series laptop core) — that gibibyte is
@@ -308,12 +310,12 @@ namespace :demo do
     python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     unless python_ok
       abort "numpy not found. Install with: pip install numpy\n" \
-            "Then re-run: bundle exec rake demo:pow"
+            "Then re-run: bundle exec rake check:pow"
     end
 
     # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
     #
-    # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
+    # `check:pow` is the only end-to-end exercise of the proof-of-work plane in
     # this repo, and it runs at `Kiosk::Pow::Equihash::Difficulty`'s `low` default while the
     # shipped kiosk-pow-equihash default — and the hosted deploy — are n=168
     # k=7, so a reader watching this task must be told which of the two they
@@ -512,7 +514,7 @@ namespace :demo do
       puts "\n  All PoW assertions passed at Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
            "(KIOSK_POW_DIFFICULTY=#{pow_level})."
       unless Kiosk::Pow::Equihash::Difficulty.high?
-        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow` " \
+        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow` " \
              "runs the same flow at the shipped n=168 k=7."
       end
     else
@@ -522,7 +524,7 @@ namespace :demo do
     end
   end
 
-  # ── demo:reputation ────────────────────────────────────────────────────────
+  # ── check:reputation ────────────────────────────────────────────────────────
   desc <<~DESC
     Anti-scalping reputation PoW demo (trust earned by booking).
 
@@ -553,12 +555,12 @@ namespace :demo do
     python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     unless python_ok
       abort "numpy not found. Install with: pip install numpy\n" \
-            "Then re-run: bundle exec rake demo:reputation"
+            "Then re-run: bundle exec rake check:reputation"
     end
 
     require "resolv"
 
-    port = ENV.fetch("PORT", "3104")  # distinct from the dev port (3002, where demo:pow runs) AND outside the 3001-3008 band the sibling demos' dev ports occupy
+    port = ENV.fetch("PORT", "3104")  # distinct from the dev port (3002, where check:pow runs) AND outside the 3001-3008 band the sibling demos' dev ports occupy
     log  = "/tmp/kiosk-atablefor-reputation-demo.log"
 
     host = begin
@@ -664,9 +666,9 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:reputation ────────────────────────────────────────────────────
+  # ── end check:reputation ────────────────────────────────────────────────────
 
-  # ── demo:backoff ───────────────────────────────────────────────────────────
+  # ── check:backoff ───────────────────────────────────────────────────────────
   desc <<~DESC
     COUNT-BASED PoW backoff demo — "solve once, next N calls free" (POW-RECENCY-GRACE).
 
@@ -699,7 +701,7 @@ namespace :demo do
     python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     unless python_ok
       abort "numpy not found. Install with: pip install numpy\n" \
-            "Then re-run: bundle exec rake demo:backoff"
+            "Then re-run: bundle exec rake check:backoff"
     end
 
     require "resolv"
@@ -815,9 +817,9 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:backoff ───────────────────────────────────────────────────────
+  # ── end check:backoff ───────────────────────────────────────────────────────
 
-  # ── demo:binding ───────────────────────────────────────────────────────────
+  # ── check:binding ───────────────────────────────────────────────────────────
   desc <<~DESC
     Account-binding walkthrough — a diner links their AI assistant to their
     restaurant account, and the assistant's booking then ties to that account.
@@ -845,7 +847,7 @@ namespace :demo do
 
     Exits 0 if every assertion holds; exits 1 on failure.
   DESC
-  task binding: :setup do
+  task binding: "demo:setup" do
     require "resolv"
     require "json"
     require "shellwords"
@@ -951,7 +953,7 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:binding ───────────────────────────────────────────────────────
+  # ── end check:binding ───────────────────────────────────────────────────────
 
   # ---------------------------------------------------------------------------
   desc <<~DESC
@@ -983,7 +985,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task isolation: :setup do
+  task isolation: "demo:setup" do
     # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
     # Everything below proves B cannot read A's rows. This proves the scope all
     # of it rests on REFUSES when there is no principal at all, instead of
@@ -1167,7 +1169,7 @@ namespace :demo do
     end
   end
 
-  # ── demo:schema ──────────────────────────────────────────────────────────
+  # ── check:schema ──────────────────────────────────────────────────────────
   desc <<~DESC
     Self-discovery proof — verifies the schema verb AND the pay-absent capability set.
 
@@ -1191,7 +1193,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task schema: :setup do
+  task schema: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -1491,9 +1493,9 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:schema ───────────────────────────────────────────────────────
+  # ── end check:schema ───────────────────────────────────────────────────────
 
-  # ── demo:redteam ─────────────────────────────────────────────────────────
+  # ── check:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery.
 
@@ -1555,7 +1557,7 @@ namespace :demo do
     and was not expected to skip.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.
   DESC
-  task redteam: :setup do
+  task redteam: "demo:setup" do
     require "resolv"
     require "json"
     require "net/http"
@@ -1570,7 +1572,7 @@ namespace :demo do
     # distinct ACCOUNT HOLDERS — two assistants linked to one diner
     # would legitimately see each other's bookings. Credentials travel in the
     # environment rather than sitting in script/redteam_suite.rb, the same way
-    # demo:binding passes the holder's.
+    # check:binding passes the holder's.
     holder_a_email    = "diego@example.com"
     holder_b_email    = "bea@example.com"
     holder_password   = "atablefor-demo-password"
@@ -1650,8 +1652,6 @@ namespace :demo do
       exit exit_status
     end
   end
-  # ── end demo:redteam ─────────────────────────────────────────────────────
+  # ── end check:redteam ─────────────────────────────────────────────────────
 end
 
-desc "End-to-end Kiosk demo: setup the DB then run the no-human table booking end-to-end."
-task demo: ["demo:setup", "demo:book"]

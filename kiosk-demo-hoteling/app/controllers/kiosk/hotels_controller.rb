@@ -306,7 +306,7 @@ class Kiosk::HotelsController < ActionController::API
     # The floor is 1, NOT the default page size: `limit=0` and every negative
     # integer are CLAMPED into 1..50, because mapping them to
     # HOTELING_SEARCH_PAGE would silently hand a caller asking for zero rows
-    # twenty of them. `script/search_flow.rb` sends `limit=0` and demo:search
+    # twenty of them. `script/search_flow.rb` sends `limit=0` and check:search
     # asserts the one-row page, so the floor is asserted, not just written.
     limit = 1 if limit < 1
     limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX

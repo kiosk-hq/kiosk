@@ -174,7 +174,7 @@ class Kiosk::FleetController < ActionController::API
   # no server→assistant push, so a descriptor that stops at "poll until the
   # human acts" leaves an agent to invent a loop with no exit.
   # The schedule below is QUOTED from kiosk.tech/skill.md's KYC-poll paragraph
-  # so the two surfaces cannot publish rival arithmetic. `demo:schema` asserts
+  # so the two surfaces cannot publish rival arithmetic. `check:schema` asserts
   # the SHAPE of it on the SERVED descriptor — two tiers, the second slower than
   # the first, and a horizon in minutes — and DELIBERATELY not the numbers, so
   # that the rake file is not a third place the schedule lives. Nothing checks

@@ -9,7 +9,7 @@
 # Kiosk-PoW request header, getting 201. Then the fresh token POSTS A
 # LISTING. One JSON line on stdout.
 #
-# Usage (invoked by rake demo:register):
+# Usage (invoked by rake check:register):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/register_flow.rb
 # Requires: python3 with numpy.
 

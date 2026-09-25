@@ -18,7 +18,7 @@ require "spec_helper"
 # It runs with no server, no proof-of-work and no bearer token: the calls go
 # through the registered handler under a GUC-scoped session, so what is asserted
 # is the operator's own code rather than the wire in front of it. The wire is
-# driven by `demo:book`, `demo:search`, `demo:isolation` and `demo:redteam`.
+# driven by `check:book`, `check:search`, `check:isolation` and `check:redteam`.
 RSpec.describe "Kiosk conformance" do
   # Two guests with a booking each. `my_bookings` answers whoever is calling, so
   # a scoping assertion needs both sides seeded: one to see rows and one to be

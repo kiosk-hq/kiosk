@@ -24,11 +24,11 @@ module Admin
   # human-inspection back-office view, not a wire/spec surface. It is reachable
   # only via GET /admin/orders (routes.rb) and called by no flow driver, redteam
   # scenario, or Kiosk verb — it exists solely so an operator can eyeball orders
-  # after demo:shop. The demo ships no controller-test harness (its assertions
+  # after check:shop. The demo ships no controller-test harness (its assertions
   # are the booted-server flow drivers, Postgres-gated); the underlying read
   # correctness — paid-status via kiosk.settlements→cart_mandates and the items
-  # join — is already exercised end-to-end by demo:shop (settlement + order_items
-  # row-count assertions) and demo:isolation, and since the containment is now
+  # join — is already exercised end-to-end by check:shop (settlement + order_items
+  # row-count assertions) and check:isolation, and since the containment is now
   # shared with `my_orders`, those gates cover this page's half of it too.
   # Adding a booted-server assertion for this visualization surface alone would be
   # disproportionate, so it is left documented-uncovered rather than asserted.

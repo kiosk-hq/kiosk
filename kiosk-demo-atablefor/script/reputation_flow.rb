@@ -32,7 +32,7 @@
 # own object, and a 402 is an RFC 9457 problem document whose `code` and
 # `challenges` are TOP-LEVEL members.
 #
-# Usage (invoked by rake demo:reputation — do not run standalone without the server):
+# Usage (invoked by rake check:reputation — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3104 \
 #   KIOSK_ISSUER=http://127.0.0.1:3104 \
 #   bundle exec ruby script/reputation_flow.rb

@@ -17,7 +17,7 @@ require "jwt"
 # so `require`-ing the sibling app's kiosk-demo-prove/app/services/prove_key.rb across
 # the app boundary only works inside the BOOTED BROKER — and this file is
 # loaded into two FOREIGN processes, where it would break in two ways:
-#   * skooti's own Rails (demo:rideflow, demo:isolation, the KYC rake tasks):
+#   * skooti's own Rails (check:rideflow, check:isolation, the KYC rake tasks):
 #     `Rails` resolves, but skooti's config has no `x.prove` block (skooti sets
 #     x.kiosk.prove_*), so key_pem comes back nil and OpenSSL::PKey::RSA.new(nil)
 #     raises TypeError — no NameError to point at the cause;
@@ -37,7 +37,7 @@ require "jwt"
 #         files use (KIOSK_PROVE_ISSUER, defaulting to the deploy origin), and
 #         the two-server harness pins KIOSK_PROVE_ISSUER on BOTH sides.
 #   And the lockstep is CHECKED, not merely documented: the two-server
-#   demo:redteam gate calls .assert_matches_broker! with the public key the
+#   check:redteam gate calls .assert_matches_broker! with the public key the
 #   RUNNING broker serves at GET /prove_key.pem, so a broker that changes its
 #   key source reddens that gate with a message naming this file.
 #

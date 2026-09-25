@@ -84,7 +84,7 @@ RSpec.describe "AssistantsController" do
     # The flash mixin needs the flash MIDDLEWARE (present in a real Rails app;
     # absent in this bare Metal dispatch), so we assert the controller ATTEMPTS
     # to set the alert rather than reading it back out of a serialised session.
-    # The demos' `demo:binding` exercises the real middleware end-to-end.
+    # The demos' `check:binding` exercises the real middleware end-to-end.
     it "sets a flash alert telling the visitor to sign in" do
       flash_double = {}
       allow_any_instance_of(Kiosk::Server::AssistantsController)

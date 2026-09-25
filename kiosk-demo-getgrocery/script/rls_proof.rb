@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# RLS isolation proof for getgrocery demo:rls.
+# RLS isolation proof for getgrocery check:rls.
 #
 # Run with: KIOSK_RLS_ENFORCE=1 bundle exec rails runner script/rls_proof.rb
 #

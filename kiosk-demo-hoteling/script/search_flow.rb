@@ -29,7 +29,7 @@
 #      descriptor, its refusal hint and kiosk.tech's descriptor house style all
 #      publish and which nothing sent a value below 1 to test.
 #
-# Usage (invoked by rake demo:search — do not run standalone without the server):
+# Usage (invoked by rake check:search — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby script/search_flow.rb
 #

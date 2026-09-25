@@ -27,7 +27,7 @@
 #       next /pay and via the sweep), while one whose outcome only the PSP knows
 #       is reported UNRESOLVED and keeps its claim — never blind-released.
 #
-# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake demo:race`.
+# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake check:race`.
 
 require "json"
 
@@ -369,7 +369,7 @@ check(unknown_error.is_a?(Kiosk::Server::Errors::Forbidden),
 # The cashier is one of TWO places a wire-supplied id reaches an `::uuid` cast;
 # the same `Kiosk::UuidCheck` guard covers the other, and it is an action, so
 # drive it through the real registry here rather than trusting the shape of the
-# code. (A DB-free unit pass over the guard itself is `rake demo:cashier_spec`.)
+# code. (A DB-free unit pass over the guard itself is `rake check:cashier_spec`.)
 def action_error(name, args)
   Kiosk::Server::CurrentRequest.with(identity: identity) do
     Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do

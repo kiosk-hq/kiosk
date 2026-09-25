@@ -140,23 +140,23 @@ jobs:
         include:
           - demo: kiosk-demo-atablefor
             # Restaurant table-booking: NO
-            # payments — demo:book is the headline ("book a table for 2"),
-            # demo:schema asserts pay ABSENT (capabilities [schema, queries,
+            # payments — check:book is the headline ("book a table for 2"),
+            # check:schema asserts pay ABSENT (capabilities [schema, queries,
             # actions] — the 0.4 names the engine computes and demo.rake asserts;
             # `query`/`run` were the retired 0.3 spelling, K-1067).
-            # demo:binding is the human-IdP + account-linking beat (a diner links
+            # check:binding is the human-IdP + account-linking beat (a diner links
             # their assistant via the real Devise session, and the assistant's
             # booking ties to the diner's account); unlike the sibling binding
             # demos it carries no RFC 8628 poll timing, so it runs in CI.
-            # demo:backoff is PoW-only (no RFC 8628 timing) and solves exactly
+            # check:backoff is PoW-only (no RFC 8628 timing) and solves exactly
             # ONE small Equihash proof at the CI-default `low` difficulty (n=96
             # k=5, sub-second) before asserting the count-based grant, so it runs
-            # in CI. demo:rls moved to getgrocery.
-            # demo:walkthrough is the curl tour of the wire surface (bin/demo):
+            # in CI. check:rls moved to getgrocery.
+            # check:walkthrough is the curl tour of the wire surface (bin/demo):
             # no PoW, no RFC 8628 timing, no key — the same profile as the
             # stylish/philslist walkthroughs already here, ~4 s. It was the one
             # walkthrough no gate reached (K-618). It is NOT redundant with
-            # demo:book, and the reason CHANGED with T-104 (K-837): the tour no
+            # check:book, and the reason CHANGED with T-104 (K-837): the tour no
             # longer leans on a seeded stub principal — that one, and the
             # self-asserted bearer that named it, are deleted. It now EARNS its
             # principal by running the shipped /kiosk/auth/register handshake
@@ -167,28 +167,28 @@ jobs:
             # Watched fail: break the JWKS route (config/routes.rb:60) or empty
             # its key set — GET /kiosk/.well-known/jwks.json is fetched by
             # NOTHING else in this demo, so `curl -sf` returns non-zero, `set
-            # -e` kills the tour, and demo:book stays green.
+            # -e` kills the tour, and check:book stays green.
             # It goes LAST because `task walkthrough: :setup` reseeds, while
-            # demo:backoff and demo:book have no prerequisite and live off the
+            # check:backoff and check:book have no prerequisite and live off the
             # job-level demo:setup.
-            # demo:reputation is the ONLY task anywhere that boots the
+            # check:reputation is the ONLY task anywhere that boots the
             # `:reputation` branch of ATABLEFOR_POW_MODE (dev/test resolve the
             # mode to `:off`), and therefore the only thing that executes
             # `c.reputation_factors` — the gate's DB read path, evaluated on
             # every gated request of the flagship reputation demo. It was
-            # excluded as "the same heavy-PoW family as demo:pow", and that is
+            # excluded as "the same heavy-PoW family as check:pow", and that is
             # true only at KIOSK_POW_DIFFICULTY=high, which the hosted deploy
             # sets and CI does not: at the CI-default `low` (n=96 k=5) the whole
             # curve is six sub-second proofs, MEASURED at 4.1 s end to end
-            # including its own server boot (K-786) — cheaper than demo:book.
+            # including its own server boot (K-786) — cheaper than check:book.
             # Same correction, same reasoning and the same measurement discipline
-            # as hoteling's demo:browse (K-617). It has no `: :setup`
+            # as hoteling's check:browse (K-617). It has no `: :setup`
             # prerequisite and books two tables, so it sits with the other
             # prerequisite-free tasks, ahead of everything that reseeds.
             # Watched fail: drop the `status: "confirmed"` from the
             # reputation_factors count and the curve stays 2 → 2, so "proof count
             # dropped after the first booking" goes red.
-            # demo:pow was opted out for years as "the heavy anti-scalping
+            # check:pow was opted out for years as "the heavy anti-scalping
             # toll... excluded on every demo", and that reason was never
             # measured (K-790, subsuming K-841). The weight is a property of
             # KIOSK_POW_DIFFICULTY=high, which the HOSTED deploy sets and
@@ -198,21 +198,21 @@ jobs:
             # (n, k) off the wire — which changes nothing here, because nothing
             # in this job sets it, so CI still gets the `low` default
             # (n=96 k=5). MEASURED at head: 2.7 s end to end
-            # INCLUDING its own server boot, i.e. cheaper than demo:book, which
+            # INCLUDING its own server boot, i.e. cheaper than check:book, which
             # this job already runs. That makes it the third exclusion whose
             # stated reason described a configuration CI does not use, after
-            # demo:browse (K-617) and demo:link/demo:reputation (K-786).
+            # check:browse (K-617) and check:link/check:reputation (K-786).
             # It is worth the 2.7 s twice over: it is the ONLY beat anywhere
             # that reaches the flat :demo branch of AtableforDemoPowPolicy and
             # the c.on_bad_proof penalty counter, and atablefor's ONLY
             # valid-solve->200 / wrong-nonce->403 pair — the toll this demo
             # charges at registration was otherwise pinned by no gate at all.
-            # It has no `: :setup` prerequisite, so it sits with demo:backoff
+            # It has no `: :setup` prerequisite, so it sits with check:backoff
             # ahead of everything that reseeds.
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:317) and "on_bad_proof penalized: bad_proof_count=1"
             # goes red with bad_proof_count=0, exit 1.
-            # demo:wire_args_spec goes FIRST — it is the only task in this job
+            # check:wire_args_spec goes FIRST — it is the only task in this job
             # that needs no server, no Postgres and no PoW (~0.4 s, a bare
             # `ruby spec/wire_arguments_spec.rb`), so the cheapest signal fails
             # first. 255 assertions over the pure guards: the `whole_number`
@@ -221,15 +221,15 @@ jobs:
             # and `seating_date` and `neighborhood` — each answering a value
             # outside its domain with the servable set NAMED (K-717) — and
             # `booking_id`'s blank-vs-malformed split. Until it existed the only
-            # executable coverage of ANY of them was demo:redteam, which needs a
+            # executable coverage of ANY of them was check:redteam, which needs a
             # booted origin, a seeded database and a live Equihash toll (T-137).
             # Watched fail: restore the pre-K-1027 coercion (`size = raw.to_i`)
             # and drop the `size > MAX_INT4` arm — 31 assertions go red, four of
             # them the NoMethodError raises K-1027 was filed for (`true.to_i`,
             # `false.to_i`, `[].to_i`), and the task exits 1.
-            tasks: demo:wire_args_spec demo:backoff demo:pow demo:book demo:reputation demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
+            tasks: check:wire_args_spec check:backoff check:pow check:book check:reputation check:binding check:isolation check:redteam check:schema check:walkthrough
           - demo: kiosk-demo-getgrocery
-            # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
+            # check:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
             # age_over_18) — a TWO-SERVER integration: it boots the KYC
             # broker (kiosk-demo-prove) on its own port, with getgrocery
@@ -242,22 +242,22 @@ jobs:
             # FIRST — the three DB-free unit specs (~0.5 s each, no server, no
             # Postgres, no PoW): they fail in under a second on the cheapest
             # possible signal.
-            #   demo:slots_spec   K-480 delivery-slot past-filter across DST.
-            #   demo:cashier_spec K-579 order-reference shape guard.
-            #   demo:wire_args_spec T-116 — the WHOLE WireArguments module, the
+            #   check:slots_spec   K-480 delivery-slot past-filter across DST.
+            #   check:cashier_spec K-579 order-reference shape guard.
+            #   check:wire_args_spec T-116 — the WHOLE WireArguments module, the
             #     gate every verb opens with. 314 assertions over the pure
             #     guards: K-1020's `whole_number` table, K-1025's shape-vs-range
             #     split on `delivery_slot_id`, the K-693/K-1047 cart and both
             #     ends of `qty`'s declared range, `order_id`, `delivery_date`
             #     read off the ORIGIN's clock (K-969), and the §9.1 domain
             #     refusals. Until it existed the only executable coverage of any
-            #     of them was demo:redteam, which needs a booted origin, a
+            #     of them was check:redteam, which needs a booted origin, a
             #     seeded database and a live Equihash toll.
             #     Watched fail: restore the pre-K-1020 coercions (`qty =
             #     (item[:qty] || 1).to_s.to_i`, `slot = raw.to_s.to_i`) and drop
             #     the K-1047 `qty > MAX_INT4` arm — 25 assertions go red and the
             #     task exits 1.
-            # THEN demo:conformance (T-193) — the four properties the protocol
+            # THEN check:conformance (T-193) — the four properties the protocol
             # makes normative of an origin, asserted through `bin/rails test`:
             # every declared verb is routed with the method its kind requires,
             # the read surface executes as an authenticated principal, three
@@ -275,7 +275,7 @@ jobs:
             # nothing draws that path, so it is a 404 to every caller; replace
             # `Order.owned_by_current_principal` with `Order.all` and the
             # scoping assertion names the leaked rows.
-            # LAST — demo:race, the pay path's ONLY permanent regression net:
+            # LAST — check:race, the pay path's ONLY permanent regression net:
             # the K-544 double-charge/order-swap races, K-578 stuck-`paying`
             # reconciliation, and the K-579 malformed-uuid 400 over the real
             # database. It runs real threads on pooled connections against real
@@ -294,10 +294,10 @@ jobs:
             #
             # What is NOT wired, and why, is in the `ungated:` map below — one
             # place, checked by bin/check-ci-tasks rather than remembered.
-            # demo:claim and demo:rls join the tail for the same reason as
-            # demo:race — each was a real assertion battery that only ran when a
+            # check:claim and check:rls join the tail for the same reason as
+            # check:race — each was a real assertion battery that only ran when a
             # human remembered to type it.
-            #   demo:claim  the SECOND pay path (the first is demo:shop): a
+            #   check:claim  the SECOND pay path (the first is check:shop): a
             #     standalone assistant is REBOUND onto the seeded human's
             #     account by the claim ceremony and then pays off_session
             #     against that human's saved card, asserted against the database
@@ -307,19 +307,19 @@ jobs:
             #     Watched fail: make AccountBinding.rebind's UPDATE a no-op on
             #     user_id and the human's pay comes back 403 "mandate principal
             #     mismatch" — the flow aborts and the task exits 1.
-            #   demo:rls    the suite's ONLY RLS *enforcement* proof. The
+            #   check:rls    the suite's ONLY RLS *enforcement* proof. The
             #     kiosk-rls gem suite (in the gems matrix) tests the emitter; it
             #     is this overlay that proves FORCE + non-owner role-drop
             #     actually blocks a raw cross-tenant SELECT, with the
             #     owner/superuser leak as the negative control. ~3 s.
             #     Watched fail: widen the SELECT policy to `USING (true)` and
             #     both enforced sessions see 2 rows instead of 1.
-            # Both reseed (demo:claim invokes demo:setup, demo:rls does its own
+            # Both reseed (check:claim invokes demo:setup, check:rls does its own
             # drop/create/load/seed), so they sit AFTER everything that lives off
-            # the job-level demo:setup and BEFORE demo:race, which stays last.
-            # demo:rls leaves RLS applied to `orders`; demo:race's `: :setup`
+            # the job-level demo:setup and BEFORE check:race, which stays last.
+            # check:rls leaves RLS applied to `orders`; check:race's `: :setup`
             # drops the database, which is what clears it — do not reorder them.
-            # demo:pow carried the same unmeasured "heavy catalog toll"
+            # check:pow carried the same unmeasured "heavy catalog toll"
             # opt-out as atablefor's, and the same correction applies (K-790):
             # nothing in this job sets KIOSK_POW_DIFFICULTY, so CI runs the
             # `low` default (n=96 k=5) — the task forwards whatever is ambient
@@ -330,57 +330,57 @@ jobs:
             # the KIOSK_POW_DEMO=1 branch of this demo's initializer (:61,
             # :274) as a walkthrough, and getgrocery's only valid-solve->200 /
             # wrong-nonce->403 pair on the catalog verb.
-            # It invokes demo:setup, so it RESEEDS: it sits with demo:claim in
-            # the reseeding group, and BEFORE demo:rls, which must stay
-            # immediately ahead of demo:race for the reason below.
+            # It invokes demo:setup, so it RESEEDS: it sits with check:claim in
+            # the reseeding group, and BEFORE check:rls, which must stay
+            # immediately ahead of check:race for the reason below.
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
-            tasks: demo:slots_spec demo:cashier_spec demo:wire_args_spec demo:conformance demo:shop demo:delivery demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
+            tasks: check:slots_spec check:cashier_spec check:wire_args_spec check:conformance check:shop check:delivery check:isolation check:redteam check:schema check:agecheck check:claim check:pow check:rls check:race
             ungated:
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it
                 prints "nothing stuck" and exits 0 no matter what the code does,
                 and a step that cannot go red is not a gate. Its logic is
-                gated here anyway, by demo:race's reconciliation block, which strands
+                gated here anyway, by check:race's reconciliation block, which strands
                 orders first and then sweeps.
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
-            # shaped pi_ fixtures so the full flow — including demo:shop's
+            # shaped pi_ fixtures so the full flow — including check:shop's
             # off_session charge — runs secret-free. STRIPE_MOCK_URL (set by the
-            # stripe-mock step below) makes demo:setup/demo:schema boot, and
-            # demo:shop/isolation/redteam/agecheck self-start the mock process.
+            # stripe-mock step below) makes demo:setup/check:schema boot, and
+            # check:shop/isolation/redteam/agecheck self-start the mock process.
             stripe_mock: true
             # K-844 — see the "Redteam under the PoW toll" step at the end of
             # this job. getgrocery's KIOSK_POW_DEMO=1 policy tolls EVERY query,
             # so every scenario in the battery exercises the client's 402 retry.
             tolled_redteam: KIOSK_POW_DEMO=1
           - demo: kiosk-demo-hoteling
-            # demo:search is the T-042/K-452 pagination + opaque-cursor proof
+            # check:search is the T-042/K-452 pagination + opaque-cursor proof
             # over the ~100-hotel catalogue: a full page carries `next`, echoing
             # it back as `cursor` returns a DISJOINT page, a complete (filtered)
             # result OMITS `next`, and hotel_detail resolves a summary row's id.
             # No PoW, no RFC 8628 poll timing, no key — ~5 s. It goes LAST
-            # because `task search: :setup` reseeds. So does demo:book now: it
+            # because `task search: :setup` reseeds. So does check:book now: it
             # was the one task here without a `: :setup`, living off the
             # job-level demo:setup, and that is exactly why a second LOCAL
-            # `demo:book` failed on exhausted inventory while this job stayed
+            # `check:book` failed on exhausted inventory while this job stayed
             # green — it never ran the task twice (K-1044).
             # Watched fail: pin the query to `OFFSET 0` (the cursor ignored) and
             # page 2 repeats page 1 — the disjointness assertion goes red.
             #
-            # demo:browse is the ONLY proof anywhere that hoteling's "price
+            # check:browse is the ONLY proof anywhere that hoteling's "price
             # depth, don't ban it" model holds — the vertical's differentiator.
-            # It was excluded as part of the demo:pow family because it solves
+            # It was excluded as part of the check:pow family because it solves
             # ESCALATING browse PoW, but at the CI-default `low` difficulty
             # (n=96 k=5) that is 10 sub-second proofs plus the register proof:
             # MEASURED at 6.9 s end to end including its own reseed (K-617), i.e.
             # the same per-proof cost this workflow already pays for atablefor's
-            # demo:backoff, and the numpy solver is already installed below.
+            # check:backoff, and the numpy solver is already installed below.
             # Watched fail: raise HOTELING_FREE_BROWSES above the driver's
             # BROWSES=7 and the curve stays [0,0,0,0,0,0,0] — "browsing never got
             # priced" goes red, exit 1.
-            # It goes last with demo:search; both reseed via `: :setup`.
-            # demo:wire_args_spec goes FIRST, and it is the only task in this
+            # It goes last with check:search; both reseed via `: :setup`.
+            # check:wire_args_spec goes FIRST, and it is the only task in this
             # job that needs no server, no Postgres and no PoW (~0.4 s, a bare
             # `ruby spec/wire_arguments_spec.rb`). Hoteling shipped no `spec/`
             # at all until T-137, so every other task here paid for a booted
@@ -396,7 +396,7 @@ jobs:
             # Watched fail: restore the pre-guard coercion (`Integer(raw.to_s
             # .strip, 10)` → `raw.to_s.to_i`) and drop the `max:` arm — 15
             # assertions go red and the task exits 1.
-            # demo:conformance (T-193) goes SECOND, right after the DB-free
+            # check:conformance (T-193) goes SECOND, right after the DB-free
             # unit spec: the four properties the protocol makes normative of an
             # origin, asserted through `bundle exec rspec`. This demo is the
             # fleet's RSPEC worked example of the kiosk-test-support conformance
@@ -410,9 +410,9 @@ jobs:
             # Watched fail, proven by plant-and-restore with the sha checked
             # back: replace `Booking.owned_by_current_principal` with
             # `Booking.all` and the scoping example names the leaked rows —
-            # where demo:isolation needs a booted origin, a seeded database and
+            # where check:isolation needs a booted origin, a seeded database and
             # a solved Equihash toll to reach the same property.
-            # demo:spending_cap is the ONLY thing in the fleet that exercises
+            # check:spending_cap is the ONLY thing in the fleet that exercises
             # `config.spending_cap` at all (T-154). The seam was configured
             # NOWHERE until this task — `Executor#enforce_spending_cap!` returns
             # at its first line without it — so the K-1251 fix, a cap an
@@ -428,30 +428,30 @@ jobs:
             # kiosk.settlements holds "EUR" beside "eur", exit 1. Or, the plant
             # the row itself names: raise the seeded cap above the charge and the
             # same assertion goes red with the cap-arithmetic control beside it.
-            # It goes with demo:search and demo:browse at the end: `task
+            # It goes with check:search and check:browse at the end: `task
             # spending_cap: :setup` reseeds.
-            tasks: demo:wire_args_spec demo:conformance demo:property_decision demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse demo:spending_cap
+            tasks: check:wire_args_spec check:conformance check:property_decision check:book check:isolation check:redteam check:schema check:search check:browse check:spending_cap
             # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
             # single Kiosk-PoW header, which is the multi-proof half of the
             # retry that getgrocery's flat one-proof toll never reaches.
             tolled_redteam: KIOSK_POW_BROWSE_DEMO=1
           - demo: kiosk-demo-prove
             # kiosk-demo-prove — the anonymizing KYC broker (an ISSUER, not a Kiosk
-            # operator; mounts none of the four verbs). demo:test runs its own
+            # operator; mounts none of the four verbs). check:test runs its own
             # rspec suite (intake auth + allow-list, per-request/operator/subject
             # binding, single-use, TTL, SSRF/open-relay guard, signed claim).
-            tasks: demo:test
+            tasks: check:test
           - demo: kiosk-demo-skooti
-            # demo:kyc = the KYC attribute gate (combustion motorcycle needs
+            # check:kyc = the KYC attribute gate (combustion motorcycle needs
             # age_over_18 + licence_a; the electric scooter is licence-free) — now
             # a TWO-SERVER integration: it boots the KYC broker
             # (kiosk-demo-prove) on its own port and drives the cross-app flow, as
-            # does demo:redteam (the broker-flavored theft/cross-operator/forged-
+            # does check:redteam (the broker-flavored theft/cross-operator/forged-
             # callback beats). So this job also bundles the sibling broker app.
             prove_broker: kiosk-demo-prove
-            tasks: demo:kat demo:rideflow demo:kyc demo:isolation demo:redteam demo:schema
+            tasks: check:kat check:rideflow check:kyc check:isolation check:redteam check:schema
           - demo: kiosk-demo-stylish
-            # demo:roles is the roles-from-IdP gate, and the ONLY place the
+            # check:roles is the roles-from-IdP gate, and the ONLY place the
             # prod-only K-436/K-439 class is exercised against real Devise: an
             # owner and a customer sign in through the actual /users/sign_in
             # session, and the inherited role is checked on the token, on the
@@ -461,14 +461,14 @@ jobs:
             # Watched fail: delete User#kiosk_role and the Devise adapter
             # resolves every real sign-in to roles.first — the three REAL DEVISE
             # assertions go red while the stub-session one still passes.
-            # demo:register is the registration-PoW gate (no proof → 402; ONE
+            # check:register is the registration-PoW gate (no proof → 402; ONE
             # Equihash solve at the CI-default `low` → 201; the fresh token
-            # queries) — the same profile as atablefor's demo:backoff, which
+            # queries) — the same profile as atablefor's check:backoff, which
             # already runs here, ~4 s. Watched fail: set registration_pow_count
             # to 0 and the unproven register returns 201.
-            # Both reseed (`: :setup`), so they go after demo:walkthrough, which
+            # Both reseed (`: :setup`), so they go after check:walkthrough, which
             # has no prerequisite and lives off the job-level demo:setup.
-            # demo:clock_spec goes FIRST and is the cheapest signal in the list:
+            # check:clock_spec goes FIRST and is the cheapest signal in the list:
             # DB-free, no server, no PoW, ~0.5 s, and it runs the same file under
             # TZ=Etc/GMT-11 and TZ=Etc/GMT+2 because the defect it holds — a
             # zoneless `slot` read in the SERVER PROCESS's zone rather than the
@@ -476,87 +476,87 @@ jobs:
             # Watched fail: drop `zone.iso8601` from SalonClock.parse_slot so the
             # stdlib parse is the value again, and 4 assertions go red under both
             # TZ values (exit 1); restoring the file returns 0.
-            tasks: demo:clock_spec demo:walkthrough demo:isolation demo:redteam demo:schema demo:roles demo:register
+            tasks: check:clock_spec check:walkthrough check:isolation check:redteam check:schema check:roles check:register
             ungated:
-              demo:binding: >-
+              check:binding: >-
                 timing-sensitive: the account-binding ceremony polls on the
                 advertised RFC 8628 device-grant interval, which flakes on a
                 shared runner. Local-only on every demo that has a poll-timed
-                binding task; atablefor's demo:binding carries no such timing and
+                binding task; atablefor's check:binding carries no such timing and
                 does run in CI.
           - demo: kiosk-demo-philslist
-            # NON-COMMERCE classifieds board — no payments. demo:walkthrough is
-            # the browse→post→edit→close happy path; demo:schema asserts `pay` is
+            # NON-COMMERCE classifieds board — no payments. check:walkthrough is
+            # the browse→post→edit→close happy path; check:schema asserts `pay` is
             # ABSENT from the advertised capabilities (the not-only-commerce
             # proof). Same standard task set as stylish.
-            # demo:register is the registration-PoW gate — no proof → 402, ONE
+            # check:register is the registration-PoW gate — no proof → 402, ONE
             # Equihash solve at the CI-default `low` → 201, then the fresh token
             # posts a listing and a bad category_slug gets a clean 400 naming the
-            # valid categories. Same profile as atablefor's demo:backoff, ~4 s.
-            # It reseeds (`: :setup`), so it goes after demo:walkthrough, which
+            # valid categories. Same profile as atablefor's check:backoff, ~4 s.
+            # It reseeds (`: :setup`), so it goes after check:walkthrough, which
             # has no prerequisite and lives off the job-level demo:setup.
             # Watched fail: set registration_pow_count to 0 and the unproven
             # register returns 201 instead of 402.
-            # demo:clock_spec and demo:access_spec go FIRST and are the two
+            # check:clock_spec and check:access_spec go FIRST and are the two
             # cheapest signals in the list: no server, no database, no toll,
             # under a second each. Together they are the only coverage of this
             # demo that a contributor without Postgres can run at all — every
             # other task here needs a seeded origin.
-            # demo:clock_spec runs spec/board_clock_spec.rb under TZ=Etc/GMT-11
+            # check:clock_spec runs spec/board_clock_spec.rb under TZ=Etc/GMT-11
             # and TZ=Etc/GMT+2, because a helper that leaked the server
             # process's zone into a published `posted_at` is invisible inside
             # any single run. Watched fail: make BoardClock.zone answer
             # default_zone unconditionally and 3 assertions go red under both
             # TZ values (exit 1).
-            # demo:access_spec covers the owner-scoped refusal surface — the
+            # check:access_spec covers the owner-scoped refusal surface — the
             # listing_id shape guard and the one sentence a miss earns. Watched
             # fail: give ListingAccess.not_owner a different message per verb
             # and the no-enumeration assertion goes red.
-            tasks: demo:clock_spec demo:access_spec demo:walkthrough demo:isolation demo:redteam demo:schema demo:register
+            tasks: check:clock_spec check:access_spec check:walkthrough check:isolation check:redteam check:schema check:register
             ungated:
-              demo:binding: >-
+              check:binding: >-
                 timing-sensitive: the account-binding ceremony polls on the
                 advertised RFC 8628 device-grant interval, which flakes on a
                 shared runner — the same exclusion as stylish's.
           - demo: kiosk-demo-tudu
-            # NON-COMMERCE collaborative todo — no payments. demo:collab is the
+            # NON-COMMERCE collaborative todo — no payments. check:collab is the
             # happy path (membership-based sharing + agent→agent invites +
-            # per-agent attribution); demo:schema asserts `pay` ABSENT like
+            # per-agent attribution); check:schema asserts `pay` ABSENT like
             # philslist.
-            # demo:link is the W5 rebind beat, and since K-783 it is the only
+            # check:link is the W5 rebind beat, and since K-783 it is the only
             # end-to-end regression for a DATA-LOSS bug: re-linking an already
             # bound key used to run tudu's assistant_claimed hook on a no-op
             # transition and DELETE every one of the human's list memberships.
             # It was excluded as "timing-sensitive on the RFC 8628 device-grant
-            # poll interval, the same exclusion as the sibling demo:binding
+            # poll interval, the same exclusion as the sibling check:binding
             # tasks", and that reason was simply wrong: script/link_flow.rb runs
             # the LINK-CODE ceremony (POST /auth/link → POST /auth/claim) and
             # polls nothing at all — its only sleep is a deliberate 1.1 s to
             # cross a second boundary so the JWT `iat` watermark is unambiguous.
-            # stylish's and philslist's demo:binding DO poll (`sleep(interval +
-            # 1)` around the device-grant token poll); tudu's demo:link never
+            # stylish's and philslist's check:binding DO poll (`sleep(interval +
+            # 1)` around the device-grant token poll); tudu's check:link never
             # touches that endpoint, so their exclusion does not extend to it
             # (K-786). MEASURED at 4.8 s end to end including its own reseed and
             # server boot. It reseeds (`: :setup`), like every other tudu task
             # here, so its position is free.
-            # demo:clock_spec and demo:access_spec go FIRST and are the two
+            # check:clock_spec and check:access_spec go FIRST and are the two
             # cheapest signals in the list: no server, no database, no toll,
             # under a second each. Together they are the only coverage of this
             # demo that a contributor without Postgres can run at all — every
             # other task here reseeds and boots.
-            # demo:clock_spec runs spec/reader_clock_spec.rb under TZ=Etc/GMT-11
+            # check:clock_spec runs spec/reader_clock_spec.rb under TZ=Etc/GMT-11
             # and TZ=Etc/GMT+2, because stdlib `Time.iso8601` binds an
             # offsetless string to the server process's zone and that class is
             # invisible inside any single run. Watched fail: drop the
             # `in_zone.iso8601(str)` line from ReaderClock.parse so the stdlib
             # value is returned, and 2 assertions go red under both TZ values
             # (exit 1).
-            # demo:access_spec covers the list-access gate: the shape check runs
+            # check:access_spec covers the list-access gate: the shape check runs
             # with Membership deliberately not loaded, so a gate that consulted
             # the table before checking the shape raises there. Watched fail:
             # drop the `require_owner:` forwarding and the owner-demand
             # assertion goes red.
-            tasks: demo:clock_spec demo:access_spec demo:collab demo:link demo:isolation demo:redteam demo:schema
+            tasks: check:clock_spec check:access_spec check:collab check:link check:isolation check:redteam check:schema
           # Every demo: task a demo defines must appear either in its `tasks:`
           # list above (or be demo:setup, which the "Set up demo" step runs) or
           # in its `ungated:` map with the reason it is not a gate. That is not a
@@ -616,7 +616,7 @@ jobs:
       - name: Task inventory matches Rake (bin/check-ci-tasks parser guard)
         run: ./bin/check-ci-tasks --verify-inventory ${{ matrix.demo }}
 
-      # skooti's demo:kyc / demo:redteam and getgrocery's demo:agecheck are
+      # skooti's check:kyc / check:redteam and getgrocery's check:agecheck are
       # two-server integrations that boot the KYC broker (kiosk-demo-prove)
       # on its own port; that sibling app needs its own bundle installed for the
       # boot helper to `rails s` it.
@@ -632,7 +632,7 @@ jobs:
 
       # getgrocery only: install stripe-mock on PATH and advertise its URL so
       # the real-Stripe-adapter demo runs against canned pi_ fixtures with NO
-      # key. demo:setup/demo:schema boot on STRIPE_MOCK_URL; the
+      # key. demo:setup/check:schema boot on STRIPE_MOCK_URL; the
       # charge-running tasks self-start the mock process via `command -v`.
       - name: Set up stripe-mock (getgrocery, no key in CI)
         if: matrix.stripe_mock
@@ -699,7 +699,7 @@ jobs:
       # public half straight off that file (script/dev_unlock_key.rb deliberately
       # never consults ENV, because its other callers are bare-Ruby drivers).
       # Signer and verifier drifted apart, every unlock returned false, and
-      # demo:rideflow went red on `happy: unlocked expected true, got false`
+      # check:rideflow went red on `happy: unlocked expected true, got false`
       # for five heads. A variable that exists for ONE step belongs in that
       # step's `env:`, never in $GITHUB_ENV — the blast radius of the heredoc
       # form is the whole job, and nothing in the job says so.
@@ -907,7 +907,7 @@ jobs:
       #
       # K-760 gave the redteam client a 402-PoW retry on query/run/pay/pay_raw,
       # and it was proved by hand on two booted origins and then pinned by
-      # NOTHING on the wire: every listed demo:redteam above boots UNTOLLED, so
+      # NOTHING on the wire: every listed check:redteam above boots UNTOLLED, so
       # the only gate on that retry was kiosk-redteam's own stub examples — the
       # exact stub-green/wire-broken split that let K-760 sit latent in the
       # first place. The heavy-PoW opt-out that used to justify the gap was
@@ -917,9 +917,9 @@ jobs:
       # 3 SKIPPED, 0 BREACH either way), hoteling 10.6 s -> 14.4 s (19/3/0).
       #
       # demo:setup runs first and in its OWN invocation: the battery expects
-      # the seeded state, and the tasks above have moved it (demo:race strands
+      # the seeded state, and the tasks above have moved it (check:race strands
       # orders on purpose). Batching the two into one `bin/rails demo:setup
-      # demo:redteam` is the trap this job's other comment names — a task that
+      # check:redteam` is the trap this job's other comment names — a task that
       # exits the process reports success for everything after it.
       #
       # Watched fail: make Kiosk::Redteam::Client#query return its first
@@ -931,7 +931,7 @@ jobs:
         working-directory: ${{ matrix.demo }}
         run: |
           bin/rails demo:setup
-          env ${{ matrix.tolled_redteam }} bin/rails demo:redteam
+          env ${{ matrix.tolled_redteam }} bin/rails check:redteam
 
   # THE SKOOTI LOCK FIRMWARE'S TEST TARGETS RAN IN NO CI JOB AT ALL UNTIL THIS
   # ONE (K-1599).
@@ -1046,7 +1046,7 @@ jobs:
   # Five ledger rows (K-602/K-614/K-616/K-617/K-618) were spent re-deriving BY
   # HAND, one rake file at a time, which assertion-bearing `demo:` tasks no gate
   # invoked — a list no artifact published. The workflow's own comments were the
-  # sole record and had already drifted (they asserted "demo:rls moved to
+  # sole record and had already drifted (they asserted "check:rls moved to
   # getgrocery" for the whole period before the move happened). This job is the
   # replacement for remembering: bin/check-ci-tasks reads the demos matrix above
   # and every demo's lib/tasks/*.rake, and fails when a task is in neither the
@@ -1870,7 +1870,7 @@ jobs:
   #
   # A separate job for the reason bin/check-demo-derivations gives above: the
   # boundary between these checks is the comparison INPUT, and this one compares
-  # a demo's redteam PROSE — the suite header, the demo:redteam rake desc, the
+  # a demo's redteam PROSE — the suite header, the check:redteam rake desc, the
   # README battery section — against that demo's own suite REGISTRATIONS, and
   # since K-1482 against its ASSERTIONS too: a sentence there may not attribute
   # an HTTP status to a beat whose own implementation never names it.

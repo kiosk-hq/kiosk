@@ -2,7 +2,7 @@
 
 # Standalone (no rails boot, no DB) unit spec for {SalonClock} — the parse
 # `book_appointment` reads its `slot` with. Run with:
-#   bundle exec rake demo:clock_spec   (or: ruby spec/salon_clock_spec.rb)
+#   bundle exec rake check:clock_spec   (or: ruby spec/salon_clock_spec.rb)
 #
 # THE BUG IT WOULD HAVE CAUGHT, and why the rake task runs this file TWICE.
 # Stdlib `Time.iso8601` binds a string carrying no offset to the SERVER
@@ -11,7 +11,7 @@
 # the author meant were the same, and every assertion passed. It only shows when
 # the SAME input is parsed under two different `TZ` values and the two answers
 # disagree — so section 1 pins the resolved instant to an absolute epoch that no
-# process zone can move, and `demo:clock_spec` runs the file under
+# process zone can move, and `check:clock_spec` runs the file under
 # `TZ=Etc/GMT-11` and `TZ=Etc/GMT+2`, the two clocks thirteen hours apart that
 # the measurement used.
 #
@@ -23,7 +23,7 @@
 # served. What is provable without a database is that every helper honours the
 # zone it is handed and invents none, which sections 2 to 4 assert at two real
 # zones; that the zone is READ OFF THE SALON needs a row in a table and is
-# exercised by demo:roles and demo:redteam against a booted origin.
+# exercised by check:roles and check:redteam against a booted origin.
 
 require "time"
 require "active_support"

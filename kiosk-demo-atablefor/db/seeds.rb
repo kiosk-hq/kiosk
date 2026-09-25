@@ -21,7 +21,7 @@
 # What IS seeded is the HUMAN half: real Devise account holders. A diner signs
 # in at /users/sign_in, mints a link code, and an assistant redeems it — from
 # then on that assistant acts for the diner's ACCOUNT and its bookings tie to
-# it (demo:binding), surfacing on the PUBLIC reservations board under the
+# it (check:binding), surfacing on the PUBLIC reservations board under the
 # diner's display name.
 #
 # TWO diners, not one, because the adversarial drivers need two DISTINCT
@@ -36,7 +36,7 @@ DINER_A_ID = "00000000-0000-0000-0000-000000000001"
 DINER_B_ID = "00000000-0000-0000-0000-000000000002"
 DEMO_PASSWORD = "atablefor-demo-password"
 
-# Diego — the headline diner, the one demo:binding walks and the one whose
+# Diego — the headline diner, the one check:binding walks and the one whose
 # reservation the board shows by name.
 DINER_EMAIL = "diego@example.com"
 DINER_NAME  = "Diego Marlowe"

@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-# RLS overlay setup for getgrocery demo:rls.
+# RLS overlay setup for getgrocery check:rls.
 #
 # Run as the privileged owner connection BEFORE script/rls_proof.rb.
 # Does NOT add a Rails migration — this is an imperative overlay layered on top
 # of the structure.sql-loaded schema. structure.sql is intentionally left with
 # NO ROW LEVEL SECURITY so the default shop path stays clean.
 #
-# Called by: rake demo:rls (no KIOSK_RLS_ENFORCE — setup runs as owner)
+# Called by: rake check:rls (no KIOSK_RLS_ENFORCE — setup runs as owner)
 #
 # Dogfoods Kiosk::RLS::Emitter, which emits the canonical sequence:
 #   ALTER TABLE orders ENABLE ROW LEVEL SECURITY
@@ -75,7 +75,7 @@ table = Kiosk::RLS::Table.new(
 table.instance_eval do
   policy :select, using: "user_id = kiosk.current_user_id()"
   policy :insert, check: "user_id = kiosk.current_user_id()"
-  comment "Orders owned by the placing user — RLS DB backstop (getgrocery demo:rls)."
+  comment "Orders owned by the placing user — RLS DB backstop (getgrocery check:rls)."
 end
 table.validate!
 

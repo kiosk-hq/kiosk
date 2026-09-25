@@ -3,29 +3,28 @@
 # Kiosk demo orchestration for kiosk-demo-getgrocery.
 # Tasks:
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake demo:shop       boots the server, runs script/getgrocery_flow.rb, asserts happy path
-#   rake demo:claim      claim-rebind walkthrough: a standalone assistant's key is
+#   rake check:shop       boots the server, runs script/getgrocery_flow.rb, asserts happy path
+#   rake check:claim      claim-rebind walkthrough: a standalone assistant's key is
 #                        re-bound to the human's account, then pays with its saved card
-#   rake demo:isolation  adversarial cross-tenant + order-ownership isolation test
-#   rake demo:rls        opt-in Postgres RLS showcase — enforced-session three-way
+#   rake check:isolation  adversarial cross-tenant + order-ownership isolation test
+#   rake check:rls        opt-in Postgres RLS showcase — enforced-session three-way
 #                        proof (script/rls_proof.rb) that a non-owner app_role is order-scoped
-#   rake demo:schema     self-discovery proof over the schema verb
-#   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
-#   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200) at TOY
+#   rake check:schema     self-discovery proof over the schema verb
+#   rake check:redteam    adversarial regression battery (kiosk-redteam scenarios)
+#   rake check:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200) at TOY
 #                        params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
-#   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter
-#   rake demo:cashier_spec DB-free unit spec for the order-ref uuid shape check
-#   rake demo:wire_args_spec DB-free unit spec for the whole WireArguments shape
+#   rake check:slots_spec DB-free unit spec for the delivery-slot past-filter
+#   rake check:cashier_spec DB-free unit spec for the order-ref uuid shape check
+#   rake check:wire_args_spec DB-free unit spec for the whole WireArguments shape
 #                        guard — the module that decides whether a hostile wire
 #                        argument is a typed 400 or a booked order
-#   rake demo:conformance the four properties the protocol makes normative of
+#   rake check:conformance the four properties the protocol makes normative of
 #                        this origin — routes resolve, a verb executes, a query
 #                        answers its declared shape, data access is scoped to
 #                        the principal — asserted with `bin/rails test`
-#   rake demo:race       pay-path regression: concurrency + typed 4xx
+#   rake check:race       pay-path regression: concurrency + typed 4xx
 #                        + stuck-`paying` self-heal
 #   rake demo:reconcile  resolve orders stuck in `paying` from local evidence
-#   rake demo            setup + shop (full end-to-end proof)
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
@@ -80,7 +79,7 @@ end
 
 # Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
 # suites use it so the full pay→settlement→gate flow runs with NO real Stripe
-# (fast, no key, no charges, CI-runnable). demo:shop still uses real Stripe.
+# (fast, no key, no charges, CI-runnable). check:shop still uses real Stripe.
 def start_stripe_mock
   require "socket"
   port = 12111
@@ -123,6 +122,60 @@ namespace :demo do
     # worktree. The canonical structure.sql is the source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
+
+  desc <<~DESC
+    Reconcile orders stuck in `paying` — LOCAL evidence only.
+
+    OPERATOR UTILITY, NOT A GATE. Every other task in this namespace
+    asserts an invariant and exits non-zero when it breaks. This one reports:
+    on a freshly seeded database it prints "nothing stuck" and exits 0 no
+    matter what the code does, so it can never go red and CI does not run it.
+    The logic below IS gated — by check:race's reconciliation block, which strands
+    orders first and then sweeps them.
+
+    A crash (or a failed status flip) between a successful capture and the
+    paid-flip leaves an order `paying`: charged ONCE (the atomic claim makes a
+    double charge impossible) but unpayable until reconciled. This sweep:
+
+      • flips `paying` → `paid` for every stuck order that ALREADY has a
+        settlement row — decisive local proof the charge was recorded;
+      • LISTS the rest as UNRESOLVED with their cart-mandate ids, because only
+        the payment processor knows whether money moved. It deliberately does
+        NOT release those claims: releasing one is exactly the blind retry that
+        could double-charge.
+
+    This demo runs no background worker — invoke it manually (or from cron).
+    Set MINUTES=n to change the "old enough to be stuck" cutoff (default 15).
+  DESC
+  task reconcile: :environment do
+    minutes = Integer(ENV.fetch("MINUTES", "15"))
+    result  = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: minutes * 60)
+
+    puts "\n── Stuck-`paying` reconciliation (older than #{minutes} min) ──"
+    if result[:healed].empty? && result[:unresolved].empty?
+      puts "  nothing stuck. Exit 0."
+      next
+    end
+
+    result[:healed].each { |id| puts "  HEALED      #{id} — settlement on file, status → paid" }
+    result[:unresolved].each do |row|
+      puts "  UNRESOLVED  #{row[:order_id]} — claimed #{row[:claimed_at]}, no settlement row."
+      if row[:cart_mandate_ids].empty?
+        # The engine persists the cart mandate (phase 1) BEFORE the claim, so a
+        # wire-driven pay always leaves one. None here means this claim did not
+        # come through /pay at all.
+        puts "              No cart mandate references this order — it was not claimed via the /pay wire path."
+      else
+        puts "              Check the processor for a succeeded charge whose metadata.cart_mandate_id is " \
+             "one of: #{row[:cart_mandate_ids].join(", ")}"
+      end
+    end
+    puts "\n  healed=#{result[:healed].size} unresolved=#{result[:unresolved].size}"
+    puts "  UNRESOLVED orders need a human/PSP check — they are NOT released automatically." unless result[:unresolved].empty?
+  end
+end
+
+namespace :check do
 
   desc "DB-free unit spec for the delivery-slot past-filter + Dublin zone."
   task :slots_spec do
@@ -171,12 +224,12 @@ namespace :demo do
   # It runs in RAILS_ENV=test against its OWN database, so it neither reads nor
   # disturbs the seeded development data every other task in this file shares —
   # the fixtures are created per example and rolled back. Same recipe
-  # kiosk-demo-prove's `demo:test` uses.
+  # kiosk-demo-prove's `check:test` uses.
   #
   # No server, no Postgres beyond that database, no PoW and no bearer: the
   # calls reach the registered handler through a GUC-scoped session. The WIRE
-  # in front of those handlers is what demo:shop, demo:isolation and
-  # demo:redteam drive.
+  # in front of those handlers is what check:shop, check:isolation and
+  # check:redteam drive.
   desc "Conformance (routes resolve, verbs execute, queries answer their declared shape, data is principal-scoped) plus this shop's own DB-backed verb regressions — the whole of `bin/rails test`."
   task :conformance do
     puts "\n── Kiosk conformance (bin/rails test, RAILS_ENV=test) ──"
@@ -419,7 +472,7 @@ namespace :demo do
     # correct system for a reason that has nothing to do with getgrocery. The
     # mock path keeps the presence checks above; the cashier check
     # (ValidatingPaymentProvider) is what pins the amount BEFORE capture, and
-    # demo:redteam's TamperedPriceCart / InflatedTotalCart run it under the mock.
+    # check:redteam's TamperedPriceCart / InflatedTotalCart run it under the mock.
     if use_mock
       puts "  OK  (settled amount not asserted under stripe-mock — its fixture always reports amount_received=0)"
     elsif pay["settled_amount_cents"].to_i == result["total_cents"].to_i
@@ -444,7 +497,7 @@ namespace :demo do
     # -- assertions: THIS RUN's rows, named by id --
     #
     # A DB-wide `COUNT(*) >= 1` passes on a row a PREVIOUS run left behind:
-    # getgrocery's seeds create no orders, but `demo:shop` is not always run
+    # getgrocery's seeds create no orders, but `check:shop` is not always run
     # straight after `demo:setup`, so the beat could stop writing and all three
     # would stay green. The driver reports `order_id` and the `user_id` of the
     # agent it registered this run; both are anchors.
@@ -518,13 +571,13 @@ namespace :demo do
     end
   end
 
-  # ── demo:claim ───────────────────────────────────────────────────────────────
+  # ── check:claim ───────────────────────────────────────────────────────────────
   desc <<~DESC
     Claim-rebind walkthrough — "why not MY account?".
 
     Boots the server against stripe-mock (the walkthrough charges a SEEDED
     card-on-file mapping — a mock fixture, no real key, no real charge; run
-    demo:shop for the real-Stripe path) and runs script/claim_flow.rb:
+    check:shop for the real-Stripe path) and runs script/claim_flow.rb:
 
       1. A standalone assistant self-registers (fresh key, own synthetic
          account), orders groceries, and hits payment_setup → setup_required
@@ -671,9 +724,9 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:claim ────────────────────────────────────────────────────────────
+  # ── end check:claim ────────────────────────────────────────────────────────────
 
-  # ── demo:isolation ───────────────────────────────────────────────────────────
+  # ── check:isolation ───────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial cross-tenant isolation test.
 
@@ -700,7 +753,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task isolation: :setup do
+  task isolation: "demo:setup" do
     # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
     # Everything below proves B cannot read A's rows. This proves the scope all
     # of it rests on REFUSES when there is no principal at all, instead of
@@ -919,9 +972,9 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:isolation ────────────────────────────────────────────────────────
+  # ── end check:isolation ────────────────────────────────────────────────────────
 
-  # ── demo:schema ──────────────────────────────────────────────────────────────
+  # ── check:schema ──────────────────────────────────────────────────────────────
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
@@ -945,7 +998,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task schema: :setup do
+  task schema: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -1194,7 +1247,7 @@ namespace :demo do
     # `input_schema` is validated on every call, unconditionally, so the pattern
     # asserted below is what refuses a malformed order_id at the wire.
     # `Kiosk::UuidCheck` in the handler remains the floor for the values the pattern
-    # admits — demo:race pins that side, in-process. Asserted by BEHAVIOUR, not
+    # admits — check:race pins that side, in-process. Asserted by BEHAVIOUR, not
     # by string equality: the published pattern must accept the ids create_order
     # hands out and reject the junk that would otherwise reach a `::uuid` cast.
     #
@@ -1335,9 +1388,9 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:schema ───────────────────────────────────────────────────────────
+  # ── end check:schema ───────────────────────────────────────────────────────────
 
-  # ── demo:redteam ─────────────────────────────────────────────────────────────
+  # ── check:redteam ─────────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery — kiosk-redteam.
 
@@ -1404,7 +1457,7 @@ namespace :demo do
     Exits 0 when all applicable scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in getgrocery — fix the app, not the scenario.
   DESC
-  task redteam: :setup do
+  task redteam: "demo:setup" do
     require "resolv"
     require "json"
     require "net/http"
@@ -1496,7 +1549,7 @@ namespace :demo do
       exit exit_status
     end
   end
-  # ── end demo:redteam ──────────────────────────────────────────────────────────
+  # ── end check:redteam ──────────────────────────────────────────────────────────
 
   desc <<~DESC
     Pay-path regression: concurrency, typed 4xx, reconciliation.
@@ -1520,7 +1573,7 @@ namespace :demo do
 
     Exits 0 iff every invariant holds; non-zero on any breach.
   DESC
-  task race: :setup do
+  task race: "demo:setup" do
     require "shellwords"
     driver = File.expand_path("../../script/race_flow.rb", __dir__)
     puts "\n── Running script/race_flow.rb (pay path) ──"
@@ -1529,62 +1582,10 @@ namespace :demo do
     exit(ok ? 0 : 1)
   end
 
-  desc <<~DESC
-    Reconcile orders stuck in `paying` — LOCAL evidence only.
-
-    OPERATOR UTILITY, NOT A GATE. Every other task in this namespace
-    asserts an invariant and exits non-zero when it breaks. This one reports:
-    on a freshly seeded database it prints "nothing stuck" and exits 0 no
-    matter what the code does, so it can never go red and CI does not run it.
-    The logic below IS gated — by demo:race's reconciliation block, which strands
-    orders first and then sweeps them.
-
-    A crash (or a failed status flip) between a successful capture and the
-    paid-flip leaves an order `paying`: charged ONCE (the atomic claim makes a
-    double charge impossible) but unpayable until reconciled. This sweep:
-
-      • flips `paying` → `paid` for every stuck order that ALREADY has a
-        settlement row — decisive local proof the charge was recorded;
-      • LISTS the rest as UNRESOLVED with their cart-mandate ids, because only
-        the payment processor knows whether money moved. It deliberately does
-        NOT release those claims: releasing one is exactly the blind retry that
-        could double-charge.
-
-    This demo runs no background worker — invoke it manually (or from cron).
-    Set MINUTES=n to change the "old enough to be stuck" cutoff (default 15).
-  DESC
-  task reconcile: :environment do
-    minutes = Integer(ENV.fetch("MINUTES", "15"))
-    result  = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: minutes * 60)
-
-    puts "\n── Stuck-`paying` reconciliation (older than #{minutes} min) ──"
-    if result[:healed].empty? && result[:unresolved].empty?
-      puts "  nothing stuck. Exit 0."
-      next
-    end
-
-    result[:healed].each { |id| puts "  HEALED      #{id} — settlement on file, status → paid" }
-    result[:unresolved].each do |row|
-      puts "  UNRESOLVED  #{row[:order_id]} — claimed #{row[:claimed_at]}, no settlement row."
-      if row[:cart_mandate_ids].empty?
-        # The engine persists the cart mandate (phase 1) BEFORE the claim, so a
-        # wire-driven pay always leaves one. None here means this claim did not
-        # come through /pay at all.
-        puts "              No cart mandate references this order — it was not claimed via the /pay wire path."
-      else
-        puts "              Check the processor for a succeeded charge whose metadata.cart_mandate_id is " \
-             "one of: #{row[:cart_mandate_ids].join(", ")}"
-      end
-    end
-    puts "\n  healed=#{result[:healed].size} unresolved=#{result[:unresolved].size}"
-    puts "  UNRESOLVED orders need a human/PSP check — they are NOT released automatically." unless result[:unresolved].empty?
-  end
 end
 
-desc "End-to-end getgrocery demo: setup DB then run no-human catalog->create_order (slot+address)->pay (mirrored cart)."
-task demo: ["demo:setup", "demo:shop"]
 
-namespace :demo do
+namespace :check do
   desc <<~DESC
     Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1).
 
@@ -1598,7 +1599,7 @@ namespace :demo do
     To exercise the SHIPPED parameters — n=168 k=7, kiosk-pow-equihash's own
     default:
 
-      KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow
+      KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow
 
     Budget ~10 s and ~1.3 GiB of RSS PER PROOF from the reference solver
     (bench/README.md, measured on one M-series laptop core) — that gibibyte is
@@ -1621,7 +1622,7 @@ namespace :demo do
 
     # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
     #
-    # `demo:pow` is the only end-to-end exercise of the proof-of-work plane in
+    # `check:pow` is the only end-to-end exercise of the proof-of-work plane in
     # this repo, and it runs at `Kiosk::Pow::Equihash::Difficulty`'s `low` default while the
     # shipped kiosk-pow-equihash default is n=168 k=7, so a reader watching
     # this task must be told which of the two they are seeing. The ambient
@@ -1767,7 +1768,7 @@ namespace :demo do
       puts "\n  All catalog PoW assertions PASSED at Equihash n=#{pow_params[:n]} " \
            "k=#{pow_params[:k]} (KIOSK_POW_DIFFICULTY=#{pow_level})."
       unless Kiosk::Pow::Equihash::Difficulty.high?
-        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow` " \
+        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow` " \
              "runs the same flow at the shipped n=168 k=7."
       end
     else
@@ -1775,7 +1776,7 @@ namespace :demo do
     end
   end
 
-  # ── demo:rls — additive RLS-enforce reference (the suite's RLS showcase) ────
+  # ── check:rls — additive RLS-enforce reference (the suite's RLS showcase) ────
   desc <<~DESC
     RLS enforce reference — strictly additive overlay; does NOT touch the
     structure.sql schema and does NOT add any migration.
@@ -1807,7 +1808,7 @@ namespace :demo do
   DESC
   task :rls do
     # getgrocery's initializer requires a Stripe key to boot; the RLS proof
-    # never pays, so default a dummy test key (same as demo:pow).
+    # never pays, so default a dummy test key (same as check:pow).
     ENV["STRIPE_SECRET_KEY"] = "sk_test_dummy" if ENV["STRIPE_SECRET_KEY"].to_s.empty?
 
     # ── Step 1: Load structure.sql — identical to demo:setup (canonical) ─────
@@ -1877,12 +1878,12 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:rls ──────────────────────────────────────────────────────────
+  # ── end check:rls ──────────────────────────────────────────────────────────
 end
 
 
-namespace :demo do
-  # ── demo:agecheck ──────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:agecheck ──────────────────────────────────────────────────────────
   #
   # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE. The task
   # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
@@ -1925,7 +1926,7 @@ namespace :demo do
     DEPLOY FOLLOW-UP: getgrocery is allow-listed at the broker only by this test
     harness; a standing deploy allow-list entry for getgrocery is a follow-up.
   DESC
-  task agecheck: :setup do
+  task agecheck: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -2072,12 +2073,12 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:agecheck ──────────────────────────────────────────────────────
+  # ── end check:agecheck ──────────────────────────────────────────────────────
 
   desc <<~DESC
     The shop's own two transitions — the courier leaving and the basket arriving.
 
-    WHY IT IS A TASK AND NOT PART OF demo:shop. The courier departs ten to
+    WHY IT IS A TASK AND NOT PART OF check:shop. The courier departs ten to
     fifteen minutes before a window that is itself hours away, so no flow that
     drives the wire can reach either transition: a suite that waited would be a
     suite nobody runs. `courier_lead_seconds` is configuration exactly so this
@@ -2187,5 +2188,5 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:delivery ──────────────────────────────────────────────────────
+  # ── end check:delivery ──────────────────────────────────────────────────────
 end

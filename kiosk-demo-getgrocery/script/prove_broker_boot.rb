@@ -4,7 +4,7 @@ require "net/http"
 require "uri"
 
 # ProveBrokerBoot — shared helper for getgrocery's two-server age-gate gate
-# (demo:agecheck). The KYC broker (kyc.demo.kiosk.tech) is a SEPARATE Rails app
+# (check:agecheck). The KYC broker (kyc.demo.kiosk.tech) is a SEPARATE Rails app
 # (kiosk-demo-prove); this gate is a genuine two-server integration. This helper
 # boots the broker on its own port, sets up its DB, wires the intake allow-list
 # to getgrocery's host (getgrocery is a SECOND registered operator alongside

@@ -4,18 +4,17 @@
 # Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake demo:kat        DB-free known-answer test for the RentalTokenIssuer
+#   rake check:kat        DB-free known-answer test for the RentalTokenIssuer
 #                        demo lib (byte-exact wire vector the firmware mirrors)
-#   rake demo:rideflow   boots the server, runs script/rental_flow.rb (no-human full
+#   rake check:rideflow   boots the server, runs script/rental_flow.rb (no-human full
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down, then runs script/pay_window.rb in-process
 #                        (capture-anchored paid state)
-#   rake demo:isolation  adversarial cross-tenant + ownership isolation test
-#   rake demo:kyc        named-anonymized-attribute KYC gate proof (age_over_18 +
+#   rake check:isolation  adversarial cross-tenant + ownership isolation test
+#   rake check:kyc        named-anonymized-attribute KYC gate proof (age_over_18 +
 #                        licence_a): motorcycle 403→attest→200, scooter stays KYC-free
-#   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
-#   rake demo:schema     self-discovery proof over the schema verb
-#   rake demo            setup + rideflow (full end-to-end proof)
+#   rake check:redteam    adversarial regression battery (kiosk-redteam scenarios)
+#   rake check:schema     self-discovery proof over the schema verb
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
@@ -69,15 +68,6 @@ def skooti_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
-  desc "Known-answer test for the RentalTokenIssuer demo lib (DB-free; no server boot)."
-  task :kat do
-    # Run standalone (fresh ruby, no Rails): the KAT stands up its own tiny
-    # Kiosk.configuration carrier and self-configures its load path, so it must
-    # NOT be required into the booted Rails process (where the real
-    # Kiosk::Configuration is present). Exit status propagates the pass/fail.
-    sh "ruby #{Rails.root.join('script/rental_token_issuer_kat.rb')}"
-  end
-
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
@@ -88,6 +78,18 @@ namespace :demo do
     # directly (no RLS). Use db:schema:load instead of db:migrate so that
     # the canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
+  end
+end
+
+namespace :check do
+
+  desc "Known-answer test for the RentalTokenIssuer demo lib (DB-free; no server boot)."
+  task :kat do
+    # Run standalone (fresh ruby, no Rails): the KAT stands up its own tiny
+    # Kiosk.configuration carrier and self-configures its load path, so it must
+    # NOT be required into the booted Rails process (where the real
+    # Kiosk::Configuration is present). Exit status propagates the pass/fail.
+    sh "ruby #{Rails.root.join('script/rental_token_issuer_kat.rb')}"
   end
 
   desc "Boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
@@ -437,7 +439,7 @@ namespace :demo do
     end
 
     # WHERE THE C3 PROPERTY IS PROVED — a spent/active resource cannot be
-    # re-activated by the SAME principal — is demo:redteam's
+    # re-activated by the SAME principal — is check:redteam's
     # Kiosk::Redteam::Scenarios::SpentResourceReuse (script/redteam_suite.rb),
     # which drives ONE principal against the SAME owned_ref twice, and NOT a
     # run here. A run here would mint a NEW principal each time and call
@@ -574,7 +576,7 @@ namespace :demo do
     # settlement row need a controllable PSP and the provider called directly —
     # so this run is IN-PROCESS against the same database, driving the real
     # verbs through the registry the wire dispatches to. It rides inside
-    # demo:rideflow rather than becoming its own task because demo:rideflow is
+    # check:rideflow rather than becoming its own task because check:rideflow is
     # already this demo's pay-path gate.
     puts "\n══ Capture-anchored paid state ══"
     window_rb = File.expand_path("../../script/pay_window.rb", __dir__)
@@ -594,7 +596,7 @@ namespace :demo do
   end
 end
 
-namespace :demo do
+namespace :check do
   # ---------------------------------------------------------------------------
   desc <<~DESC
     Adversarial cross-tenant isolation test.
@@ -625,7 +627,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task isolation: :setup do
+  task isolation: "demo:setup" do
     # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
     # Everything below proves B cannot read A's rows. This proves the scope all
     # of it rests on REFUSES when there is no principal at all, instead of
@@ -819,8 +821,8 @@ namespace :demo do
   end
 end
 
-namespace :demo do
-  # ── demo:redteam ─────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:redteam ─────────────────────────────────────────────────────────
   #
   # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE. The task
   # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
@@ -902,7 +904,7 @@ namespace :demo do
     Exits 0 when all scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in skooti — fix the app, not the scenario.
   DESC
-  task redteam: :setup do
+  task redteam: "demo:setup" do
     require "resolv"
     require "json"
     require "net/http"
@@ -1012,11 +1014,11 @@ namespace :demo do
       exit exit_status
     end
   end
-  # ── end demo:redteam ─────────────────────────────────────────────────────
+  # ── end check:redteam ─────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:schema ────────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:schema ────────────────────────────────────────────────────────────
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
@@ -1037,7 +1039,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task schema: :setup do
+  task schema: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -1360,11 +1362,11 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:schema ────────────────────────────────────────────────────────
+  # ── end check:schema ────────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:kyc ───────────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:kyc ───────────────────────────────────────────────────────────────
   #
   # THIS `desc` DOES NOT NAME THE SECOND DATABASE, ON PURPOSE. The task
   # drops a SIBLING demo's database through script/prove_broker_boot.rb; the
@@ -1403,7 +1405,7 @@ namespace :demo do
     still BLOCKS. It boots nothing and takes no port, so it costs this task a
     single `rails runner`.
   DESC
-  task kyc: :setup do
+  task kyc: "demo:setup" do
     spec = File.expand_path("../../spec/licence_flag_spec.rb", __dir__)
     puts "\n── licence-flag fail-closed spec (no server, no port) ──"
     sh "bundle exec rails runner #{spec}"
@@ -1598,8 +1600,6 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:kyc ─────────────────────────────────────────────────────────────
+  # ── end check:kyc ─────────────────────────────────────────────────────────────
 end
 
-desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain."
-task demo: ["demo:setup", "demo:rideflow"]

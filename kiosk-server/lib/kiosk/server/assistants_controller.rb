@@ -178,7 +178,7 @@ module Kiosk
         # so the page asks the configuration rather than assuming a seam. The
         # field still submits — the governance surface (a human setting policy on
         # an origin that may not be the one that charges) is deliberate, stated in
-        # stylish's initializer, and `demo:binding` drives it end to end.
+        # stylish's initializer, and `check:binding` drives it end to end.
         @spending_cap_enforced = !Kiosk.configuration.spending_cap.nil?
         # Forms post to <page>/link, <page>/unlink and <page>/update;
         # recompute the page path so the view works at any mount and after POSTs.

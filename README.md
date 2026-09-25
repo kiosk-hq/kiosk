@@ -135,13 +135,17 @@ end-to-end test harness — fixtures, a stub PSP and the AI-assistant pay flow �
 so it serves no vertical and deploys nowhere. It runs as a CI gate
 (`./e2e/run.sh`) and nothing else.
 
-Each demo exposes a set of `rake demo:*` tasks. Not all of them are CI gates —
-some are heavy or timing-sensitive local showcases. Which is which is stated in
-every demo README's **"Which of these run in CI"** table, generated from
-`.github/workflows/ci.yml` by `bin/check-ci-tasks`; that script also runs as its
-own CI job and fails the build when a `demo:` task is neither gated nor recorded
-with the reason it is not — or when a task the demo defines is not named in that
-README's own hand-written list of what each task proves.
+A demo's rake tasks say what they are by their namespace. A `rake check:*` task
+ASSERTS: it exits non-zero when the property it names breaks. A `rake demo:*`
+task is one a person runs and reads — `demo:setup` prepares the database,
+getgrocery's `demo:reconcile` reports on stuck orders — and neither can go red.
+Not every `check:` task runs in CI; a few are too heavy or too timing-sensitive
+for a shared runner. Which is which is stated in every demo README's **"Which of
+these run in CI"** table, generated from `.github/workflows/ci.yml` by
+`bin/check-ci-tasks`; that script also runs as its own CI job and fails the build
+when a `check:` task is neither gated nor recorded with the reason it is not,
+when a `demo:` task is listed as a gate, or when a task the demo defines is not
+named in that README's own hand-written list of what each task proves.
 
 **Four of the demos — `atablefor`, `getgrocery`, `hoteling`, `skooti` — also
 carry a `before-after.md`**: a long-form contrast between what an AI assistant

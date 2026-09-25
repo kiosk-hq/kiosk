@@ -19,7 +19,7 @@
 #   (no card on file), the claimed account genuinely gets `ready` — the
 #   contrast IS the point of claiming.
 #
-# Usage (invoked by rake demo:claim):
+# Usage (invoked by rake check:claim):
 #   SERVER_URL=… KIOSK_ISSUER=… HUMAN_USER_ID=… HUMAN_EMAIL=… HUMAN_PASSWORD=… \
 #   bundle exec ruby script/claim_flow.rb
 #

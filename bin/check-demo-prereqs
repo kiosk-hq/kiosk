@@ -52,8 +52,8 @@
 # THE DISCLOSURE SURFACES ARE THE README AND THE RUNTIME BANNER. THE `desc`
 # STRINGS DELIBERATELY ARE NOT (K-1392), AND THE REASON IS MEASURED.
 #
-# Three tasks destroy a database in ANOTHER demo — getgrocery's `demo:agecheck`
-# and skooti's `demo:kyc`/`demo:redteam`, each through
+# Three tasks destroy a database in ANOTHER demo — getgrocery's `check:agecheck`
+# and skooti's `check:kyc`/`check:redteam`, each through
 # `script/prove_broker_boot.rb` — and their `desc` strings do not say so. That
 # was raised as a gap on the argument that `rake -T` is the first place an
 # operator looks, and it is. What settles it is what `rake -T` actually PRINTS.
@@ -83,7 +83,7 @@
 # sentence into three `desc` bodies is the drift the derivation exists to
 # prevent, and a `desc` body is evaluated on EVERY rake/rails task load, so
 # READING the sibling's `config/database.yml` there would turn a documentation
-# string into a load-time failure mode — the reason skooti's `demo:redteam`
+# string into a load-time failure mode — the reason skooti's `check:redteam`
 # desc already gives for naming a knob rather than resolving it.
 #
 # Usage:
@@ -210,7 +210,7 @@ DESTRUCTIVE_TRIGGER = { file: "lib/tasks/demo.rake", must: /db:drop\s+db:create/
 # derived tallies; that is the number.
 #
 # `rails_env:` is a PARAMETER because a rake task may run the same command under
-# another one (K-1393): kiosk-demo-prove's `demo:test` prefixes `RAILS_ENV=test`,
+# another one (K-1393): kiosk-demo-prove's `check:test` prefixes `RAILS_ENV=test`,
 # so the database it destroys is the one the `test:` block names and not the
 # `development:` one. A warning that read `development:` for every drop would
 # name the wrong database with complete confidence.
@@ -241,18 +241,18 @@ def dev_host(dir)     = yml_value(dir, "host")
 # in here run a `db:drop db:create`» — and the warning it drove said `demo:setup`
 # is destructive «and every task that depends on it inherits that». True, and it
 # folded a SECOND unconditional drop into the first one's sentence:
-# kiosk-demo-getgrocery's `demo:rls` runs its own `db:drop db:create db:schema:load
+# kiosk-demo-getgrocery's `check:rls` runs its own `db:drop db:create db:schema:load
 # db:seed` and does NOT depend on `demo:setup`, so an operator who avoided
 # `demo:setup` on the strength of the warning still lost the database to the other
-# task. kiosk-demo-prove's `demo:test` is the same shape one step further out: it
+# task. kiosk-demo-prove's `check:test` is the same shape one step further out: it
 # runs the drop under `RAILS_ENV=test`, so it destroys a DIFFERENT database, which
 # a warning naming only the development one gets exactly backwards.
 #
 # So the ownership is DERIVED, task by task, from the same file the trigger reads:
 # walk it tracking the enclosing `namespace`/`task`, and attribute each
 # `db:drop db:create` to the task it sits under, with the `RAILS_ENV=` that
-# prefixes it when one does. Nothing is typed — not `demo:setup`, not `demo:rls`,
-# not `demo:test` — so a demo that grows or loses a drop moves its own warning.
+# prefixes it when one does. Nothing is typed — not `demo:setup`, not `check:rls`,
+# not `check:test` — so a demo that grows or loses a drop moves its own warning.
 #
 # THE LIMIT, plainly: this reads the LEXICAL enclosure, so a drop reached through
 # a helper method defined at the top of the file is attributed to nothing, exactly
@@ -290,8 +290,8 @@ end
 #
 # DESTRUCTIVE_TRIGGER asks `lib/tasks/demo.rake` and nothing else, so a
 # `db:drop` a task reaches THROUGH a `require_relative` is invisible to it — and
-# that is not a hypothetical gap. getgrocery's `demo:agecheck` and skooti's
-# `demo:kyc`/`demo:redteam` each require `script/prove_broker_boot.rb`, whose
+# that is not a hypothetical gap. getgrocery's `check:agecheck` and skooti's
+# `check:kyc`/`check:redteam` each require `script/prove_broker_boot.rb`, whose
 # `with_broker` runs `db:drop db:create db:schema:load db:seed` with `chdir:` at
 # a SIBLING DEMO — so running skooti's red-team battery destroys the KYC
 # broker's database, and until this rule nothing anywhere said so.
@@ -659,7 +659,7 @@ if ARGV.include?("--self-test")
                     File.write(y, File.read(y).sub("ENV.fetch(\"PGHOST\"", "ENV.fetch(\"PGHOSTNAME\"")) },
       expect: %r{philslist/README\.md: the PREREQS block does not match} },
     { id:   "cross-demo-drop-not-disclosed",
-      what: "the second-database warning is deleted while demo:agecheck still drops the KYC " \
+      what: "the second-database warning is deleted while check:agecheck still drops the KYC " \
             "broker's database through script/prove_broker_boot.rb — K-1377's shape exactly",
       op:   ->(t) { r = File.join(t, "kiosk-demo-getgrocery/README.md")
                     File.write(r, File.read(r).sub(/^>\n> \*\*AND ONE TASK DROPS A SECOND.*?\n(?=<!-- PREREQS:END)/m, "")) },
@@ -672,11 +672,11 @@ if ARGV.include?("--self-test")
                                                    "database: kiosk_prove_dev")) },
       expect: %r{skooti/README\.md: the PREREQS block does not match} },
     { id:   "second-own-drop-not-attributed",
-      what: "the sentence attributing getgrocery's SECOND unconditional drop to `demo:rls` is " \
+      what: "the sentence attributing getgrocery's SECOND unconditional drop to `check:rls` is " \
             "deleted while that task still runs one — K-1393's shape, an operator who avoids " \
             "demo:setup losing the database to the other task",
       op:   ->(t) { r = File.join(t, "kiosk-demo-getgrocery/README.md")
-                    File.write(r, File.read(r).sub(/^>\n> \*\*`demo:rls` RUNS ITS OWN.*?\n(?=>\n|<!-- PREREQS:END)/m, "")) },
+                    File.write(r, File.read(r).sub(/^>\n> \*\*`check:rls` RUNS ITS OWN.*?\n(?=>\n|<!-- PREREQS:END)/m, "")) },
       expect: %r{getgrocery/README\.md: the PREREQS block does not match} },
     { id:   "own-drop-appears-in-a-new-task",
       what: "a demo grows a second task that drops its own database and the README does not " \
@@ -687,7 +687,7 @@ if ARGV.include?("--self-test")
                                           "    sh \"bundle exec rails db:drop db:create\"\n  end\nend\n") },
       expect: %r{tudu/README\.md: the PREREQS block does not match} },
     { id:   "cross-env-drop-names-the-wrong-database",
-      what: "the RAILS_ENV=test prefix is dropped from prove's `demo:test`, so its warning names " \
+      what: "the RAILS_ENV=test prefix is dropped from prove's `check:test`, so its warning names " \
             "the development database for a command that destroys the test one",
       op:   ->(t) { ra = File.join(t, "kiosk-demo-prove/lib/tasks/demo.rake")
                     File.write(ra, File.read(ra).sub("RAILS_ENV=test bundle exec rails db:drop", "bundle exec rails db:drop")) },
@@ -726,8 +726,8 @@ if ARGV.include?("--self-test")
             "and reads as coverage",
       # STRUCTURAL, and it was a HAND-KEPT LIST until it rotted (T-193). The op
       # used to name the two second drops it knew about — getgrocery's
-      # `demo:rls` and prove's `demo:test` — by their exact source lines. The
-      # moment two demos grew a `demo:conformance` that drops the TEST database,
+      # `check:rls` and prove's `check:test` — by their exact source lines. The
+      # moment two demos grew a `check:conformance` that drops the TEST database,
       # the plant stopped draining the corpus: `extra-drops` stayed positive,
       # the vacuity message never fired, and this arm read GREEN where it should
       # have read VAC. An arm that has to be edited every time the tree grows a

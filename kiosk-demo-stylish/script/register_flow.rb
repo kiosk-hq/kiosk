@@ -7,7 +7,7 @@
 # challenge(s) and resubmits the SAME signed body, sending the proof(s) in the
 # Kiosk-PoW request header, getting 201. Then queries `salons`. One JSON line on stdout.
 #
-# Usage (invoked by rake demo:register):
+# Usage (invoked by rake check:register):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/register_flow.rb
 # Requires: python3 with numpy.
 

@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-25: **A demo task says what it is by its namespace: `check:` asserts, `demo:` is one a person runs and reads** (T-065). The bare `rake demo` was a smoke test called a demo; it is gone.
 - 2026-09-25: **the README taglines no longer put a database in Kiosk's headline** (K-1810). Kiosk is named as the protocol it is; Postgres stays where the implementation's requirements are stated.
 - 2026-09-25: **`listen.py` gains a one-shot wait: `--until-event` exits 0 on the first event and 5 at the deadline.** A wait held in the foreground costs what the human took.
 - 2026-09-25: **The fleet re-pins to `skill-v0.4.17.md` and `events/listen-v0.5.1.py`.** All seven demos and the engine default move URL and digest together.

@@ -4,8 +4,8 @@
 # The happy path is the VISIBLE CONTRAST with every commerce demo:
 #   browse → post → edit → close, with NO payment step.
 #
-# Run via `rake demo` (handles DB setup + invokes this script), or directly
-# when the demo DB is already prepared. Exits non-zero on any failed assertion
+# Run via `rake check:walkthrough` (after `rake demo:setup`), or directly when
+# the demo database is already prepared. Exits non-zero on any failed assertion
 # so CI catches regressions.
 
 set -euo pipefail
@@ -101,7 +101,7 @@ say "✓ Alice's assistant holds a kiosk-pop JWT this provider minted"
 # — browse → post → edit → close — and the cross-owner board it browses comes
 # from the seeds, not from a second live principal. Bob's side of the boundary
 # is asserted where it belongs:
-# `rake demo:isolation` and `rake demo:redteam`, which bind him for real.
+# `rake check:isolation` and `rake check:redteam`, which bind him for real.
 
 # ─── discovery: prove there is NO payment ─────────────────────────────
 

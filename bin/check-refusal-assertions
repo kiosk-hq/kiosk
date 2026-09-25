@@ -20,11 +20,11 @@
 #   K-1764  tudu's «a zoneless due_at is REFUSED 400, never completed on
 #           somebody's clock» read exactly that pair. With
 #           `if ReaderClock.zoneless?(due_at)` forced to `if false`,
-#           `demo:collab` stayed at exit 0 with the beat still ticked.
+#           `check:collab` stayed at exit 0 with the beat still ticked.
 #   K-1762  philslist's `MalformedUuidArg` asserted 400 + `bad_request` + a leak
 #           scan, under a comment crediting `Kiosk::UuidCheck`. Deleting that
-#           guard left `demo:redteam` at exit 0 (16 BLOCKED, 0 BREACH) while
-#           `demo:access_spec` went red — the beat was reading the wire's
+#           guard left `check:redteam` at exit 0 (16 BLOCKED, 0 BREACH) while
+#           `check:access_spec` went red — the beat was reading the wire's
 #           declaration all along.
 #   K-1767  philslist's «bad category_slug → clean 400 (not 500)» tested
 #           `== 400` and left the sentence to a separate beat on another key.

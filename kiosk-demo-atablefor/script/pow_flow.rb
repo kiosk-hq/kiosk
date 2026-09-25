@@ -27,7 +27,7 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on any assertion failure.
 #
-# Usage (invoked by rake demo:pow — do not run standalone without the server):
+# Usage (invoked by rake check:pow — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
 #   bundle exec ruby script/pow_flow.rb
 #
@@ -35,7 +35,7 @@
 # driven by the challenge the origin issued, so this file works unchanged at
 # either level of KIOSK_POW_DIFFICULTY — toy `low` (n=96 k=5, the default) or
 # the shipped `high` (n=168 k=7). It reports the served `params` back to
-# `rake demo:pow`, which asserts them against the level it asked for, so the
+# `rake check:pow`, which asserts them against the level it asked for, so the
 # toll a run pays is a fact off the wire rather than a banner.
 #
 # Requirements:
@@ -84,7 +84,7 @@ end
 # rejected proof against THIS identity and nobody else's — it is NOT the
 # decayed, durable bad_proof_count a real provider needs.
 require_relative "../app/services/bad_proof_counter"
-# The path is OWNED by `rake demo:pow`, which exports it to the server it
+# The path is OWNED by `rake check:pow`, which exports it to the server it
 # spawns and to this driver. No default on purpose: a second hand-typed literal
 # here can drift from the task's, open an empty sqlite, read 0 for every count
 # and report the zeros as a pass. A KeyError is the only honest answer when
@@ -215,7 +215,7 @@ puts JSON.generate(
   bad_proof_count:            bad_proof_count,
   other_bad_proof_count:      other_bad_proof_count,
   availability_rows:          rows.size,
-  # THE PARAMETERS THE WIRE ACTUALLY SERVED, so `rake demo:pow`'s
+  # THE PARAMETERS THE WIRE ACTUALLY SERVED, so `rake check:pow`'s
   # verdict can assert which toll was paid instead of printing what it hoped
   # for. Read off the challenge rather than from config: it follows an operator
   # override or a per-identity policy that a config read cannot see.

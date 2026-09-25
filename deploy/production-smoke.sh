@@ -14,7 +14,7 @@
 #                   expectation makes `config.eager_load = true` (production
 #                   only) raise on boot.
 #   MISSING COLUMN  a page that SELECTs a column this app's structure.sql has
-#                   not got → HTTP 500 in production; demo:binding drives the
+#                   not got → HTTP 500 in production; check:binding drives the
 #                   WIRE ceremony, never the HTML page render, so CI stays green.
 #   PROXY CSRF      with `config.assume_ssl` off, behind a TLS-terminating proxy
 #                   the Rails 8.1 CSRF Origin check rejects the browser's
@@ -383,7 +383,7 @@ smoke_stylish() {
   # `c.agent_idp` at all. So this asserts that a self-asserted bearer buys
   # nothing in ANY environment — a 200 here would be a cross-tenant read of the
   # public `salons` query, authenticated as a forged owner. The dev-mode CI and
-  # demo:redteam gates assert the same refusal.
+  # check:redteam gates assert the same refusal.
   # Protocol 0.4: a query is `GET <endpoint>/<query-name>`. Identity resolves
   # BEFORE the verb is looked up, so this probe is a 401 whether or not the
   # name exists — which is exactly the property being asserted, and also why an

@@ -81,16 +81,17 @@ universal agent skill is `skill.md` on the same site.
   `.ruby-version` are gitignored). Per-gem bundles: `cd <gem> && bundle install &&
   bundle exec rspec` (`kiosk-rls-minitest`: `bundle exec rake test`).
 - Demos: `bin/rails demo:setup`, then the flow tasks
-  (`demo:walkthrough`/`shop`/`book`/`rideflow`/`collab`, `demo:isolation`,
-  `demo:redteam`). Postgres required.
+  (`check:walkthrough`/`shop`/`book`/`rideflow`/`collab`, `check:isolation`,
+  `check:redteam`). Postgres required.
 - Full e2e: `./e2e/run.sh` (Postgres + jq). CI: `.github/workflows/ci.yml`
-  (gems matrix + demos matrix + e2e). Which `demo:` tasks CI runs — and the
-  recorded reason for each one it does not — is enforced by `bin/check-ci-tasks`
-  and published in every demo README's "Which of these run in CI" table; adding
-  a `demo:` task means adding it to the matrix `tasks:` list or to that entry's
-  `ungated:` map, naming it in that README's own hand-written task list (the
-  same check asserts presence, never the prose), then `bin/check-ci-tasks
-  --write`.
+  (gems matrix + demos matrix + e2e). A demo task's namespace says what it is:
+  `check:` ASSERTS and goes red, `demo:` is one a person runs and reads. Which
+  `check:` tasks CI runs — and the recorded reason for each one it does not — is
+  enforced by `bin/check-ci-tasks` and published in every demo README's "Which of
+  these run in CI" table; adding a `check:` task means adding it to the matrix
+  `tasks:` list or to that entry's `ungated:` map, naming it in that README's own
+  hand-written task list (the same check asserts presence, never the prose), then
+  `bin/check-ci-tasks --write`.
 - The demos are separate Rails apps, so shared code is HAND-COPIED.
   `bin/check-demo-copies` (its own CI job) declares every hand-written Ruby file
   that exists in two or more demos — plus `.gitignore` — as `:identical`,

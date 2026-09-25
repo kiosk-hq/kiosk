@@ -22,7 +22,7 @@
 # existed: bin/check-ci-tasks compares ci.yml against each demo's rake tasks,
 # bin/check-demo-copies compares demo files against EACH OTHER, and it itself
 # compares a demo's before-after.md against that demo's own producers. This one
-# compares a demo's redteam PROSE -- the suite header, the `demo:redteam` rake
+# compares a demo's redteam PROSE -- the suite header, the `check:redteam` rake
 # `desc`, the README battery section -- against that demo's own suite
 # REGISTRATIONS. It was not folded into check-demo-derivations because that file
 # is bound to one document (`DOC = "before-after.md"`) and to one carrier (a
@@ -79,11 +79,11 @@
 #     a scenario the header named and the file did not have.
 #
 # R4  DESC COVERAGE (coverage). Every registered beat is named somewhere in that
-#     demo's `demo:redteam` rake `desc`. Text, not table: tudu writes its list as
+#     demo's `check:redteam` rake `desc`. Text, not table: tudu writes its list as
 #     a prose sentence and the other six as a `BLOCKED  Name` column, and the
 #     rule holds for both because it asks only whether the name is there.
 #
-# R5  DESC NAMES ARE REAL (ban). Every beat entry in a `demo:redteam` desc must
+# R5  DESC NAMES ARE REAL (ban). Every beat entry in a `check:redteam` desc must
 #     be a registered beat. THE DESC HAS TWO LEGITIMATE SHAPES and this rule
 #     reads both (K-1490): the `BLOCKED|SKIPPED|BREACH  Name` column six demos
 #     write, and the prose sentence tudu writes. R4 has held both from the
@@ -104,13 +104,13 @@
 #     wherever that beat is implemented -- a scenario class in the suite, an
 #     inline `record` call, an entry of a locally-built beat table, or the gem's
 #     `Kiosk::Redteam::Scenarios::<Name>` file -- and holds all three
-#     restatements to it: the suite header, the `demo:redteam` desc and the
+#     restatements to it: the suite header, the `check:redteam` desc and the
 #     README battery section. A registered beat whose implementation this guard
 #     cannot FIND is red for R1's reason: an unlocatable beat is one whose prose
 #     nothing here checks.
 #
 #     THIS IS THE RULE K-1482 ASKED FOR, and what it missed is worth writing
-#     down. For the whole life of the K-1418 change, four demos' `demo:redteam`
+#     down. For the whole life of the K-1418 change, four demos' `check:redteam`
 #     descs promised `405 method_not_allowed with Allow:` and `401 without a
 #     bearer` for two beats whose suites had already moved to the plain 404 --
 #     and R1..R6, which own exactly those two files, stayed green throughout,
@@ -176,7 +176,7 @@
 #     R7's is: a vacuity arm whose UNIT is the corpus rather than the member
 #     reads as coverage of every member, which is the K-1213 shape one level up.
 #   * zero desc entries across the fleet (R5 could not bite)
-#   * a demo whose `demo:redteam` desc yields no entry under EITHER shape — the
+#   * a demo whose `check:redteam` desc yields no entry under EITHER shape — the
 #     `BLOCKED  Name` column or a prose sentence — so R5 says nothing about that
 #     demo while the fleet-wide count above stays satisfied by the others
 #     (R5-vacuity, K-1490). Asked PER DEMO off the suite glob, for the same
@@ -623,14 +623,14 @@ def check(root)
 
       # R5 — the desc may not name a beat the suite does not register.
       (d_entries - beats).each do |ghost|
-        failures << "#{demo}: demo:redteam's desc lists #{ghost}, which script/redteam_suite.rb does not " \
+        failures << "#{demo}: check:redteam's desc lists #{ghost}, which script/redteam_suite.rb does not " \
                     "register [R5]"
       end
 
       # R4 — every registered beat is named in the desc.
       d_missing = beats.reject { mentions?(desc, _1) }
       unless d_missing.empty?
-        failures << "#{demo}: demo:redteam's desc does not name #{d_missing.join(', ')} — an operator " \
+        failures << "#{demo}: check:redteam's desc does not name #{d_missing.join(', ')} — an operator " \
                     "reading `rake -D` is told a smaller battery runs than does [R4]"
       end
     end
@@ -664,7 +664,7 @@ def check(root)
     # oracle, and the oracle is CODE.
     surfaces = {
       "script/redteam_suite.rb's header" => attributed(header.gsub(/^#[ \t]?/, ""), beats, HEADER_ENTRY),
-      "demo:redteam's desc"              => attributed(desc.to_s, beats, DESC_ENTRY),
+      "check:redteam's desc"              => attributed(desc.to_s, beats, DESC_ENTRY),
       "README.md's battery section"      => attributed(section.to_s, beats, NO_ENTRY),
     }
     r7_checked[demo] ||= 0
@@ -728,7 +728,7 @@ def check(root)
                 "this demo while the fleet-wide counts stay satisfied by the others [R2/R3-vacuity]"
   end
   if desc_entry_total.zero?
-    failures << "the desc entry extractor found no entries in any demo:redteam desc — R5 is a ban that " \
+    failures << "the desc entry extractor found no entries in any check:redteam desc — R5 is a ban that " \
                 "cannot bite [R5-vacuity]"
   end
   # …and the same question asked PER DEMO, which is the arm this rule was
@@ -743,7 +743,7 @@ def check(root)
   desc_entries_by_demo.each do |demo, count|
     next unless count.zero?
 
-    failures << "#{demo}: its demo:redteam desc yields no beat entry under either shape — neither the " \
+    failures << "#{demo}: its check:redteam desc yields no beat entry under either shape — neither the " \
                 "`BLOCKED  Name` column nor a prose sentence — so R5 says nothing about this demo while " \
                 "the fleet-wide count stays satisfied by the others [R5-vacuity]"
   end
@@ -962,7 +962,7 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     s = File.read(p)
     i = s.index(/^\#{1,6}[ \t].*adversarial/i)
     j = s.index(/^\#{1,6}[ \t]/, i + 1)
-    File.write(p, "#{s[0...i]}### Adversarial battery (`rake demo:redteam`)\n\nNothing to see.\n\n#{s[j..]}")
+    File.write(p, "#{s[0...i]}### Adversarial battery (`rake check:redteam`)\n\nNothing to see.\n\n#{s[j..]}")
   end
   run.call("R6-scope — no README carries a battery heading any more", "R6-vacuity") do |root|
     Dir.glob(File.join(root, "kiosk-demo-*/README.md")).each do |p|
@@ -979,7 +979,7 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
   # own corpus the moment two demos grew a task.
   #
   # Each arm rewrites the first status R7 actually checks in that demo's
-  # `demo:redteam` desc into one no beat asserts, which is the K-1418 shape
+  # `check:redteam` desc into one no beat asserts, which is the K-1418 shape
   # exactly: the assertion moved, the sentence beside it did not. A demo whose
   # desc stops naming a checkable status RAISES here rather than passing, for
   # the same reason the vacuity arm exists.
@@ -989,7 +989,7 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
   stale = "429"
   Dir.glob(File.join(ROOT, "kiosk-demo-*", "script", "redteam_suite.rb")).sort.each do |real_suite|
     demo = File.basename(File.dirname(File.dirname(real_suite)))
-    run.call("R7 — #{demo}'s demo:redteam desc promises a status its own suite never asserts", "R7") do |root|
+    run.call("R7 — #{demo}'s check:redteam desc promises a status its own suite never asserts", "R7") do |root|
       src      = File.read(File.join(root, demo, "script", "redteam_suite.rb"))
       beats, _ = suite_beats(src)
       rake     = File.join(root, demo, "lib", "tasks", "demo.rake")
@@ -997,7 +997,7 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       desc     = redteam_desc(rake_src)
       table    = attributed(desc.to_s, beats, DESC_ENTRY)
       beat, statuses = beats.map { |b| [b, asserted_statuses(table[b].to_s)] }.find { |_, st| !st.empty? }
-      raise "self-test fixture: #{demo}'s demo:redteam desc names no status R7 checks" unless beat
+      raise "self-test fixture: #{demo}'s check:redteam desc names no status R7 checks" unless beat
 
       from = desc.index(/(?<![A-Za-z0-9_])#{Regexp.escape(beat)}(?![A-Za-z0-9_])/)
       at   = desc.index(statuses.first, from)
@@ -1073,7 +1073,7 @@ end
 warn "\ncheck-redteam-headers FAILED (#{report.failures.length}):\n"
 report.failures.each { warn "  x #{_1}" }
 warn "\nThe beat set — and, since K-1482, each beat's status set — is DERIVED from each suite's own " \
-     "registrations and assertions; the header, the demo:redteam desc and the README battery section are " \
+     "registrations and assertions; the header, the check:redteam desc and the README battery section are " \
      "RESTATEMENTS of it. Repair the restatement, never the derivation — and if a beat was renamed, or the " \
      "status it asserts moved, all three move together (K-709, K-710, K-1482, T-078)."
 exit 1

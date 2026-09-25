@@ -216,7 +216,7 @@ class MyPolicy < Kiosk::Reputation::Policy
   #   kiosk-server arrives here as :run (VerbController#create serves
   #   `serve(:run)`), so branch on :run rather than on :action. The protocol
   #   states the same mapping in its Reputation section, and kiosk-demo-hoteling
-  #   is the worked example that EXERCISES a :run branch (rake demo:browse) —
+  #   is the worked example that EXERCISES a :run branch (rake check:browse) —
   #   because branching on :action would otherwise be silent: it matches
   #   nothing, so the toll never applies to a write and no error, log line or
   #   test says so. kiosk-server does not let it be silent: assigning a

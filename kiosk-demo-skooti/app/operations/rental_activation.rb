@@ -5,7 +5,7 @@
 #
 # ONE call site, deliberately. The bytes {RentalTokenIssuer.issue} signs are a
 # PHYSICAL-DEVICE contract reproduced byte-for-byte in script/lock_sim.rb,
-# firmware/host_test.c and firmware/skooti_lock.ino and pinned by `demo:kat` as a
+# firmware/host_test.c and firmware/skooti_lock.ino and pinned by `check:kat` as a
 # frozen known-answer vector. Both rental verbs mint one, so a second call site
 # would be a second place a byte can drift — and that drift signs tokens no
 # provisioned lock opens, for one vehicle class only.

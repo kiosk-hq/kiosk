@@ -137,7 +137,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # is no second, role-carrying channel.
 #
 # Emails and password arrive in the environment from the rake task, the way
-# demo:binding's HOLDER_EMAIL / HOLDER_PASSWORD do — never as literals here.
+# check:binding's HOLDER_EMAIL / HOLDER_PASSWORD do — never as literals here.
 OWNER_ID      = "00000000-0000-0000-0000-0000000000a0"
 OWNER_EMAIL   = ENV.fetch("OWNER_EMAIL")
 ALICE_EMAIL   = ENV.fetch("ALICE_EMAIL")

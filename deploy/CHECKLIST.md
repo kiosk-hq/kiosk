@@ -19,7 +19,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
       developer laptop with four times the cores; do not size from them without saying so.
 - [ ] **No Python/numpy needed on the server** — it only *verifies* proofs (cheap, pure Ruby). numpy is
       the client's *solver* (`solve.py`); install it on the box ONLY if you want to run the solve-side
-      demo smoke tests (`demo:shop`/`demo:book`/`demo:backoff`) there.
+      demo smoke tests (`check:shop`/`check:book`/`check:backoff`) there.
 - [ ] **Lean Puma** for a small box: `WEB_CONCURRENCY=1` (or 0) + `RAILS_MAX_THREADS=5` per app —
       what every `deploy/env/*.env.example` already ships, so a copied template needs no edit here.
 - [ ] **If you raise `WEB_CONCURRENCY` above 1**, the PoW spent-id store and the auth-challenge store

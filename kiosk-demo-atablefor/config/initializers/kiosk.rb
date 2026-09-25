@@ -20,8 +20,8 @@ require "kiosk/user_identity_providers/devise"
 # challenge and is the thing to read. Registration PoW is a separate,
 # always-on gate (own section below).
 #
-#   rake demo:book — no PoW flag set  → :off in dev → nothing is tolled
-#   rake demo:pow  — KIOSK_POW_DEMO=1 → :demo → :query tolled, :run free
+#   rake check:book — no PoW flag set  → :off in dev → nothing is tolled
+#   rake check:pow  — KIOSK_POW_DEMO=1 → :demo → :query tolled, :run free
 #
 # Reservation-scalping is the abuse a table-booking provider fears: scripts
 # that mass-claim prime-time 2-tops to resell. PoW prices that at the door —
@@ -61,7 +61,7 @@ Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equ
 #                confirmed-bookings DB factor. A fresh agent pays escalating PoW
 #                to browse prime-time availability; the cost DROPS as it builds
 #                a genuine booking record.
-#   demo       — flat AtableforDemoPowPolicy: always toll :query (rake demo:pow).
+#   demo       — flat AtableforDemoPowPolicy: always toll :query (rake check:pow).
 #   backoff    — "solve once, next N calls free" (N = KIOSK_POW_BACKOFF_DEMO, else 10).
 #   off        — no verb toll at all. Registration PoW (below) stays on regardless.
 #
@@ -127,7 +127,7 @@ when :demo
   # inflate anyone else's count. It has NO TTL, and a count that only grows is
   # equally wrong: a production signal needs decay and durability first.
   #
-  # `rake demo:pow` owns the file's location — it wipes it and exports
+  # `rake check:pow` owns the file's location — it wipes it and exports
   # KIOSK_BAD_PROOF_DB to both the server and the driver, so the two cannot
   # drift onto different files and report zero at each other.
   ATABLEFOR_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
@@ -210,7 +210,7 @@ Kiosk.configure do |c|
   #
   # user_idp is the provider's own web session (Devise/Warden): it authenticates
   # the signed-in human diner on the account-binding surfaces — link-code mint,
-  # device verify, unlink. Walked by `rake demo:binding`.
+  # device verify, unlink. Walked by `rake check:binding`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   # Where the engine bounces an unauthenticated browser visitor to the
   # manage-assistants page. The engine stays IdP-neutral, so the URL is supplied
@@ -287,7 +287,7 @@ Kiosk.configure do |c|
   when :backoff
     # "Solve once, next N calls free": one proof grants `count` ungated
     # follow-up calls, then the assistant is re-challenged. The env value IS the
-    # count (demo:backoff sets 3); default 10. The in-process BackoffStore is
+    # count (check:backoff sets 3); default 10. The in-process BackoffStore is
     # per worker — a multi-worker deploy needs a shared store.
     backoff_count = ENV["KIOSK_POW_BACKOFF_DEMO"].to_i
     backoff_count = 10 if backoff_count < 1

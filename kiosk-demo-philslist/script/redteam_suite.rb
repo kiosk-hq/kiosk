@@ -79,7 +79,7 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans behind the two assistants (db/seeds.rb). Credentials arrive
-# in the environment from the rake task, the way demo:binding's HOLDER_EMAIL /
+# in the environment from the rake task, the way check:binding's HOLDER_EMAIL /
 # HOLDER_PASSWORD do — never as literals in a driver.
 ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
@@ -162,7 +162,7 @@ BATTERY.record("CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc
 # a verb's arguments are validated on every call, so the refusal is the
 # operator's own typed 400 and no handler runs. The app's shape guard
 # ({ListingAccess.listing_id}) is the second door, for a caller that is not the
-# wire; `rake demo:access_spec` is what holds THAT, and deleting the guard
+# wire; `rake check:access_spec` is what holds THAT, and deleting the guard
 # leaves this beat green — which is why the two are asserted apart rather than
 # one being read as proof of the other. Four properties are asserted here: the
 # status is 400 (a client mistake reported as such), the problem document's

@@ -91,7 +91,7 @@ class Membership < ApplicationRecord
   # address. The rule is not tudu's: spec Section 7.2 forbids a login address in
   # a row about another account at EVERY reach, `consented` included, because
   # consent to share a list is not consent to publish an email address.
-  # `demo:redteam`'s NoLoginAddressOnTheRoster beat reads this projection over
+  # `check:redteam`'s NoLoginAddressOnTheRoster beat reads this projection over
   # the wire and fails on an address appearing ANYWHERE in the body, not merely
   # in this field.
   #

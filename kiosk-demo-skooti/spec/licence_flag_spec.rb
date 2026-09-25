@@ -4,7 +4,7 @@
 #
 #   bundle exec rails runner spec/licence_flag_spec.rb
 #
-# `rake demo:kyc` runs it first, before it boots anything, so the property is
+# `rake check:kyc` runs it first, before it boots anything, so the property is
 # checked on every CI run of the demo whose motorcycle it protects.
 #
 # WHAT IT IS FOR. `reserve` is open to every vehicle, so unless BOTH rental
@@ -18,7 +18,7 @@
 # yielding `"TRUE"` or `1`, and the unrecognised value reads as licence-FREE.
 #
 # WHY THE REDTEAM BATTERY IS NOT THIS ASSERTION, which is the whole reason this
-# file exists. `demo:redteam`'s MotorcycleViaStartRental beat drives the real
+# file exists. `check:redteam`'s MotorcycleViaStartRental beat drives the real
 # wire against the real schema, so it only ever presents the gate with a real
 # Ruby boolean — the one input on which the broken enumeration and the correct
 # cast AGREE. Revert {Scooter#licence_flag} to the old chain and that beat

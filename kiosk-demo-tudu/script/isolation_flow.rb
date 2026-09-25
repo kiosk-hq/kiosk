@@ -12,7 +12,7 @@
 #   Member  — accepts a genuine invite (positive control: a member DOES see it).
 #   Mallory — never invited (the adversary).
 #
-# Assertions (parsed by rake demo:isolation):
+# Assertions (parsed by rake check:isolation):
 #   1  Mallory's my_lists is EMPTY (she is a member of nothing).
 #   2  Mallory list_todos on the owner's list → 403 (non-member read denial).
 #   3  Mallory list_members on the owner's list → 403.

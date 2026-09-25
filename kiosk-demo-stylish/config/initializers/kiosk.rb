@@ -115,7 +115,7 @@ Kiosk.configure do |c|
   # member's `staff_role` — so an OWNER who signs in at /users/sign_in mints
   # link codes as `owner`, kiosk-server captures that role onto the link row
   # (AuthController#link → LinkCode.mint(requested_role:)), and the assistant
-  # that redeems it inherits it. Walked by `rake demo:roles`.
+  # that redeems it inherits it. Walked by `rake check:roles`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   # Where the engine bounces an unauthenticated browser visitor to the
   # manage-assistants page. The engine stays IdP-neutral, so the URL is supplied
@@ -131,7 +131,7 @@ Kiosk.configure do |c|
   # takes payment in the chair), so a seam set here could never be consulted.
   # What stylish DOES demonstrate is the governance surface above the cap — the
   # manage-assistants page writes `agents.spending_cap_cents`, which
-  # `demo:binding` asserts end to end — and that is deliberate: a human sets the
+  # `check:binding` asserts end to end — and that is deliberate: a human sets the
   # policy on the page whether or not this origin is the one that charges.
   # An origin that both charges and caps sets `c.spending_cap =
   # Kiosk::Server::ColumnSpendingCap.new` beside its `payment_provider`.

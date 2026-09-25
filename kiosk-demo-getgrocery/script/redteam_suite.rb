@@ -976,7 +976,7 @@ end
 # «An operator publishes ONE rendering per row and not two — a second wall clock
 # in the caller's zone is a field pair that can disagree.» The first sentence of
 # that rule is asserted everywhere (every time-bearing row carries `timezone`,
-# and `demo:schema` fails a row without one); the second was an absence — no row
+# and `check:schema` fails a row without one); the second was an absence — no row
 # publishes a second wall clock, and nothing looked.
 #
 # THE PROBE READS THE SAME WINDOWS ON TWO CLOCKS. `delivery_slots` is called with
@@ -1122,7 +1122,7 @@ end
 
 # THE KYC BROKER IS A SECOND SERVICE AND THIS ORIGIN IS BOOTED WITHOUT IT — which
 # is why this battery is where the beat belongs rather than the age-gate flow.
-# `demo:agecheck` boots the broker AND sets the intake secret, so no gate in this
+# `check:agecheck` boots the broker AND sets the intake secret, so no gate in this
 # repository had ever called `request_kyc` in the configuration a plain
 # `bin/rails s` produces: the one a live demo run uses.
 #

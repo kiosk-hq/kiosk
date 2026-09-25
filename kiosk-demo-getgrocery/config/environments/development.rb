@@ -52,7 +52,7 @@ Rails.application.configure do
 
   # Permit the demo's realistic /etc/hosts domain. Rails 8 HostAuthorization
   # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
-  # which blocks `rake demo` when it runs on http://getgrocery.demo.kiosk.tech:3001.
+  # which blocks the demo tasks when they run on http://getgrocery.demo.kiosk.tech:3001.
   config.hosts << "getgrocery.demo.kiosk.tech"
 
   # ── Kiosk env inputs ────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ Rails.application.configure do
   # WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
   # is per-environment posture rather than a demo mode, so it is resolved here
   # with every other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT). `rake demo:pow` OWNS the location: it wipes the file
+  # (ENV-CONFIG-PLACEMENT). `rake check:pow` OWNS the location: it wipes the file
   # for a clean slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it
   # spawns and the driver that reads the counts back, so the two processes
   # cannot drift onto different files and report zero at each other; the
@@ -115,7 +115,7 @@ Rails.application.configure do
   # TWO keys because atablefor's :demo and :reputation PoW branches keep
   # SEPARATE stores and this file cannot know which branch will run — an
   # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
-  # demo:pow relies on. Published in all seven demos like every other key in
+  # check:pow relies on. Published in all seven demos like every other key in
   # this block (only atablefor and getgrocery carry a bad-proof counter): these
   # blocks are kept identical across the seven, two of them by
   # bin/check-demo-copies.
@@ -128,7 +128,7 @@ Rails.application.configure do
   # local stripe-mock the key is irrelevant (the mock accepts any); with neither
   # variable set the app still boots on a placeholder, so db:setup, the schema
   # proof, isolation and redteam all run with no payment config at all. Only a
-  # real charge (demo:shop) needs a live key, and it fails clearly at charge time
+  # real charge (check:shop) needs a live key, and it fails clearly at charge time
   # if there is none. Production invents nothing — see production.rb.
   config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
   config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence
@@ -137,7 +137,7 @@ Rails.application.configure do
       config.x.kiosk.stripe_secret_key = "sk_test_mock"
     else
       config.x.kiosk.stripe_secret_key = "sk_test_placeholder"
-      warn "[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; demo:shop needs one to charge."
+      warn "[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; check:shop needs one to charge."
     end
   end
 

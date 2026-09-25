@@ -6,21 +6,20 @@ require "resolv"
 
 # Kiosk demo orchestration. Sub-tasks:
 #
-#   rake demo:clock_spec   DB-free unit spec for the salon-clock slot parse,
+#   rake check:clock_spec   DB-free unit spec for the salon-clock slot parse,
 #                          run under two TZ values
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
-#   rake demo:walkthrough  boots the server, runs a curl-driven showcase,
+#   rake check:walkthrough  boots the server, runs a curl-driven showcase,
 #                          tears down
-#   rake demo:isolation    adversarial cross-tenant denial test
-#   rake demo:register     registration-PoW demo (no-proof 402 → solve → 201)
-#   rake demo:binding      account-binding walkthrough (claim ceremony over the
+#   rake check:isolation    adversarial cross-tenant denial test
+#   rake check:register     registration-PoW demo (no-proof 402 → solve → 201)
+#   rake check:binding      account-binding walkthrough (claim ceremony over the
 #                          real Devise session + link-code redeem + unlink)
-#   rake demo:roles        roles-from-IdP demo — owner-linked assistant sees
+#   rake check:roles        roles-from-IdP demo — owner-linked assistant sees
 #                          the whole salon_calendar + forecast, a customer-linked
 #                          one sees only its own bookings
-#   rake demo:redteam      adversarial regression battery against the live surface
-#   rake demo:schema       self-discovery proof over the schema verb
-#   rake demo              setup + walkthrough end-to-end
+#   rake check:redteam      adversarial regression battery against the live surface
+#   rake check:schema       self-discovery proof over the schema verb
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.
@@ -89,6 +88,21 @@ DEMO_CREDENTIALS = {
 }.freeze
 
 namespace :demo do
+  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
+  task :setup do
+    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
+       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
+       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
+    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
+    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
+    # directly (no RLS). Use db:schema:load instead of db:migrate so that
+    # the canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
+  end
+end
+
+namespace :check do
+
   desc "DB-free unit spec for the salon-clock slot parse, run under two TZ values."
   task :clock_spec do
     spec = File.expand_path("../../spec/salon_clock_spec.rb", __dir__)
@@ -100,18 +114,6 @@ namespace :demo do
     # that the measurement used, and they sit on either side of the origin's own.
     puts "\n── salon-clock slot parse (no boot, no DB), under two process zones ──"
     %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
-  end
-
-  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
-  task :setup do
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
-       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
-    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
-    # directly (no RLS). Use db:schema:load instead of db:migrate so that
-    # the canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
-    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
   desc "Boot the server and run the demo walkthrough."
@@ -146,7 +148,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task isolation: :setup do
+  task isolation: "demo:setup" do
     # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
     # Everything below proves B cannot read A's rows. This proves the scope all
     # of it rests on REFUSES when there is no principal at all, instead of
@@ -196,7 +198,7 @@ namespace :demo do
     # The two seeded humans behind the two assistants (db/seeds.rb). The driver
     # EARNS each principal through the shipped ceremony — register → the human's
     # Devise sign-in → link → claim — so it needs real credentials, and they
-    # travel as env the way demo:binding's do rather than as literals inside
+    # travel as env the way check:binding's do rather than as literals inside
     # script/isolation_flow.rb.
     alice_email   = DEMO_CREDENTIALS[:alice_email]
     bob_email     = DEMO_CREDENTIALS[:bob_email]
@@ -350,10 +352,8 @@ namespace :demo do
   end
 end
 
-desc "End-to-end Kiosk demo: setup the DB then run the walkthrough."
-task demo: ["demo:setup", "demo:walkthrough"]
 
-namespace :demo do
+namespace :check do
   desc <<~DESC
     Registration-PoW demo.
 
@@ -362,7 +362,7 @@ namespace :demo do
     with no proof → 402; solve the Equihash challenge and resubmit →
     201; the fresh token queries `salons` → 200. Requires python3 + numpy.
   DESC
-  task register: :setup do
+  task register: "demo:setup" do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
@@ -439,7 +439,7 @@ namespace :demo do
   end
 end
 
-namespace :demo do
+namespace :check do
   desc <<~DESC
     Account-binding walkthrough — both binding flows against the live app.
 
@@ -459,7 +459,7 @@ namespace :demo do
 
     Exits 0 if every assertion holds; exits 1 on failure.
   DESC
-  task binding: :setup do
+  task binding: "demo:setup" do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     port         = ENV.fetch("PORT", "3005")
@@ -569,8 +569,8 @@ namespace :demo do
   end
 end
 
-namespace :demo do
-  # ── demo:roles ─────────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:roles ─────────────────────────────────────────────────────────────
   desc <<~DESC
     roles-from-IdP demo (Path A — indirect, via the bound human).
 
@@ -594,7 +594,7 @@ namespace :demo do
     Exits 0 if all hold; exits 1 on failure. A red assertion = a real role
     gate hole: fix the app, not the test.
   DESC
-  task roles: :setup do
+  task roles: "demo:setup" do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     port         = ENV.fetch("PORT", "3005")
@@ -695,11 +695,11 @@ namespace :demo do
       puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
     end
   end
-  # ── end demo:roles ─────────────────────────────────────────────────────────
+  # ── end check:roles ─────────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:redteam ─────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery — attacks stylish's live surface.
 
@@ -764,7 +764,7 @@ namespace :demo do
     beat could not be exercised and was not expected to skip. A BREACH = a real
     hole — fix the app, not the scenario.
   DESC
-  task redteam: :setup do
+  task redteam: "demo:setup" do
     require "net/http"
     require "shellwords"
     require "uri"
@@ -795,7 +795,7 @@ namespace :demo do
     # The seeded humans the battery drives (db/seeds.rb). The suite EARNS its
     # customer principals through the shipped ceremony instead of writing
     # tokens down, so it needs credentials, passed as env the way
-    # demo:binding's are.
+    # check:binding's are.
     alice_email   = DEMO_CREDENTIALS[:alice_email]
     bob_email     = DEMO_CREDENTIALS[:bob_email]
     owner_email   = DEMO_CREDENTIALS[:owner_email]
@@ -851,11 +851,11 @@ namespace :demo do
       exit exit_status
     end
   end
-  # ── end demo:redteam ─────────────────────────────────────────────────────
+  # ── end check:redteam ─────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:schema ───────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:schema ───────────────────────────────────────────────────────────
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
@@ -876,7 +876,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task schema: :setup do
+  task schema: "demo:setup" do
     require "net/http"
     require "uri"
     require "json"
@@ -1139,5 +1139,5 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:schema ────────────────────────────────────────────────────────
+  # ── end check:schema ────────────────────────────────────────────────────────
 end

@@ -15,7 +15,7 @@ require "test_helper"
 # It runs with no server, no proof-of-work and no bearer token: the calls go
 # through the registered handler under a GUC-scoped session, so what is being
 # asserted is the operator's own code rather than the wire in front of it. The
-# wire itself is driven by `demo:shop`, `demo:isolation` and `demo:redteam`.
+# wire itself is driven by `check:shop`, `check:isolation` and `check:redteam`.
 class KioskConformanceTest < ActiveSupport::TestCase
   # Two principals with a shopping history each. `my_orders` answers whoever is
   # calling, so a scoping assertion needs both sides seeded: one to see rows and
@@ -56,7 +56,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # about all eight at once.
   #
   # Watched fail: delete the `get "/kiosk/delivery_slots"` line and this goes
-  # red naming the verb, the method and the path — where `demo:shop` would keep
+  # red naming the verb, the method and the path — where `check:shop` would keep
   # passing until it reached that one call.
   test "every declared verb is routed, with the method its kind requires" do
     assert_kiosk_verbs_routed

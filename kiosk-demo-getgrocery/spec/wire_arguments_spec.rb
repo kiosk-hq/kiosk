@@ -3,16 +3,16 @@
 # Standalone (no rails boot, no DB) unit spec for `app/operations/wire_arguments.rb`
 # — the module that decides whether a hostile wire argument becomes a typed 400
 # or a booked order. Run with:
-#   bundle exec rake demo:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
+#   bundle exec rake check:wire_args_spec   (or: ruby spec/wire_arguments_spec.rb)
 #
 # WHY IT IS DB-FREE, and why that is the whole point. Every guard in here is a
 # PURE FUNCTION over its argument: `whole_number` reads no clock, `items` opens
 # no connection, `order_id` is a regexp. Without this file the only executable
-# coverage of any of them would be `demo:redteam`, which needs a booted origin,
+# coverage of any of them would be `check:redteam`, which needs a booted origin,
 # a seeded database and a live Equihash toll — so proving a table about ten
 # literal values would cost all three, and would mean MUTATING a published
 # `input_schema`. The two cheaper siblings on this demo (`DeliverySlots` →
-# demo:slots_spec, `Kiosk::UuidCheck` → demo:cashier_spec) already have this seam; the
+# check:slots_spec, `Kiosk::UuidCheck` → check:cashier_spec) already have this seam; the
 # module that actually stands between the wire and the order needs it most.
 #
 # WHAT IS ASSERTED. Not "something was refused" — the TYPE and the SHAPE of each

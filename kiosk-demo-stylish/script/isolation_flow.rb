@@ -75,7 +75,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans behind the two assistants (db/seeds.rb). Emails and password
 # come from the environment — db/seeds.rb owns them and the rake task passes
-# them through, the same way demo:binding passes HOLDER_EMAIL/HOLDER_PASSWORD. A
+# them through, the same way check:binding passes HOLDER_EMAIL/HOLDER_PASSWORD. A
 # password literal in a driver is a second place for it to be true.
 ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")

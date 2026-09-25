@@ -3,7 +3,7 @@
 # Standalone (no rails boot, no DB) unit spec for {ReaderClock} — the clock every
 # todo on a shared list is read on — and for the one deadline this demo publishes
 # as «copy this». Run with:
-#   bundle exec rake demo:clock_spec   (or: ruby spec/reader_clock_spec.rb)
+#   bundle exec rake check:clock_spec   (or: ruby spec/reader_clock_spec.rb)
 #
 # WHY IT IS DB-FREE, AND WHY THAT IS THE POINT. Every other task in this demo's
 # rake file boots a server against a seeded Postgres, and two of them pay an
@@ -19,14 +19,14 @@
 # the author meant were the same, and every assertion passed. It only shows when
 # the SAME input is read under two different `TZ` values and the two answers
 # disagree — so every expectation below is pinned to an absolute epoch or to an
-# explicitly named zone, and `demo:clock_spec` runs the file under
+# explicitly named zone, and `check:clock_spec` runs the file under
 # `TZ=Etc/GMT-11` and `TZ=Etc/GMT+2`, thirteen hours apart and on either side of
 # the household's own clock.
 #
 # WHAT IS DELIBERATELY NOT HERE. {User.public_name} is a pure derivation too and
 # it is the strongest privacy claim in this demo, but the method lives on an
 # ActiveRecord class whose body calls `devise` and `has_many`, so it cannot be
-# loaded without booting Rails; `demo:redteam` reads it over the wire instead.
+# loaded without booting Rails; `check:redteam` reads it over the wire instead.
 # The same goes for the projections on {Todo} and {List}: what is pure about
 # them is the rendering, and that rendering is {ReaderClock}, which is right
 # here.
@@ -251,7 +251,7 @@ assert(example_at > Time.now,
 # WHY THEY ARE DRIVEN HERE RATHER THAN OVER THE WIRE. `add_todo` declares
 # `due_at` with `format: "date-time"`, so an assistant's zoneless or
 # unparseable value is refused by the argument validation before any handler
-# runs — that is the refusal `demo:collab` asserts, and it is the operator's,
+# runs — that is the refusal `check:collab` asserts, and it is the operator's,
 # not this app's. The branches below are the SECOND door, for a caller with no
 # schema in front of it, and a driver that only reads a status and a code stays
 # ticked with both of them deleted. A direct call is the only thing that can

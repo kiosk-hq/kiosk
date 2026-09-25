@@ -53,7 +53,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 DB     = ENV.fetch("HOTELING_DB", "kiosk_hoteling_development")
 
 # A window of its own, well clear of script/hoteling_flow.rb's today+30..+33.
-# `demo:book` takes that property's whole inventory for those nights and the
+# `check:book` takes that property's whole inventory for those nights and the
 # unpaid hold is never released; a driver that shared the
 # window would inherit that exhaustion for no reason.
 CHECK_IN  = (Date.today + 90).to_s

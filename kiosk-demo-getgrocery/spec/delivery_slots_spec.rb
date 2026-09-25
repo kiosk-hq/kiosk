@@ -2,7 +2,7 @@
 
 # Standalone (no rails boot, no DB) unit spec for the DeliverySlots helper —
 # the pure past-slot-filter + delivery-address-zone logic. Run with:
-#   bundle exec rake demo:slots_spec      (or: ruby spec/delivery_slots_spec.rb)
+#   bundle exec rake check:slots_spec      (or: ruby spec/delivery_slots_spec.rb)
 #
 # It stubs "now at the address" to a fixed instant and asserts:
 #   • at 11:00 Dublin, today's 08:00 and 10:00 windows are HIDDEN, 12:00+ stay;

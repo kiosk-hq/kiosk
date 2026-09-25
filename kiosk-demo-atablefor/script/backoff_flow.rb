@@ -29,7 +29,7 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on any assertion failure.
 #
-# Usage (invoked by rake demo:backoff — do not run standalone without the server):
+# Usage (invoked by rake check:backoff — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3106 KIOSK_ISSUER=http://127.0.0.1:3106 \
 #   bundle exec ruby script/backoff_flow.rb
 #

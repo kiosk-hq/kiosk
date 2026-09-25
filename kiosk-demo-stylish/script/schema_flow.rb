@@ -5,7 +5,7 @@
 # Boots against a running stylish server and calls, with no credential at all:
 #   GET /kiosk/schema            (unauthenticated — the catalogue is public)
 #   GET /.well-known/kiosk.json  (the one document carrying the module set)
-# and emits ONE JSON line the demo:schema rake task asserts on.
+# and emits ONE JSON line the check:schema rake task asserts on.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \

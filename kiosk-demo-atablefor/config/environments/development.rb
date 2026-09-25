@@ -52,7 +52,7 @@ Rails.application.configure do
 
   # Permit the demo's realistic /etc/hosts domain. Rails 8 HostAuthorization
   # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
-  # which blocks `rake demo` when it runs on http://atablefor.demo.kiosk.tech:3002.
+  # which blocks the demo tasks when they run on http://atablefor.demo.kiosk.tech:3002.
   config.hosts << "atablefor.demo.kiosk.tech"
 
   # ── Kiosk env inputs ────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ Rails.application.configure do
   # WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
   # is per-environment posture rather than a demo mode, so it is resolved here
   # with every other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT). `rake demo:pow` OWNS the location: it wipes the file
+  # (ENV-CONFIG-PLACEMENT). `rake check:pow` OWNS the location: it wipes the file
   # for a clean slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it
   # spawns and the driver that reads the counts back, so the two processes
   # cannot drift onto different files and report zero at each other; the
@@ -115,7 +115,7 @@ Rails.application.configure do
   # TWO keys because atablefor's :demo and :reputation PoW branches keep
   # SEPARATE stores and this file cannot know which branch will run — an
   # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
-  # demo:pow relies on. Published in all seven demos like every other key in
+  # check:pow relies on. Published in all seven demos like every other key in
   # this block (only atablefor and getgrocery carry a bad-proof counter): these
   # blocks are kept identical across the seven, two of them by
   # bin/check-demo-copies.

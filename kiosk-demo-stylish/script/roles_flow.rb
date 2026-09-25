@@ -25,7 +25,7 @@
 # and the live failure it hides is an owner whose token comes back `customer`.
 # The column, not a header, is the role source.
 #
-# Usage (invoked by `rake demo:roles`, which supplies the seeded credentials
+# Usage (invoked by `rake check:roles`, which supplies the seeded credentials
 # db/seeds.rb owns — do not run standalone without the server):
 #   SERVER_URL=… KIOSK_ISSUER=… OWNER_EMAIL=… CUSTOMER_EMAIL=… DEMO_PASSWORD=… \
 #     bundle exec ruby script/roles_flow.rb
@@ -48,7 +48,7 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # Seeded principals and their Devise credentials. `db/seeds.rb` owns the
-# values; `demo:roles` hands them over as env, the way every sibling driver
+# values; `check:roles` hands them over as env, the way every sibling driver
 # gets its credentials — a driver that re-types the seeded password
 # turns a seed change into a sign-in failure that names nothing. The owner
 # carries staff_role='owner'; Alice carries none, which is what makes her a

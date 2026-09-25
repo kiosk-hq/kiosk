@@ -6,7 +6,7 @@
 # ownership-denial is N/A), philslist listings are OWNED resources — this is the
 # first demo where cross-owner WRITE denial is the headline.
 #
-# Assertions (parsed by rake demo:isolation):
+# Assertions (parsed by rake check:isolation):
 #   1  browse_listings returns BOTH owners' open listings to each caller
 #      (open board — positive control that browse is genuinely cross-owner).
 #   2a Bob's my_listings EXCLUDES Alice's listing.
@@ -57,7 +57,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # The seeded humans behind the two assistants. Emails and password come from the
 # environment — db/seeds.rb owns them and the rake task passes them through, the
-# same way demo:binding passes HOLDER_EMAIL/HOLDER_PASSWORD. A password literal
+# same way check:binding passes HOLDER_EMAIL/HOLDER_PASSWORD. A password literal
 # in a driver is a second place for it to be true.
 ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")

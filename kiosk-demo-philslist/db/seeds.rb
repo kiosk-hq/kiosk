@@ -9,9 +9,9 @@
 #     UUIDs stay stable because the claim REBINDS the assistant onto the human's
 #     account, which is what makes "Alice's rows" mean these ids.
 #     Alice's account is ALSO the HOUSEHOLD account: two
-#     assistants (Alice's and her partner's) bind to it in `demo:binding`, so a
+#     assistants (Alice's and her partner's) bind to it in `check:binding`, so a
 #     listing either assistant posts is one shared board presence. Bob is a
-#     SEPARATE owner — the cross-owner isolation boundary (`demo:isolation`).
+#     SEPARATE owner — the cross-owner isolation boundary (`check:isolation`).
 #   - the five categories (Bikes, Electronics, Furniture, Housing, Free stuff).
 #   - ~7 concrete, NAMED listings across those categories, priced in EUR, split
 #     across Alice and Bob so browse_listings is genuinely cross-owner and
@@ -55,7 +55,7 @@ by_slug = Category.all.index_by(&:slug)
 # assistant that posted it (nil = posted by the human through the web session).
 #
 # Alice's account is the HOUSEHOLD: "alices-macbook" and "partner-pixel" are the
-# two assistants bound to it in demo:binding — two devices, one shared board
+# two assistants bound to it in check:binding — two devices, one shared board
 # presence. Bob is the neighbour across the isolation boundary.
 LISTINGS = [
   # Alice's household account — posted through two different assistants.

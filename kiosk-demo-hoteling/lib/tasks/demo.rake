@@ -4,25 +4,24 @@
 # Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake demo:wire_args_spec DB-free unit spec for the WireArguments shape guard —
+#   rake check:wire_args_spec DB-free unit spec for the WireArguments shape guard —
 #                        the gate every verb opens with, and the only executable
 #                        coverage of it that needs no origin, no database and no
 #                        Equihash toll
-#   rake demo:conformance the four properties the protocol makes normative of
+#   rake check:conformance the four properties the protocol makes normative of
 #                        this origin — routes resolve, a verb executes, a query
 #                        answers its declared shape, data access is scoped to
 #                        the principal — asserted with `bundle exec rspec`
-#   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
+#   rake check:book       boots the server, runs script/hoteling_flow.rb (no-human full
 #                        booking chain), asserts happy path + negative gate, then runs
 #                        script/pay_window.rb in-process (capture-anchored paid state)
-#   rake demo:spending_cap the per-assistant spending cap: a spend under it settles,
+#   rake check:spending_cap the per-assistant spending cap: a spend under it settles,
 #                        one that would cross it is 403 spending_cap_exceeded, and two
 #                        spellings of one currency hit ONE cap
-#   rake demo:isolation  adversarial cross-tenant isolation test
-#   rake demo:redteam    adversarial regression battery (kiosk-redteam)
-#   rake demo:schema     self-discovery proof — verifies the schema verb over HTTP
-#   rake demo:browse     browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1)
-#   rake demo            setup + book (full end-to-end proof)
+#   rake check:isolation  adversarial cross-tenant isolation test
+#   rake check:redteam    adversarial regression battery (kiosk-redteam)
+#   rake check:schema     self-discovery proof — verifies the schema verb over HTTP
+#   rake check:browse     browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1)
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
@@ -76,6 +75,22 @@ def hoteling_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
+  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
+  task :setup do
+    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
+       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
+       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
+    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
+    # db:schema:load unconditionally: db/structure.sql is TRACKED in every demo,
+    # so a db:migrate arm would be unreachable in every checkout — and under
+    # `schema_format = :sql` it would re-dump that tracked file, dirtying the
+    # worktree. The canonical structure.sql is the source of truth.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
+  end
+end
+
+namespace :check do
+
   desc "The property's own decision — both branches, forced, with the wait collapsed."
   task property_decision: :environment do
     # WHY THIS TASK EXISTS. The decision is 80/20 on a random draw after a
@@ -146,7 +161,7 @@ namespace :demo do
                devent && devent["data"]["status"] == "cancelled")
     # A booking seeded here was never charged, so there is no settlement to
     # reverse and no refund block — which is the honest answer rather than an
-    # invented receipt. The CHARGED path is asserted by demo:book, which pays
+    # invented receipt. The CHARGED path is asserted by check:book, which pays
     # for real before the property answers.
     check.call("no refund is claimed for a booking that was never charged",
                devent && !devent["data"].key?("refund") && declined.refund_psp_reference.nil?)
@@ -172,7 +187,7 @@ namespace :demo do
         "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
         "cap_amount_cents, currency, expires_at, raw_jws) " \
         "VALUES ($1, $2::uuid, gen_random_uuid(), $3, 'booking', $4, 'eur', " \
-        "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
+        "now() + interval '1 hour', 'seeded-by-check:property_decision') RETURNING id",
         "seed intent", ["intent-#{SecureRandom.hex(6)}", booking.user_id,
                         Kiosk.configuration.issuer, booking.total_cents],
       ).first["id"]
@@ -180,7 +195,7 @@ namespace :demo do
         "INSERT INTO kiosk.cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, " \
         "issuer, line_items, total_amount_cents, currency, expires_at, raw_jws) " \
         "VALUES ($1, $2::uuid, $3::uuid, gen_random_uuid(), $4, $5::jsonb, $6, 'eur', " \
-        "now() + interval '1 hour', 'seeded-by-demo:property_decision') RETURNING id",
+        "now() + interval '1 hour', 'seeded-by-check:property_decision') RETURNING id",
         "seed cart", ["cart-#{SecureRandom.hex(6)}", intent_id, booking.user_id,
                       Kiosk.configuration.issuer, [{ booking_id: booking.id }].to_json,
                       booking.total_cents],
@@ -220,7 +235,7 @@ namespace :demo do
     # PAID FOR REAL, so the payment gates are satisfied and the refusal this
     # asserts is the one about the property's silence rather than about money.
     # A row that merely READS `paid` would stop at the settlement gate, which
-    # is `demo:book`'s SKIP_PAY beat and not this one.
+    # is `check:book`'s SKIP_PAY beat and not this one.
     pending = seed.call
     settle.call(pending)
     pending.update_columns(status: Booking::RESERVED)
@@ -285,7 +300,7 @@ namespace :demo do
   #
   # No server, no PoW and no bearer: the calls reach the registered handler
   # through a GUC-scoped session. The WIRE in front of those handlers is what
-  # demo:book, demo:search, demo:isolation and demo:redteam drive.
+  # check:book, check:search, check:isolation and check:redteam drive.
   desc "Conformance: routes resolve, verbs execute, queries answer their declared shape, data is principal-scoped."
   task :conformance do
     puts "\n── Kiosk conformance (rspec, RAILS_ENV=test) ──"
@@ -293,26 +308,13 @@ namespace :demo do
     sh "bundle exec rspec"
   end
 
-  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
-  task :setup do
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
-       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
-    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # db:schema:load unconditionally: db/structure.sql is TRACKED in every demo,
-    # so a db:migrate arm would be unreachable in every checkout — and under
-    # `schema_format = :sql` it would re-dump that tracked file, dirtying the
-    # worktree. The canonical structure.sql is the source of truth.
-    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
-  end
-
   desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), then the " \
        "in-process capture-window regression (script/pay_window.rb), assert."
   # `: :setup` IS LOAD-BEARING — it is what makes the headline task runnable
   # TWICE.
   #
-  # The consequence was measured, not argued: `demo:setup` 0, `demo:book` 0,
-  # `demo:book` again **1**, aborting at script/hoteling_flow.rb's "availability
+  # The consequence was measured, not argued: `demo:setup` 0, `check:book` 0,
+  # `check:book` again **1**, aborting at script/hoteling_flow.rb's "availability
   # returned empty rows". ONE pass consumes the entire inventory the driver can
   # reach. app/controllers/kiosk/hotels_controller.rb renders
   # `Property.order(:name)`, so the driver's `props.first` is deterministically
@@ -336,7 +338,7 @@ namespace :demo do
   # "redundant with the job-level demo:setup CI runs": CI is green by
   # construction, and the operator running the headline task a second time is
   # precisely the case that was broken.
-  task book: :setup do
+  task book: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -410,7 +412,7 @@ namespace :demo do
       # task drives. Both are the shipped behaviour with its two knobs turned:
       # a live viewer meets a two-to-five minute wait and a one-in-five refusal,
       # and a flow that met either would be asserting a coin toss behind a
-      # sleep. `demo:property_decision` is where both branches are driven on
+      # sleep. `check:property_decision` is where both branches are driven on
       # purpose, with the same knobs turned the other way.
       server_pid = spawn(
         { "KIOSK_ISSUER" => kiosk_issuer,
@@ -589,7 +591,7 @@ namespace :demo do
     # settlement row need a controllable PSP and the provider called directly —
     # so this run is IN-PROCESS against the same database, driving the real
     # verbs through the registry the wire dispatches to. It rides inside
-    # demo:book rather than becoming its own task because demo:book is already
+    # check:book rather than becoming its own task because check:book is already
     # this demo's pay-path gate.
     puts "\n══ RUN 3: capture-anchored paid state ══"
     window_rb = File.expand_path("../../script/pay_window.rb", __dir__)
@@ -609,8 +611,8 @@ namespace :demo do
   end
 end
 
-namespace :demo do
-  # ── demo:spending_cap ───────────────────────────────────────────────────────
+namespace :check do
+  # ── check:spending_cap ───────────────────────────────────────────────────────
   desc <<~DESC
     The per-assistant spending cap, and the one property that makes it a cap
     rather than a suggestion.
@@ -637,7 +639,7 @@ namespace :demo do
     all — and this is the only place in the fleet that boots one. Exits 1 on
     any assertion.
   DESC
-  task spending_cap: :setup do
+  task spending_cap: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -739,7 +741,7 @@ namespace :demo do
 
       # ── psql ground truth ──────────────────────────────────────────────
       #
-      # Anchored to THIS run's principal, the way demo:book's are: the
+      # Anchored to THIS run's principal, the way check:book's are: the
       # driver registers a fresh agent every run, so a DB-wide count would pass
       # on a previous run's rows.
       user_id = result["user_id"]
@@ -785,8 +787,8 @@ namespace :demo do
   end
 end
 
-namespace :demo do
-  # ── demo:isolation ──────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:isolation ──────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial cross-tenant isolation test.
 
@@ -817,7 +819,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task isolation: :setup do
+  task isolation: "demo:setup" do
     # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
     # Everything below proves B cannot read A's rows. This proves the scope all
     # of it rests on REFUSES when there is no principal at all, instead of
@@ -1003,11 +1005,11 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:isolation ─────────────────────────────────────────────────────
+  # ── end check:isolation ─────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:redteam ─────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery — kiosk-redteam.
 
@@ -1059,7 +1061,7 @@ namespace :demo do
     Exits 0 when all applicable scenarios are BLOCKED and skips match expectations.
     A BREACH = a real hole in hoteling — fix the app, not the scenario.
   DESC
-  task redteam: :setup do
+  task redteam: "demo:setup" do
     require "resolv"
     require "json"
     require "net/http"
@@ -1141,11 +1143,11 @@ namespace :demo do
       exit exit_status
     end
   end
-  # ── end demo:redteam ─────────────────────────────────────────────────────
+  # ── end check:redteam ─────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:schema ─────────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:schema ─────────────────────────────────────────────────────────────
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
@@ -1166,7 +1168,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task schema: :setup do
+  task schema: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -1475,11 +1477,11 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:schema ─────────────────────────────────────────────────────────
+  # ── end check:schema ─────────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:search ─────────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:search ─────────────────────────────────────────────────────────────
   desc <<~DESC
     Pagination + detail-by-id proof.
 
@@ -1512,7 +1514,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task search: :setup do
+  task search: "demo:setup" do
     require "resolv"
     require "net/http"
     require "uri"
@@ -1750,13 +1752,11 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:search ─────────────────────────────────────────────────────────
+  # ── end check:search ─────────────────────────────────────────────────────────
 end
 
-desc "End-to-end Kiosk hoteling demo: setup the DB then prove the full booking chain."
-task demo: ["demo:setup", "demo:book"]
 
-namespace :demo do
+namespace :check do
   desc <<~DESC
     Browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1).
 
@@ -1774,7 +1774,7 @@ namespace :demo do
     answered 402 with challenges and then 200 once they are solved. Requires
     python3 + numpy.
   DESC
-  task browse: :setup do
+  task browse: "demo:setup" do
     require "resolv"
     require "net/http"; require "uri"; require "json"; require "shellwords"
 

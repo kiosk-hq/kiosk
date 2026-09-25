@@ -229,7 +229,7 @@ rc_confirm, confirm_resp = post_json(
 # KEPT it: a value minted for the response and stored in no column cannot be
 # matched when a guest quotes it at the desk.
 # Re-query my_bookings for this booking and report the stored code, so
-# demo:book can assert the two are the same string.
+# check:book can assert the two are the same string.
 rc_mine, mine_resp = query_json(
   "my_bookings", {},
   { "Authorization" => "Bearer #{token}" },

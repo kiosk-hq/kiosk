@@ -6,21 +6,20 @@ require "resolv"
 
 # philslist demo orchestration (NON-COMMERCE classifieds board). Sub-tasks:
 #
-#   rake demo:clock_spec   DB-free unit spec for the board clock a listing's
+#   rake check:clock_spec   DB-free unit spec for the board clock a listing's
 #                          publication time is read on, run under two TZ values
-#   rake demo:access_spec  DB-free unit spec for the owner-scoped refusal
+#   rake check:access_spec  DB-free unit spec for the owner-scoped refusal
 #                          surface — the listing_id shape guard and the
 #                          not-owner sentence both write verbs share
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
-#   rake demo:walkthrough  boots the server, runs the browse→post→edit→close
+#   rake check:walkthrough  boots the server, runs the browse→post→edit→close
 #                          curl showcase (NO payment step), tears down
-#   rake demo:isolation    adversarial cross-owner denial test (write denial)
-#   rake demo:register     registration-PoW demo (no-proof 402 → solve → 201)
-#   rake demo:binding      account-binding walkthrough (claim ceremony over the
+#   rake check:isolation    adversarial cross-owner denial test (write denial)
+#   rake check:register     registration-PoW demo (no-proof 402 → solve → 201)
+#   rake check:binding      account-binding walkthrough (claim ceremony over the
 #                          real Devise session + link-code redeem + unlink)
-#   rake demo:redteam      adversarial regression battery against the live surface
-#   rake demo:schema       self-discovery + NOT-ONLY-COMMERCE proof (pay absent)
-#   rake demo              setup + walkthrough end-to-end
+#   rake check:redteam      adversarial regression battery against the live surface
+#   rake check:schema       self-discovery + NOT-ONLY-COMMERCE proof (pay absent)
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.
@@ -115,6 +114,21 @@ def philslist_boot_server(log:, port:, host: "127.0.0.1", extra_env: {})
 end
 
 namespace :demo do
+  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
+  task :setup do
+    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
+       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
+       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
+    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
+    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
+    # directly (no RLS). Use db:schema:load instead of db:migrate so the
+    # canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
+  end
+end
+
+namespace :check do
+
   desc "DB-free unit spec for the board clock a listing's publication time is read on, run under two TZ values."
   task :clock_spec do
     spec = File.expand_path("../../spec/board_clock_spec.rb", __dir__)
@@ -133,18 +147,6 @@ namespace :demo do
     spec = File.expand_path("../../spec/listing_access_spec.rb", __dir__)
     puts "\n── owner-scoped refusal surface (no boot, no DB) ──"
     sh "ruby #{spec}"
-  end
-
-  desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
-  task :setup do
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
-       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
-    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
-    # directly (no RLS). Use db:schema:load instead of db:migrate so the
-    # canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
-    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
   desc "Boot the server and run the demo walkthrough (browse→post→edit→close)."
@@ -200,7 +202,7 @@ namespace :demo do
     Exits 0 if all assertions hold; exits 1 on failure. A red assertion = a real
     isolation hole: fix the app, not the test.
   DESC
-  task isolation: :setup do
+  task isolation: "demo:setup" do
     # ── OFF THE WIRE, BEFORE ANY SERVER STARTS ─────────────────────────────
     # Everything below proves B cannot read A's rows. This proves the scope all
     # of it rests on REFUSES when there is no principal at all, instead of
@@ -249,7 +251,7 @@ namespace :demo do
     # The two seeded humans behind the two assistants (db/seeds.rb). The driver
     # EARNS each principal through the shipped ceremony — register → the human's
     # Devise sign-in → link → claim — so it needs real credentials, and they
-    # travel as env the way demo:binding's do rather than as literals inside
+    # travel as env the way check:binding's do rather than as literals inside
     # script/isolation_flow.rb.
     alice_email   = "alice@example.com"
     bob_email     = "bob@example.com"
@@ -440,10 +442,8 @@ namespace :demo do
   end
 end
 
-desc "End-to-end philslist demo: setup the DB then run the walkthrough."
-task demo: ["demo:setup", "demo:walkthrough"]
 
-namespace :demo do
+namespace :check do
   desc <<~DESC
     Registration-PoW demo.
 
@@ -453,7 +453,7 @@ namespace :demo do
     with no proof → 402; solve the Equihash challenge and resubmit → 201; the
     fresh token posts a listing → 200. Requires python3 + numpy.
   DESC
-  task register: :setup do
+  task register: "demo:setup" do
     require "json"; require "shellwords"
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
@@ -520,7 +520,7 @@ namespace :demo do
   end
 end
 
-namespace :demo do
+namespace :check do
   desc <<~DESC
     Account-binding walkthrough — the binding ceremony + MULTI-ACCOUNT proof.
 
@@ -541,7 +541,7 @@ namespace :demo do
 
     Exits 0 if every assertion holds; exits 1 on failure.
   DESC
-  task binding: :setup do
+  task binding: "demo:setup" do
     require "json"; require "shellwords"
 
     port    = ENV.fetch("PORT", "3006")
@@ -640,8 +640,8 @@ namespace :demo do
   end
 end
 
-namespace :demo do
-  # ── demo:redteam ─────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery — attacks philslist's live surface.
 
@@ -688,14 +688,14 @@ namespace :demo do
     was not expected to skip. A BREACH = a real hole — fix the app, not the
     scenario.
   DESC
-  task redteam: :setup do
+  task redteam: "demo:setup" do
     require "shellwords"
     port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-redteam.log"
 
     # The two seeded humans behind the battery's principals (db/seeds.rb): the
     # suite EARNS them through the shipped ceremony instead of writing tokens
-    # down, so it needs credentials, passed as env like demo:binding's.
+    # down, so it needs credentials, passed as env like check:binding's.
     alice_email   = "alice@example.com"
     bob_email     = "bob@example.com"
     demo_password = "philslist-demo-password"
@@ -744,11 +744,11 @@ namespace :demo do
       exit exit_status
     end
   end
-  # ── end demo:redteam ─────────────────────────────────────────────────────
+  # ── end check:redteam ─────────────────────────────────────────────────────
 end
 
-namespace :demo do
-  # ── demo:schema ───────────────────────────────────────────────────────────
+namespace :check do
+  # ── check:schema ───────────────────────────────────────────────────────────
   desc <<~DESC
     Self-discovery + NOT-ONLY-COMMERCE proof — verifies the schema verb AND the
     discovery documents over HTTP.
@@ -775,7 +775,7 @@ namespace :demo do
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
-  task schema: :setup do
+  task schema: "demo:setup" do
     require "json"
     port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-schema.log"
@@ -1062,5 +1062,5 @@ namespace :demo do
       exit 1
     end
   end
-  # ── end demo:schema ────────────────────────────────────────────────────────
+  # ── end check:schema ────────────────────────────────────────────────────────
 end

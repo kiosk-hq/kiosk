@@ -7,12 +7,12 @@ Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled
 - Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string, an action is a `POST /kiosk/<action-name>` with its arguments as the JSON body, and the success body IS the result (no envelope). `GET /kiosk/schema`, `GET /kiosk/openapi.json` and `POST /kiosk/pay` keep their own paths; errors are RFC 9457 problem documents whose top-level `code` is what an assistant branches on
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 - A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a small set of services, each with a EUR price, all always bookable (infinite capacity, overbooking allowed — the salon never fills up, so the demo never goes empty or stale and needs no reseed cron). The salon starts with zero bookings; real bookings accumulate as visitors book.
-- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
-- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and the salon **owner** views the forecast. The owner's role, supplied by the operator's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees every booking + a *forecasted* € revenue — summed live from the actual bookings' prices, starting at €0 and growing as visitors book; a visitor sees only their own bookings and no forecast). Walked by `rake demo:roles`. (Multi-account is deferred, so a tester acts as a visitor **or** as the owner, not both at once.)
+- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake check:binding`
+- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and the salon **owner** views the forecast. The owner's role, supplied by the operator's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees every booking + a *forecasted* € revenue — summed live from the actual bookings' prices, starting at €0 and growing as visitors book; a visitor sees only their own bookings and no forecast). Walked by `rake check:roles`. (Multi-account is deferred, so a tester acts as a visitor **or** as the owner, not both at once.)
 
 Stylish is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
-> **Auth:** The Kiosk auth story is `kiosk-pop` — register/login by proof-of-possession; `rake demo:register` exercises it end-to-end. The mounted `/kiosk/oauth/*` endpoints are the **account-binding ceremony** (RFC 8628 shape): an assistant's public key gets bound to an existing human account after the human — signed in through the demo's real Devise form — approves on the verify page, and the token poll requires a possession proof for that key. The reverse direction is the human-initiated link code (`/kiosk/auth/link` → `/kiosk/auth/claim`), and `/kiosk/auth/unlink` revokes one assistant without touching the human's own session. Tokens are always minted by kiosk-pop; `/auth.md` describes the methods. `rake demo:binding` walks all of it end-to-end.
+> **Auth:** The Kiosk auth story is `kiosk-pop` — register/login by proof-of-possession; `rake check:register` exercises it end-to-end. The mounted `/kiosk/oauth/*` endpoints are the **account-binding ceremony** (RFC 8628 shape): an assistant's public key gets bound to an existing human account after the human — signed in through the demo's real Devise form — approves on the verify page, and the token poll requires a possession proof for that key. The reverse direction is the human-initiated link code (`/kiosk/auth/link` → `/kiosk/auth/claim`), and `/kiosk/auth/unlink` revokes one assistant without touching the human's own session. Tokens are always minted by kiosk-pop; `/auth.md` describes the methods. `rake check:binding` walks all of it end-to-end.
 
 ## Run the demo
 
@@ -22,10 +22,11 @@ The demo lives in the Kiosk monorepo and resolves its gems by path
 ```sh
 cd kiosk-demo-stylish
 bundle install
-rake demo
+bin/setup                        # seed, then serve the origin
+rake demo:setup check:walkthrough   # or assert it instead
 ```
 
-`rake demo` creates the Postgres database, runs migrations + seeds, boots the Rails server, and walks through discovery, named queries, the `book_appointment` Action, and Alice/Bob isolation with `curl` + `jq` output. (`/kiosk/schema` and `/kiosk/pay` are not part of this walkthrough — see `rake demo:schema` and the e2e harness.)
+`bin/setup` creates the Postgres database, loads the schema + seeds and leaves the origin running for an assistant to drive — see "Watch it work" below. `check:walkthrough` instead walks through discovery, named queries, the `book_appointment` Action, and Alice/Bob isolation with `curl` + `jq` output, asserting each step. (`/kiosk/schema` and `/kiosk/pay` are not part of that walkthrough — see `rake check:schema` and the e2e harness.)
 
 <!-- PREREQS:BEGIN — generated by bin/check-demo-prereqs --write; do not edit by hand -->
 ### Prerequisites
@@ -79,7 +80,7 @@ The walkthrough (`bin/demo`) prints these sections:
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs are at `/tmp/kiosk-demo.log` if you want to inspect what hit the HTTP surface.
 
-### Account binding (`rake demo:binding`)
+### Account binding (`rake check:binding`)
 
 Two flows, one run, all over plain HTTP against the live app:
 
@@ -88,18 +89,18 @@ Two flows, one run, all over plain HTTP against the live app:
 
 The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` for the bound key equals the human's id, and the booking landed on the human's own row.
 
-### Roles from an IdP (`rake demo:roles`)
+### Roles from an IdP (`rake check:roles`)
 
 The role an assistant works with is sourced **indirectly, from the bound human's IdP role** — the natural extension of the link ceremony. Both principals use the SAME channel: they sign in at `/users/sign_in` with real Devise, and `kiosk-user-idp-devise` asks the `User` model for `#kiosk_role`, which returns the provider's own `staff_role` column. The salon **owner** carries `owner` there; a plain **customer** carries none:
 
 1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every visitor's booking) plus a **forecasted** € revenue total — summed live from the actual bookings' prices, starting at €0 and growing as visitors book, never a fixed number.
 2. **Customer** → the token carries `role: customer` → `salon_calendar` returns **only that customer's own bookings**, and **no forecast**.
 
-The role rides the token, sourced from the operator's identity system — never self-selected by the AI assistant. It is read off the approving human in **both** binding directions: the link ceremony captures it when the human mints the code, and the claim ceremony captures it when the human approves at the verify page — so a customer's assistant cannot widen its scope to the owner's book, whichever door it comes through, and the query's `WHERE` is operator-controlled besides. The verify page names the access it is handing over, so the approval is given knowing what it grants. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`.
+The role rides the token, sourced from the operator's identity system — never self-selected by the AI assistant. It is read off the approving human in **both** binding directions: the link ceremony captures it when the human mints the code, and the claim ceremony captures it when the human approves at the verify page — so a customer's assistant cannot widen its scope to the owner's book, whichever door it comes through, and the query's `WHERE` is operator-controlled besides. The verify page names the access it is handing over, so the approval is given knowing what it grants. `rake check:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`.
 
-**What the redteam battery proves, and where to read it.** Both binding directions are covered. The claim direction takes four beats (`DeviceGrantCannotSelfSelectRole`, `DeviceGrantRoleComesFromTheApprover`, `DeviceGrantVerifyPageNamesTheAccess`, `DeviceGrantRebindCannotEscalate`), the **rebind** among them, because a first-bind-only guard leaves the second bind open; each was watched failing against an engine without the fix before it was allowed to pass. **Read the beat list in `rake demo:redteam`'s own description, never a summary sentence here:** a summary is a second statement of what the battery covers, and the battery is the one that runs.
+**What the redteam battery proves, and where to read it.** Both binding directions are covered. The claim direction takes four beats (`DeviceGrantCannotSelfSelectRole`, `DeviceGrantRoleComesFromTheApprover`, `DeviceGrantVerifyPageNamesTheAccess`, `DeviceGrantRebindCannotEscalate`), the **rebind** among them, because a first-bind-only guard leaves the second bind open; each was watched failing against an engine without the fix before it was allowed to pass. **Read the beat list in `rake check:redteam`'s own description, never a summary sentence here:** a summary is a second statement of what the battery covers, and the battery is the one that runs.
 
-### The salon's clock (`rake demo:clock_spec`)
+### The salon's clock (`rake check:clock_spec`)
 
 `book_appointment` takes an INSTANT. A haircut happens at a chair, at an address, at an hour, so the clock every wall-clock answer here is written on is **that salon's** — `salons.timezone`, a recorded column, read off the salon being booked. `app/models/salon_clock.rb` is the one place that says so, the same shape atablefor and hoteling use for their own service places. `Europe/Paris` survives in that file only as the ORIGIN DEFAULT: what fills the column, and what dates the published example, which addresses no salon.
 
@@ -107,30 +108,46 @@ The role rides the token, sourced from the operator's identity system — never 
 
 The rule has to be STATED, because the default is not one. Stdlib `Time.iso8601` binds a zoneless string to whatever zone the **server process** happens to run in: measured, the same `2026-09-14T14:00:00` is `+11:00` under `TZ=Etc/GMT-11` and `-02:00` under `TZ=Etc/GMT+2`, thirteen hours apart, from an environment variable nobody sets deliberately. That is the value now refused by name.
 
-`rake demo:clock_spec` is DB-free (no server, no Postgres, no PoW) and runs `spec/salon_clock_spec.rb` **twice**, under those two `TZ` values, because that is the only way the class is visible: inside a single run the process zone and the intended zone agree and every assertion passes. It checks a zoneless value is recognised as naming no instant while five offset spellings are; pins the three spellings of one instant to one absolute epoch and shows that epoch is unchanged when it is read on another salon's clock; shows one instant PUBLISHED on two salons' clocks reads back as two different strings, which is the whole of why the zone is a column; checks the January answer is CET rather than a summer offset frozen into the constant; and checks the shape gate still refuses `"banana"`, `"12345"` and a bare `"2026-09-14"` rather than turning them into plausible appointments.
+`rake check:clock_spec` is DB-free (no server, no Postgres, no PoW) and runs `spec/salon_clock_spec.rb` **twice**, under those two `TZ` values, because that is the only way the class is visible: inside a single run the process zone and the intended zone agree and every assertion passes. It checks a zoneless value is recognised as naming no instant while five offset spellings are; pins the three spellings of one instant to one absolute epoch and shows that epoch is unchanged when it is read on another salon's clock; shows one instant PUBLISHED on two salons' clocks reads back as two different strings, which is the whole of why the zone is a column; checks the January answer is CET rather than a summer offset frozen into the constant; and checks the shape gate still refuses `"banana"`, `"12345"` and a bare `"2026-09-14"` rather than turning them into plausible appointments.
 
 **The clock decides on the way OUT too, and every row says which one it was.** Every verb that publishes an appointment instant — the `book_appointment` confirmation, its `slot` refusals, `my_appointments`, `salon_calendar` — renders it through `SalonClock.publish` on the booked salon's own zone and publishes that zone as `timezone`, so one booking is one string wherever you read it and an owner reading a book that spans two cities reads each row where its chair is. Underneath, `appointments.slot` is `timestamp with time zone`, the same as the instant columns in atablefor and getgrocery: an invariant about instants belongs in the schema, not in `ActiveRecord.default_timezone`, which is a framework default an operator may change in one line.
+
+### Watch it work
+
+`bin/setup` seeds this demo and leaves the origin running on
+<http://localhost:3000>. Then say this to your AI assistant:
+
+> There is a Kiosk origin at http://localhost:3000 — read its
+> `/.well-known/kiosk.json` and book me a haircut at Combette on Park next Tuesday afternoon.
+
+It discovers the wire, registers itself and drives the flow. If it asks you to
+approve the link, sign in at <http://localhost:3000/users/sign_in> as
+`alice@example.com` / `combette-demo-password` and approve it there.
+
+Everything under `check:` below asserts and exits non-zero when it breaks; that
+is what CI runs. `demo:setup` prepares the database.
 
 <!-- CI-TASKS:BEGIN — generated by bin/check-ci-tasks --write; do not edit by hand -->
 ### Which of these run in CI
 
-`.github/workflows/ci.yml` runs the tasks marked **yes** on every push and pull
-request; the rest are local-only, for the reason given. This table is generated
-from the workflow by `bin/check-ci-tasks`, which fails the build when the
-workflow, this table and `lib/tasks/demo.rake` disagree — so a task that carries
-assertions cannot go ungated and unexplained.
+A `check:` task asserts and goes red; a `demo:` task is one a person runs and
+reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
+and pull request; the rest are local-only, for the reason given. This table is
+generated from the workflow by `bin/check-ci-tasks`, which fails the build when
+the workflow, this table and `lib/tasks/demo.rake` disagree — so a task that
+carries assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
-| `demo:clock_spec` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
-| `demo:walkthrough` | yes |  |
-| `demo:isolation` | yes |  |
-| `demo:register` | yes |  |
-| `demo:binding` | no | timing-sensitive: the account-binding ceremony polls on the advertised RFC 8628 device-grant interval, which flakes on a shared runner. Local-only on every demo that has a poll-timed binding task; atablefor's demo:binding carries no such timing and does run in CI. |
-| `demo:roles` | yes |  |
-| `demo:redteam` | yes |  |
-| `demo:schema` | yes |  |
+| `check:clock_spec` | yes |  |
+| `check:walkthrough` | yes |  |
+| `check:isolation` | yes |  |
+| `check:register` | yes |  |
+| `check:binding` | no | timing-sensitive: the account-binding ceremony polls on the advertised RFC 8628 device-grant interval, which flakes on a shared runner. Local-only on every demo that has a poll-timed binding task; atablefor's check:binding carries no such timing and does run in CI. |
+| `check:roles` | yes |  |
+| `check:redteam` | yes |  |
+| `check:schema` | yes |  |
 <!-- CI-TASKS:END -->
 
 ## Repo tour
@@ -149,15 +166,15 @@ assertions cannot go ungated and unexplained.
 | `script/roles_flow.rb` | roles-from-IdP driver: the owner links an assistant + a customer signs in, `salon_calendar` gates on the inherited role |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |
 | `app/models/salon_clock.rb` | The origin's default IANA zone, the lookup that reads a salon's own out of `salons.timezone`, and the `slot` parse that refuses a value carrying no offset — a plain module, no AR on the paths that matter, so `spec/salon_clock_spec.rb` can exercise it with no boot and no database |
-| `spec/salon_clock_spec.rb` | The DB-free proof of that parse, run under two `TZ` values by `rake demo:clock_spec` |
-| `lib/tasks/demo.rake` | `rake demo:clock_spec`, `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:binding`, `rake demo:roles`, `rake demo:redteam`, `rake demo:schema` |
+| `spec/salon_clock_spec.rb` | The DB-free proof of that parse, run under two `TZ` values by `rake check:clock_spec` |
+| `lib/tasks/demo.rake` | `rake check:clock_spec`, `rake demo:setup`, `rake check:walkthrough`, `rake check:isolation`, `rake check:register`, `rake check:binding`, `rake check:roles`, `rake check:redteam`, `rake check:schema` |
 
 ## Make it real
 
 The demo bakes in shortcuts that production operators replace. Each transition is small. Two DIFFERENT identity seams are involved — keep them straight:
 
 - **Synthetic users (Alice, Bob) + the staff owner** → real user table populated by your operator's signup flow (the demo already gives them real Devise credentials, and every driver here signs in through the real form like a person would).
-- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**, so the engine's own `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` verifies the kiosk-pop JWTs this very engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` and the binding ceremony — in every environment. `rake demo:redteam`'s `SelfAssertedTokenForgery` beat asserts over the live wire that a self-asserted `agent:u-…:a-…:r-…` string resolves to no identity at all — the shape a dev-only parser in front of this seam would turn into an identity at any role it asked for, `owner` included. Set this seam **only** to front an EXTERNAL agent-identity issuer (an ID-JAG-style agent-IdP), by subclassing `Kiosk::AgentIdentityProviders::Base` — the only subclass Kiosk ships is the bundled `DefaultAgentIdp` named above, so an adapter fronting an external issuer is yours to write. Whatever you write, the `agent_id` your adapter returns must be a **UUID string**: every `agent_id` column in the `kiosk` schema (and `kiosk.current_agent_id()`) is typed `uuid`, with no `user_id_type`-style knob to widen it, so a foreign issuer's agent identifier has to be mapped onto a local uuid inside the adapter.
+- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**, so the engine's own `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` verifies the kiosk-pop JWTs this very engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` and the binding ceremony — in every environment. `rake check:redteam`'s `SelfAssertedTokenForgery` beat asserts over the live wire that a self-asserted `agent:u-…:a-…:r-…` string resolves to no identity at all — the shape a dev-only parser in front of this seam would turn into an identity at any role it asked for, `owner` included. Set this seam **only** to front an EXTERNAL agent-identity issuer (an ID-JAG-style agent-IdP), by subclassing `Kiosk::AgentIdentityProviders::Base` — the only subclass Kiosk ships is the bundled `DefaultAgentIdp` named above, so an adapter fronting an external issuer is yours to write. Whatever you write, the `agent_id` your adapter returns must be a **UUID string**: every `agent_id` column in the `kiosk` schema (and `kiosk.current_agent_id()`) is typed `uuid`, with no `user_id_type`-style knob to widen it, so a foreign issuer's agent identifier has to be mapped onto a local uuid inside the adapter.
 - **The USER-IdP seam** (`c.user_idp`) is **not** one of them: this demo wires `kiosk-user-idp-devise` and nothing else, in every environment. Swapping Devise for your real SSO/OIDC session means implementing `Kiosk::UserIdentityProviders::Base` and setting `c.user_idp` — the role your adapter returns is the role the assistant inherits at link time, unchanged. The Devise adapter gets it from `User#kiosk_role`, which this demo maps onto the provider's own `staff_role` column; yours would read it from wherever your identity system keeps it.
 
 ## License

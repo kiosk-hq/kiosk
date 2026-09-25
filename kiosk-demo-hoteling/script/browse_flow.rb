@@ -16,7 +16,7 @@
 # 402 this driver expects on the un-proofed `reserve_room` is what proves the
 # branch fires at all.
 #
-# Usage (invoked by rake demo:browse — needs the server with KIOSK_POW_BROWSE_DEMO=1):
+# Usage (invoked by rake check:browse — needs the server with KIOSK_POW_BROWSE_DEMO=1):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/browse_flow.rb
 # Requires: python3 with numpy.
 

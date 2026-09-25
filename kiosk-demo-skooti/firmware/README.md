@@ -350,7 +350,7 @@ so, and the table below is where that status is tracked.
 | Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test`) |
 | Field count is exactly 6 — a 5-, 7- or 8-field message with a VALID dev-key signature is rejected | **PROVEN** (`make test`) |
 | A trailing `|` is a seventh field, not punctuation — validly signed, still rejected | **PROVEN** (`make test`) |
-| A pipe in an issuer input shifts fields so `field[4]` reads a caller-chosen expiry — rejected by the count gate, and refused by the issuer before it signs | **PROVEN** (`make test`, `demo:kat`) |
+| A pipe in an issuer input shifts fields so `field[4]` reads a caller-chosen expiry — rejected by the count gate, and refused by the issuer before it signs | **PROVEN** (`make test`, `check:kat`) |
 | Field charsets — an empty field, a non-numeric `iat`, a signed or overflowing `exp`, a jti in the wrong alphabet: all rejected with a VALID signature | **PROVEN** (`make test`) |
 | `scooter_code` and `reservation_id` hold the RFC 3986 unreserved set, and EVERY one of the 256 byte values is run through all three readers rather than sampled | **PROVEN** (`make crosscheck`) |
 | The verdict is a function of the token's bytes — six Ruby encoding tags over one token give one answer, and none of them raises | **PROVEN** (`make crosscheck`) |

@@ -1999,22 +1999,12 @@ jobs:
         run: ./deploy/check-live-hsts.sh --self-test
 
   # THE THIRD OF THE SAME FAMILY, AND THE ONE THAT HOLDS THE ENV FILES.
-  # /etc/kiosk-demo/*.env was driven by NO repository file until deploy/rollout.sh:
-  # box-prep-2026-08-11.sh says so in its own header, and the cost was thirty-five
-  # days of `501 module_not_served` from both KYC operators, each holding a correct
-  # secret under a name the app had stopped reading.
-  #
-  # ONLY THE --self-test RUNS HERE, for the reason the two jobs above give: the real
-  # run needs a shell on a box this repository does not deploy. What CI can honestly
-  # hold is that the script still decides correctly, and it holds a lot — the arms
-  # build their own tree under mktemp -d and prove the env-file parser, that a wiped
-  # box with no vault REFUSES and writes not one blank, that a second --apply leaves
-  # every file byte-identical, that --check reddens on a changed declared value and
-  # on a retired name, that both sides of the shared KYC secret are written from one
-  # value and a half-pair is refused, that each operator pins exactly the broker's
-  # own public half, and that a sentinel secret reaches the FILE and never the
-  # OUTPUT. Plus a vacuity arm: every REPLACE_ slot in every shipped template must
-  # be classified, so a new secret in deploy/env/ cannot slip past unclassified.
+  # /etc/kiosk-demo/*.env is driven by deploy/rollout.sh and by nothing else. The
+  # real run needs a shell on a box this repository does not deploy, so what CI
+  # holds is the decision, against a fake root: a box missing a value somebody
+  # else holds writes nothing and exits non-zero; a box that has those values
+  # converges in one run, stays converged on the next, pairs the KYC secret
+  # across the two files that name it differently, and prints no secret.
   deploy-rollout:
     name: the declarative env rollout works (deploy/rollout.sh)
     runs-on: ubuntu-latest
@@ -2023,8 +2013,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: rollout self-test
-        run: ./deploy/rollout.sh --self-test
+      - name: it refuses a wiped box, then converges and stays converged
+        run: |
+          export KIOSK_ENV_DIR=$RUNNER_TEMP/kiosk-demo KIOSK_SRC=$PWD
+          export KIOSK_OWNER="$(id -un):$(id -gn)"
+          mkdir -p "$KIOSK_ENV_DIR"
+          ! ./deploy/rollout.sh
+          [ -z "$(ls -A "$KIOSK_ENV_DIR")" ]
+          for u in atablefor getgrocery hoteling philslist skooti stylish tudu prove; do
+            echo "KIOSK_$(echo "$u" | tr a-z A-Z)_DB_PASSWORD=pw-$u" >"$KIOSK_ENV_DIR/$u.env"
+          done
+          echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/getgrocery.env"
+          printf 'KIOSK_UNLOCK_SIGNING_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/skooti.env"
+          printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/prove.env"
+          ./deploy/rollout.sh
+          ! ./deploy/rollout.sh | grep -q '^wrote'
+          ! ./deploy/rollout.sh | grep -q 'pw-tudu'
+          s=$(sed -n 's/^KIOSK_PROVE_INTAKE_SECRET=//p' "$KIOSK_ENV_DIR/skooti.env")
+          [ -n "$s" ] && grep -qx "KIOSK_PROVE_SKOOTI_SECRET=$s" "$KIOSK_ENV_DIR/prove.env"
+          [ "$(stat -c '%U:%G %a' "$KIOSK_ENV_DIR/tudu.env")" = "$KIOSK_OWNER 640" ]
 
   # What a `gem install` gets is NOT what this repo contains, and until now
   # nothing checked the difference. kiosk-server's spec.files globbed lib/ only,

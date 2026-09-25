@@ -15,8 +15,8 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
-| `rollout.sh` | **The only supported way `/etc/kiosk-demo/*.env` is set.** Run it ON THE BOX. It renders every unit's env file from `env/<app>.env.example` — names, order, comments and every value this repository decides — and fills the `REPLACE_*` slots from the box's own current values or from an operator-supplied vault file. `--check` answers «is the live configuration what this tree says it should be?» and changes nothing; `--apply` brings a drifted box into line, backs up what it changes, names the units to restart and restarts none of them. It carries no secret and prints none, and it gives every env file to the account the push-to-deploy hook runs as, at mode `0640`. On a box with nothing to source from it NAMES what is missing and writes nothing, rather than writing a blank. `--self-test` builds a throwaway tree and proves the parser, idempotence, drift correction, the refusal, and both directions of the KYC pairing; it touches no host and runs in CI. |
-| `box-prep-2026-08-11.sh` | **Spent — a record of what was done on that date, not a step.** It stripped the legacy PoW flags and the long-dead `KIOSK_POW_REGISTER_DEMO` from the hand-maintained env files, one time, before the deploy that followed. Everything it did is now a standing property of `rollout.sh`, which removes a retired name on every `--apply` instead of once. Kept, because a dated one-shot is history; do not run it. |
+| `rollout.sh` | **The only supported way `/etc/kiosk-demo/*.env` is set.** Run it ON THE BOX, with no flags — it is idempotent, so running it is also how you check. It renders every unit's env file from `env/<app>.env.example` (names, order, comments and every value this repository decides), keeps the `REPLACE_*` values the box already has, mints the ones nothing off the box holds a half of, and NAMES the four that someone else holds instead of writing a blank. Owner `ubuntu:ubuntu` and mode `0640` are two literal lines in it. Backs up what it changes, prints the `systemctl restart` line per changed unit, restarts nothing. See [Configuration is DECLARED](#configuration-is-declared). |
+| `box-prep-2026-08-11.sh` | **Spent — a record of what was done on that date, not a step.** It stripped the legacy PoW flags and the long-dead `KIOSK_POW_REGISTER_DEMO` from the hand-maintained env files, one time, before the deploy that followed. Everything it did is now a standing property of `rollout.sh`, which renders each file from its template on every run instead of once. Kept, because a dated one-shot is history; do not run it. |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
 | `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template says OK for as long as the box serves without the header. `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
 | `live-fleet-drive.rb` | **Run it by hand after a deploy — it is not a CI job.** Drives every vhost in `Caddyfile` with the drivers this repo ships (`Kiosk::Redteam::Wire`, `Kiosk::Redteam::Client`) and then runs `e2e/schema_conformance.rb` against the bytes each origin served — the only place §16.3's «every wire object validates against its JSON Schema» is asserted about a DEPLOYED byte rather than a localhost one. **Every probe is read-only**: the two registration probes are the ones that must be REFUSED, and the query probes carry a forged bearer or none, so no domain row is created and none is deleted. The one residue is measured and named in the script's header — the possession handshake's `GET /auth/challenge` leaves a single-use nonce per origin in that origin's in-process TTL store, which expires unaided and reaches no database. It therefore cannot run the shipped `Scenarios::*` battery, each of which registers principals and stages state — including `RegistrationWithoutPow`, whose control registers successfully. It borrows a demo's bundle automatically (`KIOSK_DRIVE_BUNDLE` picks another). `--self-test` covers the vhost derivation and the TLS seam and touches no host; the live drive stays out of CI for `check-live-hsts.sh`'s reason — CI must not depend on a box this repo does not deploy. |
@@ -26,98 +26,69 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
 | `README.md` | This runbook. |
 
-## Configuration is DECLARED, and a wipe is a question with an answer
+## Configuration is DECLARED
 
 `/etc/kiosk-demo/<app>.env` is what every unit reads, and an env file a hand
-maintains is joined to this repository by nothing. The cost of that is not
-theoretical: an app whose secret sits under a name it does not read fails CLOSED
-and SILENTLY — the descriptor still advertises the verb, the verb answers a
-cacheable `501 module_not_served`, and no request from outside can tell that
-apart from an operator that genuinely serves no such module. Both KYC operators
-answered exactly that for thirty-five days. A rename that ships with a sentence
-asking deploys to follow it has shipped no mechanism at all.
+maintains is joined to this repository by nothing. An app whose secret sits
+under a name it does not read fails CLOSED and SILENTLY: the descriptor still
+advertises the verb, the verb answers a cacheable `501 module_not_served`, and
+nothing an outsider can probe tells that apart from an operator that serves no
+such module.
 
-`rollout.sh` is the mechanism. **`deploy/env/<app>.env.example` is the
+`rollout.sh` is the mechanism, and **`deploy/env/<app>.env.example` is the
 declaration** — the variable set, the order, the comments and every value this
-repository gets to decide — and the script renders it onto the box, filling only
-the `REPLACE_*` slots. So there is exactly one place to change the fleet's
-configuration, and it is a file in this repository:
+repository gets to decide. The script renders it onto the box, filling only the
+`REPLACE_*` slots. It has no flags: running it IS the check, because it is
+idempotent.
 
 ```sh
-ssh <deploy-user>@<box> 'sudo bash -s' -- --check < deploy/rollout.sh   # is the box what the tree says?
-ssh <deploy-user>@<box> 'sudo bash -s' -- --apply < deploy/rollout.sh   # make it so
+ssh <deploy-user>@<box> 'sudo bash -s' < deploy/rollout.sh
 ```
 
-The declaration it reads is the checkout **on the box** (`/srv/kiosk`), not
-`main` — an env file belongs to the code that reads it, and that is the code the
-units are running. So a box behind `main` is checked against templates that are
-behind it too; deploy first if the question you mean is «does the fleet match
-head».
+It prints `ok <unit>` for a file that already agrees and `wrote <unit>` plus the
+`systemctl restart` line for one it changed, backs up what it changes to
+`<file>.bak-<date>`, and restarts nothing. The declaration it reads is the
+checkout **on the box** (`/srv/kiosk`), not `main` — an env file belongs to the
+code that reads it — so deploy first if the question you mean is «does the fleet
+match head».
 
-`--check` changes nothing and exits 1 when a declared variable is missing,
-empty, still a placeholder or carrying a value the tree disagrees with, when a
-retired name is still assigned, or when the two sides of the shared KYC secret
-do not pair. Ordering and comments are reported and are never red — one
-`--apply` settles them — so the first run against a hand-maintained fleet
-answers the question that matters instead of a cosmetic one.
+**Where a secret comes from.** The script carries none and prints none. A slot
+is kept when the box's own file already has it and minted when it does not,
+which is right for the values nothing off this box holds the other half of and
+wrong for the four that someone else holds. Those four are NAMED instead, and
+that unit is skipped:
 
-**Where secrets come from, and what happens on a wiped box.** The script
-contains no secret and prints none. Each value is taken from the vault file if
-there is one (`/etc/kiosk-demo/secrets.env`, or `--secrets`, holding
-`<UNIT>__<VARIABLE>=…` lines) and otherwise from the value already on the box —
-so a re-run on a healthy fleet rotates nothing. On a box where neither source
-has it, the script **names that variable and writes nothing at all**: a blank
-secret is worse than a refusal, because an app that boots with one fails closed
-and silently, which is precisely the failure this script exists to end.
+| value | who holds the other half |
+|-------|--------------------------|
+| `KIOSK_<APP>_DB_PASSWORD` | Postgres, from `postgres-init.sql` |
+| `STRIPE_SECRET_KEY` | Stripe, test mode |
+| `KIOSK_UNLOCK_SIGNING_KEY_PEM` | its public half is flashed into the locks |
+| `PROVE_KEY_PEM` | a new broker identity invalidates every attestation issued |
 
-`--apply --generate-missing` then mints the values nothing off this box can hold
-the other half of — the session key, the proof-of-work secret, the operator
-signing key, and the shared KYC intake secret whose two sides both live here —
-and prints their names. It still refuses, by name and with the command that
-produces each, the four whose other half is somewhere else: the database
-passwords (Postgres has them, from `postgres-init.sql`), getgrocery's Stripe
-test key, skooti's unlock signing key (its public half is flashed into the
-locks) and the KYC broker's own signing key (a new one invalidates every
-attestation already issued). **So a rebuilt box needs those four values from
-whoever holds them, and nothing else.**
+So a wiped box prints `MISSING <unit> <KEY>`, writes nothing for that unit and
+exits non-zero. Put those values into their own `/etc/kiosk-demo/<unit>.env` by
+hand and re-run: the script keeps them and renders the rest around them. A blank
+is worse than a refusal, for the reason in the first paragraph.
 
-**The KYC pair is handled as one secret.** The operator reads
-`KIOSK_PROVE_INTAKE_SECRET` and the broker reads `KIOSK_PROVE_<OP>_SECRET` — two
-names for one value, by design — so the vault names it once, as
-`KYC_INTAKE_SECRET_<OP>`, and the script writes both sides from it. A vault key
-that could set one side alone is refused, and so is a box where both sides are
-set and disagree: choosing between two live secrets is not a configuration
-run's to make.
+Two values are derived rather than stored twice, so neither pair can be
+half-set: the broker's copy of an operator's intake secret
+(`KIOSK_PROVE_<OP>_SECRET`) is read from that operator's own
+`KIOSK_PROVE_INTAKE_SECRET`, and each operator's pinned
+`KIOSK_PROVE_PUBLIC_KEY_PEM` is the public half of the broker's `PROVE_KEY_PEM`.
+
+**Who reads an env file.** systemd hands each one to its unit through
+`EnvironmentFile=`, which it reads as root; the push-to-deploy hook at
+`/srv/kiosk.git/hooks/post-receive` **also sources every one of them**, as the
+account a push arrives as. That account is the one that needs the read and
+nobody else does, so every file is written to `ubuntu:ubuntu` at mode `0640` —
+two literal lines in the script. A box whose hook runs as another account sets
+`KIOSK_OWNER=<user>:<group>` in the environment. When the hook has lost its
+read the symptom is silent: `db:migrate` fails with `Permission denied` on the
+hook's own `source` and the push still prints `deploy complete` while the units
+keep serving.
 
 **What it does not touch.** Caddy (that is `deploy-caddy.sh`, which owns
-`/etc/caddy/Caddyfile` whole), Postgres, migrations, seeds, and the units
-themselves — it prints the `systemctl restart` line for each unit whose file it
-changed and runs none of them.
-
-**Who reads an env file, and what `--apply` does about it.** systemd hands each
-file to its unit through `EnvironmentFile=`, which it reads as root; the
-push-to-deploy hook at `/srv/kiosk.git/hooks/post-receive` **also sources every
-one of them**, as whatever account a push arrives as. That account is the one
-that needs the read and nobody else does, so `--apply` gives every env file to
-it at mode `0640` — the files it writes and the files it does not — and
-`--check` names any file that is not there yet and exits 1. A file that is
-already right is left exactly as it is, and a mode narrower than `0640` is never
-widened. A `chown` the run cannot do fails the run rather than warning past it.
-
-Nothing on disk records which account that is, so it is the one thing the script
-cannot measure. Give it with `--hook-account <user>`; otherwise it uses the owner
-of the hook file and says in as many words that this is an INFERENCE. With
-neither — a box with no hook yet — it says the account is UNDETERMINED and
-leaves owner and mode exactly as it found them.
-
-If the deploy hook has lost its read, the symptom is silent: every unit's
-`db:migrate` fails with `Permission denied` on the hook's own `source` and the
-push still prints `deploy complete`, while the units keep serving. The repair is
-one run:
-
-```sh
-ssh <deploy-user>@<box> 'sudo bash -s' -- --apply --hook-account <deploy-user> < deploy/rollout.sh
-```
+`/etc/caddy/Caddyfile` whole), Postgres, migrations, seeds, and the units.
 
 ## Per-demo map
 
@@ -230,19 +201,15 @@ below.) Any other demo is knob-adjustable: set
    /etc/caddy/Caddyfile --adapter caddyfile` and a request to each vhost. Do not
    hold the package, and do not add the rate-limit module back: there is no
    default throttle here on purpose.
-3. **Set real secrets — and then let `rollout.sh` place them.** The values are
-   yours: a secret key base and a signing key per app, the DB passwords you
-   passed to `postgres-init.sql`, a PoW secret, a Stripe **test** key for
-   getgrocery, skooti's unlock key, the KYC broker's signing key. Put them in
-   `/etc/kiosk-demo/secrets.env` (mode `0600`) as `<UNIT>__<VARIABLE>=…` and run
-   `deploy/rollout.sh --apply`; it writes every env file from
-   `env/<app>.env.example` and names anything it could not obtain instead of
-   writing a blank. It also gives every env file to the account the
-   push-to-deploy hook runs as, at mode `0640`, so the one account that must
-   read them can and nobody else does. Copying a template by hand still
-   works and the templates are shell-source-safe as written (`set -a; . file`),
-   but then nothing joins the box to the tree — see "Configuration is DECLARED"
-   above.
+3. **Place the four secrets nobody here can mint, then run `rollout.sh`.** Put
+   each DB password you passed to `postgres-init.sql`, getgrocery's Stripe
+   **test** key, skooti's unlock key and the broker's signing key into that
+   unit's own `/etc/kiosk-demo/<unit>.env` and run `deploy/rollout.sh`. It keeps
+   them, mints the rest, writes every file from `env/<app>.env.example` at
+   `ubuntu:ubuntu` mode `0640`, and names anything still missing instead of
+   writing a blank. Copying a template by hand still works — they are
+   shell-source-safe as written (`set -a; . file`) — but then nothing joins the
+   box to the tree; see "Configuration is DECLARED" above.
 4. **Run the steps below**, or hand over shell access.
 
 **Automated (this runbook provides):** the Caddy vhosts, the SQL to create all

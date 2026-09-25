@@ -16,7 +16,7 @@
 #      FOR THIS IDENTITY, and that a second, innocent identity's count stayed 0
 #      (the counter is per-identity, not one shared tally).
 #
-# THE 0.4 WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
+# THE WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
 # with its arguments in the query string — there is no `name` field and no
 # `POST /kiosk/query`. A success body IS the result (a bare array here) and a
 # 402 is an RFC 9457 problem document whose `code` and `challenges` are

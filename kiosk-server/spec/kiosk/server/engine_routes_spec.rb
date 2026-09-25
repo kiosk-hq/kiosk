@@ -96,7 +96,7 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       .to include(controller: "kiosk/server/assistants", action: "unlink")
   end
 
-  # ── the 0.4 per-verb wire is NOT here any more (T-183) ───────────────────
+  # ── the per-verb wire is NOT here any more (T-183) ───────────────────
 
   describe "the per-verb wire, which this table deliberately does NOT draw" do
     it "draws no dynamic segment at all — every path in it is a literal" do

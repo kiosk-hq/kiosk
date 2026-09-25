@@ -140,7 +140,7 @@ module Kiosk
 
       # Execute a named query (read-only).
       #
-      # PROTOCOL 0.4: a query is `GET <endpoint>/<query-name>` with its
+      # THE WIRE: a query is `GET <endpoint>/<query-name>` with its
       # arguments in the QUERY STRING. There is no `/kiosk/query` endpoint and
       # no `name` field — the name is the path segment, which is also what the
       # PoW fingerprint binds to.
@@ -172,7 +172,7 @@ module Kiosk
 
       # Execute a named action (write).
       #
-      # PROTOCOL 0.4: an action is `POST <endpoint>/<action-name>` whose body
+      # THE WIRE: an action is `POST <endpoint>/<action-name>` whose body
       # is the arguments and nothing else.
       #
       # A tolled action is ATTACKED, not stalled around: a `pow_required` 402 is
@@ -460,8 +460,8 @@ module Kiosk
       end
 
       # GET the given path; returns a {Response}. Used for the auth-challenge
-      # fetch that opens the registration handshake AND, since 0.4, for every
-      # query — a query's arguments are the query string.
+      # fetch that opens the registration handshake AND for every query — a
+      # query's arguments are the query string.
       #
       # @param path   [String]      URL path (including leading slash)
       # @param params [Hash]        query-string parameters

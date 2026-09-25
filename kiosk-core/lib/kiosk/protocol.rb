@@ -8,16 +8,16 @@ module Kiosk
     # reserved `GET <endpoint>/schema` and `POST <endpoint>/pay`. Changes more
     # slowly than the server version itself.
     #
-    # 0.4 is a BREAKING minor: a client built for an earlier one cannot
-    # speak it.
+    # 0.5 is a BREAKING minor: the catalogue root is closed and `events` is
+    # REQUIRED in it, so a client built for an earlier minor cannot read it.
     # `bin/check-version-parity` binds every gemspec version, every inter-gem
     # constraint and every pinned skill_url to this constant's MAJOR.MINOR.
-    API_VERSION = "0.4.0"
+    API_VERSION = "0.5.0"
 
     # Minimum client version that can speak this API version. Advertised in
     # the Kiosk::Protocol::HEADER_MIN_CLIENT response header on every
     # /kiosk/* response; older clients are expected to upgrade.
-    MIN_CLIENT = "0.4.0"
+    MIN_CLIENT = "0.5.0"
 
     # HTTP response header names (sent on every /kiosk/* response).
     HEADER_SERVER_VERSION = "Kiosk-Server-Version"

@@ -63,7 +63,7 @@ ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
 PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 
-# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` with its
+# THE WIRE. An action is `POST <endpoint>/<action-name>` with its
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` with its
 # arguments in the query string. There is no `name` field and no /query or
 # /run endpoint. A success body IS the result — a bare array from a
@@ -172,7 +172,7 @@ STDERR.puts "  B close Alice's listing → #{close_rc}"
 #
 # Bob's token identifies Bob; the forged arg supplies Alice's UUID — read off
 # Alice's OWN bound token rather than written down here, so the forgery names
-# the account this run actually created rows under. On the 0.4 wire this is
+# the account this run actually created rows under. On the wire this is
 # REFUSED before the handler runs: `post_listing` publishes
 # `additionalProperties: false` and does not declare `owner_id` — the principal
 # is not one of its inputs — so the declared input contract answers a typed 400

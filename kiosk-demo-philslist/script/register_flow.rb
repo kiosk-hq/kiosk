@@ -79,7 +79,7 @@ listing_id = posted["listing_id"]
 # ── Robustness: a bad/missing category_slug returns a clean 400 that names the
 # valid categories — NOT a 500 (regression guard for the find_by! crash).
 #
-# Since 0.4 this refusal comes from the SCHEMA LAYER rather than from the
+# This refusal comes from the SCHEMA LAYER rather than from the
 # handler: `category_slug` is declared as an `enum`, `input_schema` is validated
 # on every call, and the refusal names the closed set verbatim. The rule is
 # delivered by the declaration instead of by hand-written prose — so the

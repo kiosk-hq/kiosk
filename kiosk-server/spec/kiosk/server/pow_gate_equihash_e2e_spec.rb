@@ -51,7 +51,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
     end.new
   end
 
-  # The call under test, as a router reaches it on the 0.4 wire:
+  # The call under test, as a router reaches it on the wire:
   # `GET <endpoint>/catalog?q=milk`. `command:` is the gate/POLICY verb the
   # policy branches on; `method:`/`verb:` are the two halves the request
   # fingerprint binds to alongside the arguments.

@@ -43,7 +43,7 @@ Gem::Specification.new do |spec|
   spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "kiosk-core", "~> 0.4.0"
+  spec.add_dependency "kiosk-core", "~> 0.5.0"
 
   # Both adapters are exercised by this gem's own suite — that a fault reads
   # identically through each is the whole claim of a framework-agnostic core,

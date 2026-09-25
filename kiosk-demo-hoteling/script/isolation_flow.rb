@@ -2,7 +2,7 @@
 
 # Adversarial cross-tenant isolation test driver.
 #
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
 # arguments as the JSON BODY. There is no `name` field and no /query or /run
 # endpoint. A success body IS the result — a bare array from a non-paginating
@@ -29,8 +29,8 @@
 #   Assertion 3 — the principal is NOT an input, in two halves:
 #     3a: B calls reserve_room with a forged user_id arg (A's UUID) → 400
 #         bad_request naming user_id. `reserve_room` publishes
-#         `additionalProperties: false` and does not declare `user_id`, so on
-#         the 0.4 wire the declared input contract refuses the forgery BEFORE
+#         `additionalProperties: false` and does not declare `user_id`, so
+#         the declared input contract refuses the forgery BEFORE
 #         the handler runs, which is what the published contract requires.
 #     3b: B's LEGITIMATE booking has DB user_id = B — the property the refusal
 #         alone does not prove, because ownership comes from
@@ -218,7 +218,7 @@ STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — G
 # ── Step 6: the principal is not an input (Assertion 3) ──────────────────────
 # Two halves, because neither proves the other.
 #
-#   3a  B supplies `user_id: user_id_a` adversarially. On the 0.4 wire this is
+#   3a  B supplies `user_id: user_id_a` adversarially. On the wire this is
 #       REFUSED before the handler runs: `reserve_room` publishes
 #       `additionalProperties: false` and does not declare `user_id` — the
 #       principal is not one of its inputs — so the declared input contract

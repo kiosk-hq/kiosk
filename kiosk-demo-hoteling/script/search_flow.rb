@@ -2,7 +2,7 @@
 #
 # Agent-side driver: PROVE search_hotels pagination + hotel_detail.
 #
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING — including `limit` and `cursor`, which are RESERVED names
 # the wire always accepts and `search_hotels` deliberately does NOT declare
 # at all. There is ONE page shape: the BODY is always the bare array every
@@ -48,7 +48,7 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # This file calls NOTHING but queries, so it needs no POST helper at all: on the
-# 0.4 wire `search_hotels` and `hotel_detail` are both `GET /kiosk/<name>`. (The
+# wire `search_hotels` and `hotel_detail` are both `GET /kiosk/<name>`. (The
 # register handshake below drives its own full-URL lambdas.)
 #
 # One query call: the verb NAME is the path segment, its arguments the query

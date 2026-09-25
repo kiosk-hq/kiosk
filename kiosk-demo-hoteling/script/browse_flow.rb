@@ -61,7 +61,7 @@ auth  = { "Authorization" => "Bearer #{token}" }
 
 # ── Burst of `properties` browses; record proofs demanded per browse ────────
 #
-# THE 0.4 WIRE: a query is `GET <endpoint>/<query-name>`. `properties` takes no
+# THE WIRE: a query is `GET <endpoint>/<query-name>`. `properties` takes no
 # arguments, so the URL is the whole call — there is no `name` field and no
 # `POST /kiosk/query` to send it to.
 BROWSE_URL = "#{SERVER}/kiosk/properties"

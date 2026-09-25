@@ -34,7 +34,7 @@ module Kiosk
     #
     # THAT SECOND CONSUMER IS NOT BEHIND THE FLAG. `validate_arguments!` is
     # UNCONDITIONAL on the per-verb wire ({VerbController#arguments_for}):
-    # `input_schema` is REQUIRED on every 0.4 verb and §8.1 item 5 makes the
+    # `input_schema` is REQUIRED on every verb and §8.1 item 5 makes the
     # operator coerce-then-validate before the handler sees an argument, so a
     # flag-gated check would be non-conformant with the flag off, and a typed
     # 400 for an invalid argument would exist on some origins and not others.
@@ -96,7 +96,7 @@ module Kiosk
 
       # Validate one verb's ARGUMENTS against the `input_schema` it declares.
       #
-      # Called from {VerbController} on the 0.4 per-verb wire, AFTER
+      # Called from {VerbController} on the per-verb wire, AFTER
       # {ArgumentDecoder} has recovered the declared types (a query string
       # carries strings, and `"4"` is not an `integer` to any validator) and
       # BEFORE the handler runs.
@@ -187,14 +187,14 @@ module Kiosk
         require "json_schemer"
       rescue LoadError
         # The message an operator reads while debugging must match the
-        # gemspec: `json_schemer` has been a RUNTIME dependency since
-        # 0.4 (`add_dependency`, kiosk-server.gemspec), so reaching here does
+        # gemspec: `json_schemer` is a RUNTIME dependency
+        # (`add_dependency`, kiosk-server.gemspec), so reaching here does
         # not mean "you skipped an optional extra" — it means the dependency
         # that `gem install kiosk-server` resolves is not loadable in this
         # process, which is a broken install or a pruned bundle.
         raise Errors::ConfigurationError,
           "Kiosk::Server: validate_requests is enabled but the json_schemer gem " \
-          "is not loadable. It is a RUNTIME dependency of kiosk-server (since 0.4) " \
+          "is not loadable. It is a RUNTIME dependency of kiosk-server " \
           "and should already be in your lockfile — check that the bundle is " \
           "installed and not pruned (`bundle install`, or `bundle list | grep " \
           "json_schemer`); add `gem \"json_schemer\"` to your Gemfile only if you " \

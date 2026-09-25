@@ -12,14 +12,21 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
+- 2026-09-26: **The protocol is 0.5.0, and `min_client` with it.** The catalogue's REQUIRED `events` array broke 0.4, so every gem, constraint and lock moves to the line the wire speaks.
+- 2026-09-26: **The fleet re-pins to `skill-v0.5.0.md`.** All seven operator demos and the engine default move `skill_url` and `skill_sha256` together.
+- 2026-09-26: **Shipped comments stop dating what the wire does by the version that introduced it.** `bin/check-shipped-archaeology` R5 widened on its own when the wire moved.
+- 2026-09-26: **0.5.0 is the first release section every record carries.** Nothing here has ever been tagged or published, so everything under `[Unreleased]` is in it.
+
 - 2026-09-25: **A demo task says what it is by its namespace: `check:` asserts, `demo:` is one a person runs and reads** (T-065). The bare `rake demo` was a smoke test called a demo; it is gone.
 - 2026-09-25: **the README taglines no longer put a database in Kiosk's headline** (K-1810). Kiosk is named as the protocol it is; Postgres stays where the implementation's requirements are stated.
 - 2026-09-25: **`listen.py` gains a one-shot wait: `--until-event` exits 0 on the first event and 5 at the deadline.** A wait held in the foreground costs what the human took.
-- 2026-09-25: **The fleet re-pins to `skill-v0.4.17.md` and `events/listen-v0.5.1.py`.** All seven demos and the engine default move URL and digest together.
+- 2026-09-26: **The fleet re-pins to `skill-v0.4.17.md` and `events/listen-v0.5.1.py`.** All seven demos and the engine default move URL and digest together.
 - 2026-09-25: **`deploy/rollout.sh` is 65 lines and takes no arguments: it renders, keeps or mints, names what it cannot, and writes owner and mode as two literal lines.**
 - 2026-09-25: **`deploy/rollout.sh --apply` now gives every env file to the account the deploy hook runs as, at `0640`, instead of preserving what it finds and warning about it.**
 - 2026-09-25: **`deploy/rollout.sh` preserves an env file's owner and mode rather than setting them, and reports who can read it.** Tightening them took the deploy hook's access away on the fleet.
-- 2026-09-25: **The fleet re-pins to `skill-v0.4.16.md`, the cut that puts the two out-of-band waits on the event stream.** All seven demos and the engine default move URL and digest together.
+- 2026-09-26: **The fleet re-pins to `skill-v0.4.16.md`, the cut that puts the two out-of-band waits on the event stream.** All seven demos and the engine default move URL and digest together.
 - 2026-09-25: **`bin/check-listener-pin` now asks the ALIAS whether the current skill pins the listener, not "some published cut".** A cut is immutable, so the wide question answers yes for ever.
 - 2026-09-25: **`deploy/rollout.sh` makes `deploy/env/*.env.example` drive the boxes, which nothing in any repository did before.** A missing secret stops the run rather than writing a blank.
 - 2026-09-25: **An origin that declares an event topic and leaves the in-process store in place is refused at production boot (K-1804).** One declaring no topic is untouched.

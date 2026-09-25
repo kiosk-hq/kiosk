@@ -101,7 +101,7 @@ module Kiosk
     #
     # @param response [Response]
     # @return [String, nil]
-    # PROTOCOL 0.4: an error is an RFC 9457 problem document and the branch
+    # THE WIRE: an error is an RFC 9457 problem document and the branch
     # point is the TOP-LEVEL `code` — a problem document is flat, so there is
     # no nested `error` object to reach into. The token VALUES are the same
     # closed vocabulary every verdict in this gem branches on, so nothing

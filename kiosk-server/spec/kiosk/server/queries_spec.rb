@@ -160,7 +160,7 @@ RSpec.describe Kiosk::Server::Queries do
     #
     # THESE TWO GO THROUGH `declare` RATHER THAN THE MIXIN, and that is the
     # T-073 = A change rather than a shortcut: both schemas are REQUIRED on
-    # every 0.4 verb, so {HandlerMixin} now RAISES on a declaration missing
+    # every verb, so {HandlerMixin} now RAISES on a declaration missing
     # either and no operator can produce a descriptor without them. The
     # omission behaviour is a property of this REGISTRY, which still takes nil
     # for every optional field, and it is still worth holding: `example_params`

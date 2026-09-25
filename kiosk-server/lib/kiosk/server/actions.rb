@@ -48,7 +48,7 @@ module Kiosk
     #                   An action that takes nothing declares the closed empty
     #                   object.
     #   output_schema:  REQUIRED. A JSON Schema for what the action RETURNS.
-    #                   With no response envelope since 0.4 this is the ONLY
+    #                   With no response envelope this is the ONLY
     #                   machine-readable statement of the result shape.
     #   example_params: OPTIONAL. An example params object an assistant can copy
     #                   verbatim. It ILLUSTRATES input_schema, and loses to it.

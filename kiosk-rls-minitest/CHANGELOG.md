@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - **The published journey-helper roll-call was short by `run_query` (K-1696).** The lists name it now, and the two «helpers are available» tests are held to the module rather than to themselves.

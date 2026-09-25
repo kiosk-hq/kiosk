@@ -292,11 +292,13 @@ end
 # `bin/check-changelog`, for the reason the block above is: one rule must not
 # have two spellings. Edit both, or neither.
 #
-# The three shapes a level-2 heading may take, and nothing else:
+# The shapes a level-2 heading may take, and nothing else:
 #
-#   ## [Unreleased]               where the next entry goes
-#   ## [0.4.1] — 2026-09-24       a cut: the version AND the date it was cut
-#   ## Before release sections    the entries written before this file grouped them
+#   ## [Unreleased]                        where the next entry goes
+#   ## [0.4.1] — 2026-09-24                a cut: the version AND the date it was cut
+#   ## [skill 0.5.0] — 2026-09-25          the same, naming which artefact line was cut
+#   ## [skill 0.5.0 · listener 0.5.1] — …  a cut that moved two of them at once
+#   ## Before release sections             the entries written before this file grouped them
 #
 # THE VERSION IS THREE NUMBERS BECAUSE A PATCH CUT IS A RELEASE HERE. A heading
 # naming a MAJOR.MINOR alone cannot say which version carries a patch-sized
@@ -304,12 +306,20 @@ end
 # never say it, which is what this rule was written to fix. The date is required
 # beside the version for the mirror reason: a version with no date says when
 # nothing.
+#
+# THE LABEL IS WHAT A REPOSITORY PUBLISHING MORE THAN ONE VERSIONED LINE NEEDS.
+# A bare version answers "which release has this" only where there is one line
+# to be a release of; `kiosk.tech` publishes the skill cut and the pinned event
+# listener on independent numbers, so a bare 0.5.0 there names two different
+# files. Each repository's own CHANGELOG-RULE.md says which lines it has.
 UNRELEASED_HEADING   = "[Unreleased]"
 PRE_GROUPING_HEADING = "Before release sections"
 # Either dash is accepted and the em dash is what to write: a writer copying the
 # shape off an existing heading must not be refused over the hyphen that Keep a
 # Changelog itself uses.
-RELEASE_HEADING = /\A\[\d+\.\d+\.\d+\][ \t]+(?:—|--?)[ \t]+\d{4}-\d{2}-\d{2}\z/
+LABELLED_CUT    = /[a-z][a-z0-9-]*[ \t]+\d+\.\d+\.\d+/
+RELEASE_HEADING = /\A\[(?:\d+\.\d+\.\d+|#{LABELLED_CUT}(?:[ \t]+·[ \t]+#{LABELLED_CUT})*)\]
+                   [ \t]+(?:—|--?)[ \t]+\d{4}-\d{2}-\d{2}\z/x
 # <<< SHARED RELEASE-SECTION RULE -- END
 
 # >>> ARM TABLE -- BEGIN

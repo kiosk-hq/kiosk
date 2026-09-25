@@ -34,7 +34,7 @@ require "securerandom"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
-# THE 0.4 WIRE. An action is `POST <mount>/<action-name>` with its arguments as
+# THE WIRE. An action is `POST <mount>/<action-name>` with its arguments as
 # the JSON body; a query is `GET <mount>/<query-name>` with its arguments in the
 # query string. There is no `name` field and no /query or /run endpoint. A
 # success body IS the result — a bare array from a non-paginating query, the

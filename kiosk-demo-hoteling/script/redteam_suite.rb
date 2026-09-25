@@ -43,7 +43,7 @@
 #                        route either, so it is the same plain 404 with no
 #                        `Allow`, and the verb never runs.
 #
-# THE 0.4 WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
+# THE WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
 # arguments in the query string, an action is `POST <endpoint>/<action-name>`
 # with its arguments as the JSON body, a success body IS the result (a bare
 # array from a non-paginating query, the action's own object from an action),
@@ -315,7 +315,7 @@ end
 # generic `blocked?` verdict would accept a 403 or a 401 here, so this scenario
 # builds its Verdict directly.
 #
-# Since 0.4 the ARG-shaped probes are refused one layer EARLIER — `booking_id`
+# The ARG-shaped probes are refused one layer EARLIER — `booking_id`
 # declares `format: "uuid"` and `input_schema` is validated on every call — so
 # that half now comes from the declared contract rather than from Kiosk::UuidCheck
 # inside the handler. Same status, same code, same no-leak property; the guard
@@ -581,7 +581,7 @@ end
 # WHICH LAYER ANSWERS THESE TODAY, measured rather than assumed, because it
 # changes what the beat is worth. Every SHAPE probe below is currently refused
 # by the ENGINE — `input_schema` declares `property_id` an integer and `check_in`
-# a `format: "date"` string, and 0.4 validates both on every call, so a boolean,
+# a `format: "date"` string, and the wire validates both on every call, so a boolean,
 # an array, an object or `"abc"` never reaches the handler at all. So this beat
 # does NOT prove hoteling's own guards fire; it pins the CONTRACT an assistant
 # depends on (a typed 400, no 5xx, no wrong answer served as a 200) across both

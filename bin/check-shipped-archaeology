@@ -2503,12 +2503,15 @@ def self_test
     check.call("R5 does NOT flag a float literal on a shell CODE line",
                scan(shcode).first.none? { |h| h.rule[:id] == "R5" })
 
+    # The wire this fixture names is DERIVED, exactly as the rule is: a typed one
+    # asserts the opposite of what this arm says the moment the wire moves.
+    live = current_wire.join(".")
     _, numbers = plant.call("numbers", "n2.rb", <<~RUBY)
       # frozen_string_literal: true
 
       # The origin answers on 127.0.0.1 and verification costs ~0.3 ms against a
       # ~0.2 s solve in ~44 MiB. The gem is 0.1.0 and the cut is skill-v0.4.12.md;
-      # the wire this speaks is 0.4 and the header says so.
+      # the wire this speaks is #{live} and the header says so.
       def f = 1
     RUBY
     check.call("R5 does NOT flag an IP, a timing, a size, a 3-part version, a cut or the " \

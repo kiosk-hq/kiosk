@@ -81,7 +81,7 @@ ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
 PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 
-# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
+# THE WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
 # as the JSON body; a query is `GET <endpoint>/<query-name>` with its arguments
 # in the query string. There is no `name` field and no /query or /run endpoint.
 # A success body IS the result — a bare array from a non-paginating query, the
@@ -156,7 +156,7 @@ STDERR.puts "  B my_appointments: #{b_appt_ids.inspect}"
 # B's Authorization token identifies B; the forged arg supplies A's UUID — read
 # off A's OWN bound token rather than written down here, so the forgery names
 # the account this run actually books under.
-# On the 0.4 wire this is REFUSED before the handler runs:
+# On the wire this is REFUSED before the handler runs:
 # `book_appointment` publishes `additionalProperties: false` and does not
 # declare `user_id` — the principal is not one of its inputs — so the declared
 # input contract answers a typed 400 naming the parameter, which is what the

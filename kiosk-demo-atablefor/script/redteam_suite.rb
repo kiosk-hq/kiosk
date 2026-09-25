@@ -60,7 +60,7 @@
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
 #     while the role-less request still opens the ceremony
 #
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
+# THE WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
 # them as the JSON body. A success body IS the result; an error is an RFC 9457
 # problem document whose branch point is the TOP-LEVEL `code`.
@@ -123,7 +123,7 @@ BEA_UUID   = BEA.user_id
 TOKEN_A    = DIEGO.token
 TOKEN_B    = BEA.token
 
-# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
+# THE WIRE. An action is `POST <endpoint>/<action-name>` carrying its
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.
@@ -424,7 +424,7 @@ BATTERY.record("InvalidFilterIsNotAnEmptyList",
 # declaration time can name a horizon that rolls forward daily, and the refusal
 # NAMES the bookable dates. The basic-ISO spelling — `20260821` rather than
 # `2026-08-21` — never gets that far: `book_table` declares `format: "date"`
-# and 0.4 validates `input_schema` on every call, so the wire refuses the
+# and the wire validates `input_schema` on every call, so the wire refuses the
 # spelling the descriptor does not advertise before any Ruby runs. It is worth
 # probing anyway, because it is what says the wire layer really is there: the
 # handler behind it refuses the same spelling ({WireArguments.iso_date}), so a

@@ -113,7 +113,7 @@ module Kiosk
       # pointer. A module set tells an assistant which branches of the skill
       # apply, which is what its Step 1 actually needs.
       #
-      # HTTP methods are never encoded here: in 0.4 the method follows the
+      # HTTP methods are never encoded here: the method follows the
       # KIND of the verb (a query is GET, an action is POST), which the
       # catalog states per verb.
       #
@@ -158,7 +158,7 @@ module Kiosk
       # a newer skill version.
       attr_writer :skill_url
       def skill_url
-        @skill_url ||= "https://kiosk.tech/skill-v0.4.17.md"
+        @skill_url ||= "https://kiosk.tech/skill-v0.5.0.md"
       end
       attr_accessor :skill_sha256
 
@@ -421,7 +421,7 @@ module Kiosk
       # well-formed-but-forged proof still fails the real cryptographic
       # verification inside the gate. An ABSENT pow is untouched (the initial
       # no-pow request still gets its normal 402 challenge). `json_schemer` is a
-      # RUNTIME dependency of this gem since 0.4, not an optional extra
+      # RUNTIME dependency of this gem, not an optional extra
       # tied to this flag — it is still required LAZILY, so a vendored checkout
       # missing it gets a {Errors::ConfigurationError} naming the gem rather than
       # a LoadError at boot.

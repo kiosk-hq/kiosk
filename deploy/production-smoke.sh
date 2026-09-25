@@ -384,7 +384,7 @@ smoke_stylish() {
   # nothing in ANY environment — a 200 here would be a cross-tenant read of the
   # public `salons` query, authenticated as a forged owner. The dev-mode CI and
   # check:redteam gates assert the same refusal.
-  # Protocol 0.4: a query is `GET <endpoint>/<query-name>`. Identity resolves
+  # A query is `GET <endpoint>/<query-name>`. Identity resolves
   # BEFORE the verb is looked up, so this probe is a 401 whether or not the
   # name exists — which is exactly the property being asserted, and also why an
   # unauthenticated caller cannot enumerate the catalog one path at a time.

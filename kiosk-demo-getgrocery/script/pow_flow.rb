@@ -6,7 +6,7 @@
 # HTTP 402, the agent solves an Equihash challenge and retries. Proves the loop
 # end-to-end with the real shipped solver. One JSON line on stdout.
 #
-# THE 0.4 WIRE. `catalog` is a QUERY, so it is `GET /kiosk/catalog` with no
+# THE WIRE. `catalog` is a QUERY, so it is `GET /kiosk/catalog` with no
 # arguments — the toll's request fingerprint is now SHA256("GET catalog\n{}"),
 # which is why every call below dials the SAME url with the SAME (empty) query
 # string: the challenge binds to the exact request. The proof still rides in the

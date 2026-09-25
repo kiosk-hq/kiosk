@@ -25,7 +25,7 @@
 #      challenge.
 #   7. Emit ONE JSON line with the proof-count curve.
 #
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the query string; an action is `POST <endpoint>/<action-name>` with them as
 # the JSON body. There is no `name` field, no /query or /run endpoint and no
 # response envelope: a non-paginating query answers a BARE ARRAY, an action its

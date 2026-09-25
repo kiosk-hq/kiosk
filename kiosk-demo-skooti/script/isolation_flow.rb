@@ -111,7 +111,7 @@ def register_principal(name:)
   [user_id, agent_id, token, key]
 end
 
-# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
+# THE WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
 # as the JSON body; a query is `GET <endpoint>/<query-name>` with its arguments
 # in the query string. There is no `name` field and no /query or /run endpoint.
 # A success body IS the result — a bare array from a non-paginating query, the
@@ -204,7 +204,7 @@ abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless
 STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — Gate 2 now passes for B"
 
 # ── Step 4a: B calls reserve with a forged user_id arg (Assertion 3a) ───────
-# B supplies user_id: user_id_a adversarially. On the 0.4 wire this is REFUSED
+# B supplies user_id: user_id_a adversarially. On the wire this is REFUSED
 # before the handler runs: `reserve` publishes `additionalProperties: false` and
 # declares only `scooter_code` — the principal is not one of its inputs — so the
 # declared input contract answers a typed 400 naming the offending parameter.

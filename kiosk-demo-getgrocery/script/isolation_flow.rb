@@ -37,7 +37,7 @@ require "kiosk/redteam/wire"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
 # arguments as the JSON BODY. There is no `name` field and no /query or /run
 # endpoint. A success body IS the result — a bare array from a non-paginating
@@ -205,7 +205,7 @@ abort "A reschedule_delivery failed (#{rc}): #{JSON.generate(resched_a)}" unless
 
 # ── Step 9: B calls create_order with a forged user_id (Assertion 5a) ────────
 #
-# B's token identifies B; the forged arg supplies A's UUID. On the 0.4 wire this
+# B's token identifies B; the forged arg supplies A's UUID. On the wire this
 # is REFUSED before the handler runs: `create_order` publishes
 # `additionalProperties: false` and does not declare `user_id` — the principal is
 # not one of its inputs — so the declared input contract answers a typed 400
@@ -272,7 +272,7 @@ repay_status, repay_body = begin
                   WIRE.bearer(token_b))
   [raw.status, raw.raw_body]
 end
-# The refusal's `code` parsed from the raw body. On the 0.4 wire it is a
+# The refusal's `code` parsed from the raw body. On the wire it is a
 # TOP-LEVEL member of the RFC 9457 problem document, not nested under `error`
 # (an empty body ⇒ nil ⇒ the assertion fails, which is the point).
 repay_error_code = (JSON.parse(repay_body)["code"] rescue nil)

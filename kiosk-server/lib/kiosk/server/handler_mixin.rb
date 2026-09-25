@@ -161,7 +161,7 @@ module Kiosk
 
       # ── spec §8.1 / §8.3, enforced where the mistake is made ─────────────
       #
-      # A verb name is ONE path segment on the 0.4 wire, so the three rules the
+      # A verb name is ONE path segment on the wire, so the three rules the
       # spec states about names are properties a DECLARATION either has or does
       # not, and all three are checked here — at class-body load, naming the
       # class and the method — rather than discovered later as a verb that is
@@ -198,7 +198,7 @@ module Kiosk
       # `<endpoint>/query` like any other.
       RESERVED_NAMES = %w[agents auth events oauth pay schema].freeze
 
-      # The descriptor fields 0.4 makes REQUIRED on every verb. Both are
+      # The descriptor fields REQUIRED on every verb. Both are
       # contracts a caller acts on — `input_schema` is what the wire coerces
       # and validates arguments against (§8.1 item 5),
       # `output_schema` is the ONLY machine-readable statement of the answer
@@ -550,7 +550,7 @@ module Kiosk
 
           raise ArgumentError,
             "#{where} declares the Kiosk verb #{name.inspect} without #{missing.join(" and ")}. " \
-            "Both are REQUIRED on every 0.4 verb: `input_schema` is the contract the wire " \
+            "Both are REQUIRED on every verb: `input_schema` is the contract the wire " \
             "coerces and validates arguments against, and `output_schema` is the only " \
             "machine-readable statement of what the call returns now that the response " \
             "envelope is gone. A verb that takes nothing still declares " \

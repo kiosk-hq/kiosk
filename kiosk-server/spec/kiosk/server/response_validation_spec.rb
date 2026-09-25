@@ -2,7 +2,7 @@
 
 # Response-shape validation (T-068 slice 3 / T-073 = A).
 #
-# `output_schema` is REQUIRED on every 0.4 verb and, with the envelope gone, it
+# `output_schema` is REQUIRED on every verb and, with the envelope gone, it
 # is the ONLY machine-readable statement of what a call returns. These examples
 # are what stops it being a statement nothing checks: with
 # `validate_responses` on, an answer that its own declaration rejects is a loud

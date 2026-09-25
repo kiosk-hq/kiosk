@@ -216,7 +216,7 @@ gem "devise"
 # json_schemer backs `c.validate_requests = true` in the initializer, which is
 # what makes a verb's declared input_schema EXECUTABLE — the arguments of a
 # per-verb request are validated against it, not merely published. It is a
-# RUNTIME dependency of kiosk-server (`add_dependency`, since 0.4), so
+# RUNTIME dependency of kiosk-server (`add_dependency`), so
 # Bundler resolves it for any host that depends on the gem; it is named here
 # anyway because this Gemfile is generated for a from-scratch app and naming
 # what the initializer relies on is the point of the file. It is only lazily

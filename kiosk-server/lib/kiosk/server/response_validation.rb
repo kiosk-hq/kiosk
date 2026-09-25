@@ -76,7 +76,7 @@ module Kiosk
 
       # Validate ONE verb's rendered payload against its declared output_schema.
       #
-      # @param payload [Object] the 0.4 answer body ({Result#to_payload})
+      # @param payload [Object] the answer body ({Result#to_payload})
       # @param output_schema [Hash, nil] the verb's declaration; nil skips
       # @param verb [String] the wire name, for the message
       # @param kind [Symbol] :query or :action, for the message

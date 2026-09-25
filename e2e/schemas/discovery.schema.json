@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/discovery.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/discovery.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed; bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not.",
   "title": "Kiosk discovery document",
-  "description": "The JSON served at GET /.well-known/kiosk.json (Kiosk protocol 0.4).",
+  "description": "The JSON served at GET /.well-known/kiosk.json (Kiosk protocol 0.5).",
   "type": "object",
   "required": [
     "kiosk"

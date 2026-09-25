@@ -275,11 +275,11 @@ kiosk-all/kiosk-all.gemspec	      - Adapter gems (kiosk-user-idp-*, kiosk-pay-*)
 kiosk-all/kiosk-all.gemspec	      - Test harnesses (kiosk-test-support, kiosk-rls-rspec,
 kiosk-all/kiosk-all.gemspec	      - kiosk-rls — opt-in DB-level RLS defense-in-depth; add it
 kiosk-all/kiosk-all.gemspec	    Deliberately out of scope:
-kiosk-all/kiosk-all.gemspec	  spec.add_dependency "kiosk-core",   "~> 0.4.0"
-kiosk-all/kiosk-all.gemspec	  spec.add_dependency "kiosk-server", "~> 0.4.0"
+kiosk-all/kiosk-all.gemspec	  spec.add_dependency "kiosk-core",   "~> 0.5.0"
+kiosk-all/kiosk-all.gemspec	  spec.add_dependency "kiosk-server", "~> 0.5.0"
 kiosk-all/kiosk-all.gemspec	  spec.add_development_dependency "rspec", "~> 3.13"
-kiosk-all/kiosk-all.gemspec	spec.add_dependency "kiosk-core",   "~> 0.4.0"
-kiosk-all/kiosk-all.gemspec	spec.add_dependency "kiosk-server", "~> 0.4.0"
+kiosk-all/kiosk-all.gemspec	spec.add_dependency "kiosk-core",   "~> 0.5.0"
+kiosk-all/kiosk-all.gemspec	spec.add_dependency "kiosk-server", "~> 0.5.0"
 kiosk-all/lib/kiosk-all.rb	require "kiosk"
 kiosk-all/lib/kiosk-all.rb	require "kiosk/all/version"
 kiosk-all/lib/kiosk-all.rb	require "kiosk/server"
@@ -296,7 +296,7 @@ kiosk-core/kiosk-core.gemspec	  spec.add_development_dependency "rspec", "~> 3.1
 kiosk-core/lib/kiosk/configuration.rb	    # means a second instance. (Rails' `config.hosts` does not help here — it
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.4.0"
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.5.0"
 kiosk-core/spec/spec_helper.rb	require "kiosk"
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	rollingly in Europe/Lisbon; "tonight at 8" lands on an open 2-top at 20:00.

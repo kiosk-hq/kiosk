@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # tudu's WRITE surface: the six verbs an assistant reaches with
-# `POST /kiosk/<action-name>` — one endpoint per verb (protocol 0.4), the most of
+# `POST /kiosk/<action-name>` — one endpoint per verb, the most of
 # any demo. The arguments ARE the JSON body and the verb is the path itself.
 # `kind :action` above each declaration puts it on `POST`.
 #

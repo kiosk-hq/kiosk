@@ -497,7 +497,7 @@ namespace :check do
       # ONE BEAT, NOT TWO. The status and the `code` are the operator's whatever
       # this app does, so a beat reading only `== 400` cannot tell a refusal of
       # the CATEGORY from a refusal of anything else on the call, and it stays
-      # ticked while the sentence a caller recovers from goes missing. Since 0.4
+      # ticked while the sentence a caller recovers from goes missing. Today
       # that sentence is the schema layer's — `category_slug` is declared as an
       # `enum` — so what is asserted is the SLUGS, which is what an assistant
       # recovers from, rather than a phrasing (script/register_flow.rb).

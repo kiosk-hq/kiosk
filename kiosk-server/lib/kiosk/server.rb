@@ -109,7 +109,7 @@ module Kiosk
     #   Wire plane:
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema)
     #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor
-    #   - {Kiosk::Server::VerbController}   — the 0.4 per-verb wire:
+    #   - {Kiosk::Server::VerbController}   — the per-verb wire:
     #                                         GET <endpoint>/<query-name>,
     #                                         POST <endpoint>/<action-name>
     #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,

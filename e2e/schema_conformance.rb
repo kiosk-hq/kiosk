@@ -41,7 +41,7 @@
 # precisely the failure it was written to close.
 #
 # Usage (invoked by e2e/run.sh from the generated app dir, so json_schemer —
-# a kiosk-server RUNTIME dependency since 0.4 — is on the load path):
+# a kiosk-server RUNTIME dependency — is on the load path):
 #
 #   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=… TOKEN=… \
 #     bundle exec ruby <repo>/e2e/schema_conformance.rb

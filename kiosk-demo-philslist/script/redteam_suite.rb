@@ -85,7 +85,7 @@ ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
 PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 
-# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
+# THE WIRE. An action is `POST <endpoint>/<action-name>` carrying its
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.

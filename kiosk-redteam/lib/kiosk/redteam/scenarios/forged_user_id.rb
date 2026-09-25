@@ -57,7 +57,7 @@ module Kiosk
           return stall if stall
 
           # THE SCHEMA LAYER IS A LEGITIMATE PLACE TO CATCH THIS, and since
-          # protocol 0.4 it is where a conformant origin catches it FIRST.
+          # it is where a conformant origin catches it FIRST.
           #
           # §8.1 item 5 makes the operator validate every call against the
           # verb's declared `input_schema` before the handler runs, and a verb

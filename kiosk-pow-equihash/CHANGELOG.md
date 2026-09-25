@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Added
 
 - `Kiosk::Pow::Equihash` — pure-Ruby Equihash (Biryukov & Khovratovich) verifier, the shipped default Kiosk PoW backend. No runtime dependencies: BLAKE2b-256 is clean-room pure Ruby from the public-domain BLAKE2 spec, and the gem depends on neither `kiosk-core` nor Rails.

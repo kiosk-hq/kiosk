@@ -55,7 +55,7 @@ module Kiosk
     #                   object, so "takes no arguments" is published rather than
     #                   inferred from an absence.
     #   output_schema:  REQUIRED. A JSON Schema for the rows this query RETURNS.
-    #                   With no response envelope since 0.4 this is the ONLY
+    #                   With no response envelope this is the ONLY
     #                   machine-readable statement of the result shape; a query's
     #                   is an ARRAY schema whether or not it paginates.
     #   example_params: OPTIONAL. An example params object an assistant can copy

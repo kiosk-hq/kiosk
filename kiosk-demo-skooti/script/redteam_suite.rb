@@ -65,7 +65,7 @@
 #                        route either, so it is the same plain 404 with no
 #                        `Allow`, and the verb never runs.
 #
-# THE 0.4 WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
+# THE WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
 # arguments in the query string, an action is `POST <endpoint>/<action-name>`
 # with its arguments as the JSON body, a success body IS the result, and an
 # error is an RFC 9457 problem document whose branch point is the TOP-LEVEL

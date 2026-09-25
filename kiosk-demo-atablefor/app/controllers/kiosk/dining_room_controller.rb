@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # atablefor's READ surface: the two verbs an assistant reaches with
-# `GET /kiosk/<query-name>` — one endpoint per verb since 0.4, arguments in the
+# `GET /kiosk/<query-name>` — one endpoint per verb, arguments in the
 # query string. Kiosk ships a MIXIN, not a base class: the superclass is this
 # app's own ApplicationController and `include Kiosk::Handler` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`

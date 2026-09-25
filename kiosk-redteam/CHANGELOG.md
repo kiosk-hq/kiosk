@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Added
 
 - **`Profile#gated_action_consumes` — whether the gated action SPENDS the resource.** A verb that only reads back the operator's own decision is right to answer twice, so C3 skips there.

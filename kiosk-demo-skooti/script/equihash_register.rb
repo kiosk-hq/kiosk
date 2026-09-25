@@ -59,7 +59,7 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
   if rc == 402
     # The PoP nonce is NOT consumed on a 402 (the gate runs before the
     # challenge is spent), so we resubmit the SAME signed proof + the PoW.
-    # The 402 is an RFC 9457 problem document since 0.4: `challenges` is a
+    # The 402 is an RFC 9457 problem document: `challenges` is a
     # TOP-LEVEL extension member, not nested under an `error` object.
     challenges = reg["challenges"]
     abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?

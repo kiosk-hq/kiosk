@@ -441,7 +441,7 @@ namespace :check do
       puts "  FAIL  my_orders payment_state got #{result["payment_state"].inspect}"
     end
 
-    # THE PAY BODY IS THE SETTLEMENT (0.4). `POST /kiosk/pay` keeps its path,
+    # THE PAY BODY IS THE SETTLEMENT. `POST /kiosk/pay` keeps its path,
     # but its success body is the settlement object itself — there is no `ok`
     # flag left to read, and "did it settle?" is the 200 status plus a
     # settlement that names itself and its currency. The FIELDS are what is
@@ -931,7 +931,7 @@ namespace :check do
 
     # Assertion 5a: the forged user_id is REFUSED by the published contract.
     # `create_order` declares `additionalProperties: false` and does not declare
-    # `user_id` — the principal is not one of its inputs — so on the 0.4 wire the
+    # `user_id` — the principal is not one of its inputs — so on the wire the
     # schema layer answers a typed 400 NAMING the parameter before the handler
     # runs.
     forged_rc, forged_code, forged_detail = forged_refusal
@@ -1243,7 +1243,7 @@ namespace :check do
     end
 
     # The one verb that takes an `order_id` must DECLARE its uuid shape, not
-    # merely describe it in prose. Since 0.4 the declaration is also ENFORCED:
+    # merely describe it in prose. The declaration is also ENFORCED:
     # `input_schema` is validated on every call, unconditionally, so the pattern
     # asserted below is what refuses a malformed order_id at the wire.
     # `Kiosk::UuidCheck` in the handler remains the floor for the values the pattern

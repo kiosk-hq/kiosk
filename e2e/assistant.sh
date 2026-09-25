@@ -85,7 +85,7 @@ assert() {
   fi
 }
 
-# ── The 0.4 per-verb wire ───────────────────────────────────────────────
+# ── The per-verb wire ───────────────────────────────────────────────────
 #
 # A query is a GET at its own path and carries its arguments in the query
 # string; an action is a POST at its own path and carries them in a JSON
@@ -177,7 +177,7 @@ for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well
   done
 done
 
-# THE INVERSE, on the fifth document. Every verb, at its real per-verb 0.4
+# THE INVERSE, on the fifth document. Every verb, at its real per-verb
 # endpoint, with the method that reaches it — anonymously.
 apc_body=$(curl -sf "$SERVER_URL/.well-known/api-catalog")
 for verb_name in salons my_appointments book_appointment; do

@@ -23,7 +23,7 @@
 #       my_bookings contains oB, A's my_bookings does NOT, and the DB
 #       bookings.user_id for oB is B's — ownership comes from the token.
 #
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the query string; an action is `POST <endpoint>/<action-name>` with them as
 # the JSON body. There is no `name` field and no /query or /run endpoint. A
 # success body IS the result — a bare array from a non-paginating query, the
@@ -133,7 +133,7 @@ b_booking_ids_before = my_booking_ids(SERVER, b[:token], "B (before)")
 
 # ── Step 5a: B books with a FORGED user_id arg (Assertion 2a) ────────────────
 #
-# B's token identifies B; the forged arg supplies A's user_id. On the 0.4 wire
+# B's token identifies B; the forged arg supplies A's user_id. On the wire
 # this is REFUSED before the handler runs: `book_table` publishes
 # `additionalProperties: false` and does not declare `user_id` — the principal
 # is not one of its inputs — so the declared input contract answers a typed 400

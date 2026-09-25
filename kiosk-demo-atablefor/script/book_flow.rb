@@ -34,7 +34,7 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
 # arguments as the JSON body. There is no `name` field and no /query or /run
 # endpoint. A success body IS the result — a bare array from a non-paginating

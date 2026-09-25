@@ -21,7 +21,7 @@
 #   5. The 4th follow-up request is challenged again (HTTP 402) — the grant is
 #      exhausted, so the toll returns.
 #
-# THE 0.4 WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
+# THE WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
 # with its arguments in the query string — there is no `name` field and no
 # `POST /kiosk/query`. A 402 is an RFC 9457 problem document whose `code` and
 # `challenges` are TOP-LEVEL members, and a served non-paginating query is a

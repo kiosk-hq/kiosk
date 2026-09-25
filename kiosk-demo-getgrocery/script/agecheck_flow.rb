@@ -57,7 +57,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# THE WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
 # arguments as the JSON BODY. There is no `name` field and no /query or /run
 # endpoint. A success body IS the result, and `pay` answers the settlement

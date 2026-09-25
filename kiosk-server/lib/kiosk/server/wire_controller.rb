@@ -452,7 +452,7 @@ module Kiosk
       # @param status [Integer, Symbol] the HTTP status
       # @param error [Errors::Base, nil] the error being rendered, when it is one
       # @param content_type [String, nil] overrides `application/json` — the
-      #   0.4 error path renders `application/problem+json`
+      #   error path renders `application/problem+json`
       def render_wire_body(body, status:, error: nil, content_type: nil)
         Kiosk::Server::Headers.add_to(response.headers)
         Kiosk::Server::Headers.add_cache_policy(

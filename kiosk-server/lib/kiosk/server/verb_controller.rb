@@ -172,7 +172,7 @@ module Kiosk
                  parse_body!
                end
 
-        # UNCONDITIONAL, deliberately. `input_schema` is REQUIRED on every 0.4
+        # UNCONDITIONAL, deliberately. `input_schema` is REQUIRED on every
         # verb and §8.1 item 5 makes the operator coerce-then-validate before
         # the handler sees an argument, so a per-verb endpoint that validated
         # only when a flag was set would be non-conformant with the flag off —
@@ -182,7 +182,7 @@ module Kiosk
         # carry a `Kiosk-PoW` header, on the wire and on the auth plane.
         #
         # Which is why `json_schemer` is a REAL runtime dependency of this gem
-        # since 0.4 (see the gemspec): an origin that cannot load a validator
+        # a runtime dependency (see the gemspec): an origin that cannot load a validator
         # cannot serve a conformant wire. It is still required lazily, and a
         # vendored checkout without it still gets {Errors::ConfigurationError}
         # naming the gem rather than a LoadError at boot.

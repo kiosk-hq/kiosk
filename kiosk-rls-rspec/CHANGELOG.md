@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - **Three sentences forecast a `kiosk-agent-test` gem that does not exist (K-1695).** They say what the `:kiosk_agent` tag IS instead — the same DSL, not a second mode.

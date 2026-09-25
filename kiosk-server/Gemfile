@@ -15,7 +15,7 @@ gem "kiosk-reputation",   path: "../kiosk-reputation"
 
 # `json_schemer` is a RUNTIME dependency of this gem, so `gemspec` above already
 # brings it and this line is redundant — kept only so the development bundle
-# names it. kiosk-server.gemspec says why it is one: every 0.4 verb's
+# names it. kiosk-server.gemspec says why it is one: every verb's
 # `input_schema` is validated before the handler sees an argument, behind no
 # flag at all. A host does NOT add it to enable anything; it is still required
 # lazily in lib so a checkout without it gets a ConfigurationError naming the

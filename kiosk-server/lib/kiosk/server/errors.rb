@@ -36,16 +36,16 @@ module Kiosk
       # vocabulary: these seventeen codes ARE the spec's "Error vocabulary"
       # table — narrative (specification.html), formal (protocol.md §9) and
       # `problem.schema.json` all carry the same seventeen, `payment_failed`
-      # among them since kiosk.tech a2f4089, `method_not_allowed` since the 0.4
+      # among them since kiosk.tech a2f4089, `method_not_allowed` since the
       # per-verb wire, and `verb_not_found` + `module_not_served` since the
       # three-way split below.
       # Not a superset of the published table and not a subset of it; the two
       # are the same list, and a schema-validating client rejects anything
       # else. Adding a code here is a WIRE change: spec first (rule 1).
       #
-      # `method_not_allowed` is a 0.4 addition and the reason it exists is
-      # the per-verb wire: once the HTTP METHOD carries the read/write
-      # semantics, `GET <endpoint>/<action-name>` is a resource that EXISTS
+      # `method_not_allowed` exists because of the per-verb wire: once the HTTP
+      # METHOD carries the read/write semantics, `GET
+      # <endpoint>/<action-name>` is a resource that EXISTS
       # and refuses this method, which is a different fact from "no such
       # verb" and RFC 9110 §15.5.6 already has a status for it. Adding to a
       # closed vocabulary is spec-first, so the code is here because the

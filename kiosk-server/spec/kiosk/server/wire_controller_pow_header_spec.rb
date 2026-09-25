@@ -3,7 +3,7 @@
 # The Kiosk-PoW HEADER path (ADR-0022), driven through the FULL controllers.
 #
 # The proof is carried in the `Kiosk-PoW` request HEADER as raw JSON, never in
-# the request body. On the 0.4 per-verb wire that is not a convenience but the
+# the request body. On the per-verb wire that is not a convenience but the
 # only workable channel: a query is a `GET <endpoint>/<query-name>` and a GET
 # has no body to put a proof in. This spec proves, end to end:
 #

@@ -64,8 +64,9 @@ universal agent skill is `skill.md` on the same site.
    `## [MAJOR.MINOR.PATCH] — YYYY-MM-DD` and opens a fresh empty one above — **a
    PATCH cut getting a section exactly as a MINOR one does**, since a patch is a
    release here and a date cannot say which version has a change. A cut is a TREE
-   event: every gem's version moves to the same number, the root record names it,
-   and each gem record with entries under `[Unreleased]` gets the same heading.
+   event: every gem's version moves to the same number, and the root record AND
+   EVERY GEM RECORD get the same heading — a package record is the only thing a
+   reader who installed the gem has.
    The entries written before the grouping sit below the
    `## Before release sections` heading, unedited and naming no version.
    **`CHANGELOG-RULE.md` at the root is the authority for how** — where a line

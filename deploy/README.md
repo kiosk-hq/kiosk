@@ -565,7 +565,7 @@ TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
 #       this one answers just as well before step (c) as after it.
 curl -s "$BASE/kiosk/schema" | jq .
 
-#    e) call a query as the registered assistant — protocol 0.4: one endpoint
+#    e) call a query as the registered assistant — one endpoint
 #       per verb, a query is a GET whose arguments are the query string, and the
 #       success body IS the result: a bare JSON array, no envelope to unwrap
 #       (the matching-row count rides in the X-Total-Count response header).

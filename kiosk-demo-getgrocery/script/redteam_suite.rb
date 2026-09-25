@@ -21,7 +21,7 @@
 # InflatedTotalCart local to this file — and a fourth (MalformedItemsCart)
 # attacks the input shape create_order takes.
 #
-# THE 0.4 WIRE. A query is `GET /kiosk/<query-name>` with its arguments in the
+# THE WIRE. A query is `GET /kiosk/<query-name>` with its arguments in the
 # query string and an action is `POST /kiosk/<action-name>` with its arguments
 # as the JSON body. A success body IS the result (a bare array from a
 # non-paginating query, the action's own object from an action, the settlement
@@ -145,7 +145,7 @@ profile = Kiosk::Redteam::Profile.new(
   per_user_query: "my_orders",
 
   # result_id_key: create_order's response body IS the order object, so the key
-  #                is read straight off it — body["order_id"] (0.4: no envelope)
+  #                is read straight off it — body["order_id"] (no envelope)
   # row_id_key:    my_orders rows carry an "order_id" field (it matches the
   #                consumer param name so an assistant copies the same key)
   result_id_key: "order_id",
@@ -333,7 +333,7 @@ end
 # executor.rb turns into ActionFailed — a 500 on this demo's headline action,
 # the one the onboarding page is modelled on.
 #
-# Since 0.4 the FIRST of these refusals comes from the schema layer rather than
+# The FIRST of these refusals comes from the schema layer rather than
 # from the handler: `input_schema` is validated on every call and `items`
 # declares `{type: "array", minItems: 1, items: {…}}`, so a String, an Integer
 # or an array of Strings is refused before {WireArguments.items} runs. The
@@ -436,7 +436,7 @@ end
 #
 # WHICH LAYER ANSWERS WHAT, measured rather than assumed. `delivery_slot_id`
 # declares `type: "integer", minimum: 1, maximum: 6` and `order_id` declares
-# `format: "uuid"`, so 0.4's `input_schema` validation refuses those shapes
+# `format: "uuid"`, so `input_schema` validation refuses those shapes
 # BEFORE the handler — for them this beat pins the CONTRACT (typed 400, no 5xx,
 # no wrong answer served as 200) across both layers and goes red if either
 # stops holding, e.g. if a descriptor widened the type or dropped

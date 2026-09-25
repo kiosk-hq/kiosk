@@ -158,7 +158,7 @@ Alice and Bob each post a listing. Then: `browse_listings` returns both owners'
 listings (open board); Bob's `my_listings` excludes Alice's and includes his
 own; **Bob editing or closing Alice's listing → 403**; and a forged `owner_id`
 arg on Bob's `post_listing` is **refused `400 bad_request` naming `owner_id`**,
-not accepted-and-ignored — the 0.4 schemas are `additionalProperties: false`, so
+not accepted-and-ignored — the schemas are `additionalProperties: false`, so
 the argument never reaches the handler (the legitimate row's DB `owner_id` is
 still Bob, taken from the token).
 

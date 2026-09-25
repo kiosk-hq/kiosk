@@ -497,7 +497,7 @@ namespace :check do
     # The principal is not an input, asserted in two halves.
     #
     # (a) The forged account_id is REFUSED by the published contract: create_list
-    #     declares `additionalProperties: false` and only `title`, and since 0.4
+    #     declares `additionalProperties: false` and only `title`, and
     #     input_schema is validated on every call, so the wire answers a typed
     #     400 naming the parameter instead of accepting and ignoring it.
     forged_rc, forged_code, forged_detail = r["forged_refusal"] || []

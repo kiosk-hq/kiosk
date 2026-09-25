@@ -2102,7 +2102,7 @@ jobs:
       - name: Gems, constraints and the skill pin share the protocol's MAJOR.MINOR
         run: ./bin/check-version-parity
 
-  # Verb names and the reserved plane (spec §8.1 / §8.3). On the 0.4 wire a verb
+  # Verb names and the reserved plane (spec §8.1 / §8.3). On the wire a verb
   # name IS a path segment, which makes four properties load-bearing that used
   # to be cosmetic, and bin/check-kiosk-names is the only reader of two of them:
   #

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # atablefor's WRITE surface: the two verbs an assistant reaches with
-# `POST /kiosk/<action-name>` — one endpoint per verb since 0.4, arguments as
+# `POST /kiosk/<action-name>` — one endpoint per verb, arguments as
 # the JSON body. Same shape as Kiosk::DiningRoomController — this app's own
 # ApplicationController plus `include Kiosk::Handler` — and `kind :action` above
 # each declaration is what puts it on `POST`. Each write reads its arguments,

@@ -260,7 +260,7 @@ module Kiosk
       # RFC 9727 "API Catalog" served as an `application/linkset+json` body: a
       # single linkset member, `anchor`ed at the api-catalog URL, whose `item`
       # array hyperlinks the live API endpoints — the two service
-      # DESCRIPTIONS, then EVERY REGISTERED VERB at its own 0.4 endpoint, then
+      # DESCRIPTIONS, then EVERY REGISTERED VERB at its own endpoint, then
       # `pay` and the agents.json discovery companion.
       #
       # The `schema` endpoint is the machine-readable surface description, so it
@@ -336,7 +336,7 @@ module Kiosk
           # deletes this one `items <<`.
           items << { href: "#{endpoint}/openapi.json?v=#{version}", rel: "service-desc" }
         end
-        # EVERY REGISTERED VERB, at its own 0.4 endpoint, with the method that
+        # EVERY REGISTERED VERB, at its own endpoint, with the method that
         # reaches it: a query is a GET, an action is a POST. Sorted by name
         # within each kind so the document is byte-stable across boots — a
         # linkset whose member order wobbled would break its own ETag for no

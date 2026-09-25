@@ -110,7 +110,7 @@ module Kiosk
       # one permission about a wire response's headers — "the default for a
       # `200` is `private, no-store`; an operator MAY relax it to `private,
       # max-age=N` for a genuinely identity-independent payload" — and on the
-      # 0.4 per-verb wire the only code an operator writes is a handler, so a
+      # per-verb wire the only code an operator writes is a handler, so a
       # seam that dropped every sub-response header would make that published
       # permission unreachable by anybody, so this destructures the
       # sub-response's headers and reads `Cache-Control` out of them — DO NOT

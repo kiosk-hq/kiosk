@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # tudu's READ surface: the four verbs an assistant reaches with
-# `GET /kiosk/<query-name>` — one endpoint per verb (protocol 0.4), arguments in
+# `GET /kiosk/<query-name>` — one endpoint per verb, arguments in
 # the query string, and the success body IS the rows array. Kiosk ships a MIXIN,
 # not a base class: `include Kiosk::Handler` is the whole contract and a macro is
 # claimed by the NEXT `def`, so a method with no macros above it is a helper the

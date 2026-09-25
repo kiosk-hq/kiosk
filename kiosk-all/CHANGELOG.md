@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - README: the adapter section names the two adapter gems that ship and the base classes to subclass, instead of forecasting adapters that do not exist (K-1673).

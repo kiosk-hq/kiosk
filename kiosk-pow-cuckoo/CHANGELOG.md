@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - **Three sentences priced the toy solve at «~1 second» with no machine named (K-1698).** The figure is gone; `rake solve_parity` prints its own timing.

@@ -14,10 +14,10 @@ module Kiosk
       # publish this advisory number publish the SAME number: the header here
       # and `kiosk.min_client` in `/.well-known/kiosk.json` ({WellKnown}),
       # which reads the settable value. Emitting the constant here would mean
-      # an operator who set `c.min_client = "0.5.0"` got a discovery document
-      # saying 0.5.0 and every wire response saying 0.4.0, with nothing to tell
-      # a client which was authoritative — a knob that worked on one of the two
-      # places it is read. The constant is still the DEFAULT: it is what the
+      # an operator who raised `c.min_client` got a discovery document saying
+      # the raised number and every wire response saying the constant, with
+      # nothing to tell a client which was authoritative — a knob that worked
+      # on one of the two places it is read. The constant is still the DEFAULT: it is what the
       # setter falls back to.
       def self.add_to(headers, server_version: Kiosk::Server::VERSION)
         headers[Kiosk::Protocol::HEADER_SERVER_VERSION] = server_version

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - **The README stopped forecasting `rake kiosk:rls:{show,check}`, which nothing defines (K-1700).** It now points at `psql`, which answers both questions today.

@@ -11,14 +11,14 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   catalog, and rejects carts denominated in anything else — correct, but
   single-currency. Wire-level currency negotiation is deliberately
   post-release.
-- **Uniform request validation.** Most of this layer shipped in 0.4 and what
-  is left is narrow. SHIPPED: the `c.validate_requests` flag (defaults TRUE;
+- **Uniform request validation.** Most of this layer is shipped and what is
+  left is narrow. SHIPPED: the `c.validate_requests` flag (defaults TRUE;
   set on explicitly in every operator demo) validates the proof(s) parsed
   from the `Kiosk-PoW` request header against the normative PoW JSON Schema, so
   a malformed proof returns a clear `400 bad_request` with a shape hint instead of a silent re-issued `402` loop;
   per-verb `input_schema` validation of a request's coerced
   arguments, which is **unconditional** rather than flag-gated, because
-  `input_schema` is required on every 0.4 verb and a flag would leave the typed
+  `input_schema` is required on every verb and a flag would leave the typed
   `400` existing on some origins and not others; the `405 method_not_allowed`
   answer, carrying `Allow` and a hint, which the wire composes when a route
   hands it a name the registry has as the other kind — an origin drawing one

@@ -44,7 +44,7 @@ PATCH cut each get their own section — that is the point of the rule.**
 
     ## Before release sections    the entries written before this file grouped them
 
-Three shapes, and the check holds them:
+Four shapes, and the check holds them:
 
 1. Every record carries exactly one `## [Unreleased]`, and it is the first
    section in the file. A new entry goes INSIDE it — an entry above the first
@@ -57,6 +57,10 @@ Three shapes, and the check holds them:
    holds the entries written before this file grouped them: they are not a cut,
    they are not `[Unreleased]` either — most of them are long published — and
    they are never edited.
+4. The grammar also accepts a heading that names the artefact line it cut,
+   `## [skill 0.5.0] — …`. That is for a repository publishing more than one
+   versioned line; this one publishes a single line — the tree — so every
+   heading here is the bare form.
 
 **Where the number comes from, so a changelog never invents one.** MAJOR.MINOR
 is fixed by version parity: the protocol, this implementation and the published
@@ -65,19 +69,33 @@ own. A changelog heading only ever REPORTS a version that the tree already
 carries.
 
 **A cut here is a tree event.** The gems move together: a release sets every
-gem's version to the same MAJOR.MINOR.PATCH, the root record names it, and every
-gem record with entries under `[Unreleased]` gets that same heading and date. A
-single gem MAY take a patch of its own — version parity binds MAJOR.MINOR only —
-and then only that gem's record gets the section, while the root record's entry
-waits in `[Unreleased]` for the next tree cut.
+gem's version to the same MAJOR.MINOR.PATCH, and the root record AND EVERY GEM
+RECORD get that heading and date. Every gem record, not only the ones with
+something to say: the version moved in all of them, and a package record is the
+only thing a reader who installed the gem has, so a gem with no surface change
+carries the one entry that is true — the tree moved and this gem's surface did
+not. A single gem MAY take a patch of its own — version parity binds MAJOR.MINOR
+only — and then only that gem's record gets the section, while the root record's
+entry waits in `[Unreleased]` for the next tree cut.
+
+**Which is why 0.5.0 sweeps in everything.** Nothing in this repository has ever
+been tagged or pushed to RubyGems (`SECURITY.md` says so), so 0.5.0 is the FIRST
+release of every gem and everything sitting under `[Unreleased]` when it was cut
+is in it — «Initial skeleton» included, because there was no earlier release for
+it to be in. The root record's `## Before release sections` corpus is the one
+exception and stays where it is: those entries deliberately name no version.
+
+The two demo records named in `bin/check-changelog`'s COURTESY manifest take no
+section. A demo ships in no package and carries no version, so a release heading
+over it would name a number nothing publishes.
 
 The order of one cut, and it is the order that keeps the heading true:
 
 1. Bump the version in each `lib/**/version.rb` the cut covers, then run
    `bin/check-version-parity`.
 2. Rename `## [Unreleased]` to `## [X.Y.Z] — <the date it was cut>` in the root
-   record and in every gem record that has entries under it, and open a fresh
-   empty `## [Unreleased]` above each.
+   record and in every gem record, and open a fresh empty `## [Unreleased]`
+   above each.
 3. `bin/check-changelog` green, plus the touched gems' own suites and
    `e2e/run.sh`, before the merge.
 

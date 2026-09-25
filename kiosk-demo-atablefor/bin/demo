@@ -44,7 +44,7 @@ require_tool() {
 require_tool curl
 require_tool jq
 
-# The 0.4 wire: one endpoint per verb. A query is a GET whose arguments are the
+# The wire: one endpoint per verb. A query is a GET whose arguments are the
 # query string; an action is a POST whose arguments are the JSON body. A success
 # body IS the result — no envelope to unwrap, so no `.rows`/`.value` below.
 #   q   <token> <query-name> [query-string]

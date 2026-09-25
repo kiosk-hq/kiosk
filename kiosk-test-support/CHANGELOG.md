@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Removed
 
 - **`NullExecutor#identity_stack` is no longer public, and `enqueue_action` is now `enqueue_run_action` (K-1708).** Ask `current_identity`; every rig helper is named for the kind it queues.

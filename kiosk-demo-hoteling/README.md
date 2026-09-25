@@ -10,7 +10,7 @@ only confirmed once it is paid for). Payment settles through a **stub PSP**
 
 ## Wire surface
 
-One endpoint per verb (protocol 0.4): a query is `GET /kiosk/<query-name>` with
+One endpoint per verb: a query is `GET /kiosk/<query-name>` with
 its arguments in the query string, an action is `POST /kiosk/<action-name>` with
 its arguments as the JSON body. A success body IS the result — a bare array of
 rows from a query, the action's own object from an action — and an error is an

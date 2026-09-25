@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - **`DeviseSession` reads TLS off the target's scheme.** It opened every socket in cleartext, so an `https://` server URL could not be dialled at all.

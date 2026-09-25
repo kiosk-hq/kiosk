@@ -518,7 +518,7 @@ RSpec.describe Kiosk::Server::VerbController do
   # T-068 SLICE 3. `validate_requests` is deliberately turned OFF in the example
   # below — the flag is now default-TRUE (K-1399), so turning it off is what
   # makes the point the block is about: every example here still gets its 400.
-  # That is the slice-3 change: `input_schema` is REQUIRED on every 0.4 verb
+  # That is the slice-3 change: `input_schema` is REQUIRED on every verb
   # (T-073 = A) and §8.1 item 5 makes the operator coerce-then-validate before
   # the handler sees an argument, so a per-verb endpoint that validated only
   # behind a flag would be non-conformant with the flag off — and K-717's typed

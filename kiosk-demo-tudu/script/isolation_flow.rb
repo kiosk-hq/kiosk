@@ -41,7 +41,7 @@ require "kiosk/redteam/wire"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
-# THE 0.4 WIRE. An action is `POST <mount>/<action-name>` with its arguments as
+# THE WIRE. An action is `POST <mount>/<action-name>` with its arguments as
 # the JSON body; a query is `GET <mount>/<query-name>` with its arguments in the
 # query string. There is no `name` field and no /query or /run endpoint. A
 # success body IS the result — a bare array from a non-paginating query, the
@@ -107,7 +107,7 @@ results[:mallory_list_members] = rc
 # ── Assertion 4: the principal is NOT an input ──────────────────────────────
 #
 # Mallory's token identifies Mallory; the forged arg supplies the owner's UUID.
-# On the 0.4 wire this is REFUSED before the handler runs: `create_list`
+# On the wire this is REFUSED before the handler runs: `create_list`
 # publishes `additionalProperties: false` and declares only `title` — the
 # principal is not one of its inputs — so the declared input contract answers a
 # typed 400 naming the parameter, which is what the published contract

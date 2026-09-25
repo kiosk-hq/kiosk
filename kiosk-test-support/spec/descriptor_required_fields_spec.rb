@@ -82,7 +82,7 @@ RSpec.describe "descriptor required fields" do
 
         #{missing.join("\n")}
 
-        T-073 = A makes BOTH schemas REQUIRED on every 0.4 verb: `input_schema` is
+        T-073 = A makes BOTH schemas REQUIRED on every verb: `input_schema` is
         the contract the wire coerces and validates arguments against, and
         `output_schema` is the only machine-readable statement of what a call
         returns now that the response envelope is gone. A verb that takes nothing

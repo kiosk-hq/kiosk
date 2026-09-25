@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 ### Changed
 
 - CI now installs argon2-cffi, so the `:parity` examples run instead of pending; the gemspec says so rather than implying nothing checks the two implementations.

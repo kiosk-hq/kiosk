@@ -971,7 +971,7 @@ namespace :check do
     end
 
     # ── Assertion 3a: the forged user_id is REFUSED by the published contract.
-    # On the 0.4 wire `reserve_room` publishes `additionalProperties: false` and
+    # On the wire `reserve_room` publishes `additionalProperties: false` and
     # does not declare `user_id` — the principal is not one of its inputs — so
     # the forgery is a typed 400 naming the parameter, before the handler runs.
     forged_rc, forged_code, forged_detail = forged_refusal
@@ -1024,7 +1024,7 @@ namespace :check do
       BLOCKED  UnpaidGatedAction     — confirm_booking without payment → Gate-2 fires
       BLOCKED  CrossTenantRead       — B's my_bookings excludes A's rows
       BLOCKED  ForgedUserId          — agent-supplied user_id in reserve_room args refused
-                                       (0.4: undeclared argument → typed 400 before the handler)
+                                       (undeclared argument → typed 400 before the handler)
       BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-26
+
 - 2026-09-25: **README: «What is Kiosk» names the protocol, not a Postgres-backed app** (K-1810). The database belongs to this implementation, never to the wire.
 
 ### Changed

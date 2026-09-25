@@ -458,7 +458,7 @@ namespace :check do
       require "openssl"
       require "securerandom"
 
-      # THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
+      # THE WIRE. An action is `POST <endpoint>/<action-name>` carrying its
       # arguments as the JSON body; a query is `GET <endpoint>/<query-name>`
       # carrying them in the query string. There is no `name` field and no
       # /query or /run endpoint, and a success body IS the result — a bare array

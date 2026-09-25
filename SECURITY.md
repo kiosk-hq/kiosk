@@ -50,7 +50,7 @@ We will credit you in the changelog entry for the fix unless you ask us not to.
 ## Which versions get fixes
 
 There is no release tag in this repository and nothing is on RubyGems yet; every
-gem sits on the same `0.4` protocol line and is installed from git. In practice
+gem sits on the same `0.5` protocol line and is installed from git. In practice
 that means **the fix lands on `main` and there is no back-port branch to ask
 for.** When releases start, this section says which lines are supported.
 

@@ -60,7 +60,7 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
     # The PoP nonce is NOT consumed on a 402 (the gate runs before the
     # challenge is spent), so we resubmit the SAME signed proof + the PoW.
     #
-    # The 402 is an RFC 9457 problem document (0.4 moved the auth plane onto
+    # The 402 is an RFC 9457 problem document (the auth plane rides on
     # them with the wire): `challenges` is a TOP-LEVEL extension member, not
     # nested under an `error` object.
     challenges = reg["challenges"]

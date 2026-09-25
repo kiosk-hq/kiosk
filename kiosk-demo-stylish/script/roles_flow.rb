@@ -65,7 +65,7 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
+# THE WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; there is no `name` field and no /query endpoint. A
 # success body IS the result — `salon_calendar` answers a bare JSON array of
 # rows, not `{"rows": …}`.

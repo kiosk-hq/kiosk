@@ -682,9 +682,9 @@ if ARGV.include?("--self-test")
       what: "ONE of stylish's six booting tasks loses its block and hard-codes loopback — the exact " \
             "plant that left the lockstep rule above at exit 0",
       ops:  [[:edit, "kiosk-demo-stylish/lib/tasks/demo.rake",
-              "  task roles: :setup do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
+              "  task roles: \"demo:setup\" do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
               "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    host = begin\n",
-              "  task roles: :setup do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
+              "  task roles: \"demo:setup\" do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
               "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    " \
               "host = \"127.0.0.1\"\n    _dropped = begin\n"]],
       expect: /lib\/tasks\/demo\.rake: every task that boots a server must carry exactly one/ },

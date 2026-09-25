@@ -49,7 +49,7 @@
 #     Measured: `bin/check-publication-paths --self-test` renamed to a script
 #     that does not exist left check-shipped-archaeology, check-publication-paths
 #     and check-changelog all at exit 0.
-#   * a RAKE TASK a block names. `rake demo` renamed to `rake demo:nonexistent`
+#   * a RAKE TASK a block names. `rake demo:setup` renamed to `rake demo:nonexistent`
 #     in a demo's own README left check-ci-tasks, check-shipped-archaeology,
 #     check-demo-derivations and check-prose-counts all at exit 0.
 #
@@ -57,7 +57,7 @@
 # is exactly the "second parser to be wrong in a different way" this workspace
 # warns about. That parser is scoped to declarations INSIDE a column-0
 # `namespace :demo do` block — deliberately, because its question is which
-# `demo:` tasks CI runs. The first line of most demo READMEs is `rake demo`,
+# tasks CI runs. The first runnable line of most demo READMEs is `bin/setup`,
 # which is declared at the TOP LEVEL (`task demo: ["demo:setup",
 # "check:walkthrough"]`) and is invisible to it. A rule that could not resolve the
 # most-pasted command in the repository would be theatre, so this file reads both

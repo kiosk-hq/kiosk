@@ -151,8 +151,6 @@ that property's whole inventory — the negative's unpaid hold is never released
 by design — and a second `bin/rails check:book` aborted with «availability
 returned empty rows».
 
-`bin/rails demo` runs `demo:setup` then `check:book`.
-
 ### Watch it work
 
 `bin/setup` seeds this demo and leaves the origin running on

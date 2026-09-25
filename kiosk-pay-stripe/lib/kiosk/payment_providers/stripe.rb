@@ -230,7 +230,7 @@ module Kiosk
 
       # Programmatically attach a test card to the principal's Customer,
       # simulating a completed SetupIntent without a human at a hosted page.
-      # Used by automated `rake demo` and integration specs.
+      # Used by the demos' automated flow drivers and by integration specs.
       #
       # - Ensures a Customer exists (creates + saves via the saver if absent).
       # - Attaches the PaymentMethod to the Customer.

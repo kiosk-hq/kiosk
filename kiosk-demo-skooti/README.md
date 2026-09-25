@@ -136,8 +136,6 @@ bin/rails check:schema      # self-discovery over the schema verb
 bin/rails check:kat         # known-answer test for the offline rental-token issuer (DB-free)
 ```
 
-`bin/rails demo` runs `demo:setup` then `check:rideflow`.
-
 Two more entry points are hardware-side rather than rake tasks: `bin/make-qr`
 renders the scooter QR codes, and `bin/ble-unlock` writes a rental token to a
 flashed ESP32-C3 lock over BLE from a laptop — the no-iPhone way to see the lock

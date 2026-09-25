@@ -2124,7 +2124,7 @@ SKELETON_NOT_COMPARED = {
   "config/environments/development.rb" =>
     "NOT compared, and the reason is NOT that the file is trivially per-demo — it is not (K-674/K-720). " \
     "Two things live here. (1) The HostAuthorization line: atablefor, getgrocery, hoteling and skooti " \
-    "each append their own served domain for `rake demo` (config.hosts << \"<app>.demo.kiosk.tech\", " \
+    "each append their own served domain for the demo tasks (config.hosts << \"<app>.demo.kiosk.tech\", " \
     "each on its own dev port — the domains are the REAL ones since K-695, not the invented `<app>.app` " \
     "this entry claimed until K-720), philslist/stylish/tudu have no such domain and so no such line, " \
     "and prove uses kyc.demo.kiosk.tech. (2) Since K-650 every operator demo also carries a SUBSTANTIVE " \

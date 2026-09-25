@@ -4,7 +4,7 @@ Core abstractions for the [Kiosk](https://kiosk.tech) framework.
 
 ## What is Kiosk
 
-Kiosk turns a Postgres-backed business app into an AI-assistant surface: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
+Kiosk is the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service. Its Ruby reference implementation is a Rails engine: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
 
 ## What is kiosk-core
 

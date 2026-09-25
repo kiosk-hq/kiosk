@@ -1,6 +1,6 @@
 # Kiosk — OSS reference implementation
 
-Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an AI-assistant surface (REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail). Where this is heading: [ROADMAP.md](ROADMAP.md).
+Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation (REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail). Where this is heading: [ROADMAP.md](ROADMAP.md).
 
 ## Install
 

@@ -26,14 +26,14 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1727 anchors.
+# 1725 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
 README.md	Apache-2.0 for every gem in this repo.
-README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an AI-assistant surface
+README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation
 README.md	Customer reputation factors + bad-proof signal
 README.md	Equihash (n=168, k=7)
 README.md	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
@@ -65,7 +65,6 @@ deploy/README.md	| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not 
 deploy/demo-reset.sh	# ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants
 deploy/demo-reset.sh	# Those rows are evidence of a run that happened, and seeding cannot reproduce
 deploy/demo-reset.sh	# placed against this origin — the Hermes-verified order f8bc3efb among them.
-deploy/demo-reset.sh	additive db:seed (no drop — the Hermes rows are evidence)
 deploy/env/atablefor.env.example	KIOSK_POW_DIFFICULTY=high
 deploy/env/getgrocery.env.example	KIOSK_POW_DIFFICULTY=low
 e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
@@ -290,7 +289,7 @@ kiosk-core/README.md	- **Configuration** — `Kiosk.configure { |c| ... }`
 kiosk-core/README.md	- **Postgres GUC namespace constants** — `Kiosk::GUC`
 kiosk-core/README.md	- **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, default mo
 kiosk-core/README.md	- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate` (intent / cart / payment)
-kiosk-core/README.md	Kiosk turns a Postgres-backed business app into an AI-assistant surface: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail
+kiosk-core/README.md	Kiosk is the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service. Its Ruby reference implementation is a Rails engine: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail
 kiosk-core/README.md	No Rails dependency. Loadable in any Ruby app.
 kiosk-core/README.md	The foundation. Defines:
 kiosk-core/kiosk-core.gemspec	  spec.add_development_dependency "rake",  "~> 13.2"
@@ -555,7 +554,6 @@ kiosk-demo-prove/README.md	## The three legs
 kiosk-demo-prove/README.md	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
 kiosk-demo-prove/README.md	`base_url` — the origin the request arrived on — **not** the deploy origin. The
-kiosk-demo-prove/README.md	account-possession assurance level adopted for now, after a survey of the
 kiosk-demo-prove/README.md	and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
 kiosk-demo-prove/README.md	operator → broker (server-to-server)
 kiosk-demo-prove/README.md	verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-25: **README: «What is Kiosk» names the protocol, not a Postgres-backed app** (K-1810). The database belongs to this implementation, never to the wire.
+
 ### Changed
 
 - `UuidCheck`'s JSON Schema pattern IS enforced: the engine validates every verb's arguments against its `input_schema`. The doc said it validated nothing.

@@ -104,6 +104,16 @@ assert(DublinZones::ZONES.values.uniq == ["Europe/Dublin"],
 assert(DeliverySlots.zone_for("D02").name == "Europe/Dublin",
        "zone_for(\"D02\") reads that district's declared clock")
 
+# THE REFUSAL NAMES THE SERVED SET, NEVER A RANGE OVER IT. SERVED skips D18 and
+# D19, so a `first`–`last` rendering would tell an assistant a D18 address is
+# delivered to in the very sentence refusing it.
+%i[no_district not_dublin out_of_zone].each do |reason|
+  result = DublinZones::Result.new(ok: false, district: "D18", reason: reason)
+  named  = DublinZones.reject_message(result)[/erved districts.*/].to_s.scan(/D\d\d/).uniq.sort
+  assert(named == DublinZones::SERVED.sort,
+         "the #{reason} refusal names every served district and no other, got #{named.inspect}")
+end
+
 # Handed a DIFFERENT zone, every helper answers on it. This is what makes the
 # source per-address rather than per-origin: the functions carry no clock of
 # their own.

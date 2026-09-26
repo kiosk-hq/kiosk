@@ -135,7 +135,7 @@ module DublinZones
   # Human-readable, assistant-actionable reason for a rejection. Names WHAT is
   # needed so the assistant knows to go back to its human for a real address.
   def reject_message(result)
-    served = "#{SERVED.first}–#{SERVED.last} (inner Dublin)"
+    served = SERVED.join(", ")
     case result.reason
     when :blank
       "missing delivery_address — getgrocery needs a Dublin delivery address " \

@@ -50,6 +50,7 @@
 # skill version AND re-pinning the demos — update PINNED_SHA256 as the LAST
 # step of that sequence, not the first.
 #
+# CI ARM: bin/check-solver-pin --network
 # Usage: bin/check-solver-pin [--offline | --network | --all]
 
 require "digest"

@@ -47,6 +47,7 @@
 # skill that pins it. Update PINNED_SHA256 and PINNED_URL as the LAST step of
 # that sequence, not the first.
 #
+# CI ARM: bin/check-listener-pin --network
 # Usage: bin/check-listener-pin [--offline | --network | --all]
 
 require "digest"

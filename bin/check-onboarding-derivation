@@ -159,6 +159,8 @@
 #   bin/check-onboarding-derivation --network   # the published page
 #   bin/check-onboarding-derivation --list      # every rule and what it derives
 #   bin/check-onboarding-derivation --self-test # red on a plant of every rule
+#
+# CI ARM: bin/check-onboarding-derivation --network
 
 require "net/http"
 require "uri"

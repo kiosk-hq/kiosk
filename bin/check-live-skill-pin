@@ -100,6 +100,7 @@
 #   1  drift, an origin that could not be measured, or an ambiguous expectation
 #   2  usage
 #
+# CI ARM: bin/check-live-skill-pin --offline
 # Usage: bin/check-live-skill-pin [--offline | --network | --all]
 #
 #   --offline  (default)  no network. Resolves the origins and the pin a deploy

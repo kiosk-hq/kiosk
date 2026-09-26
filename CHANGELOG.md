@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-26: **`bin/check-tls-seam` now runs in CI, and a check whose CI arm is not its bare run declares that arm in its own source.** A bare local battery read a red tree as green.
+
 ## [0.5.0] — 2026-09-26
 
 - 2026-09-26: **The protocol is 0.5.0, and `min_client` with it.** The catalogue's REQUIRED `events` array broke 0.4, so every gem, constraint and lock moves to the line the wire speaks.

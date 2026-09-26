@@ -109,6 +109,8 @@
 # it is the one fact this gate cannot measure for itself, and leaving it stale
 # only costs time, while moving it early hides real defects.
 #
+# CI ARM: bin/check-migration-replay ${{ matrix.demo }}
+#
 # Usage:
 #   bin/check-migration-replay                      # all demos
 #   bin/check-migration-replay kiosk-demo-tudu      # one demo

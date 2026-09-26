@@ -2151,6 +2151,32 @@ jobs:
       - name: Declared verb names, and the reserved plane the engine draws
         run: ./bin/check-kiosk-names
 
+  # No client driver in this repository may open a socket whose scheme it did
+  # not read off the target: `Net::HTTP.new` is cleartext and never says so, so
+  # a driver missing one line reaches loopback and no deployed origin. Stdlib
+  # Ruby only — no sibling checkout, no bundle, no services, no database, no
+  # network.
+  tls-seam:
+    name: every client socket reads its scheme off the target (bin/check-tls-seam)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard reddens on a planted cleartext site
+        run: ./bin/check-tls-seam --self-test
+
+      - name: Every Net::HTTP.new decides TLS from the target's scheme
+        run: ./bin/check-tls-seam
+
   # THE PUBLISHED ARTEFACTS — the one job that checks kiosk.tech out beside this
   # repo, because three guards compare this tree against published BYTES and
   # none of them can say anything without them (K-1361).

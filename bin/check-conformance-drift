@@ -184,6 +184,8 @@
 #     `spec/conformance-anchors.tsv` are covered — citations into other repos are
 #     not in it and are not seen here.
 #
+# CI ARM: bin/check-conformance-drift --check
+#
 # Usage (stdlib only, no bundle, no database, no network):
 #   bin/check-conformance-drift                     # report drift against the baseline
 #   bin/check-conformance-drift --matrix PATH       # …naming the matrix rows affected

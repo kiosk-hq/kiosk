@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-26: **getgrocery's order model stops naming a `scheduled` state nothing writes.** A delivery move leaves the row `rescheduled`, so the one-member set beside it goes too.
 - 2026-09-26: **getgrocery's out-of-zone refusal names the served districts instead of a range over them.** The range claimed D18 and D19, which it does not deliver to.
 - 2026-09-26: **`bin/check-tls-seam` now runs in CI, and a check whose CI arm is not its bare run declares that arm in its own source.** A bare local battery read a red tree as green.
 

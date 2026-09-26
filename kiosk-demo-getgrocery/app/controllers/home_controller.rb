@@ -16,13 +16,13 @@ class HomeController < ApplicationController
     # delivery the wire actually moves stays invisible to it, and a stat
     # presented as live activity that no current request can change is worse
     # than no stat.
-    # {Order::ALREADY_SCHEDULED} is the same predicate the admin badge and the
+    # {Order::RESCHEDULED} is the same predicate the admin badge and the
     # one-reschedule-per-order rule already use, so a third spelling of "this
     # delivery has been booked" cannot drift away from the other two.
     @products_in_catalog  = Product.where("stock > 0").count
     @orders_placed        = Order.count
     @items_ordered        = OrderItem.sum(:qty)
-    @deliveries_scheduled = Order.where(status: Order::ALREADY_SCHEDULED).count
+    @deliveries_scheduled = Order.where(status: Order::RESCHEDULED).count
 
     # Set a Link header too, so a header-only agent finds the well-known.
     # The url is `Kiosk.configuration.skill_url` — the VERSIONED cut this

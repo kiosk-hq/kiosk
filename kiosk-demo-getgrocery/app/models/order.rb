@@ -14,16 +14,15 @@
 # `status` is a tiny lifecycle rather than a label, and every gate on this
 # origin reads it: `created → paying → paid` is the per-order serialization the
 # pay path claims through (see app/services/validating_payment_provider.rb — that claim
-# is what makes a double capture impossible), `scheduled`/`rescheduled` is
-# where a delivery move leaves it, and `out_for_delivery` → `delivered` is the
-# shop's own end of the bargain, written by nobody the caller can reach.
+# is what makes a double capture impossible), `rescheduled` is where a delivery
+# move leaves it, and `out_for_delivery` → `delivered` is the shop's own end
+# of the bargain, written by nobody the caller can reach.
 class Order < ApplicationRecord
   # The order states this app names, in one place so a gate, a refusal sentence
   # and a wire row cannot come to disagree about their spelling.
   CREATED     = "created"
   PAYING      = "paying"
   PAID        = "paid"
-  SCHEDULED   = "scheduled"
   RESCHEDULED = "rescheduled"
   # THE SHOP'S OWN TWO. A courier leaves shortly before the window opens and
   # arrives inside it; neither transition is anything the caller asked for, and
@@ -31,22 +30,17 @@ class Order < ApplicationRecord
   OUT_FOR_DELIVERY = "out_for_delivery"
   DELIVERED        = "delivered"
 
-  # One reschedule per order; further changes go through the operator.
-  ALREADY_SCHEDULED = [SCHEDULED, RESCHEDULED].freeze
-
-  # The states a courier is already acting on. Kept apart from the set above
+  # The states a courier is already acting on. Kept apart from {RESCHEDULED}
   # because the two refusals mean different things to a caller: «you have
   # already moved this once» is about a quota, «the courier has left» is about
   # the physical world, and an assistant reading one for the other would retry
   # the wrong thing.
   WITH_THE_COURIER = [OUT_FOR_DELIVERY, DELIVERED].freeze
 
-  # The states a paid order can be in when the shop arms its courier. DERIVED
-  # from the set above rather than spelled again: a reschedule leaves the row
-  # `rescheduled` rather than `paid`, so a list that named `paid` alone would
-  # silently stop delivering every moved order — and a second hand-written list
-  # is where the two spellings drift apart.
-  AWAITING_COURIER = ([PAID] + ALREADY_SCHEDULED).freeze
+  # The states a paid order can be in when the shop arms its courier. A
+  # reschedule leaves the row `rescheduled` rather than `paid`, so a list that
+  # named `paid` alone would silently stop delivering every moved order.
+  AWAITING_COURIER = [PAID, RESCHEDULED].freeze
 
   # ── What `my_orders` publishes about money ─────────────────────────────────
   # The three answers protocol.md §11.6 allows a reconciliation surface to give.
@@ -90,8 +84,9 @@ class Order < ApplicationRecord
   # The rows `reschedule_delivery` may still move. Written here because the
   # verb and the pay path read the same lifecycle and must not each keep their
   # own list. A window cannot be moved once the courier holds the basket, which
-  # is a second reason and not the same one — see the two constants above.
-  scope :reschedulable, -> { where.not(status: ALREADY_SCHEDULED + WITH_THE_COURIER) }
+  # is a second reason and not the same one: {RESCHEDULED} is the quota,
+  # {WITH_THE_COURIER} is the physical world.
+  scope :reschedulable, -> { where.not(status: [RESCHEDULED, *WITH_THE_COURIER]) }
 
   # ── THE settled-cart containment, correlated to the row being selected ─────
   #

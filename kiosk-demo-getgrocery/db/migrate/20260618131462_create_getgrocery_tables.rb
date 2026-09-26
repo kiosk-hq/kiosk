@@ -13,7 +13,7 @@ class CreateGetgroceryTables < ActiveRecord::Migration[ActiveRecord::Migration.c
 
     create_table :orders, id: :uuid do |t|
       t.references :user, null: false, foreign_key: true, type: :uuid
-      t.string     :status,      null: false, default: "created"  # created | paid | scheduled
+      t.string     :status,      null: false, default: "created"
       t.integer    :total_cents, null: false, default: 0
       t.timestamptz :slot_at,   null: true
       t.text        :address,   null: true

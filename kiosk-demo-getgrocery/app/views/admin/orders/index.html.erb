@@ -185,7 +185,7 @@
       <%
         paid       = order["paid"] == "t" || order["paid"] == true
         status     = order["status"].to_s
-        scheduled  = %w[scheduled rescheduled].include?(status)
+        scheduled  = status == Order::RESCHEDULED
         # THE WINDOW IS NOT COMPOSED HERE. The controller renders it through
         # DeliverySlots — the one writer `delivery_slots` and `my_orders`
         # already answer from — so this page names the same hours, in the same

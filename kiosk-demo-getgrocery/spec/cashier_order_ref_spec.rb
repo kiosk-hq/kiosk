@@ -5,12 +5,13 @@
 #   bundle exec rake check:cashier_spec   (or: ruby spec/cashier_order_ref_spec.rb)
 #
 # `Kiosk::UuidCheck` guards the two places an agent-supplied id reaches an `::uuid`
-# cast: the cashier's cart reference (here) and
-# reschedule_delivery (in config/initializers/kiosk.rb, so it needs a
-# booted app — `rake check:race` drives it over the real DB). Before the guard
-# a malformed value made Postgres raise InvalidTextRepresentation, which is not
-# a Kiosk::Server::Errors::Base and so escaped the wire controller as an HTTP
-# 500. This spec pins, without a database:
+# cast: the cashier's cart reference, in app/services/validating_payment_provider.rb
+# and exercised here, and reschedule_delivery's `order_id`, in
+# app/operations/wire_arguments.rb, which `rake check:wire_args_spec` covers
+# DB-free and `rake check:race` drives over the real DB. Without the check a
+# malformed value makes Postgres raise InvalidTextRepresentation, which is not a
+# Kiosk::Server::Errors::Base and escapes the wire controller as an HTTP 500.
+# This spec pins, without a database:
 #   • a malformed reference → a clean 400 bad_request that echoes the value and
 #     leaks no SQL / PG internals;
 #   • the guard runs BEFORE any SQL — this whole file runs with ActiveRecord
@@ -44,6 +45,19 @@ def assert(cond, msg)
 end
 
 Cart = Struct.new(:currency, :line_items, :user_id, :total_amount_cents, keyword_init: true)
+
+# ── The header names where the guard is called; hold it to the tree ──────────
+# Every repository path the comment above cites must exist and must call the
+# guard, so a call site that moves reddens here instead of leaving the header
+# pointing at a file the identifier has left.
+HEADER = File.readlines(__FILE__).take_while { |l| !l.start_with?("require") }.join
+HEADER_PATHS = HEADER.scan(%r{\b(?:app|config|lib)/[\w./]+\.rb\b}).uniq
+assert(HEADER_PATHS.size == 2, "the header names both call sites: #{HEADER_PATHS.inspect}")
+HEADER_PATHS.each do |rel|
+  full = File.expand_path("../#{rel}", __dir__)
+  assert(File.exist?(full) && File.read(full).include?("Kiosk::UuidCheck"),
+         "#{rel} exists and calls Kiosk::UuidCheck")
+end
 
 CASHIER = ValidatingPaymentProvider.new(:no_psp_should_be_reached, currency: "eur")
 

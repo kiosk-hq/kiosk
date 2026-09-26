@@ -101,10 +101,10 @@ module WireArguments
   # `1.5.to_s.to_i` is 1, so a fractional slot comes out of that line INSIDE the
   # declared range — booked as slot 1 rather than refused. Every other hostile
   # shape (`true`, `false`, `[]`, `{}`, `[1]`, `{"a" => 1}`, `"abc"`) collapses
-  # to 0 and the range arm below catches it, so `1.5` is the single value on
-  # which the looser spelling would disagree with the layer in front of it. A
-  # layer that only holds while the layer in front of it holds is not a second
-  # layer at all.
+  # to 0 and the range arm below catches it — but every String or Symbol whose
+  # leading digits land in 1..6 comes through in range too (`"2"`, `"2.0"`,
+  # `:"2"`, `"3 units"`). A layer that only holds while the layer in front of
+  # it holds is not a second layer at all.
   #
   # {#whole_number} and not `is_a?(Integer)`: `2.0` is still slot 2 here, because
   # json_schemer says a JSON `2.0` is a valid `integer` (measured).
@@ -325,13 +325,14 @@ module WireArguments
   # `.map` / `it[:sku]` and raising a 500 out of the headline action.
   #
   # `qty` IS AS STRICT HERE AS IN THE SCHEMA, for the reason
-  # {#delivery_slot_id} gives. A `(item[:qty] || 1).to_s.to_i` lets exactly two
-  # shapes through as a legal quantity: `false`, because `||` reads it as absent
-  # and defaults to 1, and `1.5`, because `"1.5".to_i` is 1. An ABSENT `qty` is
-  # refused too: the schema requires it, so a default here would be a second,
-  # weaker contract nobody published. BOTH ENDS of the declared
-  # `{type: "integer", minimum: 1, maximum: MAX_INT4}` are carried, for the same
-  # reason one bound over.
+  # {#delivery_slot_id} gives. A `(item[:qty] || 1).to_s.to_i` lets a whole
+  # family through as a legal quantity: `false` and `nil`, which `||` reads as
+  # absent and defaults to 1; `1.5`, because `"1.5".to_i` is 1; and every String
+  # or Symbol whose leading digits parse to 1 or more — `"2"`, `"007"`, `"2.0"`,
+  # `:"2"`, `"3 units"`. An ABSENT `qty` is refused too: the schema requires it,
+  # so a default here would be a second, weaker contract nobody published. BOTH
+  # ENDS of the declared `{type: "integer", minimum: 1, maximum: MAX_INT4}` are
+  # carried, for the same reason one bound over.
   #
   # What this layer CANNOT check is the other half of the same bug: the cart's
   # TOTAL, which is not a fact about any single item. {#priceable_total} answers

@@ -171,10 +171,11 @@ assert(refusal_of(pair).nil? && value_of(pair).eql?(2),
 end
 
 # WRONG SHAPE — not a whole number at all. The SHAPE sentence, echoing the value.
-# `1.5` is the one to watch: `raw.to_s.to_i` would make it slot 1 and BOOK it,
-# inside the declared range, from the layer that claims to be stricter than the
-# schema in front of it.
-[1.5, "1", "abc", "", nil, true, false, [], [1], {}, { "a" => 1 }].each do |raw|
+# A `raw.to_s.to_i` would BOOK several of these inside the declared range, from
+# the layer that claims to be stricter than the schema in front of it: `1.5`
+# truncates to slot 1, and every String or Symbol whose leading digits land in
+# 1..6 becomes that slot.
+[1.5, "1", "2", "2.0", :"2", "3 units", "abc", "", nil, true, false, [], [1], {}, { "a" => 1 }].each do |raw|
   refusal = refusal_of(guard("delivery_slot_id(#{raw.inspect})") { WireArguments.delivery_slot_id(raw) })
   assert_typed_400(refusal, "delivery_slot_id(#{raw.inspect})")
   next unless refusal.is_a?(OperationResult)
@@ -233,12 +234,13 @@ end
   assert(refusal.message == "each item needs a sku", "  … #{refusal.message.inspect}")
 end
 
-# qty, WRONG SHAPE. `false` and `1.5` are the two to watch:
-# `(item[:qty] || 1).to_s.to_i` reads `false` as ABSENT and defaults it to 1,
-# and turns `1.5` into 1. An ABSENT qty is refused too — `input_schema` makes
+# qty, WRONG SHAPE. A `(item[:qty] || 1).to_s.to_i` would pass every one of
+# these: `false` and `nil` read as ABSENT and default to 1, `1.5` truncates to
+# 1, and any String or Symbol whose leading digits parse to 1 or more comes
+# through as that number. An ABSENT qty is refused too — `input_schema` makes
 # it `required`, so a default here would be a second, weaker contract nobody
 # published.
-[nil, false, true, 1.5, "1", "2", "abc", [], {}, [1], Float::NAN].each do |bad|
+[nil, false, true, 1.5, "1", "2", "007", "2.0", :"2", "3 units", "abc", [], {}, [1], Float::NAN].each do |bad|
   item    = bad.nil? ? { sku: "bread" } : { sku: "bread", qty: bad }
   refusal = refusal_of(guard("items([#{item.inspect}])") { WireArguments.items([item]) })
   assert_typed_400(refusal, "items(qty: #{bad.inspect})")

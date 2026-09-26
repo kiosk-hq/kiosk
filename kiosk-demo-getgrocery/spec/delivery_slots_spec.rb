@@ -103,6 +103,9 @@ assert(DublinZones::ZONES.values.uniq == ["Europe/Dublin"],
        "…and today they are all Dublin, so no response byte moves: #{DublinZones::ZONES.values.uniq.inspect}")
 assert(DeliverySlots.zone_for("D02").name == "Europe/Dublin",
        "zone_for(\"D02\") reads that district's declared clock")
+assert(DublinZones.check("D6W").reason == :not_dublin,
+       "the half-district D6W is not a numeric district, so it reads as not-Dublin " \
+       "rather than out-of-zone: #{DublinZones.check("D6W").inspect}")
 
 # THE REFUSAL NAMES THE SERVED SET, NEVER A RANGE OVER IT. SERVED skips D18 and
 # D19, so a `first`–`last` rendering would tell an assistant a D18 address is

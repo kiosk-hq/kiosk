@@ -56,7 +56,8 @@ module DublinZones
   # from a postcode range or from anything else about the address: a guess
   # nobody wrote down is one nobody can check from the other side of the wire.
   # A district absent from this map has no clock and is not deliverable, which
-  # {SERVED} already prevents — the two lists are held equal below.
+  # {SERVED} already prevents — spec/delivery_slots_spec.rb holds the two
+  # lists equal.
   ZONES = %w[
     D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 D16 D17 D20
   ].to_h { |district| [district, "Europe/Dublin"] }.freeze
@@ -110,9 +111,9 @@ module DublinZones
   # embedded as the first token (`D02 XY45`). District 0 is invalid.
   def extract_district(str)
     s = str.to_s
-    # Eircode / routing-key form: D02, D6W-style single/double digit at a word
-    # boundary (D6W is a real half-district but we normalise to D06 family — for
-    # the demo we only match the numeric districts).
+    # Eircode / routing-key form: D02, D2, D 2 — the numeric districts only.
+    # The half-district D6W is not matched at all, so {check} answers it
+    # :not_dublin rather than out-of-zone.
     if (m = s.match(/\bD\s?0?(\d{1,2})\b/i))
       n = m[1].to_i
       return normalise(n)

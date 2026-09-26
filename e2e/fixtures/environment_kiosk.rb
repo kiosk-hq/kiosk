@@ -42,11 +42,13 @@
   raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
 
   # Postgres role names: `app_role` is the non-owner role a request-scoped
-  # session drops into when `enforce_db_role` is on, `system_role` the owner role
-  # the engine returns to afterwards. run.sh pre-creates both in the harness
-  # database. WHICH roles a database actually has is deployment posture rather
-  # than a demo mode, so the names are resolved here and the initializer reads
-  # the config.
+  # session drops into when `enforce_db_role` is on; the `SET LOCAL ROLE` expires
+  # with the transaction, so nothing switches back. `system_role` is deployment
+  # vocabulary for the privileged role a DBA grants ownership to, read by nothing
+  # at runtime. run.sh pre-creates `app_role` in the harness database and both
+  # names resolve to it. WHICH roles a database actually has is deployment posture
+  # rather than a demo mode, so the names are resolved here and the initializer
+  # reads the config.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 

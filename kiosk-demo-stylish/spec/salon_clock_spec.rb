@@ -33,13 +33,16 @@
 require "time"
 require "active_support"
 require "active_support/core_ext/time"
+require "active_support/core_ext/object/blank"
 require "date"
+require "kiosk/operation_result"
 
 require_relative "../app/models/salon_clock"
 # Loads clean without Rails: the class body defines methods and resolves no
 # model constant until one is CALLED, and {BookAppointmentOperation.example_slot}
 # calls nothing but {SalonClock}.
 require_relative "../app/operations/book_appointment_operation"
+require_relative "../app/operations/operation_result"
 
 FAILURES = []
 
@@ -176,20 +179,73 @@ assert(example_at > Time.now,
 # is — which is how a `zone_for` that returned the default would stay green
 # everywhere else. A stand-in for {Salon} answers a zone that is NOT the
 # default for one id and nothing for another.
+SALON_ZONES = { "salon-toronto" => "America/Toronto" }.freeze
+SalonRow    = Struct.new(:id) do
+  def pick(_column) = SALON_ZONES[id]
+end
 Object.const_set(:Salon, Module.new do
-  ROWS = { "salon-toronto" => "America/Toronto" }.freeze
-  Row  = Struct.new(:id) do
-    def pick(_column) = ROWS[id]
-  end
-
-  def self.where(id:) = Row.new(id)
-  def self.exists?(id:) = ROWS.key?(id)
+  def self.where(id:) = SalonRow.new(id)
+  def self.exists?(id:) = SALON_ZONES.key?(id)
 end)
 
 assert(SalonClock.zone_for("salon-toronto").name == "America/Toronto",
        "zone_for reads the salon's own column, got #{SalonClock.zone_for('salon-toronto').name}")
 assert(SalonClock.zone_for("salon-nobody").name == SalonClock::DEFAULT_ZONE_NAME,
        "…and an id that addresses no salon falls back to the origin default")
+
+# ── 8. THE TWO `slot` REFUSALS, DRIVEN ─────────────────────────────────────
+#
+# `book_appointment` declares `slot` with `format: "date-time"`, so a zoneless
+# or unparseable value from an assistant is refused by the argument validation
+# before the handler runs. The two branches in {BookAppointmentOperation} are
+# the second door, for a caller with no schema in front of it, and nothing
+# reaches them over the wire — so they are called here, on the Toronto stand-in
+# from section 7, with {Appointment} standing in for the INSERT so the accepted
+# case (the control, without which a verb refusing everything would pass) can
+# be driven too.
+AppointmentRow = Struct.new(:id, :salon_id, :slot)
+Object.const_set(:Appointment, Module.new do
+  class << self
+    attr_accessor :created
+  end
+
+  def self.create!(attrs)
+    self.created = attrs
+    AppointmentRow.new("7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d", attrs[:salon_id], attrs[:slot])
+  end
+end)
+
+def book_with(slot)
+  BookAppointmentOperation.call(principal_id: nil, salon_id: "salon-toronto", slot: slot, service_id: nil)
+end
+
+zoneless_refusal = book_with("2026-09-14T14:00:00")
+assert(zoneless_refusal.is_a?(OperationResult) && !zoneless_refusal.ok? && zoneless_refusal.code == "bad_request",
+       "a zoneless slot is REFUSED with a typed bad_request, got #{zoneless_refusal.inspect[0, 70]}")
+assert(zoneless_refusal.is_a?(OperationResult) && zoneless_refusal.message.to_s.include?("names no time zone"),
+       "…and the sentence says WHY rather than only that something was wrong")
+assert(zoneless_refusal.is_a?(OperationResult) && zoneless_refusal.message.to_s.include?("America/Toronto"),
+       "…and names THIS salon's clock, read off its row, not the origin default")
+
+# CARRIES AN OFFSET AND IS STILL NOT AN INSTANT — a thirteenth month. A value
+# with no offset never reaches this branch: the zone refusal answers it first,
+# which is why the two sentences are asserted on two different values.
+unparseable = book_with("2026-13-01T14:00:00+01:00")
+assert(unparseable.is_a?(OperationResult) && !unparseable.ok? && unparseable.code == "bad_request",
+       "a thirteenth month is REFUSED rather than resolved, got #{unparseable.inspect[0, 70]}")
+assert(unparseable.is_a?(OperationResult) && unparseable.message.to_s.start_with?("invalid slot"),
+       "…with the PARSE sentence, not the zone one — the two say different things to a caller")
+
+# THE CONTROL: the published example is accepted, stored as an instant, and
+# answered on the salon's own clock.
+accepted = book_with(BookAppointmentOperation.example_slot)
+assert(accepted.is_a?(OperationResult) && accepted.ok?,
+       "the published example is ACCEPTED, got #{accepted.inspect[0, 70]}")
+assert(Appointment.created && Appointment.created[:slot].respond_to?(:utc_offset),
+       "…and what is stored is an INSTANT, not the string the caller sent")
+assert(accepted.is_a?(OperationResult) && accepted.ok? && accepted.value[:timezone] == "America/Toronto" &&
+       accepted.value[:slot] == SalonClock.publish(Appointment.created[:slot], MONTREAL),
+       "…and the confirmation is rendered on the salon's clock and says so, got #{accepted.ok? ? accepted.value.slice(:slot, :timezone) : accepted.inspect[0, 70]}")
 
 puts
 if FAILURES.empty?

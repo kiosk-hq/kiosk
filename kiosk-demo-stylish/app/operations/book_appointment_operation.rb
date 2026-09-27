@@ -51,6 +51,13 @@ class BookAppointmentOperation
     # ignores the caller that told us its own, and completing it at the caller's
     # would need a header this verb does not read. An appointment booked an hour
     # off is unrecoverable; a refusal naming its remedy is not.
+    #
+    # WHERE THAT REFUSAL COMES FROM ON THE WIRE: the descriptor declares `slot`
+    # with `format: "date-time"`, and a verb's arguments are validated before
+    # any handler runs, so an assistant meets the operator's typed 400 naming
+    # the argument first. This refusal and the parse one below it are the
+    # second door, for a caller with no schema in front of it; `rake
+    # check:clock_spec` drives both directly.
     if SalonClock.zoneless?(slot)
       return refused(
         "slot #{slot.inspect} names no time zone — an appointment is an INSTANT, so pass an " \

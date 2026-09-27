@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-27: **stylish's two `slot` refusals are driven by `check:clock_spec` through stand-ins, and the operation says the wire's own validation answers first.** Nothing reached either branch.
 - 2026-09-27: **stylish's salon-clock spec holds the per-salon zone read through a stand-in, and its header names the section its watched fail reddens.** Both coverage claims were false.
 - 2026-09-27: **skooti's rental verbs publish the `exp` read back out of the token they signed.** It was a second copy of the lifetime, and nothing held the two equal.
 - 2026-09-27: **atablefor's README, seed, initializer and script headers say the seatings roll on each restaurant's own clock.** Eight sentences still named the origin's zone.

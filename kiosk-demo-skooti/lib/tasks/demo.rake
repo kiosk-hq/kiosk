@@ -310,12 +310,15 @@ namespace :check do
         puts "  FAIL  rental_token missing or empty"
       end
 
-      exp = happy_result["exp"]
-      if exp && exp.to_i > 0
-        puts "  OK  exp present (#{exp})"
+      # The published `exp` is the token's own field 4 — the number the lock
+      # enforces — and not a second copy of it.
+      exp       = happy_result["exp"]
+      token_exp = rental_token.to_s.split(".").tap(&:pop).join(".").split("|")[4].to_i
+      if exp && exp.to_i > 0 && exp.to_i == token_exp
+        puts "  OK  exp is the token's own (#{exp})"
       else
-        failures << "happy: exp missing or zero"
-        puts "  FAIL  exp missing or zero"
+        failures << "happy: exp #{exp.inspect} is not the token's field 4 (#{token_exp})"
+        puts "  FAIL  exp #{exp.inspect} is not the token's field 4 (#{token_exp})"
       end
 
       # ── psql assertions ────────────────────────────────────────────────

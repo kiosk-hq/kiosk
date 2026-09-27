@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-27: **skooti's rental verbs publish the `exp` read back out of the token they signed.** It was a second copy of the lifetime, and nothing held the two equal.
 - 2026-09-27: **atablefor's README, seed, initializer and script headers say the seatings roll on each restaurant's own clock.** Eight sentences still named the origin's zone.
 - 2026-09-27: **getgrocery's back office badges an order out for delivery and a delivered one by name.** A delivered basket read PAID, because the badge only knew a settlement.
 - 2026-09-27: **getgrocery's `my_orders` declares all six order states as an enum, courier states included.** The description named four; a delivered basket was published under none of them.

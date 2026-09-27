@@ -12,10 +12,6 @@
 #
 # Not a VERB: the wire never reaches it — it is the shared tail of two verbs.
 module RentalActivation
-  # The issuer's own default is the same 900 seconds and is what goes INTO the
-  # signed message; this constant is what the response ECHOES as `exp`.
-  TTL_SECONDS = 900
-
   module_function
 
   # @param reservation [Reservation] already proved owned, reserved and paid for
@@ -37,6 +33,9 @@ module RentalActivation
       reservation_id: reservation_id.to_s,
       now:            now,
     )
+    # The expiry the response publishes is read back out of the token it just
+    # signed, so there is one number and it is the one the lock enforces.
+    exp = RentalTokenIssuer.verify(token: token, now: now).fetch(:exp)
 
     # `update_all`: no callbacks, no `updated_at` touch, one statement. It runs
     # inside the SessionContext transaction the wire opened, so it commits with
@@ -46,7 +45,7 @@ module RentalActivation
     OperationResult.ok({
       scooter_code: scooter.code,
       rental_token: token,
-      exp:          now + TTL_SECONDS,
+      exp:          exp,
     })
   end
 end

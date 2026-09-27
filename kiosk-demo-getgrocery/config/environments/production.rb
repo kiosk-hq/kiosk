@@ -143,8 +143,7 @@ Rails.application.configure do
   # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
   # check:pow relies on. Published in all seven demos like every other key in
   # this block (only atablefor and getgrocery carry a bad-proof counter): these
-  # blocks are kept identical across the seven, two of them by
-  # bin/check-demo-copies.
+  # blocks are kept identical across the seven by bin/check-demo-copies.
   config.x.kiosk.bad_proof_db            = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
   config.x.kiosk.reputation_bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
 

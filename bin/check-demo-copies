@@ -2917,9 +2917,8 @@ end
 #     something a demo prints.
 #   * `.md`, `.html`, `.erb`, `.sql` -- not Ruby, so «comment» means a different
 #     thing in each and Ripper cannot answer for them. The three `<!-- derived:
-#     -->` declarations and the two `before-after.md` transcript lines that carry
-#     an id today are all in that set, and all three are MACHINE-READ
-#     declarations `bin/check-demo-derivations` holds.
+#     -->` declarations in `before-after.md` are in that set, and all three are
+#     MACHINE-READ declarations `bin/check-demo-derivations` holds.
 #   * `spec/` and `test/` -- developer surfaces. An operator never runs them, and
 #     the constitution's own TODO/FIXME rule REQUIRES an id there.
 #
@@ -6898,8 +6897,8 @@ E2E_FIXTURES = {
   },
   "auth_wire_capture.rb" => {
     pairs: nil,
-    why:   "Run in place. The harness's own recorder for the auth wire; the demos publish their " \
-           "recordings through before-after.md instead, which bin/check-demo-derivations holds.",
+    why:   "Run in place. The harness's own recorder for the auth wire; no demo records the " \
+           "wire, so there is nothing for a demo copy of this to keep in step with.",
   },
 }.freeze
 
@@ -7181,9 +7180,8 @@ prose_corpus.each do |(label, own_root, rel, path)|
 end
 
 # NON-VACUITY, one arm per pattern. Both of these are rules whose subject set is
-# LIVE — unlike the promise ban in bin/check-demo-derivations, these patterns are
-# supposed to match, and a zero means the extraction broke rather than that the
-# corpus got tidier. EARLIER_WIRES is the standing example of what a silent zero
+# LIVE: these patterns are supposed to match, and a zero means the extraction
+# broke rather than that the corpus got tidier. EARLIER_WIRES is the standing example of what a silent zero
 # buys: a rule that covered nothing, anywhere, for its whole existence, with
 # nothing saying so.
 if prose_corpus.empty?

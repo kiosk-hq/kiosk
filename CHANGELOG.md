@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **`bin/check-demo-derivations` checks the one block kind the demo narratives still carry, and refuses any other.** The transcript and snippet machinery had no input left.
 - 2026-09-27: **`demo:setup` no longer creates an `app_role` group role nothing uses, so a demo needs no `CREATE ROLE` login.** The task is the one `db:drop … db:seed` line in every demo.
 - 2026-09-27: **`deploy/README.md` says the shipped systemd unit is a reference the fleet does not run as is.** The box runs as `ubuntu` with no hardening block; the runbook now says so.
 - 2026-09-27: **stylish's two `slot` refusals are driven by `check:clock_spec` through stand-ins, and the operation says the wire's own validation answers first.** Nothing reached either branch.

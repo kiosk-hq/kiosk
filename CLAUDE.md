@@ -139,15 +139,13 @@ universal agent skill is `skill.md` on the same site.
   scripts or its README NAME must resolve to an existing, executable file.
 - The four `kiosk-demo-*/before-after.md` are a PUBLISHED narrative and every
   fenced block in them DERIVES from something in the same demo, declared in a
-  comment above the fence: `<!-- derived: transcript | task: … | from: … |
-  abridged: … -->` or `<!-- derived: snippet | from: … | transform: … |
-  abridged: … -->`, or `derived: none` with a reason. `bin/check-demo-derivations`
-  (its own CI job) then holds every transcript line to a string literal the named
-  task actually prints and every snippet line to a line of the file it quotes
-  under the declared transformation — membership, never regeneration, so ids and
-  dates and wall-clock branches do not flap it. Editing one of those documents,
-  or renaming a `puts` in a flow driver or rake task, means running it. Its
-  header states what it cannot see; read that before trusting a green run.
+  comment above the fence: `<!-- derived: generator | from: … -->`.
+  `bin/check-demo-derivations` (its own CI job) then holds every line of the
+  block to an invocation of the generator that `from:` names, whose namespace it
+  derives both from the path and from the class nesting. `generator` is the only
+  kind it checks, so a block declaring another kind fails until that kind has a
+  checker — and a fenced block with no declaration fails too. Editing one of
+  those documents means running it.
 - **A migration that has shipped is never edited — a change arrives as a NEW
   file.** `db/migrate/` is not source you can refactor: every file in it is
   already recorded in the `schema_migrations` of every deployed database, and

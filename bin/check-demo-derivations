@@ -1,1276 +1,52 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Per-demo NARRATIVE derivation check (K-1051).
-#
-# WHY THIS EXISTS. `kiosk-demo-*/before-after.md` is a PUBLISHED per-demo
-# surface — four documents, ~1780 lines, quoting recorded transcripts and
-# shipped source at length — and until this script nothing compared a single
-# byte of it against anything. bin/check-demo-copies:SKELETON_NOT_COMPARED names
-# the file only to EXCLUDE it («per-demo narrative: that storefront's
-# before/after contrast»), and unlike the README entry beside it, that exclusion
-# carried no pointer to a checker of its own. bin/check-ci-tasks never mentions
-# it, and neither does the gate that guards hand-kept file inventories.
-#
-# The cost was measured, not assumed. Ten ledger rows live in these four files
-# (K-1053..K-1057, K-1062..K-1066, and K-774/K-778/K-812/K-817/K-818/K-832/K-1036
-# before them) and EVERY ONE was found by a human eye reading the documents in
-# one sitting — never by a gate. K-1062 is the shape that matters: getgrocery
-# and hoteling published transcript blocks under an explicit «verbatim … nothing
-# else touched» guarantee that contained five and three assertion strings the
-# tasks no longer print, omitted getgrocery's trailing `Server stopped.`, and in
-# hoteling's case omitted an entire RUN the task prints.
-#
-# WHY IT IS A SEPARATE SCRIPT, AND NOT A SECTION OF bin/check-demo-copies
-# (K-1096). That file's own header states the boundary it holds: bin/check-ci-tasks
-# is a SIBLING rather than a mode of it «because the two answer different
-# questions from different inputs: that one compares ci.yml against each demo's
-# rake tasks, this one compares demo files against each other». The boundary is
-# the comparison INPUT. This check's input is a THIRD pair — one demo's document
-# against THAT SAME DEMO's own producers — so it is a third sibling by the very
-# rule that kept the first two apart. (The cross-demo half of the narrative
-# class, where the input IS demo-against-demo, is correctly in check-demo-copies
-# already: the K-1069 framework-prose block.)
-#
-# ── THE THREE DESIGN FACTS THIS IS BUILT ON, each bought by a repair ──────────
-#
-# 1. A BLOCK MUST NAME ITS PRODUCER MACHINE-READABLY. The four documents named
-#    theirs in prose, four different ways; prose parsing rots. So every fenced
-#    block carries an HTML comment on the line immediately above it:
-#
-#      <!-- derived: transcript | task: bundle exec rake check:book
-#           | from: lib/tasks/demo.rake, script/book_flow.rb | abridged: none -->
-#      <!-- derived: snippet | from: app/controllers/kiosk/x_controller.rb
-#           | transform: strip_descriptions | abridged: two marked elisions -->
-#      <!-- derived: generator
-#           | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb -->
-#      <!-- derived: none | why: an illustrative one-line swap no file here carries -->
-#
-#    A fenced block with no declaration FAILS. That is the property that matters
-#    most: a new block cannot appear silently, the same way a new duplicated path
-#    cannot in bin/check-demo-copies.
-#
-# 2. THREE BLOCK CLASSES, THREE CHECKS — one check cannot serve them.
-#    TRANSCRIPT: «every line is a line the named task prints».
-#    SNIPPET:    «every line is a line of that file, modulo the declared
-#                 transformation».
-#    GENERATOR:  «every line invokes the namespace the named generator answers»,
-#                 where that namespace is DERIVED twice — from the generator's
-#                 path and from its class nesting — and the two must agree
-#                 (K-1099, which found one invocation exempted as
-#                 `derived: none` in three documents at once).
-#
-# 3. LINE MEMBERSHIP, NOT EQUALITY, AND NEVER REGENERATION. UUIDs, settlement
-#    ids, `pi_…` references, ports and dates change every run, so a guard cannot
-#    diff a block against a fresh run — and worse, getgrocery's transcript has
-#    two legitimate shapes depending on the Dublin hour (the K-480 past-slot
-#    control is a no-op after the last slot of the day), so a guard that
-#    REGENERATES flaps where one checking membership does not. This check never
-#    boots Rails, never touches a database and never runs a demo.
-#
-# ── HOW THE TRANSCRIPT CHECK WORKS ───────────────────────────────────────────
-#
-# Ripper lexes each declared producer and every string literal in it becomes a
-# LINE PATTERN: literal text with `#{…}` interpolations replaced by a wildcard,
-# split on newlines, adjacent `"a" \ "b"` literals merged (that shape is how
-# most long assertion messages are written, and treating the halves as two
-# patterns would make the check useless on exactly the lines K-1062 was about).
-#
-# A transcript line is ACCOUNTED FOR when one of these holds:
-#
-#   (a) a pattern matches it whole;
-#   (b) a pattern matches it whole as a FRAME and every wildcard it captured is
-#       itself accounted for — empty, a number one of the producers writes as a
-#       numeric literal, a whitespace-free word one of them can print, or a
-#       pattern in its own right. This is what resolves `puts "  OK    #{msg}"`
-#       against the `msg` literal two hundred lines away, without the frame's
-#       `.*?` swallowing arbitrary prose;
-#   (b') a frame with enough IDENTIFYING literal text of its own is matched
-#       without reading its captures at all, because at that point the literal
-#       is doing the work — but even there, no capture may swallow the literal
-#       that terminates it. What counts as identifying, and what a capture is
-#       allowed to be, is the K-1105 section below.
-#   (c) it is a JSON object — the driver's summary line — and every key at every
-#       depth is a name some producer names. This branch is EXCLUSIVE: a line
-#       that parses as a JSON object is checked here and nowhere else, because
-#       when it fell through to (a)/(b) first a thin frame elsewhere in the
-#       producer matched the whole line and a planted key rename went green.
-#       Its NESTED keys are the handler's,
-#       not the driver's (the driver splices a response object in whole), so a
-#       transcript may name the handler in `keys_from:`. That is a SEPARATE list
-#       on purpose: those files are consulted for key names only and their
-#       literals never join the line-pattern set, because a controller is large
-#       and folding it in would blunt the line check this exists for.
-#
-# Anything else is an error quoting the line. A doc line carrying a message the
-# task no longer prints is exactly case (b) failing, which is all five stale
-# getgrocery strings and all three hoteling ones.
-#
-# ── HOW THE SNIPPET CHECK WORKS ──────────────────────────────────────────────
-#
-# Every line must be a member of the UNION of the source's raw lines and the
-# lines of each DECLARED transformation of that source. The transformations are
-# EXECUTABLE, not prose:
-#
-#   strip_descriptions — deletes each verb's prose `description` call (leaving
-#                        the marker line the documents already use) and every
-#                        `description:` key inside a schema, reattaching what
-#                        followed it. This is the transformation the four
-#                        documents describe in prose; here it is a function.
-#   dedent             — the source's own indentation is not required to
-#                        survive quoting (config/routes.rb is quoted without the
-#                        `routes.draw do` indent). Compares lstripped.
-#
-# The document's OWN comments inside a snippet are permitted only through the
-# marked-elision shape the repair wave introduced:
-#
-#   # ── <WHAT> ELIDED HERE (this comment is the document's, not the file's) ──
-#
-# followed by a run of comment lines. A document comment that is not introduced
-# by that exact marker is an error, because it is indistinguishable from a line
-# the reader will take as shipped code.
-#
-# ── AND THE PROSE-PROMISE RULE ───────────────────────────────────────────────
-#
-# ABRIDGEMENT MUST BE DECLARED IN A FORM THIS SCRIPT READS, NOT PROMISED IN
-# PROSE. Every «nothing else touched» / «nothing removed and nothing added» /
-# «unedited» / «verbatim» promise in these four documents was FALSE when K-1062
-# and K-1063 read them — so the promise is exactly the sentence that must be
-# BACKED by something mechanical rather than trusted. Three rules, and note what
-# they deliberately are NOT:
-#
-#   * A promise in the window beside a block declared `derived: none` OR
-#     `derived: transcript` is an ERROR. `none` is checked by nothing, so
-#     dressing it as verbatim is the case where the prose is the ONLY guarantee.
-#     `transcript` is checked by a SUBSET test, which is the same hole in a
-#     different shape: membership backs «every line here is a line the task
-#     prints» and cannot reach «first line to last», «the whole output» or «all
-#     three runs». See the K-1106 section for why the second half of that
-#     sentence was missing for as long as the rule existed.
-#   * `abridged: none` and a `transform:`, or `abridged: none` and a marked
-#     elision inside the block, are a CONTRADICTION between the declaration and
-#     the block, and fail.
-#   * A declared `transform:` that no line in the block needs is DECORATION and
-#     fails — a transformation is declared because it was applied, and one
-#     nobody applied is a promise again.
-#
-#   They are NOT a ban on the phrases. A qualified promise — «every line is that
-#   file's with its `description` cut out and nothing else altered» — is what the
-#   K-1062 repair wave deliberately wrote, and it is TRUE precisely because
-#   `strip_descriptions` below makes it checkable. Banning the sentence would
-#   delete the honest form along with the dishonest one; what this script does
-#   instead is refuse to let the sentence stand alone.
-#
-# ── AND THE PROMISE RULE NOW COVERS THE CLASS IT WAS WRITTEN FOR (K-1106) ────
-#
-# The rule above shipped INSIDE the `if kind == "none"` branch, and K-1099 then
-# took that branch down to a single user — hoteling's illustrative one-line
-# swap. So a rule written because «verbatim … nothing else touched» had been
-# FALSE eight times over fired beside exactly ONE block — that `derived: none`
-# swap, which is the one declared block this script does NOT check — and beside
-# none of the four that quote a recorded run, which is exactly where those eight
-# falsehoods had been. (The split is printed, not remembered: `--list` prints
-# every DECLARED block and the success line counts the CHECKED ones — 25 and 24
-# when this was written, and both move with the next block anyone declares.) MEASURED at head before this change, by re-implementing
-# the window and the regexes over the four documents: the transcript intros
-# carried ELEVEN completeness promises, NINE matched a `PROMISES` regex, and
-# only SEVEN fell inside the window.
-#
-# TWO INDEPENDENT HOLES, BOTH CLOSED HERE.
-#
-#   1. THE CLASS. `transcript` now fails on a promise exactly as `none` does.
-#      A transcript check is set membership and no amount of membership backs a
-#      completeness claim — K-1062's hoteling block was missing an ENTIRE RUN
-#      the task prints, and every line it did quote was genuine, so the check
-#      that exists would have passed it. The four intros were rewritten into the
-#      K-1062 repair wave's qualified shape: each says what the mechanism does
-#      hold (every line is one a declared producer prints, and a line they
-#      cannot print reddens the tree) and hands completeness back to `abridged:`,
-#      naming it there as a human's signature.
-#   2. THE WINDOW. getgrocery scored ZERO promise hits, and not because it made
-#      no promise: «unedited, first line to last» sat TWO paragraphs above its
-#      declaration, behind «**This recording is the secret-free path**», and
-#      `paragraph_before` takes one. `promise_window_before` takes the whole
-#      INTRO instead — see its own comment for why widening is safe for THIS
-#      rule and would not be for a rule that reads the prose as a description.
-#
-# ── THE PRICE THE WIDE WINDOW CAME WITH, AND WHERE IT IS PAID (T-129) ───────
-#
-# READ THIS BEFORE ADDING A KIND TO `PROMISE_KINDS`. It used to live only beside
-# `promise_window_boundary?`, twelve hundred lines down, which is a constraint
-# the next author meets when it fires rather than when they need it.
-#
-# The window runs from the nearest preceding heading, `---` rule or fence down
-# to the declaration. Where two blocks share a section with no heading between
-# them, the nearest fence above is the EARLIER block's closing one, so the
-# window spans that block's own trailing commentary and attributes its sentences
-# here. MEASURED at head with the shipped neighbourhood, over all 25 declared
-# blocks: unfloored, the promise vocabulary hits 3 `generator` blocks and 13
-# `snippet` blocks; every one of the three generator hits is a `verbatim`
-# inherited from a preceding Gemfile or routes commentary. The rule covers
-# neither kind, so it cost nothing — which is what T-129 recorded, and the row's
-# reading of WHY is corrected here rather than carried: it said the four
-# `transcript` blocks and the one `none` block inherit nothing. The transcripts
-# do not (each is the first declared block under a heading). Hoteling's `none`
-# block DOES — it sits directly under a `snippet` — and it is green only because
-# those eight lines happen to contain no promise word, in a place where
-# «nothing else altered» is the qualified sentence the K-1062 repair wave
-# deliberately wrote. So the false positive was one sentence away, not one
-# extension away.
-#
-# THE FLOOR closes it: the window starts after the previous block's
-# after-paragraph, unless that paragraph is ALSO this block's own
-# `paragraph_before` — the gap holding exactly one paragraph, which serves both
-# and which hoteling's `none` block is the corpus's only instance of. MEASURED
-# after the floor: 0 generator hits, 13 snippet hits, transcripts and `none`
-# unchanged at 0. Both directions are fixtures in `--self-test` rather than
-# prose, because the corpus has one instance of this geometry and a document
-# rewrite would take the proof with it.
-#
-# WHAT WAS NOT DONE, AND WHY. The rule was NOT extended to `snippet`, where the
-# other thirteen promise hits live. Those are the weaker case and sweeping them
-# in unread would be the over-claim this section is about: a snippet's «every
-# line is that file's with its `description` cut out and nothing else altered»
-# is largely BACKED, because membership gives the first clause and the declared
-# `strip_descriptions` transform makes the second checkable. That qualified form
-# is what the repair wave deliberately wrote, and banning the phrase would
-# delete the honest sentence along with the dishonest one.
-#
-# ── AND `abridged:` IS BOUND TO THE RAKE DAG AS FAR AS IT GOES (K-1101) ──────
-#
-# `abridged:` was REQUIRED and never READ: any non-empty phrase satisfied it. So
-# hoteling and getgrocery both declared — and said again in the prose — that the
-# cut above their first quoted line was «demo:setup's db:drop/db:create/
-# db:schema:load/db:seed chatter and nothing else». Measured by running the task:
-# ELEVEN lines for hoteling, of which FIVE are not db chatter (rake's echo of the
-# two `psql` commands that create and grant `app_role`, the `NOTICE`/`LOCATION`
-# pair Postgres answers the grant with, and `[kiosk] WARNING: generated an
-# EPHEMERAL signing key`), and THIRTY-THREE for getgrocery, which adds a
-# `[getgrocery] no STRIPE_SECRET_KEY…` line to the same five. The BOUNDARY claim
-# was exact in both. Only the enumeration was wrong — and a human reading the
-# document is what found it, which is the same sentence the top of this file
-# opens with.
-#
-# THE SPLIT THIS DRAWS, AND WHY. What the cut CONTAINS cannot be checked here at
-# any price: it requires running the task, which design fact 3 refuses (ids and
-# dates move every run, and getgrocery's transcript has a legitimate wall-clock
-# branch). What the cut IS — the output of a task this demo defines and that the
-# quoted task depends on — is a fact about the rake DAG, which is static. So the
-# declaration stops enumerating the lines and NAMES THE TASK, and the naming is
-# held to three things:
-#
-#   * the cited task must be DEFINED in this demo's lib/tasks/*.rake, by the same
-#     two spellings the `task:` field is checked with. Rename it and this fails.
-#   * it must be a declared PREREQUISITE of the quoted `task:`. If the quoted task
-#     never runs it, its output was never in that task's output and calling it an
-#     abridgement is a category error — which is exactly why atablefor, whose
-#     document quotes `check:book` and prepares the database with a SEPARATE
-#     `rake demo:setup`, correctly declares `abridged: none`.
-#   * and no line of the BLOCK may be one that cited task's own body prints. A
-#     declaration that a task's output was cut, over a block containing it, is the
-#     same contradiction as `abridged: none` beside a marked elision. Note how
-#     narrow this is: `demo:setup`'s repo-produced output is its three `sh "…"`
-#     echoes and nothing else, because `Dropped database`, the psql `NOTICE` and
-#     the seed listing come from Postgres, Rails and db/seeds.rb. It catches a
-#     paste, not a paraphrase.
-#
-# WHAT IS STILL NOT CHECKED, and it is the larger half: that the cut is COMPLETE,
-# that it contains what the prose says, and that nothing was quietly deleted from
-# the MIDDLE of a block. `abridged:` remains a human's signature, and the
-# document's own prose — where the reader-useful detail belongs — remains
-# unbacked. What changed is only that the signature now names something this
-# script can resolve instead of asserting a content list nothing could.
-#
-# ── AND `abridged:` NAMES THE CUT, OR NAMES THE KEPT SET **AND ITS UNIVERSE**
-#    (K-1104) ────────────────────────────────────────────────────────────────
-#
-# This script's own error text used to tell an author the field is «`none`, or
-# a phrase naming what was LEFT OUT», and the corpus it guards did not agree
-# with it: of 21 declarations, six are cut-side, eleven are kept-side («X only,
-# out of Y», «X only; Y are out») and four are transcripts. The majority form
-# was the one the guidance did not describe, so an author following the message
-# wrote one shape and an author following the documents wrote the other.
-#
-# Nothing here was FALSE — a kept-side declaration with an explicit universe
-# determines the complement exactly as well as a cut-side one does — so the
-# ruling picks the sense by the field's PURPOSE rather than by the count. The
-# cut is what the reader cannot see; describing it is the job. The kept sense
-# is therefore admissible, but only WITH the universe, because that is the
-# thing that makes the complement derivable. The eleven kept-side declarations
-# already satisfy that and were not rewritten.
-#
-# `KEPT_SIDE_RE` / `UNIVERSE_RE` carry as much of that as a script can: a
-# declaration that has said «only» has committed to the kept sense out loud
-# and must then name what it was only-of. Its limits are in the over-claim
-# list, and they are real — a kept-side declaration that simply avoids the
-# word escapes the check entirely, which is exactly what skooti's transcript
-# did (K-1103 instance 1).
-#
-# ── AND A NUMBERED CUT LIST IS HELD TO THE FIELD BESIDE IT (K-1107) ─────────
-#
-# `abridged:` is the half of the pair this script reads; the paragraph three
-# lines above it is the half a READER reads. Nothing tied the two together, and
-# in two of K-1103's five instances the PARAGRAPH WAS RIGHT WHILE THE FIELD WAS
-# WRONG — the worse direction of the two, because the field is the half with a
-# checker. So: when that paragraph enumerates the cut as NUMBERED sentences
-# («Three things were deleted. (1) … (2) … (3) …»), every backticked BARE
-# IDENTIFIER inside those numbered sentences must appear in the field.
-#
-# MEASURED against the pre-K-1103 tree, extracted with `git archive fca7c1d1^`
-# into a scratch directory so no working tree was touched: the rule flags
-# hoteling's declaration on `search_hotels`, `hotel_detail` and `availability`
-# — i.e. it catches K-1103 instance (2) mechanically, where a human found it.
-# Run at head it has exactly ONE live hit, hoteling's `availability` again,
-# which is a vagueness rather than a falsehood («one verb's guards at a marked
-# line» where the prose names the verb) and is repaired in the same wave.
-#
-# SENTENCE-SCOPED, AND THAT IS THE WHOLE DESIGN — measured, not argued. The
-# naive whole-paragraph form false-positives on THREE of the corpus's five
-# enumerating paragraphs, because each of the three ends in a KEPT clause —
-# «Everything else — field names, types, `required` lists, `enum`s …» — whose
-# backticks name what STAYED. Reading a kept list as a cut list is how a check
-# like this gets switched off, so the items are scoped to their `(N)` sentence
-# and the paragraph's other backticks are ignored on purpose.
-#
-# IT IS A NAME-OVERLAP CHECK AND NOTHING MORE. Its limits are in the over-claim
-# list and they are real: it cannot tell whether either half is right, it is
-# blind to any cut the prose does not backtick, and it says nothing about the
-# corpus's OTHER enumerating shape — the un-numbered «N of M shipped actions …
-# are left out», which is what K-1103 instance (3) was.
-#
-# ── AND A FRAME'S LITERAL MUST IDENTIFY THE LINE, NOT MERELY EXIST (K-1105) ──
-#
-# A frame with enough literal text of its own is matched WITHOUT reading its
-# wildcards — that shortcut is what lets `Properties: #{n} found, using
-# property_id=#{id} (#{name})` account for a line carrying a hotel name this
-# script cannot possibly predict. The bar was four non-whitespace literal
-# characters, and `puts "  OK  #{label} == #{expected}"` clears it with `OK`
-# and `==`. That frame prints TWENTY of the twenty-six published
-# `  OK  … == …` verdict lines — the lines that say whether the payment, the
-# booking and the unlock worked — so for as long as this script has existed
-# those twenty were held to their punctuation and nothing else. MEASURED on a
-# published line, not on a plant: hoteling's `  OK  http_pay == 200` mutated
-# to `  OK  http_pay == 500 (charged nothing, refunded twice)` exited 0, and
-# this script printed «every line held to a literal its declared producer
-# prints» while it did. PRE-EXISTING and proven so: the same mutation was run
-# against the guard AND the documents as they stood at e8606563, extracted
-# with `git archive` into a scratch directory, and passed there too.
-#
-# THREE CHANGES, EACH THE SMALLEST ONE ITS OBSERVATION SUPPORTS.
-#
-#   * The bar counts ALPHANUMERICS. Punctuation is the scaffolding every line
-#     of a shape shares; it cannot identify WHICH line this is. The number 4
-#     is untouched, because the metric was the defect. `  OK  <W> == <W>` is
-#     an anchor of 2 under it and falls to the checked path.
-#   * A capture that is a BARE NUMBER must be a number one of the declared
-#     producers writes as a numeric literal. This is the only rule here that
-#     reaches a VALUE, and it is why `== 500` now fails where `== 200` passes.
-#   * Any other whitespace-free capture must be a word one of them can PRINT
-#     (string-literal text, symbol names, numerals — not identifiers, not
-#     comments). This is a vocabulary check, not a truth check, and it is what
-#     refuses an invented `http_paaaay` or a `confirm_status == cancelled`.
-#
-# And one repair to the unchecked path itself: a lazy `.*?` still backtracks
-# over a literal it was meant to stop at, so a frame ending in a wildcard
-# matched its own published line with prose appended after the closing
-# bracket. `no_capture_swallows_its_terminator?` refuses that.
-#
-# THE PROOF IS THE PUBLISHED CORPUS, NOT A SAMPLE. Every one of the 26 lines
-# was mutated in place, one at a time, in both a value form and a prose form
-# (50 mutations); before these changes 47 went red and 3 stayed green, after
-# them 50 go red, and the tree is restored from file copies and green at exit
-# 0 either side. What still gets through is the swap bullet in the list above,
-# and it is a smaller hole of a class this script already declared.
-#
-# AND THE PRICE, WHICH THIS SECTION DID NOT STATE UNTIL K-1108. Narrowing a
-# guard buys precision with false POSITIVES, and these three rules have one:
-# they can redden a line that is HONEST. A demo that prints a COMPUTED number —
-# a total, a duration, an elapsed count that no declared producer writes as an
-# `:on_int`/`:on_float` literal — fails whenever the frame around it carries
-# fewer than four ALPHANUMERIC characters, which `  OK  #{label} == #{value}`
-# does. Today's corpus pays nothing for that (50 of 50 mutations red, baseline
-# exit 0); the exposure is the NEXT demo. The answer there is to give the frame
-# literal text that identifies the line, or to name the value in a producer —
-# never to put the bar back on punctuation, which is the metric measured broken.
-#
-# ── WHAT THIS DOES **NOT** COVER. Stated plainly, because an over-claimed guard
-# is the defect this class keeps producing and K-1069's block was accepted
-# precisely for declaring its own holes. ────────────────────────────────────
-#
-#   * IT CANNOT PROVE A TRANSCRIPT IS COMPLETE. Membership is a SUBSET test. A
-#     block that silently drops an entire RUN the task prints — which is half of
-#     K-1062 — still passes. Completeness needs a real run, which is what
-#     `abridged:` declares instead of proves, and `abridged: none` is therefore
-#     a HUMAN's assertion this script only keeps consistent with the prose.
-#     K-1101 narrowed this and did not close it: a task NAMED in `abridged:` is
-#     now resolved against the rake DAG and held off the block, so the field can
-#     no longer cite something that does not exist or is never run. What the cut
-#     CONTAINS is still the human's word.
-#   * IT CANNOT PROVE THE LINES ARE IN THE RIGHT ORDER, or that they came from
-#     ONE run. Two lines from mutually exclusive branches both pass.
-#   * AND THE SNIPPET CHECK IS A SUBSET TEST FOR THE SAME REASON — a source line
-#     the quoting wave DROPPED is invisible here, because membership only ever
-#     asks about the lines that ARE quoted. That hole went unwritten until
-#     K-1648, when two getgrocery schemas were found missing a `timezone:`
-#     property their own `required:` lists still named. Only the one decidable
-#     CONSEQUENCE of such a drop is now caught (see `unsatisfiable_schemas`);
-#     a dropped line with no consequence inside the block is still the human's
-#     word, exactly as `abridged:` is.
-#   * IT CANNOT SEE A LINE PRINTED BY A PRODUCER NOBODY DECLARED. `from:` is a
-#     human's list; a line that came from an undeclared file simply fails, and a
-#     wrong line that happens to match a declared file's literal simply passes.
-#   * AND SINCE K-1105 THAT SAME HOLE EXISTS ONE SIZE SMALLER, AT THE TOKEN.
-#     The capture rules are VOCABULARIES, not value sets: they refuse a number
-#     or a word the producers cannot say, and accept any that they can. So a
-#     SWAP between two of the producer's own tokens passes — measured at head,
-#     all four of `  OK  http_pay == 200` → `== 201`, → `== 403`,
-#     `http_pay` → `http_availability`, and getgrocery's
-#     `slots_badzone_code == bad_request` → `== not_found` exit 0. Reaching
-#     those needs the ARGUMENTS of the call that printed the line, not the
-#     file's vocabulary, and that is dataflow this script does not do.
-#   * A LINE WITH NO LITERAL TEXT AT ALL — `puts x` — is invisible to the
-#     transcript check unless it is JSON. Its content is unconstrained.
-#   * THE JSON RULE CHECKS KEYS, NEVER VALUES. `"http_pay":200` and
-#     `"http_pay":500` are equally acceptable here. Note the asymmetry K-1105
-#     leaves behind: the plain assertion line `  OK  http_pay == 500` now
-#     FAILS, while the same claim inside the JSON summary line still passes.
-#     Values there are unconstrained because a summary line's values are the
-#     run's own — ids, timestamps, amounts — and nothing static bounds them.
-#   * `derived: none` IS AN UNCHECKED ESCAPE HATCH. It demands a `why:` and
-#     nothing more, exactly as `:per_demo` does in bin/check-demo-copies. K-1099
-#     took three of its four users away — the `rails g kiosk:install` fence,
-#     which is now `derived: generator` — leaving ONE: hoteling's illustrative
-#     one-line swap, which genuinely has no producer in this repository.
-#   * `derived: generator` CHECKS THE NAMESPACE, NOT THE EFFECT. It proves that
-#     an adopter typing this line reaches the generator the block names; it says
-#     nothing about what that generator then emits. The prose beside the fence
-#     («this emits exactly two things …») is K-1069's territory, in
-#     bin/check-demo-copies, which binds it to the generator's own source.
-#   * THE SNIPPET CHECK IS SET MEMBERSHIP, so it cannot see a reordering, a
-#     duplication, or a deletion — only a line that is in no version of the file.
-#   * THE `abridged:` UNIVERSE RULE IS A SHAPE CHECK. It fires on the word
-#     «only» and asks for an «out of …» / «… are out» clause beside it; it
-#     cannot tell whether the universe named is the right one, cannot tell
-#     whether the kept set named is what the block actually quotes, and — the
-#     one that matters most — does not fire at all on a kept-side declaration
-#     that avoids the word. Every instance K-1103 recorded was found by a human
-#     reading the document against the file, which is how every defect in this
-#     class has ever been found.
-#   * IT DOES NOT ADJUDICATE WHETHER A COMPLETENESS PROMISE IS TRUE. Membership
-#     backs «every line quoted here is a real line», never «no line is missing»,
-#     so a document may still promise more than this script can see — which is
-#     why `abridged:` is a DECLARATION a human signs, not a proof. Since K-1106
-#     it does REFUSE the promise beside the two block classes nothing can back
-#     one for (`none`, `transcript`), and that is a phrase ban, not a truth
-#     test: it says such a sentence may not be published there, never that the
-#     sentence was false.
-#   * THE PROMISE WINDOW IS A GEOMETRY, NOT AN ATTRIBUTION (T-129). Where the
-#     gap between two blocks holds ONE paragraph it is read as belonging to
-#     both, because a reader cannot tell either; where it holds more, the first
-#     belongs to the block above and the last to the block below, and any
-#     paragraph BETWEEN them belongs to neither and is invisible to this rule.
-#     That middle ground is empty in the four documents today and is the price
-#     of not attributing one block's sentence to another.
-#   * AND `PROMISES` IS A VOCABULARY, NOT A CLASSIFIER. Eight regexes, every one
-#     of them added because a document in this corpus said that exact thing —
-#     two of them (K-1106) only after a re-measurement found «all three runs»,
-#     the strongest completeness claim in these four files, matching nothing.
-#     A promise phrased in words nobody has used yet passes, and the rule is
-#     therefore a ratchet on known shapes rather than a bound on the class.
-#   * THE CUT-ENUMERATION RULE (K-1107) IS NAME OVERLAP, NOT TRUTH. It fires
-#     only where the paragraph before a declaration enumerates the cut in TWO OR
-#     MORE numbered sentences, and asks only that each backticked bare
-#     identifier in them also appear in `abridged:`. It cannot tell whether the
-#     prose is right, whether the field is right, or whether they describe the
-#     same thing in different words; it is blind to any cut the prose does not
-#     backtick; and it does not fire at all on the corpus's un-numbered shape
-#     («N of M shipped actions … are left out»), which two declarations use.
-#   * IT SAYS NOTHING ELSE ABOUT THE PROSE. Whether the paragraphs around a block
-#     are true is K-1069's question (cross-demo agreement, in check-demo-copies)
-#     and the claims-versus-behaviour audit's.
-#
-# EACH CLASS ABOVE WAS PROVEN BY A PLANT — break it, watch this go red, put it
-# back from a file copy. Twelve of them, all exit 1 and all restored to exit 0:
-# a block with its declaration deleted; a transcript line carrying a word the
-# task does not print; a renamed top-level and a renamed NESTED JSON key; a
-# snippet line whose value was changed; a document comment with no elision
-# marker; `abridged: none` on a block that has one; a `transform:` no line
-# needs; a `from:` naming a file that moved; a `task:` naming a rake task that
-# does not exist; a completeness promise beside a `derived: none` block; and a
-# demo dropped from DOCUMENTED_DEMOS while it still ships the document. The
-# third of those is why (c) is exclusive: it PASSED before that ordering fix.
-# K-1099 added five more, same discipline: a generator fence drifted to
-# `rails g kiosk:setup` (fails in that document alone); the generator's own
-# directory renamed (fails in all three at once, which is the property the
-# `derived: none` hatch did not have); the generator's class nesting renamed
-# while its path stayed (path and class then derive different namespaces); a
-# demo dropped from GENERATOR_BLOCK_DEMOS while it still declares the block;
-# and one demo's block reverted to the `derived: none` hatch, which is the
-# «silently drops the recipe» direction of the same corpus rule.
-#
-# K-1101 added four, same discipline: an `abridged:` citing a task no rake file
-# in the demo defines (which is what BOTH false declarations became the moment
-# they were read — `db:drop` is Rails', not the demo's); one citing a real task
-# of the demo that the quoted `task:` does not depend on; one citing a task the
-# quoted task has no prerequisites at all; and a block with two lines of the
-# cited task's own output pasted back into it. And one PROOF-OF-FIRE rather than
-# a plant: restoring either document's pre-K-1101 declaration verbatim reddens
-# this script.
-#
-# K-1105 replaced the plant with the sharper instrument the class had been
-# missing: a MUTATION of a line already published. All 26 `  OK  … == …`
-# verdict lines in the corpus (getgrocery 11, hoteling 9, skooti 6) were
-# mutated in place one at a time, each in a value form (a number, or the
-# verdict word, swapped for one the producers never name) and a prose form
-# (« (charged nothing, refunded twice)» appended) — 50 mutations, each
-# restored from a file copy before the next. BEFORE: 47 red, 3 green — two
-# verdict-word swaps and one appended-prose line. AFTER: 50 red, with the
-# tree green at exit 0 either side of the run. The three plants the ledger
-# row was filed with are red too (`  OK  http_register == 418 teapot`,
-# `  OK  totally_made_up_verb == 999 utterly invented prose`, and the
-# published-line mutation `  OK  http_pay == 500 (charged nothing, refunded
-# twice)`), and so is the bare `  OK  http_pay == 500`, which is the one that
-# reaches a value.
-#
-# K-1106 added four plants and a standing control, all restored from file
-# copies, tree green at exit 0 either side. Each of the three re-planted
-# promises is a sentence this corpus PUBLISHED until this wave: getgrocery's
-# «unedited, first line to last» put back THREE paragraphs above its declaration
-# (red — which is the window fix proving itself, since the old window saw
-# nothing two paragraphs out); hoteling's «all three runs» (red, quoting the
-# phrase, which matched no regex before this wave); atablefor's «none of its
-# chatter is in here» (red, same). Fourth, the rule the hoist could have broken:
-# a `verbatim` beside hoteling's `derived: none` block still fails with the
-# `derived: none` wording. The standing control is the corpus itself — FIVE
-# snippet blocks carry «nothing else altered» and the tree is green, because the
-# rule deliberately does not sweep the class whose promise is largely backed.
-#
-# K-1107 added two plants and two controls. PROOF-OF-FIRE: hoteling's pre-fix
-# `abridged:` restored verbatim reddens, naming `availability`. A plant: drop
-# `kyc_status` from getgrocery's field and it reddens naming it. The control
-# pair is what proves the scoping rather than the rule — a new backticked
-# `planted_kept_name` added to the KEPT clause («Everything else — field names,
-# types, `required` lists …») stays GREEN, and the SAME name moved into
-# numbered item (2) reddens. And a declared-limit control: getgrocery's
-# un-numbered «Two of getgrocery's four shipped actions, `payment_setup` and
-# `request_kyc`, are left out» does NOT fire when the field stops naming them,
-# which is the over-claim list's own bullet demonstrated rather than asserted.
-#
-# K-1108 is not a plant but a READING, which is the check its own row asked for:
-# with the published `  OK  http_pay == 200` mutated to `== 201` — the token
-# swap this script cannot see — it exits 0, and the sentence it prints now names
-# that swap in its NOT HELD clause. The message and the over-claim list can be
-# read side by side without one contradicting the other, which is the property
-# the old one-line OK did not have.
-#
-# K-1104 added three plants and a negative control: the « out of …» clause cut
-# off a kept-side declaration, the «… are out» clause cut off another, and
-# hoteling's issuer/payment-provider pair restored to its pre-K-1104 spelling
-# («… only, ~60 lines apart in the Kiosk.configure block» — TRUE, and legal
-# under the ruling since it does name the universe, but not in a shape a script
-# can read, so it was reworded rather than exempted). All three red; a cut-side
-# declaration lengthened without the word «only» stays green, which is the
-# control that keeps the rule from being «the word `only` is banned».
-#
-# Stdlib only (ripper + json + RubyVM::AbstractSyntaxTree, the last only to ask a
-# parser for one rake task's line range instead of guessing it from indentation),
-# no bundle, no database, no Rails boot, well under a second on a bare checkout — the same profile as bin/check-demo-copies.
+# Every fenced block in a demo's before-after.md declares what produced it, and
+# the one producer in use is checked: a `derived: generator` block quotes an
+# invocation of the generator its `from:` names, whose namespace is derived
+# twice — from the file's path and from its class nesting — and the two must
+# agree. A fenced block with no declaration fails, so a new block cannot appear
+# unchecked; a block declaring any other producer fails too, because nothing
+# here checks it.
+#
+# A sibling of bin/check-demo-copies (demo against demo) and bin/check-ci-tasks
+# (ci.yml against the rake tasks) rather than a mode of either. The boundary is
+# the comparison INPUT: this one holds a demo's document to a producer in the
+# engine gem.
 #
 # Usage:
 #   bin/check-demo-derivations             # check
-#   bin/check-demo-derivations --list      # print every declared block
-#   bin/check-demo-derivations --self-test # prove the promise rule on fixtures
+#   bin/check-demo-derivations --self-test # plant each defect in a copy of the tree
+#   bin/check-demo-derivations --root DIR  # read DIR instead of this checkout
 
-require "json"
-require "ripper"
-require "set"
+require "fileutils"
+require "open3"
+require "rbconfig"
+require "tmpdir"
 
-ROOT = File.expand_path("..", __dir__)
-DOC  = "before-after.md"
+ARGS = ARGV.dup
+root_at = ARGS.index("--root")
+ROOT = root_at ? File.expand_path(ARGS[root_at + 1].to_s) : File.expand_path("..", __dir__)
+ARGS.slice!(root_at, 2) if root_at
+unknown = ARGS - ["--self-test"]
+unless unknown.empty?
+  warn "check-demo-derivations: unrecognised argument(s): #{unknown.join(' ')}. " \
+       "It takes --self-test and --root DIR and nothing else."
+  exit 2
+end
 
-# The corpus, declared rather than discovered, for the same reason `ships:` is
-# declared in bin/check-demo-copies: a demo that grows a narrative document, or
-# drops one, changes the set with nothing noticing. prove has none — it is the
-# API-only broker, it tells no storefront story.
-DOCUMENTED_DEMOS = %w[atablefor getgrocery hoteling skooti].freeze
-
-# The one shape a document's own comment may take inside a quoted snippet.
-ELISION_MARKER = /\A\s*#\s*──\s+.+\s+ELIDED HERE \(this comment is the document's, not the file's\)\s+──\s*\z/
-
-# What `strip_descriptions` leaves where a `description` call was. The four
-# documents already use this exact line; it is here because the transformation
-# has to be executable, and this is the executable half of it.
-ELIDED_DESCRIPTION = 'description "…"   # elided — see the shipped file'
-
-# Completeness promises. These are the sentences K-1062 and K-1063 found false;
-# they are not banned outright (see the header — the repair wave's qualified
-# forms are true and checkable), but a block that this script does not check may
-# not carry one in the paragraph on either side of it.
-PROMISES = [
-  /nothing\s+else\s+(?:is\s+)?(?:touched|altered|left\s+out|removed|added)/i,
-  /nothing\s+(?:is\s+)?removed\s+and\s+nothing\s+(?:is\s+)?added/i,
-  /\bunedited\b/i,
-  /\bverbatim\b/i,
-  /first\s+line\s+to\s+last/i,
-  /\bthe\s+\*?\*?whole\*?\*?\s+output\b/i,
-  # The two the corpus taught us late (K-1106). «all three runs» is the
-  # strongest completeness claim in these four documents and matched nothing;
-  # «none of its chatter is in here» is the same claim wearing its negative
-  # face, an assertion about what the block does NOT contain, which membership
-  # cannot reach either. Both were added because a document said them, which is
-  # the honest account of how the six above got here too — this list is a
-  # VOCABULARY, not a classifier, and the over-claim list says so.
-  /\ball\s+(?:\w+\s+)?runs\b/i,
-  /\bnone\s+of\s+\S+[^.]{0,60}?\bis\s+in\s+here\b/i,
-].freeze
-
-# The two block classes the ban covers: `none`, checked by nothing, and
-# `transcript`, checked by a SUBSET test. Hoisted out of the check below so the
-# self-test can assert the set rather than re-type it (T-129).
-PROMISE_KINDS = %w[none transcript].freeze
-
-# THE SENTENCE THAT PUT EACH REGEX IN THE LIST — and it is a GATE, not a
-# citation (T-129).
-#
-# `PROMISES` is a phrase BAN, and a ban that is being obeyed matches NOTHING.
-# MEASURED at head over the four documents: SIX of the eight regexes have zero
-# hits anywhere, which is the K-1106 repair wave's success rather than a defect.
-# That makes the usual vacuity arm — «a pattern that matches nothing in this
-# repository must fail» — exactly backwards here, and it leaves the rule with a
-# hazard the other kind of rule does not have: a regex broken by an edit is
-# INDISTINGUISHABLE from a regex nobody has violated, and the run stays green.
-# It is the same shape as EARLIER_WIRES one repo over, which matched nothing for
-# its entire existence while reading as coverage.
-#
-# So the proof is a POSITIVE CONTROL instead. Every regex carries the sentence
-# that put it in the list — six of them the false sentences K-1062 and K-1063
-# found, two of them the claims K-1106's re-measurement caught the list missing
-# — and `--self-test` asserts each one still matches, and matches through the
-# real neighbourhood window rather than on its own.
-PROMISE_EXEMPLARS = [
-  "every line is that file's with its `description` cut out and nothing else altered",
-  "Nothing is removed and nothing is added.",
-  "From there down it is unedited.",
-  "The transcript below is verbatim.",
-  "It is the run's own output, first line to last.",
-  "This is the **whole** output of the task.",
-  "The block carries all three runs.",
-  "It is the task's own output and none of its chatter is in here.",
-].freeze
-
-TRANSFORMS = %w[strip_descriptions dedent].freeze
-
-# ── `derived: generator` — a COMMAND, bound to the generator that answers it
-#    (K-1099) ────────────────────────────────────────────────────────────────
-#
-# Three of the four `derived: none` hatches were the SAME fenced block —
-# `rails g kiosk:install`, byte-identical (md5 15a40864170e18899d5ea98c2fdf0632)
-# in atablefor, getgrocery and hoteling — i.e. a CROSS-DEMO fact spelled as an
-# exemption repeated once per document. Nothing would have noticed one of them
-# drifting to `rails g kiosk:setup`, nor the generator being renamed under all
-# three at once.
-#
-# Cross-demo agreement is the WEAK oracle here: three identical copies of a
-# wrong command agree perfectly. The strong one is that `kiosk:install` is not a
-# fact about the demos at all — it is the generator's own PATH. Rails resolves
-# an invocation to `lib/generators/<ns>/<name>/<name>_generator.rb`, and derives
-# the same namespace a second time from the class nesting inside that file
-# (`Kiosk::Generators::InstallGenerator` → thor's `kiosk:generators:install_generator`
-# → `_generator` stripped → `:generators:` collapsed → `kiosk:install`). So the
-# block is checked against BOTH derivations, which must agree with each other
-# and with every line of the block. Rename the directory, the file, or the
-# class, and all three documents fail in the same run.
-#
-# It is STATIC — no Rails boot, no bundle, no database, the same profile as the
-# rest of this script. Booting Rails to ask the real generator lookup would be
-# the only stronger check and it is not affordable here; what the static pair
-# cannot see is a generator that is found under this namespace but does
-# something other than what the prose beside the block says it emits (that
-# sentence is K-1069's territory, in bin/check-demo-copies).
-#
-# `ships:`-style corpus declaration, same reason as DOCUMENTED_DEMOS above: a
-# demo that silently drops the adoption recipe changes the set with nothing
-# noticing. skooti ships no recipe section — its document declares one block in
-# total — so it is excluded BY DECLARATION, not by an exception.
-GENERATOR_BLOCK_DEMOS = %w[atablefor getgrocery hoteling].freeze
-
+DOC = "before-after.md"
+DECL_RE = /\A<!--\s*derived:\s*(.*?)\s*-->\z/
 GENERATOR_PATH_RE = %r{(?:\A|/)lib/generators/(?<ns>[a-z0-9_]+)/(?<name>[a-z0-9_]+)/\k<name>_generator\.rb\z}
-
-# The runner spellings an adopter may reasonably type. Deliberately a closed
-# list: the point is that the NAMESPACE is derived, not that any command shape
-# is waved through.
 GENERATOR_RUNNERS = ["rails", "bin/rails", "bundle exec rails"].freeze
 GENERATOR_VERBS   = %w[g generate].freeze
 
-def generator_invocations(namespace)
-  GENERATOR_RUNNERS.product(GENERATOR_VERBS).map { |runner, verb| "#{runner} #{verb} #{namespace}" }
-end
+# The adoption recipe is a cross-demo section, so which documents show the
+# invocation in a block is DECLARED: a demo that drops its recipe, or grows a
+# copy of it, changes the set and the checks above would pass either way.
+GENERATOR_BLOCK_DEMOS = %w[atablefor getgrocery hoteling].freeze
 
-# Rails::Generators::Base.namespace, reproduced from the source text rather than
-# by loading it: thor's namespace of the class nesting, with a trailing
-# `_generator` stripped and a `:generators:` segment collapsed.
-def generator_namespace_from_source(body)
-  mods  = body.scan(/^\s*module\s+([A-Z][A-Za-z0-9_]*)\s*$/).flatten
-  klass = body[/^\s*class\s+([A-Z][A-Za-z0-9_]*Generator)\s*<\s*(?:::)?Rails::Generators::(?:Base|NamedBase)\b/, 1]
-  return nil if klass.nil?
-
-  parts = (mods + [klass]).map { |c| c.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }
-  parts.join(":").sub(/_generator\z/, "").sub(/:generators:/, ":")
-end
-
-# The marker a `#{…}` interpolation leaves behind in a line pattern.
-#
-# IT USED TO BE A RAW NUL BYTE — `"\x00WILD\x00"` with the byte itself in the
-# source — chosen because NUL is the one byte that cannot appear in the Markdown
-# this guards. The byte made THIS FILE binary to grep: `command grep -n
-# GENERATOR_BLOCK_DEMOS bin/check-demo-derivations` printed one line, «Binary
-# file … matches», and EXITED 0. A session grepping its own guard for a constant
-# therefore got a success code and no evidence — and neither of the workspace's
-# two standing greps-lie rules fires on it, because it reproduces under
-# `/usr/bin/grep` and because the exit code is 0 with a REAL match (T-128).
-#
-# U+FFFF instead, written as an ASCII escape so this file is plain ASCII and
-# stays greppable. It cannot collide with quoted content, for a reason STRONGER
-# than NUL's was: U+FFFF is a permanent noncharacter — Unicode guarantees it is
-# never assigned and it is not valid in interchange text — whereas NUL was
-# reachable from an ordinary producer literal through `unescape`'s own `\0`
-# mapping just below. And the reason is CHECKED rather than trusted:
-# `line_patterns` aborts if an unescaped literal ever contains it, so a
-# collision is a loud failure instead of a silently mis-split pattern.
-WILD = "\uFFFF"
-
-ESCAPES = { "n" => "\n", "t" => "\t", "s" => " ", "r" => "\r", "e" => "\e",
-            "0" => "\0", "a" => "\a", "b" => "\b", "f" => "\f", "v" => "\v" }.freeze
-
-def unescape(str)
-  str.gsub(/\\(u\{[0-9a-fA-F ]+\}|u[0-9a-fA-F]{4}|.)/m) do
-    c = Regexp.last_match(1)
-    if ESCAPES.key?(c)             then ESCAPES[c]
-    elsif c.start_with?("u{")      then c[2..-2].split.map { |h| h.to_i(16) }.pack("U*")
-    elsif c.start_with?("u")       then [c[1..].to_i(16)].pack("U")
-    else                                c
-    end
-  end
-end
-
-# Every string literal in `src`, as line patterns with `#{…}` replaced by WILD.
-# `src` is source TEXT rather than a path so that the caller keeps a label for it;
-# the label is what the collision abort below names.
-#
-# ADJACENT LITERALS ARE MERGED. `"a" \` newline `"b"` is one Ruby string and is
-# how nearly every long assertion message in these demos is written; Ripper
-# reports it as two literals, and treating it as two would leave the check
-# unable to see the very lines K-1062 recorded.
-def line_patterns(src, label)
-  toks = Ripper.lex(src)
-  out  = []
-  buf  = nil
-  depth = 0
-  gap = false
-
-  flush = lambda do
-    next if buf.nil?
-    out.concat(buf.split("\n", -1))
-    buf = nil
-  end
-
-  toks.each do |(_pos, type, tok, _state)|
-    if depth.positive?
-      case type
-      when :on_embexpr_beg, :on_lbrace then depth += 1
-      when :on_embexpr_end, :on_rbrace then depth -= 1
-      end
-      next
-    end
-
-    case type
-    when :on_tstring_beg, :on_heredoc_beg, :on_words_beg, :on_qwords_beg, :on_regexp_beg
-      if buf && gap
-        gap = false          # adjacent literal: keep accumulating into `buf`
-      else
-        flush.call
-        buf = +""
-      end
-    when :on_tstring_content
-      next unless buf
-
-      text = unescape(tok)
-      if text.include?(WILD)
-        abort "check-demo-derivations: a string literal in #{label} contains U+FFFF, the character " \
-              "line patterns use to mark a `\#{}` interpolation. The marker must be one no producer " \
-              "can emit; choose another rather than letting this literal be split at it."
-      end
-      buf << text
-    when :on_embexpr_beg
-      if buf
-        buf << WILD
-        depth = 1
-      end
-    when :on_tstring_end, :on_heredoc_end, :on_regexp_end
-      gap = true if buf
-    when :on_sp
-      nil                    # spaces and `\`-continued newlines do not break adjacency
-    else
-      flush.call if gap
-      gap = false
-    end
-  end
-  flush.call
-  out
-end
-
-# Key names a producer NAMES: `foo:` labels, `:foo` symbols and identifier-shaped
-# string literals — the three ways a key is written where a JSON body is built.
-# Deliberately NOT every `:on_ident`: a local variable is not a published field
-# name, and admitting one would let any identifier anywhere in the producer
-# legitimise any key.
-def key_names(src)
-  names = Set.new
-  symbol = false
-  Ripper.lex(src).each do |(_pos, type, tok, _state)|
-    case type
-    when :on_label then names << tok.chomp(":")
-    when :on_symbeg then symbol = true
-    when :on_ident, :on_const
-      names << tok if symbol
-      symbol = false
-    when :on_tstring_content
-      names << tok if tok.match?(/\A[a-z_][a-z0-9_]*\z/i)
-      symbol = false
-    else
-      symbol = false if type != :on_sp
-    end
-  end
-  names
-end
-
-# ── A QUOTED SCHEMA NO DOCUMENT CAN SATISFY (K-1648) ─────────────────────────
-#
-# The snippet check above is a MEMBERSHIP test, exactly like the transcript one:
-# every quoted line must exist in some version of the source. A line the quoting
-# wave DROPPED is therefore invisible to it, and unlike the transcript hole —
-# which this file's own header declares — nothing said so for snippets.
-#
-# It is not closable in general: a snippet is abridged ON PURPOSE, and what the
-# cut contains is the human's word. But ONE consequence of a dropped line is
-# decidable from the block alone, with no reference to the source at all: a JSON
-# Schema whose `required:` names a property the same schema does not declare,
-# under `additionalProperties: false`, describes a document that cannot exist.
-# That is what getgrocery published from 2026-09-10 to 2026-09-16, and the CAUSE
-# earns its line because it is the shape rather than an accident. The wave that
-# added `timezone` to `orders_controller.rb` moved the quote's two `required:`
-# lists and one `example_row` and never added the `properties` lines beside them.
-# Nothing was dropped: the lines were never quoted. That is a HALF-RELINK of a
-# derived block, and a membership test cannot see one by construction — the half
-# that moved is present in the source, and the half that did not is absent from
-# the document, which is exactly the pair membership never asks about.
-#
-# WHAT IT READS is the BLOCK and never the source, so the property holds whether
-# or not the quote is faithful — a reader copying the recipe meets it either way.
-# WHAT IT DOES NOT REACH, stated because an over-claimed guard is this class's
-# own recurring defect: an `example_params`/`example_row` key (segments stop
-# there), a dropped property nothing lists as `required:`, and a schema that does
-# not close its object. Those stay invisible here.
-SCHEMA_OPENER  = /\b(input_schema|output_schema)\b/
-SCHEMA_CLOSER  = /\A\s*(def |kind |example_params|example_row|input_schema|output_schema)/
-SCHEMA_REQUIRE = /required:\s*(%w\[[^\]]*\]|\[[^\]]*\])/
-
-def unsatisfiable_schemas(lines)
-  found = []
-  lines.each_with_index do |line, i|
-    next unless (opener = line[SCHEMA_OPENER])
-
-    tail = lines[(i + 1)..] || []
-    stop = tail.index { |l| l =~ SCHEMA_CLOSER } || tail.length
-    seg  = ([line] + tail[0...stop]).join("\n")
-    next unless seg.include?("additionalProperties: false")
-
-    required = seg.scan(SCHEMA_REQUIRE).flatten.flat_map do |list|
-      list.start_with?("%w") ? list[3..-2].to_s.split : list.scan(/"([^"]+)"/).flatten
-    end
-    next if required.empty?
-
-    declared = seg.scan(/([a-z_][a-z0-9_]*):\s*\{/).flatten
-    missing  = (required - declared).uniq
-    found << [opener, missing, i] unless missing.empty?
-  end
-  found
-end
-
-# ── WHAT A WILDCARD IS ALLOWED TO HAVE CAPTURED (K-1105) ─────────────────────
-#
-# A frame's wildcard stands for a value the producer computed, and until K-1105
-# any whitespace-free capture was waved through on the argument that ids, URLs
-# and ports vary per run and cannot be predicted. True of those — and false of
-# the two things the corpus's verdict lines actually interpolate, which is what
-# made `  OK  http_pay == 500` and `  OK  http_paaaay == 200` acceptable. So a
-# whitespace-free capture is now held to what its producers can SAY, in two
-# vocabularies of different strength.
-
-# A capture that is nothing but a number. `1_000` and a leading `+` are Ruby
-# spellings a transcript could carry, so they are normalized rather than
-# rejected; anything with a unit, a separator or a sign glued to other text
-# (`27c`, `08:00`, `id=27`) is not a bare number and takes the token rule
-# below instead.
-NUMERIC_TOKEN = /\A[+-]?\d[\d_]*(?:\.\d+)?\z/
-
-def normalize_number(tok)
-  tok.sub(/\A\+/, "").delete("_")
-end
-
-# THE NUMBERS A PRODUCER NAMES — its own integer and float literals, and
-# nothing else. Not the numbers inside its message strings, and this is the
-# sharp end of the rule rather than an oversight: hoteling's demo.rake prints
-# a red-team table containing the words «never a 500», so a pool built from
-# string text would have named 500 and the mutation this rule exists to catch
-# would have gone green (measured — it did, before this narrowing). A number a
-# producer can only print as part of a fixed sentence needs no place here,
-# because a line carrying it matches through that sentence's own literal.
-def numeric_literals(src)
-  nums = Set.new
-  Ripper.lex(src).each do |(_pos, type, tok, _state)|
-    nums << normalize_number(tok) if %i[on_int on_float].include?(type)
-  end
-  nums
-end
-
-# THE WORDS A PRODUCER CAN PRINT — every whitespace-free run inside a string
-# literal, plus symbol names and numerals. Weaker than the numeric pool on
-# purpose: this is a vocabulary, not a value set, and its job is only to
-# refuse text the producer has no way to emit at all (`http_paaaay`,
-# `cancelled`). Deliberately NOT identifiers and NOT comment words — `ok` is a
-# local variable in three of these rake files and admitting locals would have
-# legitimised `slots_badzone_code == ok`, measured.
-def printable_tokens(src)
-  toks = Set.new
-  symbol = false
-  Ripper.lex(src).each do |(_pos, type, tok, _state)|
-    case type
-    when :on_tstring_content then tok.split(/\s+/).each { |w| toks << w unless w.empty? }
-    when :on_int, :on_float  then toks << normalize_number(tok)
-    when :on_symbeg          then symbol = true
-    when :on_ident, :on_const
-      toks << tok if symbol
-      symbol = false
-    else
-      symbol = false if type != :on_sp
-    end
-  end
-  toks
-end
-
-# ── `abridged:`, bound to the rake DAG (K-1101) ──────────────────────────────
-
-# A colon-joined lowercase chain — `demo:setup`, `db:schema:load`. That is how a
-# rake task is spelled, and nothing else these declarations say is spelled that
-# way: `description:` and `keys_from:` have a space after the colon, a URL has a
-# slash, and a constant is capitalised.
-ABRIDGED_TASK_RE = /(?<![\w:])[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)+(?![\w:])/
-
-# ── `abridged:` MEANS THE CUT, AND THE KEPT SENSE NEEDS A UNIVERSE (K-1104) ──
-#
-# The field's job is to describe what the reader CANNOT see, so the CUT sense
-# is canonical. A phrase naming what was KEPT determines the complement just as
-# exactly — but only when it also names the universe the kept lines came out
-# of. «the two stripe lines only, out of the whole environment file» passes;
-# «RUN 1 and the offline-token negatives» does not, and that was skooti's
-# transcript for as long as the document existed.
-#
-# This pair of regexes is the mechanical half of that ruling and is a SHAPE
-# check, not a truth check — see the over-claim list. A declaration that says
-# «only» has committed to the kept sense out loud; it must then say what it was
-# only-of.
-KEPT_SIDE_RE = /(?<![\w-])only(?![\w-])/i
-UNIVERSE_RE  = /(?<![\w-])out\s+of(?![\w-])|(?<![\w-])(?:are|is)\s+out(?![\w-])/i
-
-# The two spellings a rake task is declared with. Kept as one predicate because
-# the `task:` field and the `abridged:` field must answer "is this task this
-# demo's?" the same way, and two copies of the pair would drift.
-def task_defined_here?(rake_files, short)
-  rake_files.any? { |rf| rake_task_declaration_in(File.read(rf), short) }
-end
-
-def rake_task_declaration_in(body, short)
-  body.lines.each_with_index do |line, idx|
-    next unless line.match?(/\A\s*task\s+:#{Regexp.escape(short)}\b/) ||
-                line.match?(/\A\s*task\s+#{Regexp.escape(short)}:/)
-
-    return [idx + 1, line]
-  end
-  nil
-end
-
-# [file, lineno, line] of the declaration, across the demo's rake files.
-def rake_task_declaration(rake_files, short)
-  rake_files.each do |rf|
-    hit = rake_task_declaration_in(File.read(rf), short)
-    return [rf, hit[0], hit[1]] if hit
-  end
-  nil
-end
-
-# What a task declares as its prerequisites, verbatim: `task x: :y do` and
-# `task x: ["a:b", "c:d"]` both answer here, `task :x do` has none.
-def rake_task_prereq_clause(decl_line)
-  decl_line.to_s[/\A\s*task\s+[a-z0-9_]+:\s*(\S.*?)\s*(?:\bdo\b.*)?\z/, 1]
-end
-
-def prereq_mentions?(clause, full_name)
-  return false if clause.nil?
-
-  short = full_name.split(":").last
-  clause.include?(full_name) || clause.match?(/(?<!\w)#{Regexp.escape(short)}(?!\w)/)
-end
-
-# The source text of a rake task's own body — the parser's line range, not an
-# indentation guess. `nil` when the task is declared without a block
-# (`task demo: [...]`), which prints nothing of its own.
-def rake_task_body_source(rake_files, short)
-  file, lineno, = rake_task_declaration(rake_files, short)
-  return nil if file.nil?
-
-  src = File.read(file)
-  root = begin
-    RubyVM::AbstractSyntaxTree.parse(src)
-  rescue SyntaxError
-    return nil
-  end
-
-  range = nil
-  walk = lambda do |node|
-    return unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
-
-    if node.type == :ITER && node.first_lineno == lineno
-      call = node.children.first
-      if call.is_a?(RubyVM::AbstractSyntaxTree::Node) && call.children.include?(:task)
-        range = [node.first_lineno, node.last_lineno]
-      end
-    end
-    node.children.each { |c| walk.call(c) }
-  end
-  walk.call(root)
-  return nil if range.nil?
-
-  src.split("\n", -1)[(range[0] - 1)..(range[1] - 1)].join("\n")
-end
-
-# LITERAL TEXT AT ALL — the bar for a frame whose captures ARE checked, where
-# anything non-empty is enough because the `.*?` cannot then swallow prose.
-def anchor_strength(pattern)
-  pattern.split(WILD, -1).sum { |part| part.gsub(/\s/, "").length }
-end
-
-# IDENTIFYING literal text — the bar for a frame matched WITHOUT reading its
-# captures, where the literal is the only thing between this check and a
-# rubber stamp. Punctuation is not identifying: it is the scaffolding every
-# line of a given shape shares, so it says nothing about WHICH line this is.
-#
-# That distinction is K-1105, and the corpus supplies the counter-example.
-# `puts "  OK  #{label} == #{expected}"` — the frame behind twenty of the
-# twenty-six published `OK … == …` verdict lines, i.e. the lines that state
-# whether the payment, the booking and the unlock worked — has four non-space
-# literal characters, `OK` and `==`. It therefore cleared a bar of 4 on the
-# UNCHECKED path and both of its wildcards went unread. Measured before the
-# fix: hoteling's own `  OK  http_pay == 200` mutated to `  OK  http_pay ==
-# 500 (charged nothing, refunded twice)` exited 0, and so did an invented
-# `  OK  totally_made_up_verb == 999 utterly invented prose`.
-#
-# Counting only alphanumerics leaves that frame the anchor it always really
-# had — `OK`, i.e. 2 — so it falls to the checked path, where the prose
-# capture must resolve to a literal and does not.
-#
-# THE THRESHOLD IS UNCHANGED AT 4 BECAUSE THE METRIC WAS THE DEFECT, NOT THE
-# NUMBER. Measured at head, every frame this corpus legitimately needs on the
-# unchecked path names something — `Ordering:` 8, `Bearer` 6, `intent-` 6,
-# `/kiosk/` 5, `Properties: … found, using property_id=… ` 33 — and the whole
-# corpus stays green with punctuation discounted. (Raising the OLD metric
-# instead was measured too: green to 9, red at 10, where `Ordering: #{list}`
-# drops out. That is a number with nothing behind it but today's corpus.)
-def anchor_identity(pattern)
-  pattern.split(WILD, -1).sum { |part| part.gsub(/[^[:alnum:]]/, "").length }
-end
-
-def pattern_regex(pattern, capture:)
-  parts = pattern.split(WILD, -1).map { |p| Regexp.escape(p) }
-  glue  = capture ? "(.*?)" : ".*?"
-  Regexp.new("\\A#{parts.join(glue)}\\z", Regexp::MULTILINE)
-end
-
-# How deep the frame composition may go. `puts "  OK    #{msg}"` with `msg`
-# itself built as `"… (got #{x})"` is two levels, and that is the deepest shape
-# these four demos use; the limit is what keeps a 500-pattern corpus from
-# exploring its own cross product.
-MAX_DEPTH = 3
-
-class Patterns
-  # `sources` and `key_sources` are `[label, source-text]` pairs.
-  def initialize(sources, key_sources = [])
-    pats   = sources.flat_map { |(label, src)| line_patterns(src, label) }.uniq
-    @exact = Set.new(pats.reject { |p| p.include?(WILD) }.map(&:rstrip).reject(&:empty?))
-    framed = pats.select { |p| p.include?(WILD) }
-    # A frame matched WITHOUT checking its wildcards needs real literal text of
-    # its own: `"#{a}#{b}"` matches everything and would make this a rubber
-    # stamp. A frame whose wildcards ARE checked can be as thin as `"  OK  "` —
-    # the capture has to resolve to a literal, so the `.*?` cannot swallow
-    # arbitrary prose. That distinction is the whole reason there are two lists.
-    #
-    # The two lists therefore measure the anchor DIFFERENTLY, which is K-1105:
-    # the unchecked list wants identifying text and punctuation is not it, while
-    # the checked list only needs the frame to be a frame at all. The unchecked
-    # list also keeps its literal SEGMENTS, so that a match can be held to the
-    # one rule that survives not reading the captures — see
-    # `no_capture_swallows_its_terminator?`.
-    @loose = framed.select { |p| anchor_identity(p) >= 4 }.map { |p| [pattern_regex(p, capture: true), p.split(WILD, -1)] }
-    @tight = framed.select { |p| anchor_strength(p) >= 1 }.map { |p| pattern_regex(p, capture: true) }
-    @keys  = (sources + key_sources).flat_map { |(_label, src)| key_names(src).to_a }.to_set
-    # THE TWO CAPTURE VOCABULARIES (K-1105). `key_sources` are excluded from both
-    # for the same reason their literals never join the line patterns: a handler
-    # is consulted for field NAMES only, and folding a large file's constants in
-    # would legitimise any number and any word at all.
-    @nums = sources.flat_map { |(_label, src)| numeric_literals(src).to_a }.to_set
-    @toks = sources.flat_map { |(_label, src)| printable_tokens(src).to_a }.to_set
-    @memo  = {}
-  end
-
-  def key?(name) = @keys.include?(name)
-
-  def accounts_for?(line, depth = 0)
-    line = line.rstrip
-    return true if @exact.include?(line)
-    return false if depth >= MAX_DEPTH
-
-    key = [line, depth]
-    return @memo[key] if @memo.key?(key)
-
-    @memo[key] = false # cut recursion on a cycle
-    ok = @loose.any? { |(re, parts)| (m = re.match(line)) && no_capture_swallows_its_terminator?(m, parts) } ||
-         @tight.any? do |re|
-           m = re.match(line)
-           m && m.captures.all? { |c| capture_ok?(c, depth) }
-         end
-    @memo[key] = ok
-  end
-
-  # THE ONE RULE THAT SURVIVES NOT READING THE CAPTURES: a frame's literal
-  # scaffolding must appear where the frame says it does. `.*?` is lazy, but
-  # backtracking will still make it eat a literal it was supposed to stop at
-  # when that is the only way to reach `\z` — so hoteling's
-  # `  OK  bookings.confirmation_code == the code returned (#{code})` matched
-  # its own published line with ` (charged nothing, refunded twice)` appended,
-  # the last of the fifty published-line mutations to stay green. Requiring
-  # each capture not to contain the literal that terminates it is what a reader
-  # already assumes lazy matching means, and it costs the corpus nothing.
-  def no_capture_swallows_its_terminator?(match, parts)
-    match.captures.each_with_index.none? do |cap, i|
-      lit = parts[i + 1].to_s
-      !lit.empty? && cap.to_s.include?(lit)
-    end
-  end
-
-  # A wildcard's captured text stands on its own when it is empty, or a single
-  # whitespace-free token that is not a bare number (an id, a URL, a path, a
-  # port, a code). Anything with a space in it is prose, and prose must come
-  # from a literal.
-  #
-  # A BARE NUMBER IS THE ONE TOKEN CLASS HELD TO THE PRODUCER (K-1105). Every
-  # other whitespace-free token genuinely varies per run — a UUID, a `pi_…`
-  # reference, a timestamp, a port — and pinning those is what design fact 3
-  # refuses. A number in a verdict line is not that: it IS the result, and
-  # `  OK  http_pay == 500` says the payment failed. Held to the numeric
-  # literals of the declared producers, that line fails — hoteling's five
-  # producers name 21 distinct integers and 500 is not among them — where the
-  # published `== 200` passes. This is the only rule in the transcript check
-  # that reaches a VALUE rather than a shape, and it reaches exactly as far as
-  # the producers' own numerals; the over-claim list says what that leaves.
-  #
-  # Any OTHER whitespace-free capture is held to the weaker `@toks` vocabulary
-  # — it must at least be a word one of the declared producers can print. A
-  # UUID, a `pi_…` reference or a port is not in it and would fail, which is
-  # why this rule only ever fires on a frame thin enough to reach the checked
-  # path: every frame in this corpus that interpolates a run-varying id names
-  # enough around it to be matched whole on the unchecked path instead.
-  def capture_ok?(text, depth)
-    t = text.strip
-    return true if t.empty?
-
-    if t !~ /\s/
-      return @nums.include?(normalize_number(t)) if t.match?(NUMERIC_TOKEN)
-
-      return @toks.include?(t)
-    end
-
-    accounts_for?(t, depth + 1)
-  end
-end
-
-# ── The declared, EXECUTABLE transformations ─────────────────────────────────
-
-# Index just past the end of a (possibly `\`-continued) string literal starting
-# at or after `lines[li][ci]`, plus whatever follows it on that final line.
-def scan_string_value(lines, li, ci)
-  i = li
-  col = ci
-  loop do
-    s = lines[i] or return [li, ""]
-    q = s.index(/["']/, col) or return [i, ""]
-    quote = s[q]
-    j = q + 1
-    j += 1 while j < s.length && !(s[j] == quote && s[j - 1] != "\\")
-    tail = s[(j + 1)..] || ""
-    return [i, tail] unless tail.rstrip.end_with?("\\")
-
-    i += 1
-    col = 0
-  end
-end
-
-def strip_descriptions(src)
-  lines = src.split("\n", -1)
-  out = []
-  i = 0
-  while i < lines.length
-    line = lines[i]
-
-    if (m = line.match(/\A(\s*)description\s+["']/))
-      last, = scan_string_value(lines, i, m[1].length + "description".length)
-      out << "#{m[1]}#{ELIDED_DESCRIPTION}"
-      i = last + 1
-      next
-    end
-
-    if (k = line.index(/(?<![\w:])description:\s/))
-      pre = line[0...k]
-      last, tail = scan_string_value(lines, i, k + "description:".length)
-      tail = tail.sub(/\A\s*,/, ",")
-      if pre.strip.empty?
-        out << (out.pop || "").rstrip.sub(/,\z/, "") + tail
-      else
-        out << pre.rstrip.sub(/,\z/, "") + tail
-      end
-      i = last + 1
-      next
-    end
-
-    out << line
-    i += 1
-  end
-  out
-end
-
-def transformed_lines(src, name)
-  case name
-  when "strip_descriptions" then strip_descriptions(src)
-  when "dedent"             then src.split("\n", -1).map(&:lstrip)
-  else raise ArgumentError, name
-  end
-end
-
-# ── Document parsing ─────────────────────────────────────────────────────────
-
-Block = Struct.new(:fence_line, :info, :body, :decl, :decl_line, :neighbourhood,
-                   :preceding_paragraph, keyword_init: true)
-
-DECL_RE = /\A<!--\s*derived:\s*(.*?)\s*-->\z/
+Block = Struct.new(:where, :decl, :body, :body_line, keyword_init: true)
 
 def parse_declaration(text)
   fields = {}
@@ -1280,801 +56,192 @@ def parse_declaration(text)
       next
     end
     k, v = part.split(":", 2)
-    next if v.nil?
-
-    fields[k.strip] = v.strip
+    fields[k.strip] = v.strip unless v.nil?
   end
   fields
 end
 
-def parse_document(path)
+def blocks_in(path, label)
   lines = File.readlines(path, chomp: true)
   blocks = []
-  prev_after = nil
   i = 0
   while i < lines.length
     unless lines[i].start_with?("```")
       i += 1
       next
     end
-
-    info = lines[i][3..].to_s.strip
     j = i + 1
     j += 1 while j < lines.length && !lines[j].start_with?("```")
-    decl_line = nil
-    decl = nil
-    if i.positive? && (m = DECL_RE.match(lines[i - 1].strip))
-      decl_line = i - 1
-      decl = parse_declaration(m[1])
-    end
-    blocks << Block.new(
-      fence_line: i + 1, info: info, body: lines[(i + 1)...j],
-      decl: decl, decl_line: decl_line && decl_line + 1,
-      neighbourhood: [promise_window_before(lines, decl_line || i, prev_after),
-                      paragraph_after(lines, j)].join("\n"),
-      preceding_paragraph: paragraph_before(lines, decl_line || i),
-    )
-    prev_after = paragraph_after_range(lines, j)
+    decl = (m = i.positive? && DECL_RE.match(lines[i - 1].strip)) ? parse_declaration(m[1]) : nil
+    blocks << Block.new(where: "#{label}:#{i + 1}", decl: decl, body: lines[(i + 1)...j], body_line: i + 2)
     i = j + 1
   end
   blocks
 end
 
-# The ONE paragraph on each side of a block — the prose that introduces it and
-# the prose that comments on it. Deliberately not "everything since the previous
-# block": the gap between two blocks belongs to both of them, so a wider window
-# attributes one document's sentence to a block it was never about.
-def paragraph_before_range(lines, idx)
-  k = idx - 1
-  k -= 1 while k >= 0 && lines[k].strip.empty?
-  stop = k
-  k -= 1 while k >= 0 && !lines[k].strip.empty?
-  (k + 1)..stop
+def generator_invocations(namespace)
+  GENERATOR_RUNNERS.product(GENERATOR_VERBS).map { |runner, verb| "#{runner} #{verb} #{namespace}" }
 end
 
-def paragraph_before(lines, idx)
-  lines[paragraph_before_range(lines, idx)].to_a.join("\n")
+# Rails::Generators::Base.namespace, read off the source rather than by loading
+# it: the class nesting, underscored, with `_generator` stripped and the
+# `:generators:` segment collapsed.
+def generator_namespace_from_source(body)
+  mods  = body.scan(/^\s*module\s+([A-Z][A-Za-z0-9_]*)\s*$/).flatten
+  klass = body[/^\s*class\s+([A-Z][A-Za-z0-9_]*Generator)\s*<\s*(?:::)?Rails::Generators::(?:Base|NamedBase)\b/, 1]
+  return nil if klass.nil?
+
+  parts = (mods + [klass]).map { |c| c.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }
+  parts.join(":").sub(/_generator\z/, "").sub(/:generators:/, ":")
 end
 
-def paragraph_after_range(lines, idx)
-  k = idx + 1
-  k += 1 while k < lines.length && lines[k].strip.empty?
-  start = k
-  k += 1 while k < lines.length && !lines[k].strip.empty? && !lines[k].start_with?("```")
-  start...k
-end
+def check_generator(block, errors)
+  rel = block.decl["from"].to_s.strip
+  return errors << "#{block.where}: `derived: generator` needs a `from:` naming the generator, repository-relative." if rel.empty?
 
-def paragraph_after(lines, idx)
-  lines[paragraph_after_range(lines, idx)].to_a.join("\n")
-end
+  src = File.join(ROOT, rel)
+  return errors << "#{block.where}: `from: #{rel}` names no file in this repository." unless File.file?(src)
 
-# ── What «beside» means for the PROMISE rule, and why it is WIDER (K-1106) ───
-#
-# `paragraph_before` above takes ONE paragraph, and getgrocery's «unedited,
-# first line to last» sits TWO above its declaration, behind «**This recording
-# is the secret-free path**». So the promise rule scored ZERO on the document
-# whose promise is as unbacked as any other in the corpus.
-#
-# The promise window is therefore the INTRO: every line from the nearest
-# preceding heading, horizontal rule or fenced block down to the declaration.
-# That is deliberately the wide window `paragraph_before`'s own comment argues
-# against — and the argument does not reach this rule. It is about a check that
-# READS the prose as a description of THIS block, where attributing one block's
-# sentence to another makes the check answer about the wrong thing. This rule
-# reads nothing: it asks only whether an unbackable sentence stands near a block
-# nothing can back it for. The worst a mis-attribution can do here is demand
-# that a sentence be qualified, and that demand is right wherever the sentence
-# sits. MEASURED at head: the wider window adds `verbatim` beside all three
-# `derived: generator` blocks, reaching back over the Gemfile snippet's
-# commentary; the rule does not fire on `generator`, so it costs nothing today.
-# AND THE FLOOR, WHICH IS THE PRICE THE WIDE WINDOW CAME WITH (T-129).
-#
-# The nearest boundary above a declaration is, where two blocks share a section
-# with no heading between them, the EARLIER block's closing fence — so the wide
-# window reaches back over that block's own trailing commentary and attributes
-# its sentences to this one. MEASURED at head before this floor existed, over
-# all 25 declared blocks: `verbatim` was inherited that way by SEVEN blocks, all
-# of them from a preceding Gemfile or routes commentary.
-#
-# T-129 filed that as latent, on the reading that the rule fires only on
-# `transcript` and `none` and none of those inherited anything. RE-MEASURED
-# 2026-08-31, that reading is WRONG IN ONE PLACE and the row is corrected here
-# rather than carried: the four transcript blocks are each the first declared
-# block under a heading and their windows are clean, but hoteling's ONE
-# `derived: none` block sits directly below a `snippet`, and its window DOES
-# span that snippet's commentary. Nothing fires today only because those eight
-# lines happen to contain no promise word — and «nothing else altered» beside a
-# snippet is the QUALIFIED form the K-1062 repair wave deliberately wrote, so
-# the next author to write one there reddens a block it was never about.
-#
-# THE FLOOR, and the exception is the whole design. The window starts after the
-# previous block's after-paragraph — UNLESS that paragraph is also this block's
-# own `paragraph_before`, i.e. the gap holds exactly ONE paragraph and it serves
-# both. hoteling's does: «Swapping in real payments is one line and touches no
-# other code:» ends in a colon that introduces the very block below it while
-# also commenting on the one above. Flooring unconditionally would delete that
-# block's real intro from its window and take the rule's only `none` subject
-# with it. So a shared single paragraph stays attributed to both — which is
-# right, because a reader cannot tell either, and that ambiguity is a fair thing
-# to be asked to fix by adding a heading or a rule.
-def promise_window_boundary?(line)
-  line.start_with?("```") || line.start_with?("#") || line.strip.match?(/\A-{3,}\z/)
-end
-
-def promise_window_before(lines, idx, prev_after = nil)
-  k = idx - 1
-  k -= 1 while k >= 0 && !promise_window_boundary?(lines[k])
-  floor = k + 1
-  if prev_after && prev_after.end > prev_after.begin &&
-     paragraph_before_range(lines, idx).begin != prev_after.begin
-    floor = [floor, prev_after.end].max
-  end
-  lines[floor...idx].to_a.join("\n")
-end
-
-# ── A NUMBERED CUT LIST, AND THE NAMES IN IT (K-1107) ────────────────────────
-#
-# `abridged:` is the half of the pair this script reads; the paragraph three
-# lines above it is the half a reader reads. In two of K-1103's five instances
-# the PARAGRAPH WAS RIGHT WHILE THE FIELD WAS WRONG — the worse direction,
-# because the field is the half with a checker. So when that paragraph
-# enumerates the cut as NUMBERED sentences, every backticked bare identifier in
-# those sentences must appear in the field.
-#
-# SENTENCE-SCOPED, AND THAT IS THE WHOLE DESIGN. Measured rather than argued:
-# the naive whole-paragraph form false-positives on THREE of the corpus's five
-# enumerating paragraphs, because each one ends in a KEPT clause — «Everything
-# else — field names, types, `required` lists, `enum`s …» — whose backticks name
-# what STAYED. Scoping to the `(N)` sentences leaves exactly one live hit at
-# head, and that hit is real.
-
-# A backticked span that is a bare identifier: `kyc_status`, `description`,
-# `description:`. Deliberately NOT `description "…"   # elided` or `BODY
-# ELIDED` — those are prose, and a field is not expected to echo them verbatim.
-BARE_IDENTIFIER_RE = /\A[A-Za-z_][A-Za-z0-9_]*:?\z/
-
-# Sentences, backtick-aware, because the corpus writes `db:schema:load` and
-# `Date.today + 30` mid-sentence and a `.` inside backticks ends nothing.
-def sentences(text)
-  flat = text.tr("\n", " ")
-  out = []
-  buf = +""
-  in_code = false
-  flat.each_char.with_index do |c, i|
-    buf << c
-    in_code = !in_code if c == "`"
-    next unless c == "." && !in_code
-
-    nxt = flat[i + 1]
-    next unless nxt.nil? || nxt.match?(/\s/)
-
-    out << buf.strip
-    buf = +""
-  end
-  out << buf.strip
-  out.reject(&:empty?)
-end
-
-# The `(N)` sentences of a paragraph that enumerates a cut. TWO are required:
-# a single stray `(1)` is a parenthesis, not an enumeration.
-def enumerated_cut_items(paragraph)
-  items = sentences(paragraph).select { |s| s.match?(/\A\(\d+\)\s/) }
-  items.length >= 2 ? items : []
-end
-
-def backticked_identifiers(text)
-  text.scan(/`([^`]+)`/).flatten.select { |s| s.match?(BARE_IDENTIFIER_RE) }.uniq
-end
-
-# How many limits WHAT THIS DOES NOT COVER actually lists, COUNTED from this
-# file rather than remembered. The success line points a CI reader at that list
-# (K-1108), and a pointer carrying a stale number is a defect a sibling
-# inventory gate has already shipped: it announced «6 work-list(s)» where its
-# code implemented five, for days, at exit 0. It aborts rather than
-# print a zero, because a pointer that has lost its target is a false one.
-def over_claim_limit_count
-  section = File.read(__FILE__)[/^# .. WHAT THIS DOES \*\*NOT\*\* COVER.*?^# EACH CLASS ABOVE WAS PROVEN/m]
-  n = section.to_s.scan(/^#   \* /).size
-  abort "check-demo-derivations: cannot find its own WHAT THIS DOES NOT COVER list — the success " \
-        "message points a CI reader at it, so the pointer may not go stale silently." if n.zero?
-
-  n
-end
-
-# ── --self-test: the promise rule proves itself on fixtures (T-129) ─────────
-#
-# WHY THIS EXISTS AND WHY IT IS SCOPED THE WAY IT IS. Everything else in this
-# script is proven by a plant in the real corpus, and the header records twelve
-# of them. The promise rule cannot be: it is a phrase BAN whose live subject set
-# is EMPTY by design (six of the eight regexes match nothing anywhere at head,
-# because K-1106's repair wave removed the sentences), and its window is a
-# geometry that only bites where two blocks share a section — a shape the four
-# documents contain in exactly one place today. Both are invisible to a bare
-# run. So this mode carries fixtures: eight positive controls for the
-# vocabulary, and four documents built to have the geometry the corpus barely
-# has.
-#
-# IT DOES NOT COVER THE REST OF THE SCRIPT. The membership, JSON, elision,
-# `abridged:` and generator rules are proven by planting in the real corpus, and
-# a `--self-test` that claimed to cover them would be the over-claim this file's
-# own header list exists to prevent.
-def self_test
-  require "tmpdir"
-  failures = []
-  arms = 0
-  check = lambda do |name, ok, detail = nil|
-    arms += 1
-    failures << "#{name}#{detail ? " — #{detail}" : ""}" unless ok
+  m = GENERATOR_PATH_RE.match(rel)
+  if m.nil?
+    return errors << "#{block.where}: `from: #{rel}` is not a Rails generator path " \
+                     "(`…/lib/generators/<ns>/<name>/<name>_generator.rb`), so no namespace can be derived from it."
   end
 
-  # A. VOCABULARY, one positive control per regex. A ban that matches nothing is
-  #    indistinguishable from a ban nobody is violating, so each pattern is held
-  #    to the sentence that put it in the list.
-  unless PROMISES.length == PROMISE_EXEMPLARS.length
-    failures << "PROMISES has #{PROMISES.length} regex(es) and PROMISE_EXEMPLARS " \
-                "#{PROMISE_EXEMPLARS.length} sentence(s) — every pattern needs the sentence that " \
-                "put it in the list, or the next one added is proven by nothing"
+  namespace  = "#{m[:ns]}:#{m[:name]}"
+  from_class = generator_namespace_from_source(File.read(src))
+  if from_class.nil?
+    return errors << "#{block.where}: #{rel} defines no `class …Generator < Rails::Generators::Base` " \
+                     "(or NamedBase), so it answers no invocation."
   end
-  PROMISES.each_with_index do |re, i|
-    exemplar = PROMISE_EXEMPLARS[i].to_s
-    check.("vocabulary[#{i}] #{re.inspect} matches its exemplar", exemplar =~ re,
-           "#{exemplar.inspect} no longer matches — the pattern was edited and nothing else can " \
-           "tell you, because a ban with no live subject stays green")
+  if from_class != namespace
+    return errors << "#{block.where}: #{rel} derives `#{namespace}` from its path but `#{from_class}` " \
+                     "from its class nesting; Rails resolves an invocation by both."
   end
 
-  # B. THE KINDS. The ban covers the two classes nothing can back a completeness
-  #    claim for, and deliberately not `snippet`, whose qualified form IS backed.
-  check.("PROMISE_KINDS is exactly none+transcript", PROMISE_KINDS.sort == %w[none transcript],
-         "got #{PROMISE_KINDS.inspect} — widening this set is the change T-129 is about, and it " \
-         "may not happen without re-measuring the window's false positives")
+  accepted = generator_invocations(namespace)
+  file = block.where.sub(/:\d+\z/, "")
+  block.body.each_with_index do |line, k|
+    next if line.strip.empty? || accepted.include?(line.strip.gsub(/\s+/, " "))
 
-  # C. THE WINDOW. Four fixture documents, each one block class over the same
-  #    geometry, run through the REAL parse_document.
-  doc = lambda do |body|
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "before-after.md")
-      File.write(path, body)
-      blocks = parse_document(path)
-      last = blocks.last
-      hit = PROMISE_KINDS.include?(last.decl["derived"]) && PROMISES.any? { |re| last.neighbourhood =~ re }
-      [hit, last]
+    errors << "#{file}:#{block.body_line + k}: this line does not invoke `#{namespace}` " \
+              "(accepted: #{accepted.join(', ')}):\n      #{line.strip[0, 160]}"
+  end
+end
+
+def documents
+  Dir.glob(File.join(ROOT, "kiosk-demo-*", DOC)).sort
+     .to_h { |doc| [File.basename(File.dirname(doc)).delete_prefix("kiosk-demo-"), doc] }
+end
+
+def run
+  errors = []
+  docs = documents
+  held = Hash.new(0)
+
+  docs.each do |demo, doc|
+    blocks_in(doc, doc.delete_prefix("#{ROOT}/")).each do |block|
+      if block.decl.nil?
+        errors << "#{block.where}: fenced block with no `<!-- derived: … -->` declaration on the line " \
+                  "above it. A block nobody declared is a block nobody checks."
+        next
+      end
+      unknown = block.decl.keys - %w[derived from why]
+      errors << "#{block.where}: unknown key(s) #{unknown.join(', ')} in the declaration." unless unknown.empty?
+      unless block.decl["derived"] == "generator"
+        errors << "#{block.where}: `derived: #{block.decl['derived']}` — this check holds `generator` " \
+                  "blocks only; another kind needs a checker of its own before it may be declared."
+        next
+      end
+      held[demo] += 1
+      check_generator(block, errors)
     end
   end
 
-  shared_gap = <<~MD
-    ## One section, two blocks, ONE paragraph between them
+  docs.each_key do |demo|
+    want = GENERATOR_BLOCK_DEMOS.include?(demo) ? 1 : 0
+    next if held[demo] == want
 
-    <!-- derived: snippet | from: config/initializers/kiosk.rb -->
-    ```ruby
-      c.issuer = "https://example.test"
-    ```
+    errors << if want == 1
+                "kiosk-demo-#{demo}/#{DOC}: declares #{held[demo]} `derived: generator` block(s), " \
+                "expected 1 — #{demo} is declared to show the generator invocation."
+              else
+                "kiosk-demo-#{demo}/#{DOC}: declares #{held[demo]} `derived: generator` block(s) but " \
+                "#{demo} is not declared to carry one. A new copy of a cross-demo command may not " \
+                "appear silently."
+              end
+  end
 
-    Quoted verbatim from the initializer, and swapping the provider is one line:
+  total = held.values.sum
+  if total.zero?
+    errors << "check-demo-derivations: no declared block in any #{DOC}. " \
+              "A rule that inspects nothing passes everything."
+  end
 
-    <!-- derived: none | why: an illustrative swap -->
-    ```ruby
-      c.payment_provider = Other.new
-    ```
-  MD
-  check.("a promise in a gap of ONE paragraph still reaches the block below it", doc.(shared_gap).first,
-         "the floor swallowed a paragraph that is the later block's own intro — hoteling's real " \
-         "`derived: none` block has exactly this shape and it is the rule's only live subject")
+  if errors.empty?
+    puts "check-demo-derivations: OK — #{total} generator-invocation block(s) across #{docs.size} " \
+         "narrative document(s), each bound to the generator its `from:` names."
+    return 0
+  end
+  warn "\ncheck-demo-derivations FAILED:\n"
+  errors.each { |e| warn "  ✗ #{e}" }
+  1
+end
 
-  split_gap = <<~MD
-    ## One section, two blocks, TWO paragraphs between them
+# ── --self-test: one planted defect per rule, in a copy of the files this reads ─
+def self_test
+  ls, git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z", "kiosk-demo-*/#{DOC}", "kiosk-server/lib/generators")
+  abort "check-demo-derivations --self-test: `git ls-files` failed in #{ROOT}" unless git.success?
+  rels = ls.split("\0").reject(&:empty?)
+  generator = rels.find { |r| r.end_with?("install_generator.rb") } or abort "no install_generator.rb tracked"
+  docs = rels.grep(/#{DOC}\z/)
+  declared = docs.select { |d| GENERATOR_BLOCK_DEMOS.any? { |demo| d.start_with?("kiosk-demo-#{demo}/") } }
+  undeclared = docs - declared
 
-    <!-- derived: snippet | from: config/initializers/kiosk.rb -->
-    ```ruby
-      c.issuer = "https://example.test"
-    ```
+  edit = lambda do |tree, rel, from, to|
+    path = File.join(tree, rel)
+    body = File.read(path)
+    abort "self-test fixture #{rel} does not contain #{from.inspect}" unless body.include?(from)
+    File.write(path, body.sub(from, to))
+  end
+  unfence = ->(tree, rel) { edit.(tree, rel, "```\nrails g kiosk:install\n```", "`rails g kiosk:install`") }
+  decl = "<!-- derived: generator | from: #{generator}"
 
-    The two lines above are quoted verbatim from the initializer.
+  arms = [
+    ["baseline", ->(_t) {}, 0, /OK — 3 generator-invocation block\(s\)/],
+    ["undeclared block", ->(t) { edit.(t, declared[0], decl, "<!-- a comment that declares nothing") }, 1, /no `<!-- derived: … -->` declaration/],
+    ["misspelt invocation", ->(t) { edit.(t, declared[1], "kiosk:install\n```", "kiosk:instal\n```") }, 1, /does not invoke `kiosk:install`/],
+    ["from: naming no file", ->(t) { edit.(t, declared[2], "from: #{generator}", "from: kiosk-server/lib/generators/kiosk/gone/gone_generator.rb") }, 1, /names no file/],
+    ["path and class nesting disagree", ->(t) { edit.(t, generator, "module Kiosk\n", "module Kiosks\n") }, 1, /from its class nesting/],
+    ["a kind nothing checks", ->(t) { edit.(t, declared[0], "derived: generator", "derived: transcript") }, 1, /holds `generator` blocks only/],
+    ["a declared demo drops its recipe", ->(t) { unfence.(t, declared[1]) }, 1, /expected 1 — getgrocery is declared/],
+    ["an undeclared demo grows one", ->(t) { edit.(t, undeclared[0], "\n## What an operator adds\n", "\n## What an operator adds\n\n#{decl} -->\n```\nrails g kiosk:install\n```\n") }, 1, /is not declared to carry one/],
+    ["nothing left to check", ->(t) { declared.each { |d| unfence.(t, d) } }, 1, /A rule that inspects nothing passes everything/],
+  ]
 
-    Here is the swap an operator would make:
-
-    <!-- derived: none | why: an illustrative swap -->
-    ```ruby
-      c.payment_provider = Other.new
-    ```
-  MD
-  check.("a promise in the EARLIER block's own commentary does not reach the block below it",
-         !doc.(split_gap).first,
-         "the unfloored window reaches back over a snippet's commentary and reddens a `none` " \
-         "block for a sentence that was never about it — the T-129 false positive")
-
-  own_intro = <<~MD
-    ## A block whose OWN intro promises
-
-    <!-- derived: transcript | from: demo:thing | abridged: nothing -->
-    ```text
-      OK  thing
-    ```
-
-    The block above is unedited.
-  MD
-  check.("a promise in the block's OWN commentary still fires", doc.(own_intro).first,
-         "the rule stopped seeing the paragraph directly after a block, which is where four of " \
-         "the corpus's eleven promises sat")
-
-  snippet_ok = <<~MD
-    ## A snippet may carry its qualified sentence
-
-    <!-- derived: snippet | from: config/routes.rb -->
-    ```ruby
-      root "home#index"
-    ```
-
-    Every line is that file's with its `description` cut out and nothing else altered.
-  MD
-  check.("a snippet's qualified promise is NOT banned", !snippet_ok.then { |b| doc.(b).first },
-         "the ban reached `snippet`, whose form is backed by the declared strip_descriptions " \
-         "transform — sweeping it in is the over-claim K-1106 declined")
-
+  failures = []
+  arms.each do |name, plant, want_exit, want_re|
+    Dir.mktmpdir("derivations-") do |tree|
+      rels.each do |r|
+        FileUtils.mkdir_p(File.dirname(File.join(tree, r)))
+        FileUtils.cp(File.join(ROOT, r), File.join(tree, r))
+      end
+      plant.call(tree)
+      out, err, st = Open3.capture3(RbConfig.ruby, __FILE__, "--root", tree)
+      text = out + err
+      ok = st.exitstatus == want_exit && text.match?(want_re)
+      puts "  #{ok ? 'OK ' : 'FAIL'}  #{name}"
+      failures << "#{name}: exit #{st.exitstatus} (wanted #{want_exit}), #{want_re.inspect} #{text.match?(want_re) ? 'matched' : 'NOT matched'}" unless ok
+    end
+  end
   if failures.empty?
-    puts "check-demo-derivations --self-test: OK — #{arms} arm(s): #{PROMISES.length} vocabulary " \
-         "positive control(s), the covered-kind set, and 4 fixture document(s) for the promise " \
-         "window (shared gap, split gap, own commentary, snippet control)."
+    puts "check-demo-derivations --self-test: OK — #{arms.length} arm(s), every one caught."
     exit 0
   end
-  warn "\ncheck-demo-derivations --self-test FAILED (#{failures.length} of #{arms} arm(s)):\n"
+  warn "\ncheck-demo-derivations --self-test FAILED (#{failures.length} of #{arms.length} arm(s)):\n"
   failures.each { |f| warn "  ✗ #{f}" }
-  warn "\nThese arms are the ONLY proof the promise rule still fires: its regexes are a ban whose " \
-       "live subject set is empty by design, so a broken one leaves a bare run green."
   exit 1
 end
 
-self_test if ARGV.include?("--self-test")
-
-# ── Checks ───────────────────────────────────────────────────────────────────
-
-errors = []
-listing = ARGV.include?("--list")
-counts = Hash.new(0)
-generator_blocks = Hash.new(0)
-
-present = Dir.glob(File.join(ROOT, "kiosk-demo-*", DOC)).map { |p| File.basename(File.dirname(p)).sub("kiosk-demo-", "") }.sort
-undeclared = present - DOCUMENTED_DEMOS
-missing = DOCUMENTED_DEMOS - present
-undeclared.each do |demo|
-  errors << "check-demo-derivations: kiosk-demo-#{demo}/#{DOC} exists but #{demo} is not in " \
-            "DOCUMENTED_DEMOS. A demo that grows a narrative document joins the corpus by being " \
-            "declared, never by being discovered — the same reason `ships:` is declared in " \
-            "bin/check-demo-copies."
-end
-missing.each do |demo|
-  errors << "check-demo-derivations: #{demo} is in DOCUMENTED_DEMOS but ships no #{DOC}. Delete the " \
-            "entry or restore the document; a corpus that silently shrinks checks nothing."
-end
-
-(DOCUMENTED_DEMOS & present).each do |demo|
-  dir = File.join(ROOT, "kiosk-demo-#{demo}")
-  doc = File.join(dir, DOC)
-  label = "kiosk-demo-#{demo}/#{DOC}"
-  rake_files = Dir.glob(File.join(dir, "lib/tasks/*.rake"))
-
-  parse_document(doc).each do |block|
-    where = "#{label}:#{block.fence_line}"
-
-    if block.decl.nil?
-      errors << "#{where}: fenced block with no `<!-- derived: … -->` declaration on the line above " \
-                "it. Every block in a narrative document must name its producer machine-readably " \
-                "(`transcript`, `snippet`) or be declared `none` with a reason — a block nobody " \
-                "declared is a block nobody checks, which is how ~30 defects reached these four " \
-                "documents (K-1051)."
-      next
-    end
-
-    kind = block.decl["derived"]
-    unknown = block.decl.keys - %w[derived task from keys_from transform abridged why]
-    unless unknown.empty?
-      errors << "#{where}: unknown key(s) #{unknown.join(', ')} in the derivation declaration."
-    end
-
-    # The promise rule covers BOTH block classes whose checker cannot back a
-    # completeness claim: `none`, checked by nothing, and `transcript`, checked
-    # by a SUBSET test. It used to sit inside the `none` branch below — i.e.
-    # beside exactly ONE block — hoteling's `derived: none` swap, the one
-    # declared block this script does not check — and beside none of the four
-    # that quote a recorded run, which is where every falsehood K-1062 and
-    # K-1063 found had been. See the K-1106 header section.
-    if PROMISE_KINDS.include?(kind) && (hit = PROMISES.find { |re| block.neighbourhood =~ re })
-      why_unbacked = if kind == "none"
-                       "the block is declared `derived: none`, so nothing checks it at all"
-                     else
-                       "a transcript is checked by MEMBERSHIP, which backs «every line here is a " \
-                       "line the task prints» and can never back a completeness claim — K-1062's " \
-                       "hoteling block was missing an ENTIRE RUN the task prints and every line " \
-                       "it did quote was genuine"
-                     end
-      errors << "#{where}: the prose beside this block promises completeness " \
-                "(#{block.neighbourhood[hit].inspect}) while #{why_unbacked}. Say what the " \
-                "mechanism DOES hold and leave completeness to the `abridged:` field, which is a " \
-                "human's signature and says so — or drop the sentence (K-1106)."
-    end
-
-    if kind == "none"
-      if block.decl["why"].to_s.empty?
-        errors << "#{where}: `derived: none` needs a `why:` — an undeclared exemption is the one " \
-                  "thing this check cannot see through, so it must at least be argued for."
-      end
-      counts[:none] += 1
-      puts "  none       #{where}  (#{block.decl['why']})" if listing
-      next
-    end
-
-    # A COMMAND an adopter types is not output this repo produces, which is why
-    # these three blocks sat under `derived: none` — but the command's namespace
-    # IS produced here, by the generator that answers it. See the header block
-    # at GENERATOR_BLOCK_DEMOS for why cross-demo agreement is the weaker oracle.
-    if kind == "generator"
-      generator_blocks[demo] += 1
-      rel = block.decl["from"].to_s.strip
-      if rel.empty?
-        errors << "#{where}: `derived: generator` needs a `from:` naming the generator that answers " \
-                  "the invocation. It is REPO-relative, unlike a transcript's or a snippet's — this " \
-                  "producer lives in the engine gem rather than in the demo, which is the whole " \
-                  "point of the binding."
-        next
-      end
-      src = File.join(ROOT, rel)
-      unless File.file?(src)
-        errors << "#{where}: `from: #{rel}` names no file in this repository. The block quotes an " \
-                  "invocation with nothing to answer it."
-        next
-      end
-      m = GENERATOR_PATH_RE.match(rel)
-      if m.nil?
-        errors << "#{where}: `from: #{rel}` is not a Rails generator path " \
-                  "(`…/lib/generators/<ns>/<name>/<name>_generator.rb`), so no namespace can be " \
-                  "derived from it and there is nothing to hold the invocation to."
-        next
-      end
-      namespace  = "#{m[:ns]}:#{m[:name]}"
-      from_class = generator_namespace_from_source(File.read(src))
-      if from_class.nil?
-        errors << "#{where}: #{rel} defines no `class …Generator < Rails::Generators::Base` " \
-                  "(or NamedBase), so it is not a generator and cannot answer `#{namespace}`."
-        next
-      end
-      if from_class != namespace
-        errors << "#{where}: #{rel} derives `#{namespace}` from its PATH but `#{from_class}` from " \
-                  "its class nesting. Rails resolves an invocation by both; while they disagree, " \
-                  "one of the two is what an adopter typing this block's command actually gets."
-        next
-      end
-      accepted = generator_invocations(namespace)
-      block.body.each_with_index do |line, k|
-        next if line.strip.empty?
-
-        lineno = block.fence_line + 1 + k
-        next if accepted.include?(line.strip.gsub(/\s+/, " "))
-
-        errors << "#{label}:#{lineno}: this line does not invoke `#{namespace}`, the namespace " \
-                  "#{rel} answers — accepted spellings are #{accepted.join(', ')}:\n      " \
-                  "#{line.strip[0, 160]}"
-      end
-      counts[:generator] += 1
-      puts "  generator  #{where}  #{namespace}  <- #{rel}" if listing
-      next
-    end
-
-    unless %w[transcript snippet].include?(kind)
-      errors << "#{where}: `derived: #{kind}` is not one of transcript, snippet, generator, none."
-      next
-    end
-
-    froms = block.decl["from"].to_s.split(",").map(&:strip).reject(&:empty?)
-    if froms.empty?
-      errors << "#{where}: `derived: #{kind}` needs a `from:` naming the producer file(s), " \
-                "demo-relative."
-      next
-    end
-    keys_from = block.decl["keys_from"].to_s.split(",").map(&:strip).reject(&:empty?)
-    if !keys_from.empty? && kind != "transcript"
-      errors << "#{where}: `keys_from:` is a transcript-only declaration — it names the handlers " \
-                "whose field names appear in the driver's JSON summary line."
-      next
-    end
-    absent = (froms + keys_from).reject { |f| File.file?(File.join(dir, f)) }
-    unless absent.empty?
-      errors << "#{where}: `from:`/`keys_from:` names #{absent.join(', ')}, which kiosk-demo-#{demo} " \
-                "does not ship. A producer that moved leaves the block quoting nothing."
-      next
-    end
-
-    abridged = block.decl["abridged"].to_s
-    if abridged.empty?
-      errors << "#{where}: `abridged:` is required. Say what was CUT — that is the field's job, " \
-                "because the cut is the part a reader cannot see; `none` when nothing was. A " \
-                "phrase naming what was KEPT is admissible only when it ALSO names the universe " \
-                "those lines came out of («the two stripe lines only, out of the whole " \
-                "environment file»), because that and only that lets a reader compute the " \
-                "complement (K-1104). Abridgement must be DECLARED in a form this check reads; " \
-                "every prose promise of the «nothing else touched» kind in these four documents " \
-                "was false (K-1062/K-1063)."
-      next
-    end
-
-    if abridged.match?(KEPT_SIDE_RE) && !abridged.match?(UNIVERSE_RE)
-      errors << "#{where}: `abridged: #{abridged}` says what was KEPT — it says «only» — without " \
-                "naming the universe those lines were kept OUT OF, so a reader cannot compute " \
-                "what was cut, which is the field's one job. Either state the cut directly (the " \
-                "canonical sense) or add the universe: «… only, out of X», «… only; Y are out» " \
-                "(K-1104). This is a SHAPE check and knows nothing about whether the universe " \
-                "named is the right one."
-    end
-
-    # The paragraph above a declaration and the declaration itself describe the
-    # same cut, and only one of the two has ever had a checker. When the
-    # paragraph enumerates the cut in numbered sentences, the two are held
-    # together BY NAME (K-1107).
-    cut_items = enumerated_cut_items(block.preceding_paragraph.to_s)
-    unless cut_items.empty?
-      unnamed = backticked_identifiers(cut_items.join(" "))
-                .reject { |id| abridged.match?(/(?<![A-Za-z0-9_])#{Regexp.escape(id)}/) }
-      unless unnamed.empty?
-        errors << "#{where}: the paragraph above this block enumerates the cut and names " \
-                  "#{unnamed.join(', ')}, which `abridged: #{abridged}` does not. Both describe " \
-                  "the same cut and this script reads only the declaration, so a field that omits " \
-                  "what the prose enumerates leaves the CHECKED half saying less than the " \
-                  "unchecked one — which is the direction two of K-1103's five instances ran " \
-                  "(K-1107). NAME-OVERLAP only: it cannot tell whether either half is right."
-      end
-    end
-
-    if kind == "transcript"
-      task = block.decl["task"].to_s
-      if task.empty?
-        errors << "#{where}: `derived: transcript` needs a `task:` naming the command that printed it."
-        next
-      end
-      name = task.split.last.to_s
-      short = name.split(":").last
-      unless task_defined_here?(rake_files, short)
-        errors << "#{where}: `task: #{task}` names `#{name}`, which no lib/tasks/*.rake in " \
-                  "kiosk-demo-#{demo} defines. The block claims a producer that does not exist."
-        next
-      end
-
-      # A task NAMED in `abridged:` is resolved against the rake DAG and held off
-      # the block. See the header section on K-1101 for what this does and does
-      # not buy — the cut's CONTENT stays the human's word.
-      broken_abridgement = false
-      abridged.scan(ABRIDGED_TASK_RE).uniq.each do |cited|
-        cited_short = cited.split(":").last
-        unless task_defined_here?(rake_files, cited_short)
-          errors << "#{where}: `abridged:` cites `#{cited}`, which no lib/tasks/*.rake in " \
-                    "kiosk-demo-#{demo} defines. Name the TASK whose output was cut, not the " \
-                    "commands it happens to run — this field is the human's signature on a " \
-                    "completeness claim nothing else can check, so it may only cite something " \
-                    "this script can resolve (K-1101)."
-          broken_abridgement = true
-          next
-        end
-
-        clause = rake_task_prereq_clause(rake_task_declaration(rake_files, short)&.last)
-        unless prereq_mentions?(clause, cited)
-          errors << "#{where}: `abridged:` cites `#{cited}`, but `#{name}` does not declare it as " \
-                    "a prerequisite#{clause ? " (its prerequisites are `#{clause}`)" : ' — it declares none'}. " \
-                    "A task the quoted one never runs contributed nothing to its output, so its " \
-                    "absence is not an abridgement; `abridged: none` is what a separately-prepared " \
-                    "database calls for."
-          broken_abridgement = true
-          next
-        end
-
-        frag = rake_task_body_source(rake_files, cited_short)
-        next if frag.nil?
-
-        cut_pats = Patterns.new([["#{cited}'s own body", frag]])
-        block.body.each_with_index do |line, k|
-          next if line.strip.empty?
-          next unless cut_pats.accounts_for?(line)
-
-          errors << "#{label}:#{block.fence_line + 1 + k}: this line is printed by `#{cited}`, whose " \
-                    "output the declaration says was CUT. The declaration and the block disagree:\n" \
-                    "      #{line.strip[0, 160]}"
-          broken_abridgement = true
-        end
-      end
-      next if broken_abridgement
-
-      pats = Patterns.new(froms.map { |f| [f, File.read(File.join(dir, f))] },
-                          keys_from.map { |f| [f, File.read(File.join(dir, f))] })
-      block.body.each_with_index do |line, k|
-        next if line.strip.empty?
-
-        lineno = block.fence_line + 1 + k
-
-        # A JSON object line goes through the KEY rule and nowhere else. It used
-        # to fall through to the literal rule first, and a thin frame elsewhere
-        # in the producer would match the whole line — a planted key rename went
-        # green that way, which is the exact defect this rule exists to catch.
-        obj = if line.strip.start_with?("{") && line.strip.end_with?("}")
-                begin
-                  JSON.parse(line.strip)
-                rescue JSON::ParserError
-                  nil
-                end
-              end
-
-        if obj.is_a?(Hash)
-          unknown_keys = []
-          walk = lambda do |node|
-            case node
-            when Hash then node.each { |kk, vv| unknown_keys << kk unless pats.key?(kk); walk.call(vv) }
-            when Array then node.each { |vv| walk.call(vv) }
-            end
-          end
-          walk.call(obj)
-          if unknown_keys.empty?
-            counts[:json] += 1
-            next
-          end
-          errors << "#{label}:#{lineno}: the JSON summary line carries key(s) " \
-                    "#{unknown_keys.uniq.join(', ')} that no file in `from:` or " \
-                    "`keys_from:` names. A published summary naming a field the driver stopped " \
-                    "emitting is K-1053 exactly; a nested key belongs to the handler that " \
-                    "serialises it, so name that handler in `keys_from:`."
-          next
-        end
-
-        next if pats.accounts_for?(line)
-
-        errors << "#{label}:#{lineno}: this line is not a line `#{task}` prints — no string " \
-                  "literal in #{froms.join(', ')} produces it:\n      #{line.strip[0, 160]}"
-      end
-      counts[:transcript] += 1
-      puts "  transcript #{where}  #{task}  <- #{froms.join(' ')}" if listing
-    else
-      src_path = File.join(dir, froms.first)
-      if froms.length > 1
-        errors << "#{where}: `derived: snippet` takes exactly one `from:` — a snippet quotes ONE " \
-                  "file, and a union of files is not a thing a reader can go and check."
-        next
-      end
-
-      transforms = block.decl["transform"].to_s.split(",").map(&:strip).reject { |t| t.empty? || t == "none" }
-      bad = transforms - TRANSFORMS
-      unless bad.empty?
-        errors << "#{where}: transform(s) #{bad.join(', ')} are not implemented here. The declared " \
-                  "transformation has to be EXECUTABLE; #{TRANSFORMS.join(', ')} are."
-        next
-      end
-
-      if abridged == "none" && !transforms.empty?
-        errors << "#{where}: `abridged: none` beside `transform: #{transforms.join(', ')}`. A " \
-                  "transformation IS an abridgement — say what it takes out."
-      end
-
-      src = File.read(src_path)
-      raw_lines = Set.new(src.split("\n", -1).map(&:rstrip))
-      allowed = raw_lines.dup
-      transforms.each { |t| transformed_lines(src, t).each { |l| allowed << l.rstrip } }
-      lstripped = Set.new(allowed.map(&:lstrip)) if transforms.include?("dedent")
-      needed_transform = false
-
-      # The first line may be the conventional `# <path>` banner. It is prose,
-      # not a line of the file — but it must name the file the declaration does.
-      body = block.body
-      if (m = body.first.to_s.match(%r{\A#\s*([A-Za-z0-9_./-]+)}))
-        if m[1] == froms.first
-          body = body[1..]
-        else
-          errors << "#{where}: the block's opening banner names #{m[1]} while the declaration says " \
-                    "`from: #{froms.first}`. One of the two is wrong and a reader cannot tell which."
-          body = body[1..]
-        end
-      end
-
-      in_note = false
-      body.each_with_index do |line, k|
-        lineno = block.fence_line + (block.body.length - body.length) + 1 + k
-        if line =~ ELISION_MARKER
-          if abridged == "none"
-            errors << "#{label}:#{lineno}: a marked elision inside a block declared " \
-                      "`abridged: none`. The declaration and the block disagree."
-          end
-          in_note = true
-          counts[:elision] += 1
-          next
-        end
-        if in_note
-          next if line.strip.start_with?("#")
-
-          in_note = false
-        end
-        next if line.strip.empty?
-        if allowed.include?(line.rstrip) || lstripped&.include?(line.lstrip.rstrip)
-          needed_transform ||= !raw_lines.include?(line.rstrip)
-          next
-        end
-
-        if line.strip.start_with?("#") && !src.include?(line.strip)
-          errors << "#{label}:#{lineno}: a comment line that is not in #{froms.first} and is not " \
-                    "introduced by the marked-elision line. A document comment a reader cannot " \
-                    "tell from shipped code is the whole reason that marker exists:\n" \
-                    "      #{line.strip[0, 160]}"
-          next
-        end
-
-        errors << "#{label}:#{lineno}: this line is in no version of #{froms.first} " \
-                  "(raw#{transforms.empty? ? '' : " or #{transforms.join('/')}"}):\n" \
-                  "      #{line.strip[0, 160]}"
-      end
-      if !transforms.empty? && !needed_transform
-        errors << "#{where}: `transform: #{transforms.join(', ')}` is declared but no line in the " \
-                  "block needs it — every quoted line is already in the raw file. A transformation " \
-                  "is declared because it was APPLIED; a decorative one is a prose promise again."
-      end
-      unsatisfiable_schemas(body).each do |opener, missing, k|
-        lineno = block.fence_line + (block.body.length - body.length) + 1 + k
-        errors << "#{label}:#{lineno}: this `#{opener}` closes its object " \
-                  "(`additionalProperties: false`) and its `required:` names " \
-                  "#{missing.join(', ')}, which the same schema never declares — so no document " \
-                  "can satisfy it and an adopter copying this block ships a verb nothing can " \
-                  "answer. In a DERIVED block that means a property line went out with the " \
-                  "`description:` keys around it: restore the line, do not edit `required:` (K-1648)."
-      end
-      counts[:snippet] += 1
-      puts "  snippet    #{where}  #{froms.first}#{transforms.empty? ? '' : "  [#{transforms.join(' ')}]"}" if listing
-    end
-  end
-end
-
-# The adoption recipe is a CROSS-DEMO section, so its presence is declared, not
-# discovered — a demo that drops it, or grows one nobody declared, changes the
-# set with nothing noticing (K-1099, and the same argument as DOCUMENTED_DEMOS).
-(DOCUMENTED_DEMOS & present).each do |demo|
-  want = GENERATOR_BLOCK_DEMOS.include?(demo) ? 1 : 0
-  got  = generator_blocks[demo]
-  next if got == want
-
-  errors << if want == 1
-              "kiosk-demo-#{demo}/#{DOC}: declares #{got} `derived: generator` block(s), expected 1. " \
-              "#{demo} is in GENERATOR_BLOCK_DEMOS, so its adoption recipe must show the generator " \
-              "invocation and that invocation must be bound to the generator that answers it."
-            else
-              "kiosk-demo-#{demo}/#{DOC}: declares #{got} `derived: generator` block(s) but #{demo} " \
-              "is not in GENERATOR_BLOCK_DEMOS. A new copy of a cross-demo command may not appear " \
-              "silently — declare it there."
-            end
-end
-
-if counts[:transcript].zero? && counts[:snippet].zero? && counts[:generator].zero? && errors.empty?
-  errors << "check-demo-derivations: found NO declared blocks at all. A rule that inspects nothing " \
-            "passes everything."
-end
-
-# The success line carries its own SCOPE, because the header's over-claim list
-# is the only place that scope used to live and no CI log carries a header
-# (K-1108). The sentence this replaces — «every line held to a literal its
-# declared producer prints» — is the exact sentence that printed while hoteling's
-# published `  OK  http_pay == 200` had been mutated to `== 500 (charged
-# nothing, refunded twice)` and this script exited 0. A green run must say what
-# it did NOT check where the reader is, not where the author is.
-if errors.empty?
-  puts "check-demo-derivations: OK — #{counts[:transcript]} transcript, #{counts[:snippet]} " \
-       "snippet and #{counts[:generator]} generator-invocation block(s) across " \
-       "#{(DOCUMENTED_DEMOS & present).size} narrative documents."
-  puts "  HELD: every line is a literal one of its declared producers prints (a frame is read " \
-       "through its captures unless four alphanumerics of its own identify the line), a line of " \
-       "the file it quotes, or the namespace the named generator answers; #{counts[:json]} JSON " \
-       "summary line(s) key-checked; #{counts[:elision]} marked elision(s); #{counts[:none]} " \
-       "block(s) declared underived with a reason; no completeness promise beside a block " \
-       "nothing can back one for."
-  puts "  NOT HELD: JSON VALUES, a SWAP between two tokens the producers both know " \
-       "(`== 200` -> `== 201` passes), line ORDER, single-run provenance, and COMPLETENESS — " \
-       "that no line is missing is the `abridged:` field's claim, signed by a human, and this " \
-       "script only keeps it consistent with the rake DAG and the block. Every limit this script " \
-       "knows of is listed under WHAT THIS DOES NOT COVER at the top of the file " \
-       "(#{over_claim_limit_count} of them); read those before quoting this line."
-  exit 0
-end
-
-warn "\ncheck-demo-derivations FAILED:\n"
-errors.each { |e| warn "  ✗ #{e}" }
-warn "\nEvery fenced block in a kiosk-demo-*/before-after.md must declare its producer in an " \
-     "`<!-- derived: … -->` comment, and every line in it must be a line that producer prints or " \
-     "a line of the file it quotes. Abridgement is DECLARED, never promised in prose."
-exit 1
+self_test if ARGS.include?("--self-test")
+exit run

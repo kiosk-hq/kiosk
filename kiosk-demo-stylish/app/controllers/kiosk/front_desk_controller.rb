@@ -13,8 +13,9 @@ class Kiosk::FrontDeskController < ApplicationController
   # salons — the full catalogue; no per-user scoping, any authenticated principal
   # may browse. The description carries semantics only.
   kind :query
-  description "Browse the public salon catalogue — every salon this front desk books for. Once the " \
-              "human picks one, `book_appointment` takes it from there."
+  description "Browse the public salon catalogue — every salon this front desk books for, each with " \
+              "the IANA zone its chairs keep. Once the human picks one, `book_appointment` takes it " \
+              "from there, on that salon's own clock."
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
@@ -25,14 +26,22 @@ class Kiosk::FrontDeskController < ApplicationController
                   properties: {
                     salon_id: { type: "integer", description: "Pass to book_appointment as `salon_id`." },
                     name:     { type: "string", description: "Salon name." },
+                    timezone: { type: "string",
+                                description: "IANA zone this salon's chairs keep, e.g. Europe/Paris. " \
+                                             "An appointment happens here, so an hour a human names is " \
+                                             "an hour on this clock: build the offset `slot` carries " \
+                                             "against it." },
                   },
-                  required: %w[salon_id name],
+                  required: %w[salon_id name timezone],
                 }
   def salons
     # `pluck` rather than loading models: naming the columns keeps the wire's
-    # field names and their order a decision this handler makes.
-    render json: Salon.order(:id).pluck(:id, :name).map { |id, name|
-      { salon_id: id, name: name }
+    # field names and their order a decision this handler makes. The zone rides
+    # along because this is the first verb a caller reaches and `book_appointment`
+    # refuses a `slot` with no offset — without it the only route to the salon's
+    # clock is asking the human, which is not a question they can answer.
+    render json: Salon.order(:id).pluck(:id, :name, :timezone).map { |id, name, zone|
+      { salon_id: id, name: name, timezone: zone }
     }
   end
 

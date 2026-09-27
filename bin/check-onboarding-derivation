@@ -60,22 +60,14 @@
 # reach across the boundary for one. So the guide could drift from its source
 # indefinitely, and it did -- onto a published page.
 #
-# ── WHY IT LIVES HERE, AND WHAT THAT COSTS ──────────────────────────────────
+# ── WHY IT LIVES HERE ───────────────────────────────────────────────────────
 #
-# The comparison needs a file from each repository, and neither CI has the
-# other checked out. MEASURED at head 2026-09-06 with `command grep -c
-# "repository:"`: `.github/workflows/ci.yml` here -> 0, and the five workflow
-# files in the sibling -> 0 between them. So a checkout-based reach would run
-# on a developer's machine and silently no-op in every CI job, which is the
-# "reads as coverage, holds nothing" shape this workspace keeps re-discovering.
-# `check-derived-counts` weighed exactly this and declined it for a cardinal.
-#
-# What it did not weigh is the OTHER reach, and this repository already uses
-# it: `bin/check-solver-pin --network` fetches what kiosk.tech actually serves,
-# because a commit in that repository can break a pin here without triggering
-# this workflow. The direction is INVERTED for the onboarding page -- a commit
-# HERE breaks a page THERE -- so this script belongs on this side, where the
-# drift is authored, next to the derivation check whose boundary it extends.
+# The comparison needs a file from each repository, and a commit HERE is what
+# breaks the page THERE -- so the script belongs on this side, where the change
+# is authored, next to the derivation check whose boundary it extends. CI runs
+# it twice: bare, against the sibling that `ci.yml`'s `published-bytes` job
+# checks out beside this repository, on every push; and `--network`, against
+# the page kiosk.tech actually serves, on the schedule (see below).
 #
 # THE PAGE IS RESOLVED IN A STATED ORDER, AND THE ORDER IS PRINTED:
 #

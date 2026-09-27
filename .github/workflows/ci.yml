@@ -1782,6 +1782,8 @@ jobs:
   #     it is CORRECTLY red. Daily and on demand, failing hard, exactly as
   #     solver-pin-live does — a scheduled workflow red on the default branch
   #     notifies, and continue-on-error would make the guard invisible.
+  #   * the same comparison against a CHECKED-OUT sibling needs neither, and
+  #     the published-bytes job below runs it bare on every push.
   #
   # This job therefore runs on BOTH schedule and push, which is the one
   # exception to the "skipped on a schedule run" comment every other job here
@@ -2212,7 +2214,7 @@ jobs:
   # In the other order the pins name a file the world cannot fetch — which is
   # the assistant-visible break, not an artefact of the check.
   #
-  # THE FOUR STEPS, and each one is dead without the sibling:
+  # THE STEPS, and each one is dead without the sibling:
   #   * skill_pin_spec.rb — the nine byte-level examples: every demo's
   #     `skill_sha256` against the SHA-256 of the file its `skill_url` names, the
   #     engine default naming that same published artefact, and the K-871
@@ -2245,6 +2247,9 @@ jobs:
   #     The guard's own job above runs it sibling-less, where it prints NOT
   #     COMPARED and exits 0; here the sibling is present, so the comparison is
   #     the point and KIOSK_REQUIRE_SITE_SIBLING=1 makes an empty checkout red.
+  #   * bin/check-onboarding-derivation — the operator guide the sibling publishes
+  #     against the worked verb this checkout serves. Bare, it reads
+  #     `../kiosk.tech/onboarding.html` and exits 1 when no page resolves.
   published-bytes:
     name: pins and vendored schemas vs the published bytes (kiosk.tech sibling)
     runs-on: ubuntu-latest
@@ -2270,7 +2275,7 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      # Fails loudly rather than letting the three steps below decide for
+      # Fails loudly rather than letting the steps below decide for
       # themselves that there is nothing to compare. Each of them is written to
       # degrade politely when the sibling is missing — correct for a developer's
       # single-repo clone, and exactly what must not happen here.
@@ -2311,6 +2316,10 @@ jobs:
         env:
           KIOSK_REQUIRE_SITE_SIBLING: "1"
         run: ./bin/check-descriptor-prose
+
+      - name: The published onboarding guide still derives from this checkout
+        working-directory: reference
+        run: ./bin/check-onboarding-derivation
 
   # A Keep-a-Changelog file answers each kind ONCE per release — everything
   # added since the last release under one `### Added`, everything fixed under

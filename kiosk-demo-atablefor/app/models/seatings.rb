@@ -3,7 +3,7 @@
 # ── Rolling-current seatings source of truth ─────────────────────────────────
 # atablefor books restaurant tables for EVENING SEATINGS. Instead of seeding
 # date-bearing slot rows that go stale on the hosted deploy, the seatings are
-# COMPUTED relative to NOW, in the operator's locale (Europe/Lisbon), and the
+# COMPUTED relative to NOW on each restaurant's own clock, and the
 # already-passed ones are filtered out. When tonight's seatings are all gone,
 # the roster rolls to TOMORROW automatically — so `availability` never goes
 # stale, yet the tables it offers are FINITE and can legitimately sell out.

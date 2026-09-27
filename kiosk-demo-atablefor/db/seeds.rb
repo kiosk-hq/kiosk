@@ -5,7 +5,7 @@
 #
 # The roster is STATIC (restaurants + their named physical tables never go
 # stale). What rolls is the SEATING (date + time): availability computes the
-# upcoming evening seatings relative to NOW in Europe/Lisbon (see
+# upcoming evening seatings relative to NOW on each restaurant's own clock (see
 # app/models/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
 # out for a given seating.
 #

@@ -7,7 +7,7 @@
 # DATE OFFSET from seed-time, so the hosted deploy went stale (availability
 # empty once the seed dates passed). The new model separates the STATIC
 # physical table (a restaurant's named table — never stale) from the seating
-# DATETIME, which is computed rollingly relative to NOW in Europe/Lisbon (see
+# DATETIME, which is computed rollingly relative to NOW (see
 # app/models/seatings.rb). A booking pins the actual seating instant it claimed.
 #
 # Changes:

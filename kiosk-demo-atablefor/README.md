@@ -12,8 +12,8 @@ no payment** (a reservation takes no money; any € figure shown is a no-show ho
 settled at the restaurant, never on the wire).
 
 Seatings are **rolling-current**: `availability` computes the upcoming evening
-seatings relative to *now* in **Europe/Lisbon** (past ones filtered, rolling to
-tomorrow), so it is never stale — yet the tables are **finite** and a fully-booked
+seatings relative to *now* on **each restaurant's own clock** (`restaurants.timezone`;
+past ones filtered, rolling to tomorrow), so it is never stale — yet the tables are **finite** and a fully-booked
 seating is honestly **sold out** (availability legitimately empty for it).
 
 The home page is **protocol-primary**: it tells a visitor (and an assistant
@@ -177,7 +177,7 @@ carries assertions cannot go ungated and unexplained.
 
 Each restaurant offers its named tables (varying capacities, some with an EUR
 no-show hold) for three evening seatings (19:00 · 20:00 · 21:00), computed
-rollingly in Europe/Lisbon; "tonight at 8" lands on an open 2-top at 20:00.
+rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.
 
 See `before-after.md` for why AI assistants stall at restaurant booking today and
 what this demo proves.

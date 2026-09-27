@@ -371,7 +371,7 @@ BATTERY.record("MethodMismatch",
 #
 # THE HORIZON HAS TWO ENDS AND BOTH ARE PROBED. A date BEHIND it is refused by
 # the very same {WireArguments.seating_date} guard, because `Seatings.upcoming`
-# starts at today in Europe/Lisbon and drops today's already-started seatings.
+# starts at today on the restaurant's own clock and drops today's already-started seatings.
 # It lives here rather than in a beat of its own because it is literally the
 # same guard answering the same question from the other side.
 #

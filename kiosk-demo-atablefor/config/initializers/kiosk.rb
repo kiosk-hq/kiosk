@@ -2,7 +2,7 @@
 
 # atablefor — a restaurant table-booking aggregator across a few Lisbon
 # neighbourhoods (static roster, db/seeds.rb). Seatings are ROLLING-CURRENT:
-# computed relative to NOW in Europe/Lisbon (app/models/seatings.rb); tables
+# computed relative to NOW on each restaurant's own clock (app/models/seatings.rb); tables
 # are FINITE and CAN sell out for a given seating.
 #
 # Env posture (signing key, PoW secret, issuer, test flags) lives in

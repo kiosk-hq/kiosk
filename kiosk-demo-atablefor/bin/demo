@@ -22,7 +22,7 @@ SERVER_URL="http://127.0.0.1:$PORT"
 DEMO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # "a table for two tonight at 8" — availability returns the current upcoming
-# seatings (Europe/Lisbon), so the tour reads the seating date/time off a row.
+# seatings on each restaurant's own clock, so the tour reads the seating date/time off a row.
 PARTY=2
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }

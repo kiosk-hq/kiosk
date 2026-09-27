@@ -1,172 +1,61 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Cross-demo copy check (K-623, K-607, K-624, K-640).
+# Cross-demo copy check.
 #
-# WHY THIS EXISTS. The eight demos are eight standalone Rails apps, so shared
-# application code is not shared at all — it is HAND-COPIED.
-# `script/equihash_register.rb` ships in seven demos,
-# `app/operations/wire_arguments.rb` in three, and nine
-# db/migrate files in up to seven. Nothing checked that the copies still agree.
+# The eight demos are eight standalone Rails apps, so shared application code is
+# not shared at all — it is HAND-COPIED, and a set of copies that agrees today is
+# a STATE rather than a check. So this script derives every relative path that
+# exists in two or more demos and fails when a copy disagrees with its siblings in
+# a way nobody declared: a new copy cannot appear silently, and a one-sided edit
+# cannot land quietly.
 #
-# They drift, and the drift is invisible, and it need not be a comment:
-# `script/equihash_register.rb` is the proof — a constant rename reached three
-# of its five copies (057196e) and stopped there, unnoticed, until this check
-# was written. A set of copies that happens to agree today is a STATE, not a
-# GUARD: the next edit that lands in one copy and not the others is exactly as
-# undetectable.
-#
-# So this is a CHECK, not a convention: it derives every relative path that
-# exists in two or more demos, and fails when a copy disagrees with its siblings
-# in a way nobody declared. "Someone must remember to propagate the edit" becomes
-# "CI notices when they did not". Same shape, and the same reason, as
-# bin/check-ci-tasks (K-619) — this is a SIBLING rather than a new mode of that
-# script because the two answer different questions from DIFFERENT INPUTS: that
-# one compares ci.yml against each demo's rake tasks, this one compares demo
-# files against each other, and bin/check-demo-derivations (K-1051) compares one
-# demo's narrative document against THAT SAME demo's own producers.
-#
-# THE INPUT IS THE BOUNDARY, AND IT IS THE ONLY ONE (K-1096). That sentence used
-# to end «folding them together would put two unrelated invariants behind one
-# exit code and one --write contract», and the reason does not survive its own
-# file. MEASURED from the `# ── … ──` banners below: this script now enforces
-# NINETEEN independent invariants behind exactly one exit code and one --write
-# contract — seventeen when that sentence was written, plus T-120's fragment
-# rule and K-1262's partial-convergence rule. Read as a rule about COUNT, the
-# sentence argued for splitting this file nineteen ways. It was never about count.
-#
-# THAT NINETEEN IS A COUNT OF BANNERS AND IT MISSES ONE, re-derived 2026-08-31
-# while writing the `--self-test` below, whose coverage table is generated from
-# the same banners and therefore had to ask the question: the K-962
-# lockfile-PLATFORMS parity rule is written with a `# -- … --` banner rather than
-# a `# ── … ──` one, so the derivation cannot see it. It is an independent
-# invariant on the same corpus by every test the others meet. The sentence above
-# is left as written because a ledger row cites it.
-#
-# AND THE CORRECTION IS NOT A NEW CARDINAL, BECAUSE THAT IS THE DEFECT THIS FILE
-# EXISTS TO PREVENT (K-1340). The correction that used to stand here announced an
-# «honest total» of its own, as a typed cardinal, and was overtaken within days:
-# the file then carried TWO wrong counts of itself plus a note explaining why one
-# of them was wrong — in the guard whose whole subject is inventories that drift
-# because somebody keeps them by hand.
-#
-# THE COUNT IS DERIVED, AND THE DERIVATION IS THE ANSWER: run
-#
-#     ./bin/check-demo-copies --self-test --list
-#
-# whose FIRST line reports how many arms cover how many bannered invariants plus
-# the unbannered ones, from this file's own banners rather than from a list — so
-# a rule added below reads as UNCOVERED rather than as absent, and a number that
-# has moved cannot go stale in a paragraph. Do not copy that number back up here.
-#
-# They all share the manifest, the discovery pass and the normalisation, so one
-# script per invariant would re-declare the demo corpus once per invariant —
-# which is precisely the drift this file exists to stop. What a sibling may not
-# share is its INPUT: a script that compares two different pairs of things cannot tell a
-# reader which pair disagreed, and no amount of output formatting fixes that,
-# whereas a second invariant over the SAME corpus costs nothing but a section.
-#
-# The cost of holding them all behind one exit code is real and is not argued
-# away here: CI cannot distinguish a failing prose claim from a failing
-# migration pair without reading the output, and `--write` can rewrite copies
-# for a reason the operator did not intend. If that becomes the thing that
-# hurts, the split is a T- with a PENDING: clause — a behavioural change to a
-# CI gate — and not a header edit.
-#
-# THE RULE IT ENFORCES. Every relative path found in >= 2 demos must appear in
-# the COPIES manifest below with a rule and a reason:
+# Every such path must appear in the COPIES manifest below with a rule and a
+# reason:
 #
 #   :identical — byte-for-byte in every demo that ships it.
 #   :code      — identical once comments and whitespace are normalised away, so
 #                each copy's header prose may name its own demo. Ripper does the
-#                stripping, so a `#` inside a string or regex is not a comment.
-#                MAGIC comments are the exception and are compared (K-628).
+#                stripping, so a `#` inside a string or a regex is not a comment.
+#                MAGIC comments are the exception and are compared: they are the
+#                one kind of comment that changes how the file RUNS.
 #   :per_demo  — a genuine per-demo implementation that shares only a filename.
-#                The FILE is not compared; the manifest entry records WHY they
-#                differ, so the next reader does not have to diff seven files to
-#                find out. A path here may still have individual METHODS and
-#                CONSTANTS held in lockstep — see the T-120 fragment rule below,
-#                which exists because «not compared» was letting shared units
-#                grow inside these files with nothing watching them. And since
-#                K-1262 the claim is CHECKED rather than taken: any SUBSET of the
-#                copies that agrees once comments and whitespace are normalised
-#                away must be declared in the entry's `agree:` map, as
-#                `:lockstep` (one artefact, hand-copied — and then held) or
-#                `:coincidence` (unrelated reasons, capped). What set that rule
-#                going: three of `script/schema_flow.rb`'s seven copies had
-#                become ONE file under an entry saying each asserted its own
-#                demo's verbs, and nothing at either granularity could see it —
-#                the fragment rule's tripwire needed UNANIMITY, so two of three
-#                converging fired nothing, and the file level had no tripwire.
-#                HOW BIG THOSE COPIES ARE IS NOT WRITTEN DOWN ANYWHERE HERE, and
-#                that is the point: the run prints a CONVERGENCE GROUPS block
-#                giving every `:per_demo` subject's normalised sizes and the
-#                subsets that agree. Read it there. Every figure this paragraph
-#                used to carry was falsified by one refactor, silently, because
-#                a comment has no exit code (K-1542).
+#                The FILE is not compared, and the entry records WHY the copies
+#                differ. Individual methods and constants inside it may still be
+#                held in lockstep — see the fragment rule below — and any SUBSET
+#                of the copies that agrees once normalised must be declared in the
+#                entry's `agree:` map, as `:lockstep` (one artefact, hand-copied,
+#                and then held) or `:coincidence` (unrelated reasons, capped).
+#                The run prints a CONVERGENCE GROUPS block naming every subject's
+#                normalised sizes and the subsets that agree; no size is written
+#                down here.
 #
-# `ships:` is the OTHER declaration a copy set can carry, and it answers a
-# question `except:` cannot: WHICH demos are supposed to have the file at all.
-# The lockstep rule compares whatever copies it finds, so a demo that stops
-# shipping one — or starts — changes the set silently. K-860 and K-883 are why
-# it exists: skooti's `script/bound_assistant.rb` sat in the tree with ZERO
-# consumers in its own demo, held byte-identical to three copies that were
-# live, and the answer was to delete it. Deleting alone would have left nothing to stop the
-# next wave copying them back, because a re-added byte-identical copy is exactly
-# what the lockstep rule is happy with. So an entry may name its set exactly:
-# a demo that ships the file and is not listed FAILS, and a listed demo that
-# does not ship it FAILS too. Entries without `ships:` are unconstrained — the
-# declaration is for sets somebody has deliberately reasoned about.
+# `ships:` names which demos are supposed to have the file at all: a demo that
+# ships it and is not listed FAILS, and a listed demo that does not ship it FAILS
+# too. Entries without `ships:` are unconstrained.
 #
 # `except:` is the escape hatch for one copy that legitimately differs from its
-# siblings (stylish's stub_user_idp is a DB-backed staff IdP). It is a demo => reason map,
-# the same shape as `ungated:` in ci.yml's demos matrix, and it is checked too:
-# an exception for a demo that no longer ships the file, or whose copy has since
-# converged on its siblings, is an error rather than a comfortable lie.
+# siblings. It is a demo => reason map, and it is checked too: an exception for a
+# demo that no longer ships the file, or whose copy has since converged on its
+# siblings, is an error.
 #
-# A path that turns up in a second demo with no manifest entry fails the build.
-# That is the property that matters: a NEW copy cannot appear silently, which is
-# how six of these got here.
+# TWO AXES THE PATH RULE CANNOT SEE, and the manifests that close them:
 #
-# ONE AXIS THE LOCKSTEP RULE CANNOT SEE (K-640). The db/migrate entries keep the
-# demos' generator-output migrations identical to EACH OTHER — but those files
-# are not hand-written: `rails g kiosk:install` emits them from kiosk-server's
-# templates, and all seven demos can drift from the ENGINE together and stay
-# green, because they only ever agree with each other. So every install-generator
-# template is also declared, in GENERATOR_TEMPLATES below, rendered with the
-# generator's own default options (the values every demo was generated with),
-# and the render must byte-match every demo copy — regenerating the engine's
-# schema without regenerating the demos now fails this check.
+#   * The db/migrate copies are `rails g kiosk:install` output, so all seven
+#     operator demos can drift from the ENGINE together while still agreeing with
+#     each other. Every install-generator template is declared in
+#     GENERATOR_TEMPLATES, rendered with the generator's own default options, and
+#     the render must byte-match the copy in every one of the seven.
+#   * A HAND-WRITTEN migration that ships in two demos at demo-specific
+#     timestamps is a singleton path that no template renders, so neither rule
+#     above can reach it. Those basenames are declared in MIGRATION_PAIRS and
+#     compared across all their copies; an undeclared one fails.
 #
-# AND ONE MORE (K-648). Both rules need a shared handle to grab a file by: the
-# lockstep rule matches copies by relative path, the template rule by the
-# basename a `.tt` emits. A HAND-WRITTEN migration that ships in two demos at
-# demo-specific timestamps has neither — every copy is a singleton path and no
-# template renders it — so the pair was compared to NOTHING. Those basenames
-# are declared in MIGRATION_PAIRS below and compared across all their copies,
-# and an undeclared one fails the build, same as an undeclared path.
+# An entry is DELETED the day its extraction lands rather than kept as a
+# memorial: a copy set promoted into the gem that owns the contract is no longer
+# a copy set.
 #
-# WHAT THIS IS NOT. It is not an argument that copying is right. Every entry
-# below is an interim state made honest, and an entry is DELETED the day its
-# extraction lands rather than kept as a memorial — which is what happened to
-# `app/models/uuid_check.rb` and `app/services/pow_difficulty.rb` under T-189,
-# each of them promoted into the gem that owns the contract.
-#
-# MAGIC COMMENTS ARE THE ONE COMMENT `:code` STILL COMPARES (K-628). Ripper drops
-# every comment, magic ones included, so until this was added a copy that lost
-# `# frozen_string_literal: true` compared equal to one that had it — and three of
-# the four application_controller.rb copies had lost it, unnoticed, because a
-# magic comment is the one comment that changes how the file RUNS. So the leading
-# magic-comment block is extracted and compared separately, on the recognised
-# Ruby set only (see MAGIC_COMMENTS): prose stays ignored, `# frozen_string_literal`
-# does not. `:identical` needs nothing here — byte equality already covers it.
-#
-# Stdlib only (digest + ripper + erb), no bundle, no database. MEASURED at head
-# 2026-08-31: ~1.0 s on a warm checkout, of which about two thirds is the T-117
-# citation rule building its ~700-file constant index. It was ~0.2 s — the same
-# profile as bin/check-ci-tasks — before that rule existed, and the cost is
-# recorded here rather than in a commit message because the next rule that wants
-# to walk a tree should know what the last one spent.
+# Stdlib only (digest + ripper + erb), no bundle, no database.
 #
 # Usage:
 #   bin/check-demo-copies          # check
@@ -184,91 +73,45 @@ ROOT = File.expand_path("..", __dir__)
 
 # ── --self-test: one planted break per invariant, in a throwaway copy ────────
 #
-# WHY THIS FILE HAS ONE, WHICH IS NOT «EVERY GUARD SHOULD». That principle is
-# explicitly rejected in this workspace — most scripts should not have one — and
-# this section does not lean on it. Two facts about THIS script are the whole
-# argument (K-1267):
-#
-#   * IT CARRIES MANY INDEPENDENT INVARIANTS BEHIND ONE EXIT CODE — `--list`
-#     below derives how many, and the number is deliberately not typed here
-#     (K-1340) — and a bare
-#     run answers ONE question about all of them at once: is the tree clean today.
-#     It cannot answer the other one — does arm N still go RED on the break it was
-#     written for. At that many, a single reverted regex takes one
-#     invariant out of service while the exit code stays 0, which is not a
-#     hypothesis: K-1240 measured exactly that, one repository over, where a bare
-#     run stayed green while `--self-test` went red on 22 arms.
-#   * THE PROOF THAT EACH ARM REDDENS WAS BEING THROWN AWAY. Landing K-1262 and
-#     K-1263 took NINE hand-driven plant-and-restore cycles across five demo files
-#     and this script. Every one was a fixture somebody wrote, watched go red, and
-#     deleted; not one was reproducible by the next session. Each arm below is one
-#     of those nine, or a sibling of one, kept.
-#
-# The IN-BAND VACUITY GUARDS this file runs on every invocation answer a
-# DIFFERENT question and are not replaced here: «does this rule still have a live
-# subject in the tree in front of you». No fixture can answer that, and no vacuity
-# guard can answer «does the rule still fail on a violation».
-#
-# HOW MANY OF THEM THERE ARE IS NOT WRITTEN HERE, and that is the T-155 fix. This
-# sentence used to say «the five», and it said five for as long as the file grew
-# past eight thousand lines — a figure in a comment being the one thing nothing
-# checks. The count is now DERIVED by `--self-test` from this file's own source
-# and printed in its `note:` line, together with how many of those guards have an
-# arm proving they fire. Read that line, not this paragraph.
+# This script holds many independent invariants behind one exit code, so a bare
+# run answers ONE question about all of them — is the tree clean today — and
+# cannot answer the other one: does arm N still go RED on the break it was
+# written for. At this many rules a single reverted regex takes one invariant out
+# of service while the exit code stays 0.
 #
 # HOW IT RUNS. `git ls-files --cached --others --exclude-standard` in ROOT, copied
 # into throwaway trees under a mktmpdir; one is checked green as a BASELINE; then
 # each arm plants its break in a tree, runs the COPY of this script from that
 # tree's own `bin/`, asserts exit 1 AND asserts the output names the invariant,
 # then restores each touched file from the pristine original and re-checksums it
-# against ROOT. The re-checksum is not ceremony: a plant is only put back if the
-# bytes match the original again, and «restored» and «restored to something else»
-# are indistinguishable without the digest. Nothing under ROOT is ever written by
-# any of this — the plant lands in the throwaway copy. A plant whose
-# needle no longer occurs is an arm FAILURE, never a pass: a needle that has moved
-# is exactly how an arm stops testing anything while still reading green.
+# against ROOT — «restored» and «restored to something else» are
+# indistinguishable without the digest. Nothing under ROOT is ever written. A
+# plant whose needle no longer occurs is an arm FAILURE, never a pass.
 #
-# TWO KINDS OF ARM, declared per row, because they answer different questions and
-# one of them is easy to get backwards:
+# TWO KINDS OF ARM, declared per row, because they answer different questions:
 #
-#   :break   — a FAITHFUL MISTAKE, the thing a real session does: a one-sided
-#              edit, a copy appearing where no `ships:` set expects it, an
-#              exception that has gone stale, a claim a sweep dropped from one
-#              document. Four rows plant in the MANIFEST instead of the tree,
-#              because that is where those mistakes are made. None of them is a
-#              syntax error a parser would catch.
+#   :break   — a FAITHFUL MISTAKE: a one-sided edit, a copy appearing where no
+#              `ships:` set expects it, an exception that has gone stale, a claim
+#              a sweep dropped from one document. Some rows plant in the MANIFEST
+#              rather than in the tree, because that is where those mistakes are
+#              made.
 #   :vacuity — the rule's own MECHANISM switched off in the copy of this script,
 #              to prove the in-band vacuity guard watching that mechanism is
-#              itself alive. NOTE THE POLARITY, which is the trap T-129 hit and
-#              K-1262 got right: for a rule that is a BAN — «no undeclared group
-#              of agreeing copies» — «the pattern must match something» is
-#              backwards, because a ban whose violations match nothing is the ban
-#              being obeyed. So these arms switch off the MEASUREMENT and expect
-#              the declaration-liveness guard to fire, never a violation count.
+#              itself alive. NOTE THE POLARITY: for a rule that is a BAN, «the
+#              pattern must match something» is backwards, because a ban whose
+#              violations match nothing is the ban being obeyed. So these arms
+#              switch off the MEASUREMENT and expect the declaration-liveness
+#              guard to fire, never a violation count.
 #
 # WHAT IT DOES NOT COVER, because an over-claimed self-test is worse than none:
-#
-#   * It proves each listed arm reddens on ONE break. It does not enumerate the
-#     breaks an invariant could miss, and a rule with an arm here is not correct
-#     because of it.
-#   * The `:vacuity` arms prove the GUARD fires when its counter reads zero. They
-#     do NOT prove the counter tracks what its name says.
-#   * Many rules carry an in-band vacuity guard; SINCE T-155 every one of them
-#     must carry a `:vacuity` arm too, and the run fails naming the rule when one
-#     does not. That coverage is derived from the source — a section is "guarded"
-#     when it raises an error whose own words say a measurement stopped measuring
-#     — so a guard added later reads as UNPROVEN rather than as absent. The test
-#     is a LEXICAL proxy over those sentences, declared as one: its floor is
-#     asserted, and the two sections it reads wrongly are exempted by name with a
-#     reason that itself goes red when it stops applying. Neither count is typed
-#     into this comment, for K-1340's reason — `--list` marks a vacuity arm `V`
-#     and a break arm `B`, and the `note:` line prints the guard census.
-#   * The fixture is a copy of the WORKING tree, so an arm is only as meaningful
-#     as the baseline: a red bare run makes this red too, by design, and says so
-#     before it runs anything else.
-#
-# COST, measured 2026-08-31 on this laptop: ~0.2 s to build one tree, ~0.8 s per
-# guard run, four trees in parallel.
+# an arm proves its rule reddens on ONE break, not that the rule is correct; a
+# `:vacuity` arm proves the guard fires when its counter reads zero, not that the
+# counter tracks what its name says. Every section carrying an in-band vacuity
+# guard must carry a `:vacuity` arm, and the run fails naming the section when one
+# does not — that coverage is derived from this file's source, so a guard added
+# later reads as UNPROVEN rather than as absent. The fixture is a copy of the
+# WORKING tree, so a red bare run makes this red too, by design, and says so
+# before it runs anything else.
 if ARGV.include?("--self-test")
   require "fileutils"
   require "open3"
@@ -279,10 +122,8 @@ if ARGV.include?("--self-test")
     "# frozen_string_literal: true\n\n# A shared helper two demos grew in the same wave.\n" \
     "class SelfTestProbe\n  def self.call = :ok\nend\n"
 
-  # The K-1088 and K-1090 arms plant in ALL SEVEN copies at once, and that is the
-  # point rather than a shortcut: both rows record seven copies held identical and
-  # identically WRONG, so a one-sided plant would be caught by the lockstep rule
-  # and would prove nothing about the ban.
+  # The K-1088 and K-1090 arms plant in ALL SEVEN copies at once: a one-sided plant
+  # is caught by the lockstep rule and proves nothing about the ban.
   SELF_TEST_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
   SELF_TEST_AC_PLANT = SELF_TEST_SEVEN.map do |d|
     [:edit, "kiosk-demo-#{d}/app/controllers/application_controller.rb",
@@ -309,7 +150,6 @@ if ARGV.include?("--self-test")
     "The manifest",
     "What is NOT compared, and why (K-629)",
     "The engine side of the generator output (K-640, hardened at K-646)",
-    "WHY THERE IS NO WAY TO RECORD AN EXCEPTION ANY MORE",
     "Cross-demo singleton pairs (K-648)",
     "Normalisation",
     "Magic comments (K-628)",
@@ -319,23 +159,17 @@ if ARGV.include?("--self-test")
 
   # ── T-155: THE IN-BAND VACUITY GUARDS, AND WHICH OF THEM IS PROVEN ────────
   #
-  # A `:vacuity` arm proves that ONE in-band guard fires. Nothing said how many
-  # in-band guards there are, so the ones with no arm were invisible: the header
-  # said only that "most rules carry one and only some of those have an arm
-  # here", and the number behind "some" was never derived. That is the same
-  # shape as every failure this file exists for — a detector nobody detects.
+  # A `:vacuity` arm proves that ONE in-band guard fires, so the coverage question
+  # is asked of the SOURCE: a rule's section is "guarded" when it raises an error
+  # whose own words say a MEASUREMENT stopped measuring, and every guarded section
+  # must carry a `:vacuity` arm.
   #
-  # So the coverage question is asked of the SOURCE. A rule's section is
-  # "guarded" when it raises an error whose own words say a MEASUREMENT stopped
-  # measuring, and every guarded section must carry a `:vacuity` arm.
-  #
-  # THIS IS A LEXICAL PROXY AND IT IS DECLARED AS ONE. There is no syntax that
-  # distinguishes an in-band vacuity guard from any other `errors <<`; what
-  # distinguishes it is what its sentence says. So the vocabulary below is the
-  # instrument, its FLOOR is asserted (a vocabulary that stops matching would
-  # print the same clean coverage as a fully-armed file), and the two sections
-  # it reads wrongly are exempted BY NAME with the reason — an exemption that
-  # goes stale reddens, exactly like SELF_TEST_NOT_A_RULE above.
+  # THIS IS A LEXICAL PROXY AND IT IS DECLARED AS ONE. No syntax distinguishes an
+  # in-band vacuity guard from any other `errors <<`; what distinguishes it is what
+  # its sentence says. So the vocabulary below is the instrument, its FLOOR is
+  # asserted — a vocabulary that stopped matching would print the same clean
+  # coverage as a fully-armed file — and the sections it reads wrongly are exempted
+  # BY NAME, an exemption that reddens when it goes stale.
   SELF_TEST_VACUITY_VOCAB = Regexp.union(
     /stopped matching/i, /stops matching/i, /no longer match/i, /clean zero/i,
     /reads as coverage/i, /vacuou/i, /read 0 /i, /reads 0 /i, /came back empty/i,
@@ -793,11 +627,8 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
               "    \"quota_exceeded\"    => :too_many_requests,\n", ""]],
       expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,skooti\] as a `:coincidence` and the coincidence has ended/ },
-    # The agreed SIZE is matched as `\d+` rather than restated: it moves every
-    # time one of the three drivers is edited, and a restated measurement that
-    # rots turns this arm red for a reason that has nothing to do with the rule
-    # it guards. What the arm is FOR is the refusal and the cap, and both are
-    # still pinned.
+    # The agreed SIZE is matched as `\d+` rather than restated: it moves whenever one
+    # of the three drivers is edited, and what this arm is for is the refusal and the cap.
     { id: "coincidence-over-the-cap", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a lockstep group relabelled `:coincidence` — the free way to switch the rule off, capped",
@@ -994,12 +825,9 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-skooti/README.md", "bin/rails demo:setup", "bin/reset-fleet"]],
       expect: /skooti: kiosk-demo-skooti\/README\.md names `bin\/reset-fleet`, which exists neither/ },
 
-    # T-192 re-pointed this rule from an ABSENCE to a PRESENCE, so the arms
-    # changed shape with it. The subject is no longer empty — eight compose
-    # files and one image — which means a COUNT is now a real signal and the
-    # vacuity arms drain the corpus STRUCTURALLY rather than naming the files
-    # they know about. An arm that has to be edited when a ninth demo arrives
-    # is an arm that will silently stop planting what it says it plants.
+    # The subject is eight compose files and one image, so a COUNT is a real signal
+    # and the vacuity arms drain the corpus STRUCTURALLY rather than naming the files
+    # that are in it today.
     { id: "demo-without-container-path", kind: :break,
       rule: "EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335)",
       what: "a demo ships no compose file, so the one command its README promises does not exist",
@@ -1080,13 +908,6 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, ".github/workflows/ci.yml", "image: postgres:17", "image: pg-service:17"]],
       expect: /no `image: postgres:<major>` in \.github\/workflows\/ci\.yml/ },
 
-    # ── T-155: SIX ARMS FOR IN-BAND VACUITY GUARDS THAT HAD NONE ─────────────
-    #
-    # The five rules below each carry a guard that fires when the rule's own
-    # measurement stops measuring, and not one of those guards was proven by
-    # anything until now — which put the detector in exactly the position of the
-    # thing it detects. `st_unproven` below derives the gap from this file rather
-    # than trusting this comment to stay true.
     { id: "vacuity-prose-superclass", kind: :vacuity,
       rule: "application_controller.rb's PROSE must stay true (K-1021)",
       what: "the superclass scan stops reading `class Kiosk::…Controller < …`, so every demo's " \
@@ -1424,34 +1245,22 @@ if ARGV.include?("--self-test")
 end
 
 # Where hand-written demo code lives. Deliberately NOT the Rails skeleton
-# (bin/, config/, public/, Rakefile, config.ru): those are generator output that
-# each demo edits for its own port, host and initializer, and comparing them
-# would drown the signal this check exists for. `lib/tasks/*.rake` is outside
-# these roots too: a demo's rake file is that storefront's own tasks, and what
-# CI runs of them is bin/check-ci-tasks's business. That used to be stated as
-# "per-demo by construction, and already covered by bin/check-ci-tasks", and
-# K-1043 made both halves false at once (K-1046): the flow-runner helper it
-# added is byte-identical in six rake files, and check-ci-tasks compares the
-# task INVENTORY, never one demo's rake file against another's. So the file
-# stays uncompared and the CONSTRUCT is declared — see the flow-runner rule
-# below, which is where any future lockstep fragment in lib/tasks/ belongs.
-# What that leaves out, and why, is recorded in SKELETON_NOT_COMPARED below.
+# (bin/, config/, public/, Rakefile, config.ru): those are generator output each
+# demo edits for its own port, host and initializer, and comparing them would
+# drown the signal this check exists for. `lib/tasks/*.rake` is outside these
+# roots too — a demo's rake file is that storefront's own tasks — so the file
+# stays uncompared and the shared CONSTRUCTS inside it are declared one by one
+# (see the flow-runner, host-detection and `desc` rules below). What the roots
+# leave out is recorded in SKELETON_NOT_COMPARED below.
 SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
 
-# Named one by one because they are the exceptions: paths outside SCAN_ROOTS
-# (or outside `*.rb`) that ARE compared. A path earns a place here either when
-# its copies have no per-demo dimension at all (`.gitignore`, the T-048
-# statics), or when the single copy that legitimately differs is carried by the
-# entry's `except:` map — the six skeleton paths where prove, the API-only
-# broker generated on its own, is the sole outlier (K-643).
-#
-# THE THIRD REASON, and it is the one `spec/` arrives under (T-137): a path can
-# be here simply because SCAN_ROOTS cannot see the directory it lives in, so the
-# manifest is the ONLY thing that knows the copies exist. `spec/` is not a scan
-# root and three demos now ship `spec/wire_arguments_spec.rb`; without this line
-# the repo's own rule — «a NEW duplicate fails the build until it is declared» —
-# would have been silently untrue for it, which is the same shape as a `:per_demo`
-# file whose shared methods nothing compares (T-120).
+# Named one by one because they are the exceptions: paths outside SCAN_ROOTS (or
+# outside `*.rb`) that ARE compared. A path earns a place here when its copies
+# have no per-demo dimension at all (`.gitignore`, the static pages), when the
+# single copy that legitimately differs is carried by the entry's `except:` map,
+# or simply because SCAN_ROOTS cannot see the directory it lives in — `spec/` is
+# not a scan root, so without a line here the repository's own rule «a NEW
+# duplicate fails the build until it is declared» would be untrue for it.
 EXTRA_SCANNED = [
   ".gitignore",
   "spec/wire_arguments_spec.rb",
@@ -1591,11 +1400,10 @@ COPIES = {
 
   # ── The K-643 promotion: recorded exclusions become enforced lockstep ──────
   #
-  # K-629 recorded each of these six in SKELETON_NOT_COMPARED with the measured
-  # observation "identical in the seven operator demos; prove differs" — a true
-  # statement nothing enforced, so a seventh copy drifting would have been
-  # silent. The observation is now the rule: :identical across the operator
-  # seven, prove the declared exception.
+  # Each of these was recorded in SKELETON_NOT_COMPARED as identical in the seven
+  # operator demos with prove differing — a true statement nothing enforced, so a
+  # seventh copy drifting would have been silent. The observation is the rule now:
+  # :identical across the operator seven, prove the declared exception.
   "config/cable.yml" => {
     rule:   :identical,
     why:  "One pubsub posture for the operator seven, and the file an adopter copies. " \
@@ -1685,20 +1493,17 @@ COPIES = {
   },
   "script/bound_assistant.rb" => {
     rule:  :identical,
-    # THREE, not four (K-883). skooti shipped a fourth copy that no skooti file
-    # required: its five drivers all `require_relative "equihash_register"` and
-    # obtain a HEADLESS agent principal, which is a real difference in what
-    # skooti demonstrates rather than an oversight, and the only cross-demo
-    # consumer (e2e/fixtures/bind_assistants.rb) requires STYLISH's copy. Listed
-    # here so re-adding it fails rather than passing as a byte-identical twin.
+    # THREE, not four: skooti's five drivers obtain a HEADLESS agent principal instead,
+    # and the only cross-demo consumer (e2e/fixtures/bind_assistants.rb) requires
+    # STYLISH's copy. Listed so a fourth copy fails rather than passing as a twin.
     ships: %w[atablefor philslist stylish],
-    why:  "The ONE way a driver obtains an AGENT principal (T-104) — the agent-side twin of " \
-          "Kiosk::UserIdentityProviders::DeviseSession, which kiosk-user-idp-devise ships. This " \
-          "one is still hand-copied because it require_relative's script/equihash_register.rb, " \
-          "which four before-after.md documents quote as the handshake written out, so it stays " \
-          "in script/ and nothing above it can be promoted past it. :identical because a driver " \
-          "runs the shipped ceremony (Equihash-tolled register -> the human's link code -> " \
-          "claim), which is one sequence of shipped endpoints and names no port, persona or verb.",
+    why:  "The ONE way a driver obtains an AGENT principal — the agent-side twin of " \
+          "Kiosk::UserIdentityProviders::DeviseSession, which kiosk-user-idp-devise ships. It " \
+          "stays in script/ because it require_relative's its sibling " \
+          "script/equihash_register.rb, and script/redteam_suite.rb and bin/demo reach it " \
+          "there. :identical because a driver runs the shipped ceremony (Equihash-tolled " \
+          "register -> the human's link code -> claim), which is one sequence of shipped " \
+          "endpoints and names no port, persona or verb.",
   },
   "script/descriptor_examples.rb" => {
     rule: :identical,
@@ -1915,11 +1720,11 @@ COPIES = {
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
-    why:  "SINCE K-792 THIS FILE IS A SUBCLASS LINE AND A CONSTANT, AND NOTHING ELSE. The shared " \
-          "half — the constructor and the ok/refused/status trio, written out seven times since " \
-          "T-083 — was PROMOTED into kiosk-server as {Kiosk::OperationResult} (Phil, 2026-08-19: a " \
-          "thing that exists in all seven demos belongs in a gem); each demo now declares " \
-          "`class OperationResult < Kiosk::OperationResult` and supplies its own STATUSES. " \
+    why:  "THIS FILE IS A SUBCLASS LINE AND A CONSTANT, AND NOTHING ELSE. The shared half — " \
+          "the constructor and the ok/refused/status trio — ships once in kiosk-server as " \
+          "{Kiosk::OperationResult}, because a thing that exists in all seven demos belongs " \
+          "in a gem; each demo declares `class OperationResult < Kiosk::OperationResult` and " \
+          "supplies its own STATUSES. " \
           "What is left is genuinely per-demo, and the reason is unchanged and unrefuted: a code " \
           "an app never produces has no business having a mapping, so the seven maps are five " \
           "different sets. stylish lists ONE (nothing on that origin ever fills up and its write " \
@@ -1956,17 +1761,12 @@ COPIES = {
   # ── db/migrate — output of kiosk-server's install generator ────────────────
   #
   # These are not hand-written: `rails g kiosk:install` emits them
-  # (kiosk-server/lib/generators/kiosk/install). A demo whose copy differs is a
-  # demo that was not regenerated when the engine's schema moved — which is the
-  # nastiest drift in this list, because it only surfaces as a runtime column
-  # error in whichever demo nobody ran.
-  #
-  # Since K-646 (2026-08-20) all seven operator demos ship the SAME six files at
-  # the SAME timestamps, because they are one `kiosk:install` run copied across:
-  # the fleet IS the generator's output, with no migration history, no per-demo
-  # subset and no renames. That is what lets the paths be declared here at all —
-  # and the GENERATOR_TEMPLATES rule below now enforces the "all seven, byte for
-  # byte, no exceptions" invariant that keeps it true.
+  # (kiosk-server/lib/generators/kiosk/install). A demo whose copy differs was not
+  # regenerated when the engine's schema moved, which otherwise surfaces only as a
+  # runtime column error in whichever demo nobody ran. All seven operator demos
+  # ship the SAME files at the SAME timestamps, because they are one
+  # `kiosk:install` run copied across — which is what lets the paths be declared
+  # here at all, and what GENERATOR_TEMPLATES below keeps true.
   "db/migrate/20260820130112_create_kiosk_schema.rb" => {
     rule: :identical, why: "kiosk:install 001 — the schema and the four current_*() helpers.",
   },
@@ -2102,31 +1902,25 @@ COPIES = {
 
 # ── What is NOT compared, and why (K-629) ────────────────────────────────────
 #
-# SCAN_ROOTS leaves the Rails skeleton out. That was a decision, but it was never
-# written down anywhere, so the next reader had to re-derive it from the absence
-# of an entry — and "no entry" reads the same whether a path was considered and
-# excluded or simply never noticed. These are the ~30 paths that exist in two or
-# more demos and that nothing above compares (eight of the original set — the
-# T-048 statics, the three error pages, puma.rb and the test/production envs —
-# have since been PROMOTED into COPIES above: K-643). Each line says what the
-# copies are allowed to differ by; measured, not assumed.
+# SCAN_ROOTS leaves the Rails skeleton out. These are the paths that exist in two
+# or more demos and that nothing above compares; each line says what the copies
+# are allowed to differ by.
 #
 # HONEST SCOPE, twice over.
 #
-# (1) These entries are DOCUMENTARY. Only their staleness is checked (a declared
-#     path that no longer exists in two demos is an error), not their
+# (1) These entries are DOCUMENTARY. Only their staleness is checked — a declared
+#     path that no longer exists in two demos is an error — not their
 #     completeness: proving no OTHER skeleton path is duplicated would mean
-#     walking the whole demo tree, which is full of gitignored local scratch
-#     (log/, tmp/, .bundle/, node_modules/), and filtering that needs `git
-#     ls-files` — an external process, in a check that deliberately runs on a
-#     bare checkout with nothing but stdlib. The scan roots keep their
-#     undeclared-copy guard; the skeleton has a record instead.
+#     walking a demo tree full of gitignored local scratch, and filtering that
+#     needs `git ls-files`, an external process in a check that runs on a bare
+#     checkout with nothing but stdlib. The scan roots keep their undeclared-copy
+#     guard; the skeleton has a record instead.
 #
 # (2) "Not compared" is not "not covered". config/routes.rb and
 #     config/initializers/kiosk.rb ARE asserted by the rules at the bottom of
-#     this file; db/structure.sql is the output of
-#     migrations this check compares byte-for-byte; and every demo's whole
-#     skeleton is exercised by that demo's CI job, which boots the app.
+#     this file; db/structure.sql is the output of migrations this check compares
+#     byte-for-byte; and every demo's whole skeleton is exercised by that demo's
+#     CI job, which boots the app.
 #
 # One recurring shape, stated once instead of forty times: kiosk-demo-prove is a
 # smaller, API-only Rails app generated on its own, so on a whole family of
@@ -2168,10 +1962,9 @@ SKELETON_NOT_COMPARED = {
   "README.md" => "Per-demo prose. The task list inside it is asserted by bin/check-ci-tasks.",
   "CHANGELOG.md" => "Per-demo history.",
   "before-after.md" =>
-    "Per-demo narrative: that storefront's before/after contrast. Its framework PROSE is compared " \
-    "across demos by the K-1069 block below; its fenced blocks are held to the producers they " \
-    "declare by bin/check-demo-derivations (K-1051), which is a sibling of this script for the " \
-    "reason the header gives - it compares one demo's document against THAT demo's own files.",
+    "Per-demo narrative: that storefront's before/after contrast. Its fenced blocks are held " \
+    "to the producers they declare by bin/check-demo-derivations; its prose is each " \
+    "storefront's own and nothing here compares it.",
   "db/seeds.rb" => "Per-demo catalog — the whole point of each demo.",
   "db/structure.sql" =>
     "Generated from the migrations, which this check DOES compare byte-for-byte; comparing the " \
@@ -2189,43 +1982,25 @@ SKELETON_NOT_COMPARED = {
 # ── The engine side of the generator output (K-640, hardened at K-646) ───────
 #
 # The db/migrate entries in COPIES hold the demos' copies in lockstep with each
-# other, which is necessary and not sufficient: `rails g kiosk:install` emits
-# those files from these templates, and nothing in the sibling rule ever looks
-# at them — the K-580 rebuild was the concrete near-miss, where template and
-# copies had to move as one change and a partial move would have stayed green.
+# other, which is necessary and not sufficient: `rails g kiosk:install` emits them
+# from these templates, and the sibling rule never looks at a template — so a
+# template edit that reached no demo, or a hand-edit to a copy that was never
+# lifted back, would stay green.
 #
-# So every template under GENERATOR_TEMPLATES_DIR is declared here, rendered
-# with plain ERB and the generator's own default options (GENERATOR_DEFAULTS —
-# the values every demo was generated with; the templates' only ERB is
-# `<%= options[:…] %>` substitution), and the render must byte-match the copy in
-# EVERY ONE of the seven operator demos.
+# So every template under GENERATOR_TEMPLATES_DIR is declared here, rendered with
+# plain ERB and the generator's own default options (GENERATOR_DEFAULTS; the
+# templates' only ERB is `<%= options[:…] %>` substitution), and the render must
+# byte-match the copy in EVERY ONE of the seven operator demos.
 #
-# ── WHY THERE IS NO WAY TO RECORD AN EXCEPTION ANY MORE ─────────────────────
+# THERE IS NO WAY TO RECORD AN EXCEPTION, and that is deliberate: an entry is
+# `emits:` (compared, byte for byte, in all seven) or `not_compared:` (with the
+# reason and where it is recorded), and there is no third state. A recordable
+# drift converts «the build is red until you propagate» into «the build is green
+# and someone will look at it».
 #
-# K-640 shipped this rule with two escape hatches: `drift:` (the render and the
-# copies knowingly disagree, pending triage) and `shipped_as:` (the demos ship
-# the migration under another basename). Both were used the day the rule
-# landed, for four clusters, and all four were still sitting there three months
-# later — which is the honest measure of what a recordable exception buys: it
-# converts "the build is red until you propagate" into "the build is green and
-# someone will look at it". Phil's answer to that state was «я вообще не
-# понимаю о чём речь, и почему какие-то шаблоны мандатов расходятся», and then
-# the instruction that removed the divergence outright: delete the demos'
-# migrations and re-emit (K-646).
-#
-# So the hatches are GONE, not merely unused. An entry is `emits:` (compared,
-# byte for byte, in all seven) or `not_compared:` (with the reason and where it
-# is recorded), and there is no third state. A template edit that is not
-# propagated to the demos now reddens the build the day it lands, which is the
-# whole mechanism this file owes the K-646 decision.
-#
-# The all-seven rule is the other half. A per-demo SUBSET is how the fleet
-# drifted in the first place: demos generated at different times shipped
-# different slices of the canonical set (philslist had no mandates, hoteling no
-# governance columns), so "which migrations should this demo have" had no
-# answer a check could hold. Since K-646 the answer is "all of them", and
-# ONE_SET_EVERYWHERE below enforces it: a demo that skips a migration, or a new
-# demo scaffolded from a stale engine, fails here.
+# ONE_SET_EVERYWHERE below is the other half: every operator demo ships every
+# canonical migration, because every operator demo IS one `kiosk:install` run. A
+# demo that skips one, or a new demo scaffolded from a stale engine, fails here.
 #
 # Entry fields:
 #   emits:        — the basename the generator writes (sans timestamp). The
@@ -2233,9 +2008,9 @@ SKELETON_NOT_COMPARED = {
 #   not_compared: — the template's output has a per-demo dimension; the reason
 #                   says where that is recorded.
 #
-# Staleness is checked both ways, per this file's house rule: a template with
-# no entry fails, an entry with no template fails, an `emits:` basename no demo
-# ships fails, and a basename not shipped by ALL of them fails.
+# Staleness is checked both ways, per this file's house rule: a template with no
+# entry fails, an entry with no template fails, an `emits:` basename no demo ships
+# fails, and a basename not shipped by ALL of them fails.
 GENERATOR_TEMPLATES_DIR = "kiosk-server/lib/generators/kiosk/install/templates"
 
 # The generator's own class_option defaults (install_generator.rb) — the
@@ -2267,13 +2042,11 @@ GENERATOR_TEMPLATES = {
 
 # ── Cross-demo singleton pairs (K-648) ───────────────────────────────────────
 #
-# The db/migrate blind spot left open after K-640: a HAND-WRITTEN migration
-# that ships in two or more demos at demo-specific timestamps. Every copy is a
-# singleton relative path, so the lockstep rule never fires; no `.tt` emits it,
-# so the template rule cannot reach it either — the copies were compared to
-# NOTHING, which is the exact shape the equihash_register constant rename
-# exploited (K-623), one directory over. Declared here by timestamp-stripped
-# basename and compared across ALL copies. Fields:
+# A HAND-WRITTEN migration that ships in two or more demos at demo-specific
+# timestamps is a singleton relative path that no `.tt` emits, so neither the
+# lockstep rule nor the template rule can reach it — the copies would be compared
+# to NOTHING. Declared here by timestamp-stripped basename and compared across
+# ALL copies. Fields:
 #   rule:  :identical | :code — how the copies must agree (same meaning as in
 #          COPIES).
 #   drift: the copies KNOWINGLY disagree in code, pending triage: the reason
@@ -2288,11 +2061,7 @@ MIGRATION_PAIRS = {
     rule: :code,
     why:   "the pending age/licence verification a demo starts at the KYC broker — the table " \
            "behind app/models/kyc_verification_request.rb, whose model copies ARE held in :code " \
-           "lockstep above. The pair CONVERGED at K-646: getgrocery declared `broker_nonce` " \
-           "inline while skooti added the identical column in a follow-up migration, which this " \
-           "rule could only record as drift because closing it meant rewriting shipped history — " \
-           "Phil authorised exactly that («сноси существующие kiosk миграции … с их последующими " \
-           "правками»), so skooti's follow-up is deleted and the column is inline in both. Prose " \
+           "lockstep above. Both copies declare `broker_nonce` inline. Prose " \
            "still differs per demo (skooti's row carries a licence claim, getgrocery's an age " \
            "gate), which is why the rule is :code.",
   },
@@ -2332,74 +2101,40 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 
 # ── A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262) ─────
 #
-# `:per_demo` means NOT COMPARED. Until 2026-08-31 the only thing anywhere in
-# this file that noticed a `:per_demo` subject whose copies had stopped
-# differing was the fragment rule's UNANIMITY tripwire one level down, and it
-# fires when ALL held copies of a declared unit agree — only then. MEASURED by
-# plant while T-146 was being built: converging TWO of
-# `app/models/cart_mandate.rb`'s three `scope :referencing` copies onto a third
-# left this script at EXIT 0; converging all three reddened it. At FILE level
-# there was no tripwire at all, in either shape. So the state the manifest is
-# LEAST able to describe — most of a group agreeing while one copy still
-# differs — was invisible at both granularities, and that is precisely the state
-# that means somebody hand-copied something.
+# `:per_demo` means NOT COMPARED, so the state this manifest is LEAST able to
+# describe — most of a group agreeing while one copy still differs — was once
+# invisible at both granularities, and it is precisely the state that means
+# somebody hand-copied something.
 #
-# EVERY `:per_demo` PATH IS GROUPED BY THE SHA256 OF ITS {code_norm} ON EVERY
-# RUN, AND THE RUN PRINTS WHAT IT FOUND — the CONVERGENCE GROUPS block, which
-# names each subject, each copy's normalised size, and which subsets share a
-# digest. This paragraph deliberately quotes none of it. It used to, and the
-# figures were falsified by a single refactor that moved the HTTP helpers onto
-# `Kiosk::Redteam::Wire`: every copy shrank, the sentence did not, and nothing
-# in this repository could say so, because a comment has no exit code (K-1542).
+# EVERY `:per_demo` PATH IS GROUPED BY THE SHA256 OF ITS {code_norm} ON EVERY RUN,
+# AND THE RUN PRINTS WHAT IT FOUND — the CONVERGENCE GROUPS block, naming each
+# subject, each copy's normalised size and which subsets share a digest. No figure
+# from it is written down here.
 #
-# THE SHAPE, which is what a reader actually needs from prose and what does not
-# rot: two kinds of group exist in this tree. `script/schema_flow.rb` carries
-# the one that matters — subsets of its seven copies sharing a digest under an
-# entry whose own words were «asserts THAT demo's declared capabilities and verb
-# set», true of the copies that stand alone and untrue of the ones that have
-# converged; that is a driver hand-copied and then edited in one place, and it
-# is the reason this rule exists. `app/operations/operation_result.rb` carries
-# the other — small pairs its entry had already argued out loud as coincidences.
-# Which demos are in which group, and how large each is, is a question for the
-# printed block and not for this comment.
-#
-# Those two kinds are the whole reason the declaration has TWO of them:
+# Any subset that agrees must be declared in the entry's `agree:` map, as one of
+# two kinds:
 #
 #   rule: :lockstep    — these copies are ONE artefact that happens to live at N
 #                        paths. They are HELD: a copy edited alone fails here,
 #                        which is what turns a hand-copied driver's unwatched
-#                        lines into watched ones. How many lines that is on any
-#                        given day is in the CONVERGENCE GROUPS block, never
-#                        here. This is the answer for a hand-copied file.
-#   rule: :coincidence — they agree today for unrelated reasons, and holding
-#                        them would enshrine an accident. NOT held as a promise
-#                        — but the group's MEMBERSHIP is: a demo JOINING it, or
-#                        the group ceasing to agree, fails and the declaration
-#                        is updated in the same commit. Both kinds are therefore
-#                        checked exactly as hard; what differs is the DIAGNOSIS
-#                        the next reader is handed, and the cap below.
+#                        lines into watched ones.
+#   rule: :coincidence — they agree today for unrelated reasons, and holding them
+#                        would enshrine an accident. NOT held as a promise — but
+#                        the group's MEMBERSHIP is: a demo JOINING it, or the
+#                        group ceasing to agree, fails, and the declaration is
+#                        updated in the same commit. Both kinds are checked
+#                        exactly as hard; what differs is the diagnosis the next
+#                        reader is handed, and the cap.
 #
-# THE CAP IS THE ONE SUBSTANTIVE DIFFERENCE, and it is there because otherwise
-# `:coincidence` would be a free way to switch this rule off — which is the
-# undeclared-exclusion shape K-1262 belongs to. A `:coincidence` group may not
-# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines. WHERE TWELVE COMES FROM,
-# without a figure that can go stale: it sits above every group this tree calls
-# a coincidence and far below every group it calls one artefact, and the gap
-# between those two populations is wide enough that the exact cap is not
-# delicate. Both populations are printed, with their sizes, in the CONVERGENCE
-# GROUPS block on every run, so the claim can be re-checked against the tree in
-# front of you rather than against a reading somebody took once — and the run
-# prints a group's own size whenever it breaches the cap. Above twelve, «they
-# happen to agree» stops being a credible reading of hand-copied code.
+# THE CAP IS THE ONE SUBSTANTIVE DIFFERENCE, because without it `:coincidence`
+# would be a free way to switch this rule off. A `:coincidence` group may not
+# exceed AGREE_COINCIDENCE_MAX_LINES normalised lines: above that, «they happen to
+# agree» stops being a credible reading of hand-copied code. Both populations are
+# printed with their sizes on every run, so the cap can be re-checked against the
+# tree in front of you rather than against a reading somebody took once.
 #
-# THIS IS NOT K-792's OPTION B, which the `app/operations/operation_result.rb`
-# entry forbids by name and which must stay forbidden. That was «compare every
-# copy EXCEPT a named REGION of the file» — a partial COMPARISON, carving a
-# region out of a file and holding the rest. This is a partial CONVERGENCE:
-# whole copies, normalised whole, with the SUBSETS that agree named. No region
-# is carved out of anything, and the entry's own argument — that the seven
-# STATUSES maps are five different sets and even the one match is a coincidence
-# to enshrine — is what the `:coincidence` kind exists to let it keep saying.
+# THIS IS NOT A PARTIAL COMPARISON — no region is carved out of any file. Whole
+# copies, normalised whole, with the SUBSETS that agree named.
 #
 # ALL COPIES AGREEING IS NOT DECLARABLE, in either kind. That is not a partial
 # convergence, it is a `:code` entry nobody has written yet, and it is reported
@@ -2411,17 +2146,10 @@ AGREE_COINCIDENCE_MAX_LINES = 12
 # keyed by a demo list. Appends to `errors` and returns the number of declared
 # groups it CONFIRMED against the tree — which the summary prints, so a rule that
 # has stopped finding anything shows up as a number rather than as silence.
-# EVERY GROUP THIS RULE SEES, RECORDED FOR THE RUN TO PRINT (K-1542). The two
-# paragraphs above used to state which paths had a converged group and what each
-# copy came to once normalised — «one file at 37», «46, 48, 59 and 23» — and not
-# one of those figures survived the refactor that moved the HTTP helpers onto the
-# shared `Kiosk::Redteam::Wire`. A hand-restated measurement in a guard's own
-# prose has no exit code, so it goes on reading as current for as long as nobody
-# diffs seven files to check it. The remedy this repository has arrived at
-# independently, several times over, is the one taken here: DERIVE IT AND PRINT
-# IT. Each row below is one compared subject — every copy's normalised size and
-# whichever subsets agree — and the CONVERGENCE GROUPS block at the end of a run
-# is the authority. No paragraph in this file quotes one of these numbers.
+# EVERY GROUP THIS RULE SEES, RECORDED FOR THE RUN TO PRINT. Each row is one
+# compared subject — every copy's normalised size and whichever subsets agree —
+# and the CONVERGENCE GROUPS block at the end of a run is the authority. No
+# paragraph in this file quotes one of these numbers.
 AGREE_CENSUS = []
 
 def agree_check(label, what, bodies, declared, errors)
@@ -2809,47 +2537,27 @@ end
 
 # ── NO LEDGER ID IN A SHIPPED GENERATOR TEMPLATE (K-1298) ────────────────────
 #
-# These templates are not read, they are WRITTEN -- `kiosk:install` copies them
-# into a third party's own repository. A `(K-830)` in one of them is therefore
-# not the demo-comment leak one directory over: it lands in SOMEBODY ELSE'S
-# codebase, pointing at a private ledger they cannot open and never will.
+# These templates are not read, they are WRITTEN — `kiosk:install` copies them
+# into a third party's own repository, where a `(K-830)` points at a private
+# ledger they cannot open. A live TODO/FIXME still requires its id, which is the
+# constitution's rule, so the ban is on the id and not on the marker that needs
+# one.
 #
-# The demo tree was scrubbed of ledger ids on 2026-09-05 and this survived it,
-# because the scrub's file set was `kiosk-demo-*` and this file is not there.
-# Measured when the arm was written: one occurrence across the six templates,
-# and zero after. A live TODO/FIXME still requires its id -- that is the
-# constitution's rule -- so the ban is on the id, not on the marker that needs
-# one, and a template growing a real TODO should declare it here rather than
-# losing the reference that makes it actionable.
-# One spelling of «a ledger id», shared by this rule and the demo-tree rule
-# below it, because two copies of one pattern is two things to be wrong in
-# different ways -- and the second one to rot would rot silently, since both
-# rules are BANS whose obedience and whose blindness print the same zero.
+# One spelling of «a ledger id», shared by this rule and the demo-tree rule below
+# it: two copies of one pattern are two things to be wrong in different ways, and
+# both rules are BANS whose obedience and whose blindness print the same zero.
 #
-# ITS LEADING BOUNDARY IS NOT `\b`, AND THAT IS A MEASUREMENT (K-1537). Inside
-# a Ruby string literal `\n` is TWO characters -- a backslash and the LETTER
-# `n` -- so `puts "\nK-724 ..."` puts a word character immediately before the
-# `K` and a leading `\b` cannot match. WATCHED: the line planted WITH the `\n`
-# in a demo's `app/` left this script AND `bin/check-shipped-archaeology` at
-# exit 0; the identical line without it reddened the second at exit 1, so the
-# PATTERN, not the scope, was what decided. The class is every escape whose
-# body is a word character -- `\t`, `\r`, `\e`, `\s`, `\a`, `\f`, `\v`,
-# `\b`, `\0`, `\cK`, and the numeric `\101`, `\x41`, `\u0041`.
-#
-# THE OBVIOUS REMEDY -- drop the leading `\b` -- IS REFUTED BY THIS TREE:
-# `git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'` finds a corpus of lines carrying no
-# ledger id at all, the great majority of them `SK-001`, kiosk-demo-skooti's own
-# scooter, which is exactly the corpus this script scans. MEASURED 2026-09-12 it
-# was 161 lines -- a reading of that day and not a live figure, so re-derive it
-# with that command and that dialect (PCRE; an ERE cannot spell `\d` or `\b`)
-# rather than quoting this. What does not move is the ORDER of magnitude: the
-# ban would redden on a demo's own fixture data by the hundred. So the boundary
-# HOLDS and an ESCAPE
-# RUN is admitted beside it: a backslash and one to five alphanumerics, five
-# being the longest escape Ruby spells with an all-alphanumeric body
-# (`\u0041`). Everything longer or punctuated (`\u{1F600}`, `\M-\C-x`, a
-# doubled `\\`) already ends in a non-word character. The alternation of
-# FIXED-length lookbehinds is forced: Onigmo rejects a variable-length one.
+# ITS LEADING BOUNDARY IS NOT `\b`. Inside a Ruby string literal `\n` is TWO
+# characters — a backslash and the LETTER `n` — so `puts "\nK-724 …"` puts a word
+# character immediately before the `K` and a leading `\b` cannot match. Dropping
+# the boundary instead would match the hundreds of `SK-001` lines in
+# kiosk-demo-skooti's own fixture data (`git grep -cP '[A-Za-z0-9_][KT]-\d{3,4}\b'`
+# — PCRE, because an ERE cannot spell `\d` or `\b`). So the boundary HOLDS and an
+# ESCAPE RUN is admitted beside it: a backslash and one to five alphanumerics,
+# five being the longest escape Ruby spells with an all-alphanumeric body
+# (`A`). Everything longer or punctuated (`\u{1F600}`, `\M-\C-x`, a doubled
+# `\\`) already ends in a non-word character. The alternation of FIXED-length
+# lookbehinds is forced: Onigmo rejects a variable-length one.
 LEDGER_ESCAPE_RUN_ALTS = (1..5).map { |n| "(?<=\\\\[A-Za-z0-9]{#{n}})" }.freeze
 LEDGER_WORD_START      = "(?:#{LEDGER_ESCAPE_RUN_ALTS.join('|')}|(?<![A-Za-z0-9_]))"
 LEDGER_ID_RE = /#{LEDGER_WORD_START}[KT]-\d{3,4}\b/
@@ -2868,82 +2576,39 @@ end
 
 # ── NO LEDGER ID IN CODE A DEMO RUNS (K-1383) ────────────────────────────────
 #
-# THE RULE ABOVE IS ONE DIRECTORY TOO NARROW. It bans a ledger id in the six
-# install-generator templates, because those are WRITTEN into a third party's
-# repository. The demo tree next door has the same reader problem for a
-# different reason: a `K-1099` inside a `desc`, an `abort`, a task banner or an
-# assertion label is printed AT A TERMINAL, to an operator who cannot open the
-# ledger it names and never will.
+# The rule above bans a ledger id in the install-generator templates, which are
+# WRITTEN into a third party's repository. The demo tree has the same reader
+# problem for a different reason: a `K-1099` inside a `desc`, an `abort`, a task
+# banner or an assertion label is printed AT A TERMINAL, to an operator who cannot
+# open the row it names.
 #
-# WHY IT IS THIS NARROW HERE, AND WHAT HOLDS THE REST. This rule speaks for one
-# reader: the operator at a terminal. A ledger id in a `desc`, a banner, an
-# `abort` or an assertion label reaches somebody's screen, and that is a
-# different failure from a citation in prose, so it keeps its own message and
-# its own remedy.
-#
-# COMMENTS ARE NO LONGER LEFT ALONE -- they are held next door, by
-# `bin/check-shipped-archaeology`, which bans a ledger id, an ADR reference and
-# Cyrillic prose in the demo tree's comments and prose alike, on the argument
-# that a demo is the first thing an operator opens and its comments are read
-# exactly as a shipped gem's are. This file therefore no longer counts demo
-# comment citations as evidence that its pattern still works: at head there are
-# NONE, by design. Phil's standing exemption -- `bin/`, `CHANGELOG.md`,
-# `CLAUDE.md` -- is unchanged in both guards.
-#
-# WHY IT EXISTS AT ALL, MEASURED -- and every figure in this paragraph is a
-# reading of a PAST day, kept because the RATE is the argument, not because
-# any of the totals is current. K-1323's sweep finished; nothing held it
-# afterwards. Its own two measurements were 568 occurrences immediately after an
-# earlier wave and 759 when the fix started -- 51 occurrences of 12 distinct ids
-# re-introduced in about a day, ALL of it by ordinary fix waves rather than by
-# anyone deciding to. Re-measured 2026-09-07, when this rule was written:
-# **24 occurrences under `kiosk-demo-*` (git grep -P, PCRE -- an ERE `\b` here
-# matches NOTHING and exits 1), 19 of them in Ruby this rule scans and every
-# one of those in a COMMENT, zero in code.** So the ban starts at zero
-# survivors and needs no exemption list at all; the day it needs one, the
-# entry goes here with its reason, exactly like every other manifest in this
-# file.
+# So this rule speaks for one reader — the operator at a terminal — and bans the
+# id in CODE only. Comments are held next door by `bin/check-shipped-archaeology`,
+# which bans a ledger id, an ADR reference and Cyrillic prose in the demo tree's
+# comments and prose alike. Phil's standing exemption — `bin/`, `CHANGELOG.md`,
+# `CLAUDE.md` — is unchanged in both.
 #
 # COMMENT versus CODE IS ASKED OF RIPPER, NOT OF A REGEX. `^\s*#` misses a
-# trailing comment and a `#` inside a string literal or a heredoc is not a
-# comment at all; both mistakes are silent and both point the wrong way. The
-# lexer answers exactly the question the rule asks, and a file it cannot lex is
-# an ERROR rather than a skip -- the fail-open discipline this file uses
-# everywhere else.
+# trailing comment, and a `#` inside a string literal or a heredoc is not a
+# comment at all; both mistakes are silent and both point the wrong way. A file
+# the lexer cannot read is an ERROR rather than a skip.
 #
 # WHAT IS NOT SCANNED, declared rather than assumed:
-#   * `kiosk-demo-*/bin/` -- Phil's standing exemption, alongside CHANGELOG.md
-#     and CLAUDE.md. Those are generator binstubs and maintainer documents, not
+#   * `kiosk-demo-*/bin/` — Phil's standing exemption, alongside CHANGELOG.md and
+#     CLAUDE.md. Those are generator binstubs and maintainer documents, not
 #     something a demo prints.
-#   * `.md`, `.html`, `.erb`, `.sql` -- not Ruby, so «comment» means a different
-#     thing in each and Ripper cannot answer for them. The three `<!-- derived:
-#     -->` declarations in `before-after.md` are in that set, and all three are
-#     MACHINE-READ declarations `bin/check-demo-derivations` holds.
-#   * `spec/` and `test/` -- developer surfaces. An operator never runs them, and
+#   * `.md`, `.html`, `.erb`, `.sql` — not Ruby, so «comment» means a different
+#     thing in each and Ripper cannot answer for them.
+#   * `spec/` and `test/` — developer surfaces. An operator never runs them, and
 #     the constitution's own TODO/FIXME rule REQUIRES an id there.
 #
-# THE VACUITY GUARDS, and note the polarity: this is a BAN, so «no violations»
-# is the tree being clean rather than the rule being switched off. Two things
-# must therefore be asserted about the MECHANISM instead. The file count catches
-# a glob that stopped matching or a lexer that stopped running. The FIXTURE
-# catches the pattern itself rotting.
-#
-# THE FIXTURE IS OWNED BY THIS RULE, and it is the second spelling of that arm.
-# The first counted demo comment citations and asserted the count was positive,
-# which was evidence only while the demo tree still carried some. It stopped
-# being evidence the day `bin/check-shipped-archaeology` took the comment half
-# and the tree was scrubbed to zero -- the arm went red for an honest reason,
-# exactly as it said it would, and this is the replacement it demanded rather
-# than the deletion it forbade. The arm before that was worse still: it cited a
-# LIVE sentence, the seven `config/routes/kiosk.rb` copies of «(T-074 = A)»,
-# and T-186 deleted that sentence as retired-wire narration.
-#
-# {DEMO_ID_FIXTURES} is therefore neither a census nor a citation. It is the
-# shapes people write, held in this file, asserted to match {LEDGER_ID_RE} and
-# asserted to be classified by Ripper the way this rule needs -- an id in a
-# comment token is a comment, an id in a string literal is not. A pattern that
-# stops matching them, or a lexer that stops separating them, fails here and
-# says which.
+# THE VACUITY GUARDS, and note the polarity: this is a BAN, so «no violations» is
+# the tree being clean rather than the rule being switched off. Two things are
+# asserted about the MECHANISM instead. The file count catches a glob that stopped
+# matching or a lexer that stopped running. {DEMO_ID_FIXTURES} — the shapes people
+# write, held in this file rather than cited out of the tree — catches the pattern
+# itself rotting: each must match {LEDGER_ID_RE}, and the comment/string pair must
+# stay separable by the lexer.
 DEMO_ID_ROOTS = %w[app lib script config db].freeze
 DEMO_ID_TOP   = %w[Rakefile config.ru].freeze
 
@@ -2961,9 +2626,8 @@ DEMO_ID_FIXTURES = [
 ].freeze
 
 # THE OTHER HALF OF K-1537, kept executable because the wrong remedy is the
-# tempting one. Deleting the leading boundary would catch the escape and would
-# also match 141 lines of the corpus this script scans that carry no ledger id
-# at all -- 129 of them `SK-001`, kiosk-demo-skooti's own scooter.
+# tempting one: deleting the leading boundary would also match the corpus this
+# script scans, which carries kiosk-demo-skooti's own `SK-001` by the hundred.
 DEMO_ID_ANTI_FIXTURES = [
   "  SCOOTER = \"SK-001\"",
   "  raise \"OK-1234\"",
@@ -3073,24 +2737,14 @@ end
 
 # ── WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520) ───
 #
-# The green line below points a reader at `bin/check-shipped-archaeology` and
-# says which of its bans reach the DEMO tree, because this script's own ban is
-# the narrower one (code tokens only) and the reader deciding whether their
-# comment is held needs to know where the wider one stops. That sentence used to
-# be TYPED, and it said «the SAME four bans — ledger id, ADR reference, Cyrillic,
-# maintainer name — in the demos and in the gems alike». MEASURED: R4, the
-# maintainer ban, declares `scopes: %i[gem spec e2e]` and has since the commit
-# that introduced the demo scope, because one demo is NAMED after the maintainer
-# and a sentence legal in Phil's List's `app/` cannot be illegal there. So the
-# demo-side truth was three bans, not four, and the guard beside it was
-# advertising coverage that does not exist — the exact defect this script's own
-# K-1506 clause was filed for, one clause to its left.
-#
-# A number written beside a mechanism outlives the mechanism; the fix is to stop
-# writing it. The clause is now DERIVED from that script's `RULES` table — ids,
-# `scopes:` and `what:` parsed out of the source — so the day a ban gains or
-# loses the demo scope this sentence moves with it, and the day the table stops
-# being parseable this script says so instead of printing a stale summary.
+# The green line below points a reader at `bin/check-shipped-archaeology` and says
+# which of its bans reach the DEMO tree, because this script's own ban is the
+# narrower one (code tokens only) and a reader deciding whether their comment is
+# held needs to know where the wider one stops. The clause is DERIVED from that
+# script's `RULES` table — ids, `scopes:` and `what:` parsed out of the source —
+# so the day a ban gains or loses the demo scope this sentence moves with it, and
+# the day the table stops being parseable this script says so instead of printing
+# a stale summary.
 ARCHAEOLOGY_GUARD = File.join(ROOT, "bin", "check-shipped-archaeology")
 
 # [[id, scopes, what], …] read out of the neighbouring guard's own RULES table.
@@ -3307,15 +2961,11 @@ end
 # asserts the declaration is PRESENT, not that a boot succeeds; each demo's own
 # CI job boots the app.
 #
-# THE SUBJECT IS DERIVED, NOT NAMED. This rule used to hang off
-# `app/services/pow_difficulty.rb`, which shipped in all seven demos and made
-# the answer "all seven" a constant. T-189 promoted that module into
-# kiosk-pow-equihash, so three demos now have an EMPTY app/services and the
-# once-path there would be a config line loading nothing. So the demo set is
-# read from the tree — which constants app/services actually defines, and
-# whether the initializer names one — and the rule is TWO-SIDED: a demo that
-# needs the line must have it, and a demo that does not must not carry it. The
-# second half is what a hand-named subject could never have caught.
+# THE SUBJECT IS DERIVED, NOT NAMED. The demo set is read from the tree — which
+# constants app/services actually defines, and whether the initializer names one —
+# and the rule is TWO-SIDED: a demo that needs the line must have it, and a demo
+# that does not must not carry it. A hand-named subject could never catch the
+# second half.
 AUTOLOAD_ONCE_PATTERN = /autoload_once_paths\s*<<\s*Rails\.root\.join\("app\/services"\)/
 
 autoload_once_checked = 0
@@ -3355,15 +3005,11 @@ end
 
 # ── What is LEFT in a per-demo operation_result.rb (K-792) ───────────────────
 #
-# `app/operations/operation_result.rb` is declared :per_demo, and :per_demo
-# means NOT COMPARED. That was a real gap while the file carried ~40 lines of
-# shared constructor: seven copies of code nothing held together. K-792 closed
-# it by PROMOTION, not by a compare rule — the constructor and the
-# ok/refused/status trio now ship once, as Kiosk::OperationResult in
-# kiosk-server, and each demo subclasses it.
-#
-# So this block guards the promotion rather than the file's contents. It asserts
-# the three properties that make "not compared" honest again:
+# `app/operations/operation_result.rb` is declared :per_demo, and :per_demo means
+# NOT COMPARED. The shared constructor and the ok/refused/status trio ship once
+# now, as Kiosk::OperationResult in kiosk-server, and each demo subclasses it — so
+# this block guards the promotion rather than the file's contents. It asserts the
+# three properties that make "not compared" honest:
 #
 #   1. the copy actually SUBCLASSES the gem's class — a demo that quietly went
 #      back to a standalone `class OperationResult` would be re-growing the
@@ -3410,18 +3056,10 @@ end
 # ── application_controller.rb's PROSE must stay true (K-1021) ────────────────
 #
 # `app/controllers/application_controller.rb` is declared `:code`, and `:code`
-# compares files MODULO COMMENTS — which is the right rule for a file whose
-# header must name its own demo's controllers, and is exactly how one FALSE
-# sentence survived in seven demos plus the e2e fixture at once. Until K-1017
-# read it, every copy said «The Kiosk wire controllers ship their own bases
-# inside kiosk-server». They do not: kiosk-server ships a MIXIN, and each demo's
-# `Kiosk::*Controller` names its own superclass. Eight copies, no gate — because
-# the script's whole rule vocabulary (`:identical`, `:code`, `:per_demo`) is
-# about CODE, so no comment in any copied file was guarded anywhere.
-#
-# The general lesson, recorded once because it outlives this row: `:code` means
-# THE PROSE IS UNGUARDED, so a per-demo comment asserting a fact about the tree
-# needs its own assertion or it rots silently in N copies at once.
+# compares files MODULO COMMENTS — the right rule for a file whose header must
+# name its own demo's controllers, and the reason its PROSE is unguarded: a
+# per-demo comment asserting a fact about the tree rots silently in N copies at
+# once.
 #
 # So this block makes the one load-bearing sentence mechanical. Each copy must
 # carry, in its comments, a sentence of the form
@@ -3430,16 +3068,14 @@ end
 #
 # where <SUPERCLASS> is either the literal «THIS class» (meaning
 # ApplicationController, the class the file itself defines) or a constant path
-# such as ActionController::API. Both halves are then checked against the tree,
-# NOT against a list kept here: the controllers are globbed off disk and their
+# such as ActionController::API. Both halves are checked against the tree, NOT
+# against a list kept here: the controllers are globbed off disk and their
 # superclasses read out of their own `class … < …` lines. A copy that names the
-# wrong controllers, names the wrong superclass, or does not carry the sentence
-# at all fails — and the pre-K-1017 sentence fails on the last of those three,
-# because it named no controller and no superclass.
+# wrong controllers, names the wrong superclass, or does not carry the sentence at
+# all fails.
 #
-# The e2e harness's fixture carried the same sentence and is checked the same
-# way, from `e2e/fixtures/*_controller.rb` — it is not a demo, so no rule above
-# can see it, and it is the eighth copy the false sentence reached.
+# The e2e harness's fixture carries the same sentence and is checked the same way,
+# from `e2e/fixtures/*_controller.rb`: it is not a demo, so no rule above sees it.
 PROSE_SUPERCLASS_SENTENCE = /
   \bhere\s+
   (?<names>Kiosk::[A-Za-z0-9_]+(?:\s*(?:,|and)\s*Kiosk::[A-Za-z0-9_]+)*)
@@ -3534,20 +3170,11 @@ end
 
 # ── The wrong-door hint must not name a RETIRED endpoint (K-1088) ────────────
 #
-# The `rescue_from ActionController::InvalidAuthenticityToken` body in these
-# same files is not documentation: it is the LIVE JSON an assistant gets when it
-# dials the human sign-in page — a reader that is by construction lost and has
-# no way to check what it is told. Seven copies told it to fetch
-# `/.well-known/kiosk.json` «for the register/login and schema/query/run/pay
-# endpoints», which is false on both available readings: protocol 0.4 deleted
-# `POST /kiosk/query` and `POST /kiosk/run` outright (T-074 = A — each demo's
-# `routes.rb` says so, and all seven red-team batteries assert that a path
-# naming no registered verb answers the plain 404), and `capabilities` has
-# published MODULE names
-# (schema/queries/actions/pay) since T-095. The `:code` rule held all seven
-# identical — identically wrong — and `CHANGELOG.md`'s T-068 slice 7 had already
-# corrected the same string on the human pages and left this one behind, which is
-# the class: a sweep that fixes a file and not its sibling.
+# The `rescue_from ActionController::InvalidAuthenticityToken` body in these same
+# files is not documentation: it is the LIVE JSON an assistant gets when it dials
+# the human sign-in page — a reader that is by construction lost and has no way to
+# check what it is told. So the body may not point it at a verb name or an error
+# shape a protocol MAJOR removed.
 #
 # Read from the CODE, comments stripped, so a comment may quote the retired
 # string to explain why it went while a string literal may not. A blocklist is
@@ -3587,58 +3214,30 @@ end
 
 # ── The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508) ─
 #
-# The block of comments directly above the `hint:` key of that same CSRF rescue
-# is not a per-demo note: it is the REASON the hint names what the discovery
-# document carries instead of enumerating verbs, and it is byte-identical in all
-# seven operator copies because K-1431 rewrote all seven in one wave. It had to:
-# a two-demo fix would have left five copies of a deleted sentence standing with
-# nothing to say so, which is the finding K-1431 was filed for.
+# The block of comments directly above the `hint:` key of that same CSRF rescue is
+# not a per-demo note: it is the REASON the hint names what the discovery document
+# carries instead of enumerating verbs, and it is byte-identical in all seven
+# operator copies. `:code` compares MODULO COMMENTS, so nothing else holds it.
 #
-# AND NOTHING HELD IT. `app/controllers/application_controller.rb` is declared
-# `:code`, and `:code` compares MODULO COMMENTS — the right rule for a file whose
-# header must name its own demo's controllers, and the exact reason this block is
-# unguarded. WATCHED, not argued: one word changed in atablefor's copy (`verb` to
-# `VERB`) left `check-demo-copies`, `check-prose-counts`, `check-redteam-headers`,
-# `check-shipped-archaeology` and `check-demo-derivations` ALL at exit 0. So the
-# next wave that edits one copy diverges silently, in seven files, which is the
-# shape K-1021 recorded once and this file's `:code` rule reproduces every time.
+# THE BLOCK IS LOCATED STRUCTURALLY, NOT BY A NEEDLE — a hand-typed anchor string
+# is a hand-kept list of one. It is found the way a reader finds it: lex the file,
+# take the `hint:` LABEL of the rescue body, and walk back over the contiguous run
+# of lines carrying nothing but a comment. Ripper rather than a `^\s*#` scan, for
+# the reason `code_digest` and `comment_prose` both give — a `#` inside a string or
+# a regex is not a comment, and a trailing comment after code is not a block line.
 #
-# THE BLOCK IS LOCATED STRUCTURALLY, NOT BY A NEEDLE. A hand-typed anchor string
-# is a hand-kept list of one, and this repository has measured what those cost.
-# So it is found the way a reader finds it: lex the file, take the `hint:` LABEL
-# of the rescue body, and walk back over the contiguous run of lines that carry
-# nothing but a comment. Ripper rather than a `^\s*#` scan, for the reason
-# `code_digest` and `comment_prose` both give — a `#` inside a string or a regex
-# is not a comment, and a trailing comment after code is not a block line either.
-# A file with no `hint:` label yields nothing and is skipped, which is how the
-# e2e fixture stays out of this rule without being named in it; a file with more
-# than one is an ERROR rather than a guess, so the anchor cannot silently move.
+# THE TWO SKIPS ARE DIFFERENT QUESTIONS AND ARE ANSWERED SEPARATELY. No `hint:`
+# label means the file has no wrong-door body — true of the e2e fixture, and held
+# independently by the `:code` comparison of this same path, because the label is
+# a CODE token. A label with NO BLOCK above it means the door is there and the
+# reason for it is gone: that is the completest form of the divergence and a
+# FAILURE rather than a skip. More than one label in a file is an ERROR rather
+# than a guess, so the anchor cannot silently move.
 #
-# AND A FILE WITH THE LABEL AND NO BLOCK IS AN ERROR TOO — which the first
-# writing of this rule got wrong, and it got it wrong on the COMPLETEST form of
-# the divergence it exists to catch (K-1508, reopened). It skipped an empty run
-# alongside an absent label, on one `next if run.nil? || run.empty?`, so
-# DELETING a copy's whole rationale while leaving `hint:` in place left this
-# guard at exit 0 naming nothing: the remaining copies still agreed with each
-# other, and `WRONG_DOOR_MIN_LINES` only ever saw a block of one or two lines.
-# Up to five of the seven could have lost it. WATCHED at the head that repaired
-# it — the eleven-line block removed from `kiosk-demo-stylish`'s copy left this
-# script, `check-prose-counts`, `check-redteam-headers`, `check-shipped-archaeology`
-# and `check-demo-derivations` ALL at exit 0, so it was not that a sibling
-# covered what this rule skipped: nothing held the deletion at all.
-#
-# The two skips are DIFFERENT QUESTIONS and are now answered separately. No
-# label means the file has no wrong-door body — a true statement about the e2e
-# fixture, and one the `:code` comparison of this same path holds independently,
-# because the label is a CODE token: renaming `hint:` in one copy reddens the
-# `:code` rule, measured. A label with no block above it means the door is there
-# and the reason for it is gone, which is the divergence, not an exemption from
-# it.
-#
-# WHAT THIS RULE IS NOT. It does not say the block is CORRECT — K-1088 above
-# holds the live JSON body against the retired vocabulary and is where that
-# question lives. This one says only that the seven answers are the SAME answer,
-# so a wave that improves one has to improve all of them or go red.
+# WHAT THIS RULE IS NOT. It does not say the block is CORRECT — K-1088 above holds
+# the live JSON body against the retired vocabulary. This one says only that the
+# seven answers are the SAME answer, so a wave that improves one has to improve
+# all of them or go red.
 WRONG_DOOR_LABEL = "hint:"
 
 # The contiguous comment-only lines immediately above the `hint:` label, with
@@ -3735,43 +3334,28 @@ end
 
 # ── The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)
 #
-# The three `public/*.html` pages are held byte-identical across the operator
-# seven a few hundred lines above — and byte-identity only guarantees the seven
-# copies are WRONG TOGETHER. The check above reads the CSRF rescue body and
-# stops there, so the identical enumeration K-1088 deleted from that body stayed
-# LIVE in `public/404.html` of all seven: «Fetch /.well-known/kiosk.json for the
-# endpoints it actually serves — register/login, schema, query, run, pay».
-#
-# That page is the one with the wider reach of the two: PublicExceptions serves
-# it for EVERY unrouted path, which is why this file's own `why:` for it calls it
-# «the answer an assistant guessing web-app paths hits most often», where the
-# CSRF body is reached only after a JSON-dialing caller has already hit a human
-# form. And the class had ALREADY been swept once — `CHANGELOG.md`'s T-068 slice
-# 7 corrected 422.html and 500.html and left 404.html behind — so this is the
-# third survivor of one class. A check that reads only Ruby cannot see that.
+# The three `public/*.html` pages are held byte-identical across the operator seven
+# a few hundred lines above, and byte-identity only guarantees the seven copies are
+# WRONG TOGETHER. The rule above reads the CSRF rescue body and stops there, while
+# `public/404.html` has the wider reach of the two: PublicExceptions serves it for
+# EVERY unrouted path, where the CSRF body is reached only after a JSON-dialing
+# caller has already hit a human form.
 #
 # Two retired vocabularies are refused here, both deleted by a protocol MAJOR:
 #
 #   * RETIRED_WIRE_NAMES — the 0.3 verb list, for the reason stated above it.
 #   * RETIRED_ERROR_SHAPE — the word «envelope». 0.4 answers a FLAT RFC 9457
 #     problem document served as `application/problem+json`, whose top-level
-#     `code` is the branch point (K-808, T-074 = A); «envelope» is the word the
-#     deleted `{ok:false, error:{…}}` shape owned. The engine's own auth.md was
-#     corrected by T-068 slice 7 and kiosk-server's suite PINS the phrase out
-#     (`well_known_spec.rb`: `expect(body).not_to match(/JSON envelope/)`) — all
-#     three static pages kept it, so they described RFC 9457 in the vocabulary of
-#     the thing RFC 9457 replaced, on the surface least able to check.
+#     `code` is the branch point; «envelope» is the word the deleted
+#     `{ok:false, error:{…}}` shape owned, and kiosk-server's own suite pins the
+#     phrase out of the discovery document.
 #
-# THE WHOLE FILE IS JUDGED, COMMENTS INCLUDED — and that is the one place this
-# rule differs from the Ruby one above, which strips comments so a comment may
-# quote the retired string to explain why it went. It cannot here: an HTML
-# comment in a static page IS served, byte for byte, to whoever fetched the page.
-# MEASURED — `curl` at an unrouted path on a booted demo returns the header
-# comment along with the body, so a comment quoting the dead verb list would hand
-# that list to the very reader the fix exists to protect. The header comments on
-# these three pages therefore describe what the sentence used to say WITHOUT
-# reproducing it. prove is scanned too — its pages are the declared exception to
-# byte-IDENTITY, never an exception to what is true.
+# THE WHOLE FILE IS JUDGED, COMMENTS INCLUDED — the one place this rule differs
+# from the Ruby one above, which strips comments so that a comment may quote the
+# retired string to explain why it went. It cannot here: an HTML comment in a
+# static page IS served, byte for byte, to whoever fetched the page. prove is
+# scanned too — its pages are the declared exception to byte-IDENTITY, never an
+# exception to what is true.
 STATIC_SIGNPOST_PAGES = %w[public/404.html public/422.html public/500.html].freeze
 RETIRED_ERROR_SHAPE = /envelope/i
 
@@ -3811,18 +3395,11 @@ end
 
 # ── A deploy/env template may not cite a path that is not there (K-1093) ─────
 #
-# Six templates told an operator the PoW difficulty knob was «wired via
-# `lib/pow_difficulty.rb`». No demo has ever had a file at that path: it was
-# `app/services/pow_difficulty.rb` in all seven until T-189 promoted the module
-# into kiosk-pow-equihash, and `deploy/README.md` — the
-# runbook shipped in the same directory — said so correctly the whole time. So
-# the two disagreed about a path, and the templates are the file an operator
-# actually opens while editing values. The stale bootsnap caches still on disk
-# in each demo's `tmp/` name the OLD location, which is what this was: a cite
-# that was true once and rotted silently when the file moved. It is the SECOND
-# time a `deploy/` document has been found citing a path nobody verified
-# (`CHANGELOG.md`, 2026-07-21, same directory), which is what makes it a rule
-# rather than a fix.
+# A template in `deploy/` is the file an operator opens while editing values, and
+# a path it cites is a claim the tree can answer. A cite that was true once rots
+# silently the day the file moves, while the runbook shipped beside it goes on
+# being right — so the two disagree about where a knob lives, and the operator
+# reads the wrong one.
 #
 # `skooti.env.example` is the shape to PREFER and needs no rule at all — it
 # names the constant (`registration_pow_params =
@@ -3869,17 +3446,13 @@ end
 
 # ── The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)
 #
-# `lib/tasks/*.rake` sits outside SCAN_ROOTS, and the reason recorded up there
-# was true when it was written: a demo's rake file IS per-demo, task by task.
-# K-1043 made half of it false in one wave. Closing the flow harness's fail-open
-# — read the child's exit status before parsing its JSON — needed the same fifty
-# lines of comment and `def` in every demo, so the fleet now carries a construct
-# that is byte-identical in SIX rake files and load-bearing in SEVEN, in the one
-# directory nothing compares. bin/check-ci-tasks is not cover: it compares the
-# task INVENTORY (ci.yml against the tasks each demo defines, plus the README
-# table it generates), and never one demo's rake file against another's. So the
-# drift argument this whole check opens with applied verbatim, and to the one
-# construct every operator demo's ability to FAIL now rests on.
+# `lib/tasks/*.rake` sits outside SCAN_ROOTS because a demo's rake file IS
+# per-demo, task by task — and this construct is not. Reading the child's exit
+# status before parsing its JSON is the same fifty lines of comment and `def` in
+# every demo, so the fleet carries one construct that every operator demo's ability
+# to FAIL rests on, in the one directory nothing compares. bin/check-ci-tasks is
+# not cover: it compares the task INVENTORY, never one demo's rake file against
+# another's.
 #
 # The FRAGMENT is declared rather than the file, because the rest of the rake
 # file genuinely is per-demo. Each demo names its helper after itself
@@ -4031,94 +3604,35 @@ end
 
 # ── The host-detection block: lib/tasks/ is not compared, this construct is (K-1353)
 #
-# THE SECOND construct in `lib/tasks/*.rake`, and it is here for the reason the
-# flow-runner rule above is: that directory sits outside SCAN_ROOTS because a
-# demo's rake file IS per-demo task by task, and a construct hand-copied across
-# four of them is nevertheless a hand-copied construct with nothing watching it.
-# The demos in HOST_BLOCK_SHIPS below boot their servers on a vanity
-# `<demo>.demo.kiosk.tech` host, and every task that boots one opens with the
-# same block: an OPT-IN resolver
-# lookup (KIOSK_DEMO_HOST_LOOKUP unset means no outbound DNS query at all), a
-# `rescue StandardError` that is deliberately wider than `Resolv::ResolvError`
-# because `Resolv::ResolvTimeout` is not one of those, and the 127.0.0.1
-# fallback with the /etc/hosts hint an operator needs to reach the vanity name.
+# THE SECOND construct in `lib/tasks/*.rake`, here for the same reason as the
+# flow-runner rule above: that directory is outside SCAN_ROOTS because a demo's
+# rake file IS per-demo task by task, and a construct hand-copied across seven of
+# them is a hand-copied construct with nothing watching it. Every demo in
+# HOST_BLOCK_SHIPS boots its server on a vanity `<demo>.demo.kiosk.tech` host, and
+# every task that boots one opens with the same block: an OPT-IN resolver lookup
+# (KIOSK_DEMO_HOST_LOOKUP unset means no outbound DNS query at all), a `rescue
+# StandardError` deliberately wider than `Resolv::ResolvError` because
+# `Resolv::ResolvTimeout` is not one of those, and the 127.0.0.1 fallback with the
+# /etc/hosts hint an operator needs to reach the vanity name.
 #
-# WHAT IT LOOKED LIKE WHEN THIS RULE WAS WRITTEN, and why a scan-root change was
-# not the answer. MEASURED by extracting all twenty-five blocks, substituting the
-# demo's own name and grouping: FOUR distinct forms — thirteen a silent ternary,
-# six printing the operator hint with an em dash, four with a double hyphen, two
-# without the parentheses. Whether the run told an operator how to reach the
-# vanity host depended on which task they happened to run, which is an accident
-# rather than a decision. The obvious homes were both measured wrong before this
-# one was written: adding `lib/tasks/` to SCAN_ROOTS is a NO-OP, because the scan
-# globs `**/*.rb` and `kiosk-demo-*/lib/tasks/**/*.rb` matches zero files; and
-# teaching that glob `.rake` would then whole-file-compare eight rake files that
-# are per-demo by construction, which is the signal-drowning this file's own
-# header declines in writing. So: the construct is declared, and only it.
-#
-# WHAT IS COMPARED, AND WHY IT IS THE BLOCK'S MEANING RATHER THAN ITS BYTES.
-# Every block is read from its `host = begin` to the `end` at the same
-# indentation, the demo's OWN vanity host is substituted for a placeholder, and
-# what is left must agree across every site in every demo that ships one. The
-# substitution is the whole of the difference between bytes and meaning here:
-# the host name is the one thing that legitimately varies, and normalising it is
-# what makes «these four demos detect their host the same way» a checkable claim
-# instead of a diff. It also means a block naming a SIBLING's host — hoteling's
-# copy reaching for skooti's name — is red, because the substitution cannot
+# WHAT IS COMPARED IS THE BLOCK'S MEANING RATHER THAN ITS BYTES. Every block is
+# read from its `host = begin` to the `end` at the same indentation, the demo's OWN
+# vanity host is substituted for a placeholder, and what is left must agree across
+# every site in every demo that ships one. The substitution is the whole of the
+# difference: the host name is the one thing that legitimately varies. It also
+# means a block naming a SIBLING's host is red, because the substitution cannot
 # cancel a name that is not this demo's.
 #
-# NO `variants:` MAP, deliberately, and that is a difference from the flow-runner
-# rule rather than an oversight: tudu's flow helper is a genuine variant because
-# it builds the child process differently, whereas there is no way for one demo
-# to legitimately detect its own host differently from another. If one ever needs
-# to, the map is the change to make and the reason is the thing to write down.
+# NO `variants:` MAP, deliberately — there is no way for one demo to legitimately
+# detect its own host differently from another. If one ever needs to, the map is
+# the change to make and the reason is the thing to write down.
 #
-# `ships:` is the same declaration the COPIES entries carry, for the same reason
-# (K-860, K-883): a demo that grows a host-detecting task without being listed
-# fails here rather than becoming another copy nobody reasoned about, and a
-# listed demo that loses its last one fails too.
-#
-# `why:` FOR THE SET ITSELF, WHICH IT DID NOT CARRY (K-1379), AND THE SET IS NOW
-# EVERY OPERATOR DEMO THAT BOOTS A SERVER (K-1400). Every COPIES entry states a
-# reason; this one named four demos and said nothing about the three it left out,
-# so a reader could not tell a decision from a half-finished sweep. MEASURED at
-# head then, and the answer was: NOBODY DECIDED IT.
-#
-#   * philslist, stylish and tudu are operator demos that boot servers and have a
-#     deployed vanity host in `deploy/README.md` (`philslist.demo.kiosk.tech`,
-#     `stylish.demo.kiosk.tech`, `tudu.demo.kiosk.tech`, ports 3005-3007), and
-#     they shipped NO host-detection block: `command grep -c "host = begin"` over
-#     each one's `lib/tasks/demo.rake` -> 0, against 8 / 6 / 6 / 5 for the four
-#     listed. Their tasks hard-coded `http://127.0.0.1:#{port}` and therefore
-#     printed no hint that a vanity name existed.
-#   * There is nothing about them that makes the block inapplicable. It is
-#     opt-in on `KIOSK_DEMO_HOST_LOOKUP=1`, makes no outbound query otherwise,
-#     and falls back to loopback -- which is what those three did unconditionally.
-#   * The set was EXACTLY the four demos that carry a published `before-after.md`
-#     recording (`BEFORE_AFTER_FOUR` below is the same four names, arrived at
-#     independently). That is a correlation with the DOCUMENTS, not with any
-#     capability, and it was not chronological either: stylish predates two of the
-#     four. No ADR and no ledger row recorded a choice; K-1318 and K-1353 both
-#     swept «all twenty-five blocks» and neither asked about the demos with none.
-#
-# THE DECISION, taken because the `why:` above could name no reason for the line
-# it drew: the block is now in EVERY operator demo — `HOST_BLOCK_SHIPS` is that
-# set, declared below and derived from nothing else — plus sixteen further
-# sites when the decision was taken (2026-09-07; a reading of that day, and the
-# only half of it this script holds is the demo set). WHAT AN OPERATOR'S RUN
-# PRINTS CHANGED, and that is the whole visible effect: a task in philslist,
-# stylish or tudu that used to say nothing now prints, once, «(using
-# 127.0.0.1 — to reach <demo>.demo.kiosk.tech instead, add it to /etc/hosts as
-# 127.0.0.1 and set KIOSK_DEMO_HOST_LOOKUP=1)», and with that env var AND an
-# /etc/hosts entry it dials the vanity name instead of loopback. Nothing else
-# moves: the lookup stays opt-in so no run gains an outbound DNS query, the
-# server is still BOUND to 127.0.0.1 in every demo, and only the URL the
-# harness dials (hence the `Host` header) follows the name. The three demos'
-# `config/environments/development.rb` gained the `config.hosts <<` entry the
-# block's own comment requires, without which the printed /etc/hosts line would
-# earn a Rails 8 HostAuthorization 403.
-# `kiosk-demo-prove` is deliberately NOT in the set: it is an ISSUER, not a Kiosk
-# operator, its rake file boots no server of its own, and a sibling boots it.
+# `ships:` is the same declaration the COPIES entries carry, for the same reason: a
+# demo that grows a host-detecting task without being listed fails here rather than
+# becoming another copy nobody reasoned about, and a listed demo that loses its
+# last one fails too. The set is every operator demo that boots a server;
+# `kiosk-demo-prove` is out of it because it is an ISSUER whose rake file boots no
+# server of its own.
 HOST_BLOCK_REL   = "lib/tasks/demo.rake"
 HOST_BLOCK_SHIPS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 HOST_BLOCK_OPEN  = /\A(\s*)host = begin\s*\z/
@@ -4250,41 +3764,31 @@ end
 
 # ── Every task that boots a server detects its host (K-1413) ─────────────────
 #
-# THE RULE ABOVE HOLDS THE BLOCKS THAT EXIST AND CANNOT SEE ONE GO MISSING.
-# Its two halves are «every block that is there must agree after substitution»
-# and «a declared demo must have at least one». MEASURED (K-1413): replacing ONE
-# of stylish's six blocks with a hard-coded loopback literal left the guard at
-# exit 0 — the other five still agreed with everyone else's, and the demo still
-# had blocks, so both halves passed while one task quietly stopped telling an
-# operator the vanity name existed. K-1400 then took the guarded population from
-# twenty-five sites in four demos to forty-one in seven, which widened the blind
-# spot rather than closing it.
+# THE RULE ABOVE HOLDS THE BLOCKS THAT EXIST AND CANNOT SEE ONE GO MISSING: its
+# two halves are «every block that is there must agree after substitution» and «a
+# declared demo must have at least one», so one task that loses its block and
+# hard-codes loopback leaves both halves passing.
 #
-# WHAT CLOSES IT IS A PAIRING, NOT A COUNT. A per-demo tally would be a
-# hand-kept number — the thing K-863 and K-1379 both record going stale — so the
-# rule is derived from the file instead: the rake file is cut at every `task`
-# declaration, and in each task the number of `host = begin` blocks must be 1 if
-# that task boots a server and 0 if it does not. Losing one block leaves a
-# booting task with none, which is red; adding a booting task without one is red
-# for the same reason and needs no edit here; and a block left behind in a task
-# that no longer boots is red too, because a resolver lookup nothing dials is a
-# lie about what the run does.
+# WHAT CLOSES IT IS A PAIRING, NOT A COUNT. A per-demo tally would be a hand-kept
+# number, so the rule is derived from the file instead: the rake file is cut at
+# every `task` declaration, and in each task the number of `host = begin` blocks
+# must be 1 if that task boots a server and 0 if it does not. Losing one block
+# leaves a booting task with none, which is red; adding a booting task without one
+# is red for the same reason and needs no edit here; and a block left behind in a
+# task that no longer boots is red too, because a resolver lookup nothing dials is
+# a lie about what the run does.
 #
-# WHAT COUNTS AS BOOTING, and why it is two spellings rather than one. Five
-# demos spawn `bundle exec rails s` inline (hoteling and skooti wrap theirs in a
+# WHAT COUNTS AS BOOTING, and why it is two spellings rather than one. Most demos
+# spawn `bundle exec rails s` inline (hoteling and skooti wrap theirs in a
 # task-local `boot_server` lambda called two or three times, which is still ONE
 # spawn site and ONE host block). philslist and tudu hoist the spawn into a
-# file-level `<demo>_boot_server` helper that takes the host as a KEYWORD, so
-# their tasks boot by calling it. The helper itself lives before the first task
-# and is deliberately outside the pairing: it has no host to detect, it is
-# handed one.
+# file-level `<demo>_boot_server` helper that takes the host as a KEYWORD, so their
+# tasks boot by calling it; the helper itself lives before the first task and is
+# deliberately outside the pairing, because it has no host to detect — it is handed
+# one.
 #
-# TWO TASKS FAILED THIS THE DAY IT WAS WRITTEN and were fixed rather than
-# excepted: getgrocery's `check:pow` and hoteling's `check:browse` both spawned a
-# server and hard-coded `http://127.0.0.1:#{port}`, so K-1400's sweep — whose
-# own prose says «every task that boots one opens with the same block» — had
-# missed them, and nothing could have said so. There is no exemption list here
-# on purpose: an exemption is the hand-kept thing this rule exists to avoid.
+# There is no exemption list, on purpose: an exemption is the hand-kept thing this
+# rule exists to avoid.
 HOST_PAIR_BOOT = "bundle exec rails s "
 HOST_PAIR_TASK = /\A\s*task[\s(:]/
 
@@ -4343,14 +3847,6 @@ end
 # being edited. One clause pasted flush left takes the common prefix to zero and
 # every OTHER line keeps the raw source indentation it was written with — the
 # paragraph that was added looks right and the twenty around it move.
-#
-# MEASURED (K-1549): the K-1538 wave inserted the same three-line clause into
-# three demos; in tudu it landed inside the existing indentation and in
-# atablefor and philslist it landed at column 0, which re-indented both whole
-# descriptions by four spaces and broke their bullet lists. Nothing saw it. The
-# lockstep rules above do not compare `lib/tasks/`, and the ones that do compare
-# constructs inside it (K-1046, K-1353, K-1413) read code, not description
-# prose. The bare run was green for a day on a surface an operator reads.
 #
 # WHY A MINIMUM INDENT IS THE WHOLE RULE. A zero here is not a style opinion: a
 # `desc` is nested inside `namespace :demo do`, so every line an author intends
@@ -4424,173 +3920,51 @@ end
 
 # ── A shared UNIT inside a `:per_demo` file (T-120) ──────────────────────────
 #
-# The lockstep rule's handle is a relative PATH, so a method shared by two demos
-# inside a file the manifest calls `:per_demo` — which this file's own header
-# defines as «Not compared» — sits BELOW its granularity and is compared to
-# nothing. That is not hypothetical and it is not new: `whole_number/1` is
-# byte-identical in atablefor and getgrocery (K-1027/K-1020) and `missing/1` in
-# getgrocery, hoteling and skooti, five hand-copies across two methods, all
-# inside `app/operations/wire_arguments.rb`, which is `:per_demo` for a good
-# reason — the guards ARE each demo's argument vocabulary, and sharing the FILE
-# would mean shipping every demo guards for arguments it does not take.
+# The lockstep rule's handle is a relative PATH, so a method or constant shared by
+# two demos inside a file the manifest calls `:per_demo` — «not compared» — sits
+# BELOW its granularity and is compared to nothing. So the unit is DECLARED and
+# COMPARED, the way the flow-runner rule declares a fragment inside another
+# uncompared file. What it takes from that rule, and what it does not:
 #
-# WHY THIS SHAPE AND NOT THE OTHER TWO T-120 NAMED.
+#   * TAKES the `ships:` declaration and the two-directional staleness check, so a
+#     demo growing a copy fails rather than becoming another copy nobody reasoned
+#     about, and a demo losing one fails too.
+#   * TAKES the file-level manifest's `except:` map — «one copy that legitimately
+#     differs from its siblings» — one level down, because without it the manifest
+#     could not state a true thing: `app/models/user.rb#devise` loads an extra
+#     Devise module in tudu alone, the one demo whose humans sign themselves up,
+#     and the only declarable file-level rule was `:per_demo`. The exception is
+#     checked exactly as hard as the file-level one: a reason may not be blank, an
+#     exception for a demo that no longer defines the unit is stale, an exception
+#     whose copy has CONVERGED on its siblings is stale, and an entry where every
+#     copy but one is excepted guards nothing and says so.
+#   * TAKES the loud-failure-on-unreadable rule: a unit the extractor cannot read
+#     back as valid Ruby is an ERROR, never a silent skip, because a lockstep rule
+#     with nothing to compare passes everything.
+#   * DOES NOT take «compare the prose too». Each copy's prose is that demo's own
+#     reasoning about its own arguments, and each is correct. So the comparison is
+#     `:code` — the manifest's own «identical once comments and whitespace are
+#     normalised away» — applied one level down through the same {code_norm}.
 #
-#   * PROMOTING the shared half into the gem the fleet already reaches for
-#     (Phil's rule, T-089/K-792) is the right answer for a thing with a public
-#     contract, and the wrong one here: `whole_number` is a four-line predicate
-#     and `missing` is a three-line sentence, and putting either behind a gem
-#     boundary buys a versioned public API, a CHANGELOG entry and a release for
-#     each future word of a refusal message — while the copies stop being
-#     readable next to the guard that calls them, which is most of their value.
-#     The promotions this file has seen went the other way round: `UuidCheck`
-#     and `PowDifficulty` moved into a gem because each has a contract two
-#     parties read. A four-line predicate has one caller and no contract, and
-#     the restraint applies twice as hard one level down.
-#   * DECLARING the set as a known duplicate with a reason buys detection of a
-#     THIRD copy and nothing else — the one-sided edit, which is the entire
-#     class this script exists for, stays exactly as undetectable as it was.
+# DISCOVERY, not just declaration, is the half that makes this a check rather than
+# a list: every unit name that appears in TWO OR MORE copies of a declared path
+# must be in FRAGMENTS, so a new shared method cannot appear silently. It is also
+# why a shared NAME with different bodies is declared `:per_demo` here rather than
+# left out — a reader should be told once instead of discovering it by diffing.
 #
-# So the unit is DECLARED and COMPARED, the way the K-1046 flow-runner rule
-# already declares and compares a fragment inside another uncompared file. Two
-# things it takes from that rule and one it does not:
+# THE CRITERION FOR TAKING A PATH, so the next one is judged the same way: take it
+# when every unit shared by two or more copies is either identical, or differs for
+# a reason that belongs to the DEMO — its own vocabulary, its own fixture, its own
+# operator identity. Leave it when a shared name differs only by HARNESS
+# GENERATION, because a `:per_demo` fragment entry would then record an accident as
+# a decision. Either way the path is declared: every `:per_demo` path is in
+# FRAGMENT_PATHS or named in FRAGMENT_EXCLUDED with a reason, and a declared path
+# that shares NOTHING is reported by name rather than counted as a file this rule
+# holds.
 #
-#   * TAKES the `ships:` declaration (K-860, K-883) and the two-directional
-#     staleness check, so a demo growing a copy fails rather than becoming a
-#     fourth copy nobody reasoned about, and a demo losing one fails too.
-#   * TAKES, since K-1263, the file-level manifest's `except:` map — «one copy
-#     that legitimately differs from its siblings», the K-643 escape hatch,
-#     one level down. WITHOUT IT THE MANIFEST COULD NOT STATE A TRUE THING:
-#     `app/models/user.rb#devise` is `devise :database_authenticatable` in six
-#     demos and `devise :database_authenticatable, :registerable` in tudu, the
-#     one demo whose humans sign themselves up. `:code` failed on tudu, and
-#     pinning `ships:` to the six failed on tudu as a stray, because discovery
-#     requires every copy of a shared unit to be in its entry's set — so the
-#     only declarable rule was `:per_demo`, and SIX copies of the line that
-#     decides which Devise modules an operator's human IdP loads were compared
-#     to nothing. The exception is DECLARED with what makes that copy
-#     different, and it is checked exactly as hard as the file-level one: a
-#     reason may not be blank, an exception for a demo that no longer defines
-#     the unit is stale, an exception whose copy has since CONVERGED on its
-#     siblings is stale, and an entry where every copy but one is excepted
-#     guards nothing and says so. A seventh demo growing a divergent `devise`
-#     line still reddens, because it is compared, not excepted.
-#   * TAKES the loud-failure-on-unreadable rule: a unit the extractor cannot
-#     read back as valid Ruby is an ERROR, never a silent skip, because a
-#     lockstep rule with nothing to compare passes everything.
-#   * DOES NOT take «compare the prose too». The flow-runner block is ONE
-#     construct with ONE argument written above it, so its header is part of
-#     what is copied. These units are the opposite: each copy's prose is that
-#     demo's own reasoning about its own arguments — atablefor's `whole_number`
-#     explains a party, getgrocery's a quantity, and both are correct. So the
-#     comparison is `:code`, the manifest's own «identical once comments and
-#     whitespace are normalised away», applied one level down through the same
-#     {code_norm}.
-#
-# DISCOVERY, not just declaration, and that is the half that makes this a check
-# rather than a list: every unit name that appears in TWO OR MORE copies of a
-# declared path must be in FRAGMENTS. A new shared method cannot appear
-# silently, which is the property the file-level manifest has and the reason six
-# of those copies were found at all. It is also why `priceable_total` is
-# declared `:per_demo` below rather than left out — getgrocery's takes a total,
-# hoteling's takes a total AND the nights it spans, and a shared NAME with
-# different bodies is a thing a reader should be told about once rather than
-# discover by diffing.
-#
-# WHICH PATHS ARE IN, AND THE RULE THE NEXT ONE IS JUDGED BY (T-136, T-145).
-# Seventeen manifest paths are `:per_demo`. Running the extractor below over all
-# seventeen at head finds **124 unit NAMES shared by two or more copies**, of
-# which **76** also have identical bodies once comments and whitespace are
-# normalised away. Both readings are stated because they answer different
-# questions: discovery fires on a shared NAME whatever the bodies do, and only
-# the narrower number is what a lockstep rule can actually hold. Re-measured for
-# T-136 with the extractor above — the 100/38 this paragraph carried before is
-# not reproducible at head under either reading, nor under a third (55) that also
-# requires the unit to exist in every copy of its path; the tree moved, and the
-# extractor stopped dropping a name's second definition.
-#
-# THE FIRST QUESTION WAS NOT «WHICH UNITS» BUT «IS THE MANIFEST ENTRY RIGHT»,
-# because a fragment rule on a path that should have been compared WHOLE
-# entrenches the wrong granularity — and the rule below deliberately errors on a
-# `:code` path for exactly that reason. MEASURED, and the answer is no for the
-# two entries that looked likeliest: `script/pay_window.rb` normalises to 194
-# lines in hoteling and 181 in skooti with only 100 in common (a 198-line
-# unified diff), and `script/binding_flow.rb` to 69 / 125 / 119 lines across
-# atablefor / philslist / stylish. Their UNITS agree; their beats — the
-# fixtures, the verbs driven, the terminal assertion — do not, which is what
-# those `:per_demo` entries already say. The entries stand.
-#
-# THE CRITERION FOR TAKING A PATH, applied to each one below and written down so
-# the next one is judged the same way: take it when every unit shared by two or
-# more copies is either identical, or differs for a reason that belongs to the
-# DEMO — its own vocabulary, its own fixture, its own operator identity. Leave it
-# when a shared name differs only by HARNESS GENERATION, because a `:per_demo`
-# fragment entry would then record an accident as a decision, and the convergence
-# that ought to happen instead (T-119) would arrive as a red build demanding a
-# dozen re-declarations.
-#
-# TAKEN — every `:per_demo` path that passes it, which is FOURTEEN of the
-# seventeen and 88 of the 124 shared names. EVERY FIGURE FROM HERE TO THE END
-# OF THIS PARAGRAPH IS THIS SCRIPT'S OWN READING OF 2026-08-28 — the
-# `:per_demo` unit comparison over the tracked tree, no hand-run grep in it —
-# and it is kept as the ARGUMENT FOR THE RULE, not as a live figure. What the
-# fleet shares TODAY is what a bare run answers, and it answers it by failing
-# on the pair that drifted rather than by printing a total. Shared/identical
-# on that day:
-# `script/binding_flow.rb` 16/16, `script/pay_window.rb` 19/15 (the four that
-# differ are `reserve!`, `payment_state`, `cart_for` and `settlements_for` —
-# booking_id against reservation_id, a room-night against a scooter-minute),
-# `spec/wire_arguments_spec.rb` 8/7 (T-145; the odd one is each demo's own
-# fixture DAY), `script/pow_flow.rb` 7/6, `script/prove_broker_boot.rb` 9/4 (T-147 split four
-# per-operator units out of `with_broker` so the other 54 lines could be held),
-# `app/operations/wire_arguments.rb` 4/3 (T-120's original path),
-# `app/operations/request_kyc_operation.rb` 5/3, `script/register_flow.rb` 4/4,
-# `app/services/prove_trust.rb` 3/2, `app/models/booking.rb` 3/1,
-# `app/models/cart_mandate.rb` 3/2 and `app/models/user.rb` 3/0 (T-146 — all
-# nine of those units are class macros, and every one of them was invisible
-# until the handle learned to read a class body),
-# `app/controllers/home_controller.rb` 3/1 and
-# `app/operations/operation_result.rb` 1/0. That last one holds nothing today:
-# its single shared unit is a same-name-different-body declaration. What it
-# buys is DISCOVERY over seven copies of shipped code, which is where the next
-# method quietly shared by the fleet — the K-792 promotion signal — has to show
-# up.
-#
-# THE TWO PATHS THIS PARAGRAPH USED TO NAME AS «LEFT ALONE» ARE IN THE RULE NOW
-# (T-100). It read that `script/isolation_flow.rb` shared 8 names over seven
-# copies with 4 identical and `script/schema_flow.rb` 3 with 2, and that their
-# `get_json` had six and three distinct bodies — the same helper written once
-# per demo, which is what made a driver unportable between two of them. Neither
-# file carries an HTTP helper any more: both open on one
-# `Kiosk::Redteam::Wire`, so what the handle finds in them is the environment
-# they read and the driver they build, and both are declared below.
-#
-# `script/redteam_suite.rb` USED TO LEAD THIS PARAGRAPH with 25 shared names and
-# a six-bodied `get_json` of its own. It no longer does: its HTTP driver, result
-# ledger, printed vocabulary and exit contract are `Kiosk::Redteam::Wire` and
-# `Kiosk::Redteam::Battery`, so `def bearer` and `def record` occur zero times
-# across those seven files and `def get_json` once. It stays out of
-# FRAGMENT_PATHS for a narrower reason now, stated in FRAGMENT_EXCLUDED below.
-#
-# THE PATH THE HANDLE COULD NOT REACH, AND WHAT IT COST (T-146).
-# `app/models/cart_mandate.rb` has three copies and, until 2026-08-31, ZERO
-# units — because what they share is a `scope :referencing, ->`, a `has_many`
-# and a `self.table_name`, and FRAGMENT_START matched a `def` or a constant.
-# The path was left OUT of FRAGMENT_PATHS and the only record of that was this
-# paragraph, which is the defect: an exclusion nothing checks reads exactly
-# like coverage. Both halves are closed. The handle now takes its start points
-# from the PARSE TREE as well (see class_macro_starts below), which found TEN
-# shared units the `def`-or-constant handle had never seen — three in
-# cart_mandate.rb, two each in booking.rb, user.rb and home_controller.rb, one
-# in request_kyc_operation.rb — and moved the fleet-wide count from 114/72 to
-# 124/76. And every `:per_demo` path is now either in FRAGMENT_PATHS or named
-# in FRAGMENT_EXCLUDED with a reason, with a path that shares NOTHING reported
-# by name rather than counted as a file this rule holds.
-#
-# A hundred declarations with a hundred reasoned `why:` lines is still a manifest
-# nobody would read, and a manifest nobody reads is how «declared» stops meaning
-# «reasoned about». The criterion above is what keeps this at 88 entries rather
-# than 124, and it is a judgement about VALUE — not a budget.
+# HOW MANY UNITS THE FLEET SHARES IS WHAT A BARE RUN ANSWERS, and it answers by
+# failing on the pair that drifted rather than by printing a total. No count of
+# them is written down here.
 FRAGMENT_PATHS = %w[
   app/controllers/home_controller.rb
   app/models/booking.rb
@@ -4610,33 +3984,21 @@ FRAGMENT_PATHS = %w[
   script/schema_flow.rb
 ].freeze
 
-# AND THE PATHS THAT ARE NOT IN IT, DECLARED (T-146).
-#
-# THIS LIST EXISTS BECAUSE ITS ABSENCE WAS THE DEFECT. `app/models/cart_mandate.rb`
-# was left out of FRAGMENT_PATHS because the handle could not see a `scope`, and
-# the only record of that was a paragraph in this file's header — so a path
-# contributing NOTHING looked exactly like a path that had been checked. Every
-# `:per_demo` entry in COPIES is now either in FRAGMENT_PATHS or named here with
-# a reason, and the check below fails on a path in neither, on an entry for a
-# path that is not `:per_demo`, on an entry that is also in FRAGMENT_PATHS, and
-# on a blank reason. An undeclared exclusion is the thing this rule is about.
+# AND THE PATHS THAT ARE NOT IN IT, DECLARED. Every `:per_demo` entry in COPIES is
+# either in FRAGMENT_PATHS or named here with a reason, and the check below fails
+# on a path in neither, on an entry for a path that is not `:per_demo`, on an entry
+# that is also in FRAGMENT_PATHS, and on a blank reason. An undeclared exclusion
+# reads exactly like coverage, which is what this list exists to prevent.
 FRAGMENT_EXCLUDED = {
   "script/redteam_suite.rb" =>
-    "THE HARNESS IS NO LONGER IN THESE FILES, SO THE REASON THIS PATH IS OUT HAS CHANGED — and " \
-    "the old one is recorded here because it was this manifest's largest single entry. It read " \
-    "«25 unit names shared across seven copies, `get_json` alone has SIX distinct bodies», which " \
-    "was the two-harness split: the same helper written six ways, so a beat could not be moved " \
-    "between two suites without a rewrite. That is gone. MEASURED at head with `command grep -c` " \
-    "over these seven files: `def bearer` and `def record` occur ZERO times, `def get_json` and " \
-    "`def post_json` once each — tudu's two-line delegators onto its Devise session, which needs " \
-    "the human's cookie jar. The HTTP driver, the result ledger, the printed vocabulary and the " \
-    "exit contract are `Kiosk::Redteam::Wire` and `Kiosk::Redteam::Battery`, held by that gem's " \
-    "own suite rather than by a copy comparison. WHAT KEEPS THE PATH OUT NOW is narrower and " \
-    "durable: what these files still share by NAME is the `Scenario` subclass vocabulary — " \
-    "`initialize`, `call`, `refused`, `check`, `pay_with_ref` — over beats that attack different " \
-    "verbs, so the bodies genuinely differ and always will. Discovery is all-or-nothing per " \
-    "path, so taking it would mean declaring twenty settled `:per_demo` variants to hold a " \
-    "handful of units, which is a manifest nobody reads for a guarantee the gem already gives.",
+    "What these seven copies still share by NAME is the `Scenario` subclass vocabulary — " \
+    "`initialize`, `call`, `refused`, `check`, `pay_with_ref` — over beats that attack " \
+    "different verbs, so the bodies genuinely differ and always will. The HTTP driver, the " \
+    "result ledger, the printed vocabulary and the exit contract are `Kiosk::Redteam::Wire` " \
+    "and `Kiosk::Redteam::Battery`, held by that gem's own suite rather than by a copy " \
+    "comparison. Discovery is all-or-nothing per path, so taking this one would mean " \
+    "declaring twenty settled `:per_demo` variants to hold a handful of units — a manifest " \
+    "nobody reads, for a guarantee the gem already gives.",
 }.freeze
 
 # The demo sets and the reasons several fragment entries share, stated once so N
@@ -5195,15 +4557,11 @@ FRAGMENTS = {
   "script/prove_broker_boot.rb#with_broker" => {
     rule:  :code,
     ships: KYC_DEMOS,
-    why:   "THE SHARED HALF, AND IT IS THE REASON T-147 EXISTS. Declared `:per_demo` until " \
-           "2026-08-31, when the entry read «everything else — the DB setup, the spawn, the " \
-           "at_exit stop, the 40-second readiness poll — is line-for-line the same»: MEASURED, 46 " \
-           "of getgrocery's 64 normalised lines and skooti's 61 were common, and `:per_demo` means " \
-           "compared to NOTHING, so ~55 lines of real shared logic were held by no gate. The four " \
-           "lines that genuinely differed were all operator identity and now live in the four " \
-           "per-demo units above; what is left is operator-neutral and normalises to 54 identical " \
-           "lines in both copies. An edit to the readiness poll, the teardown or the DB setup that " \
-           "reaches one demo now fails the build.",
+    why:   "THE SHARED HALF: the DB setup, the spawn, the at_exit stop and the readiness poll " \
+           "are line-for-line the same in both copies and operator-neutral, while the four " \
+           "lines that carry operator identity live in the four per-demo units above. An edit " \
+           "to the readiness poll, the teardown or the DB setup that reaches one demo now " \
+           "fails the build.",
   },
 
   # ── script/register_flow.rb — philslist, stylish (T-136) ───────────────────
@@ -5507,59 +4865,44 @@ FRAGMENTS = {
 # the terminator AND the validity check in one: a fragment that never parses is
 # reported rather than silently dropped.
 #
-# EVERY definition and not the FIRST, and that is a silent hole closed rather
-# than a refinement (T-136). This rule was written against
-# `app/operations/wire_arguments.rb` — one module, where a name occurs once — and
-# it kept the first definition and dropped the rest without saying so.
-# `script/pay_window.rb` has TWO PSP stubs, BlockingPsp and CountingPsp, and both
-# define `initialize`, `capture` and `setup_required?`: the moment that path
-# joined FRAGMENT_PATHS the summary would have counted three units as held while
-# three definitions were compared to NOTHING, inside the driver whose whole
-# subject is a payment window. Concatenating keeps the handle a bare NAME, so
-# every declaration already written stays valid, and makes the comparison cover
-# the file — a copy that edits its SECOND `capture`, or that reorders the two
-# classes, now fails. It also corrects a MEASUREMENT: taken before this change,
-# `script/redteam_suite.rb` read `initialize` and `call` as identical across
-# getgrocery, hoteling and skooti, when one copy defines each of them NINE times
-# and only the first was ever compared.
+# EVERY definition and not the FIRST: a name may be defined more than once in one
+# file — `script/pay_window.rb` has two PSP stubs that both define `initialize`,
+# `capture` and `setup_required?` — so the definitions are concatenated in file
+# order. The handle stays a bare NAME, so every declaration already written stays
+# valid, and a copy that edits its SECOND `capture`, or reorders the two classes,
+# now fails.
 FRAGMENT_START = /\A\s*(?:def\s+(?:self\.)?([a-z_][A-Za-z0-9_]*[?!=]?)|([A-Z][A-Za-z0-9_]*)\s*=[^=~>])/
 FRAGMENT_MAX_LINES = 200
 
-# THE SECOND HANDLE: A CLASS-BODY MACRO (T-146).
+# THE SECOND HANDLE: A CLASS-BODY MACRO.
 #
-# `FRAGMENT_START` above is a `def` or a constant, and that made every unit
-# written in a DSL invisible. MEASURED, and this is the row's own example:
-# `app/models/cart_mandate.rb` ships in getgrocery, hoteling and skooti, its
-# three copies share a `scope :referencing`, a `has_many :settlements` and a
-# `self.table_name` — and the extractor found ZERO units in all three. The path
-# was therefore left OUT of FRAGMENT_PATHS rather than declared, so nothing in
-# the manifest recorded that it contributed nothing. That is the defect: the
-# exclusion read like coverage.
+# `FRAGMENT_START` above is a `def` or a constant, which made every unit written in
+# a DSL invisible: three copies of `app/models/cart_mandate.rb` share a `scope`, a
+# `has_many` and a `self.table_name`, and the extractor found ZERO units in all
+# three.
 #
-# THE HANDLE IS DERIVED, NOT LISTED, and that is the whole design. An earlier
-# draft of this declared a vocabulary of macro heads — `scope`, `validates`,
-# `has_many` — which is the hand-kept inventory this repository has been wrong
-# about four times (K-863, K-1213, K-1227, K-1232): a head nobody thought of is
-# invisible, and a head that stops occurring reads as coverage forever. So the
-# start points come from the PARSE TREE instead: every statement in a `class` or
-# `module` body that is a bare method call — `scope :x, -> {...}`,
-# `has_many :y`, `devise :database_authenticatable`, `layout false` — plus every
-# `self.<attr> = …` assignment. A macro this repository has never used before is
-# reached the day it is written, with no edit here.
+# THE HANDLE IS DERIVED, NOT LISTED, and that is the whole design. A vocabulary of
+# macro heads — `scope`, `validates`, `has_many` — is the hand-kept inventory this
+# repository has been wrong about repeatedly: a head nobody thought of is invisible,
+# and a head that stops occurring reads as coverage forever. So the start points
+# come from the PARSE TREE instead: every statement in a `class` or `module` body
+# that is a bare method call — `scope :x, -> {...}`, `has_many :y`,
+# `devise :database_authenticatable`, `layout false` — plus every `self.<attr> = …`
+# assignment. A macro this repository has never used before is reached the day it
+# is written, with no edit here.
 #
-# THE NAME IS THE HEAD ALONE, not the head and its first argument. `belongs_to`
-# in atablefor's booking.rb is ONE unit holding all three associations in file
-# order, exactly as `capture` is one unit holding both PSP stubs' definitions
-# (T-136, the concatenation rule above). That is deliberate: an association
-# DELETED in one copy is the drift this rule exists for, and a per-argument name
-# would report it as a unit that simply stopped being shared.
+# THE NAME IS THE HEAD ALONE, not the head and its first argument, so `belongs_to`
+# is ONE unit holding every association in file order — exactly as `capture` is one
+# unit holding both PSP stubs' definitions above. An association DELETED in one
+# copy is the drift this rule exists for, and a per-argument name would report it
+# as a unit that simply stopped being shared.
 #
 # WHAT IT STILL CANNOT SEE, stated because an over-claimed handle is this rule's
-# own recurring defect: a macro called at the top level of a file rather than in
-# a class or module body; a macro generated by another macro; a `def` created by
+# own recurring defect: a macro called at the top level of a file rather than in a
+# class or module body; a macro generated by another macro; a `def` created by
 # `define_method`; and any shared code that is neither a definition nor a
-# class-body statement. The vacuity arm below is the only thing that can tell
-# you the handle has stopped finding anything at all.
+# class-body statement. The vacuity arm below is the only thing that can tell you
+# the handle has stopped finding anything at all.
 def class_macro_starts(node, out = [])
   return out unless node.is_a?(Array)
 
@@ -5805,15 +5148,13 @@ FRAGMENTS.each do |id, entry|
   end
 end
 
-# VACUITY FOR THE EXCEPTION MECHANISM (K-1263). `except:` is an EXEMPTION, not a
-# ban, so «its pattern must match something» is the right direction: an exception
-# that is never REACHED is an exception that is not excusing anything, and the
-# entry it sits in would then be comparing copies it thinks it is not. The two
-# arms above cover a single entry (stale demo, converged copy); this one covers
-# the mechanism — if the manifest declares exceptions and none of them was live
-# in this run, the partition stopped running rather than the tree stopped needing
-# it, and a `:code` entry silently comparing an excepted copy is a red build for
-# the wrong reason, or worse, a green one.
+# VACUITY FOR THE EXCEPTION MECHANISM. `except:` is an EXEMPTION, not a ban, so
+# «its pattern must match something» is the right direction here: an exception that
+# is never REACHED is not excusing anything, and the entry it sits in would then be
+# comparing copies it thinks it is not. The two arms above cover a single entry
+# (stale demo, converged copy); this one covers the mechanism — if the manifest
+# declares exceptions and none of them was live in this run, the partition stopped
+# running rather than the tree stopped needing it.
 declared_exceptions = FRAGMENTS.sum { |_, e| (e[:except] || {}).size }
 if declared_exceptions.positive? && fragment_exceptions_live.zero?
   errors << "check-demo-copies: FRAGMENTS declares #{declared_exceptions} `except:` " \
@@ -5829,24 +5170,19 @@ if FRAGMENTS.any? && fragment_comparisons.zero?
             "a lockstep rule with nothing to compare passes everything."
 end
 
-# VACUITY FOR THE PARTIAL-CONVERGENCE RULE (K-1262), AND IT IS DELIBERATELY NOT
-# «THE PATTERN MUST MATCH SOMETHING».
+# VACUITY FOR THE PARTIAL-CONVERGENCE RULE, AND IT IS DELIBERATELY NOT «THE PATTERN
+# MUST MATCH SOMETHING».
 #
 # That arm is right for a rule that LOOKS for a thing and wrong for a rule that
-# FORBIDS one. `agree:`'s discovery half is a ban — no undeclared group of
-# agreeing copies inside a `:per_demo` entry — and a ban whose violations match
-# nothing is the ban being obeyed, which is the state this repository wants to be
-# in. Requiring an undeclared group to exist would require the defect to exist.
-#
-# So the liveness is asserted on the DECLARATIONS instead, through exactly the
-# machinery the ban uses: every declared group is re-derived from the tree by the
-# same grouping pass, and the count of groups CONFIRMED that way is checked
-# against the count declared. If the grouping stops running — a `next` in the
-# wrong place, a normaliser that returns nothing, an entry key that stops being
-# read — nothing is grouped, so nothing is undeclared, so the ban passes silently.
-# It cannot pass silently AND confirm a declared group at the same time. This is
-# the EARLIER_WIRES lesson applied to a rule of the opposite polarity: what must
-# be alive is the measurement, not the offence.
+# FORBIDS one. `agree:`'s discovery half is a ban — no undeclared group of agreeing
+# copies inside a `:per_demo` entry — and a ban whose violations match nothing is
+# the ban being obeyed. So the liveness is asserted on the DECLARATIONS instead,
+# through exactly the machinery the ban uses: every declared group is re-derived
+# from the tree by the same grouping pass, and the count of groups CONFIRMED that
+# way is checked against the count declared. If the grouping stops running nothing
+# is grouped, so nothing is undeclared, so the ban passes silently — and it cannot
+# pass silently AND confirm a declared group at the same time. What must be alive
+# is the measurement, not the offence.
 declared_agree_groups = COPIES.sum { |_, e| (e[:agree] || {}).size } +
                         FRAGMENTS.sum { |_, e| (e[:agree] || {}).size }
 if declared_agree_groups.positive? && agree_groups.zero?
@@ -5858,14 +5194,11 @@ if declared_agree_groups.positive? && agree_groups.zero?
             "exiting 0 (K-1262)."
 end
 
-# VACUITY, TWO ARMS, BOTH T-146.
+# VACUITY, TWO ARMS.
 #
-# The first is the one this row was filed for. `app/models/cart_mandate.rb` sat
-# OUTSIDE FRAGMENT_PATHS because the extractor found zero units in all three of
-# its copies, and the only record of that was a paragraph of header prose — a
-# path contributing nothing looked exactly like a path that had been checked.
-# Inside the list the same silence is worse, because the summary counts the path.
-# So a declared path that shares NOTHING is named.
+# The first: a declared path that shares NOTHING is NAMED. A path contributing
+# nothing otherwise looks exactly like a path that has been checked, and inside
+# FRAGMENT_PATHS the silence is worse, because the summary counts the path.
 FRAGMENT_PATHS.each do |rel|
   shared = fragment_sources.count { |id, per_demo| id.start_with?("#{rel}#") && per_demo.size >= 2 }
   next if shared.positive?
@@ -5877,12 +5210,10 @@ FRAGMENT_PATHS.each do |rel|
             "what they share, in which case say which construct and fix the handle (T-146)."
 end
 
-# The second is the EARLIER_WIRES arm: a rule whose pattern matches nothing in
-# this repository must fail rather than pass. The class-macro handle was added
-# because a `scope` shared by three demos was invisible; if it ever stops
-# finding a class body at all — a Ripper change, a walker that stops matching a
-# node shape — every DSL unit silently leaves the corpus and the summary drops
-# by a number nobody is watching.
+# The second: a rule whose pattern matches nothing in this repository must fail
+# rather than pass. If the class-macro handle ever stops finding a class body at
+# all — a Ripper change, a walker that stops matching a node shape — every DSL unit
+# silently leaves the corpus and the summary drops by a number nobody is watching.
 if fragment_dsl_ids.empty?
   errors << "check-demo-copies: the T-146 class-macro handle found NO class-body macro in any " \
             "copy of the #{FRAGMENT_PATHS.size} declared `:per_demo` path(s). It was added " \
@@ -5894,60 +5225,31 @@ end
 
 # ── THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536) ───
 #
-# WHAT WAS INVISIBLE, AND WHY THE OBVIOUS REPAIR WOULD HAVE BEEN A NO-OP.
-# `SCAN_ROOTS` is `lib app script db/migrate`; a demo's `spec/` reaches this
-# script only through EXTRA_SCANNED, which names ONE path. K-1536 read that as
-# «declare each new spec path in EXTRA_SCANNED as it lands», and MEASURED that
-# fixes nothing: of the tracked files under `kiosk-demo-*/spec` and
-# `kiosk-demo-*/test`, exactly ONE relative path exists in two or more demos —
-# `spec/wire_arguments_spec.rb`, already declared. Every other spec file sits at
-# a path unique to its demo, so a file-level entry for it would compare a copy
-# against nothing at all. The repository's rule «a NEW duplicate fails the build
-# until it is declared» was not being broken at FILE level here; it was never
-# reaching the level the duplication is actually at.
+# WHERE THE DUPLICATION ACTUALLY IS: THE UNIT, NOT THE PATH. A demo's `spec/`
+# reaches this script only through EXTRA_SCANNED, and of the tracked files under
+# `kiosk-demo-*/spec` and `kiosk-demo-*/test` almost every one sits at a path
+# unique to its demo — so a file-level entry would compare a copy against nothing
+# at all. What IS hand-copied is the harness: `assert`, `guard` and their fixtures,
+# across files at different paths, and `at_dublin` across two spec files INSIDE one
+# demo. No rule keyed on a path, or on a demo, can see those, so this rule keys on
+# the NAME over the whole corpus.
 #
-# WHERE IT IS ACTUALLY AT: THE UNIT. `assert` and `guard` are hand-copied
-# across these files in numbers this script's own run prints. FRAGMENTS holds
-# units too, and holds SOME of these rather than none: its key is `path#unit`,
+# THE REACH OF EACH RULE IS COUNTED, NOT ASSERTED. FRAGMENTS' key is `path#unit`,
 # so it reaches exactly those copies whose own relative path is declared in
-# FRAGMENT_PATHS, and `spec/wire_arguments_spec.rb` is — three demos ship it and
-# all three define `FAILURES`, `assert` and `guard`. What no path-keyed rule can
-# do is hold a unit whose copies live at DIFFERENT paths, which is most of them
-# here; this rule keys on the NAME over the whole corpus, so the reach of each
-# rule is a number rather than a claim, and the run prints both. It is also how
-# `at_dublin`, shared by two spec files INSIDE getgrocery, turns out to be a copy
-# as well — no rule keyed on a path, or on a demo, could have seen that one.
-#
-# THE REACH IS COUNTED AND NOT ASSERTED BECAUSE ASSERTING IT WAS WRONG (K-1536,
-# reopened 2026-09-13). The first writing of this rule compressed a true
-# measurement — «exactly ONE relative path in that corpus exists in two or more
-# demos, and it is already declared» — into «no two of them share a path», and
-# put that in four places: here, in the error a violator reads, in the green line
-# of every passing run, and in this repo's CLAUDE.md. The script's own planted
-# failure message refuted it, listing atablefor's, getgrocery's and hoteling's
-# copies of that one path side by side in a single bracket. A justification that
-# the run can derive should never be a sentence somebody keeps.
-#
-# WHAT THE FIRST RUN FOUND, before a line of this manifest was written:
-# `assert` in TWO bodies (skooti padded `OK` with two extra spaces so it lines
-# up under `FAIL`) and `guard` in THREE (`rescue StandardError, NoMethodError`,
-# `rescue StandardError, NameError`, and a bare `rescue StandardError` — the two
-# named classes are DESCENDANTS of StandardError, so all three rescued exactly
-# the same set while reading as though they did not). Both were CONVERGED rather
-# than declared as exceptions: an exception needs a true reason, and «nobody
-# normalised them» is not one.
+# FRAGMENT_PATHS; how many of this corpus's files that is, and how many it already
+# holds, is printed by the run rather than claimed in a sentence.
 #
 # THE CORPUS IS DERIVED, never listed — `git ls-files` over the two subdirectory
-# globs, filtered to `.rb`, with a filesystem walk behind it for the throwaway
-# tree `--self-test` runs in, where `git` exits 128. A demo that grows a spec
-# directory tomorrow is in the corpus that day.
+# globs, filtered to `.rb`, with a filesystem walk behind it for the throwaway tree
+# `--self-test` runs in, where `git` exits 128. A demo that grows a spec directory
+# tomorrow is in the corpus that day.
 #
 # THE DELEGATION IS DERIVED TOO. A name whose every copy sits at a path
-# FRAGMENT_PATHS walks, under an id FRAGMENTS declares, is already HELD one
-# level up; it is reported as delegated and is NOT re-declared here, so the two
-# rules compose instead of stating the same thing twice. The day such a unit is
-# copied into a file outside that path it stops being delegated and this
-# manifest has to speak for it — which is the event that matters.
+# FRAGMENT_PATHS walks, under an id FRAGMENTS declares, is already HELD one level
+# up; it is reported as delegated and is NOT re-declared here, so the two rules
+# compose instead of stating the same thing twice. The day such a unit is copied
+# into a file outside that path it stops being delegated and this manifest has to
+# speak for it — which is the event that matters.
 DEMO_SPEC_SUBDIRS = %w[spec test].freeze
 
 # `:code`     — every copy must agree once comments and whitespace are
@@ -6059,12 +5361,9 @@ spec_corpus.each do |rel|
   units.each { |name, src| spec_unit_sources[name][rel] = code_norm(src) }
 end
 
-# TWO SEPARATE QUESTIONS ABOUT ONE COPY, both counted rather than claimed
-# (K-1536). FRAGMENTS' key is `path#unit`, so «could a path-keyed rule be
-# pointed at this copy» and «does it already hold this copy» are not the same
-# question, and the first one is the one the old justification got wrong: it
-# said the answer was always no, when three of these files sit at
-# `spec/wire_arguments_spec.rb`, which FRAGMENT_PATHS walks.
+# TWO SEPARATE QUESTIONS ABOUT ONE COPY, both counted rather than claimed.
+# FRAGMENTS' key is `path#unit`, so «could a path-keyed rule be pointed at this
+# copy» and «does it already hold this copy» are not the same question.
 spec_path_walked = lambda { |rel| FRAGMENT_PATHS.include?(rel.split("/", 2).last) }
 
 spec_held_by_fragments = lambda do |name, rel|
@@ -6185,39 +5484,24 @@ end
 
 # ── A SPEC PATH TWO DEMOS SHARE MUST REACH THE FILE MANIFEST (K-1550) ───────
 #
-# THE HOLE THE RULE ABOVE LEAVES, AND IT IS THE RULE ABOVE RUN BACKWARDS.
-# K-1536's header says: «`:per_demo` says the FILE is not compared; it does not
-# exempt what is inside it.» Here the units are held and the FILE is not. The
-# unit rule keys on a NAME, so it compares the units it can see and everything
-# else in a copied file — the fixtures, the assertions, the tail, the prose —
-# is compared against nothing at all.
+# THE HOLE THE RULE ABOVE LEAVES, WHICH IS THAT RULE RUN BACKWARDS: the unit rule
+# keys on a NAME, so it compares the units it can see and everything else in a
+# copied file — the fixtures, the assertions, the tail, the prose — is compared
+# against nothing at all. A whole spec file duplicated at one relative path, whose
+# every unit name is already declared and whose copies agree, produces silence.
 #
-# MEASURED at head by planting exactly that, twice, and the second plant is the
-# one that matters because the FIRST was misleading. `spec/salon_clock_spec.rb`
-# copied byte-for-byte from stylish into skooti and left UNTRACKED: bare guard
-# exit 0, the path not mentioned once — but only because the corpus is
-# `git ls-files` first, so an untracked file is not in it at all. `git add`ed,
-# the same copy goes RED, and for an INCIDENTAL reason: it defines `PARIS`,
-# which is not in SPEC_UNITS, so the NAME rule catches it. That catch is luck.
-# `spec/board_clock_spec.rb` copied from philslist into tudu and tracked defines
-# `FAILURES`, `MONTREAL`, `TOKYO` and `assert` — every one of them already
-# declared, every copy byte-identical, so all four agreed and produced silence:
-# **bare guard exit 0, zero mentions of the path.** A whole file, duplicated at
-# one relative path, held by nothing.
+# WHAT CLOSES IT is two lines over a corpus that is already derived: every relative
+# path that two or more files of this corpus share must be declared in
+# EXTRA_SCANNED. That is not a formality — EXTRA_SCANNED is what puts a path
+# outside SCAN_ROOTS into the file-level `found` map, which then REQUIRES a COPIES
+# entry with a rule (`:code`, `:lockstep`, `:per_demo`, …), which is where a
+# `:per_demo` path in turn meets FRAGMENT_PATHS. One declaration hands the path to
+# every file-level rule at once.
 #
-# WHAT CLOSES IT, and it is two lines over a corpus that is already derived:
-# every relative path that two or more files of this corpus share must be
-# declared in EXTRA_SCANNED. That is not a formality — EXTRA_SCANNED is what
-# puts a path outside SCAN_ROOTS into the file-level `found` map, which then
-# REQUIRES a COPIES entry with a rule (`:code`, `:lockstep`, `:per_demo`, …),
-# which is where a `:per_demo` path in turn meets FRAGMENT_PATHS. One
-# declaration hands the path to every file-level rule at once.
-#
-# It is scoped to THIS corpus on purpose: a duplicate under `lib`, `app`,
-# `script` or `db/migrate` is already seen, because SCAN_ROOTS walks those. The
-# reject below asks that question rather than assuming it, so widening
-# DEMO_SPEC_SUBDIRS into a scan root tomorrow does not produce a demand that is
-# already met.
+# It is scoped to THIS corpus on purpose: a duplicate under `lib`, `app`, `script`
+# or `db/migrate` is already seen, because SCAN_ROOTS walks those. The reject below
+# asks that question rather than assuming it, so widening DEMO_SPEC_SUBDIRS into a
+# scan root tomorrow does not produce a demand that is already met.
 spec_undeclared_paths = spec_shared_paths.keys.reject do |sub|
   EXTRA_SCANNED.include?(sub) || SCAN_ROOTS.any? { |root| sub == root || sub.start_with?("#{root}/") }
 end
@@ -6256,13 +5540,11 @@ end
 # the GEM sections legitimately differ. Its `PLATFORMS` section does not.
 #
 # The deploy box is x86_64 linux and every demo is installed there by the same
-# push-to-deploy hook. A lockfile that names fewer platforms than its siblings
-# is not a variant, it is a lockfile that cannot be installed frozen: under
+# push-to-deploy hook. A lockfile that names fewer platforms than its siblings is
+# not a variant, it is a lockfile that cannot be installed frozen: under
 # `BUNDLE_FROZEN` / `--deployment`, or a bundler that tightens the default, it
-# fails to boot on the box while the others succeed. Before this check,
-# philslist alone declared `arm64-darwin` and nothing else, so every deploy
-# rewrote the tracked file in place and left the production work-tree dirty --
-# which is exactly how it was found, on the box rather than in CI.
+# fails to boot on the box while the others succeed, and every deploy rewrites the
+# tracked file in place and leaves the production work-tree dirty.
 #
 # Deliberately a PARITY rule and not a fixed list: the set changes when bundler
 # or a native gem changes, and pinning the ten names here would turn a routine
@@ -6302,21 +5584,14 @@ end
 
 # ── No demo initializer patches a Rails framework class (K-504) ──────────────
 #
-# `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` sat in FOUR of these
-# initializers — atablefor, getgrocery, hoteling, skooti — in four hand-written
-# variants, and in the kiosk-rls README as the documented way to adopt the gem.
-# It is an APPLICATION monkey-patching a FRAMEWORK class on a GEM's behalf: the
-# host carries a line it did not author, for a capability it does not own, at a
-# load-order position nothing verifies. kiosk-rls now injects the migration
-# verbs itself, from `Kiosk::RLS::Railtie` — which is the extension point Rails
-# provides for exactly this, and which getgrocery's `check:rls` proves under a
-# real boot before it applies its overlay.
-#
-# So the patch must not come back, in any demo, for any framework class. This
-# rule is deliberately wider than the one line it was written for: the next
-# `ActionController::Base.include(...)` or `ActiveSupport::TimeZone.prepend(...)`
-# in an initializer is the same mistake with a different constant, and a gem
-# (or a concern in app/) is the answer every time.
+# An initializer that patches a framework class is an APPLICATION monkey-patching a
+# FRAMEWORK class on a GEM's behalf: the host carries a line it did not author, for
+# a capability it does not own, at a load-order position nothing verifies. A
+# railtie is the extension point Rails provides for exactly this, and a concern in
+# `app/` is the answer when the behaviour is the demo's own. So the ban is on the
+# SHAPE rather than on one constant: `ActiveRecord::Migration.include(…)`,
+# `ActionController::Base.include(…)` and `ActiveSupport::TimeZone.prepend(…)` are
+# the same mistake with different constants.
 #
 # NOT forbidden: patching a KIOSK class. `Kiosk::Configuration.include(...)` is
 # the gem's own documented extension idiom — kiosk-rls adds `system_role` to the
@@ -6338,20 +5613,14 @@ FRAMEWORK_PATCH = /
 
 # ── No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT) ────
 #
-# Phil decided on 2026-08-12 that env-var reading, dev/test fallbacks and
-# crash-if-absent fetches live in config/environments/{development,test,production}.rb
-# as Rails custom config (`Rails.configuration.x.kiosk…`), and that initializers
-# and lib files READ that config. K-650 swept the demos for it — and missed a
-# pair, in all seven copies at once: `c.app_role = ENV.fetch("KIOSK_APP_ROLE",
-# "app_role")` and its `system_role` sibling sat inside `Kiosk.configure` for
-# eleven days after the sweep that was supposed to have removed them, because
-# nothing looked.
-#
-# A convention nothing checks survives exactly until the next copy-paste, and
-# these files ARE copy-paste: seven standalone apps whose configuration blocks
+# Env-var reading, dev/test fallbacks and crash-if-absent fetches live in
+# config/environments/{development,test,production}.rb as Rails custom config
+# (`Rails.configuration.x.kiosk…`), and initializers and lib files READ that
+# config. A convention nothing checks survives exactly until the next copy-paste,
+# and these files ARE copy-paste: seven standalone apps whose configuration blocks
 # are hand-propagated. So the rule is mechanical — an `ENV.fetch` in a demo
-# initializer is a RESOLUTION decision (it names the default, or raises when
-# there is none), and resolution belongs to the environment files.
+# initializer is a RESOLUTION decision (it names the default, or raises when there
+# is none), and resolution belongs to the environment files.
 #
 # The rule covers the SEVEN demo initializers and the e2e harness fixture
 # (K-1009, K-1011): `e2e/run.sh` copies fixtures over the generated app's
@@ -6500,60 +5769,36 @@ end
 # ── A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546) ──
 #
 # THIS IS A PROPERTY OVER A GLOB, NOT A COMPARISON BETWEEN COPIES, and that is
-# deliberate. The seven `script/redteam_suite.rb` copies are declared
-# `:per_demo` and named in FRAGMENT_EXCLUDED, so no `#ISSUER` unit is compared
-# across them — which is how six of the seven grew a fallback (three to
-# `SERVER`, three to `BASE_URL`) against tudu's one without, held by nothing.
-# `script/mint_agent_token.rb` is single-demo and so is reachable by no copy
-# rule at all.
+# deliberate. `script/redteam_suite.rb` is `:per_demo` and named in
+# FRAGMENT_EXCLUDED, so no unit inside it is compared across the seven copies, and
+# `script/mint_agent_token.rb` is single-demo and reachable by no copy rule at all.
+# A property rule costs one entry, reaches the single-demo file, and catches a
+# driver that never existed as a copy of anything — including the next one somebody
+# writes.
 #
-# TAKING THE PATH INTO FRAGMENT_PATHS WOULD ALSO HAVE CLOSED IT, AND WAS
-# MEASURED RATHER THAN GUESSED: planted at head, discovery demands 23
-# declarations — `ALICE`, `BOB`, `LEAKS`, `SHAPES`, `call`, `check`, `refused`
-# and the rest of the Scenario vocabulary — of which one is this line. That is
-# 22 settled `:per_demo` variants written down to hold a single unit, which is
-# the manifest FRAGMENT_EXCLUDED's own reason argues against, now with a number
-# behind it. A property rule costs one entry, reaches the single-demo file the
-# copy rules cannot see, and catches a driver that never existed as a copy of
-# anything — including the next one somebody writes.
-#
-# WHY NO DEFAULT, which is the DRIVER_ENV reason applied one file over. What
-# these two names have in common is that a rake task and `bin/demo` pass BOTH
-# on the command line, so a fallback is never taken by a gated run and can only
-# fire on a HAND run — which is exactly where guessing is wrong. What they do
-# NOT share is how wrong the guess is, so each carries its own reason and the
-# message quotes the one that fired:
+# WHY NO DEFAULT: a rake task and `bin/demo` pass every one of these names on the
+# command line, so a fallback is never taken by a gated run and can only fire on a
+# HAND run — which is exactly where guessing is wrong. Each name carries its own
+# reason and the message quotes the one that fired:
 #
 #   KIOSK_ISSUER is the `aud` a possession proof is signed for, and the deploy
-#   templates set it to a public host (`https://<app>.demo.kiosk.tech`) that
-#   the server does not bind. Measured when the fallback came out: with it, a
-#   driver walked PAST the issuer line and died six lines later naming a
-#   different variable; without it, it names the one it wants. The engine is
+#   templates set it to a public host the server does not bind. The engine is
 #   crash-if-absent on the same name.
 #
-#   SERVER_URL is the origin every request in the file is sent to, and the
-#   three fallbacks it carried were a hard-coded `http://127.0.0.1:<port>`
-#   rather than a sibling variable — so where an issuer fallback at least
-#   followed whatever origin was configured, this one IGNORED it and drove
-#   whatever happened to be listening on that port. A red-team suite that
-#   silently attacks the wrong origin reports BLOCKED for a surface it never
+#   SERVER_URL is the origin every request in the file is sent to, and a hard-coded
+#   `http://127.0.0.1:<port>` fallback IGNORES whatever origin was configured and
+#   drives whatever happens to be listening on that port instead. A red-team suite
+#   that silently attacks the wrong origin reports BLOCKED for a surface it never
 #   touched.
 #
 #   KIOSK_PROVE_BROKER_URL is the KYC broker the theft, cross-operator and
-#   forged-callback beats attack. Its fallback was the same hard-coded
-#   `http://127.0.0.1:3020` and fails the same way — a beat that reaches
-#   whatever is listening on 3020 reports BLOCKED for a broker it never
-#   touched — and the two tasks that run that suite both pass the name on the
-#   command line, so only a hand run ever took it. It is read by ONE driver
-#   where the two names above are read by many, which is exactly why it wants
-#   the per-name vacuity arm rather than a copy rule: nothing else's fetches
-#   can stand in for its own.
+#   forged-callback beats attack, and it fails the same way for the same reason.
 #
 # A NAME JOINS THIS LIST WHEN ITS OWN RESIDUE IS GONE, never with an allowance
-# beside it — a standing permission excusing a known defect is the shape this
-# file refuses everywhere else. THE VACUITY ARM IS PER NAME for the same
-# reason: with two names a single tally goes non-zero on either one, so a name
-# whose drivers stopped reading it would hide behind the other's fetches.
+# beside it — a standing permission excusing a known defect is the shape this file
+# refuses everywhere else. THE VACUITY ARM IS PER NAME for the same reason: under
+# one tally a name whose drivers stopped reading it would hide behind another
+# name's fetches.
 DRIVER_NO_DEFAULT_VARS = {
   "KIOSK_ISSUER" => "the `aud` a possession proof is signed for, and the engine crashes without it",
   "SERVER_URL"   => "the origin every request in the file is sent to",
@@ -6601,12 +5846,10 @@ end
 
 # ── `validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332) ──
 #
-# The engine's own file says turning it on in production converts a descriptor
-# typo into a 500 for a caller who did nothing wrong — and all seven demos set
-# it `= true` unconditionally while every one of their deploy env templates sets
-# `RAILS_ENV=production`. So the deployed fleet ran the posture its own engine
-# warns against, on the public endpoints an assistant is pointed at, in the file
-# `onboarding.html` sends an adopting operator to COPY.
+# The engine's own file says turning this on in production converts a descriptor
+# typo into a 500 for a caller who did nothing wrong — on the public endpoints an
+# assistant is pointed at, in the file `onboarding.html` sends an adopting operator
+# to COPY.
 #
 # `config/initializers/kiosk.rb` is `:per_demo` and rightly so — capabilities,
 # verbs, PoW policy and adapters differ per storefront — so nothing above
@@ -6663,52 +5906,30 @@ end
 #    (T-118, generalising the hand-written arms of K-504/K-699, K-1009/K-1011
 #    and K-1021)
 #
-# WHY THIS EXISTS, AND WHY IT IS A SCAN ROOT RATHER THAN A SIXTH SPECIAL CASE.
-# `SCAN_ROOTS` walks `kiosk-demo-*` and nothing else, so no path under
-# `e2e/fixtures/` has ever entered the `found` map and no COPIES rule could
-# apply to one. That is defensible on its face — the e2e harness is not a demo,
-# and the header's «paths that exist in two or more demos» is exactly what the
-# lockstep rule does. It is indefensible in what it produced: FIVE hand-written
-# arms reach into that directory one file at a time (the two initializer rules,
-# the run.sh-derived initializer set, the application_controller prose rule and
-# the framework-prose routes corpus), written by four different fixers, each of
-# whom had to discover for themselves that the discovery loop could not get
-# there. The cost is not the unguarded surface — it is that EVERY new rule
-# silently costs a second implementation, and a fixer who does not know that
-# ships a rule that passes vacuously on the harness.
+# WHY THIS IS A SCAN ROOT RATHER THAN A SIXTH SPECIAL CASE. `SCAN_ROOTS` walks
+# `kiosk-demo-*` and nothing else, so no path under `e2e/fixtures/` enters the
+# `found` map and no COPIES rule could apply to one. The cost of that is not the
+# unguarded surface: it is that every new rule silently costs a second
+# implementation, written by a fixer who has to discover for themselves that the
+# discovery loop cannot get there — and a rule written without knowing it passes
+# vacuously on the harness.
 #
-# WHAT WAS ACTUALLY UNGUARDED, MEASURED at head rather than assumed. Of the 22
-# `e2e/fixtures/*.rb`, EIGHT have a demo counterpart they agree with:
-# `salon.rb` is BYTE-IDENTICAL to stylish's `app/models/salon.rb`; `stub_psp.rb`
-# is byte-identical to skooti's and comment-identical to hoteling's;
-# `devise_initializer.rb` is comment-identical to all seven demos'
-# `config/initializers/devise.rb`; `create_users.rb` and
-# `add_devise_columns_to_users.rb` to all seven demos' copies of those
-# migrations; `create_salons_and_appointments.rb` to stylish's. Seven more share
-# a basename with a demo file and have diverged. Nothing asked which of the two
-# any of them was.
-#
-# THE PAIRING IS DERIVED, NOT LISTED — that is the half that makes this a scan
-# root rather than a longer manifest. `e2e/run.sh` already says where each
-# fixture is installed, in fifteen `cp "$FIXTURES/…" <dest>` lines, and that
-# destination IS the demo-relative path to compare against. So an entry needs no
-# `pairs:` at all unless run.sh does not install the file (six fixtures are run
-# in place with `ruby "$FIXTURES/…"`, one is appended into the generated
-# environment files) or unless the installed path exists in no demo. A fixture
-# that MOVES in run.sh moves here with it, and a fixture that stops being
-# installed is reported rather than skipped — the same property K-1011 bought
-# for the two initializers, one directory wide.
+# THE PAIRING IS DERIVED, NOT LISTED, which is the half that makes this a scan root
+# rather than a longer manifest. `e2e/run.sh` already says where each fixture is
+# installed, in its `cp "$FIXTURES/…" <dest>` lines, and that destination IS the
+# demo-relative path to compare against. So an entry needs no `pairs:` unless run.sh
+# does not install the file (some fixtures are run in place, one is appended into
+# the generated environment files) or unless the installed path exists in no demo. A
+# fixture that MOVES in run.sh moves here with it, and one that stops being
+# installed is reported rather than skipped.
 #
 # THE RULES ARE THE MANIFEST'S OWN, one level over: `:identical`, `:code` and
-# `:per_demo` mean here exactly what they mean for two demo copies, and
-# `:per_demo` carries the same convergence tripwire the fragment rule does — a
-# fixture declared a deliberate variant that has quietly become comment-identical
-# to every demo copy is reported, because that is a copy nobody decided to make.
-# `pairs: nil` is the fourth state and the one this wave is about: it declares
-# that a fixture has no demo counterpart, and it is CHECKED — no demo file
-# sharing its basename may be comment-identical to it. An undeclared exclusion
-# is what T-118 was filed about; a declared one that nothing tests is the same
-# thing with better manners.
+# `:per_demo` mean here exactly what they mean for two demo copies, and `:per_demo`
+# carries the same convergence tripwire the fragment rule does — a fixture declared
+# a deliberate variant that has quietly become comment-identical to every demo copy
+# is reported, because that is a copy nobody decided to make. `pairs: nil` is the
+# fourth state: it declares that a fixture has no demo counterpart, and it is
+# CHECKED — no demo file sharing its basename may be comment-identical to it.
 E2E_FIXTURES_DIR = "e2e/fixtures"
 E2E_FIXTURE_CP   = /^\s*cp\s+"\$FIXTURES\/(?<fixture>[^"]+)"\s+(?:"(?<quoted>[^"]+)"|(?<bare>\S+))/
 
@@ -7021,65 +6242,39 @@ end
 # ── A comment in a compared file may not cite something that is not there ────
 #    (T-117, generalising K-1021 from one sentence to the whole corpus)
 #
-# WHAT `rule: :code` MEANS, AND WHY THAT LEFT FOURTEEN HEADERS UNGUARDED.
-# `:code` compares copies MODULO COMMENTS, so each copy's header may name its
-# own demo — which is the whole point of the rule and is right. It also means
-# every one of those headers is unconstrained BY CONSTRUCTION, and that is how
-# «The Kiosk wire controllers ship their own bases inside kiosk-server» — false
-# of all seven demos — survived in eight copies until a human read it (K-1017).
-# K-1021 closed the class for ONE sentence in ONE file by deriving the answer
-# from disk. Thirteen `:code` paths still had nothing.
-#
-# THE ANSWER IS NOT «COMPARE THE COMMENTS TOO», and it is worth saying why
-# before saying what it is. Comparing them would delete the reason `:code`
-# exists: `script/schema_flow.rb`'s header explains that demo's own catalogue,
-# and seven identical explanations would each be wrong in six demos.
-# Nor is it thirteen more bespoke arms in K-1021's shape — one derivation per
-# sentence does not generalise, and the fourteenth header would be unguarded
-# again.
+# `:code` compares copies MODULO COMMENTS, so each copy's header may name its own
+# demo — which is the point of the rule — and every one of those headers is
+# therefore unconstrained by construction. Comparing the comments instead would
+# delete the reason `:code` exists, and one bespoke derivation per sentence does not
+# generalise.
 #
 # WHAT IS HELD INSTEAD IS THE PART OF A HEADER THAT IS MECHANICALLY FALSIFIABLE:
-# its CITATIONS. These headers do not merely describe, they point — at files and
-# at code — and a pointer is a claim the tree can answer. Two arms, both derived,
-# no list:
+# its CITATIONS. These headers do not merely describe, they point — at files and at
+# code — and a pointer is a claim the tree can answer. Two arms, both derived, no
+# list:
 #
-#   * A SOURCE PATH named in a comment must exist. Same shape and the same
-#     regex family as the K-1093 rule for deploy/env templates, which already
-#     does this for a different corpus.
+#   * A SOURCE PATH named in a comment must exist — the same shape as the K-1093
+#     rule for deploy/env templates, over a different corpus.
 #   * A `{Constant}` or `{Constant.member}` reference must resolve. This is the
-#     repository's own YARD-ish notation and it is used heavily —
-#     `{Kiosk::UuidCheck}` and `{WireArguments}` through
-#     `{Order::SETTLED_CART_REFERENCES_THIS_ROW}` and
-#     `{Reservation.owned_by_current_principal}`. A rename that reaches the code
-#     and not the six comments pointing at it is exactly the drift this file
-#     exists for, one notation over.
+#     repository's own YARD-ish notation, and a rename that reaches the code and not
+#     the comments pointing at it is exactly the drift this file exists for, one
+#     notation over.
 #
-#     BOTH COUNTS ARE PRINTED BY THE RUN, NOT FROZEN HERE, and that is a repair
-#     rather than a style: this paragraph used to state «208 citations» and «147
-#     citations of 56 distinct names» as MEASURED facts and offered `{UuidCheck}`
-#     as its first example. T-189 promoted that module to `Kiosk::UuidCheck`, so
-#     the example named a constant that occurs nowhere in the corpus, and both
-#     numbers had drifted with the tree. The green line reports the live pair
-#     every time this script runs; a number written down here is a claim nothing
-#     rechecks.
+# Both counts are PRINTED BY THE RUN rather than written down here.
 #
-# THE CORPUS IS EVERY `.rb` THE MANIFEST DECLARES, IN EVERY DEMO THAT SHIPS IT,
-# PLUS `e2e/fixtures/` — not just the `:code` paths T-117 named. Restricting it
-# to `:code` would itself be an undeclared exclusion: an `:identical` header can
-# be identically false (this file's own header records that happening), and a
-# `:per_demo` header is as unguarded as a `:code` one. The wider corpus was
-# measured before it was chosen, and it is clean.
+# THE CORPUS IS EVERY `.rb` THE MANIFEST DECLARES, IN EVERY DEMO THAT SHIPS IT, PLUS
+# `e2e/fixtures/` — not only the `:code` paths. Restricting it to `:code` would
+# itself be an undeclared exclusion: an `:identical` header can be identically
+# false, and a `:per_demo` header is as unguarded as a `:code` one.
 #
-# WHAT THIS DOES NOT DO, stated because an over-claimed prose rule is what
-# K-1021 was filed about. It cannot tell whether a sentence is TRUE — «the verb
-# handlers are ActiveRecord since K-654» names no path and no constant, and
-# nothing mechanical reaches it. It resolves a `{Constant}` by its LAST segment,
-# so `{Kiosk::Server::ArgumentDecoder}` is satisfied by a class named
+# WHAT THIS DOES NOT DO, stated because an over-claimed prose rule is the defect
+# this class keeps producing. It cannot tell whether a sentence is TRUE — a claim
+# naming no path and no constant is out of reach. It resolves a `{Constant}` by its
+# LAST segment, so `{Kiosk::Server::ArgumentDecoder}` is satisfied by a class named
 # `ArgumentDecoder` anywhere in the index; it does not check the namespace. It
 # resolves a member against any file that defines the constant, not against the
-# right one. And it is blind to a citation written any other way — a bare
-# `UuidCheck` in prose, a path without a directory. It holds the pointers, and
-# says so.
+# right one. And it is blind to a citation written any other way — a bare constant
+# in prose, a path without a directory. It holds the pointers, and says so.
 PROSE_PATH_CITE = %r{(?<![\w./-])(?!/)[a-z][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_.-]+)+\.(?:rb|yml|yaml|erb|sql|py|json|md|txt)\b}
 PROSE_CODE_REF  = /\{([A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*)(?:[.#]([A-Za-z_][A-Za-z0-9_]*[?!]?))?\}/
 # `scope :referencing`, `has_many :settlements`, `attr_reader :psp` — a member a
@@ -7209,88 +6404,46 @@ end
 
 # ── Cross-demo PROSE about the FRAMEWORK (K-1069) ────────────────────────────
 #
-# WHAT WENT WRONG, and it is the only reason this block exists. Three shapes,
-# all from the K-1062..K-1066 wave, every one found by a human eye reading four
-# documents in one sitting:
+# `:code` and `:per_demo` are rules about CODE, so the PROSE in these documents is
+# compared by nothing — and a framework fact hand-written into N demos is true in
+# some of them and stale in the rest as soon as the framework moves. So this block
+# declares a CORPUS (the per-demo documents no rule above compares) and a manifest
+# of FRAMEWORK CLAIMS over it. Each claim carries up to five declarations:
 #
-#   (a) THE SAME FACTUAL SENTENCE IN N DEMOS, TRUE IN SOME AND FALSE IN OTHERS.
-#       K-1064: hoteling's «a follow-up release will mount these via the engine's
-#       own routes drawer» beside getgrocery's «Mounting the engine draws all of
-#       this in one line» — one framework fact, two documents shipping side by
-#       side, one of them stale. K-1068 was the same sentence in six
-#       `config/routes.rb`. K-1065's PoW leg was the same shape with the truth
-#       and the falsehood swapped between demos.
-#   (b) ONE DOCUMENT CONTRADICTING ITSELF. skooti's before-after asserted a KYC
-#       registration gate in its opening and its closing paragraph that its own
-#       shipped-gate list denied in the middle (K-1065). Two documents were not
-#       even needed.
-#   (c) A CLAIM ABOUT THE FRAMEWORK THAT WAS FALSE AT THE SOURCE. The routes
-#       drawer again: the demos promised it as future work while
-#       `kiosk-server/lib/kiosk/server/engine.rb` had shipped both drawers.
+#   text:    a sentence that must appear VERBATIM (whitespace-normalised) in every
+#            document listed in `ships:` — the detector for COPIES.
+#   topic:   a regex naming the SUBJECT. Where it matches a corpus document, `must:`
+#            has to match too — the detector for PARAPHRASES, which `text:`
+#            structurally cannot see, because two texts about one fact are not
+#            copies of each other.
+#   forbids: regexes that may not match ANY corpus document — the detector for a
+#            document contradicting itself. It finds contradictions SOMEBODY
+#            DECLARED, never contradictions in general.
+#   source:  a framework file + a regex that must match it. It fires when the
+#            producer stops saying the thing the demos say about it.
+#   ships:   which demos must carry the claim at all, the same declaration and the
+#            same reason as `ships:` in COPIES above.
 #
-# WHY THIS IS NOT K-1051's GUARD, and the argument is MECHANISM rather than
-# scope. K-1051 commissions a DERIVATION guard: a fenced block must equal what
-# its named producer prints. Prose ABOUT THE FRAMEWORK has no producer to derive
-# from, so that guard, fully built and green, would have caught none of (a), (b)
-# or (c). The oracle here is cross-document AGREEMENT plus a binding to the
-# framework file that makes the claim true.
+# WHAT THIS BLOCK DOES **NOT** DO, because an over-claimed guard is the defect this
+# class keeps producing:
 #
-# WHAT THIS BLOCK DOES. It declares a CORPUS — the per-demo documents every rule
-# above leaves uncompared (`before-after.md`, declared per-demo at
-# SKELETON_NOT_COMPARED with no checker of its own until now; `config/routes.rb`,
-# declared per-demo there too and otherwise uncompared) —
-# and a manifest of FRAMEWORK CLAIMS over it. Each claim carries up to five
-# declarations, and each one answers a different one of the three shapes:
-#
-#   text:    a sentence that must appear VERBATIM (whitespace-normalised) in
-#            every document listed in `ships:`. This is the (a) detector for
-#            copies: the five `config/routes.rb` that were one line short of
-#            getgrocery's and hoteling's would have failed here.
-#   topic:   a regex naming the SUBJECT. Where it matches a corpus document,
-#            `must:` has to match too. This is the (a) detector for PARAPHRASES,
-#            which `text:` structurally cannot see — hoteling's stale sentence
-#            and getgrocery's current one are not copies of each other, they are
-#            two different texts about one fact, and only a topic can pair them.
-#   forbids: regexes that may not match ANY corpus document. This is the (b)
-#            detector, and it is honest about its limit: it finds contradictions
-#            SOMEBODY DECLARED, never contradictions in general.
-#   source:  a framework file + a regex that must match it. This is the (c)
-#            detector. It fires when the producer stops saying the thing the
-#            demos say about it.
-#   ships:   which demos must carry the claim at all, the same declaration and
-#            the same reason as `ships:` in COPIES above — a demo that silently
-#            drops the subject, or grows it, changes the set with nothing
-#            noticing.
-#
-# WHAT THIS BLOCK DOES **NOT** DO. Stated plainly, because an over-claimed guard
-# is the defect this class keeps producing:
-#
-#   * IT CANNOT TELL WHICH OF TWO VARIANTS IS TRUE. It forces ONE text and binds
-#     it to a source; choosing the text stays a human act. A corpus declared
-#     around a false sentence enforces the false sentence in seven demos.
-#   * IT CANNOT SEE AN UNDECLARED SELF-CONTRADICTION. skooti's KYC pair is caught
-#     because a `forbids:` entry names it, not because anything here understands
-#     KYC. A new contradiction, on a new subject, is invisible until someone
-#     declares it — exactly as a new duplicated path is invisible to the lockstep
-#     rule until it appears in a second demo.
-#   * `source:` PROVES THE FRAMEWORK STILL SAYS IT, NOT THAT THE FRAMEWORK DOES
-#     IT. Every binding below is aimed at CODE (a `routes` call, the absence of a
-#     method, the absence of a token in a file) rather than at a comment, because
-#     a comment satisfying a comment is a tautology — but it is still a proxy.
+#   * IT CANNOT TELL WHICH OF TWO VARIANTS IS TRUE. It forces ONE text and binds it
+#     to a source; choosing the text stays a human act, and a corpus declared around
+#     a false sentence enforces the false sentence in seven demos.
+#   * IT CANNOT SEE AN UNDECLARED SELF-CONTRADICTION: a `forbids:` entry has to name
+#     the pair, exactly as a new duplicated path is invisible to the lockstep rule
+#     until somebody declares it.
+#   * `source:` PROVES THE FRAMEWORK STILL SAYS IT, NOT THAT THE FRAMEWORK DOES IT.
+#     Every binding below is aimed at CODE rather than at a comment, because a
+#     comment satisfying a comment is a tautology — but it is still a proxy.
 #   * A PARAPHRASE IN VOCABULARY NO `topic:` MATCHES IS INVISIBLE. That is the
 #     residual hole and it does not close: the topic regexes are as wide as their
 #     authors made them.
-#   * FENCED BLOCKS ARE EXCLUDED from `before-after.md`. They are
-#     bin/check-demo-derivations's territory (K-1051) — a transcript or a
-#     snippet has a producer to derive from — and checking them here would
-#     double-count the easy half and dilute this one.
 #
-# prove ships no corpus document of its own that makes framework claims: it is
-# the smaller API-only broker (PROVE_SKELETON above), it has no `before-after.md`
-# at all, and its `config/routes.rb` carries none of the operator wire-surface
-# prose. It is excluded by `ships:`, not by an exception.
+# prove is excluded by `ships:` rather than by an exception: it is the smaller
+# API-only broker, and its `config/routes.rb` carries none of the operator
+# wire-surface prose.
 FRAMEWORK_CORPUS_RUBY = ["config/routes.rb", "config/routes/kiosk.rb"].freeze
-FRAMEWORK_CORPUS_TEXT = [].freeze
 
 FRAMEWORK_CLAIMS = {
   "wire-surface-is-the-engine's" => {
@@ -7317,16 +6470,6 @@ FRAMEWORK_CLAIMS = {
            "now bound to the controller that still states the one-endpoint-per-verb shape, and " \
            "`bin/check-verb-routes` is what holds the demos' actual lines to it.",
   },
-  # The `no-multiplexed-pair` claim used to live here: eight copies of «NO `POST
-  # /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the multiplexed
-  # pair outright», held to the protocol constant’s own record of that deletion.
-  # Both ends of it are gone (T-186). Phil’s rule is that a public artefact
-  # describes what IS, so the narration of a retired wire element is one
-  # changelog line and nothing else — it was deleted from `kiosk/protocol.rb`
-  # and from the eight `config/routes/kiosk.rb` copies in the same wave. What a
-  # reader needs is already one entry up: `one-endpoint-per-verb` says every
-  # verb is its own endpoint, and `bin/check-verb-routes` holds the demos’
-  # actual lines to it.
   "mount-draws-the-protocol-plane" => {
     doc:   "config/routes/kiosk.rb",
     text:  "THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way.",
@@ -7359,11 +6502,10 @@ FRAMEWORK_CLAIMS = {
       /(?:mount|routes drawer)[^.]{0,200}(?:will be|lands? in|in a) follow-?up release/i,
     ],
     source:  { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /^\s*routes do\s*$/ },
-    why:     "K-1064 + K-1068, the row's shape (a) and shape (c) at once: six `config/routes.rb` " \
-             "and three `before-after.md` promised the engine's routes drawer as future work " \
-             "while `engine.rb` had shipped BOTH drawers — the root-relative discovery block and " \
-             "the mount-prefixed one. A ban rather than a required sentence, because the defect " \
-             "was a sentence that should not exist anywhere rather than one missing somewhere.",
+    why:     "A ban rather than a required sentence, because the defect was a sentence that " \
+             "should not exist anywhere rather than one missing somewhere: the demos promised " \
+             "the engine's routes drawer as future work while `engine.rb` had shipped BOTH " \
+             "drawers — the root-relative discovery block and the mount-prefixed one.",
   },
   "kyc-is-not-a-registration-gate" => {
     doc:     :all,
@@ -7373,22 +6515,17 @@ FRAMEWORK_CLAIMS = {
       /(?:hasn't|has not|hasn’t) paid the PoW and passed KYC/i,
     ],
     source:  { file: "kiosk-server/lib/kiosk/server/auth_controller.rb", must_not: /kyc/i },
-    why:     "K-1069's shape (b), verbatim: skooti's before-after asserted a KYC registration gate " \
-             "in its opening honesty note and its closing «what this does not require» paragraph " \
-             "while the shipped-gate list in the SAME document said KYC gates `rent_motorcycle` " \
-             "and nothing else. One document, two sections, no second demo needed. The source " \
-             "binding is what makes the ban true rather than stylistic: the register endpoint's " \
-             "whole controller contains no KYC token, so nothing on the registration path can " \
-             "consult an attestation. NOTE THE LIMIT this entry exists to illustrate — it catches " \
-             "this contradiction because it is DECLARED, not because anything here reasons.",
+    why:     "The source binding is what makes this ban true rather than stylistic: the " \
+             "register endpoint's whole controller contains no KYC token, so nothing on the " \
+             "registration path can consult an attestation, and a document saying otherwise " \
+             "contradicts its own shipped-gate list. NOTE THE LIMIT this entry exists to " \
+             "illustrate — it catches this contradiction because it is DECLARED, not because " \
+             "anything here reasons.",
   },
 }.freeze
 
-# The corpus documents, as {label => {rel => normalised text}}. Ruby files go
-# through Ripper — a routes.rb sentence WRAPS across `#` lines, and the same
-# single-line blindness is how «the Kiosk error envelope» hid in
-# atablefor/config/routes.rb from every grep for that phrase (K-1090). Markdown
-# is read whole with fenced blocks dropped (K-1051's territory, see above).
+# The corpus documents, as {label => {rel => normalised text}}. Read through Ripper:
+# a routes.rb sentence WRAPS across `#` lines, and a single-line scan is blind to it.
 def framework_prose_ruby(path)
   Ripper.lex(File.read(path))
         .select { |(_, type, _)| type == :on_comment }
@@ -7397,28 +6534,12 @@ def framework_prose_ruby(path)
         .gsub(/\s+/, " ")
 end
 
-def framework_prose_text(path)
-  keep, fence = [], false
-  File.foreach(path) do |line|
-    if line.start_with?("```")
-      fence = !fence
-      next
-    end
-    keep << line unless fence
-  end
-  keep.join.gsub(/\s+/, " ")
-end
-
 corpus = {}
 demos.each do |dir|
   label = short.(File.basename(dir))
   FRAMEWORK_CORPUS_RUBY.each do |rel|
     p = File.join(dir, rel)
     (corpus[label] ||= {})[rel] = framework_prose_ruby(p) if File.exist?(p)
-  end
-  FRAMEWORK_CORPUS_TEXT.each do |rel|
-    p = File.join(dir, rel)
-    (corpus[label] ||= {})[rel] = framework_prose_text(p) if File.exist?(p)
   end
 end
 e2e_routes = File.join(ROOT, "e2e/fixtures/routes.rb")
@@ -7535,41 +6656,30 @@ end
 
 # ── The HOUSE SENTENCE, where the ENGINE says it too (K-1294) ────────────────
 #
-# The FRAGMENTS entry for `app/operations/wire_arguments.rb#missing` calls
-# `missing field: <name>` "the one an assistant's error handling matches on" and
-# holds the three demos that ship it in lockstep. That was true and it was not
-# enough: the file set of every rule above is `kiosk-demo-*`, and the ENGINE
-# emits the same sentence on the auth plane — where an assistant meets it FIRST,
-# before it has read a catalogue or called a verb.
+# `missing field: <name>` is the sentence an assistant's error handling matches on.
+# The FRAGMENTS entry for `app/operations/wire_arguments.rb#missing` holds the three
+# demos that ship it in lockstep, and the file set of every rule above is
+# `kiosk-demo-*` — while the ENGINE emits the same sentence on the auth plane, where
+# an assistant meets it FIRST, before it has read a catalogue or called a verb. So
+# the sentence is compared ACROSS the boundary here: the demos' refusal and the
+# engine's builder must open with the same literal, or one of them has drifted.
 #
-# MEASURED live against the deployed fleet on 2026-09-05: `POST
-# /kiosk/auth/register` with an empty object answered
-# `"detail":"missing field: key not found: :public_key"`. That is
-# `KeyError#message` spliced in whole — a fourth wording, with a Ruby symbol in
-# it, in the one place no rule in this file could see. So the sentence is
-# compared ACROSS the boundary here: the demos' refusal and the engine's builder
-# must open with the same literal, or one of them has drifted.
+# READ OFF THE PRODUCER, NOT MATCHED AGAINST A REMEMBERED TEXT, and that distinction
+# is the whole rule rather than an implementation note: a pattern that already knows
+# the answer can only ever notice the answer VANISHING, never a producer
+# disagreeing. So each producer's own method body is sliced and whatever literal it
+# interpolates the field into is taken as its spelling; the rule compares those
+# spellings to each other and holds nothing else.
 #
-# READ OFF THE PRODUCER, NOT MATCHED AGAINST A REMEMBERED TEXT, and that
-# distinction is the whole rule rather than an implementation note. The first
-# writing of this section carried the sentence in its own regex; the self-test
-# arm below — the engine re-worded to `missing param:` — then reddened for the
-# WRONG reason, reporting the engine as silent rather than as disagreeing,
-# because a pattern that knows the answer can only ever notice the answer
-# VANISHING. So each producer's own method body is sliced and whatever literal
-# it interpolates the field into is taken as its spelling; the rule compares
-# those spellings to each other and holds nothing else.
+# WHAT THIS DOES NOT DO. It compares the LITERAL, not the behaviour: the engine's
+# own suite (`kiosk-server/spec/kiosk/server/wire_wording_spec.rb`) dispatches each
+# site and reads the detail off the wire, and it carries the sweep that stops a new
+# site building the sentence for itself. This rule answers the one question that
+# spec structurally cannot: whether the two INDEPENDENT producers, in two gems with
+# two suites, still say the same words.
 #
-# WHAT THIS DOES NOT DO, said plainly. It compares the LITERAL, not the
-# behaviour: the engine's own suite (`kiosk-server/spec/kiosk/server/
-# wire_wording_spec.rb`) is what dispatches each site and reads the detail off
-# the wire, and it carries the sweep that stops a new site building the sentence
-# for itself. This rule answers the one question that spec structurally cannot:
-# whether the two INDEPENDENT producers, in two gems with two suites, still say
-# the same words.
-#
-# The demo side is DERIVED from the fragment entry rather than re-listed, so a
-# demo joining or leaving the house sentence moves both rules at once.
+# The demo side is DERIVED from the fragment entry rather than re-listed, so a demo
+# joining or leaving the house sentence moves both rules at once.
 HOUSE_SENTENCE_UNIT   = "app/operations/wire_arguments.rb#missing"
 HOUSE_SENTENCE_ENGINE = "kiosk-server/lib/kiosk/server/errors.rb"
 HOUSE_SENTENCE_ENTRY  = { HOUSE_SENTENCE_ENGINE => "def self.missing_field(",
@@ -7791,15 +6901,10 @@ end
 
 # ── Every `bin/` script a demo names EXISTS and is runnable (K-1315) ─────────
 #
-# WHAT WENT WRONG. All seven copies of `bin/setup` ended `exec "bin/dev"`, and
-# `bin/dev` shipped in three demos. In the other four the first command a Rails
-# developer types died of `Errno::ENOENT` on its last line — and this file,
-# which is the one place that looks at those scripts at all, recorded `bin/dev`
-# as "Rails generator output, identical where shipped" and never asked whether
-# it was shipped. A byte-identity check over the copies that exist certifies
-# nothing about the copies that do not. tudu had the same defect in a second
-# spelling: `bin/setup`, `bin/rake` and `bin/dev` were tracked mode 100644, so
-# there the script was not `ENOENT` but `EACCES`, and no rule here read a mode.
+# A `bin/` script a demo NAMES must exist and be runnable, or the first command a
+# developer types dies of `Errno::ENOENT` — or of `EACCES`, when the file is tracked
+# without its executable bit. A byte-identity check over the copies that exist
+# certifies nothing about the copies that do not, and no rule above reads a mode.
 #
 # WHY IT IS DERIVED RATHER THAN DECLARED. `ships:` on the two COPIES entries
 # above is the declared half and it is real — a demo that drops `bin/dev` fails
@@ -7880,37 +6985,25 @@ end
 
 # ── EVERY DEMO SHIPS A CONTAINER PATH, AND THE RECIPE IS SHARED (T-192, K-1335) ─
 #
-# WHAT THIS RULE USED TO BE, AND WHY IT MOVED. It used to police an ABSENCE:
-# `rails new` emits a `.dockerignore` next to the `Dockerfile` it also emits,
-# these demos kept neither, and the ignore-file outlived the recipe in one demo
-# at a time — three times, in three separate waves, each a hand sweep of the
-# demos somebody happened to open. That half is still here, and it is the last
-# rule below. What changed is the wider question the old rule deliberately left
-# open: whether a self-hostable reference ought to ship a container recipe at
-# all. It does now. An operator evaluating this repository expects to clone it
-# and type one command, and until this rule the answer was that they had to
-# install Postgres, hold a login permitted to `CREATE ROLE`, and have python3
-# with numpy on PATH before anything would run at all.
-#
-# THE SHAPE, and it is the reason this is a rule rather than eight files. The
-# kiosk gems are resolved through `path: "../kiosk-<gem>"` wherever a demo
-# depends on them, so a container build context CANNOT be a single demo directory — it has to be this
-# repository. That makes the expensive half — the image — shared by
+# The kiosk gems are resolved through `path: "../kiosk-<gem>"` wherever a demo
+# depends on them, so a container build context CANNOT be a single demo directory —
+# it has to be this repository. That makes the expensive half shared by
 # construction: ONE `Dockerfile` at the repository root, carrying every demo's
-# bundle, `psql`, python3+numpy, curl and jq. What is genuinely per-demo is
-# four facts, and each of them is DERIVED from that demo's own tree rather than
-# typed: the project name and the working directory (the demo's own directory
-# name) and the port (the default its own `lib/tasks/demo.rake` declares).
+# bundle, `psql`, python3+numpy, curl and jq. What is genuinely per-demo is DERIVED
+# from that demo's own tree rather than typed: the project name and the working
+# directory (the demo's own directory name) and the port the demo's own
+# `lib/tasks/demo.rake` declares.
 #
-# NON-VACUITY IS NOW STRUCTURAL, and that is the substantive change. The old
-# rule's subject was empty — the tree held zero container files — so a count
-# could never be its signal and it proved its detector against constructed
-# names instead. Its subject is no longer empty, so the count IS the signal,
-# and it is taken from the CORPUS: every `kiosk-demo-*` directory this script
-# already discovered must have a compose file, so a demo added to this
-# repository makes this rule fail until it has one. Nothing below enumerates
-# demos, ports or database names; a hand-listed vacuity arm stops draining the
-# moment the corpus grows, which is exactly what happened one guard over.
+# Two properties are held. Every demo must ship a compose file, because an operator
+# evaluating this repository expects to clone it and type one command. And an
+# ignore-file may not outlive the recipe `rails new` emitted it beside — that is the
+# last rule below, and it is the half this section started as.
+#
+# NON-VACUITY IS STRUCTURAL. The count is taken from the CORPUS: every
+# `kiosk-demo-*` directory this script already discovered must have a compose file,
+# so a demo added to this repository makes this rule fail until it has one. Nothing
+# below enumerates demos, ports or database names — a hand-listed vacuity arm stops
+# draining the moment the corpus grows.
 CONTAINER_IGNORE_RE = /\A\.(?:docker|container|podman)ignore\z/
 CONTAINER_RECIPE_RE = /\A(?:Dockerfile|Containerfile)(?:\..+)?\z|\A.+\.(?:dockerfile|containerfile)\z|\A(?:docker-)?compose(?:\..+)?\.ya?ml\z/
 CONTAINER_COMPOSE_RE = /\A(?:docker-)?compose(?:\..+)?\.ya?ml\z/

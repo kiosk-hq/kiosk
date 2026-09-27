@@ -105,12 +105,7 @@ end
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
-       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
-    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
-    # directly (no RLS). Generate encrypted credentials on first run so the dev
+    # Generate encrypted credentials on first run so the dev
     # secret_key_base exists (Devise sessions need it) — idempotent. Done
     # directly (NOT via `rails credentials:edit`): the credentials generator's
     # master-key step appends its own ignore block to .gitignore, silently
@@ -133,11 +128,8 @@ namespace :demo do
         env_key: "RAILS_MASTER_KEY", raise_if_missing_key: true,
       ).write("secret_key_base: #{SecureRandom.hex(64)}")
     end
-    # db:schema:load, NOT db:migrate: this task's own description and the
-    # comment above both say schema:load, and under
-    # `schema_format = :sql` (config/application.rb) `db:migrate` RE-DUMPS the
-    # tracked db/structure.sql, so demo:setup would dirty the worktree.
-    # The canonical structure.sql is the source of truth, as in every sibling.
+    # db:schema:load, not db:migrate: the tracked db/structure.sql is the schema's
+    # source of truth, and under `schema_format = :sql` a migrate would re-dump it.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 end

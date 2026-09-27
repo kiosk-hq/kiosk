@@ -7,8 +7,7 @@
 # `db:drop db:create db:schema:load db:seed`, so `kiosk_hoteling_development` is dropped
 # and recreated on every `up`. What changes is WHERE — that database lives on
 # the `pgdata` volume this file declares, so the drop cannot reach a Postgres
-# on your machine, and nothing here needs a login permitted to `CREATE ROLE`:
-# the container's Postgres superuser has it.
+# on your machine.
 #
 # To run one of this demo's own tasks instead of the server:
 #

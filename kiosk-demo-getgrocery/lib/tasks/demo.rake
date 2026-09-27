@@ -112,14 +112,8 @@ end
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
-       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
-    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # db:schema:load unconditionally: db/structure.sql is TRACKED in every demo,
-    # so a db:migrate arm would be unreachable in every checkout — and under
-    # `schema_format = :sql` it would re-dump that tracked file, dirtying the
-    # worktree. The canonical structure.sql is the source of truth.
+    # db:schema:load, not db:migrate: the tracked db/structure.sql is the schema's
+    # source of truth, and under `schema_format = :sql` a migrate would re-dump it.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 

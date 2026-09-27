@@ -80,13 +80,8 @@ end
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
-       "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
-    sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
-    # directly. Use db:schema:load instead of db:migrate so the canonical
-    # structure.sql is the source of truth.
+    # db:schema:load, not db:migrate: the tracked db/structure.sql is the schema's
+    # source of truth, and under `schema_format = :sql` a migrate would re-dump it.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 end

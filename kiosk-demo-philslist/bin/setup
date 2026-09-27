@@ -14,10 +14,9 @@ FileUtils.chdir APP_ROOT do
   #
   # WHY. The Rails-generated script runs `db:prepare` and then execs
   # `bin/dev`. Both halves were wrong here. `db:prepare` loads the schema and
-  # stops, so the app came up with no seeded catalogue and without `app_role` —
-  # the group role this demo's queries assume, created and granted by
-  # `demo:setup` — while the exec named a file four of the seven demos did not
-  # ship, so the first command a Rails developer types ended in Errno::ENOENT on
+  # stops, so the app came up with no seeded catalogue, while the exec named a
+  # file four of the seven demos did not ship, so the first command a Rails
+  # developer types ended in Errno::ENOENT on
   # its last line. `demo:setup` is what this app's own README tells an operator
   # to run; running anything else here would be a second, worse answer to the
   # same question. The generated `--reset` arm is gone with it: `demo:setup`

@@ -96,8 +96,8 @@ Rails.application.configure do
   # `enforce_db_role` is on; the `SET LOCAL ROLE` expires with the transaction, so
   # nothing switches back. `system_role` is deployment vocabulary for the
   # privileged role a DBA grants ownership to — nothing in kiosk-server or
-  # kiosk-rls reads it at runtime, and these demos create one Postgres role, so
-  # both names resolve to it. WHICH roles a database actually has is deployment
+  # kiosk-rls reads it at runtime, so both names resolve to one default. WHICH
+  # roles a database actually has is deployment
   # posture rather than a demo mode, so the names are resolved here with every
   # other env input and the initializer reads the config, never ENV
   # (ENV-CONFIG-PLACEMENT). Nothing in this repo SETS either variable: they are

@@ -48,7 +48,6 @@ needs. It is not shorter under containers; it is unnecessary.
 
 - **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
 - **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **A Postgres login permitted to `CREATE ROLE`.** `demo:setup` creates the `app_role` group role and grants it to the current user. Managed Postgres and shared development servers usually refuse this; a local superuser has it.
 - **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
 - **`curl` and `jq`** on PATH — `bin/demo` drives the walkthrough with them.
 

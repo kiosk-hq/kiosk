@@ -6,19 +6,13 @@
 # WHY THIS EXISTS. The documented prerequisites were not the actual
 # prerequisites, in every demo. Three of the eight READMEs carried a
 # prerequisites block at all; in three others the whole precondition was the
-# sentence "Postgres required. From this directory:". Two hard requirements were
-# named nowhere an operator reads:
-#
-#   (1) python3 + numpy. Every operator demo sets `registration_pow_count = 1`
-#       and every copy of `script/equihash_register.rb` shells out to `python3`
-#       with the bundled numpy solver, so EVERY task that registers an assistant
-#       needs both. Without numpy the solver exits "this solver requires numpy".
-#   (2) The `CREATE ROLE` privilege. `demo:setup` runs `psql -d postgres` with
-#       `CREATE ROLE app_role NOLOGIN` and `GRANT app_role TO CURRENT_USER`,
-#       which managed Postgres and shared dev servers refuse.
-#
-# CI masks both: it pip-installs numpy and runs Postgres as a superuser, so
-# neither has ever failed for us and neither would.
+# sentence "Postgres required. From this directory:". One hard requirement was
+# named nowhere an operator reads: python3 + numpy. Every operator demo sets
+# `registration_pow_count = 1` and every copy of `script/equihash_register.rb`
+# shells out to `python3` with the bundled numpy solver, so EVERY task that
+# registers an assistant needs both. Without numpy the solver exits "this solver
+# requires numpy". CI masks it: it pip-installs numpy, so it has never failed
+# for us and would not.
 #
 # A third thing was undocumented in the same way and is the same class (K-1317):
 # `demo:setup` runs `db:drop db:create db:schema:load db:seed` unconditionally,
@@ -31,8 +25,8 @@
 # again and again. So the block is GENERATED: each requirement below carries a
 # TRIGGER, a question asked of that demo's OWN files, and the block rendered
 # into that demo's README holds exactly the requirements its own code creates.
-# A demo that stops shelling out to python3 loses the line; one that grows a new
-# `CREATE ROLE` gains it; and a requirement declared here that no demo triggers
+# A demo that stops shelling out to python3 loses the line; one that grows a
+# shell tour gains the `curl`/`jq` line; and a requirement declared here that no demo triggers
 # fails the run, so a rule that has stopped covering anything cannot read as
 # coverage.
 #
@@ -135,14 +129,6 @@ REQUIREMENTS = [
     why:  "Every demo:setup runs psql itself, so `pg_isready` alone is not the whole precondition.",
   },
   {
-    id:   "create-role",
-    file: "lib/tasks/demo.rake", must: /CREATE ROLE app_role/,
-    line: ->(_) { "- **A Postgres login permitted to `CREATE ROLE`.** `demo:setup` creates the " \
-                  "`app_role` group role and grants it to the current user. Managed Postgres and " \
-                  "shared development servers usually refuse this; a local superuser has it." },
-    why:  "K-1316's second gap. CI runs as a superuser, so this has never failed for us.",
-  },
-  {
     id:   "python3-numpy",
     # The trigger is the demo LOADING the gem's solver, not the word `python3`:
     # T-189 moved the `Open3.capture2("python3", …)` line into
@@ -170,7 +156,7 @@ REQUIREMENTS = [
 # it — at the top of the same block that used to open with «install Postgres».
 #
 # WHAT IT DOES AND DOES NOT DO TO THE LIST BELOW IT. It does not delete a
-# requirement. Ruby, Postgres, the `CREATE ROLE` grant, python3 with numpy —
+# requirement. Ruby, Postgres, python3 with numpy —
 # every one of them is still exactly what running `bin/rails demo:*` on this
 # machine needs, and that path is not going away. What changes is that it is no
 # longer the ONLY path, so the list is introduced as the host one rather than as
@@ -628,11 +614,9 @@ if ARGV.include?("--self-test")
                     File.write(r, File.read(r).sub(/^- \*\*python3 with numpy\*\*.*?\n(?=- |\n|<!--)/m, "")) },
       expect: %r{skooti/README\.md: the PREREQS block does not match} },
     { id:   "requirement-appears-in-code",
-      what: "a demo grows a CREATE ROLE its README does not mention",
-      op:   ->(t) { r  = File.join(t, "kiosk-demo-philslist/README.md")
-                    ra = File.join(t, "kiosk-demo-philslist/lib/tasks/demo.rake")
-                    File.write(r, File.read(r).sub(/^- \*\*A Postgres login permitted.*?\n(?=- |\n|<!--)/m, ""))
-                    File.write(ra, File.read(ra)) },
+      what: "a demo's shell tour needs jq and its README does not mention it",
+      op:   ->(t) { r = File.join(t, "kiosk-demo-philslist/README.md")
+                    File.write(r, File.read(r).sub(/^- \*\*`curl` and `jq`\*\*.*?\n(?=- |\n|<!--)/m, "")) },
       expect: %r{philslist/README\.md: the PREREQS block does not match} },
     { id:   "drop-not-disclosed",
       what: "the destructive-setup warning is deleted while demo:setup still drops the database — " \
@@ -762,12 +746,12 @@ if ARGV.include?("--self-test")
                     end },
       expect: %r{not ONE demo yielded a host for the destructive warning} },
     { id:   "vacuity-trigger-stops-matching", kind: :vacuity,
-      what: "the CREATE ROLE trigger stops matching anywhere, so the requirement silently covers " \
+      what: "the curl/jq trigger stops matching anywhere, so the requirement silently covers " \
             "nothing and every README reads as complete",
-      op:   ->(t) { Dir[File.join(t, "kiosk-demo-*/lib/tasks/demo.rake")].each do |f|
-                      File.write(f, File.read(f).gsub("CREATE ROLE app_role", "CREATE GROUP app_role"))
+      op:   ->(t) { Dir[File.join(t, "kiosk-demo-*/bin/demo")].each do |f|
+                      File.write(f, File.read(f).gsub("require_tool jq", "require_tool yq"))
                     end },
-      expect: %r{the `create-role` trigger matched NO demo} },
+      expect: %r{the `curl-jq` trigger matched NO demo} },
   ]
 
   ls, git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard")

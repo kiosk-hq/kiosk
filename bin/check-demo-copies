@@ -6019,6 +6019,19 @@ SPEC_UNITS = {
           "three clock specs pair with {TOKYO}. Same reason, and stated separately because a " \
           "reader meeting one of them is entitled to know the other is held too.",
   },
+  "where" => {
+    rule: :per_file,
+    why:  "ACTIVERECORD'S OWN NAME, not a copied helper: a DB-free spec that stands in for a " \
+          "model must answer the query method the code under test calls, and each stand-in " \
+          "answers its own fixture — getgrocery's returns itself in front of a `pick` that " \
+          "claims zero rows, stylish's returns a row keyed by salon id.",
+  },
+  "pick" => {
+    rule: :per_file,
+    why:  "The second half of the same stand-in: `where(...).pick(:column)` is how the code " \
+          "under test reads one value, so each spec's `pick` answers what that spec's fixture " \
+          "holds — nil for getgrocery's zero-row claim, the salon's zone for stylish's.",
+  },
 }.freeze
 
 # The corpus, derived. `git ls-files` first because the tracked set is the

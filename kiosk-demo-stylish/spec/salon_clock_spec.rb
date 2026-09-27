@@ -10,20 +10,25 @@
 # single run: on the machine that wrote the code the process zone and the zone
 # the author meant were the same, and every assertion passed. It only shows when
 # the SAME input is parsed under two different `TZ` values and the two answers
-# disagree — so section 1 pins the resolved instant to an absolute epoch that no
+# disagree — so section 2 pins the resolved instant to an absolute epoch that no
 # process zone can move, and `check:clock_spec` runs the file under
 # `TZ=Etc/GMT-11` and `TZ=Etc/GMT+2`, the two clocks thirteen hours apart that
 # the measurement used.
 #
 # WATCHED FAIL: put `Time.iso8601(str)` back as the return value of
-# {SalonClock.parse_slot} and section 2 goes red under both TZ values.
+# {SalonClock.parse_slot} and section 4 goes red under both TZ values — «in
+# January a Paris salon is on CET (+01:00), got 0». Section 2 cannot see it:
+# every input there carries an offset (section 1 is what refuses one without),
+# so `Time.iso8601` resolves each to the right instant; what it gets wrong is
+# the clock the value is READ BACK on, and section 4 is where that is pinned.
 #
 # AND THE SECOND SUBJECT, since the zone stopped being an origin constant: the
 # clock a row is RENDERED on is `salons.timezone`, read off the salon being
 # served. What is provable without a database is that every helper honours the
 # zone it is handed and invents none, which sections 2 to 4 assert at two real
-# zones; that the zone is READ OFF THE SALON needs a row in a table and is
-# exercised by check:roles and check:redteam against a booted origin.
+# zones. That the zone is READ OFF THE SALON is section 7's, through a stand-in
+# for {Salon}: the one seeded salon carries the column default, so no booted
+# gate can tell the column read from the constant.
 
 require "time"
 require "active_support"
@@ -162,6 +167,29 @@ assert(example_at.utc_offset == SalonClock.default_zone.now.advance(days: 7).utc
        "#{example_at.utc_offset / 3600}")
 assert(example_at > Time.now,
        "…and it is still in the future, so the guard it illustrates would accept it")
+
+# ── 7. THE ZONE IS READ OFF THE SALON, held without a database ─────────────
+#
+# {SalonClock.zone_for} reads `salons.timezone` for the salon being booked. The
+# seed file writes one salon and lets the column default fill its zone, so a
+# booted gate sees the same bytes whether the column is read or the constant
+# is — which is how a `zone_for` that returned the default would stay green
+# everywhere else. A stand-in for {Salon} answers a zone that is NOT the
+# default for one id and nothing for another.
+Object.const_set(:Salon, Module.new do
+  ROWS = { "salon-toronto" => "America/Toronto" }.freeze
+  Row  = Struct.new(:id) do
+    def pick(_column) = ROWS[id]
+  end
+
+  def self.where(id:) = Row.new(id)
+  def self.exists?(id:) = ROWS.key?(id)
+end)
+
+assert(SalonClock.zone_for("salon-toronto").name == "America/Toronto",
+       "zone_for reads the salon's own column, got #{SalonClock.zone_for('salon-toronto').name}")
+assert(SalonClock.zone_for("salon-nobody").name == SalonClock::DEFAULT_ZONE_NAME,
+       "…and an id that addresses no salon falls back to the origin default")
 
 puts
 if FAILURES.empty?

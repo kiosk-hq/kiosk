@@ -363,11 +363,12 @@ module Kiosk
 
       # Operator sign-in path the engine redirects a browser to when an
       # UNAUTHENTICATED human hits the manage-assistants page
-      # (`<mount>/auth/assistants`). Optional, default nil.
+      # (`<mount>/auth/assistants`) or the claim ceremony's verify page
+      # (`<mount>/oauth/device/verify`). Optional, default nil.
       #
       # The engine stays IdP-neutral — it cannot hardcode a sign-in URL
       # (Devise's `/users/sign_in` is app-specific). When a provider sets this
-      # to its own sign-in path, {AssistantsController#require_account_holder!}
+      # to its own sign-in path, {AccountHolderGate#require_account_holder!}
       # redirects a browser visitor there (with a flash alert + a stored
       # return-to) instead of rendering the bare 401. When left nil — or for a
       # non-HTML/API request — the plain 401 is preserved, so the API contract

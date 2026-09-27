@@ -151,6 +151,10 @@ Kiosk.configure do |c|
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint and unlink. ONE channel in every environment.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+  # Where the engine bounces an unauthenticated browser visitor to the
+  # account-binding pages. The engine stays IdP-neutral, so the URL is
+  # supplied here; without it those pages render a bare 401.
+  c.sign_in_path = "/users/sign_in"
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
   # The cashier check: ValidatingRentalProvider verifies the agent-signed cart

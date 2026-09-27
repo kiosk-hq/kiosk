@@ -156,6 +156,10 @@ Kiosk.configure do |c|
   # the approving human on the account-binding surfaces — device verify page,
   # link-code mint, unlink. `rake check:claim` walks the claim-rebind ceremony.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+  # Where the engine bounces an unauthenticated browser visitor to the
+  # account-binding pages. The engine stays IdP-neutral, so the URL is
+  # supplied here; without it those pages render a bare 401.
+  c.sign_in_path = "/users/sign_in"
 
   # Payment provider: real Stripe in test mode (sk_test_…), SetupIntent
   # card-on-file — card saved once on Stripe's hosted page, charged off_session

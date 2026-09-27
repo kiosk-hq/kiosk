@@ -39,6 +39,13 @@ module Kiosk
     # itself is an escalation even when the page discloses it, and a correct
     # role the page never names is an approval given blind.
     class DeviceVerifyController < ::ActionController::Base
+      include AccountHolderGate
+
+      # What an unauthenticated visitor is told, on the 401 body and on the
+      # sign-in page this origin redirects a browser to.
+      SIGN_IN_PROMPT = "Sign in to your account first, then re-open this page to approve the assistant link."
+      SIGN_IN_ALERT  = "Please sign in to approve the assistant link."
+
       # Failed user_code lookups tolerated per session before a 429.
       # Generous for fat-fingering; hopeless for guessing one of the
       # 31^8 ≈ 8.5 × 10^11 codes ({DeviceAuthorization::USER_CODE_ALPHABET}).
@@ -67,7 +74,7 @@ module Kiosk
       end
 
       def show
-        return unless require_account_holder!
+        return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
         return if attempt_capped!
 
         @user_code = params[:user_code].to_s
@@ -82,7 +89,7 @@ module Kiosk
       end
 
       def create
-        return unless require_account_holder!
+        return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
         return if attempt_capped!
 
         @user_code = params[:user_code].to_s
@@ -111,19 +118,6 @@ module Kiosk
       end
 
       private
-
-      # The approving human authenticates through the provider's normal
-      # session (`user_idp` — e.g. the Devise adapter reading the Warden
-      # user). No session → 401; the provider's own login page is the
-      # remedy, not anything Kiosk ships.
-      def require_account_holder!
-        @identity = Kiosk.configuration.user_idp&.verify(request)
-        return true if @identity
-
-        render plain: "Sign in to your account first, then re-open this page to approve the assistant link.",
-               status: :unauthorized
-        false
-      end
 
       # A machine caller for signposting purposes: an explicit JSON `Accept`,
       # or a JSON request body. Deliberately narrow — anything ambiguous

@@ -23,6 +23,13 @@ module Kiosk
     # like {DeviceVerifyController}; override the view by shipping
     # app/views/kiosk/server/assistants/show.html.erb in the host app.
     class AssistantsController < ::ActionController::Base
+      include AccountHolderGate
+
+      # What an unauthenticated visitor is told, on the 401 body and on the
+      # sign-in page this origin redirects a browser to.
+      SIGN_IN_PROMPT = "Sign in to your account first to manage linked assistants."
+      SIGN_IN_ALERT  = "Please sign in to manage your linked assistants."
+
       # Host app view paths (configured by Rails on ActionController::Base)
       # come first, so a provider's own templates override these.
       append_view_path File.expand_path("../../../app/views", __dir__)
@@ -55,7 +62,7 @@ module Kiosk
       end
 
       def show
-        return unless require_account_holder!
+        return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
         render_page
       end
@@ -84,7 +91,7 @@ module Kiosk
       # validated at mint; `bind!` validates it against `config.roles` at
       # redeem, which is where the JSON path validates it too.
       def link
-        return unless require_account_holder!
+        return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
         result = LinkCode.mint(user_id: @identity.user_id, requested_role: @identity.role)
         @link_code  = result[:link_code]
@@ -93,7 +100,7 @@ module Kiosk
       end
 
       def unlink
-        return unless require_account_holder!
+        return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
         AccountBinding.unlink!(agent_id: params[:agent_id].to_s, user_id: @identity.user_id)
         @notice = "Assistant unlinked — its key no longer signs in."
@@ -109,7 +116,7 @@ module Kiosk
       # rows. Empty spending_cap_cents → NULL (unlimited); a non-integer
       # value is rejected as a bad request.
       def update
-        return unless require_account_holder!
+        return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
         # `lease_connection`, not `connection` (following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
@@ -197,34 +204,6 @@ module Kiosk
       # non-HTML/API request, or when no sign_in_path is configured, keep the
       # bare 401 — this preserves the API contract (the engine stays
       # IdP-neutral).
-      def require_account_holder!
-        @identity = Kiosk.configuration.user_idp&.verify(request)
-        return true if @identity
-
-        sign_in_path = Kiosk.configuration.sign_in_path
-        if sign_in_path && html_request?
-          set_sign_in_flash
-          store_return_location
-          redirect_to sign_in_path
-          return false
-        end
-
-        render plain: "Sign in to your account first to manage linked assistants.",
-               status: :unauthorized
-        false
-      end
-
-      # Browser vs API: prefer the negotiated format, but also accept a raw
-      # `Accept: text/html` (a curl/bookmark hit whose format Rails could not
-      # infer). API clients send JSON and get the plain 401 unchanged.
-      def html_request?
-        return true if request.format.html?
-
-        request.headers["Accept"].to_s.include?("text/html")
-      rescue StandardError
-        false
-      end
-
       # A machine caller for signposting purposes: an explicit JSON `Accept`,
       # or a JSON request body. Deliberately NARROW — anything ambiguous
       # (`*/*`, a form post, no headers at all) counts as a browser and keeps
@@ -256,24 +235,6 @@ module Kiosk
                      "(public) for the verbs this origin serves",
           },
         }
-      end
-
-      # Flash the sign-in prompt. The flash mixin is present on
-      # ActionController::Base, but `request.flash` needs the flash
-      # middleware in the stack — absent on a bare Rack host or Metal
-      # dispatch — so a missing flash must not abort the redirect.
-      def set_sign_in_flash
-        flash[:alert] = "Please sign in to manage your linked assistants."
-      rescue StandardError
-        nil
-      end
-
-      # Devise convention: remember where the visitor was headed so login can
-      # bounce them back to the manage page. Harmless if unused by the IdP.
-      def store_return_location
-        session["user_return_to"] = request.fullpath
-      rescue StandardError
-        nil
       end
 
       # The holder's live agent rows — id, key fingerprint, created_at,

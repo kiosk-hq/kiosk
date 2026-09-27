@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-28: **A signed-out human landing on the claim ceremony’s verify page is sent to the operator’s sign-in, as on the manage-assistants page.** `sign_in_path` now governs both pages.
+
 ## [0.5.0] — 2026-09-26
 
 - 2026-09-25: **`listen.py` gains `--until-event`: it exits 0 on the first event and 5 at the deadline**, so an assistant holds a wait in one foreground call instead of tailing a log.

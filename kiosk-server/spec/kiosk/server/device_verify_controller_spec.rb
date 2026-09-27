@@ -38,16 +38,17 @@ RSpec.describe "DeviceVerifyController" do
     wire_user_idp(human)
   end
 
-  def dispatch(action, method:, params: {})
+  def dispatch(action, method:, params: {}, headers: {})
     env = Rack::MockRequest.env_for(
       "https://provider.example/kiosk/oauth/device/verify",
       method: method, params: params,
     )
+    headers.each { |k, v| env[k] = v }
     env["rack.session"] = session
-    status, _headers, body = Kiosk::Server::DeviceVerifyController.action(action).call(env)
+    status, response_headers, body = Kiosk::Server::DeviceVerifyController.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
-    [status, raw]
+    [status, raw, response_headers]
   end
 
   def start_claim
@@ -71,6 +72,48 @@ RSpec.describe "DeviceVerifyController" do
     Kiosk.configure { |c| c.user_idp = nil }
     status, = dispatch(:show, method: "GET")
     expect(status).to eq(401)
+  end
+
+  # VERIFY-PAGE-UNAUTH-UX (K-1779): this page is the DEFAULT human step of the
+  # claim ceremony — the `verification_uri` an assistant hands its human — so a
+  # signed-out browser landing on it needs the same way forward its sibling
+  # manage-assistants page has had. Both read `config.sign_in_path` through
+  # {Kiosk::Server::AccountHolderGate}.
+  context "with config.sign_in_path set (browser UX)" do
+    before do
+      wire_user_idp(nil)
+      Kiosk.configure { |c| c.sign_in_path = "/users/sign_in" }
+    end
+
+    it "redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to" do
+      status, _body, headers = dispatch(
+        :show, method: "GET", headers: { "HTTP_ACCEPT" => "text/html" },
+      )
+      expect(status).to eq(302)
+      expect(headers["Location"]).to end_with("/users/sign_in")
+      expect(session["user_return_to"]).to eq("/kiosk/oauth/device/verify")
+    end
+
+    # The flash mixin needs the flash MIDDLEWARE (present in a real Rails app;
+    # absent in this bare Metal dispatch), so assert the controller ATTEMPTS to
+    # set the alert rather than reading it back out of a serialised session.
+    it "sets a flash alert telling the visitor to sign in" do
+      flash_double = {}
+      allow_any_instance_of(Kiosk::Server::DeviceVerifyController)
+        .to receive(:flash).and_return(flash_double)
+      dispatch(:show, method: "GET", headers: { "HTTP_ACCEPT" => "text/html" })
+      expect(flash_double[:alert]).to eq("Please sign in to approve the assistant link.")
+    end
+
+    # Backward compat: a JSON / API caller still gets the plain 401 even with a
+    # sign_in_path configured — the redirect is HTML-only.
+    it "still 401s a non-HTML (API/JSON) request" do
+      status, body = dispatch(
+        :show, method: "GET", headers: { "HTTP_ACCEPT" => "application/json" },
+      )
+      expect(status).to eq(401)
+      expect(body).to include("Sign in")
+    end
   end
 
   it "shows the consent panel with key fingerprint and requested-at for a live code" do

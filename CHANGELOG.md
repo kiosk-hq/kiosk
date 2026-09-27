@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-27: **getgrocery's back office badges an order out for delivery and a delivered one by name.** A delivered basket read PAID, because the badge only knew a settlement.
 - 2026-09-27: **getgrocery's `my_orders` declares all six order states as an enum, courier states included.** The description named four; a delivered basket was published under none of them.
 - 2026-09-27: **`bin/check-demo-copies` holds the Kiosk env block of every operator demo's `development.rb` in lockstep.** Only the host line and getgrocery's payment paragraph may differ.
 - 2026-09-27: **The published onboarding guide is compared against this checkout on every push, in the CI job that already checks kiosk.tech out.** Until now only the daily schedule asked.

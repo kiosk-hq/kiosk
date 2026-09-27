@@ -100,6 +100,16 @@
       color: #475569;
       border: 1px solid #cbd5e1;
     }
+    .badge-out-for-delivery {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+    }
+    .badge-delivered {
+      background: #e0e7ff;
+      color: #3730a3;
+      border: 1px solid #a5b4fc;
+    }
 
     .order-meta {
       display: flex;
@@ -185,7 +195,6 @@
       <%
         paid       = order["paid"] == "t" || order["paid"] == true
         status     = order["status"].to_s
-        scheduled  = status == Order::RESCHEDULED
         # THE WINDOW IS NOT COMPOSED HERE. The controller renders it through
         # DeliverySlots — the one writer `delivery_slots` and `my_orders`
         # already answer from — so this page names the same hours, in the same
@@ -208,19 +217,19 @@
         total_str  = format("%s%.2f", cur_glyph, order["total_cents"].to_i / 100.0)
         items      = order["items"] || []
 
-        badge_class = if scheduled
-          "badge-scheduled"
-        elsif paid
-          "badge-paid"
-        else
-          "badge-created"
-        end
-        badge_label = scheduled ? "SCHEDULED" : (paid ? "PAID" : "CREATED")
+        # The shop's own two states outrank the settlement: a delivered basket
+        # still carries one, and it is not what this list is for.
+        badge = case status
+                when Order::DELIVERED        then "delivered"
+                when Order::OUT_FOR_DELIVERY then "out-for-delivery"
+                when Order::RESCHEDULED      then "scheduled"
+                else paid ? "paid" : "created"
+                end
       %>
       <div class="order-card">
         <div class="order-header">
           <span class="order-id">#<%= order["short_id"] %></span>
-          <span class="badge <%= badge_class %>"><%= badge_label %></span>
+          <span class="badge badge-<%= badge %>"><%= badge.tr("-", " ").upcase %></span>
           <div class="order-meta">
             <span><span class="label">Total:</span> <%= total_str %></span>
             <% if order["address"] && !order["address"].empty? %>

@@ -30,6 +30,9 @@ class Order < ApplicationRecord
   OUT_FOR_DELIVERY = "out_for_delivery"
   DELIVERED        = "delivered"
 
+  # Every state this app writes, in lifecycle order — what `my_orders` declares.
+  STATUSES = [CREATED, PAYING, PAID, RESCHEDULED, OUT_FOR_DELIVERY, DELIVERED].freeze
+
   # The states a courier is already acting on. Kept apart from {RESCHEDULED}
   # because the two refusals mean different things to a caller: «you have
   # already moved this once» is about a quota, «the courier has left» is about

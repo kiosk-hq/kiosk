@@ -251,7 +251,8 @@ class Kiosk::StorefrontController < ActionController::API
                   type: "object", additionalProperties: false,
                   properties: {
                     order_id:      { type: "string", description: "Pass to reschedule_delivery as `order_id` once this order is paid." },
-                    status:        { type: "string", description: "The operator's order status — where the BASKET stands (created, paying, paid, rescheduled). Read payment_state for where the money stands." },
+                    status:        { type: "string", enum: Order::STATUSES,
+                                     description: "Where the BASKET stands: created → paying → paid, rescheduled once its window has been moved, then out_for_delivery and delivered as the shop's courier acts. Read payment_state for where the money stands." },
                     total_cents:   { type: "integer", description: "EUR cents." },
                     slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null. " \
                                                                         "The offset is the DELIVERY zone's — the same one `delivery_slots`, " \

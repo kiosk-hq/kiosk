@@ -143,8 +143,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: Kiosk::Pow::Equihash::Difficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.5.0.md"
-  c.skill_sha256 = "0d4b9cb05c18663e746f1a02bc187107be396730e1d4aa6ba9826311d48ea806"
+  c.skill_url    = "https://kiosk.tech/skill-v0.5.1.md"
+  c.skill_sha256 = "872802ec9ee29a7bb62047d6438cb1999aca941418da5d1a17bba8e769cae1f1"
 
   # ── NO c.agent_idp — deliberate ──────────────────────────────────────────
   # An assistant authenticates with the kiosk-pop JWT this engine minted, and

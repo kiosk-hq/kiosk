@@ -158,7 +158,7 @@ module Kiosk
       # a newer skill version.
       attr_writer :skill_url
       def skill_url
-        @skill_url ||= "https://kiosk.tech/skill-v0.5.0.md"
+        @skill_url ||= "https://kiosk.tech/skill-v0.5.1.md"
       end
       attr_accessor :skill_sha256
 

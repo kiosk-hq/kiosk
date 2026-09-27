@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **Every demo and the engine default pin `skill-v0.5.1.md`**, the cut that asks the human’s time zone once and says how to hand over a bearer credential.
 - 2026-09-28: **A signed-out human landing on the claim ceremony’s verify page is sent to the operator’s sign-in, as on the manage-assistants page.** All seven demos now set `sign_in_path`.
 - 2026-09-28: **`bin/check-demo-derivations` checks the one block kind the demo narratives still carry, and refuses any other.** The transcript and snippet machinery had no input left.
 - 2026-09-27: **`demo:setup` no longer creates an `app_role` group role nothing uses, so a demo needs no `CREATE ROLE` login.** The task is the one `db:drop … db:seed` line in every demo.

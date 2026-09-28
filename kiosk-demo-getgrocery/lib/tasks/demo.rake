@@ -14,6 +14,8 @@
 #   rake check:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200) at TOY
 #                        params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
 #   rake check:slots_spec DB-free unit spec for the delivery-slot past-filter
+#   rake check:clock_spec DB-free unit spec, clock STUBBED, for where the caller's
+#                        zone may be read from and where it may not reach
 #   rake check:cashier_spec DB-free unit spec for the order-ref uuid shape check
 #   rake check:wire_args_spec DB-free unit spec for the whole WireArguments shape
 #                        guard — the module that decides whether a hostile wire
@@ -184,6 +186,18 @@ namespace :check do
     spec = File.expand_path("../../spec/delivery_slots_spec.rb", __dir__)
     puts "\n── delivery_slots past-filter spec (no DB) ──"
     sh "ruby #{spec}"
+  end
+
+  desc "DB-free unit spec, clock STUBBED, for the caller's declared zone, run under two TZ values."
+  task :clock_spec do
+    spec = File.expand_path("../../spec/caller_clock_spec.rb", __dir__)
+    # `Time.now` is pinned inside the file, so the DAY every assertion turns on
+    # is fixed. The two TZ values are the other axis: a zone leaking out of the
+    # SERVER PROCESS instead of off the delivery district cannot be seen from
+    # inside a single run, and Etc/GMT-11 and Etc/GMT+2 sit on either side of
+    # this shop's own clock.
+    puts "\n── the caller's clock: declared, never inferred (no boot, no DB), under two process zones ──"
+    %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
   end
 
   desc "DB-free unit spec for the cashier's order-reference shape check."

@@ -15,6 +15,21 @@ RSpec.describe Kiosk::Server::AuthChallenge do
       expect(Kiosk.configuration.auth_challenge_store.take(pem, result[:challenge])).to be(true)
     end
 
+    # A CHALLENGE'S `exp` IS AN INSTANT, NOT A SERVICE TIME (spec §3, the
+    # timezone rules' last clause). It is read off the clock and off nothing
+    # else: `now:` is a seam for a caller that has one, and with the seam unused
+    # — the production path — the value is `Time.now` plus the TTL, whatever zone
+    # the process or the request happens to be rendering in.
+    it "mints `exp` from the clock alone, and no ambient zone moves it" do
+      pinned = Time.utc(2026, 9, 7, 22, 30, 0)
+      allow(Time).to receive(:now).and_return(pinned)
+
+      expect(described_class.issue(public_key_pem: pem)[:exp]).to eq(pinned.to_i + 120)
+      Time.use_zone("Pacific/Kiritimati") do
+        expect(described_class.issue(public_key_pem: pem)[:exp]).to eq(pinned.to_i + 120)
+      end
+    end
+
     it "normalises the key so a whitespace-padded presentation still matches" do
       result = described_class.issue(public_key_pem: "#{pem}\n")
       expect(described_class.consume!(public_key_pem: pem, nonce: result[:challenge])).to be(true)

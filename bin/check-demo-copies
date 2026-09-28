@@ -1475,8 +1475,8 @@ COPIES = {
     rule:  :identical,
     ships: OPERATOR_SEVEN,
     why:  "THE FIRST COMMAND A RAILS DEVELOPER TYPES, and until K-1315 it was the Rails generator's " \
-          "own script doing two wrong things in a demo app. It ran `db:prepare` — schema, no seeds, " \
-          "no `app_role` — so the app came up answering nothing; and it ended `exec \"bin/dev\"`, " \
+          "own script doing two wrong things in a demo app. It ran `db:prepare` — schema, no " \
+          "seeds — so the app came up answering nothing; and it ended `exec \"bin/dev\"`, " \
           "which four of the seven demos did not ship, so it died of Errno::ENOENT on its last line " \
           "in the MAJORITY of its copies while this file recorded it as inert generator output. It " \
           "is hand-written now, it runs the demo's own `demo:setup`, and there is nothing per-demo " \

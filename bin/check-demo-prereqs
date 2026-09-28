@@ -126,7 +126,7 @@ REQUIREMENTS = [
     file: "lib/tasks/demo.rake", must: /\bpsql\b/,
     line: ->(_) { "- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: " \
                   "the demo tasks shell out to it directly, not only through ActiveRecord." },
-    why:  "Every demo:setup runs psql itself, so `pg_isready` alone is not the whole precondition.",
+    why:  "Every demo's tasks run psql themselves, so `pg_isready` alone is not the whole precondition.",
   },
   {
     id:   "python3-numpy",

@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **`CONTRIBUTING.md`, the container file and the CI comment no longer sell a `CREATE ROLE` privilege the demos stopped needing.** Only `e2e/run.sh` still creates a role.
 - 2026-09-28: **The two engine event-store files say what the code does.** The correction that set the retention floor and the retired row-count ceiling are in the commit instead.
 - 2026-09-28: **The eight demo lockfiles resolve activesupport 8.1.4 and json 3.** The positional `JSON.parse` caller that made a `bundle update json` fatal in a demo is gone.
 - 2026-09-28: **`bin/check-refusal-assertions` and `bin/check-redteam-headers` read a Ruby comment as a comment.** A stray delimiter in one could move where a beat's call ended.

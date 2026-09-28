@@ -13,15 +13,15 @@
 # nearly all of their work.
 #
 # WHAT THE IMAGE CARRIES vs WHAT COMPOSE PROVIDES. The image carries what the
-# demo CODE shells out to and cannot supply for itself: the `psql` client, pinned to the major the tracked `structure.sql` was dumped by (every
-# `demo:setup` runs `psql -d postgres` directly, not only through ActiveRecord),
+# demo CODE shells out to and cannot supply for itself: the `psql` client, pinned to the major the tracked `structure.sql` was dumped by (the
+# demos' `check:*` tasks query Postgres with it directly, not only through ActiveRecord),
 # python3 with numpy (every task that registers an assistant pays an Equihash
 # toll and solves it with the bundled `solve.py`), and `curl` + `jq` (the three
 # demos whose walkthrough is a shell tour drive it with them). Compose provides
 # what is a SERVER rather than a tool: Postgres, on its own volume, on the
 # compose project's own network. That split is what makes the container path
-# need no host database and no `CREATE ROLE` grant — the demo talks to a
-# Postgres that belongs to the demo, as its superuser.
+# need no host database — the demo talks to a Postgres that belongs to the
+# demo, as its superuser.
 #
 # The Ruby version is a build argument, and `bin/check-demo-copies` holds it to
 # a version this repository's CI actually runs and to the floor the gemspecs

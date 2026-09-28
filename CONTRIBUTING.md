@@ -37,8 +37,10 @@ template).
   both ends: one leg on the declared floor, read out of a gemspec at job time,
   and one on the newest release the demos run.
 - **PostgreSQL.** The kiosk schema, the identity tables and the optional RLS
-  backstop are Postgres. Running the demos additionally needs the privilege to
-  `CREATE ROLE` — managed Postgres and shared dev servers refuse it.
+  backstop are Postgres, and the demo tasks query it with `psql` directly, so
+  that has to be on PATH too. `e2e/run.sh` additionally creates a group role, so
+  running the harness needs the privilege to `CREATE ROLE` — managed Postgres
+  and shared dev servers refuse it.
 - **Python 3 with numpy.** Only for *solving* proof-of-work, which is what the
   demos' register step and the e2e harness do on the client side. Verifying a
   proof is pure Ruby and needs neither.

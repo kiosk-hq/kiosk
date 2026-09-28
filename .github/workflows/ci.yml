@@ -1813,12 +1813,10 @@ jobs:
   # does each one disclose that its setup DROPS the database? (K-1316, K-1317)
   #
   # THIS JOB EXISTS BECAUSE THE REST OF CI MASKS THE ANSWER. The demos job
-  # pip-installs numpy and runs Postgres as a superuser, so the two hard
-  # requirements no README named — python3 + numpy for the Equihash toll every
-  # registration pays, and the `CREATE ROLE` privilege `demo:setup` needs — have
-  # never failed for us and never will. A green matrix is not evidence that an
-  # operator on managed Postgres, or on a box without numpy, can run anything
-  # here; it is evidence that OUR box can.
+  # pip-installs numpy, so the hard requirement no README named — python3 +
+  # numpy for the Equihash toll every registration pays — has never failed for
+  # us and never will. A green matrix is not evidence that an operator on a box
+  # without numpy can run anything here; it is evidence that OUR box can.
   #
   # So the block is DERIVED rather than written seven times: each requirement
   # carries a trigger asked of that demo's OWN files, and the run fails both

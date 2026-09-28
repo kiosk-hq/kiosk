@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **`bin/check-refusal-assertions` and `bin/check-redteam-headers` read a Ruby comment as a comment.** A stray delimiter in one could move where a beat's call ended.
 - 2026-09-28: **stylish’s `salons` query publishes each salon’s IANA zone.** It was the only clock an assistant needed before booking and the only one no reachable verb carried.
 - 2026-09-28: **Every demo and the engine default pin `skill-v0.5.1.md`**, the cut that asks the human’s time zone once and says how to hand over a bearer credential.
 - 2026-09-28: **A signed-out human landing on the claim ceremony’s verify page is sent to the operator’s sign-in, as on the manage-assistants page.** All seven demos now set `sign_in_path`.

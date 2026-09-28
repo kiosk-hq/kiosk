@@ -144,21 +144,29 @@ def call_sites(src, receiver)
   out
 end
 
-# Index of the closer that balances the opener at `from`.
+# Index of the closer that balances the opener at `from`, reading `src` as Ruby:
+# a `#` outside a string opens a comment, and a delimiter inside either is prose,
+# so neither moves where the call ends — and that end bounds the body every rule
+# below reads. Not understood: heredocs, percent literals, regexp literals,
+# `?#`. None of them occurs inside a beat's argument list.
 def scan_to_close(src, from, opener, closer)
   depth = 0
   i = from
   in_str = nil
+  in_comment = false
   esc = false
   while i < src.length
     c = src[i]
-    if in_str
+    if in_comment
+      in_comment = false if c == "\n"
+    elsif in_str
       if esc then esc = false
       elsif c == "\\" then esc = true
       elsif c == in_str then in_str = nil
       end
     else
       case c
+      when "#" then in_comment = true
       when '"', "'" then in_str = c
       when opener then depth += 1
       when closer
@@ -171,21 +179,26 @@ def scan_to_close(src, from, opener, closer)
   i
 end
 
-# Split an argument list at top-level commas.
+# Split an argument list at top-level commas, with comments and string literals
+# skipped for the reason `scan_to_close` gives.
 def top_level_args(body)
   args = []
   depth = 0
   in_str = nil
+  in_comment = false
   esc = false
   start = 0
   body.each_char.with_index do |c, i|
-    if in_str
+    if in_comment
+      in_comment = false if c == "\n"
+    elsif in_str
       if esc then esc = false
       elsif c == "\\" then esc = true
       elsif c == in_str then in_str = nil
       end
     else
       case c
+      when "#" then in_comment = true
       when '"', "'" then in_str = c
       when "(", "[", "{" then depth += 1
       when ")", "]", "}" then depth -= 1
@@ -516,6 +529,17 @@ def self_test
          "r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\" &&\n" \
          "               r[\"zoneless_due_detail\"].to_s.include?(\"due_at\")",
          "r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\"")
+  end
+
+  # The plant above, behind a comment carrying an unbalanced `(`. The walkers
+  # read an argument list by counting delimiters, so one counted inside a comment
+  # would move where the call ends and the rule would read another beat's body.
+  run.call("RA-1 — a comment carrying a stray `(` does not move where the beat ends", "RA-1") do |root|
+    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
+         "r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\" &&\n" \
+         "               r[\"zoneless_due_detail\"].to_s.include?(\"due_at\")",
+         "# the app's own check ( defeated\n" \
+         "               r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\"")
   end
 
   # RA-1, hop 1: the beat delegates to a local computed above it. K-1762.

@@ -450,13 +450,34 @@ def snake_case(name)
       .downcase
 end
 
-# The offset of the `)` closing the `(` at `open`.
-def balanced_paren(src, open)
-  depth = 0
-  i     = open
+# The offset of the `)` closing the `(` at `open`. With `code: true` the source
+# is read as RUBY — a `#` opens a comment, a quote opens a literal — so a stray
+# delimiter in either does not move where the call ends. Off by default: the
+# other caller walks the README, where a `#` is prose.
+# Not understood: heredocs, percent literals, regexp literals, `?#`. None of
+# them occurs in a registration call.
+def balanced_paren(src, open, code: false)
+  depth   = 0
+  i       = open
+  quote   = nil
+  comment = false
+  esc     = false
   while i < src.length
-    depth += 1 if src[i] == "("
-    if src[i] == ")"
+    c = src[i]
+    if comment
+      comment = false if c == "\n"
+    elsif quote
+      if esc then esc = false
+      elsif c == "\\" then esc = true
+      elsif c == quote then quote = nil
+      end
+    elsif code && (c == '"' || c == "'")
+      quote = c
+    elsif code && c == "#"
+      comment = true
+    elsif c == "("
+      depth += 1
+    elsif c == ")"
       depth -= 1
       return i if depth.zero?
     end
@@ -487,13 +508,13 @@ def beat_code(root, src, name, battery)
   # (c) an inline `record`. The beat is the code that RAN to produce the verdict
   #     argument, so the span reaches back to the previous registration.
   if battery && (m = src.match(/#{Regexp.escape(battery)}\.record\(\s*"#{esc}"/))
-    call_end = balanced_paren(src, src.index("(", m.begin(0)))
+    call_end = balanced_paren(src, src.index("(", m.begin(0)), code: true)
     prev     = 0
     src.to_enum(:scan, /#{Regexp.escape(battery)}\.(?:record|scenario)\(/).each do
       earlier = Regexp.last_match
       break if earlier.begin(0) >= m.begin(0)
 
-      prev = balanced_paren(src, src.index("(", earlier.begin(0)))
+      prev = balanced_paren(src, src.index("(", earlier.begin(0)), code: true)
     end
     return ["inline", src[prev..call_end]]
   end
@@ -1007,6 +1028,16 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       planted[at, 3] = stale
       File.write(rake, rake_src.sub(desc) { planted })
     end
+  end
+
+  # A comment carrying a stray `)` must not truncate an inline beat's span: R7
+  # reads a beat's statuses from the source up to the end of its own call, so a
+  # delimiter counted there would make a true restatement read as a violation.
+  run.call("GREEN — a comment carrying a stray `)` inside a record call", nil) do |root|
+    edit(File.join(root, "kiosk-demo-atablefor/script/redteam_suite.rb"),
+         'BATTERY.record("MissingAuth", rc == 401,',
+         "BATTERY.record(\"MissingAuth\", # the status is the operator's, whatever this app does )\n" \
+         "               rc == 401,")
   end
 
   run.call("R7-locate — a registered beat with no implementation anywhere", "R7-locate") do |root|

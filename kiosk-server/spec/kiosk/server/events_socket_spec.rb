@@ -60,6 +60,19 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["opened"]).to be(true)
       expect(report["welcome"]).to eq("type" => "welcome")
     end
+
+    # Spec Section 8.5.3: the `Authorization` header is the whole of what
+    # authorises an upgrade, and an operator MUST NOT refuse one over its
+    # `Origin`. That header is a browser's forgery control, and a browser
+    # cannot attach `Authorization` cross-origin in the first place — so
+    # requiring it would only lock out the stacks this wire is written for.
+    it "accepts an upgrade that carries NO Origin header" do
+      expect(report["no_origin_welcomed"]).to be(true)
+    end
+
+    it "accepts an upgrade whose Origin names somewhere else entirely" do
+      expect(report["foreign_origin_welcomed"]).to be(true)
+    end
   end
 
   describe "subscribing" do

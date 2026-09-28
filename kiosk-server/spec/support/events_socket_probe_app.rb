@@ -91,7 +91,7 @@ end
 
 # ── the client ───────────────────────────────────────────────────────────────
 class ProbeSocket
-  attr_reader :frames, :handshake_status
+  attr_reader :frames
 
   def initialize(port, path, headers)
     @url = "ws://127.0.0.1:#{port}#{path}"
@@ -99,7 +99,6 @@ class ProbeSocket
     @frames = []
     @open = false
     @closed = false
-    @handshake_status = nil
     @driver = WebSocket::Driver.client(self)
     headers.each { |k, v| @driver.set_header(k, v) }
     @driver.on(:open)    { @open = true }
@@ -311,6 +310,23 @@ begin
   REPORT[:url_delivered] = urlsub.messages.any? { |m| m["id"] == url_id }
 
   urlsub.close
+
+  # 13 — NO `Origin` header at all, and the upgrade is accepted. The
+  #      `Authorization` header is the authorisation; `Origin` is a browser's
+  #      forgery control and there is no browser on this exchange.
+  sock = connect(port, headers: { "Authorization" => "Bearer #{GOOD_TOKEN}" })
+  sock.pump_until { sock.frames.any? }
+  REPORT[:no_origin_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
+  sock.close
+
+  # 14 — an `Origin` naming somewhere else entirely, same answer: a browser
+  #      cannot attach the `Authorization` header cross-origin, so the header
+  #      that decides this upgrade is one an attacker's page cannot send.
+  sock = connect(port, headers: { "Origin" => "https://example.com",
+                                  "Authorization" => "Bearer #{GOOD_TOKEN}" })
+  sock.pump_until { sock.frames.any? }
+  REPORT[:foreign_origin_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
+  sock.close
 
   REPORT[:ok] = true
 rescue StandardError => e

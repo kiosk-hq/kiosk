@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **The event stream accepts an upgrade that sends no `Origin`.** Action Cable's browser forgery check was answering a bare 404 to every non-browser client on the advertised URL.
 - 2026-09-28: **The README names `bin/check-prose-counts` for the four-document `before-after.md` set.** It credited `bin/check-demo-copies`, which says nothing about the count.
 - 2026-09-28: **`CONTRIBUTING.md`, the container file and the CI comment no longer sell a `CREATE ROLE` privilege the demos stopped needing.** Only `e2e/run.sh` still creates a role.
 - 2026-09-28: **The two engine event-store files say what the code does.** The correction that set the retention floor and the retired row-count ceiling are in the commit instead.

@@ -10,17 +10,14 @@ module Kiosk
     # == Why this is not `ActionCable.server`
     #
     # `ActionCable.server` is the host application's singleton: one connection
-    # class, one `allowed_request_origins`, one forgery-protection setting for
-    # every channel the operator will ever add. Taking it over would mean the
-    # engine deciding those for the host — which is what made the app-global option
-    # (`disable_request_forgery_protection = true`) unacceptable: an app-global
-    # switch disarming channels the operator writes later.
+    # class, one forgery-protection setting for every channel the operator will
+    # ever add. Taking it over would mean the engine deciding those for the host.
     #
     # `ActionCable::Server::Base.new(config:)` takes its OWN
     # {ActionCable::Server::Configuration}, carrying `connection_class`,
-    # `allowed_request_origins`, `cable` and the rest. So the engine mounts a
-    # server of its own, the operator's stays untouched, and the origin
-    # allowance below applies to the Kiosk stream and to nothing else.
+    # `cable` and the rest. So the engine mounts a server of its own, the
+    # operator's stays untouched, and the request-forgery setting below reaches
+    # the Kiosk stream and nothing else.
     #
     # == Stream naming
     #
@@ -38,8 +35,8 @@ module Kiosk
 
       # Mounted in the engine's route table. A lambda rather than the server
       # object so the server is built on FIRST REQUEST rather than at
-      # route-draw time — by then `Kiosk.configuration` is populated, which is
-      # what `allowed_request_origins` below reads.
+      # route-draw time, by which point the host application is fully loaded
+      # and `cable_config` below can read its `config/cable.yml`.
       RACK_APP = ->(env) { Kiosk::Server::EventsCable.server.call(env) }
 
       class << self
@@ -63,26 +60,17 @@ module Kiosk
             config.connection_class = -> { Kiosk::Server::EventsConnection }
             config.cable = cable_config
             config.logger = resolved_logger
-            # The listener sends `Origin: <issuer>`, and this is the
-            # only value that satisfies Action Cable's own forgery check — which
-            # is hostile to non-browser clients by design: a request with NO
-            # Origin header matches neither the host nor this list and is
-            # refused with nothing in the client's hand but a 404.
-            #
-            # Deterministic on purpose: it does not depend on
-            # `X-Forwarded-Proto` reaching Rails correctly through the edge,
-            # which a host-comparison would.
-            config.allowed_request_origins = [Kiosk.configuration.issuer].compact
+            # `Origin` decides nothing on this stream, and Action Cable's
+            # check of it is left off deliberately. That check defends a
+            # BROWSER's ambient credentials; this upgrade is authorised by the
+            # `Authorization` header (spec Section 8.5.3), which a page cannot
+            # attach cross-origin, so the request has no ambient credential to
+            # defend. Armed, it refuses every client that sends no `Origin` —
+            # every non-browser stack there is — with a bare 404 on the URL
+            # discovery advertises. This server is the engine's own, so the
+            # setting reaches the Kiosk stream and no channel of the host's.
+            config.disable_request_forgery_protection = true
           end
-        end
-
-        # Test seam, and the reason one is needed: both memos above capture
-        # `Kiosk.configuration` at first use, so an example that changes the
-        # issuer after a socket has been built would otherwise be checking the
-        # previous example's origin allowance.
-        def reset!
-          @server = nil
-          @configuration = nil
         end
 
         private

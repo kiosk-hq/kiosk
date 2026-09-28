@@ -5,6 +5,7 @@
 require "action_controller"
 require "json"
 require "kiosk/server/kyc_verifier"
+require "kiosk/server/request_validation"
 require "kiosk/server/errors"
 require "kiosk/server/headers"
 
@@ -26,7 +27,7 @@ module Kiosk
     class KycAttestationController < ::ActionController::API
       def create
         identity = authenticate!
-        body     = parse_body!
+        body     = parse_body!("POST <endpoint>/agents/kyc")
         raw_jws  = body[:kyc_jws] or raise Errors.missing_field("kyc_jws")
 
         claims = KycVerifier.verify(raw_jws: raw_jws, identity: identity)
@@ -47,13 +48,16 @@ module Kiosk
       # its own typed error: a bare JSON.parse outside it leaks
       # JSON::ParserError — or TypeError, from `body[:kyc_jws]` on an Array —
       # as an unhandled 500.
-      def parse_body!
+      # See {AuthController#parse_body!}: the body is held to the object
+      # §17 publishes for `exchange` before the member below is read.
+      def parse_body!(exchange)
         raw = request.raw_post
         raise Errors::BadRequest, "request body must be a JSON object" if raw.nil? || raw.empty?
 
         parsed = JSON.parse(raw, symbolize_names: true)
         raise Errors::BadRequest, "request body must be a JSON object" unless parsed.is_a?(Hash)
 
+        RequestValidation.validate_body!(parsed, exchange: exchange)
         parsed
       rescue JSON::ParserError
         raise Errors.malformed_json

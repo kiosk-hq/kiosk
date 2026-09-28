@@ -1414,7 +1414,7 @@ end
 # A vendored mirror is read for its local `$comment` and nothing else — see
 # the header. Masking the other lines rather than skipping the file keeps the
 # reported line number honest. BOTH homes: `bin/check-spec-schemas` mirrors
-# seven schemas into `e2e/schemas` and one into `kiosk-server/lib`, and a
+# into `e2e/schemas` and into `kiosk-server/lib`, and a
 # self-test arm re-reads THAT script's manifest and fails if it ever mirrors a
 # path this pattern does not cover — so the two homes are a pattern here and a
 # derivation there, rather than a list nobody re-checks.

@@ -76,12 +76,14 @@ SERVER  = ENV.fetch("SERVER_URL")
 LIVE = ENV["KIOSK_LIVE"] == "1"
 E2E_DIR = __dir__
 SCHEMA_DIR = File.join(E2E_DIR, "schemas")
-# `pow.schema.json` is not copied here — kiosk-server vendors it already, for
-# its own request-shape validation, and one repo holding two copies of one file
-# is the drift this whole exercise is about. `bin/check-spec-schemas` prints how
-# many vendored copies it matched, across both directories.
-POW_SCHEMA = File.expand_path(
-  "../kiosk-server/lib/kiosk/server/schemas/pow.schema.json", E2E_DIR
+# The schemas kiosk-server ENFORCES at runtime are not copied here — the gem
+# vendors them already, for its own request-shape validation, and one repo
+# holding two copies of one file is the drift this whole exercise is about.
+# This directory keeps the rest: the documents only this harness reads.
+# `bin/check-spec-schemas` prints how many vendored copies it matched, across
+# both directories.
+ENGINE_SCHEMA_DIR = File.expand_path(
+  "../kiosk-server/lib/kiosk/server/schemas", E2E_DIR
 )
 
 PASS = []
@@ -117,12 +119,12 @@ end
 # a validator that reached out to https://kiosk.tech to resolve it would be
 # testing the network, and would pass on a stale cache.
 DOCS = {}
-Dir[File.join(SCHEMA_DIR, "*.schema.json")].sort.each do |path|
-  doc = JSON.parse(File.read(path))
-  DOCS[doc.fetch("$id")] = doc
+[SCHEMA_DIR, ENGINE_SCHEMA_DIR].each do |dir|
+  Dir[File.join(dir, "*.schema.json")].sort.each do |path|
+    doc = JSON.parse(File.read(path))
+    DOCS[doc.fetch("$id")] = doc
+  end
 end
-pow_doc = JSON.parse(File.read(POW_SCHEMA))
-DOCS[pow_doc.fetch("$id")] = pow_doc
 
 REF_RESOLVER = lambda do |uri|
   DOCS[uri.to_s.split("#").first] or

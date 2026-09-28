@@ -107,9 +107,27 @@ module Kiosk
         )
       end
 
-      # POST <endpoint>/pay
+      # POST <endpoint>/pay — the one RESERVED endpoint on this path. Its wire
+      # NAME is its command name, so the name travels to the request
+      # fingerprint exactly as a per-verb call's does and its `"<METHOD> <verb>"`
+      # half needs no special case.
+      #
+      # parse_body! runs inside the action, so the rescue_from above covers it:
+      # a malformed body raises Errors::BadRequest, which must render a 400
+      # problem document, not escape as an uncaught 500 (the same
+      # parse-outside-rescue class fixed for
+      # AuthController/KycAttestationController).
       def pay
-        run_command(:pay)
+        body     = parse_body!
+        identity = resolve_identity!
+
+        # The body against the object §17 publishes for it — AFTER identity, so
+        # this endpoint keeps {VerbController}'s documented gate order (401
+        # before 400) rather than telling an anonymous caller which member of
+        # the mandate bundle it got wrong.
+        RequestValidation.validate_body!(body, exchange: "POST <endpoint>/pay")
+
+        execute_wire(command: :pay, args: body, identity: identity, name: "pay")
       end
 
       private
@@ -162,22 +180,6 @@ module Kiosk
         return true  if raw.strip == "*"
 
         raw.split(",").any? { |tag| tag.strip.delete_prefix("W/") == etag }
-      end
-
-      # `pay`, the one reserved endpoint on this path. Its wire NAME is its
-      # command name, so the name travels to the request fingerprint exactly
-      # as a per-verb call's does and its `"<METHOD> <verb>"` half needs no
-      # special case.
-      def run_command(command)
-        # parse_body! runs inside the action, so the rescue_from above covers
-        # it: a malformed body raises Errors::BadRequest, which must render a
-        # 400 problem document, not escape as an uncaught 500 (the same
-        # parse-outside-rescue class fixed for
-        # AuthController/KycAttestationController).
-        body     = parse_body!
-        identity = resolve_identity!
-
-        execute_wire(command: command, args: body, identity: identity, name: command.to_s)
       end
 
       # The toll, the session and the render — everything after the arguments

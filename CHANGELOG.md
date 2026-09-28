@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **every reserved-plane JSON body is held to the object §17 publishes for it** (T-045). A wrong-typed member is a 400 naming it, not a verifier raising deeper in.
+
 - 2026-09-28: **An origin can now decline account binding — `c.serve_account_binding = false` — so the reference exhibits the optional-module profile the spec defines.** Discovery is unchanged.
 - 2026-09-28: **The event stream accepts an upgrade that sends no `Origin`.** Action Cable's browser forgery check was answering a bare 404 to every non-browser client on the advertised URL.
 - 2026-09-28: **The README names `bin/check-prose-counts` for the four-document `before-after.md` set.** It credited `bin/check-demo-copies`, which says nothing about the count.

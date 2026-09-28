@@ -17,19 +17,19 @@
 #
 # THE COPIES
 #
-#   e2e/schemas/*.schema.json                       (seven: discovery, problem,
-#                                                    schema-descriptor,
-#                                                    mandates, kyc, auth,
-#                                                    binding -- the last two
-#                                                    arrived with T-149, which
-#                                                    gave Sections 5 and 6 of
-#                                                    the formal spec the schemas
-#                                                    its published conformance
-#                                                    anchor had been claiming
-#                                                    for them)
-#   kiosk-server/lib/kiosk/server/schemas/pow.schema.json  (vendored
-#                                                    long before this check, for
-#                                                    RequestValidation's own use)
+#   kiosk-server/lib/kiosk/server/schemas/*.schema.json  the schemas the ENGINE
+#                                                    enforces at runtime and
+#                                                    ships inside the gem: pow,
+#                                                    mandates, kyc, auth and
+#                                                    binding -- the last four
+#                                                    because RequestValidation
+#                                                    holds each reserved-plane
+#                                                    request body to the object
+#                                                    Section 17 publishes for it
+#   e2e/schemas/*.schema.json                        the rest, which only this
+#                                                    harness reads: discovery,
+#                                                    problem, schema-descriptor,
+#                                                    event
 #
 # WHAT IS COMPARED. The PARSED documents, with the vendored `$comment` (the
 # provenance marker, which upstream does not carry) removed from the local
@@ -57,16 +57,20 @@ require "json"
 REPO = File.expand_path("..", __dir__)
 
 # local vendored copy => basename in the published set
+# Spelled `File.join(REPO, "<repo-relative path>")` throughout, and not
+# through a directory constant: `bin/check-shipped-archaeology` re-derives
+# the mirrored set by SCANNING this literal, so a shorter spelling here
+# silently narrows the vendored-mirror carve-out over there.
 COPIES = {
   File.join(REPO, "e2e/schemas/discovery.schema.json")         => "discovery.schema.json",
   File.join(REPO, "e2e/schemas/problem.schema.json")           => "problem.schema.json",
   File.join(REPO, "e2e/schemas/schema-descriptor.schema.json") => "schema-descriptor.schema.json",
-  File.join(REPO, "e2e/schemas/mandates.schema.json")          => "mandates.schema.json",
-  File.join(REPO, "e2e/schemas/kyc.schema.json")               => "kyc.schema.json",
-  File.join(REPO, "e2e/schemas/auth.schema.json")              => "auth.schema.json",
-  File.join(REPO, "e2e/schemas/binding.schema.json")           => "binding.schema.json",
   File.join(REPO, "e2e/schemas/event.schema.json")             => "event.schema.json",
-  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/pow.schema.json") => "pow.schema.json",
+  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/pow.schema.json")      => "pow.schema.json",
+  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/mandates.schema.json") => "mandates.schema.json",
+  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/kyc.schema.json")      => "kyc.schema.json",
+  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/auth.schema.json")     => "auth.schema.json",
+  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/binding.schema.json")  => "binding.schema.json",
 }.freeze
 
 # ── the comparison, as ONE function so the self-test can plant into it ───────

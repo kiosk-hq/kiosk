@@ -67,7 +67,7 @@ module Kiosk
       # The signed body stays pow-free so the challenge fingerprint (bound to
       # the registering public key) matches on retry.
       def register
-        body   = parse_body!
+        body   = parse_body!("POST <endpoint>/auth/register")
         pow    = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
         if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
           RequestValidation.validate_proofs!(pow)
@@ -86,7 +86,7 @@ module Kiosk
 
       # Refresh a token for an EXISTING public key (404 if unknown → register).
       def login
-        body   = parse_body!
+        body   = parse_body!("POST <endpoint>/auth/login")
         result = AgentLogin.call(
           public_key_pem: body.fetch(:public_key),
           signed:         body.fetch(:signed),
@@ -156,7 +156,7 @@ module Kiosk
       CLAIM_RESPONSE_FIELDS = %i[agent_id user_id access_token].freeze
 
       def claim
-        body   = parse_body!
+        body   = parse_body!("POST <endpoint>/auth/claim")
         result = LinkCode.redeem(
           code:           body.fetch(:code),
           public_key_pem: body.fetch(:public_key),
@@ -184,7 +184,7 @@ module Kiosk
       # on every mount-path response (§3, point 6), empty body or not.
       def unlink
         identity = authenticated_account_holder!
-        body     = parse_body!
+        body     = parse_body!("POST <endpoint>/auth/unlink")
         AccountBinding.unlink!(agent_id: body.fetch(:agent_id), user_id: identity.user_id)
         Kiosk::Server::Headers.add_to(response.headers)
         head :no_content
@@ -219,13 +219,20 @@ module Kiosk
         nil
       end
 
-      def parse_body!
+      # Parse the body and hold it to the object §17 publishes for `exchange`
+      # ({RequestValidation::BODY_SCHEMAS}). The schema check runs HERE rather
+      # than at each call site so no action on this plane can acquire a body
+      # without one, and it runs before the `fetch`es below it so a wrong-TYPED
+      # member is a 400 naming the member instead of whatever the verifier
+      # downstream raises about it.
+      def parse_body!(exchange)
         raw = request.raw_post
         raise Errors::BadRequest, "request body must be a JSON object" if raw.nil? || raw.empty?
 
         parsed = JSON.parse(raw, symbolize_names: true)
         raise Errors::BadRequest, "request body must be a JSON object" unless parsed.is_a?(Hash)
 
+        RequestValidation.validate_body!(parsed, exchange: exchange)
         parsed
       rescue JSON::ParserError
         raise Errors.malformed_json

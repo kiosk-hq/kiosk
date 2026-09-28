@@ -101,7 +101,7 @@ e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
 ├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes, §5/§6 included
-├── schemas/                                # vendored copies of seven of the eight published normative schemas (pow.schema.json is vendored in kiosk-server instead; `bin/check-spec-schemas` holds all eight against the originals)
+├── schemas/                                # vendored copies of the published normative schemas this harness alone reads (the five kiosk-server ENFORCES are vendored in the gem instead; `bin/check-spec-schemas` holds every copy against its original and prints how many it matched)
 ├── README.md                               # this file
 └── fixtures/                               # files copied into the generated app
     ├── create_users.rb                     # provider's user table (UUID PK)

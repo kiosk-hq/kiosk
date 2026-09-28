@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1736 anchors.
+# 1742 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -264,8 +264,6 @@ e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	the pay REQUEST body
 e2e/schema_conformance.rb	the settlement this origin answered
 e2e/schema_conformance.rb	§5 and §6 — the auth and binding planes
-e2e/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
-e2e/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 e2e/schemas/schema-descriptor.schema.json	One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others
 kiosk-all/README.md	`kiosk-all` declares runtime dependencies on the two production data-plane gems:
 kiosk-all/README.md	`kiosk-all` does **not** pull in `kiosk-rls`.
@@ -1169,6 +1167,8 @@ kiosk-server/lib/kiosk/server/queries.rb	            descriptor[:example_row]   
 kiosk-server/lib/kiosk/server/queries.rb	    # Registry of named queries — the sanctioned read surface that replaces raw
 kiosk-server/lib/kiosk/server/queries.rb	convention the provider upholds (the registry does not enforce it)
 kiosk-server/lib/kiosk/server/registration_pow.rb	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/request_validation.rb	AN ABSENT MEMBER KEEPS THE WIRE'S OWN SENTENCE.
+kiosk-server/lib/kiosk/server/request_validation.rb	RESERVED-PLANE REQUEST BODY => the published object that types it.
 kiosk-server/lib/kiosk/server/schema_definitions.rb	          CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
 kiosk-server/lib/kiosk/server/schema_definitions.rb	      # `agents` — credential per (user × agent host); `agent_tokens` —
 kiosk-server/lib/kiosk/server/schema_definitions.rb	      # ─── 002 create_kiosk_identity_tables ──────────────────────────────
@@ -1182,6 +1182,8 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	def helper_functions_sql(sch
 kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
+kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
+kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/verb_controller.rb	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
 kiosk-server/lib/kiosk/server/verb_controller.rb	    # SUCCESS is the handler's rendered payload, VERBATIM; ERRORS are RFC 9457
 kiosk-server/lib/kiosk/server/verb_controller.rb	    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
@@ -1607,6 +1609,10 @@ kiosk-server/spec/kiosk/server/registration_pow_spec.rb	demands `count` challeng
 kiosk-server/spec/kiosk/server/registration_pow_spec.rb	is a no-op when registration_pow_count is 0 (default)
 kiosk-server/spec/kiosk/server/registration_pow_spec.rb	proceeds when the real verifier accepts the proof
 kiosk-server/spec/kiosk/server/registration_pow_spec.rb	rejects the removed SHA256 registration_difficulty knob
+kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	carries every exchange the engine dials
+kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	does nothing when the operator sets validate_requests = false
+kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	is an RFC 9457 bad_request naming the member and pointing at the schema
+kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	refuses a wrong-typed member, naming it
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	accepts the same array schema on the last page of the same verb
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	checks a paginating query against the PUBLISHED bare array
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	does not check a payload its declaration rejects

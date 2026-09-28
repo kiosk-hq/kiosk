@@ -178,8 +178,9 @@ module Kiosk
         # only when a flag was set would be non-conformant with the flag off —
         # and the typed 400 for an invalid filter value would fall out of the
         # schema layer on some origins and not others. `validate_requests`
-        # covers something else: the opt-in PoW-SHAPE check on requests that
-        # carry a `Kiosk-PoW` header, on the wire and on the auth plane.
+        # covers something else: the opt-in SHAPE checks on a `Kiosk-PoW`
+        # header and on the RESERVED plane's own request bodies, both of
+        # which §16.3 anchor 1 makes a SHOULD rather than a MUST.
         #
         # Which is why `json_schemer` is a REAL runtime dependency of this gem
         # a runtime dependency (see the gemspec): an origin that cannot load a validator

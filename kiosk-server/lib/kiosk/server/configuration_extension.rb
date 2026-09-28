@@ -440,6 +440,14 @@ module Kiosk
       # cannot parse yields [], so the gate re-issues a fresh 402 forever with no
       # diagnostic).
       #
+      # It ALSO holds every RESERVED-plane JSON request body to the object §17
+      # publishes for it — register, login, claim, unlink, the KYC attestation
+      # and `pay` ({RequestValidation::BODY_SCHEMAS} is the list) — so a
+      # wrong-typed member is a 400 naming the member rather than whatever a
+      # verifier downstream raises about it. §16.3 anchor 1 makes that a
+      # SHOULD for an operator, which is why it is this flag rather than
+      # unconditional, and why turning it off leaves an origin conformant.
+      #
       # This is a SHAPE check in front of the gate — NOT a replacement for it: a
       # well-formed-but-forged proof still fails the real cryptographic
       # verification inside the gate. An ABSENT pow is untouched (the initial

@@ -10,7 +10,7 @@ module Kiosk
     # Called by {WireController#execute_wire} AFTER identity resolution and
     # BEFORE {Executor.call}, so it stands in front of every endpoint that
     # reaches the executor: each declared verb, through {VerbController}, and
-    # the reserved `pay`, through {WireController#run_command}. When
+    # the reserved `pay`, through {WireController#pay}. When
     # `Kiosk.configuration.reputation_policy` is nil
     # (the default), {.gate} returns `:proceed` immediately — zero overhead,
     # no `kiosk-reputation` references evaluated. This is the invariant that

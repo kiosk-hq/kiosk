@@ -225,19 +225,16 @@ SERVER_HANDLER_MIXIN = "kiosk-server/lib/kiosk/server/handler_mixin.rb"
 SERVER_ERRORS        = "kiosk-server/lib/kiosk/server/errors.rb"
 # The demo prerequisites the page paraphrases (K-1839). `bin/check-demo-prereqs`
 # derives each demo README's Prerequisites block from that demo's own files, so a
-# requirement no demo creates any more is rendered by nothing and leaves all
-# eight READMEs in the commit that removes it. The page restates the same facts
-# in prose, for a stranger who has not opened a demo yet, and nothing compared
-# the two: when `demo:setup` stopped creating the `app_role` group role the
-# READMEs lost the bullet at once and the page went on demanding a `CREATE ROLE`
-# login for three days.
+# requirement no demo creates is rendered into no README. The page restates the
+# same facts in prose for a stranger who has not opened a demo yet, and R24 below
+# is what holds the prose to the derivation.
 #
 # THE CORPUS IS THE RENDERED BLOCK, not a second reading of the requirement
 # table. `bin/check-demo-prereqs` holds the committed blocks byte-equal to its
 # own derivation on every push, so the blocks ARE the derivation, and re-deriving
-# the triggers here would be the second copy of one fact this script's header
-# refuses. The markers delimiting them are read out of that script rather than
-# typed, so a rename there makes this rule say it is holding nothing.
+# the triggers here would be the second copy of one fact this script refuses by
+# name. The markers delimiting them are read out of that script rather than
+# typed, so a rename there makes R24 say it is holding nothing.
 PREREQS_SCRIPT   = "bin/check-demo-prereqs"
 DEMO_README_GLOB = "kiosk-demo-*/README.md"
 
@@ -3360,25 +3357,26 @@ end.call
 arms << plant_arm("the mount drawn BELOW the page's verb routes",
                   planted.call("the mount's position", page, demoted),
                   sources, "MOUNT_FIRST")
-# (e) THE CATCH-ALL BACK ON THE PAGE, in the exact spelling the engine drew
-# through 0.4.12 and T-183 deleted.
-# K-1839's own break: a requirement the derived blocks no longer render,
-# emphasised on the page as though a demo still needed it. The paragraph is
-# located exactly as the rule locates it, and the phrase is asserted absent from
-# the corpus first -- a plant the corpus happens to carry would read as coverage
-# while proving nothing.
+# R24's break: a phrase emphasised on the page as a requirement that the derived
+# README blocks do not carry. The paragraph is found the way the rule finds it,
+# and the phrase is DERIVED rather than typed -- the toll setting itself, which
+# the page names and no generated block does -- and asserted absent before the
+# arm is built, because a plant the corpus happens to carry would read as
+# coverage while proving nothing.
 prereq_quote = page_blockquotes(page)
                .find { |q| phrase_text(q).include?(phrase_text("registration_pow_count = #{f[:prereq_toll]}")) }
-retired      = "a Postgres login permitted to CREATE ROLE"
+absent       = phrase_text("c.registration_pow_count = #{f[:prereq_toll]}")
 if prereq_quote.nil? ||
-   prereq_corpus(sources[:prereqs_script], sources[:demo_readmes]).include?(phrase_text(retired))
-  warn "self-test cannot plant K-1839's break: the page has no prerequisite blockquote, or the " \
-       "derived README blocks already carry #{retired.inspect}"
+   prereq_corpus(sources[:prereqs_script], sources[:demo_readmes]).include?(absent)
+  warn "self-test cannot plant R24's break: the page has no prerequisite blockquote, or the " \
+       "derived README blocks already carry #{absent.inspect}"
   return 1
 end
 arms << plant_arm("a requirement no demo README renders, emphasised on the page",
-                  page.sub(prereq_quote) { "#{prereq_quote} It also needs <strong>#{retired}</strong>." },
+                  page.sub(prereq_quote) { "#{prereq_quote} It also needs <strong>#{absent}</strong>." },
                   sources, "DEMO_PREREQS")
+# (e) THE CATCH-ALL BACK ON THE PAGE, in the exact spelling the engine drew
+# through 0.4.12 and T-183 deleted.
 arms << plant_arm("the :kiosk_verb catch-all taught in place of #{route_verb}'s line",
                   planted.call("the catch-all", page,
                                page.sub(route_re, %(get "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show"\n))),

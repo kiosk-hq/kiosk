@@ -211,6 +211,15 @@ begin
   REPORT[:bad_token_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
   sock.close
 
+  # 2b — a GOOD token, but in the query string: refused. Spec Section 8.5.3
+  # forbids an operator to accept the access token anywhere but the
+  # `Authorization` header, and the engine reads it nowhere else.
+  sock = connect(port, headers: { "Origin" => Kiosk.configuration.issuer },
+                       path: "/kiosk/events?access_token=#{GOOD_TOKEN}")
+  sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
+  REPORT[:query_token_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
+  sock.close
+
   # 3 — a good upgrade: 101, and the welcome frame.
   sock = connect(port)
   sock.pump_until { sock.frames.any? }

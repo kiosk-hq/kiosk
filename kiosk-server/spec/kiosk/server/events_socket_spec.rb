@@ -48,6 +48,14 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["bad_token_welcomed"]).to be(false)
     end
 
+    # Spec Section 8.5.3: an operator MUST NOT accept the access token anywhere
+    # but the `Authorization` header. The token here is the good one — what is
+    # refused is the PLACE, so this fails if the engine ever grows a second
+    # route in.
+    it "refuses a VALID token presented only in the query string" do
+      expect(report["query_token_welcomed"]).to be(false)
+    end
+
     it "accepts a caller the ordinary identity chain resolves, and welcomes it" do
       expect(report["opened"]).to be(true)
       expect(report["welcome"]).to eq("type" => "welcome")

@@ -53,10 +53,10 @@ The Kiosk gems in `Gemfile`, then one command:
 rails g kiosk:install
 ```
 
-It writes `config/initializers/kiosk.rb` and the `kiosk.*` migrations. What is
-left is read in the directory rather than quoted here:
-`config/routes/kiosk.rb`, the engine mounted in one line and then one route per
-verb — GET for a query, POST for an action — and
+It writes `config/initializers/kiosk.rb`, the `kiosk.*` migrations and
+`config/routes/kiosk.rb` with the engine mounted in one line. What is left is
+read in the directory rather than quoted here: one route per verb under that
+mount — GET for a query, POST for an action — and
 `app/controllers/kiosk/{hotels,reservations}_controller.rb`, the verbs as
 ordinary Rails controllers. The toll, the PSP adapter and the spending cap are
 the initializer's.

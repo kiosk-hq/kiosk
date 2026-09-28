@@ -151,11 +151,14 @@ named in that README's own hand-written list of what each task proves.
 carry a `before-after.md`**: a contrast between what an AI assistant can do at
 that provider today and what the same errand looks like once Kiosk is
 installed, followed by the operator-side adoption recipe. Four rather than all
-eight is deliberate and it is machine-held there. Every fenced block in one must
-declare what produced it, and `bin/check-demo-derivations` (its own CI job) then
-holds each line of it to an invocation of the generator that declaration names.
-`bin/check-demo-copies` asserts the set is exactly
-those four, so a fifth cannot appear — or a fourth vanish — unannounced. The
+eight is deliberate, and neither the documents nor the number is kept by hand.
+Every fenced block in one must declare what produced it, and
+`bin/check-demo-derivations` (its own CI job) then holds each line of it to an
+invocation of the generator that declaration names. The number in the sentence
+above is DERIVED, not typed: `bin/check-prose-counts` re-runs the command
+`bin/prose-counts-allow.txt` records beside it — `git ls-files
+'kiosk-demo-*/before-after.md' | wc -l` — and fails when the answer and the prose
+disagree, so a fifth cannot appear, or a fourth vanish, unannounced. The
 rest say it shorter: `philslist` carries an inline **Before / after** section in
 its README; `stylish` and `tudu` carry neither.
 

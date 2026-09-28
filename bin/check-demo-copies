@@ -195,7 +195,7 @@ if ARGV.include?("--self-test")
   # The floor is the number of guarded sections measured when this was written.
   # It is a MEASUREMENT, not a target: it may rise freely, and a fall means
   # either a guard was deleted or the vocabulary above stopped reading one.
-  SELF_TEST_VACUITY_FLOOR = 14
+  SELF_TEST_VACUITY_FLOOR = 15
 
   # The one rule with no `# ── … ──` banner, declared so the check below can tell
   # «an arm for an unbannered rule» from «an arm for a banner that has moved».
@@ -237,7 +237,31 @@ if ARGV.include?("--self-test")
               "kiosk-demo-prove/config/environments/test.rb"]],
       expect: /config\/environments\/test\.rb: `except:` for prove is stale/ },
 
-    { id: "new-copy-undeclared", kind: :break,
+    { id: "e83-harness-half-moves-alone", kind: :break,
+  rule: "THE §8.3 LOOP EXISTS TWICE, AND ONE COPY IS NOT A DEMO (T-156)",
+  what: "the §8.3 loop is corrected in the harness and not in the demo copy — the one-sided " \
+        "fix this pair exists to catch",
+  ops:  [[:edit, "e2e/schema_conformance.rb", "if examples_checked >= 4", "if examples_checked >= 3"]],
+  expect: %r{script/descriptor_examples\.rb ↔ e2e/schema_conformance\.rb §8\.3: the harness half has moved} },
+{ id: "e83-demo-half-moves-alone", kind: :break,
+  rule: "THE §8.3 LOOP EXISTS TWICE, AND ONE COPY IS NOT A DEMO (T-156)",
+  what: "the same correction lands in all seven demo copies and not in the harness, so the " \
+        "`:identical` rule above stays green and only this pair sees it",
+  ops:  SELF_TEST_SEVEN.map { |d|
+          [:edit, "kiosk-demo-#{d}/script/descriptor_examples.rb",
+           "if checked >= minimum", "if checked >= minimum.to_i"]
+        },
+  expect: %r{script/descriptor_examples\.rb ↔ e2e/schema_conformance\.rb §8\.3: the demo half has moved} },
+{ id: "vacuity-e83-harness-banner", kind: :vacuity,
+  rule: "THE §8.3 LOOP EXISTS TWICE, AND ONE COPY IS NOT A DEMO (T-156)",
+  what: "the banner pattern stops delimiting the harness half, so the pair digests nothing and " \
+        "reads as a clean run",
+  ops:  [[:edit, "bin/check-demo-copies",
+          "E83_HARNESS_BEGIN  = /\\A# ── \\d+\\. §8\\.3 /",
+          "E83_HARNESS_BEGIN  = /\\A# ── \\d+\\. §9\\.9 /"]],
+  expect: %r{e2e/schema_conformance\.rb: no `§8\.3` section banner} },
+
+{ id: "new-copy-undeclared", kind: :break,
       rule: "Undeclared and stale manifest entries",
       what: "a helper lands in two demos at once with no manifest entry — how six of these got here",
       ops:  [[:write, "kiosk-demo-tudu/app/services/self_test_probe.rb", SELF_TEST_PROBE_RB],
@@ -6245,6 +6269,66 @@ if e2e_fixture_comparisons.zero? && E2E_FIXTURES.any?
             "stale, and a rule with nothing to compare passes everything."
 end
 
+# ── THE §8.3 LOOP EXISTS TWICE, AND ONE COPY IS NOT A DEMO (T-156) ───────────
+#
+# `script/descriptor_examples.rb` is `:identical` across the seven operator
+# demos, so one copy stands for all seven here. The reference origin runs the
+# same §8.3 loop inline in e2e/schema_conformance.rb, and every rule above pairs
+# by demo-relative path, so that half is compared to nothing: a correction to
+# the loop lands in whichever of the two its author was reading.
+#
+# They are not byte-comparable — one is a function returning failures, the other
+# is inline against that script's own ok/bad pair — so what is held is that they
+# were RECONCILED. The `:code`-normalised digest of each is pinned below, either
+# half moving reddens, and the run prints the digests it computed so re-pinning
+# is a copy. Prose and whitespace are normalised away, so a reword costs nothing.
+#
+# The harness half is delimited by that file's own section banners rather than
+# by line numbers.
+E83_DEMO_PATH      = "script/descriptor_examples.rb"
+E83_HARNESS_PATH   = "e2e/schema_conformance.rb"
+E83_HARNESS_BEGIN  = /\A# ── \d+\. §8\.3 /
+E83_HARNESS_BANNER = /\A# ── /
+E83_RECONCILED = {
+  demo:    "989edaa53c1b963b8929ed9d1e8ec9d11e014104ab7196a60c9545f9e396d42e",
+  harness: "c522a2d102e89e8ae6850a7026567943d0462e82c7ff942084c1a37698a55288"
+}.freeze
+
+def e83_harness_block(src)
+  lines = src.lines
+  start = lines.index { |l| E83_HARNESS_BEGIN.match?(l) } or return nil
+  stop  = lines[(start + 1)..].index { |l| E83_HARNESS_BANNER.match?(l) }
+  lines[start, stop ? stop + 1 : lines.length - start].join
+end
+
+e83_pair_checked = 0
+e83_demo_copies = demos.map { |dir| File.join(dir, E83_DEMO_PATH) }.select { |p| File.file?(p) }.sort
+e83_harness_file = File.join(ROOT, E83_HARNESS_PATH)
+if e83_demo_copies.empty? || !File.file?(e83_harness_file)
+  errors << "check-demo-copies: #{E83_DEMO_PATH} ships in #{e83_demo_copies.length} demo(s) and " \
+            "#{E83_HARNESS_PATH} #{File.file?(e83_harness_file) ? 'is present' : 'is gone'}, so the " \
+            "§8.3 pair compares nothing. Move this rule with whichever half moved (T-156)."
+else
+  e83_block = e83_harness_block(File.read(e83_harness_file))
+  if e83_block.nil?
+    errors << "#{E83_HARNESS_PATH}: no `§8.3` section banner, so the pair has no harness half to " \
+              "digest and compares nothing. Restore the banner, or re-aim E83_HARNESS_BEGIN at " \
+              "whatever delimits the loop now (T-156)."
+  else
+    e83_got = { demo: code_digest(e83_demo_copies.first),
+                harness: Digest::SHA256.hexdigest(code_norm(e83_block)) }
+    e83_pair_checked += 1
+    e83_moved = E83_RECONCILED.reject { |half, sha| e83_got[half] == sha }
+    unless e83_moved.empty?
+      errors << "#{E83_DEMO_PATH} ↔ #{E83_HARNESS_PATH} §8.3: the #{e83_moved.keys.join(' and ')} " \
+                "half has moved since the two were last reconciled. The same loop is implemented " \
+                "twice and only one of them carries this change — read both, make the correction " \
+                "in both, then re-pin E83_RECONCILED to demo: #{e83_got[:demo]}, " \
+                "harness: #{e83_got[:harness]} (T-156)."
+    end
+  end
+end
+
 # ── A comment in a compared file may not cite something that is not there ────
 #    (T-117, generalising K-1021 from one sentence to the whole corpus)
 #
@@ -7412,6 +7496,8 @@ if errors.empty?
        "(#{e2e_fixture_comparisons} comparison(s) against a demo copy, " \
        "#{E2E_FIXTURES.count { |_, e| e.key?(:pairs) && e[:pairs].nil? }} declared to have no " \
        "counterpart and checked for one), " \
+"the §8.3 example-vs-schema loop held at #{e83_pair_checked} reconciled pair of digests " \
+"(script/descriptor_examples.rb against e2e/schema_conformance.rb's §8.3 block), " \
        "#{fragment_comparisons} shared-unit cop#{fragment_comparisons == 1 ? 'y' : 'ies'} declared " \
        "in #{FRAGMENTS.size} unit(s) inside #{FRAGMENT_PATHS.size} `:per_demo` file(s) " \
        "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} unit(s) held in lockstep over " \

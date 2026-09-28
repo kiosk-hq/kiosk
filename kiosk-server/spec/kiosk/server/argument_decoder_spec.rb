@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
-# The 0.4 query-argument encoding, as decided in T-070 (option B,
-# 2026-08-17) and narrowed in T-087 (option A, 2026-08-19). That decision is
-# the normative text these examples encode until both specs are rewritten;
-# each `describe` below names the clause it covers.
+# The query-argument encoding of Section 8.1 items 1 to 7. Each `describe`
+# below names the rule it covers, in that section's own numbering.
 #
 # Every example here is a unit example: {Kiosk::Server::ArgumentDecoder} takes
 # a query string and a declaration and returns arguments, with no Rails and no
@@ -66,15 +64,27 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
       expect(decode("amenity=pool", declared)).to eq(amenity: %w[pool])
     end
 
-    # WHAT THIS EXAMPLE USED TO ASSERT, AND WHY IT IS THE OPPOSITE NOW (K-1307).
-    # It matched `/amenity/`, and the only thing supplying that word was RACK's
-    # own refusal — measured on the shipped Rack 3.2.6: `expected Array (got
-    # String) for param `amenity'` — which the decoder spliced onto its
-    # sentence. So an example written to prove the refusal was informative was
-    # in fact PINNING a library's wording to this protocol's wire, on a path
-    # any caller reaches with a hand-typed query string. It now asserts the
-    # published sentence, the published hint, and that not one byte of Rack's
-    # copy is in either: restoring the splice reddens it.
+    it "REFUSES an INDEXED name where an array is declared — a%5B0%5D= is an object" do
+      # Rack reads the indices as ordinary object keys, so both spellings
+      # arrive as {"0" => "pool", "1" => "spa"}. Empty brackets are the array
+      # spelling and the only one, so the coercion refuses this and names it.
+      ["amenity%5B0%5D=pool&amenity%5B1%5D=spa", "amenity[0]=pool&amenity[1]=spa"].each do |query|
+        expect { decode(query, declared) }
+          .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+            expect(e.message).to include('parameter "amenity" is not an array')
+            expect(e.hint).to include("send repeated amenity%5B%5D=… parameters")
+          }
+      end
+    end
+
+    it "reads an INDEXED name the verb does NOT declare as the object it is" do
+      expect(decode("amenity%5B0%5D=pool&amenity%5B1%5D=spa"))
+        .to eq(amenity: { "0" => "pool", "1" => "spa" })
+    end
+
+    # The refusal is OURS: the published sentence, the published hint, and not
+    # one byte of Rack's own copy — which names the parameter and the Ruby
+    # types it expected, neither of which is on this wire.
     it "refuses a name used as both scalar and array in one query string" do
       expect { decode("amenity=pool&amenity%5B%5D=spa", declared) }
         .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|

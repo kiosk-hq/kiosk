@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1728 anchors.
+# 1730 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1240,6 +1240,7 @@ kiosk-server/spec/kiosk/server/agent_registration_spec.rb	raises Conflict on an 
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	requires a `signed` proof-of-possession argument
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	treats an empty-string registration_role as unset (no ConfigurationError)
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	writes an empty allowed_roles with registration_role unset (K-788)
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an INDEXED name where an array is declared — a%5B0%5D= is an object
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an array of objects — that read is an ACTION too
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an array-valued object leaf — the shape T-087 dropped
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES two levels of nesting — that read is an ACTION (rule 5)
@@ -1252,6 +1253,7 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	folds a bare repeat into
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	keeps Rack's last-wins for a repeated name with NO array declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	keeps cursor an opaque string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	names the ACTION remedy in the hint rather than only refusing
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	reads an INDEXED name the verb does NOT declare as the object it is
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	recovers an integer
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a WHOLE-VALUED float where an integer is declared — 2.0 is not an integer LITERAL
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a name used as both scalar and array in one query string

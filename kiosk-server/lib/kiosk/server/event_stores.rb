@@ -6,27 +6,16 @@ module Kiosk
     #
     # The DEFAULT store is {Kiosk::Server::EventStore} — a Hash + Mutex living
     # in ONE process. That is the TEST implementation and a development
-    # convenience, and it is the wrong thing to deploy, for a reason that is
-    # about the protocol rather than about scale:
-    #
-    #   Two of the topics an operator declares are not WAITS but SUBSCRIPTIONS.
-    #   A delivery event arrives hours after the order; a shared-list event
-    #   arrives whenever somebody else gets round to it. Nothing holds a socket
-    #   across an assistant's sessions — in any harness, on any runtime, because
-    #   a turn-based agent has no process that outlives its session. So for
-    #   those topics the CURSOR is the delivery mechanism and the socket is an
-    #   optimisation over it: the subscriber records `max(id)` and asks for
-    #   everything after it when it next runs.
-    #
-    # A tail that is gone on restart cannot answer that question, so
-    # `truncated: true` becomes the permanent answer for precisely the topics
-    # that have no other one. Hence:
+    # convenience, and it is the wrong thing to deploy. A deployed origin sets:
     #
     #   Kiosk.configure do |c|
     #     c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
     #   end
     #
-    # which `rails generate kiosk:install` writes into the initializer.
+    # which `rails generate kiosk:install` writes into the initializer. An origin
+    # that declares a topic and leaves the default in place is refused at boot by
+    # {Kiosk::Server::Engine.ephemeral_event_store_error}, and that message is
+    # where the reason lives.
     #
     # Naming follows {PowSpentStores}: the in-process store is the top-level
     # {EventStore} rather than an `EventStores::InMemory`, because the constant
@@ -39,12 +28,10 @@ module Kiosk
       # {PowSpentStores::ActiveRecord}, so no model class is defined and
       # satellite neutrality holds.
       class ActiveRecord
-        # The spec's retention FLOOR. Twenty-four hours and not one, and the
-        # correction is the whole reason this class exists: an hour was reasoned
-        # from one access-token lifetime, so that a reconnect after a full `exp`
-        # cycle always resumes. That is the right bound for a WAIT and the wrong
-        # one for a SUBSCRIPTION — an hour does not survive a delivery window,
-        # let alone a shared list somebody adds to tomorrow.
+        # The published retention FLOOR: an origin serves at least this much
+        # history per identity. Long enough for a subscription topic — a delivery
+        # window, or a shared list somebody adds to tomorrow — and not for a
+        # reconnect alone.
         DEFAULT_RETENTION_HOURS = 24
 
         # Seconds between opportunistic retention sweeps. Bounds table growth
@@ -52,13 +39,11 @@ module Kiosk
         # so it is throttled hard rather than run on every append.
         DEFAULT_PRUNE_INTERVAL = 300
 
-        # THERE IS DELIBERATELY NO ROW-COUNT CEILING, and the in-process store's
-        # old "256 events or 24 hours, whichever binds first" is not reproduced
-        # here. On a busy subject a count binds long before the time does, so it
-        # would silently BECOME the real retention and the published floor would
-        # be a number no operator meets. If a ceiling comes back as a defence
-        # against one identity filling the table, it has to be large enough that
-        # the TIME is what binds in ordinary use.
+        # There is deliberately NO row-count ceiling. On a busy subject a count
+        # binds long before the time does, so it would silently become the real
+        # retention and the published floor would be a number no operator meets.
+        # A ceiling added as a defence against one identity filling the table has
+        # to be large enough that the TIME is what binds in ordinary use.
         def initialize(retention_hours: DEFAULT_RETENTION_HOURS,
                        prune_interval: DEFAULT_PRUNE_INTERVAL)
           @retention_hours = retention_hours

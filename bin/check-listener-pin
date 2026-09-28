@@ -58,10 +58,9 @@ require "uri"
 PINNED_VERSION = "0.5.1"
 PINNED_SHA256  = "2d34ae0cc75a8143ea95f876c003a00e1ca002e6868403630f422ebb8f34c0b5"
 # TWO published URLs, the same split the solver uses and for the same reason —
-# except that this one is VERSIONED rather than content-addressed (Phil,
-# 2026-09-24: «будем версионировать ровно как kiosk и как skill.md, а не
-# sha12»). A version-named file is not immutable by construction, so
-# kiosk.tech's check-skill-immutability enforces it instead.
+# except that this one is VERSIONED rather than content-addressed, like the skill
+# cuts. A version-named file is not immutable by construction, so kiosk.tech's
+# check-skill-immutability enforces it instead.
 PINNED_URL = "https://kiosk.tech/events/listen-v#{PINNED_VERSION}.py"
 STABLE_URL = "https://kiosk.tech/events/listen.py"
 

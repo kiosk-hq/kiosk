@@ -2,49 +2,35 @@
 
 module Kiosk
   module Server
-    # THE EVENT-STORE CONTRACT, and the in-process implementation of it.
+    # The event-store contract, and the in-process implementation of it: a Hash
+    # and a Mutex in ONE process.
     #
     # == This is the test implementation, and a deployed origin may not use it
     #
-    # It IS what `Kiosk.configuration.event_store` falls back to when an
-    # operator sets nothing — the suite and a one-process `rails server` want
-    # exactly this store and want no database for it. What a DEPLOYED origin
-    # must set is {EventStores::ActiveRecord}, which `rails generate
-    # kiosk:install` writes into the initializer, and the engine refuses to
-    # boot a production origin that declares a topic and leaves this default in
-    # place ({Kiosk::Server::Engine.ephemeral_event_store_error}). So «the
-    # default» and «what ships in front of a subscriber» are two different
-    # answers here, and the difference between them is not a deployment
-    # nicety. Two of the topics an operator declares are not
-    # WAITS but SUBSCRIPTIONS: a delivery event arrives hours after the order,
-    # a shared-list event arrives whenever somebody else gets round to it, and
-    # nothing holds a socket across an assistant's sessions — in any harness, on
-    # any runtime, because a turn-based agent has no process that outlives its
-    # session. So for those topics the CURSOR is the delivery mechanism and the
-    # socket is an optimisation over it: the subscriber records `max(id)` and
-    # asks for everything after it when it next runs. A tail that is gone on
-    # restart makes that question unanswerable rather than merely degraded, and
-    # `truncated: true` becomes the permanent answer for exactly the topics
-    # that have no other one.
-    #
-    # This implementation is therefore correct for the suite and for a
-    # single-process development boot, and for nothing that is deployed.
+    # It is what `Kiosk.configuration.event_store` falls back to when an operator
+    # sets nothing, and it is correct for the suite and for a single-process
+    # development boot and for nothing that is deployed. A deployed origin sets
+    # {EventStores::ActiveRecord}, which `rails generate kiosk:install` writes
+    # into the initializer; the engine refuses to boot a production origin that
+    # declares a topic and leaves this default in place, and
+    # {Kiosk::Server::Engine.ephemeral_event_store_error} is the refusal it
+    # prints — that message is where the reason lives.
     #
     # == The seam
     #
     # Same shape as `pow_spent_store` and `revocation_store`: a plain object
     # swapped in an initializer, no model class, nothing in ActiveRecord touched
-    # until an operation runs. Four methods, and an implementation that answers
-    # them is a valid store however it holds its rows.
+    # until an operation runs. Four methods — #append, #since, #head and
+    # #truncated? — and an implementation that answers them is a valid store
+    # however it holds its rows. #prune_before is this store's own.
     #
     # == An identity_key is a user_id, not an agent_id
     #
-    # A human's second assistant must see the same stream — keying the tail on
-    # the agent would hand a newly linked assistant an empty history of its
-    # human's own orders. A REVOKED assistant is stopped at the socket
-    # (the connection re-verifies on a timer and closes), which is the right
-    # place for it: revocation is about who may hold a connection, not about
-    # whose events exist.
+    # A human's second assistant sees the same stream; keying the tail on the
+    # agent would hand a newly linked assistant an empty history of its human's
+    # own orders. A revoked assistant is stopped at the socket, which re-verifies
+    # on a timer and closes: revocation is about who may hold a connection, not
+    # about whose events exist.
     class EventStore
       def initialize
         @mutex  = Mutex.new

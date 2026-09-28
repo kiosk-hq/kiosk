@@ -335,14 +335,34 @@ jobs:
             # immediately ahead of check:race for the reason below.
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
-            tasks: check:slots_spec check:cashier_spec check:wire_args_spec check:conformance check:shop check:delivery check:isolation check:redteam check:schema check:agecheck check:claim check:pow check:rls check:race
+            #   check:reconcile  T-112 — the OTHER half of the stuck-`paying`
+            #     story, and the half check:race cannot reach. check:race proves
+            #     the sweep heals from a settlement row and refuses to guess
+            #     without one; this proves what it does with the PROCESSOR'S own
+            #     answer: charged → paid, not charged → the claim released and
+            #     the order payable again, no answer → UNRESOLVED with the claim
+            #     kept. The first two are driven by a scripted processor, which
+            #     is the only way to reach them without moving real money; the
+            #     real StripeChargeLookup then runs against stripe-mock, whose
+            #     canned PaymentIntent sits in `requires_payment_method` — a
+            #     status that would release a claim on its own, and does not,
+            #     because it names no cart of ours. That refusal is the whole
+            #     instrument: it is what lets a demo gate assert a processor-led
+            #     reconciliation with no key and no charge. It reseeds
+            #     (`: "demo:setup"`), so it sits in the reseeding group; ~4 s.
+            #     Watched fail: make `StripeChargeLookup#charges_this_cart?`
+            #     answer true for every intent and stripe-mock's fixture becomes
+            #     proof — the order is RELEASED on a charge that is not its own,
+            #     four assertions go red, exit 1.
+            tasks: check:slots_spec check:cashier_spec check:wire_args_spec check:conformance check:shop check:delivery check:isolation check:redteam check:schema check:agecheck check:claim check:pow check:reconcile check:rls check:race
             ungated:
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it
                 prints "nothing stuck" and exits 0 no matter what the code does,
                 and a step that cannot go red is not a gate. Its logic is
-                gated here anyway, by check:race's reconciliation block, which strands
-                orders first and then sweeps.
+                gated here anyway — check:reconcile for the processor's three
+                answers, check:race for the local-evidence heal — both of which
+                strand orders first and then sweep them.
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including check:shop's

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **getgrocery's stuck-`paying` sweep now asks Stripe**: charged heals the order, not charged releases the claim, no answer keeps it. `check:reconcile` gates all three.
+
 - 2026-09-28: **every reserved-plane JSON body is held to the object §17 publishes for it** (T-045). A wrong-typed member is a 400 naming it, not a verifier raising deeper in.
 
 - 2026-09-28: **An origin can now decline account binding — `c.serve_account_binding = false` — so the reference exhibits the optional-module profile the spec defines.** Discovery is unchanged.

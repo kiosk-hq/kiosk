@@ -118,14 +118,14 @@ namespace :demo do
   end
 
   desc <<~DESC
-    Reconcile orders stuck in `paying` — LOCAL evidence only.
+    Reconcile orders stuck in `paying`, against Stripe where local evidence runs out.
 
     OPERATOR UTILITY, NOT A GATE. Every other task in this namespace
     asserts an invariant and exits non-zero when it breaks. This one reports:
     on a freshly seeded database it prints "nothing stuck" and exits 0 no
     matter what the code does, so it can never go red and CI does not run it.
-    The logic below IS gated — by check:race's reconciliation block, which strands
-    orders first and then sweeps them.
+    The logic below IS gated — by check:reconcile, which strands orders first
+    and then sweeps them against each of the three answers a processor can give.
 
     A crash (or a failed status flip) between a successful capture and the
     paid-flip leaves an order `paying`: charged ONCE (the atomic claim makes a
@@ -133,39 +133,47 @@ namespace :demo do
 
       • flips `paying` → `paid` for every stuck order that ALREADY has a
         settlement row — decisive local proof the charge was recorded;
-      • LISTS the rest as UNRESOLVED with their cart-mandate ids, because only
-        the payment processor knows whether money moved. It deliberately does
-        NOT release those claims: releasing one is exactly the blind retry that
-        could double-charge.
+      • asks Stripe about the rest, by the `metadata.cart_mandate_id` the
+        capture stamped on its PaymentIntent. A matching succeeded intent is
+        `paid`; a matching cancelled or declined one means no money moved, so
+        the claim is RELEASED and the order is payable again;
+      • LISTS as UNRESOLVED every order Stripe cannot answer for, and keeps its
+        claim: releasing one on an answer that is not about this cart is
+        exactly the blind retry that could double-charge.
 
     This demo runs no background worker — invoke it manually (or from cron).
     Set MINUTES=n to change the "old enough to be stuck" cutoff (default 15).
   DESC
   task reconcile: :environment do
     minutes = Integer(ENV.fetch("MINUTES", "15"))
-    result  = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: minutes * 60)
+    result  = ValidatingPaymentProvider.reconcile_stuck_paying!(
+      lookup: StripeChargeLookup.new, older_than_seconds: minutes * 60,
+    )
 
     puts "\n── Stuck-`paying` reconciliation (older than #{minutes} min) ──"
-    if result[:healed].empty? && result[:unresolved].empty?
+    if result.values.all?(&:empty?)
       puts "  nothing stuck. Exit 0."
       next
     end
 
-    result[:healed].each { |id| puts "  HEALED      #{id} — settlement on file, status → paid" }
+    result[:healed].each { |id| puts "  HEALED      #{id} — charge on file, status → paid" }
+    result[:released].each { |id| puts "  RELEASED    #{id} — Stripe charged nothing, status → created" }
     result[:unresolved].each do |row|
-      puts "  UNRESOLVED  #{row[:order_id]} — claimed #{row[:claimed_at]}, no settlement row."
+      puts "  UNRESOLVED  #{row[:order_id]} — claimed #{row[:claimed_at]}, no settlement row, " \
+           "no Stripe answer about this cart."
       if row[:cart_mandate_ids].empty?
         # The engine persists the cart mandate (phase 1) BEFORE the claim, so a
         # wire-driven pay always leaves one. None here means this claim did not
         # come through /pay at all.
         puts "              No cart mandate references this order — it was not claimed via the /pay wire path."
       else
-        puts "              Check the processor for a succeeded charge whose metadata.cart_mandate_id is " \
+        puts "              Check the processor by hand for a charge whose metadata.cart_mandate_id is " \
              "one of: #{row[:cart_mandate_ids].join(", ")}"
       end
     end
-    puts "\n  healed=#{result[:healed].size} unresolved=#{result[:unresolved].size}"
-    puts "  UNRESOLVED orders need a human/PSP check — they are NOT released automatically." unless result[:unresolved].empty?
+    puts "\n  healed=#{result[:healed].size} released=#{result[:released].size} " \
+         "unresolved=#{result[:unresolved].size}"
+    puts "  UNRESOLVED orders need a human check at the processor — they are NOT released automatically." unless result[:unresolved].empty?
   end
 end
 
@@ -1573,6 +1581,38 @@ namespace :check do
     puts "\n── Running script/race_flow.rb (pay path) ──"
     # A generous pool so N racing threads each get their own real connection.
     ok = system({ "RAILS_MAX_THREADS" => "12" }, "bundle exec rails runner #{driver.shellescape}")
+    exit(ok ? 0 : 1)
+  end
+
+  desc <<~DESC
+    Stuck-`paying` reconciliation: the three answers a processor can give.
+
+    Resets the DB, then runs script/reconcile_flow.rb IN-PROCESS (real
+    Postgres, the real sweep) over orders stranded exactly as a crash between a
+    successful capture and the paid-flip strands them, to prove:
+
+      (a) CHARGED     — the processor says the money moved: `paying` → `paid`.
+      (b) NOT CHARGED — it says no money moved: the claim is released and the
+                        order is `created` and payable again.
+      (c) NO ANSWER   — it cannot say: UNRESOLVED, the claim is kept, and the
+                        cart-mandate ids are reported for a human to look up.
+      (d) LOCAL FIRST — a settlement row heals the order without the processor
+                        being asked at all.
+
+    (a) and (b) are driven by a SCRIPTED processor — the only way to reach them
+    without moving real money. The real StripeChargeLookup then runs against a
+    local stripe-mock, whose canned PaymentIntent is in a status that would
+    release a claim on its own and does not, because it names no cart of ours.
+
+    Exits 0 iff every outcome holds; non-zero on any breach.
+  DESC
+  task reconcile: "demo:setup" do
+    require "shellwords"
+    driver = File.expand_path("../../script/reconcile_flow.rb", __dir__)
+    mock_url = start_stripe_mock
+    puts "  (stripe-mock at #{mock_url} — the evidence check runs against it, never Stripe)"
+    puts "\n── Running script/reconcile_flow.rb (stuck-`paying` reconciliation) ──"
+    ok = system({ "STRIPE_MOCK_URL" => mock_url }, "bundle exec rails runner #{driver.shellescape}")
     exit(ok ? 0 : 1)
   end
 

@@ -478,7 +478,12 @@ o5 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
 young_order = o5["order_id"]
 strand_as_paying!(young_order, age: "1 second") # a pay legitimately in flight
 
-sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: 600)
+#     What Stripe would say is check:reconcile's subject; here the sweep is
+#     pinned to the one answer this block is about — the processor knows
+#     nothing — so what is asserted is the local-evidence half and the refusal
+#     to guess without it.
+knows_nothing = Class.new { def outcome(**_kwargs) = :unknown }.new
+sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: knows_nothing, older_than_seconds: 600)
 unresolved_ids = sweep[:unresolved].map { |r| r[:order_id] }
 
 check(sweep[:healed].include?(charged_order), "sweep healed the settled order (healed=#{sweep[:healed].size})")

@@ -63,36 +63,41 @@ class ValidatingPaymentProvider
     @provider.respond_to?(name, include_private) || super
   end
 
-  # ── Stuck-`paying` reconciliation (LOCAL evidence only) ───────────────────
+  # ── Stuck-`paying` reconciliation ─────────────────────────────────────────
   #
   # A crash between a successful capture and the paid-flip leaves an order
   # `paying` forever: charged ONCE — the claim makes double-charging impossible —
-  # but unpayable until something reconciles it. This sweep resolves what local
-  # evidence can prove and REPORTS the rest instead of guessing:
+  # but unpayable until something reconciles it. This sweep resolves each stuck
+  # order against the best evidence there is, in that order:
   #
-  #   • settlement row exists  ⇒ the charge is recorded; flip `paying` → `paid`.
-  #   • no settlement row      ⇒ only the PSP knows whether money moved, so do
-  #     NOT release the claim — releasing it invites the blind retry that can
-  #     charge a second time — and do NOT invent an answer; list the order
-  #     UNRESOLVED with the cart-mandate
-  #     ids to look up at the processor (the Stripe adapter stamps each
-  #     PaymentIntent with `metadata.cart_mandate_id`).
+  #   • settlement row exists ⇒ the charge is recorded; flip `paying` → `paid`.
+  #   • otherwise ask the processor about every cart mandate that claimed this
+  #     order (the Stripe adapter stamps each PaymentIntent with
+  #     `metadata.cart_mandate_id`). It charged ⇒ `paid`. It did not ⇒ release
+  #     the claim, leaving the order `created` and payable again.
+  #   • an answer the processor cannot give ⇒ list the order UNRESOLVED with its
+  #     cart-mandate ids and KEEP the claim. Releasing it invites the blind
+  #     retry that can charge a second time.
   #
-  # Callable from `rake demo:reconcile`. There is NO background worker in this
-  # demo, and querying the PSP for the unresolved half is not built.
+  # Callable from `rake demo:reconcile`; `rake check:reconcile` asserts all
+  # three outcomes. There is NO background worker in this demo.
   #
-  # The three status statements here and in `claim_and_validate!` are RAW SQL
-  # where every READ on this origin is a model call, because the claim's
-  # ATOMICITY is what closes both races above and `update_all` has no RETURNING
-  # in Rails 8.1 — an ActiveRecord spelling would be a SELECT then an UPDATE, and
-  # the race would be back. Every value still travels as a `$N` BIND rather than through
+  # The status statements here and in `claim_and_validate!` are RAW SQL where
+  # every READ on this origin is a model call, because the claim's ATOMICITY is
+  # what closes both races above and `update_all` has no RETURNING in Rails 8.1
+  # — an ActiveRecord spelling would be a SELECT then an UPDATE, and the race
+  # would be back. Every value still travels as a `$N` BIND rather than through
   # `conn.quote`: a demo is the file a provider copies, and the copy is where a
   # forgotten `quote` lives (`no_interpolated_sql_spec.rb` enforces it).
   #
   # @param older_than_seconds [Integer] ignore claims young enough to be a pay
   #   that is legitimately still in flight.
-  # @return [Hash] { healed: [order_id, …], unresolved: [{order_id:, claimed_at:, cart_mandate_ids:}, …] }
-  def self.reconcile_stuck_paying!(older_than_seconds: 900)
+  # @param lookup [#outcome] answers :paid / :not_charged / :unknown about one
+  #   cart mandate. Required, and never defaulted: a sweep that reached a real
+  #   processor because nobody said which one to ask is how a test charges money.
+  # @return [Hash] { healed: [order_id, …], released: [order_id, …],
+  #   unresolved: [{order_id:, claimed_at:, cart_mandate_ids:}, …] }
+  def self.reconcile_stuck_paying!(lookup:, older_than_seconds: 900)
     orders = Order.arel_table
     stuck  = Order.where(status: Order::PAYING)
                   .where(orders[:updated_at].lt(Time.now.utc - older_than_seconds))
@@ -100,30 +105,18 @@ class ValidatingPaymentProvider
                   .pluck(:id, :updated_at)
 
     healed     = []
+    released   = []
     unresolved = []
 
     stuck.each do |id, updated_at|
       order_id = id.to_s
-      if settled?(order_id)
-        Order.lease_connection.exec_update(
-          "UPDATE orders SET status = 'paid', updated_at = now() " \
-          "WHERE id = $1::uuid AND status = 'paying'",
-          "getgrocery reconcile heal", [order_id]
-        )
-        # The sweep is the out-of-band trigger: it runs minutes to hours after
-        # the capture, from a rake task rather than from any call this principal
-        # made, so there is nothing for an assistant to poll in the meantime.
-        owner_id = Order.where(id: order_id).pick(:user_id)
-        if owner_id
-          Kiosk::Server::Events.emit(
-            topic: :order_payment, subject: order_id, identity_scope: [owner_id],
-            data: { "order_id" => order_id, "payment_state" => "paid" },
-          )
-        end
-        # The heal is a paid order arriving late; it gets its courier like any
-        # other, and an order whose window has already passed departs at once.
-        CourierDispatchJob.arm!(order_id)
+      case settled?(order_id) ? :paid : processor_says(order_id, lookup)
+      when :paid
+        heal!(order_id)
         healed << order_id
+      when :not_charged
+        set_status(order_id, from: Order::PAYING, to: Order::CREATED)
+        released << order_id
       else
         unresolved << {
           order_id:         order_id,
@@ -133,7 +126,51 @@ class ValidatingPaymentProvider
       end
     end
 
-    { healed: healed, unresolved: unresolved }
+    { healed: healed, released: released, unresolved: unresolved }
+  end
+
+  # What the processor says about the order, folded from what it says about each
+  # cart mandate that claimed it. ONE `:paid` settles it, because one charge
+  # anywhere means money moved; `:not_charged` needs every mandate to say so,
+  # and an order no mandate references at all was never claimed over the wire —
+  # both of those fall through to `:unknown`, which keeps the claim.
+  def self.processor_says(order_id, lookup)
+    answers = CartMandate.referencing(order_id)
+                         .pluck(:mandate_id, :total_amount_cents, :currency)
+                         .map do |mandate_id, amount_cents, currency|
+      lookup.outcome(cart_mandate_id: mandate_id.to_s, amount_cents: amount_cents, currency: currency)
+    end
+
+    return :paid        if answers.include?(:paid)
+    return :not_charged if answers.any? && answers.all?(:not_charged)
+
+    :unknown
+  end
+
+  # Flip a reconciled order to `paid` and let the shop act on it.
+  def self.heal!(order_id)
+    set_status(order_id, from: Order::PAYING, to: Order::PAID)
+    # The sweep is the out-of-band trigger: it runs minutes to hours after the
+    # capture, from a rake task rather than from any call this principal made,
+    # so there is nothing for an assistant to poll in the meantime.
+    owner_id = Order.where(id: order_id).pick(:user_id)
+    if owner_id
+      Kiosk::Server::Events.emit(
+        topic: :order_payment, subject: order_id, identity_scope: [owner_id],
+        data: { "order_id" => order_id, "payment_state" => "paid" },
+      )
+    end
+    # The heal is a paid order arriving late; it gets its courier like any
+    # other, and an order whose window has already passed departs at once.
+    CourierDispatchJob.arm!(order_id)
+  end
+
+  def self.set_status(order_id, from:, to:)
+    Order.lease_connection.exec_update(
+      "UPDATE orders SET status = $1, updated_at = now() " \
+      "WHERE id = $2::uuid AND status = $3",
+      "getgrocery order status flip", [to, order_id.to_s, from]
+    )
   end
 
   # True iff a settlement (capture receipt) references this order — the
@@ -286,11 +323,11 @@ class ValidatingPaymentProvider
   end
 
   def release_claim!(order_id)
-    set_status(order_id, from: "paying", to: "created")
+    set_status(order_id, from: Order::PAYING, to: Order::CREATED)
   end
 
   def mark_paid!(order_id)
-    set_status(order_id, from: "paying", to: "paid")
+    set_status(order_id, from: Order::PAYING, to: Order::PAID)
     # AND THE COURIER IS ARMED. The basket is bought; from here the shop acts
     # on its own clock, and nothing the assistant calls will produce either of
     # the two transitions that follow. {CourierDispatchJob} swallows its own
@@ -302,13 +339,7 @@ class ValidatingPaymentProvider
     nil
   end
 
-  def set_status(order_id, from:, to:)
-    Order.lease_connection.exec_update(
-      "UPDATE orders SET status = $1, updated_at = now() " \
-      "WHERE id = $2::uuid AND status = $3",
-      "getgrocery order status flip", [to, order_id.to_s, from]
-    )
-  end
+  def set_status(order_id, from:, to:) = self.class.set_status(order_id, from: from, to: to)
 
   def deny(message)
     raise Kiosk::Server::Errors::Forbidden.new(message)

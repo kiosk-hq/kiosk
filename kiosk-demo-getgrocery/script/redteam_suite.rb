@@ -889,8 +889,10 @@ end
 # the TCP PEER, which a client cannot forge from the outside (`X-Forwarded-For`
 # and its proxy siblings are the closest a request can come and are what is sent
 # here), and the TOKEN, because nothing in this engine's claim set carries a
-# zone, so there is no value for an operator to read off one. Those two halves
-# remain construction.
+# zone, so there is no value for an operator to read off one. Both are asserted
+# where they ARE reachable: `spec/caller_clock_spec.rb` builds the Rack env
+# itself, with a clock stubbed, and requires the declared zone to be read from
+# neither.
 class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
   ADDRESS = "1 Redteam St, Dublin 1"
 
@@ -1060,8 +1062,7 @@ end
 #
 # «Machine timestamps are not service times and are unaffected.» An `exp` is an
 # INSTANT — a moment a credential stops working — and no clock anybody declares
-# changes when that moment is. Nothing here renders one on a caller's clock, and
-# until this beat nothing said so.
+# changes when that moment is. Nothing here renders one on a caller's clock.
 #
 # THE PROBE IS THE SAME DIFFERENTIAL AT A DIFFERENT ENDPOINT. Two auth
 # challenges, seconds apart, on clocks 25 hours apart: their `exp` values must
@@ -1077,7 +1078,8 @@ end
 # THIS COVERS ONE MACHINE TIMESTAMP, the auth challenge's, and it is the engine's
 # rather than this shop's — which is why it lives beside the two beats above
 # instead of in every suite. A bearer's own `iat`/`exp`, skooti's unlock-token
-# `exp` and tudu's `expires_in` are not probed here.
+# `exp` and tudu's `expires_in` are held where they are minted, each against a
+# pinned instant, rather than over this wire.
 class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
   TOLERANCE_SECONDS = 60
 

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1745 anchors.
+# 1753 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -453,6 +453,10 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	caller's zone absent from both ans
 kiosk-demo-getgrocery/script/redteam_suite.rb	redteam-inferzone-a
 kiosk-demo-getgrocery/script/redteam_suite.rb	redteam-onerender-a
 kiosk-demo-getgrocery/script/redteam_suite.rb	the two clocks are 90000s apart
+kiosk-demo-getgrocery/spec/caller_clock_spec.rb	a DECLARED zone moves the answer: one day, two calendars
+kiosk-demo-getgrocery/spec/caller_clock_spec.rb	one rendering per row, at the district's clock
+kiosk-demo-getgrocery/spec/caller_clock_spec.rb	the caller's zone is DECLARED, and read from nothing else
+kiosk-demo-getgrocery/spec/caller_clock_spec.rb	the day the shop answers is identical bare and baited
 kiosk-demo-getgrocery/spec/wire_arguments_spec.rb	caller_day: a day the caller is still in is not past
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
@@ -624,6 +628,7 @@ kiosk-demo-skooti/script/rental_flow.rb	# ── Step 2: (no KYC) ────�
 kiosk-demo-skooti/script/rental_flow.rb	# ── Step 3b: payment_setup — the card check that MUST precede pay
 kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, self-verifying unlock credential.
 kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify
+kiosk-demo-skooti/script/rental_token_issuer_kat.rb	issue: exp = now + 900
 kiosk-demo-stylish/Gemfile	gem "kiosk-rls",
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
 kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**
@@ -712,6 +717,7 @@ kiosk-demo-tudu/app/controllers/lists_controller.rb	    rows = conn.exec_query(<
 kiosk-demo-tudu/app/models/invite.rb	# A single-use, TTL'd, HASHED collaboration code — tudu's own app-layer
 kiosk-demo-tudu/app/models/invite.rb	# `code_digest` is stored, and the plaintext is returned ONCE and travels
 kiosk-demo-tudu/app/operations/add_todo_operation.rb	names no time zone — a deadline is an INSTANT
+kiosk-demo-tudu/app/operations/invite_operation.rb	OperationResult.ok({ "code" => code, "expires_in" => TTL_SECONDS })
 kiosk-demo-tudu/app/operations/list_access.rb	return nil if Membership.reachable?(list_id, require_owner: require_owner)
 kiosk-demo-tudu/app/views/lists/index.html.erb	      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
 kiosk-demo-tudu/app/views/lists/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
@@ -978,6 +984,7 @@ kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	does not invoke the bac
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when params are tampered
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when salt is tampered
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when the sig field itself is corrupted
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	sets exp = now + ttl
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	falls back to user_id when agent_id is nil
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	grants are per-identity (agent-2's solve does not free agent-1)
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	keys a Kiosk::Identity-shaped object by agent_id when present
@@ -1264,6 +1271,7 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a WHOLE-VALUED f
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a name used as both scalar and array in one query string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses an EMPTY value where a scalar type is declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses the same whole-valued float spelling on a RESERVED integer name — limit=20.0
+kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	mints `exp` from the clock alone, and no ambient zone moves it
 kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	mints a nonce and records it with a TTL, consumable exactly once
 kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	raises Unauthenticated on replay (single-use)
 kiosk-server/spec/kiosk/server/auth_challenge_store_spec.rb	consumes a live, matching challenge exactly once (single-use)

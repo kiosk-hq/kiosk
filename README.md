@@ -135,6 +135,17 @@ end-to-end test harness — fixtures, a stub PSP and the AI-assistant pay flow �
 so it serves no vertical and deploys nowhere. It runs as a CI gate
 (`./e2e/run.sh`) and nothing else.
 
+Four more top-level directories are neither a gem nor a demo. **`bin/`** holds
+the checks that gate this repository — one `check-*` script per property,
+each exiting non-zero when that property breaks; CI runs them as jobs of
+their own, not through `rake`. **`deploy/`** is the runbook for hosting the
+live demo fleet — Caddy, Postgres, systemd and the scripts that provision and
+smoke-test the box (`deploy/README.md`). **`spec/`** holds three GENERATED
+indexes the publication and conformance checks read and regenerate — not a
+test suite; each gem's own tests live under its own `spec/`. **`.github/`**
+holds the one CI pipeline, `workflows/ci.yml` — the gems matrix, the demos
+matrix and `e2e/run.sh`, on every push and pull request.
+
 A demo's rake tasks say what they are by their namespace. A `rake check:*` task
 ASSERTS: it exits non-zero when the property it names breaks. A `rake demo:*`
 task is one a person runs and reads — `demo:setup` prepares the database,

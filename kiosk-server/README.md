@@ -20,7 +20,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, reservations, device authorizations, mandates).
 - **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding) and nothing else — your own verbs are yours to draw, one explicit route each — installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
-- **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
+- **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the wire routes file with the engine mounted in it.
 
 kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
 
@@ -247,8 +247,11 @@ a boot failure rather than an audit trail that silently was never there.
 
 ## Draw the routes
 
-The wire has TWO HALVES and the split is by whose surface it is. Put both in a
-routes file of their own and reach it with Rails' own `draw`:
+The wire has TWO HALVES and the split is by whose surface it is. Both live in a
+routes file of their own, reached with Rails' own `draw` — and
+`bin/rails g kiosk:install` writes that file and the `draw(:kiosk)` line into
+`config/routes.rb` for you, because bundling the gem draws no route at all and
+an origin with no mount answers nothing:
 
 ```ruby
 # config/routes.rb
@@ -258,7 +261,12 @@ draw(:kiosk)
 ```ruby
 # config/routes/kiosk.rb
 mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+```
 
+The generator stops there: it knows no verb of yours. You add one line per verb
+under the mount, which is the second half:
+
+```ruby
 get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
 post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "place_order" }
 ```
@@ -282,10 +290,11 @@ protocol says a verb IS, so the routes state it instead of hiding it, and
 `bin/rails routes` prints your actual wire. `defaults: { kiosk_verb: … }` hands
 the name to the shipped controller; nothing is inferred from the path.
 
-**Draw the mount FIRST.** Rails dispatches the first matching route, so
-everything the engine draws wins over anything you write below it and no verb of
-yours can shadow `schema`, `pay` or the auth plane. (You could not declare such
-a verb anyway — `Kiosk::Handler` refuses a reserved name at boot.)
+**The mount comes FIRST, and your lines go below it.** Rails dispatches the
+first matching route, so everything the engine draws wins over anything written
+under it and no verb of yours can shadow `schema`, `pay` or the auth plane. (You
+could not declare such a verb anyway — `Kiosk::Handler` refuses a reserved name
+at boot.)
 
 A path under the mount that names no route — including a verb called with the
 other method — matches nothing, so it is the ordinary 404 Rails answers at any

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-28: **`kiosk:install` writes `config/routes/kiosk.rb` with the engine mounted, and draws it from `config/routes.rb`.** An install that stopped at the initializer served nothing.
+
 - `validate_requests` now also holds register, login, claim, unlink, the KYC attestation and `pay` bodies to their published schemas; a wrong-typed member is a 400 naming it.
 
 - 2026-09-28: **`c.serve_account_binding = false` declines the binding module: every binding path answers `501 module_not_served`.** Default true, and the six published auth URLs do not move.

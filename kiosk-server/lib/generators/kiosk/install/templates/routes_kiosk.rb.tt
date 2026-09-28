@@ -1,0 +1,26 @@
+# frozen_string_literal: true
+
+# The Kiosk wire, in two halves, split by whose surface it is. Reached from
+# config/routes.rb by Rails' own `draw(:kiosk)`.
+#
+# 1. THE PROTOCOL PLANE IS MOUNTED. `schema`, `openapi.json`, `pay`, the auth
+#    ceremonies, JWKS, KYC attestation, the account-binding wire and the
+#    root-relative discovery documents are the specification's paths, not
+#    yours; one line draws them all. It goes FIRST: Rails dispatches the first
+#    matching route, so nothing written below can shadow a protocol path.
+#
+# 2. YOUR OWN VERBS ARE HAND-WRITTEN, one explicit route each, and the METHOD
+#    FOLLOWS THE KIND — GET for a `kind :query`, POST for a `kind :action`.
+#    `defaults: { kiosk_verb: … }` hands the name to the shipped controller;
+#    nothing is inferred from the path. A verb you declare and never route is
+#    unreachable, so adding one is two edits: the declaration in your handler
+#    controller, and its line here.
+
+mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+
+# ── The verbs this origin serves ────────────────────────────────────────────
+# One line per verb declared by a controller named in `c.handlers`. The prefix
+# is your `c.mount_path`, `/kiosk` unless you set another:
+#
+#   get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
+#   post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "place_order" }

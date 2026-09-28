@@ -2031,6 +2031,12 @@ GENERATOR_TEMPLATES = {
                   "PoW policy, adapters), recorded in SKELETON_NOT_COMPARED; the one line every " \
                   "copy of it must carry IS asserted at the bottom of this file.",
   },
+  "routes_kiosk.rb.tt" => {
+    not_compared: "emits config/routes/kiosk.rb — the mount line is identical everywhere, but the " \
+                  "verb routes under it are each storefront's own, so the file as a whole is " \
+                  "per-demo by design, recorded in SKELETON_NOT_COMPARED; bin/check-verb-routes " \
+                  "holds every demo's route lines to the verbs its handler controllers declare.",
+  },
   "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
   "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
   "create_kiosk_reservations.rb.tt"          => { emits: "create_kiosk_reservations.rb" },

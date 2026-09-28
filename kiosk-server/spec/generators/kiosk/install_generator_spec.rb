@@ -6,9 +6,20 @@ require "rails/generators"
 require_relative "../../../lib/generators/kiosk/install/install_generator"
 
 RSpec.describe Kiosk::Generators::InstallGenerator do
+  # A host Rails app, reduced to the one file the generator writes INTO:
+  # `config/routes.rb` is where `draw(:kiosk)` lands, and every real adopter
+  # has one.
+  HOST_ROUTES = <<~RUBY
+    Rails.application.routes.draw do
+      root "home#index"
+    end
+  RUBY
+
   around do |example|
     Dir.mktmpdir do |dir|
       @destination = dir
+      FileUtils.mkdir_p(File.join(dir, "config"))
+      File.write(File.join(dir, "config/routes.rb"), HOST_ROUTES)
       example.run
     end
   end
@@ -199,6 +210,71 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
           "response_validation.rb still carries the retired K-1332 claim that the generator " \
           "sets neither flag. The template sets both; delete the sentence rather than the arm."
       end
+    end
+  end
+
+  # Bundling kiosk-server draws no route: the engine installs its surface only
+  # when it is mounted. So an install that stops at the initializer and the
+  # migrations leaves an origin that answers nothing — not even the discovery
+  # document an assistant reads first — and the operator has no file to put
+  # their own verb routes in.
+  describe "wire routes" do
+    # Executable lines only: the file is mostly the comment that teaches the
+    # two halves, and every rule below is about the code.
+    def wire_code
+      read("config/routes/kiosk.rb").lines.map(&:strip).reject { |l| l.empty? || l.start_with?("#") }
+    end
+
+    it "creates config/routes/kiosk.rb" do
+      invoke!
+      expect(File).to exist(File.join(@destination, "config/routes/kiosk.rb"))
+    end
+
+    it "mounts the engine at the CONFIGURED mount_path, not a hard-coded prefix" do
+      invoke!
+      expect(wire_code).to include("mount Kiosk::Server::Engine => Kiosk.configuration.mount_path")
+    end
+
+    it "draws the mount FIRST — Rails dispatches the first match, so the protocol " \
+       "plane must win over anything the operator writes below it" do
+      invoke!
+      expect(wire_code.first).to start_with("mount Kiosk::Server::Engine")
+    end
+
+    it "draws no verb route of its own — a fresh app declares no verb, and an active " \
+       "example line would publish one nobody wrote" do
+      invoke!
+      expect(wire_code.grep(/\A(get|post|put|patch|delete|match)\b/)).to be_empty
+    end
+
+    it "teaches the per-verb shape with the method following the kind" do
+      invoke!
+      body = read("config/routes/kiosk.rb")
+      expect(body).to include(%(get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }))
+      expect(body).to include(%(post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "place_order" }))
+    end
+
+    # T-183 deleted the pattern route. A worked file must not re-teach it, and a
+    # commented example is read exactly as attentively as an active line.
+    it "names no dynamic path segment anywhere" do
+      invoke!
+      expect(read("config/routes/kiosk.rb")).not_to match(%r{"/[^"]*[:*][a-z_]})
+    end
+
+    it "reaches that file from config/routes.rb with Rails' own draw" do
+      invoke!
+      expect(read("config/routes.rb")).to match(/^\s*draw\(:kiosk\)\s*$/)
+    end
+
+    it "draws it INSIDE the routes block, not beside it" do
+      invoke!
+      body = read("config/routes.rb")
+      expect(body.index("draw(:kiosk)")).to be > body.index("routes.draw do")
+    end
+
+    it "leaves the host's own routes alone" do
+      invoke!
+      expect(read("config/routes.rb")).to include('root "home#index"')
     end
   end
 

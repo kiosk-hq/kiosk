@@ -223,6 +223,23 @@ MONOREPO_README = "README.md"
 # decides WHETHER the message travels, `errors.rb` decides WHAT does.
 SERVER_HANDLER_MIXIN = "kiosk-server/lib/kiosk/server/handler_mixin.rb"
 SERVER_ERRORS        = "kiosk-server/lib/kiosk/server/errors.rb"
+# The demo prerequisites the page paraphrases (K-1839). `bin/check-demo-prereqs`
+# derives each demo README's Prerequisites block from that demo's own files, so a
+# requirement no demo creates any more is rendered by nothing and leaves all
+# eight READMEs in the commit that removes it. The page restates the same facts
+# in prose, for a stranger who has not opened a demo yet, and nothing compared
+# the two: when `demo:setup` stopped creating the `app_role` group role the
+# READMEs lost the bullet at once and the page went on demanding a `CREATE ROLE`
+# login for three days.
+#
+# THE CORPUS IS THE RENDERED BLOCK, not a second reading of the requirement
+# table. `bin/check-demo-prereqs` holds the committed blocks byte-equal to its
+# own derivation on every push, so the blocks ARE the derivation, and re-deriving
+# the triggers here would be the second copy of one fact this script's header
+# refuses. The markers delimiting them are read out of that script rather than
+# typed, so a rename there makes this rule say it is holding nothing.
+PREREQS_SCRIPT   = "bin/check-demo-prereqs"
+DEMO_README_GLOB = "kiosk-demo-*/README.md"
 
 PAGE_URL      = "https://kiosk.tech/onboarding.html"
 PAGE_BASENAME = "onboarding.html"
@@ -325,6 +342,16 @@ def repo_read_dir(rel)
   raise "derivation source directory missing: #{rel}" unless File.directory?(dir)
 
   Dir[File.join(dir, "*.rb")].sort.to_h { |p| [File.basename(p), File.read(p)] }
+end
+
+# Every file matching one glob, keyed by its path relative to this checkout. A
+# GLOB and not a list of names, for `repo_read_dir`'s reason: a demo added or
+# retired moves the corpus instead of leaving a name nobody maintains.
+def repo_read_glob(rel)
+  paths = Dir[File.join(ROOT, rel)].sort
+  raise "derivation source glob matches nothing: #{rel}" if paths.empty?
+
+  paths.to_h { |p| [p.delete_prefix("#{ROOT}/"), File.read(p)] }
 end
 
 # A FETCHED BODY IS BYTES, AND EVERY RULE BELOW COMPARES IT AS TEXT (K-1367).
@@ -2374,6 +2401,127 @@ def rule_route_pattern(page, sources)
                                    "is the catch-all T-183 deleted, spelled on the page" }.join("; "))
 end
 
+# ── R24's reading of both sides (K-1839) ─────────────────────────────────────
+
+# ONE SPELLING FOR BOTH SIDES. The page bolds a requirement in HTML and the
+# README bolds it in Markdown; the words are the claim and the markup is not, so
+# both are flattened the same way before anything is compared.
+def phrase_text(raw)
+  t = raw.gsub(/<[^>]*>/, " ")
+  { "&amp;" => "&", "&lt;" => "<", "&gt;" => ">", "&quot;" => '"', "&#39;" => "'",
+    "&ldquo;" => '"', "&rdquo;" => '"', "&mdash;" => "-", "&ndash;" => "-",
+    "&nbsp;" => " " }.each { |entity, char| t = t.gsub(entity, char) }
+  t.delete("*`>").downcase.gsub(/[[:space:]]+/, " ").strip
+end
+
+# The markers `bin/check-demo-prereqs` writes around every block it generates,
+# read from that script so this side cannot carry a stale copy of them.
+def prereq_markers(script_src)
+  first = script_src[/^BEGIN_MARK\s*=\s*"([^"]*)"/, 1]
+  last  = script_src[/^END_MARK\s*=\s*"([^"]*)"/, 1]
+  (first && last) ? [first, last] : nil
+end
+
+# Every generated Prerequisites block in the demo READMEs. The UNION and not one
+# demo's: a requirement only some demos trigger is still one the page may name.
+def prereq_blocks(script_src, readmes)
+  marks = prereq_markers(script_src)
+  return [] if marks.nil?
+
+  span = /#{Regexp.escape(marks[0])}.*?#{Regexp.escape(marks[1])}/m
+  readmes.values.filter_map { |body| body[span] }
+end
+
+def prereq_corpus(script_src, readmes)
+  blocks = prereq_blocks(script_src, readmes)
+  blocks.empty? ? nil : phrase_text(blocks.join("\n"))
+end
+
+# What the derived blocks themselves BOLD. The self-test fixture writes one of
+# these as its own emphasised requirement, so the fixture satisfies R24 the way
+# a correct page does rather than by saying nothing.
+def prereq_bold_phrases(script_src, readmes)
+  prereq_blocks(script_src, readmes)
+    .flat_map { |b| b.scan(/\*\*(.+?)\*\*/m).flatten }
+    .map { |s| phrase_text(s) }.reject(&:empty?).uniq
+end
+
+# The inner text of every <blockquote> on the page.
+def page_blockquotes(page)
+  page.scan(%r{<blockquote>(.*?)</blockquote>}m).flatten
+end
+
+# What a blockquote EMPHASISES, minus its lead. Every blockquote on this page
+# opens with a bold sentence titling it; that one is a heading rather than a
+# requirement, and it is identified by where it sits, not by its words.
+def emphasised_claims(inner)
+  spans = inner.scan(%r{<strong>(.*?)</strong>}m).flatten
+  spans = spans.drop(1) if inner.lstrip.start_with?("<strong>")
+  spans.map { |s| phrase_text(s) }.reject(&:empty?).uniq
+end
+
+# R24 -- the page's prerequisite paraphrase names only requirements the demo
+# READMEs still carry (K-1839).
+#
+# THE PARAGRAPH IS FOUND BY A DERIVED TOKEN, never by a position or a typed
+# sentence: it is the blockquote naming the `registration_pow_count` every demo
+# initializer sets, which is where the Equihash toll that paragraph explains
+# comes from. A page that stops naming it makes this rule say it holds nothing.
+#
+# WHAT IT HOLDS AND WHAT IT DOES NOT. It holds the phrases the blockquote
+# EMPHASISES -- which is where that paragraph states its requirements -- against
+# the text `bin/check-demo-prereqs` renders. It does NOT hold the prose around
+# them, and it does not hold the paragraph's own cardinal: what an ADOPTING
+# operator does not need is derived nowhere, because that script derives what a
+# DEMO needs, so counting the difference would be a hand-kept judgement per
+# requirement, which is the shape this script refuses by name.
+def rule_demo_prereqs(page, sources)
+  corpus = prereq_corpus(sources[:prereqs_script], sources[:demo_readmes])
+  if corpus.nil?
+    return vacuous!("DEMO_PREREQS",
+                    "#{PREREQS_SCRIPT} declares no BEGIN_MARK/END_MARK pair, or no " \
+                    "#{DEMO_README_GLOB} carries a generated block between them, so there is no " \
+                    "derived prerequisite text for the page's paraphrase to agree with")
+  end
+
+  toll = sources[:getgrocery_init][/registration_pow_count\s*=\s*(\d+)/, 1]
+  if toll.nil?
+    return vacuous!("DEMO_PREREQS",
+                    "#{GETGROCERY_INITIALIZER} sets no `registration_pow_count`, which is the " \
+                    "token the prerequisite paragraph is found by")
+  end
+
+  needle = phrase_text("registration_pow_count = #{toll}")
+  quotes = page_blockquotes(page).select { |q| phrase_text(q).include?(needle) }
+  if quotes.empty?
+    return vacuous!("DEMO_PREREQS",
+                    "no blockquote on the page names `registration_pow_count = #{toll}` -- either " \
+                    "the prerequisite paragraph is gone, or it stopped naming the setting the " \
+                    "toll it explains comes from. Re-point this rule rather than leaving it " \
+                    "matching nothing")
+  end
+
+  claims = quotes.flat_map { |q| emphasised_claims(q) }.uniq
+  if claims.empty?
+    return vacuous!("DEMO_PREREQS",
+                    "the prerequisite blockquote emphasises nothing below its own lead, so it " \
+                    "states no requirement this rule can hold")
+  end
+
+  bad = claims.reject { |c| corpus.include?(c) }
+  check("DEMO_PREREQS",
+        bad.empty?,
+        "all #{claims.size} requirement(s) the prerequisite blockquote emphasises are in the " \
+        "block #{PREREQS_SCRIPT} derives into the demo READMEs",
+        bad.empty? ? "derived from #{PREREQS_SCRIPT} through the " \
+                     "#{prereq_blocks(sources[:prereqs_script], sources[:demo_readmes]).size} " \
+                     "#{DEMO_README_GLOB} block(s)"
+                   : bad.map { |c| "the page tells a stranger a demo needs «#{c}», and no demo " \
+                                   "README says so. #{PREREQS_SCRIPT} derives that list from the " \
+                                   "demos' own files, so a requirement it no longer renders is " \
+                                   "one no demo has" }.join("; "))
+end
+
 RULES = [
   [:rule_status_prose,       "STATUS_PROSE",        "pointer",    "the guard one repository over that DOES hold this page's status-beside-a-code sentences, which this script's own disclaimer list says nothing derives"],
   [:rule_handler_names,      "HANDLER_NAMES",       "derivation", "the two handler class names the kiosk:install initializer template teaches"],
@@ -2398,6 +2546,7 @@ RULES = [
   [:rule_verb_routes,        "VERB_ROUTES",        "derivation", "getgrocery's own route line for every verb the page declares -- method, path, and the kiosk_verb it defaults"],
   [:rule_mount_first,        "MOUNT_FIRST",        "derivation", "the engine mount getgrocery draws, and the fact it is drawn above every verb route"],
   [:rule_route_pattern,      "ROUTE_PATTERN",      "ban",        "a dynamic path segment, or a route naming no verb -- the catch-all pair T-183 deleted"],
+  [:rule_demo_prereqs,       "DEMO_PREREQS",       "derivation", "every requirement the page's prerequisite blockquote emphasises, against the Prerequisites block bin/check-demo-prereqs derives into the demo READMEs"],
 ].freeze
 
 def load_sources
@@ -2416,6 +2565,8 @@ wire_file:       repo_read(GETGROCERY_WIRE_ROUTES),
     server_gemspec:  repo_read(SERVER_GEMSPEC),
     core_gemspec:    repo_read(CORE_GEMSPEC),
     readme:          repo_read(MONOREPO_README),
+    prereqs_script:  repo_read(PREREQS_SCRIPT),
+    demo_readmes:    repo_read_glob(DEMO_README_GLOB),
     handler_mixin:   repo_read(SERVER_HANDLER_MIXIN),
     server_errors:   repo_read(SERVER_ERRORS) }
 end
@@ -2437,9 +2588,10 @@ def run_list
    CORE_UUID_CHECK, GETGROCERY_WIRE_ARGUMENTS, GETGROCERY_CREATE_ORDER,
    GETGROCERY_DELIVERY_SLOTS, GETGROCERY_OPERATIONS_DIR,
    GETGROCERY_APP_ROUTES, GETGROCERY_WIRE_ROUTES,
-   SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS].each do |rel|
-    path = File.join(ROOT, rel)
-    puts "  #{File.exist?(path) ? "present" : "MISSING"}  #{rel}"
+   SERVER_GEMSPEC, CORE_GEMSPEC, MONOREPO_README, SERVER_HANDLER_MIXIN, SERVER_ERRORS,
+   PREREQS_SCRIPT, DEMO_README_GLOB].each do |rel|
+    hits = Dir[File.join(ROOT, rel)]
+    puts "  #{hits.empty? ? "MISSING" : "present"}  #{rel}#{hits.size > 1 ? " (#{hits.size} files)" : ""}"
   end
   0
 end
@@ -2662,7 +2814,14 @@ def derived_facts(sources)
     routes: demo_verb_routes(sources),
     mount: wire_mount_line(sources[:wire_file]),
     draw: sources[:app_routes][DRAW_CALL, 1],
-    wire_rel: GETGROCERY_WIRE_ROUTES[%r{config/routes/[^/]+\.rb\z}] }
+    wire_rel: GETGROCERY_WIRE_ROUTES[%r{config/routes/[^/]+\.rb\z}],
+    # K-1839: the demo prerequisites the page paraphrases. `prereq_toll` is the
+    # setting R24 finds the paragraph by; `prereq_bold` is one phrase the derived
+    # README blocks themselves BOLD, which the fixture writes as its own
+    # emphasised requirement so the fixture satisfies R24 the way a correct page
+    # does. Both read, never typed -- a reworded requirement moves them.
+    prereq_toll: sources[:getgrocery_init][/registration_pow_count\s*=\s*(\d+)/, 1],
+    prereq_bold: prereq_bold_phrases(sources[:prereqs_script], sources[:demo_readmes]).min_by(&:length) }
 end
 
 # ── THE FIXTURE CARRIES getgrocery's KEYWORDS (K-1360) ───────────────────────
@@ -2821,7 +2980,16 @@ def fixture_page(f)
   # pair the schema no longer holds.
   status_prose = f[:problem_pair] ?
     %(<p>Without one it refuses with a <code>#{f[:problem_pair][1]} #{f[:problem_pair][0]}</code> problem document.</p>) : ""
+  # R24's paragraph (K-1839): found by the derived toll setting, emphasising a
+  # requirement the derived README blocks carry. It is written here rather than
+  # left out because a fixture the rule is VACUOUS on would fail the unplanted
+  # arm instead of exercising the rule.
+  prereq_note = %(<blockquote><strong>Running a demo needs what this integration does not.</strong> ) +
+                %(Every demo sets <code>c.registration_pow_count = #{f[:prereq_toll]}</code>, so the ) +
+                %(demo tasks need <strong>#{f[:prereq_bold]}</strong>. Each demo's README states its ) +
+                %(own prerequisites, derived from that demo's files.</blockquote>)
   [status_prose,
+   prereq_note,
    %(<p>getgrocery registers #{(f[:getgrocery] - f[:handlers]).join(", ")} instead.</p>),
    %(<p>Needs Rails #{f[:rails]} and Ruby #{f[:ruby]}.</p>),
    %(<p>#{f[:publication][0]}. Publication status is stated once, at <a href="#{status_url}">#{status_url}</a>.</p>),
@@ -2877,7 +3045,8 @@ def run_self_test
      f[:integers].empty? || f[:rails].nil? || f[:ruby].nil? || f[:install].nil? ||
      f[:orders_schemas].empty? || f[:arrays].empty? || f[:seam].nil? || f[:hints].empty? ||
      f[:ceiling].nil? || f[:window].nil? || f[:publication].nil? ||
-     f[:routes].empty? || f[:mount].nil? || f[:draw].nil? || f[:wire_rel].nil?
+     f[:routes].empty? || f[:mount].nil? || f[:draw].nil? || f[:wire_rel].nil? ||
+     f[:prereq_toll].nil? || f[:prereq_bold].nil?
     warn "self-test cannot derive its own plants from this checkout: #{f.inspect}"
     return 1
   end
@@ -3193,6 +3362,23 @@ arms << plant_arm("the mount drawn BELOW the page's verb routes",
                   sources, "MOUNT_FIRST")
 # (e) THE CATCH-ALL BACK ON THE PAGE, in the exact spelling the engine drew
 # through 0.4.12 and T-183 deleted.
+# K-1839's own break: a requirement the derived blocks no longer render,
+# emphasised on the page as though a demo still needed it. The paragraph is
+# located exactly as the rule locates it, and the phrase is asserted absent from
+# the corpus first -- a plant the corpus happens to carry would read as coverage
+# while proving nothing.
+prereq_quote = page_blockquotes(page)
+               .find { |q| phrase_text(q).include?(phrase_text("registration_pow_count = #{f[:prereq_toll]}")) }
+retired      = "a Postgres login permitted to CREATE ROLE"
+if prereq_quote.nil? ||
+   prereq_corpus(sources[:prereqs_script], sources[:demo_readmes]).include?(phrase_text(retired))
+  warn "self-test cannot plant K-1839's break: the page has no prerequisite blockquote, or the " \
+       "derived README blocks already carry #{retired.inspect}"
+  return 1
+end
+arms << plant_arm("a requirement no demo README renders, emphasised on the page",
+                  page.sub(prereq_quote) { "#{prereq_quote} It also needs <strong>#{retired}</strong>." },
+                  sources, "DEMO_PREREQS")
 arms << plant_arm("the :kiosk_verb catch-all taught in place of #{route_verb}'s line",
                   planted.call("the catch-all", page,
                                page.sub(route_re, %(get "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show"\n))),
@@ -3344,6 +3530,9 @@ arms << vacuity_arm("getgrocery's wire file mounts no Kiosk engine", page,
                     sources.merge(wire_file: no_mount), "MOUNT_FIRST")
 no_routes = sources[:wire_file].gsub(/^(get|post)([ \t])/) { "x#{$1}#{$2}" }
 planted.call("getgrocery's route lines disabled", sources[:wire_file], no_routes)
+arms << vacuity_arm("bin/check-demo-prereqs loses the markers it writes", page,
+                    sources.merge(prereqs_script: sources[:prereqs_script]
+                      .sub(/^BEGIN_MARK\s*=.*$/, "# removed")), "DEMO_PREREQS")
 arms << vacuity_arm("getgrocery's wire file draws no route at all", page,
                     sources.merge(wire_file: no_routes), "ROUTE_PATTERN")
 

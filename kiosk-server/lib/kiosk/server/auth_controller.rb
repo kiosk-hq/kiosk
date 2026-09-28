@@ -41,6 +41,11 @@ module Kiosk
     # holds the private key — and, via its `aud` claim, binding the proof to
     # THIS origin so it can't be relayed. See kiosk.tech/specification.html.
     class AuthController < ::ActionController::API
+      # The three binding actions only: challenge / register / login / revoke
+      # are CORE auth and are served whatever this origin does about binding.
+      include BindingModuleGate
+      prepend_before_action :refuse_unserved_binding, only: %i[link claim unlink]
+
       # Issue a single-use, short-lived challenge nonce for a public key.
       # Unauthenticated by design: the caller has no token yet, and the nonce
       # is worthless to anyone without the matching private key.

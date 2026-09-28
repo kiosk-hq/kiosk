@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1730 anchors.
+# 1736 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1277,6 +1277,10 @@ kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 400 bad_request w
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated when NO Authorization header is present
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	revokes all sessions for the caller and hands back a fresh usable token
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers #{method} #{path} with 501 module_not_served
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	keeps the OAuth error object for an ordinary refusal
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all six auth URLs and adds no capability for binding
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the four core kiosk-pop auth endpoints
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	refuses a UTC offset by name
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil for an unknown or revoked key (no row)
@@ -1336,9 +1340,11 @@ kiosk-server/spec/kiosk/server/engine_mount_spec.rb	RSpec.describe "mount Kiosk:
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a routing 404 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an explicit line reaches the VERB wire
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an unhandled 500 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers #{line} with a 501 module_not_served problem document
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers a name nobody registered the same ordinary 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb an ordinary routing 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all six auth URLs and no binding capability
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	stamps every path UNDER the mount — success and refusal alike
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	the HOST's own route outside the mount carries none — on a 200
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on a root-level routing 404

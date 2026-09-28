@@ -12,6 +12,7 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-28: **An origin can now decline account binding — `c.serve_account_binding = false` — so the reference exhibits the optional-module profile the spec defines.** Discovery is unchanged.
 - 2026-09-28: **The event stream accepts an upgrade that sends no `Origin`.** Action Cable's browser forgery check was answering a bare 404 to every non-browser client on the advertised URL.
 - 2026-09-28: **The README names `bin/check-prose-counts` for the four-document `before-after.md` set.** It credited `bin/check-demo-copies`, which says nothing about the count.
 - 2026-09-28: **`CONTRIBUTING.md`, the container file and the CI comment no longer sell a `CREATE ROLE` privilege the demos stopped needing.** Only `e2e/run.sh` still creates a role.

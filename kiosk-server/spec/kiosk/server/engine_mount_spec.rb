@@ -415,4 +415,57 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       expect(header_names("exceptions", "GET /nope")).to be_empty
     end
   end
+
+  # §16.1 item 7 on real bytes. The per-endpoint contract is pinned in
+  # binding_module_gate_spec.rb; what only a booted host can show is the
+  # `/oauth/*` carve-out ARRIVING through the mount as an
+  # `application/problem+json` body where that pair otherwise answers the OAuth
+  # error object.
+  context "when the origin declines the account-binding module (§16.1 item 7)" do
+    DECLINED_PATHS = [
+      "POST /kiosk/oauth/device_authorization",
+      "POST /kiosk/auth/claim",
+      "POST /kiosk/oauth/token",
+      "GET /kiosk/oauth/device/verify",
+      "POST /kiosk/auth/link",
+      "POST /kiosk/auth/unlink",
+      "GET /kiosk/auth/assistants",
+    ].freeze
+
+    DECLINED_PATHS.each do |line|
+      it "answers #{line} with a 501 module_not_served problem document" do
+        res = probe("binding_declined", line)
+        expect(res["status"]).to eq(501)
+        expect(res["headers"]["content-type"]).to include("application/problem+json")
+
+        problem = JSON.parse(res["body"])
+        expect(problem["code"]).to   eq("module_not_served")
+        expect(problem["status"]).to eq(501)
+        expect(problem["detail"]).to include("account binding")
+      end
+    end
+
+    it "still serves the core: schema answers, and auth/challenge is the CORE refusal" do
+      expect(probe("binding_declined", "GET /kiosk/schema")["status"]).to eq(200)
+
+      challenge = probe("binding_declined", "GET /kiosk/auth/challenge")
+      expect(challenge["status"]).to eq(400)
+      expect(JSON.parse(challenge["body"])["code"]).to eq("bad_request")
+    end
+
+    # §4.3: the auth block is core discovery, so nothing about the declined
+    # module is visible before a caller dials it.
+    it "publishes all six auth URLs and no binding capability" do
+      res = probe("binding_declined", "GET /.well-known/kiosk.json")
+      expect(res["status"]).to eq(200)
+
+      kiosk = JSON.parse(res["body"]).fetch("kiosk")
+      expect(kiosk.fetch("auth").keys).to include(
+        "challenge_url", "register_url", "login_url", "revoke_url",
+        "device_authorization_url", "claim_url"
+      )
+      expect(kiosk.fetch("capabilities")).to include("queries")
+      expect(kiosk.fetch("capabilities").grep(/bind/)).to be_empty
+    end
+  end
 end

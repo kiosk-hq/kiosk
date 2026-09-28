@@ -24,6 +24,8 @@ module Kiosk
     # app/views/kiosk/server/assistants/show.html.erb in the host app.
     class AssistantsController < ::ActionController::Base
       include AccountHolderGate
+      include BindingModuleGate
+      prepend_before_action :refuse_unserved_binding
 
       # What an unauthenticated visitor is told, on the 401 body and on the
       # sign-in page this origin redirects a browser to.

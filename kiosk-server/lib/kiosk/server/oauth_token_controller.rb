@@ -36,6 +36,9 @@ module Kiosk
     #            | "invalid_request"        | "unsupported_grant_type",
     #     "error_description": "..." }
     class OauthTokenController < ::ActionController::API
+      include BindingModuleGate
+      prepend_before_action :refuse_unserved_binding
+
       def create
         grant_type = params[:grant_type].to_s
         case grant_type

@@ -95,6 +95,7 @@ require "kiosk/server/verb_controller"
 require "kiosk/server/open_api_controller"
 require "kiosk/server/discovery_controller"
 require "kiosk/server/jwks_controller"
+require "kiosk/server/binding_module_gate"
 require "kiosk/server/oauth_device_authorization_controller"
 require "kiosk/server/oauth_token_controller"
 require "kiosk/server/account_holder_gate"
@@ -197,6 +198,8 @@ module Kiosk
     #   - {Kiosk::Server::DeviceVerification}         — verify-page helpers: .find_pending + .approve + .deny
     #   - {Kiosk::Server::AccountBinding}             — fresh-register / rebind / unlink + the assistant_claimed / assistant_unlinked hooks
     #   - {Kiosk::Server::LinkCode}                   — link flow service: .mint + .redeem
+    #   - {Kiosk::Server::BindingModuleGate}          — the `501 module_not_served` refusal every binding endpoint runs first
+    #   - {Kiosk::Server::AccountHolderGate}          — the signed-in-human gate the ceremony's two HTML pages share
     #   - {Kiosk::Server::OauthDeviceAuthorizationController} — POST /oauth/device_authorization
     #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token (device_code grant)
     #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify (HTML, overridable views)

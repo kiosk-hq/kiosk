@@ -253,4 +253,34 @@ report["operator_verbs"] = {
   "GET /kiosk/9lives"      => request("GET",  "/kiosk/9lives",  auth: true),
 }
 
+# Scenario 6 — THE DECLINED-BINDING PROFILE (§16.1 item 7). The same one-line
+# mount, at an origin configured `serve_account_binding = false`. This is the
+# only place the refusal is measured on real bytes through the full Rack stack,
+# which is what the `/oauth/*` half needs: the carve-out is a CONTENT TYPE
+# claim — a Kiosk problem document where that pair otherwise answers the OAuth
+# error object — and a Metal dispatch cannot show it arriving through a mount.
+#
+# The discovery document is snapshotted beside the refusals because the profile
+# is as much about what does NOT move: all six auth URLs stay published and
+# `capabilities` gains no binding member.
+Rails.application.routes.draw do
+  mount Kiosk::Server::Engine => "/kiosk"
+end
+Kiosk.configure { |c| c.serve_account_binding = false }
+report["binding_declined"] = {
+  "GET /.well-known/kiosk.json"        => request("GET",  "/.well-known/kiosk.json"),
+  "POST /kiosk/oauth/device_authorization" =>
+    request("POST", "/kiosk/oauth/device_authorization"),
+  "POST /kiosk/auth/claim"             => request("POST", "/kiosk/auth/claim"),
+  "POST /kiosk/oauth/token"            => request("POST", "/kiosk/oauth/token"),
+  "GET /kiosk/oauth/device/verify"     => request("GET",  "/kiosk/oauth/device/verify"),
+  "POST /kiosk/auth/link"              => request("POST", "/kiosk/auth/link"),
+  "POST /kiosk/auth/unlink"            => request("POST", "/kiosk/auth/unlink"),
+  "GET /kiosk/auth/assistants"         => request("GET",  "/kiosk/auth/assistants"),
+  # The core stays served: an origin declining binding is still a conformant
+  # operator, and an assistant registers plainly instead.
+  "GET /kiosk/auth/challenge"          => request("GET",  "/kiosk/auth/challenge"),
+  "GET /kiosk/schema"                  => request("GET",  "/kiosk/schema"),
+}
+
 puts JSON.generate(report)

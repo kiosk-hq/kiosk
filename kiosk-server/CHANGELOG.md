@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-28: **`c.serve_account_binding = false` declines the binding module: every binding path answers `501 module_not_served`.** Default true, and the six published auth URLs do not move.
 - 2026-09-28: **The engine's Action Cable server stops running the browser forgery check.** It refused every upgrade without an `Origin` header; the `Authorization` header is the authorisation.
 - 2026-09-28: **A signed-out human landing on the claim ceremony’s verify page is sent to the operator’s sign-in, as on the manage-assistants page.** `sign_in_path` now governs both pages.
 

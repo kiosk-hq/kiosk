@@ -40,6 +40,8 @@ module Kiosk
     # role the page never names is an approval given blind.
     class DeviceVerifyController < ::ActionController::Base
       include AccountHolderGate
+      include BindingModuleGate
+      prepend_before_action :refuse_unserved_binding
 
       # What an unauthenticated visitor is told, on the 401 body and on the
       # sign-in page this origin redirects a browser to.

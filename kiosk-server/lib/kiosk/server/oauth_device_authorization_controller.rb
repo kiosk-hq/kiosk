@@ -31,6 +31,9 @@ module Kiosk
     #     "interval":                  5
     #   }
     class OauthDeviceAuthorizationController < ::ActionController::API
+      include BindingModuleGate
+      prepend_before_action :refuse_unserved_binding
+
       def create
         client_id = params[:client_id].to_s
         if client_id.empty?

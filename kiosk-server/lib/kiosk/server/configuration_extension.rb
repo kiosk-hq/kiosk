@@ -375,6 +375,28 @@ module Kiosk
       # is unaffected.
       attr_accessor :sign_in_path
 
+      # ── The account-binding module ─────────────────────────────
+
+      # Whether this origin SERVES account binding — the claim ceremony and the
+      # link-code redeem. Binding is an OPTIONAL module; payment and KYC are
+      # the other two, and each is declined by leaving its own setting unset.
+      # Default true.
+      #
+      #   Kiosk.configure { |c| c.serve_account_binding = false }
+      #
+      # Set false and every binding path answers `501 module_not_served` — the
+      # refusal the wire names for a module this origin does not serve
+      # ({BindingModuleGate}). Discovery does not move: the auth block is core
+      # discovery and carries all six URLs on every origin, and `capabilities`
+      # has no binding member, so an assistant STARTS the ceremony and branches
+      # on the answer rather than reading a flag.
+      attr_writer :serve_account_binding
+      def serve_account_binding
+        return @serve_account_binding unless @serve_account_binding.nil?
+
+        true
+      end
+
       # ── Account-binding hooks ──────────────────────────────────
 
       # Optional callable fired when a KNOWN key is claimed onto (rebound to)

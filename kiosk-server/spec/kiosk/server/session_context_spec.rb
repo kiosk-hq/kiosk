@@ -142,17 +142,19 @@ RSpec.describe Kiosk::Server::SessionContext do
     # no served path can reach this guard, but if one ever does the wire must
     # answer a problem document and not a 500.
     it "raises a code from the closed vocabulary, not a bare exception" do
-      described_class.require_open!
-    rescue Kiosk::Server::Errors::Base => e
-      expect(e.code).to eq("unauthenticated")
-      expect(e.http_status).to eq(401)
+      expect { described_class.require_open! }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("unauthenticated")
+          expect(e.http_status).to eq(401)
+        }
     end
 
     it "names the remedy an off-wire caller has to apply" do
-      described_class.require_open!
-    rescue Kiosk::Server::Errors::Unauthenticated => e
-      expect(e.message).to include("Kiosk::Server::SessionContext.open(connection:, identity:)")
-      expect(e.message).to include("take the principal as an argument")
+      expect { described_class.require_open! }
+        .to raise_error(Kiosk::Server::Errors::Unauthenticated) { |e|
+          expect(e.message).to include("Kiosk::Server::SessionContext.open(connection:, identity:)")
+          expect(e.message).to include("take the principal as an argument")
+        }
     end
 
     it "passes inside an open session" do

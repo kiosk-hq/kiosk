@@ -694,16 +694,15 @@ RSpec.describe Kiosk::Server::Executor do
 
     it "puts module_not_served/501 on the wire for it, not a 403" do
       Kiosk.configuration.payment_provider = nil
-      begin
-        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
-      rescue Kiosk::Server::Errors::ModuleNotServed => e
-        expect(e.code).to        eq("module_not_served")
-        expect(e.http_status).to eq(501)
-        expect(e.to_problem[:type]).to eq("https://kiosk.tech/problems/module_not_served")
-        # `detail` NAMES the module — the only thing separating "no payments
-        # here" from "no KYC here" to a reader of the answer.
-        expect(e.to_problem[:detail]).to include("payment")
-      end
+      expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::ModuleNotServed) { |e|
+          expect(e.code).to        eq("module_not_served")
+          expect(e.http_status).to eq(501)
+          expect(e.to_problem[:type]).to eq("https://kiosk.tech/problems/module_not_served")
+          # `detail` NAMES the module — the only thing separating "no payments
+          # here" from "no KYC here" to a reader of the answer.
+          expect(e.to_problem[:detail]).to include("payment")
+        }
     end
 
     # K-800: THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO. `pay` is drawn on every

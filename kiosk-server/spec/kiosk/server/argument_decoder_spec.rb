@@ -127,9 +127,10 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
     end
 
     it "names the ACTION remedy in the hint rather than only refusing" do
-      decode("price%5Brange%5D%5Bmin%5D=8000")
-    rescue Kiosk::Server::Errors::BadRequest => e
-      expect(e.hint).to match(/ACTION/)
+      expect { decode("price%5Brange%5D%5Bmin%5D=8000") }
+        .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+          expect(e.hint).to match(/ACTION/)
+        }
     end
   end
 

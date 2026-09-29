@@ -176,14 +176,15 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
     it "mints the token with the role the ceremony resolves, not the pre-link one" do
       Kiosk.configure { |c| c.registration_role = :customer }
-      idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
+      idp    = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
+      issued = nil
       allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
-        expect(agent_id).to eq("agent-known")
-        expect(role).to eq("customer")
+        issued = { agent_id: agent_id, role: role }
         "kiosk-pop-jwt"
       end
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
+      expect(issued).to eq(agent_id: "agent-known", role: "customer")
     end
 
     # roles-from-IdP (Path A): a rebind carrying the NEW human's role
@@ -203,14 +204,16 @@ RSpec.describe Kiosk::Server::AccountBinding do
       end
 
       it "mints the token with the ADOPTED role, not the pre-link one" do
-        idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
+        idp    = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
+        issued = nil
         allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
-          expect(agent_id).to eq("agent-known")
-          expect(role).to eq("stylist") # adopted, not the pre-link "customer"
+          issued = { agent_id: agent_id, role: role }
           "kiosk-pop-jwt"
         end
 
         described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "stylist")
+        # adopted, not the pre-link "customer"
+        expect(issued).to eq(agent_id: "agent-known", role: "stylist")
       end
 
       it "rejects a role outside the declared set on rebind (no scope widening)" do

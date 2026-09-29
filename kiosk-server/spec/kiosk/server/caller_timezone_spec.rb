@@ -70,11 +70,12 @@ RSpec.describe Kiosk::Server::CallerTimezone do
     end
 
     it "carries a hint naming what IS accepted" do
-      described_class.from_value("nonsense")
-    rescue Kiosk::Server::Errors::BadRequest => e
-      expect(e.hint).to include("Area/Location")
-      expect(e.hint).to include("UTC")
-      expect(e.hint).to include("DST")
+      expect { described_class.from_value("nonsense") }
+        .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+          expect(e.hint).to include("Area/Location")
+          expect(e.hint).to include("UTC")
+          expect(e.hint).to include("DST")
+        }
     end
 
     it "refuses with a 400" do

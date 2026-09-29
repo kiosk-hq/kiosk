@@ -55,9 +55,10 @@ RSpec.describe Kiosk::Server::Cursor do
     end
 
     it "names the parameter and steers to the Link target in its hint" do
-      described_class.decode_offset("nope")
-    rescue Kiosk::Server::Errors::BadRequest => e
-      expect(e.to_problem.fetch(:hint)).to include("rel=\"next\"")
+      expect { described_class.decode_offset("nope") }
+        .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+          expect(e.to_problem.fetch(:hint)).to include("rel=\"next\"")
+        }
     end
   end
 end

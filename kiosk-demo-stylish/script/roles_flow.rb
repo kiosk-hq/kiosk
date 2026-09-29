@@ -90,7 +90,7 @@ def jwt_claims(token)
 end
 
 # Redeem a link code with a fresh key + possession proof, returning the minted
-# token's claims. Shared by the stub and the real-Devise paths.
+# token's claims.
 def claim_link(code, label)
   key = OpenSSL::PKey::RSA.generate(2048)
   pem = key.public_key.to_pem
@@ -134,12 +134,9 @@ abort "OWNER salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 
 owner_rows     = Array(cal)
 owner_summary  = owner_rows.find { |r| r["summary"] == "forecast" }
 owner_bookings = owner_rows.select { |r| r["kind"] == "booking" }
-results[:owner_booking_count]   = owner_bookings.size
-results[:owner_forecast_cents]  = owner_summary && owner_summary["forecast_cents"]
-results[:owner_sees_forecast]   = !owner_summary.nil?
-results[:devise_owner_token_role]   = results[:owner_token_role]
-results[:devise_owner_sees_forecast] = results[:owner_sees_forecast]
-STDERR.puts "  OWNER sees #{owner_bookings.size} bookings; forecast=#{results[:owner_forecast_cents]} cents"
+forecast_cents = owner_summary && owner_summary["forecast_cents"]
+results[:owner_sees_forecast] = !owner_summary.nil?
+STDERR.puts "  OWNER sees #{owner_bookings.size} bookings; forecast=#{forecast_cents} cents"
 
 # CUSTOMER through the same real Devise session → role customer, own bookings,
 # no forecast. Same channel, different `staff_role` — that IS the role source.
@@ -150,7 +147,6 @@ rc, cal = get_json("/kiosk/salon_calendar",
 abort "CUSTOMER (real Devise) salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
 c_rows = Array(cal)
 results[:devise_customer_sees_forecast] = c_rows.any? { |r| r["summary"] == "forecast" }
-results[:devise_customer_row_count]     = c_rows.size
 STDERR.puts "  CUSTOMER (real Devise) role=#{results[:devise_customer_token_role].inspect} sees #{c_rows.size} rows, forecast_row=#{results[:devise_customer_sees_forecast]}"
 
 puts JSON.generate(results)

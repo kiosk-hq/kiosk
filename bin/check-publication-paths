@@ -121,7 +121,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "7d421942927c0e0fef68c01cbab0119cb8d3cad99f454b18b47b8af045f7f0c8"
+TWIN_DIGEST = "45f77a508f7c816eb78c828cb0a2248025ca5e8f2ecf7b46254c4395d3e5eaf0"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -850,6 +850,14 @@ GREEN_FIXTURES = {
     "# The normative text is kiosk.tech/specification.html and kiosk.tech/spec/protocol.md §8.3;",
     "# the harness lives at reference/e2e/run.sh.",
   ],
+  # A published cut is frozen, so a citation that stops resolving is repaired in
+  # the NEXT cut and never in place -- which is what AL-5 exempts. No cut carries
+  # a section marker today, so without this fixture the entry would be a door
+  # nothing has ever opened. `§99.9` resolves to nothing, so this file is green
+  # only for as long as AL-5 fires on it.
+  "skill-v0.0.0.md" => [
+    "Pay the toll the way §99.9 of the cut this one supersedes described it.",
+  ],
   # The blanket-exempt file carries EVERY forbidden shape at once, and it takes
   # them from the table rather than re-spelling them: a fixture that re-types a
   # pattern's text drifts from it, and re-typing is also what puts a second copy
@@ -1029,7 +1037,7 @@ def run_self_test
     # exemption stopped firing the tree would redden -- and reading the
     # per-entry suppression counts back says WHICH entry did the work.
     counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
-    { "AL-2" => 1, "AL-3" => 3, "AL-4" => 2,
+    { "AL-2" => 1, "AL-3" => 3, "AL-4" => 2, "AL-5" => 1,
       "AL-7" => DECLARED_DEV_KEYS.size }.each do |id, want|
       got = counted[id].to_i
       if got < want

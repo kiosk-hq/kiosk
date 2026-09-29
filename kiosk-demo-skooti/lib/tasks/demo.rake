@@ -998,10 +998,18 @@ namespace :check do
       # i.e. KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
       # stamps and skooti's server verifies against, or the valid-KYC control
       # mismatches iss.
+
+      # The seeded rider the driver's forgery beat signs in as for its positive
+      # control. db/seeds.rb OWNS these two values; this task only re-states them
+      # so the subprocess can be handed them, the way philslist and stylish do.
+      rider_email   = "ada@example.com"
+      demo_password = "skooti-demo-password"
+
       env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                 "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                 "KIOSK_PROVE_ISSUER=#{broker[:wiring]['KIOSK_PROVE_ISSUER']} " \
-                "KIOSK_PROVE_OPERATOR_ID=#{broker[:wiring]['KIOSK_PROVE_OPERATOR_ID']}"
+                "KIOSK_PROVE_OPERATOR_ID=#{broker[:wiring]['KIOSK_PROVE_OPERATOR_ID']} " \
+                "RIDER_EMAIL=#{rider_email} DEMO_PASSWORD=#{demo_password}"
 
       system("#{env_str} bundle exec ruby #{suite_rb}")
       exit_status = $?.exitstatus

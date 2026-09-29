@@ -107,6 +107,11 @@ ISSUER     = ENV.fetch("KIOSK_ISSUER")
 # The broker's base URL (set by the two-server check:redteam harness). The
 # broker-flavored beats (theft / cross-operator / forged-callback) drive it.
 BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL")
+# The seeded rider the SelfAssertedUserBearerForgery beat signs in as for its
+# positive control. db/seeds.rb owns both values and the rake task passes them
+# through; a password literal in a driver is a second place for it to be true.
+RIDER_EMAIL   = ENV.fetch("RIDER_EMAIL")
+DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
 TRUSTED_ISSUER = ProveTrust.issuer
 
 # Wrong signing key with the TRUSTED issuer — the only adversarial property is
@@ -1243,7 +1248,7 @@ self_asserted_user_bearer_forgery = lambda do
   # Positive control: the honest channel still works, so a 401 above is the
   # forgery being refused rather than the surface being broken.
   rider = Kiosk::UserIdentityProviders::DeviseSession.new(BASE_URL)
-                       .sign_in!(email: "ada@example.com", password: "skooti-demo-password")
+                       .sign_in!(email: RIDER_EMAIL, password: DEMO_PASSWORD)
   rc_real, = rider.post_json("/kiosk/auth/link", {}, { session: true })
 
   if rc_forged == 401 && [200, 201].include?(rc_real)

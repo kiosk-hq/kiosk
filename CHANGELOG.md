@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **Security: an origin no longer writes the caller's proofs and mandates into its request log.** The engine filters its own field names; the three demos missing Rails' list now ship it.
+
 - 2026-09-29: **A topic may declare `description nil`, which the published topic descriptor has always permitted and the engine refused.** What is required is the declaration, not a truthy value.
 
 - 2026-09-29: **The in-process event store stops answering `truncated: true` for a cursor one below the retained floor.** The durable store never did; a complete range now reads as complete in both.

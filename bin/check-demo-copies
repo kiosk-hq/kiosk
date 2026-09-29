@@ -1337,6 +1337,7 @@ EXTRA_SCANNED = [
   "config/cable.yml",
   "config/environments/test.rb",
   "config/environments/production.rb",
+  "config/initializers/filter_parameter_logging.rb",
   "bin/setup",
   "bin/dev",
 ].freeze
@@ -1492,6 +1493,16 @@ COPIES = {
     why:  "One test posture for the operator seven (eager_load in CI, null cache store, " \
           "deprecations to stderr); a demo whose test env drifts is a demo whose green means " \
           "something different (K-643).",
+  },
+  "config/initializers/filter_parameter_logging.rb" => {
+    rule:   :identical,
+    why:  "One log-hygiene posture for the operator seven, and the file an adopter copies. " \
+          "kiosk-demo-prove does not ship it at all and needs no `except:`: the KYC broker " \
+          "takes no password, no card and no session. The Kiosk wire's own credential fields " \
+          "are NOT in this list and are not meant to be — kiosk-server appends those to " \
+          "`config.filter_parameters` from its own initializer, because the engine is what " \
+          "knows their names; what is here is the Rails generator's list, which covers the " \
+          "operator's own forms (K-1881).",
   },
   "config/environments/production.rb" => {
     rule:   :identical,
@@ -2026,7 +2037,6 @@ SKELETON_NOT_COMPARED = {
     "Rails generator output, identical, and inert: every line in it is commented out.",
   "config/initializers/inflections.rb" =>
     "Rails generator output, identical, and inert: every line in it is commented out.",
-  "config/initializers/filter_parameter_logging.rb" => "Rails generator output, identical where shipped.",
   "config/locales/en.yml" => "Rails generator output, identical where shipped.",
   "config.ru" => "Rails generator output, identical in all eight.",
   "Rakefile" => "Rails generator output, identical in all eight.",

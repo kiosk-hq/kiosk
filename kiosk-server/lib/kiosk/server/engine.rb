@@ -130,6 +130,25 @@ module Kiosk
                                      Kiosk::Server::HeadersMiddleware
       end
 
+      # The wire's credential-bearing request fields, kept out of the host's
+      # `Parameters:` log line: the possession proof (§5.2), the link code
+      # (§6.2), the device code (§6.1), the KYC attestation (§12) and the
+      # three payment mandates (§11).
+      #
+      # Whole keys rather than Rails' default substring match, so an
+      # operator's own `promo_code` is left alone. `public_key` is not here —
+      # §5: a public key is not a credential, it is public — and neither is
+      # the proof-of-work proof, which is not a secret and rides in the
+      # `Kiosk-PoW` request header rather than in a parameter.
+      FILTERED_PARAMETERS = %w[
+        signed code device_code kyc_jws
+        intent_mandate_jws cart_mandate_jws payment_mandate_jws
+      ].map { |field| /\A#{field}\z/ }.freeze
+
+      initializer "kiosk-server.filter_parameters" do |app|
+        app.config.filter_parameters += FILTERED_PARAMETERS
+      end
+
       # THE VERBS ARE REGISTERED BY THE ENGINE, not by the operator: an origin
       # that leaves registration to the operator serves an empty catalog, a
       # 404 wire and empty capabilities.

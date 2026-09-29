@@ -82,6 +82,15 @@ module Kiosk
       # the timer needs from it is this one answer.
       def kiosk_identity_resolves? = !resolve_identity.nil?
 
+      # Whether the credential this socket was opened with has merely run out.
+      # Spec Section 8.5.6 answers an expired token differently from a revoked
+      # one — the assistant holding it can mint another and resume — and the
+      # `exp` of the identity resolved at connect is what tells them apart.
+      def kiosk_credential_expired?
+        exp = kiosk_identity&.claims&.dig(:exp)
+        !exp.nil? && Time.now.to_i >= exp.to_i
+      end
+
       private
 
       def auto_subscribe!

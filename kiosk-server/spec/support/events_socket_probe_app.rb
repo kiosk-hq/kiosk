@@ -34,14 +34,19 @@ REVOKED    = { value: false }
 # The operator's answer to "may this subscriber read this subject", flipped
 # under a socket that is already holding one.
 REACHABLE  = { value: true }
+# The `exp` this IdP stamps on the identity it resolves, and after which it
+# stops resolving at all. Moved back under a held socket to age its token out.
+EXPIRES_AT = { value: Time.now.to_i + 3600 }
 
 class ProbeIdp
   def verify(request)
     header = request.headers["Authorization"] || request.headers["HTTP_AUTHORIZATION"]
     return nil unless header.to_s == "Bearer #{GOOD_TOKEN}"
     return nil if REVOKED[:value]
+    return nil if Time.now.to_i >= EXPIRES_AT[:value]
 
-    Kiosk::Identity.new(user_id: "u1", role: "customer", actor: "agent", agent_id: "a1")
+    Kiosk::Identity.new(user_id: "u1", role: "customer", actor: "agent", agent_id: "a1",
+                        claims: { exp: EXPIRES_AT[:value] })
   end
 end
 
@@ -365,9 +370,9 @@ begin
   plain.pump_until(seconds: 2) { false }
   REPORT[:other_socket_unsubscribed] = plain.messages.any? { |m| m["type"] == "unsubscribed" }
 
-  # 17 — the credential stops resolving. The whole connection goes, and the
-  #      client is told that coming back with this token will not help. Last,
-  #      because from here no upgrade on this origin is accepted at all.
+  # 17 — the credential stops resolving for a reason that is not expiry. The
+  #      whole connection goes, and the client is told that coming back with
+  #      this token will not help.
   REVOKED[:value] = true
   plain.pump_until(seconds: 5) { plain.frames.any? { |f| f["type"] == "disconnect" } }
   REPORT[:revoked_frame] = plain.frames.find { |f| f["type"] == "disconnect" }
@@ -375,6 +380,17 @@ begin
   REPORT[:revoked_socket_closed] = plain.closed?
   held.close
   plain.close
+
+  # 18 — the access token AGES OUT under a held socket. The two sockets differ
+  #      in nothing but their credential's `exp`, and that is what separates
+  #      "come back" from "stop". Last, because after it no upgrade resolves.
+  REVOKED[:value] = false
+  EXPIRES_AT[:value] = Time.now.to_i + 3
+  expiring = connect(port, path: "/kiosk/events?topic=order_payment")
+  expiring.pump_until { expiring.messages.any? { |m| m["type"] == "subscribed" } }
+  expiring.pump_until(seconds: 8) { expiring.frames.any? { |f| f["type"] == "disconnect" } }
+  REPORT[:expired_frame] = expiring.frames.find { |f| f["type"] == "disconnect" }
+  expiring.close
 
   REPORT[:ok] = true
 rescue StandardError => e

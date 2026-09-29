@@ -171,12 +171,9 @@ class KioskEvents < ActionCable::Channel::Base
     false
   end
 
-  # Runs every REAUTHORISE_EVERY_SECONDS. Two different failures, two different
-  # answers, and the difference matters to a client deciding whether to come
-  # back: a reach that was withdrawn is about THIS subscription, while a
-  # revoked token is about the whole connection and will not change by
-  # reconnecting — a client that retries into it is a reconnect storm against
-  # an origin whose answer is fixed.
+  # Runs every REAUTHORISE_EVERY_SECONDS. A reach that was withdrawn is about
+  # THIS subscription; a credential the identity chain no longer resolves is
+  # about the whole connection, so the connection goes with it.
   #
   # Either answer is FINAL for this subscription, so the declaration is
   # dropped with it: the timer goes on firing until the client closes, and
@@ -186,9 +183,7 @@ class KioskEvents < ActionCable::Channel::Base
 
     unless connection.kiosk_identity_resolves?
       @declaration = nil
-      connection.transmit(
-        "type" => "disconnect", "reason" => "revoked", "reconnect" => false
-      )
+      connection.transmit(disconnect_frame)
       connection.close
       return
     end
@@ -204,5 +199,19 @@ class KioskEvents < ActionCable::Channel::Base
     # Action Cable's worker pool swallows this into the HOST application's
     # logger, where nothing of ours reads it. Say it here instead.
     logger&.error("[kiosk] events re-authorisation failed: #{e.class}: #{e.message}")
+  end
+
+  # Spec Section 8.5.6. `reconnect` rather than the reason is what a client
+  # acts on, so the two cases must not be conflated: an access token that
+  # merely aged out is renewable by challenge-response, while anything else
+  # the identity chain refuses — a revoked watermark above all — answers the
+  # same to a fresh socket, and a client that retries into it is a reconnect
+  # storm against an origin whose answer is fixed.
+  def disconnect_frame
+    if connection.kiosk_credential_expired?
+      { "type" => "disconnect", "reason" => "token_expired", "reconnect" => true }
+    else
+      { "type" => "disconnect", "reason" => "revoked", "reconnect" => false }
+    end
   end
 end

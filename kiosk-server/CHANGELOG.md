@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-29: **The stream tells an expired credential from a revoked one**: `token_expired` with `reconnect: true` where the identity chain refused a token that had simply reached its `exp`.
+
 - 2026-09-29: **Security: the event stream's re-authorisation now runs.** A withdrawn reach gets `unsubscribed` and a credential that stops resolving gets `disconnect` and a closed socket.
 
 - 2026-09-29: **The manage-assistants listing only swallows a MISSING settlements table.** Any other statement error now raises instead of rendering a 200 with settled 0.

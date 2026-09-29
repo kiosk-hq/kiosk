@@ -177,5 +177,14 @@ RSpec.describe "the Kiosk event stream over a real socket" do
         .to eq("type" => "disconnect", "reason" => "revoked", "reconnect" => false)
       expect(report["revoked_socket_closed"]).to be(true)
     end
+
+    # The one case where coming back WOULD have worked: an access token is
+    # short-lived and a held socket outlives it, so the assistant mints another
+    # by challenge-response and resumes from its cursor. The two sockets differ
+    # in nothing but their credential's `exp`.
+    it "tells a client whose access token merely aged out to come back" do
+      expect(report["expired_frame"])
+        .to eq("type" => "disconnect", "reason" => "token_expired", "reconnect" => true)
+    end
   end
 end

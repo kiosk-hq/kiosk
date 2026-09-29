@@ -83,10 +83,6 @@ class KioskEvents < ActionCable::Channel::Base
     replay!
   end
 
-  def unsubscribed
-    stop_all_streams
-  end
-
   private
 
   def identity_key = connection.kiosk_identity_key

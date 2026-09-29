@@ -1335,7 +1335,7 @@ def report(result, quiet:)
       puts
       puts "check-prose-counts: OK -- every count in shipped prose is re-derivable or declared " \
            "excused, and every declared command agrees with the number beside it."
-      puts "(Consistency, never truth. See the header for the six things this cannot catch.)"
+      puts "(Consistency, never truth. The header lists what this cannot catch.)"
     end
     return 0
   end

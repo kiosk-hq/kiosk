@@ -68,8 +68,8 @@ require_relative "equihash_register"
 #
 # The counter wraps the helper's `equihash_solve` HERE, in the per-demo driver,
 # rather than inside `script/equihash_register.rb` — that file is held in
-# lockstep across seven demos by bin/check-demo-copies, and none of the other
-# six needs a counter.
+# lockstep across seven demos by bin/check-demo-copies, and a driver that pays
+# no tolled query has nothing to count.
 POW_SOLVES = { total: 0 }
 alias equihash_solve_uncounted equihash_solve
 def equihash_solve(challenge)

@@ -1335,12 +1335,12 @@ jobs:
 
   # `spec/conformance-drift-baseline.tsv` is the anchors manifest's sibling: a
   # GENERATED file recording each anchored region's fingerprint, so a conformance
-  # sweep can re-judge what MOVED instead of walking ~185 rows blind. It had no
-  # staleness check of any kind, where the manifest has one — and it showed: the
-  # first committed baseline's header read "sampling ~185 rows blind" where its
-  # own committed generator has emitted "sampling the matrix blind" since 918a56f2,
-  # so the file had been produced by a draft that no longer existed and nothing in
-  # the tree could say so.
+  # sweep can re-judge what MOVED instead of walking a work-list with no
+  # change-detection on it. It had no staleness check of any kind, where the
+  # manifest has one — and it showed: the first committed baseline's header read
+  # "sampling ~185 rows blind" where its own committed generator has emitted
+  # "sampling the matrix blind" since 918a56f2, so the file had been produced by a
+  # draft that no longer existed and nothing in the tree could say so.
   #
   # THE MANIFEST'S RULE IS NOT THE RULE HERE, deliberately. "Equal to what the
   # generator would write at head" would force the baseline forward on every

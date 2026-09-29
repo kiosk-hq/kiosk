@@ -20,12 +20,10 @@
 # and refuses to guess: it never edits in place, never patches a line, and never
 # merges. It ships the whole file or it ships nothing.
 #
-# WHAT MAKES THAT SAFE, and it is checked rather than assumed: the live file is
-# read first, and it is 49 lines, ALL of them Kiosk — eight demo vhosts and one
-# snippet, no other sites. Owning the whole file is the right design only while
-# that holds. If this box ever gains a non-Kiosk vhost, this script has to
-# manage a FRAGMENT instead, so re-read /etc/caddy/Caddyfile before assuming it
-# still holds.
+# WHAT MAKES THAT SAFE: every vhost on the box is Kiosk's. Owning the whole
+# file is the right design only while that holds, so --check prints the diff
+# against the live file and you read it before --apply. If this box ever gains
+# a non-Kiosk vhost, this script has to manage a FRAGMENT instead.
 
 set -euo pipefail
 

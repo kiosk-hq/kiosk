@@ -510,7 +510,7 @@ def self_test
       root = fixture_root(dir)
       setup.call(root)
       rep = check(root)
-      arms << name
+      arms << [name, tag]
       if tag.nil?
         failures << "#{name}: expected GREEN, got: #{rep.failures.first}" unless rep.failures.empty?
       elsif rep.failures.empty?
@@ -610,10 +610,31 @@ def self_test
     end
   end
 
+  # Every token of the EVIDENCE vocabulary is split character by character, so no
+  # alternative of it survives and the beats that still claim a refusal of a
+  # constrained argument read nothing. RA-1 reddens beside it; the arm demands the
+  # RA-V4 tag, which is the one that says the PATTERN died rather than the tree.
+  run.call("RA-V4 — no predicate reads a refusal's words any more", "RA-V4") do |root|
+    (Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/*.rake")) +
+     Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb"))).each do |p|
+      File.write(p, File.read(p).gsub(EVIDENCE) { |m| m.chars.join("-") })
+    end
+  end
+
+  # The coverage claim is DERIVED from this file, so a fifth in-band vacuity check
+  # reads as UNPROVEN on the day it is written rather than being counted by hand.
+  declared_v = File.read(__FILE__).scan(/failures << "\[(RA-V\d+)\]/).flatten.uniq.sort
+  armed_v    = arms.filter_map { |(_, t)| t if t.to_s.start_with?("RA-V") }.uniq.sort
+  unless (unproven = declared_v - armed_v).empty?
+    failures << "#{unproven.join(', ')}: an in-band vacuity check with no arm — add one that " \
+                "drains its counter. A check nothing proves fires is in the position of the " \
+                "thing it watches."
+  end
+
   if failures.empty?
     puts "check-refusal-assertions --self-test: OK — #{arms.length} arm(s): the rule at each hop " \
          "it reads, the 403 scope line in both directions, the ellipsis continuation in both, and " \
-         "one vacuity arm per pattern."
+         "#{armed_v.length} vacuity arm(s) over #{declared_v.length} in-band vacuity check(s)."
     exit 0
   end
 

@@ -53,16 +53,6 @@ BoundAssistant = Struct.new(:agent_id, :user_id, :token, :key, :pem, :session,
     seg = token.split(".")[1]
     JSON.parse(Base64.urlsafe_decode64(seg + "=" * ((4 - seg.length % 4) % 4)))
   end
-
-  # A fresh possession proof for this key — `/auth/login`, a second claim, or
-  # any beat that needs to re-prove the key.
-  def pop_proof(issuer)
-    rc, ch = session.get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-    raise "challenge failed (#{rc}): #{JSON.generate(ch)}" unless rc == 200
-
-    JWT.encode({ aud: issuer, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-               key, "RS256")
-  end
 end
 
 # Run the full register -> link -> claim ceremony and return a {BoundAssistant}.

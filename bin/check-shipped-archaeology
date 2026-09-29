@@ -304,7 +304,7 @@
 #       the same reason. These are the two idioms K-1510 measured walking
 #       straight through R6's fixed word list. They are a CENSUS rather than
 #       new markers on that list because a ban on either would demand a repair
-#       that is wrong. See the census section below for the measurement.
+#       that is wrong. See the census section below.
 #   C3  the TENSE CONTRAST — a past copula answered by an explicit «it is now»
 #       — PRINTED, NEVER RED (K-1515). R6's list is lexical and this shape
 #       carries none of its words: «Was the DEFAULT while the log was a table;
@@ -514,45 +514,18 @@
 # a retired element in words the list does not carry — the adjective «retired»
 # and the pluperfect «it had been» — and the guard was green on all four.
 #
-# THE INSTRUMENT WAS CHOSEN BY MEASUREMENT, NOT BY TASTE, and the measurement
-# says a ban would be wrong. Read by THIS SCRIPT over its own four scopes at the
-# head that added it, 2026-09-12 — which is the file set that matters, and it
-# is wider than a hand-run pathspec. That reading is a claim about that day and
-# not a live count; what is live is the run's own census, which prints what it
-# finds. On that day `retired` stood at SIX lines and every one of them was
-# LIVE —
-#
-#   * `kiosk-pow/README.md` and `kiosk-pow/kiosk-pow.gemspec` call that gem the
-#     «Retired / optional» backend. That is the gem's status TODAY, on a gem an
-#     adopter can still add to a Gemfile; it is what stops them picking it.
-#   * `kiosk-server/lib/kiosk/server/open_api.rb` says «`params` is the RETIRED
-#     slot and is published as null». The slot is IN the document a reader
-#     fetches, and this sentence is what tells them what they will find in it.
-#   * `deploy/README.md` says `box-prep-…sh` «strips the retired
-#     KIOSK_POW_DEMO/… flags that current code refuses at boot». The word is
-#     load-bearing and the caveat is live: the flags are gone from the code and
-#     may still be in a box's env file, which is why the script exists.
-#   * `deploy/Caddyfile` warns that «the retired live limit was 1 req/s … and
-#     neither number has a recorded derivation» — a bound an operator may still
-#     be running.
-#   * `deploy/check-live-hsts.sh` says «THIS SCRIPT IS NOT RETIRED BY THAT and
-#     must not be», which is a maintainer rule addressed to a future editor and
-#     is the shape the R5/R6 header already declares must never redden.
-#
-# A rule that reddened on those six would demand six repairs that each make the
-# document worse, which is the definition of a gate somebody switches off.
-# The pluperfect is the same story one degree weaker: `had been` stands at
-# THREE, and one of them — philslist's red-team beat, «nothing in the response
-# saying the filter had been discarded» — is an assertion about what the server
-# does NOW, phrased in the tense the attack needs.
-#
-# THOSE NINE ARE A READING OF ONE DAY AND THE CENSUS RE-DERIVES THEM ON EVERY
-# RUN. Read the rows the script prints and the CENSUS TOTALS block beneath them,
-# not this paragraph. (Re-measured when K-1516 rewrote C1's header, the nine
-# still reproduce exactly — six `retired`, three `had been` — which is why this
-# paragraph keeps its enumeration where C1's lost its integers: an enumeration
-# a reader can check against the printed rows is not the same object as a bare
-# count nothing holds. It is still a reading of one day.)
+# A BAN ON EITHER IDIOM WOULD BE WRONG, AND THE SHAPE IS WHAT DECIDES IT.
+# `retired` is most often a STATUS a reader can still meet — a component still
+# installable but no longer the one to pick, a document slot still published
+# and empty, a flag a deployed box may still carry — and a caveat about
+# something still in front of the reader is what this repository ships
+# documents FOR. The pluperfect is the same one degree weaker: an assertion
+# about what the server does NOW is phrased in that tense whenever the thing
+# asserted is the absence of an earlier step. A rule that reddened on those
+# would demand repairs that each make the document worse, which is the
+# definition of a gate somebody switches off. So both are a census, and the
+# SIZE is the run's to state: read the rows it prints and the CENSUS TOTALS
+# block beneath them, never a figure typed into this comment.
 #
 # AND THE WIDER RETIREMENT VOCABULARY IS NOT EVEN A CANDIDATE, which is the
 # other half of why this is a census. `once`, `old`, `deprecat…`, `no longer`,

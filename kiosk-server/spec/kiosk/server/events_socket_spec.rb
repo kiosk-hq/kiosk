@@ -73,6 +73,31 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     it "accepts an upgrade whose Origin names somewhere else entirely" do
       expect(report["foreign_origin_welcomed"]).to be(true)
     end
+
+    # Spec Section 8.5.3: an operator that completes the handshake and then
+    # refuses on the credential MUST say so. Without it the refused socket is
+    # open, silent and indistinguishable from a quiet one.
+    it "tells a refused upgrade so, and says nothing else" do
+      expect(report["no_auth_frames"])
+        .to eq([{ "type" => "disconnect", "reason" => "unauthorized", "reconnect" => false }])
+    end
+  end
+
+  # Spec Section 8.5.4. The envelope is the wire a port has to produce, and the
+  # level a frame arrives at is what a subscriber reads it by: a subscription's
+  # own frames are wrapped, the connection's are not.
+  describe "the actioncable-v1-json framing" do
+    it "wraps a subscription's own frames, echoing the identifier it was given" do
+      expect(report["subscribed_envelope"].keys).to contain_exactly("identifier", "message")
+      expect(JSON.parse(report["subscribed_envelope"]["identifier"]))
+        .to eq("channel" => "KioskEvents", "topic" => "order_payment")
+    end
+
+    it "confirms a live subscription at top level, with the identifier and no message" do
+      expect(report["confirmation"])
+        .to eq("identifier" => report["subscribed_envelope"]["identifier"],
+               "type" => "confirm_subscription")
+    end
   end
 
   describe "subscribing" do

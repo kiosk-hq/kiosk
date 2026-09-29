@@ -215,6 +215,10 @@ begin
   # never the 101.
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
   REPORT[:no_auth_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
+  # Everything the refused socket is told before it goes, which is the typed
+  # disconnect spec Section 8.5.3 names and nothing else.
+  sock.pump_until(seconds: 2) { sock.closed? }
+  REPORT[:no_auth_frames] = sock.frames
   sock.close
 
   # 2 — a bad token: refused.
@@ -243,6 +247,13 @@ begin
   sock.subscribe(identifier("order_payment"))
   sock.pump_until { sock.messages.any? { |m| m["type"] == "subscribed" } }
   REPORT[:subscribed] = sock.messages.find { |m| m["type"] == "subscribed" }
+  # The FRAME the confirmation travels in, rather than the message inside it:
+  # everything about one subscription is wrapped, and everything about the
+  # connection is not (spec Section 8.5.4).
+  REPORT[:subscribed_envelope] =
+    sock.frames.find { |f| f.dig("message", "type") == "subscribed" }
+  sock.pump_until { sock.frames.any? { |f| f["type"] == "confirm_subscription" } }
+  REPORT[:confirmation] = sock.frames.find { |f| f["type"] == "confirm_subscription" }
 
   # 5 — an UNdeclared topic is rejected, not streamed empty.
   sock.subscribe(identifier("nope"))

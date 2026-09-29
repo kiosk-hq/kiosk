@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1753 anchors.
+# 1756 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1391,9 +1391,12 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	still maps 404 to not_found, the o
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts a caller the ordinary identity chain resolves, and welcomes it
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts an upgrade that carries NO Origin header
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts an upgrade whose Origin names somewhere else entirely
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	confirms a live subscription at top level, with the identifier and no message
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a VALID token presented only in the query string
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a caller presenting a token the IdP does not know
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a caller presenting no Authorization header
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	tells a refused upgrade so, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	wraps a subscription's own frames, echoing the identifier it was given
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	hits ONE cap across both spellings
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spelling is not identity (K-1251)

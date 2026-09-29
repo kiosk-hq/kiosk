@@ -16,7 +16,7 @@
 # and no payments block in agents.json / agents.txt.
 #
 # Usage:
-#   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/schema_flow.rb
+#   SERVER_URL=http://127.0.0.1:3007 bundle exec ruby script/schema_flow.rb
 # Prints ONE JSON line on stdout; non-zero exit on transport failure.
 
 require "json"

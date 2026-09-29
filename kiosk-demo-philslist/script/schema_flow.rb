@@ -3,7 +3,7 @@
 # Self-discovery proof driver — verifies the `schema` verb AND the discovery
 # documents over HTTP, with the load-bearing NOT-ONLY-COMMERCE assertions.
 #
-# Boots against a running tudu server and calls, with NO credential at all:
+# Boots against a running philslist server and calls, with NO credential at all:
 #   GET /kiosk/schema
 #   GET /.well-known/kiosk.json
 #   GET /agents.json
@@ -16,7 +16,7 @@
 # and no payments block in agents.json / agents.txt.
 #
 # Usage:
-#   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/schema_flow.rb
+#   SERVER_URL=http://127.0.0.1:3006 bundle exec ruby script/schema_flow.rb
 # Prints ONE JSON line on stdout; non-zero exit on transport failure.
 
 require "json"

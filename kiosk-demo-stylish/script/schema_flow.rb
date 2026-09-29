@@ -8,9 +8,7 @@
 # and emits ONE JSON line the check:schema rake task asserts on.
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3005 \
-#   KIOSK_ISSUER=http://127.0.0.1:3005 \
-#   bundle exec ruby script/schema_flow.rb
+#   SERVER_URL=http://127.0.0.1:3005 bundle exec ruby script/schema_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on transport failure.
 

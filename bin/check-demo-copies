@@ -1943,8 +1943,9 @@ COPIES = {
               "`/kiosk/schema`, `/.well-known/kiosk.json`, `/agents.json` and `/agents.txt` with NO " \
               "credential and emits one JSON line; the per-demo part — which capabilities and which " \
               "verbs that line must carry — lives entirely in each demo's `check:schema` rake task, " \
-              "which is where it belongs. The two copies differ only in the operator's name in a " \
-              "comment and the port in a usage line. Held rather than " \
+              "which is where it belongs. This rule compares the NORMALISED body, so each copy's " \
+              "header names its own origin and its own port in its usage line, and that is the " \
+              "only thing that differs between them (K-1909). Held rather than " \
               "recorded, because the load-bearing half is an ABSENCE that a one-sided edit would " \
               "restore without failing anything: sending no Authorization header IS the T-094 " \
               "assertion that `schema` is public, and a copy that quietly re-added a Bearer token " \
@@ -1965,7 +1966,8 @@ COPIES = {
               "own `check:schema` rake task. Held for the same reason as the group above: the " \
               "load-bearing half is an ABSENCE, so a copy that quietly re-added a Bearer " \
               "token would still pass its own demo while proving the opposite of what it " \
-              "claims.",
+              "claims. As in the group above, each copy's header names its own origin and " \
+              "its own port (K-1909).",
       },
     },
   },

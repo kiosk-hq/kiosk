@@ -2,16 +2,14 @@
 
 # Self-discovery proof driver — the schema verb over HTTP.
 #
-# Boots against a running hoteling server and calls, with NO credential at
+# Boots against a running skooti server and calls, with NO credential at
 # all:
 #   GET /kiosk/schema            (unauthenticated — the catalogue is public)
 #   GET /.well-known/kiosk.json  (the one document carrying the module set)
 # and prints one JSON line on stdout.
 #
 # Usage (invoked by rake check:schema — do not run standalone without the server):
-#   SERVER_URL=http://127.0.0.1:3003 \
-#   KIOSK_ISSUER=http://127.0.0.1:3003 \
-#   bundle exec ruby script/schema_flow.rb
+#   SERVER_URL=http://127.0.0.1:3004 bundle exec ruby script/schema_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any HTTP failure.
 

@@ -164,14 +164,20 @@ processor = ScriptedProcessor.new(
 sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: processor, older_than_seconds: 600)
 unresolved_ids = sweep[:unresolved].map { |row| row[:order_id] }
 
-check(sweep[:healed].include?(charged), "the processor says CHARGED → healed (healed=#{sweep[:healed].size})")
-check(status_of(charged) == "paid", "…and the order is `paid`")
+charged_healed = sweep[:healed].include?(charged)
+charged_paid   = status_of(charged) == "paid"
+check(charged_healed, "the processor says CHARGED → healed (healed=#{sweep[:healed].size})")
+check(charged_paid, "…and the order is `paid`")
 
-check(sweep[:released].include?(declined), "the processor says NOT CHARGED → released (released=#{sweep[:released].size})")
-check(status_of(declined) == "created", "…and the order is back at `created`, payable again")
+declined_released = sweep[:released].include?(declined)
+declined_payable  = status_of(declined) == "created"
+check(declined_released, "the processor says NOT CHARGED → released (released=#{sweep[:released].size})")
+check(declined_payable, "…and the order is back at `created`, payable again")
 
-check(unresolved_ids.include?(silent), "the processor CANNOT SAY → UNRESOLVED")
-check(status_of(silent) == "paying", "…and the claim is kept (a blind retry stays impossible)")
+silent_unresolved = unresolved_ids.include?(silent)
+silent_claim_kept = status_of(silent) == "paying"
+check(silent_unresolved, "the processor CANNOT SAY → UNRESOLVED")
+check(silent_claim_kept, "…and the claim is kept (a blind retry stays impossible)")
 check(sweep[:unresolved].find { |row| row[:order_id] == silent }[:cart_mandate_ids] == ["cart-SILENT"],
       "…reported with the cart-mandate id to look up by hand")
 
@@ -203,8 +209,9 @@ check(canned.any?, "stripe-mock answers the search with a canned intent (#{canne
 check(StripeChargeLookup::NOT_CHARGED.include?(canned.first.status),
       "…in a status that would RELEASE a claim on its own (#{canned.first.status})")
 
-lookup = StripeChargeLookup.new
-check(lookup.outcome(cart_mandate_id: mock_mandate, amount_cents: CHEAP_PRICE, currency: "eur") == :unknown,
+lookup       = StripeChargeLookup.new
+mock_outcome = lookup.outcome(cart_mandate_id: mock_mandate, amount_cents: CHEAP_PRICE, currency: "eur")
+check(mock_outcome == :unknown,
       "…and the evidence check refuses it: it names no cart, amount or currency of ours")
 
 mock_sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: lookup, older_than_seconds: 600)
@@ -214,10 +221,18 @@ check(mock_sweep[:released].empty?, "…releases nothing (released=#{mock_sweep[
 check(status_of(mock_order) == "paying", "…and the claim is kept")
 
 # ── Verdict ─────────────────────────────────────────────────────────────────
+#
+# Every member is READ OFF the run — the value its own `check` above asserted on
+# — and the line prints whatever the outcome, so a breach shows up in it instead
+# of suppressing it. The exit code follows FAILURES, which is what `rake
+# check:reconcile` reads.
 puts
+puts JSON.generate(healed:               charged_healed && charged_paid,
+                   released:             declined_released && declined_payable,
+                   unresolved:           silent_unresolved && silent_claim_kept,
+                   mock_fixture_refused: mock_outcome == :unknown)
 if FAILURES.empty?
   puts "getgrocery stuck-`paying` reconciliation: ALL PASS"
-  puts JSON.generate(healed: true, released: true, unresolved: true, mock_fixture_refused: true)
   exit 0
 else
   puts "getgrocery stuck-`paying` reconciliation: #{FAILURES.size} FAILURE(S)"

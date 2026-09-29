@@ -236,10 +236,12 @@ orders_before = orders_held
 other = create_order!(items: [{ sku: DEAR_SKU, qty: 100 }], delivery_slot_id: 3,
                       delivery_date: FUTURE, delivery_address: ADDRESS)
 
-o_after = order_row(order_id)
-check(o_after["total_cents"].to_i == CHEAP_PRICE,
+o_after      = order_row(order_id)
+total_kept   = o_after["total_cents"].to_i == CHEAP_PRICE
+separate_row = other["order_id"] != order_id
+check(total_kept,
       "order O still holds the CHEAP total (#{o_after["total_cents"]}c == #{CHEAP_PRICE}c) — untouched by the second order")
-check(other["order_id"] != order_id,
+check(separate_row,
       "…and the expensive cart landed on a DIFFERENT order (#{other["order_id"]}), never on O")
 check(orders_held == orders_before + 1,
       "…as one new row and not a rewrite of an old one (#{orders_held} orders, was #{orders_before})")
@@ -259,7 +261,8 @@ check(state_inflight != "unpaid",
 blocking.release!
 pay_thread.join
 
-check(blocking.charged_cents == CHEAP_PRICE,
+charged_cheap = blocking.charged_cents == CHEAP_PRICE
+check(charged_cheap,
       "the PSP was asked to charge the CHEAP amount (#{blocking.charged_cents}c), never the swapped-in expensive total")
 check(order_row(order_id)["status"] == "paid", "order O settled to `paid` after capture")
 
@@ -324,10 +327,15 @@ oks     = outcomes.count { |o| o == :ok }
 denied  = outcomes.count { |o| o.is_a?(Array) && o.first == :denied }
 errored = outcomes.select { |o| o.is_a?(Array) && o.first == :error }
 
-check(counting.count == 1, "exactly ONE capture fired across #{n} racing pays (got #{counting.count})")
-check(oks == 1,            "exactly ONE /pay succeeded (got #{oks})")
-check(denied == n - 1,     "the other #{n - 1} /pay were cleanly rejected (got #{denied} denied)")
-check(errored.empty?,      "no /pay produced a raw error (got #{errored.inspect})")
+one_capture   = counting.count == 1
+one_accepted  = oks == 1
+rest_rejected = denied == n - 1
+no_raw_error  = errored.empty?
+
+check(one_capture,   "exactly ONE capture fired across #{n} racing pays (got #{counting.count})")
+check(one_accepted,  "exactly ONE /pay succeeded (got #{oks})")
+check(rest_rejected, "the other #{n - 1} /pay were cleanly rejected (got #{denied} denied)")
+check(no_raw_error,  "no /pay produced a raw error (got #{errored.inspect})")
 check(order_row(order2)["status"] == "paid", "order O2 settled to `paid`")
 
 puts "\n== a malformed order_id is a typed 4xx, never a 500 =="
@@ -346,6 +354,8 @@ bad_error = begin
 rescue StandardError => e
   e
 end
+
+malformed_code = bad_error.respond_to?(:code) ? bad_error.code : nil
 
 check(bad_error.is_a?(Kiosk::Server::Errors::BadRequest),
       "a malformed order_id raises BadRequest (got #{bad_error.class})")
@@ -486,8 +496,10 @@ knows_nothing = Class.new { def outcome(**_kwargs) = :unknown }.new
 sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: knows_nothing, older_than_seconds: 600)
 unresolved_ids = sweep[:unresolved].map { |r| r[:order_id] }
 
-check(sweep[:healed].include?(charged_order), "sweep healed the settled order (healed=#{sweep[:healed].size})")
-check(order_row(charged_order)["status"] == "paid", "…its status is `paid`")
+sweep_healed_charged = sweep[:healed].include?(charged_order)
+charged_now_paid     = order_row(charged_order)["status"] == "paid"
+check(sweep_healed_charged, "sweep healed the settled order (healed=#{sweep[:healed].size})")
+check(charged_now_paid, "…its status is `paid`")
 check(unresolved_ids.include?(unknown_order), "sweep reported the unprovable order as UNRESOLVED")
 check(order_row(unknown_order)["status"] == "paying",
       "…and did NOT release its claim (a blind retry stays impossible)")
@@ -497,11 +509,19 @@ check(!sweep[:healed].include?(young_order) && !unresolved_ids.include?(young_or
       "a freshly-claimed order (pay still in flight) is left alone by the sweep")
 
 # ── Verdict ─────────────────────────────────────────────────────────────────
+#
+# Every member is READ OFF the run — the value its own `check` above asserted on
+# — and the line prints whatever the outcome, so a breach shows up in it instead
+# of suppressing it. The exit code follows FAILURES, which is what `rake
+# check:race` reads.
 puts
+puts JSON.generate(swap_blocked:        total_kept && separate_row && charged_cheap,
+                   at_most_once:        one_capture && one_accepted && rest_rejected && no_raw_error,
+                   captures_under_race: counting.count,
+                   malformed_order_id:  malformed_code,
+                   stuck_paying_healed: sweep_healed_charged && charged_now_paid)
 if FAILURES.empty?
   puts "getgrocery pay-path spec: ALL PASS"
-  puts JSON.generate(swap_blocked: true, at_most_once: true, captures_under_race: counting.count,
-                     malformed_order_id: "bad_request", stuck_paying_healed: true)
   exit 0
 else
   puts "getgrocery pay-path spec: #{FAILURES.size} FAILURE(S)"

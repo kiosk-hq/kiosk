@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The topic registry — the events half of what {Kiosk::Server::Queries} and
-# {Kiosk::Server::Actions} are for verbs (T-169 phase A task 1).
+# {Kiosk::Server::Actions} are for verbs.
 #
 # Written from the OPERATOR's side, like handler_mixin_spec.rb beside it: every
 # example declares a topic the way a demo will and then reads the registry the
@@ -69,14 +69,13 @@ RSpec.describe Kiosk::Server::Events do
     expect(verb[:description]).to eq("A verb.")
   end
 
-  # ── RELOAD, which is where the first spelling of this was wrong ──────────
+  # ── RELOAD ───────────────────────────────────────────────────────────────
   #
-  # `topic` used to call `Events.register` from the class body, so the SECOND
-  # read of that body — a Zeitwerk reload, or an eager load following a lazy
-  # one — met its own first registration and raised «already declared on this
-  # origin» at boot. Measured in e2e, where `db:seed` loads the controller
-  # twice in one process. The declaration is held on the class now and drained
-  # by `kiosk_register!`, exactly as a verb is.
+  # A class body is read more than once: a Zeitwerk reload, an eager load after
+  # a lazy one, `db:seed` loading a controller twice in one process. Registering
+  # from the body meets its own first registration on the second read and raises
+  # «already declared on this origin» at boot, so `topic` holds its declaration
+  # on the class and `kiosk_register!` drains it, exactly as a verb does.
   it "survives the class body being read twice, as every reload reads it" do
     declaring = lambda do
       controller.class_eval do
@@ -112,7 +111,7 @@ RSpec.describe Kiosk::Server::Events do
   end
 
   # THE PROPERTY HOLDING THE DECLARATION ON THE CLASS ACTUALLY BUYS, and the one
-  # neither example above asserts (K-1805). Re-registering an identical frozen
+  # neither example above asserts. Re-registering an identical frozen
   # declaration is a no-op, and `clear!` empties the registry however the macro
   # wrote into it — so the cheaper spelling, `topic` calling `Events.register`
   # as the class body runs, passes both of them and looks equally green. What it
@@ -293,8 +292,7 @@ RSpec.describe Kiosk::Server::Events do
   end
 end
 
-# `emit` — the one line an operator writes at the transition (T-169 phase A
-# task 2). The scope it takes is the OPERATOR's answer to "who may read this",
+# `emit` — the one line an operator writes at the transition. The scope it takes is the OPERATOR's answer to "who may read this",
 # computed where the domain knows it; `reach` authorises a SUBSCRIPTION and is a
 # different question, answered at the socket.
 RSpec.describe "Kiosk::Server::Events.emit" do
@@ -373,7 +371,7 @@ RSpec.describe "Kiosk::Server::Events.emit" do
 end
 
 # The events surface as an operator and an assistant SEE it: a third catalogue
-# array, a fifth capability, and a discovery field (T-169 phase A task 4).
+# array, a fifth capability, and a discovery field.
 RSpec.describe "the events surface in the catalogue and discovery" do
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
 

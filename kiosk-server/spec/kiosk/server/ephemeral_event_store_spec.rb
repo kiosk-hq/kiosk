@@ -1,15 +1,13 @@
 # frozen_string_literal: true
 
-# K-1804 — the boot refusal for a production origin that declares an event
-# topic and leaves the IN-PROCESS event store in place.
+# The boot refusal for a production origin that declares an event topic and
+# leaves the IN-PROCESS event store in place.
 #
-# The class K-1792 could not close. That row moved four demos onto the durable
-# store one file at a time; every one of them had the defect at once and CI was
-# green over all of them, because nothing anywhere tied «declares a topic» to
-# «sets a durable store» — no default, no refusal, no warning, no check. The
-# engine is the only place that reaches an operator who is not us: a check over
-# this tree sees our seven demos and nobody else's origin, and a corpus example
-# sees only suites that run it.
+# Nothing else ties «declares a topic» to «sets a durable store» — no default,
+# no refusal, no warning, no check — and the engine is the only place that
+# reaches an operator who is not us: a check over this tree sees our seven
+# demos and nobody else's origin, and a corpus example sees only suites that
+# run it.
 #
 # The condition lives on the engine class rather than inside its
 # `after_initialize` block so it can be asserted without booting a production

@@ -39,11 +39,10 @@ class KioskEvents < ActionCable::Channel::Base
     # topic, and the client would wait forever on a name it got wrong.
     return reject unless declaration
 
-    # ORDER MATTERS AND IT BIT ONCE: `reachable?` reads `@subject`, so the
-    # assignment has to precede it. With it after, every `consented`
-    # subscription authorised against a nil subject and was refused — including
-    # the ones that should have been allowed, which reads from the outside like
-    # a working deny rule.
+    # ORDER MATTERS: `reachable?` reads `@subject`, so the assignment has to
+    # precede it. After it, every `consented` subscription authorises against a
+    # nil subject and is refused — including the ones that should be allowed,
+    # which reads from the outside like a working deny rule.
     @topic = topic
     @subject = params[:subject]
     @declaration = declaration
@@ -74,10 +73,9 @@ class KioskEvents < ActionCable::Channel::Base
   # `stream_from` POSTS the pubsub subscribe to Action Cable's event loop and
   # defers this confirmation until it succeeds — so between the end of
   # `subscribed` and this call there is a window in which the client holds our
-  # `subscribed` frame and no stream. MEASURED 2026-09-25: an event emitted in
-  # that window reached nobody at all. Replaying HERE closes it, because
-  # everything after the head we captured before opening the stream is sent
-  # once the stream exists.
+  # `subscribed` frame and no stream — and an event emitted in that window
+  # reaches nobody. Replaying HERE closes it, because everything after the head
+  # captured before the stream was opened is sent once the stream exists.
   def transmit_subscription_confirmation
     super
     replay!
@@ -113,8 +111,8 @@ class KioskEvents < ActionCable::Channel::Base
   # An event may therefore arrive twice — once from here and once from the
   # stream. That costs nothing and is not a defect: delivery is at-least-once
   # by construction, and the wire already requires a client to ignore an `id`
-  # it has seen. Losing one, which is what the conditional replay did, has no
-  # such remedy.
+  # it has seen. A LOST event has no such remedy, which is why the floor is
+  # unconditional.
   def replay!
     return if @head.nil?
 

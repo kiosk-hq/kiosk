@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 # The event-store CONTRACT, exercised through its in-process implementation
-# (T-169 phase A task 2).
 #
 # This is the TEST implementation of the seam. It IS what
 # `Kiosk.configuration.event_store` falls back to when an operator sets

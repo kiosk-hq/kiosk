@@ -4,7 +4,6 @@ require "json"
 require "socket"
 
 # The event stream, driven over a REAL WebSocket against a REAL server
-# (T-169 phase A task 5).
 #
 # Everything here is asserted from spec/support/events_socket_probe_app.rb, run
 # as a subprocess: it boots Rails with the engine mounted, serves it on Puma

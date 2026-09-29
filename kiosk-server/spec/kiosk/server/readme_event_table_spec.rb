@@ -1,21 +1,17 @@
 # frozen_string_literal: true
 
-# THE README's «What the event carries» TABLE IS THE FIELD LIST, DERIVED
-# (K-1579).
+# THE README's «What the event carries» TABLE IS THE FIELD LIST, DERIVED.
 #
 # `c.audit_sink` hands the operator one {Kiosk::Server::ActionEvent} per action
 # invocation, and this gem's README is where an operator reads what is in it —
 # the table under «What the event carries» is what somebody columns their own
-# audit row from. It was HAND-KEPT, and it sat two of the twelve members short
-# for seven days at head: `cause_class` and `cause_message` had joined the value
-# object and nothing anywhere compared the two lists, so the first action that
-# failed with a WRAPPED exception raised on the operator's insert.
+# audit row from. Kept by hand it goes short of the value object without
+# anything saying so, and an action that fails with a WRAPPED exception then
+# raises on the operator's insert.
 #
-# The code side was never the gap. `audit_sink_spec.rb` asserts the full
+# The code side is not the gap. `audit_sink_spec.rb` asserts the full
 # twelve-key `event.to_h`, so adding a member reddens that file immediately —
-# and says nothing at all about the README, which is exactly how the two fields
-# went unlisted while the suite stayed green. K-1563 repaired the table by hand
-# and installed no mechanism, so this is the mechanism: the SET is derived from
+# and says nothing at all about the README. So the SET is derived from
 # `ActionEvent.members` and the PROSE stays the author's, which is the same
 # split every derived-inventory guard in this repository makes.
 #

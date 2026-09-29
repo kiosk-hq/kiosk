@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-# The DURABLE event tail (T-169 phase A task 3).
+# The DURABLE event tail.
 #
 # Same contract as spec/kiosk/server/event_store_spec.rb asserts against the
 # in-process implementation, plus the two properties only a table can have:

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# K-1804 — the refusal, against a REAL booted Rails application in production.
+# The ephemeral-event-store refusal, against a REAL booted Rails application
+# in production.
 #
 # ephemeral_event_store_spec.rb asserts the CONDITION on the engine class. This
 # file asserts the consequence: that the engine's `after_initialize` block turns

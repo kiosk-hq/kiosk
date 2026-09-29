@@ -35,10 +35,9 @@ module Kiosk
       # a bare constant with no configuration accessor anywhere in 8.1.
       #
       # That cadence is invisible to a client that filters the envelope and
-      # FATAL to one that does not. MEASURED 2026-09-25 against a harness whose
-      # WebSocket source surfaces every frame to the agent: the pings alone
-      # exhausted its notification budget and two real Kiosk messages were
-      # suppressed before the agent ever saw them.
+      # FATAL to one that does not: a client that surfaces every frame to an
+      # agent spends its whole notification budget on beats, and real messages
+      # are suppressed behind them.
       #
       # Ten beats to one ping is 30 seconds — ten times any useful signal on
       # this stream, and well inside every idle timeout on the path. Throttling

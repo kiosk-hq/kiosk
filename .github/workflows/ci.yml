@@ -1353,6 +1353,11 @@ jobs:
   # looks at head, so a baseline three hundred commits behind passes exactly as
   # well as a fresh one.
   #
+  # The --self-test step runs beside it because nothing else does: two of its
+  # twenty arms plant the defects K-1819 records — a hand-edited fingerprint,
+  # and a ref moved to the wrong commit — and until this step existed they
+  # fired only when a person typed the flag.
+  #
   # Stdlib Ruby only: no bundle, no services, no database, ~1 s.
   conformance-drift-baseline:
     name: the drift baseline is self-consistent (bin/check-conformance-drift --check)
@@ -1378,6 +1383,9 @@ jobs:
 
       - name: The generated baseline is one its own generator could have written
         run: ./bin/check-conformance-drift --check
+
+      - name: The check is red on a plant of every arm, and non-vacuous here
+        run: ./bin/check-conformance-drift --self-test
 
   # This repository is published out of a larger private workspace, and a
   # shipped line that cites something from that workspace is a dangling pointer

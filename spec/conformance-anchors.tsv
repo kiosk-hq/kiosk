@@ -1541,7 +1541,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects when user_id in 
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns an IntentMandate for a valid agent-signed JWS
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	still accepts every currency spelling live in this repository
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	settles eur, usd, gbp and jpy — either case, and padded
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses an undeclared role the same way — the value is never consulted
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses the OAuth-standard `scope` spelling too

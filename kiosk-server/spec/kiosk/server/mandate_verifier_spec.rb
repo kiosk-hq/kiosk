@@ -267,14 +267,15 @@ RSpec.describe Kiosk::Server::MandateVerifier do
           }.to raise_error { |e| expect(e.class::HTTP_STATUS).to eq(403) }
         end
 
-        # THE CONTROL, and it is not decoration: every currency spelled anywhere
-        # in this repository must still settle. Measured with `git grep -c` over
-        # the TRACKED tree of `reference` on 2026-08-31 — "eur" 183 hits in 49
-        # files, "EUR" 43 in 13, "usd" 13 in 7, "USD" 9 in 4 — so these four
-        # spellings are the whole live set and they fold to two codes.
-        it "still accepts every currency spelling live in this repository" do
+        # THE CONTROL, and it is not decoration: a code this repository spells
+        # somewhere must still settle. The four are a dated reading, not a
+        # standing claim — `git grep -c -w <code>` over the tracked tree of
+        # `reference` (BRE plus -w) on 2026-09-29 answers eur in 52 files, EUR in
+        # 63, usd in 16, USD in 9, gbp in 3, jpy in 1; gbp is getgrocery's glyph
+        # map and jpy is kiosk-redteam's WrongCurrencyCart ALTERNATIVES.
+        it "settles eur, usd, gbp and jpy — either case, and padded" do
           { "eur" => "eur", "EUR" => "eur", "usd" => "usd", "USD" => "usd",
-            "  eur " => "eur" }.each do |sent, canonical|
+            "gbp" => "gbp", "jpy" => "jpy", "  eur " => "eur" }.each do |sent, canonical|
             m = described_class.verify_intent(
               raw_jws: sign(intent_payload.merge(currency: sent)), identity: identity,
             )

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **Security: philslist keeps the seller's contact line out of its request log.** The board publishes that text; the operator need not keep a second copy.
+
 - 2026-09-29: **Security: a handler dispatch inherits the host's parameter filter.** A filtered field was masked on the wire request's log line and written in full on the handler's.
 
 - 2026-09-29: **The spent `box-prep-2026-08-11.sh` one-shot is out of `deploy/`.** `rollout.sh` renders every env file from its template on every run; the runbook no longer ships it.

@@ -41,6 +41,9 @@
 #   NoSellerPiiOnTheOpenBoard — the cross-owner board names sellers by an
 #                      opaque, per-seller pseudonym and carries no account
 #                      address anywhere in the response
+#   ContactDetailsStayOutOfTheRequestLog — the contact line `post_listing` asks
+#                      an assistant to put in `body` is published on the board and
+#                      filtered out of the operator's own request log
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
@@ -383,6 +386,47 @@ BATTERY.record("NoSellerPiiOnTheOpenBoard",
                "alice=#{alice_handle.inspect} on #{alice_rows} rows, bob=#{bob_handle.inspect} " \
                "(want 200, no account address anywhere, every handle an opaque " \
                "`seller-<12 hex>`, and ONE handle covering >= 2 of Alice's rows and not Bob's)")
+
+# ── ContactDetailsStayOutOfTheRequestLog ─────────────────────────────────────
+#
+# `post_listing`'s `body` is where a seller's phone number or e-mail lands: the
+# argument's own description tells the assistant to ASK ITS HUMAN how they want
+# to be contacted and to write that in. The board PUBLISHES that text — a buyer
+# has no other way to reach the seller — but publishing it is no reason for the
+# operator to keep a second copy in its request log, which Rails writes at
+# `info`, the level a deployed demo runs at, for every argument the app does
+# not filter.
+#
+# TWO SENTINELS IN ONE REQUEST, and the second is what makes the first mean
+# anything: `title` is NOT filtered and must be FOUND, so a beat that could not
+# read the log, or a server that logged nothing, fails here instead of passing.
+# Both are fresh per run, so a sentinel left in this append-only file by an
+# earlier run cannot answer for this one.
+#
+# IT READS THE `Parameters:` LINES AND NOT THE WHOLE FILE, because those are
+# the lines `config.filter_parameters` governs and the ones a deployed demo
+# writes: `config.log_level` is `info` there, while the statement log that
+# echoes an INSERT is `debug` and appears in development only. There are TWO
+# such lines per verb call — the wire request's and the handler dispatch's —
+# and the field has to be masked on both.
+body_sentinel  = "contact-#{SecureRandom.hex(8)}"
+title_sentinel = "title-#{SecureRandom.hex(8)}"
+rc_log, _log_post = WIRE.post_json("/kiosk/post_listing",
+                                   { category_slug: "free",
+                                     title: "Redteam #{title_sentinel}",
+                                     body:  "Call me on #{body_sentinel}" },
+                                   ALICE.bearer)
+request_log  = File.expand_path("../log/development.log", __dir__)
+log_text     = File.exist?(request_log) ? File.read(request_log, encoding: "UTF-8", invalid: :replace, undef: :replace) : ""
+param_lines  = log_text.each_line.select { |line| line.include?("Parameters:") }
+body_logged  = param_lines.any? { |line| line.include?(body_sentinel) }
+title_logged = param_lines.any? { |line| line.include?(title_sentinel) }
+BATTERY.record("ContactDetailsStayOutOfTheRequestLog",
+               rc_log == 200 && title_logged && !body_logged,
+               "post_listing → #{rc_log}; across #{param_lines.length} `Parameters:` line(s) in " \
+               "log/development.log the body sentinel is #{body_logged ? 'FOUND' : 'absent'} and the " \
+               "title sentinel is #{title_logged ? 'found' : 'MISSING'} " \
+               "(want 200, the contact line masked on every one of them, and the unfiltered title present)")
 
 # ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
 #

@@ -1496,17 +1496,21 @@ COPIES = {
   },
   "config/initializers/filter_parameter_logging.rb" => {
     rule:   :identical,
-    except: { "getgrocery" => "the only demo whose verbs declare an argument carrying a human's own " \
-                              "data — `delivery_address`, a customer's postal address — so its copy " \
-                              "adds that one field. A demo-domain field is the operator's to filter, " \
-                              "in the operator's app, which is what this divergence shows an adopter." },
+    except: { "getgrocery" => "a verb argument carrying a human's own data — `delivery_address`, a " \
+                              "customer's postal address — so its copy adds that one field. A " \
+                              "demo-domain field is the operator's to filter, in the operator's app, " \
+                              "which is what this divergence shows an adopter.",
+              "philslist"  => "the same, for `body`: `post_listing` asks the assistant to put the " \
+                              "seller's phone number or e-mail into the listing text. The board " \
+                              "PUBLISHES that text — that is the product — but publishing it is no " \
+                              "reason to keep a second copy in the operator's request log." },
     why:  "One log-hygiene posture for the operator seven, and the file an adopter copies. " \
           "kiosk-demo-prove does not ship it at all and needs no `except:`: the KYC broker " \
           "takes no password, no card and no session. The Kiosk wire's own credential fields " \
           "are NOT in this list and are not meant to be — kiosk-server appends those to " \
           "`config.filter_parameters` from its own initializer, because the engine is what " \
           "knows their names; what is here is the Rails generator's list, which covers the " \
-          "operator's own forms (K-1881), plus — in the one demo that has one — that " \
+          "operator's own forms (K-1881), plus — in each demo that declares one — that " \
           "operator's own personal field.",
   },
   "config/environments/production.rb" => {

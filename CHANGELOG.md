@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **The manage-assistants listing now only falls back to a spend-free query when the settlements table is absent.** Every other statement error reaches the operator.
+
 - 2026-09-29: **Every demo task that boots a server, and `e2e/run.sh`, now refuse to start when something already holds the port, naming the pid.** They used to drive it and pass.
 
 - 2026-09-29: **A database now records which MAJOR of the Kiosk schema it carries, and the engine refuses a boot two or more majors ahead of it.** Crossing a major stops at it (T-103).

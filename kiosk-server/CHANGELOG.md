@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-29: **The manage-assistants listing only swallows a MISSING settlements table.** Any other statement error now raises instead of rendering a 200 with settled 0.
+
 - 2026-09-29: **The genesis records `<schema>.schema_major()` and the engine reads it at boot**, refusing a gem two or more majors ahead of the schema and naming the major to install next.
 
 - 2026-09-28: **`kiosk:install` writes `config/routes/kiosk.rb` with the engine mounted, and draws it from `config/routes.rb`.** An install that stopped at the initializer served nothing.

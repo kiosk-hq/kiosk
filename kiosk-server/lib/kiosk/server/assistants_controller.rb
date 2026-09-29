@@ -233,10 +233,13 @@ module Kiosk
       # Read-only SELECT on kiosk.agents (Kiosk's own table; satellite
       # neutrality holds).
       #
-      # Providers with no payment surface never migrate a settlements table
-      # (e.g. stylish): when the correlated subquery hits a missing
-      # table, fall back to a spend-free listing (settled 0) so the
-      # governance page still works.
+      # An origin with no payment surface may never have run the mandates
+      # migration: when the correlated subquery hits a settlements table that is
+      # not there, fall back to a spend-free listing (settled 0) so the
+      # governance page still works. THAT failure and no other — every other
+      # StatementInvalid (a bind list the statement does not match, a renamed
+      # column, a type Postgres refuses) is a defect in this file and must reach
+      # the operator instead of rendering a 200 with settled 0.
       def bound_assistants
         config = Kiosk.configuration
         # `lease_connection` for the reason `#update` records above.
@@ -245,11 +248,19 @@ module Kiosk
           begin
             sql, binds = bound_assistants_query(config, settled_spend: true)
             conn.exec_query(sql, "Kiosk bound assistants", binds)
-          rescue ::ActiveRecord::StatementInvalid
+          rescue ::ActiveRecord::StatementInvalid => e
+            raise unless missing_table?(e)
+
             sql, binds = bound_assistants_query(config, settled_spend: false)
             conn.exec_query(sql, "Kiosk bound assistants", binds)
           end
         rows.to_a.map { |row| present(row) }
+      end
+
+      # Matched by class NAME for the reason `executor.rb#unique_violation?`
+      # records: this file must not force `PG` to load.
+      def missing_table?(error)
+        error.cause&.class&.name == "PG::UndefinedTable"
       end
 
       # `settled_spend:` toggles the correlated settlements subquery. false

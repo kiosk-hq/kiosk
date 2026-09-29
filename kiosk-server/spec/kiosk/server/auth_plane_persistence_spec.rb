@@ -543,20 +543,75 @@ RSpec.describe "auth plane persistence (real Postgres)" do
       expect(agent_row(foreign).fetch("human_label")).to be_nil
     end
 
+    # A settled receipt for this agent, `days_ago` old. The chain is what the
+    # shipped schema requires: a settlement hangs off a cart mandate, which hangs
+    # off an intent. Every value travels as a bind, including the timestamp —
+    # which is the point of the two examples below.
+    def settle!(cents:, days_ago:)
+      at     = Time.now.utc - (days_ago * 86_400)
+      intent = value(%(
+        INSERT INTO #{table('intent_mandates')}
+          (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents, currency, expires_at, raw_jws)
+        VALUES ($1, $2, $3, 'https://provider.example', 'shop', 1000000, 'eur', now() + interval '1 day', 'jws')
+        RETURNING id
+      ), [SecureRandom.uuid, holder, agent_id])
+      cart = value(%(
+        INSERT INTO #{table('cart_mandates')}
+          (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items, total_amount_cents,
+           currency, expires_at, raw_jws)
+        VALUES ($1, $2, $3, $4, 'https://provider.example', '[]'::jsonb, $5, 'eur',
+                now() + interval '1 day', 'jws')
+        RETURNING id
+      ), [SecureRandom.uuid, intent, holder, agent_id, cents])
+      connection.exec_query(%(
+        INSERT INTO #{table('settlements')}
+          (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
+        VALUES ($1, $2, $3, 'https://provider.example', $4, $5, 'eur', $6)
+      ), "spec seed", [cart, holder, agent_id, SecureRandom.hex(8), cents, at])
+    end
+
     it "lists the holder's assistants with settled spend, windowed through make_interval" do
+      settle!(cents: 2500, days_ago: 1)
+      settle!(cents: 9900, days_ago: 60)
       Kiosk.configure { |c| c.spending_cap_window_days = 30 }
       status, body = dispatch(:show, method: "GET")
 
       expect(status).to eq(200)
       expect(body).to include(agent_id[0, 8])
+      # The window is the assertion: the 60-day-old receipt is outside it, so the
+      # bind reached `make_interval` as a day count and not as something Postgres
+      # read differently.
+      expect(body).to include("spent: 2500 cents")
     end
 
     it "lists them with no window configured (the statement drops the bind)" do
+      settle!(cents: 2500, days_ago: 1)
+      settle!(cents: 9900, days_ago: 60)
       Kiosk.configure { |c| c.spending_cap_window_days = nil }
       status, body = dispatch(:show, method: "GET")
 
       expect(status).to eq(200)
       expect(body).to include(agent_id[0, 8])
+      # No window, so both receipts count — the same statement with one bind
+      # fewer, which is the branch a mismatched bind list breaks first.
+      expect(body).to include("spent: 12400 cents")
+    end
+
+    # The fallback, against the failure it is FOR: an origin that never ran the
+    # mandates migration. It is the only StatementInvalid the listing swallows,
+    # so this is also what says the narrow predicate matches the real error.
+    it "still lists, spend-free, when the settlements table is not there" do
+      Kiosk.configure { |c| c.spending_cap_window_days = 30 }
+      connection.execute(%(DROP TABLE #{table('settlements')} CASCADE))
+
+      status, body = dispatch(:show, method: "GET")
+
+      expect(status).to eq(200)
+      expect(body).to include("spent: 0 cents")
+    ensure
+      connection.execute(Kiosk::Server::SchemaDefinitions.mandates_sql(
+                           schema: AUTH_PLANE_SPEC_SCHEMA, user_id_type: :uuid,
+                         ))
     end
   end
 end

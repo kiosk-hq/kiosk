@@ -295,9 +295,9 @@ RSpec.describe "AssistantsController" do
   # K-1014. The editor is rendered unconditionally, and on an origin that wires
   # no `config.spending_cap` seam the number it saves is read by nothing —
   # `Executor#enforce_spending_cap!` returns on `seam.nil?` before it looks at
-  # the column, and NO demo in the fleet sets one. The page must say so where it
-  # is rendered; the field keeps submitting, because setting policy on an origin
-  # that may not be the one that charges is deliberate (stylish's initializer).
+  # the column. The page must say so where it is rendered; the field keeps
+  # submitting, because setting policy on an origin that may not be the one that
+  # charges is deliberate.
   it "says the cap binds NOTHING when the origin wires no spending_cap seam" do
     Kiosk.configure { |c| c.spending_cap = nil }
     con.next_exec_result = [

@@ -6,7 +6,7 @@ require "kiosk/server/queries"
 
 module Kiosk
   module Server
-    # Rebuilds the Actions/Queries registries from the operator's
+    # Rebuilds the verb and topic registries from the operator's
     # `Kiosk.configuration.handlers` declaration. The engine drives it from a
     # `to_prepare` block, so it runs once at boot in production and again after
     # every code reload in development.
@@ -88,7 +88,7 @@ module Kiosk
             "give it a `wire_name` of its own."
         end
 
-        # Empties both registries. Every entry in them was installed by the
+        # Empties every registry. Every entry in them was installed by the
         # mixin — there is no other way in — so nothing here needs to tell one
         # kind of entry from another.
         def clear!

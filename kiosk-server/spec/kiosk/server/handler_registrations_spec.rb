@@ -7,7 +7,7 @@
 # handler_registration_boot_spec.rb; this file pins the semantics.
 
 # An operator's handler controllers — the consumer's side, as everywhere else in
-# these specs. spec_helper resets both registries before each example, so
+# these specs. spec_helper resets every registry before each example, so
 # nothing here is registered until the code under test registers it.
 class SpecRegistrationsQueriesController < ApplicationController
   include Kiosk::Handler

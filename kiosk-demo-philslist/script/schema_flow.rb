@@ -50,18 +50,14 @@ schema_value = body || {}
 #
 # This flow SERVED the stream before it read anything about it: an origin could
 # gain a whole module and the beat would not notice. What is read here is what
-# an assistant actually reads — the topic NAMES in the catalogue, the closed
-# member set of one descriptor, and the absence of the operator's own subject
-# rule from a published document.
+# an assistant actually reads — the topic NAMES in the catalogue.
 #
 # THE ASSERTIONS ARE NOT HERE, and that is the split this file already has: the
 # flow is shared by every demo that runs it, and what each origin SHOULD
 # advertise differs. One that declares topics asserts the module is present;
-# one that declares none asserts it is absent. Both read the same fields.
+# one that declares none asserts it is absent.
 schema_events      = schema_value["events"] || []
 event_topic_names  = schema_events.map { |t| t["name"] }.sort
-todo_descriptor    = schema_events.find { |t| t["name"] == "todo" } || {}
-todo_member_keys   = todo_descriptor.keys.sort
 
 # ── /.well-known/kiosk.json — the advertised capability set ──────────────────
 wk_rc, wk = WIRE.get_json("/.well-known/kiosk.json")
@@ -103,7 +99,6 @@ puts JSON.generate(
   discovery_capabilities:       capabilities,
   discovery_events_url:         events_url,
   schema_event_topics:          event_topic_names,
-  schema_event_member_keys:     todo_member_keys,
   agents_json_has_payments:     agents_json_has_payments,
   agents_txt_has_ap2:           agents_txt_has_ap2,
   agents_txt_has_payments:      agents_txt_has_payments,

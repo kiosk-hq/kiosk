@@ -664,12 +664,12 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-philslist/script/schema_flow.rb",
               "WIRE.get_json(\"/kiosk/schema\")",
               "WIRE.get_json(\"/kiosk/schema\", {}, WIRE.bearer(token))"]],
-      expect: /script\/schema_flow\.rb: `agree:` holds \[atablefor,philslist,tudu\] in lockstep/ },
+      expect: /script\/schema_flow\.rb: `agree:` holds \[atablefor,philslist\] in lockstep/ },
     { id: "fourth-demo-joins-group", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
-      what: "a fourth copy joins a group that already agrees — a NEW copy of something hand-copied",
-      ops:  [[:copy, "kiosk-demo-tudu/script/schema_flow.rb", "kiosk-demo-stylish/script/schema_flow.rb"]],
-      expect: /script\/schema_flow\.rb: `agree:` declares \[atablefor,philslist,tudu\] and stylish has since joined/ },
+      what: "a third copy joins a group that already agrees — a NEW copy of something hand-copied",
+      ops:  [[:copy, "kiosk-demo-atablefor/script/schema_flow.rb", "kiosk-demo-stylish/script/schema_flow.rb"]],
+      expect: /script\/schema_flow\.rb: `agree:` declares \[atablefor,philslist\] and stylish has since joined/ },
     { id: "coincidence-has-ended", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a legitimate divergence inside a `:coincidence` — the OTHER diagnosis, not drift",
@@ -682,9 +682,9 @@ if ARGV.include?("--self-test")
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a lockstep group relabelled `:coincidence` — the free way to switch the rule off, capped",
       ops:  [[:edit, "bin/check-demo-copies",
-              "      %w[atablefor philslist tudu] => {\n        rule: :lockstep,\n",
-              "      %w[atablefor philslist tudu] => {\n        rule: :coincidence,\n"]],
-      expect: /`agree:` calls \[atablefor,philslist,tudu\] a `:coincidence`, but what they agree on is \d+ normalised lines and the cap is 12/ },
+              "      %w[atablefor philslist] => {\n        rule: :lockstep,\n",
+              "      %w[atablefor philslist] => {\n        rule: :coincidence,\n"]],
+      expect: /`agree:` calls \[atablefor,philslist\] a `:coincidence`, but what they agree on is \d+ normalised lines and the cap is 12/ },
     { id: "vacuity-agree-confirmation", kind: :vacuity,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "the grouping pass stops running, so the ban passes silently and confirms nothing",
@@ -1920,26 +1920,30 @@ COPIES = {
     rule:  :per_demo,
     why:   "asserts THAT demo's declared capabilities and verb set — TRUE OF ONE OF THE SEVEN " \
            "COPIES, and the other six are declared below rather than left implied (K-1262). " \
-           "stylish drives its own catalogue and asserts its own verbs; the other six are TWO " \
-           "hand-copied drivers of three copies each, one digest apiece. None of " \
+           "stylish and tudu each drive their own catalogue and assert their own verbs; the " \
+           "other five are TWO hand-copied drivers, of two and three copies. None of " \
            "the seven carries an HTTP helper any more — all open on one `Kiosk::Redteam::Wire`, " \
            "held by name in FRAGMENTS below (T-100) — so the length of a copy is now nearly all " \
            "assertion, and two copies happening to normalise to the same NUMBER of lines is not " \
            "evidence of anything. The digest is; that is what this rule compares. Converging " \
            "the remaining copy is not proposed — stylish's assertions really are its own.",
     agree: {
-      %w[atablefor philslist tudu] => {
+      %w[atablefor philslist] => {
         rule: :lockstep,
-        why:  "ONE DISCOVERY DRIVER AT THREE PATHS, AND NOTHING IN IT IS PER-DEMO. It GETs " \
+        why:  "ONE DISCOVERY DRIVER AT TWO PATHS, AND NOTHING IN IT IS PER-DEMO. It GETs " \
               "`/kiosk/schema`, `/.well-known/kiosk.json`, `/agents.json` and `/agents.txt` with NO " \
               "credential and emits one JSON line; the per-demo part — which capabilities and which " \
               "verbs that line must carry — lives entirely in each demo's `check:schema` rake task, " \
-              "which is where it belongs. The three copies differ only in the operator's name in a " \
-              "comment, the port in a usage line and the alignment of one hash. Held rather than " \
+              "which is where it belongs. The two copies differ only in the operator's name in a " \
+              "comment and the port in a usage line. Held rather than " \
               "recorded, because the load-bearing half is an ABSENCE that a one-sided edit would " \
               "restore without failing anything: sending no Authorization header IS the T-094 " \
               "assertion that `schema` is public, and a copy that quietly re-added a Bearer token " \
-              "would still pass its own demo while proving the opposite of what it claims.",
+              "would still pass its own demo while proving the opposite of what it claims. " \
+              "tudu drove this same file until K-1884: its copy reads the member keys of its own " \
+              "`todo` topic descriptor, which these two origins declare no topic to have, so the " \
+              "lookup could only ever answer `{}` here. That copy now stands on its own, like " \
+              "stylish's, and the file entry above says what that costs.",
       },
       %w[getgrocery hoteling skooti] => {
         rule: :lockstep,

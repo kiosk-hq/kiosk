@@ -337,8 +337,8 @@ begin
     urlsub.messages.select { |m| m["type"] == "subscribed" }.map { |m| m["topic"] }.sort
 
   # DELIBERATELY emitting on the `subscribed` frame and NOT on Action Cable's
-  # later `confirm_subscription`: that window is where an event used to be lost,
-  # and this is the assertion that it no longer is.
+  # later `confirm_subscription`: an event emitted in that window still has to
+  # reach the subscriber, and this is the assertion that it does.
   url_id = Kiosk::Server::Events.emit(
     topic: :order_payment, subject: "ord_3", identity_scope: %w[u1], data: { "status" => "paid" },
   )

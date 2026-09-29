@@ -3,13 +3,12 @@
 require "base64"
 require "kiosk/reputation"
 require "kiosk/pow/equihash"
+require_relative "../../support/equihash_kat"
 
 # Registration PoW gate — the SAME equihash machinery as the reputation gate,
 # applied at /auth/register to price fresh identity minting. Driven with the
 # kiosk-pow-equihash known-answer proof (n=8, k=1) so it is fast and real.
 RSpec.describe Kiosk::Server::RegistrationPow do
-  KAT_PARAMS = { n: 8, k: 1 }.freeze
-  KAT_NONCE  = { indices: [2, 10] }.freeze
   PEM        = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
 
   before(:each) do
@@ -26,7 +25,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   def configure(count:)
     Kiosk.configure do |c|
       c.registration_pow_count  = count
-      c.registration_pow_params = KAT_PARAMS
+      c.registration_pow_params = EquihashKat::PARAMS
       c.pow_secret              = secret
     end
   end
@@ -39,7 +38,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     fp = Kiosk::Server::PowGate.request_fingerprint(method: "POST", verb: "auth/register",
                                                     body: { public_key: pem })
     Kiosk::Reputation::Challenge.issue(
-      alg: "equihash", params: KAT_PARAMS, request_fingerprint: fp,
+      alg: "equihash", params: EquihashKat::PARAMS, request_fingerprint: fp,
       secret: secret, ttl: 300, salt: "kat".b, id: id,
     )
   end
@@ -60,7 +59,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
 
   it "proceeds when the real verifier accepts the proof" do
     configure(count: 1)
-    proof = { challenge: kat_challenge(id: "r1"), nonce: KAT_NONCE }
+    proof = { challenge: kat_challenge(id: "r1"), nonce: EquihashKat::NONCE }
     expect(
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [proof] }),
     ).to be_nil
@@ -77,7 +76,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   it "binds proofs to the public key (a proof for another key re-challenges)" do
     configure(count: 1)
     other = { challenge: kat_challenge(id: "r1", pem: "-----BEGIN PUBLIC KEY-----\nOTHER\n-----END PUBLIC KEY-----"),
-              nonce: KAT_NONCE }
+              nonce: EquihashKat::NONCE }
     expect {
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [other] })
     }.to raise_error(Kiosk::Server::Errors::PowRequired)
@@ -93,13 +92,13 @@ RSpec.describe Kiosk::Server::RegistrationPow do
       method: "GET", verb: "auth/register", body: { public_key: PEM },
     )
     elsewhere = Kiosk::Reputation::Challenge.issue(
-      alg: "equihash", params: KAT_PARAMS, request_fingerprint: elsewhere_fp,
+      alg: "equihash", params: EquihashKat::PARAMS, request_fingerprint: elsewhere_fp,
       secret: secret, ttl: 300, salt: "kat".b, id: "r-elsewhere",
     )
 
     expect {
       Kiosk::Server::RegistrationPow.gate(
-        public_key_pem: PEM, pow: { proofs: [{ challenge: elsewhere, nonce: KAT_NONCE }] },
+        public_key_pem: PEM, pow: { proofs: [{ challenge: elsewhere, nonce: EquihashKat::NONCE }] },
       )
     }.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
@@ -107,7 +106,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   it "raises ConfigurationError when count > 0 but pow_secret is missing" do
     Kiosk.configure do |c|
       c.registration_pow_count  = 1
-      c.registration_pow_params = KAT_PARAMS
+      c.registration_pow_params = EquihashKat::PARAMS
     end
     expect {
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
@@ -210,7 +209,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   # solves it at n=8 k=1 — against two server configs. Only the params differ.
   describe "server-side parameter re-derivation (K-541)" do
     def trivial_proof(id:)
-      { challenge: kat_challenge(id: id), nonce: KAT_NONCE }
+      { challenge: kat_challenge(id: id), nonce: EquihashKat::NONCE }
     end
 
     def configure_at(params)
@@ -222,7 +221,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     end
 
     it "accepts the trivial proof while the server itself demands n=8 k=1" do
-      configure_at(KAT_PARAMS)
+      configure_at(EquihashKat::PARAMS)
       expect(
         Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-ok")] }),
       ).to be_nil

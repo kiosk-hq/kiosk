@@ -47,9 +47,16 @@
 #
 # WHAT IT CANNOT CATCH, stated plainly because a parse is not an execution:
 #
-#   * every RUNTIME warning — a redefined method, an already-initialised
-#     constant, a `Struct` member shadowing. Those need the file LOADED, so
-#     they belong to a gate that runs its corpus rather than parsing it.
+#   * a RUNTIME warning — a redefined method, a `Struct` member shadowing.
+#     Those need the file LOADED, so they belong to a gate that runs its corpus
+#     rather than parsing it. ONE of them is the exception below.
+#   * THE EXCEPTION IS `already initialized constant` BETWEEN TWO SPEC FILES
+#     (K-1851): its cause IS visible in the source, because a constant assigned
+#     at the top of an `RSpec.describe` block lands in Object rather than on the
+#     example group, so two files in one suite naming the same one redefine each
+#     other and whichever loads second wins. The last example reads that
+#     statically. A METHOD two files redefine has the identical shape and is not
+#     read here.
 #   * a variable that IS read, by code that never executes.
 #   * anything outside a tracked `.rb` or `.rake` file: `.erb` templates, the
 #     `.rb.tt` generator templates (which are not valid Ruby on their own), and
@@ -138,5 +145,50 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
     rest = WARNINGS.reject { |(_, line)| line =~ FATAL_WARNING }
     rest.each { |(rel, line)| RSpec.configuration.reporter.message("  NOTICE #{rel}: #{line}") }
     expect(rest.length).to be_a(Integer)
+  end
+
+  # The one runtime warning a parse can see (K-1851). Scope: the files RSpec
+  # LOADS, which is why each one must carry an `RSpec.describe` — the demos run
+  # their `spec/*_spec.rb` as one `ruby` process each, so a name four of them
+  # share collides with nothing. The suite that loads a file is its gem, so the
+  # comparison is per top-level directory.
+  def object_constants(src)
+    found = []
+    walk  = lambda do |node, scoped|
+      next unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
+
+      case node.type
+      when :CLASS, :MODULE, :SCLASS
+        node.children.each { |c| walk.call(c, true) }
+        next
+      when :CDECL
+        name = node.children.first
+        found << [name, node.first_lineno] if name.is_a?(Symbol) && !scoped
+      end
+      node.children.each { |c| walk.call(c, scoped) }
+    end
+    walk.call(RubyVM::AbstractSyntaxTree.parse(src), false)
+    found
+  end
+
+  it "has no constant two spec files of one suite both assign into Object" do
+    declared = {}
+    FILES.grep(/_spec\.rb\z/).each do |rel|
+      src = File.read(File.join(WARNINGS_REPO_ROOT, rel))
+      next unless src.include?("RSpec.describe")
+
+      object_constants(src).each do |(name, line)|
+        ((declared[[rel[%r{\A[^/]+}], name]] ||= []) << "#{rel}:#{line}")
+      end
+    end
+
+    collisions = declared.select { |_, sites| sites.map { |s| s[/\A[^:]+/] }.uniq.length > 1 }
+
+    expect(collisions).to be_empty, lambda {
+      "#{collisions.length} constant(s) are assigned into Object by two spec files of one suite. " \
+      "Whichever loads second wins, so editing one file silently changes the other's inputs. " \
+      "Give it one home — a module in spec/support, required by both.\n" +
+        collisions.map { |(gem, name), sites| "  #{gem}: #{name} — #{sites.join(", ")}" }.join("\n")
+    }
   end
 end

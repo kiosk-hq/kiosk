@@ -132,20 +132,10 @@ def attest_forged(user_id)
 end
 
 # ── KYC broker driver (redteam-only) ─────────────────────────────────────
-# Start a real verification at the broker and approve it as the human would, so
-# the broker mints a REAL signed claim and POSTs it to skooti's callback. Used by
-# the theft / cross-operator / forged-callback beats.
-
-# The intake secret arrives in this driver's env (the rake task passes the
-# broker wiring through — KIOSK_PROVE_INTAKE_SECRET, the operator side's one
-# role-named variable); there is no shipped default anywhere.
-def broker_start_verification(callback_url:, subject_handle:, requested_claims: %w[age_over_18 licence_category:A], operator_id: ProveTrust.operator_id, secret: ENV.fetch("KIOSK_PROVE_INTAKE_SECRET"))
-  uri = URI("#{BROKER_URL}/verifications")
-  req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{secret}")
-  req.body = JSON.generate(operator_id:, callback_url:, requested_claims:, subject_handle:)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# Approve a verification at the broker as the human would, so the broker mints
+# a REAL signed claim and POSTs it to skooti's callback; and reach that
+# callback directly. The verification itself is started over the wire, by the
+# `request_kyc` verb.
 
 def broker_approve(request_id)
   uri = URI("#{BROKER_URL}/verify")

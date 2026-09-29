@@ -675,6 +675,10 @@ namespace :check do
                by an opaque `seller-<hex>` pseudonym derived from the account
                id, carries no account address anywhere in the response, and
                keeps ONE handle per seller across their listings
+      BLOCKED  ContactDetailsStayOutOfTheRequestLog — the contact line
+               post_listing asks an assistant to put in `body` is published on
+               the board and filtered out of the `Parameters:` lines of the
+               operator's own request log
       BLOCKED  DeviceGrantRoleSelfSelection — the shared kiosk-redteam beat:
                the binding ceremony's unauthenticated opening request refuses
                `role`/`scope` at a DECLARED value as well as an invented one,

@@ -176,7 +176,10 @@ is the same plain 404 and the write never runs),
 `LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,
 not any character) and `NoSellerPiiOnTheOpenBoard` (the open board names a
 seller by an opaque `seller-<hex>` pseudonym, carries no account address
-anywhere in the response, and keeps one handle per seller). Last comes the one
+anywhere in the response, and keeps one handle per seller) and
+`ContactDetailsStayOutOfTheRequestLog` (the contact line `post_listing` asks an
+assistant to put in `body` is published on the board and filtered out of the
+`Parameters:` lines of the operator's own request log). Last comes the one
 beat this file does not hand-roll: `DeviceGrantRoleSelfSelection`, shared from
 `kiosk-redteam` by every demo — the account-binding claim ceremony's
 unauthenticated opening request must refuse a `role` at a value this origin

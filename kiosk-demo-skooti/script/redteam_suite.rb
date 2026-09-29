@@ -94,7 +94,6 @@ require "json"
 # variant signs with a DIFFERENT key but the TRUSTED issuer so signature
 # verification is exercised in isolation (an alg:none/weakened-sig regression is
 # caught). None of this weakens the real verification path.
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require_relative "prove_test_issuer"
 require_relative "../app/services/prove_trust"
 # The Equihash params printed in the run header below are READ from the same

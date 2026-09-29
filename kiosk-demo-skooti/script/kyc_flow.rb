@@ -42,7 +42,6 @@ require "securerandom"
 require "uri"
 require "jwt"
 
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require_relative "lock_sim"
 require_relative "dev_unlock_key"
 require_relative "equihash_register"

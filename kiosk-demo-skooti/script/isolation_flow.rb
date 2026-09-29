@@ -47,7 +47,6 @@ require "uri"
 require "jwt"
 require "kiosk/redteam/wire"
 
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 # Valid attestations are minted with the SHARED KYC broker key
 # (ProveTestIssuer, signing with the ProveKey skooti trusts), which is the only
 # issuer skooti accepts.

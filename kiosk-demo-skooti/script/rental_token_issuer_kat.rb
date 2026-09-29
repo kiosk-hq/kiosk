@@ -35,9 +35,6 @@ require "openssl"
 require "base64"
 require "securerandom"
 
-lib_dir = File.expand_path(__dir__)
-$LOAD_PATH.unshift(lib_dir) unless $LOAD_PATH.include?(lib_dir)
-
 # Minimal config carrier so the KAT runs without booting the full Rails app.
 # The real demo defines the same `unlock_signing_key` accessor on
 # Kiosk::Configuration in config/initializers/kiosk.rb; here we stand up just
@@ -51,10 +48,6 @@ unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
 
     def self.configuration
       @configuration ||= KatConfig.new
-    end
-
-    def self.reset!
-      @configuration = KatConfig.new
     end
   end
 end

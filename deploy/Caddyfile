@@ -187,7 +187,6 @@ hoteling.demo.kiosk.tech {
 }
 
 skooti.demo.kiosk.tech {
-	# "beware: intensive PoW" demo — high register difficulty (see env).
 	import kioskproxy 127.0.0.1:3004
 }
 

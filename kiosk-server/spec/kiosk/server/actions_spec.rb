@@ -5,6 +5,18 @@
 # the next `def`. `declare_action` (spec_helper) builds exactly that. See
 # queries_spec.rb for the read side — the two registries are the same code.
 RSpec.describe Kiosk::Server::Actions do
+  # That last sentence, held rather than asserted in prose (K-1853): each
+  # registry is `VerbRegistry` plus its `SCOPE`, and neither carries a method of
+  # its own, so the behaviour below has exactly one home.
+  it "and Queries ARE VerbRegistry — neither defines any behaviour of its own" do
+    [described_class, Kiosk::Server::Queries].each do |registry|
+      expect(registry.singleton_class.ancestors).to include(Kiosk::Server::VerbRegistry)
+      expect(registry.singleton_methods(false)).to be_empty
+      expect(registry::Entry).to be(Kiosk::Server::VerbRegistry::Entry)
+    end
+    expect([described_class::SCOPE, Kiosk::Server::Queries::SCOPE]).to eq(%i[action query])
+  end
+
   describe ".fetch" do
     it "returns the registered handler" do
       declare_action("ping")

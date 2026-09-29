@@ -1049,7 +1049,7 @@ kiosk-server/lib/kiosk/server/account_binding.rb	      # `requested_role:` IS NE
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(public_key_pem:, user_id:, requested_role: nil)
 kiosk-server/lib/kiosk/server/account_binding.rb	    #     ceremony can carry), `allowed_roles` is REMAPPED to
 kiosk-server/lib/kiosk/server/account_binding.rb	role ? [", allowed_roles = ARRAY[$3]::text[]", [role]]
-kiosk-server/lib/kiosk/server/actions.rb	    # Process-wide registry of Action handlers: a name -> callable map plus the
+kiosk-server/lib/kiosk/server/actions.rb	    # Registry of named actions — the write surface. An action CHANGES something
 kiosk-server/lib/kiosk/server/agent_identity_providers/default_agent_idp.rb	def authorization_for(request)
 kiosk-server/lib/kiosk/server/assistants_controller.rb	class AssistantsController < ::ActionController::Base
 kiosk-server/lib/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
@@ -1172,7 +1172,6 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	def enforce(spec:, fingerprint:, pow:,
 kiosk-server/lib/kiosk/server/pow_gate.rb	def issue_challenges(count, spec, fp, secret, config)
 kiosk-server/lib/kiosk/server/pow_gate.rb	def pow_count
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
-kiosk-server/lib/kiosk/server/queries.rb	            descriptor[:example_row]    = entry.example_row    unless entry.example_row.nil?
 kiosk-server/lib/kiosk/server/queries.rb	    # Registry of named queries — the sanctioned read surface that replaces raw
 kiosk-server/lib/kiosk/server/queries.rb	convention the provider upholds (the registry does not enforce it)
 kiosk-server/lib/kiosk/server/registration_pow.rb	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
@@ -1202,6 +1201,7 @@ kiosk-server/lib/kiosk/server/verb_controller.rb	class VerbController < WireCont
 kiosk-server/lib/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/lib/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
 kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane wins by first-match, because the operator
+kiosk-server/lib/kiosk/server/verb_registry.rb	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/well_known.rb	            kind:          "kiosk-pop",
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
 kiosk-server/lib/kiosk/server/well_known.rb	          auth_modes: ["kiosk-pop", "user-claimed", "link-code"],

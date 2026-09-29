@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **Security: getgrocery filters the customer's postal address out of its request log.** A demo-domain personal field is the operator's to name; the engine names only the wire's.
+
 - 2026-09-29: **Security: an origin no longer writes the caller's proofs and mandates into its request log.** The engine filters its own field names; the three demos missing Rails' list now ship it.
 
 - 2026-09-29: **A topic may declare `description nil`, which the published topic descriptor has always permitted and the engine refused.** What is required is the declaration, not a truthy value.

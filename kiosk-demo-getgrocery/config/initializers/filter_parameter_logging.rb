@@ -6,3 +6,8 @@
 Rails.application.config.filter_parameters += [
   :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc
 ]
+
+# This shop's OWN personal field. The list above is the Rails generator's and
+# covers credentials; a domain argument carrying a human's data — here the
+# customer's postal address — is the operator's to add, in the operator's app.
+Rails.application.config.filter_parameters << :delivery_address

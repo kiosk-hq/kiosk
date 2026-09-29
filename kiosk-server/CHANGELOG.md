@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-29: **`EventStore#truncated?` agrees with the durable store at the floor.** A cursor one below it holds a complete range, so it no longer costs a subscriber an ordinary re-read.
+
 - 2026-09-29: **The stream tells an expired credential from a revoked one**: `token_expired` with `reconnect: true` where the identity chain refused a token that had simply reached its `exp`.
 
 - 2026-09-29: **Security: the event stream's re-authorisation now runs.** A withdrawn reach gets `unsubscribed` and a credential that stops resolving gets `disconnect` and a closed socket.

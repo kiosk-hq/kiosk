@@ -180,6 +180,20 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     expect(store.truncated?("u1", 0)).to be(false)
   end
 
+  # THE BOUNDARY, asked here exactly as event_store_spec.rb asks it of the
+  # in-process store: one below the floor the range is complete, so there is
+  # nothing to re-read.
+  it "is NOT truncated one below the floor, where the range it asks for is complete" do
+    first  = store.append("u1", event)
+    second = store.append("u1", event)
+    third  = store.append("u1", event)
+    backdate(id_below: second, hours: 25)
+    store.prune!
+
+    expect(store.since("u1", first).map { |e| e["id"] }).to eq([second, third])
+    expect(store.truncated?("u1", first)).to be(false)
+  end
+
   def backdate(id_below:, hours:)
     ::ActiveRecord::Base.connection.exec_query(
       %(UPDATE "#{EVENTS_SPEC_SCHEMA}".events

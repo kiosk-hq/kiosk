@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **The in-process event store stops answering `truncated: true` for a cursor one below the retained floor.** The durable store never did; a complete range now reads as complete in both.
+
 - 2026-09-29: **An event stream whose access token merely aged out now closes with `token_expired` and `reconnect: true`.** `revoked` and its terminal flag are kept for a credential that is.
 
 - 2026-09-29: **Security: the event stream now stops when a human revokes.** Its re-authorisation raised every tick, so a withdrawn reach kept delivering and a revoked token kept its socket.

@@ -66,15 +66,17 @@ module Kiosk
       # @return [Integer] the origin's current maximum id, 0 on a fresh origin
       def head = @mutex.synchronize { @seq }
 
-      # "I cannot prove you saw everything." True when rows between the caller's
-      # cursor and what is still retained have been pruned — the one condition
-      # that makes a subscriber re-read current state through the ordinary verb,
-      # once, and then continue on the stream.
+      # "I cannot prove you saw everything." True when an id ABOVE the caller's
+      # cursor has been pruned — the one condition that makes a subscriber
+      # re-read current state through the ordinary verb, once, and then
+      # continue on the stream.
       #
-      # A cursor AT head is never truncated, including on an empty origin: there
-      # is nothing between it and what we hold.
+      # So the boundary is `@floor > id + 1`, not `id < @floor`: a cursor one
+      # BELOW the floor is caught up, because everything after it survived.
+      # {EventStores::ActiveRecord} is the reference for this question — it is
+      # what a deployed origin runs — and it asks it that way.
       def truncated?(_identity_key, id)
-        @mutex.synchronize { id.to_i < @floor }
+        @mutex.synchronize { @floor > id.to_i + 1 }
       end
 
       # Drop everything below +id+ and remember that we did. The ActiveRecord

@@ -81,6 +81,20 @@ RSpec.describe Kiosk::Server::EventStore do
     expect(store.truncated?("u1", id)).to be(false)
   end
 
+  # THE BOUNDARY, and the one cursor the two examples above step over. One
+  # below the floor the range the caller asks for is COMPLETE — everything
+  # above the cursor survived the sweep — so there is nothing to re-read.
+  # event_stores_spec.rb asks the durable store the same question.
+  it "is NOT truncated one below the floor, where the range it asks for is complete" do
+    first  = store.append("u1", event)
+    second = store.append("u1", event)
+    third  = store.append("u1", event)
+    store.prune_before(second)
+
+    expect(store.since("u1", first).map { |e| e["id"] }).to eq([second, third])
+    expect(store.truncated?("u1", first)).to be(false)
+  end
+
   it "keeps identities apart — one identity's tail is not another's" do
     store.append("u1", event)
 

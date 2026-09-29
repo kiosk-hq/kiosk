@@ -3,35 +3,22 @@
 
 # Version-parity check (K-748).
 #
-# WHY THIS EXISTS. `kiosk.tech/spec/protocol.md` §14.1 is normative and says:
+# WHY THIS EXISTS. `kiosk.tech/spec/protocol.md` §14.1 is normative: the
+# protocol, the reference implementation and the AI assistant skill share their
+# MAJOR.MINOR version. It is not quoted here — read it there.
 #
-#     Version parity (MAJOR.MINOR only). The protocol, the reference
-#     implementation, and the AI assistant skill share their MAJOR.MINOR
-#     version — currently 0.3. An operator on Kiosk 0.3 pins a 0.3 skill
-#     against a 0.3 wire.
-#
-# For months that sentence was false about one of its three subjects, on every
-# request. The protocol was 0.3.0 and the skill was 0.3.11, but thirteen gems
-# were `VERSION = "0.0.1"` and kiosk-pow-equihash was `"0.1.0"` — the gems did
-# not even agree with each other — and `Kiosk-Server-Version` emits the gem
-# version, so a server advertising `Kiosk-API-Version: 0.3.0` answered
-# `Kiosk-Server-Version: 0.0.1` on the same response. Nothing was red. Every
-# suite in this repo passes at any version number, because the version is an
-# input to no assertion: the specs that touch it match `/\A\d+\.\d+\.\d+\z/`
-# or compare the constant against itself.
-#
-# Phil's answer (2026-08-16) was to honour the published rule rather than
-# weaken it — and to stop the rule being prose. So this is a CHECK, not a
-# convention: it reads the protocol version out of kiosk-core, reads every
-# gem's version out of its own gemspec the way RubyGems would, and fails the
-# build when they no longer speak the same MAJOR.MINOR.
+# Phil's ruling (2026-08-16) was to honour the published rule rather than weaken
+# it — and to stop the rule being prose. So this is a CHECK, not a convention: it
+# reads the protocol version out of kiosk-core, reads every gem's version out of
+# its own gemspec the way RubyGems would, and fails the build when they no longer
+# speak the same MAJOR.MINOR.
 #
 # THE RULE IT ENFORCES — and the half of it that is easy to get wrong. §14.1
 # binds MAJOR.MINOR **only**. A per-gem PATCH release is legitimate and
-# expected: kiosk-server may ship 0.3.4 while kiosk-rls-minitest sits at
-# 0.3.0, because a fix in one gem is not a protocol event. So this check must
-# NOT demand identical versions — a check that did would be wrong about the
-# spec and would be silenced the first time someone needed a patch release.
+# expected: kiosk-server may ship a PATCH kiosk-rls-minitest has not, because a
+# fix in one gem is not a protocol event. So this check must NOT demand
+# identical versions — a check that did would be wrong about the spec and would
+# be silenced the first time someone needed a patch release.
 # Four things are asserted, and none of them looks at PATCH:
 #
 #   A. GEM VERSIONS.  Every gemspec's `spec.version` shares MAJOR.MINOR with
@@ -40,19 +27,20 @@
 #      the spec sentence is about.
 #
 #   B. INTER-GEM CONSTRAINTS.  Every `kiosk-*` dependency any gemspec declares
-#      must be `~> MAJOR.MINOR.0`, which is exactly `>= 0.3.0, < 0.4.0` — the
+#      must be `~> MAJOR.MINOR.0`, which pins the resolver to one MINOR — the
 #      parity rule written where the RESOLVER can read it. This matters
 #      off-tree, not here: everything in this monorepo consumes siblings by
 #      `path:`, so the constraint is never exercised locally and a stale one
 #      cannot fail any suite. The constraints really were stale — `~> 0.0`
 #      (i.e. `>= 0.0, < 1.0`) would have let someone `gem install kiosk-server`
-#      0.3 against kiosk-core 0.1 and get a resolution the spec forbids.
+#      against a kiosk-core from another MINOR and get a resolution the spec
+#      forbids.
 #
 #   C. THE SKILL PIN.  §14.1's third subject. The `skill_url` each demo pins,
 #      and kiosk-server's default, names `skill-vMAJOR.MINOR.PATCH.md`; that
 #      MAJOR.MINOR must be the protocol's too. PATCH is deliberately ignored
 #      — §14.4 makes the skill's PATCH an independent, skill-only revision
-#      line (0.3.11 today, eleven cuts into protocol 0.3).
+#      line. The run prints the series every pin resolved to.
 #
 #      THIS IS NOT WHAT kiosk-test-support/spec/skill_pin_spec.rb COVERS, and
 #      the two do not overlap. That spec asserts INTEGRITY — that the pinned
@@ -68,7 +56,7 @@
 #   D. THE SINGLE EDIT POINT.  Each gem's `lib/**/version.rb` must declare
 #      exactly one `VERSION` and the gemspec's `spec.version` must equal it.
 #      Without this, a gemspec that stopped reading its own version.rb — a
-#      hardcoded `spec.version = "0.3.9"` — would pass A while the file every
+#      hardcoded `spec.version` — would pass A while the file every
 #      human edits became decoration.
 #
 # THE FAIL-OPEN GUARD. Rule A reads `spec.version` by LOADING each gemspec
@@ -143,9 +131,9 @@ abort "check-version-parity: could not read `API_VERSION = \"X.Y.Z\"` from #{PRO
       "file must be taught the new one rather than left guessing." unless api_version
 
 major, minor, = api_version.split(".").map(&:to_i)
-SERIES      = "#{major}.#{minor}"                             # "0.3.0" -> "0.3"
+SERIES      = "#{major}.#{minor}"                             # "X.Y.Z" -> "X.Y"
 NEXT_SERIES = "#{major}.#{minor + 1}.0"                       # the exclusive upper bound
-WANT        = Gem::Requirement.new("~> #{SERIES}.0")          # >= 0.3.0, < 0.4.0
+WANT        = Gem::Requirement.new("~> #{SERIES}.0")          # one MINOR series
 
 def series_of(version) = version.to_s.split(".").first(2).join(".")
 

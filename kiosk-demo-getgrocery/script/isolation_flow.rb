@@ -54,7 +54,7 @@ WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 
 # Pay for an order with a cart that MIRRORS it (per create_order's pay_hint):
 # one {order_id} entry plus one {sku, qty, price_cents} entry per item.
-def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total_cents, items)
+def pay_for_order(issuer, token, key, user_id, agent_id, order_id, total_cents, items)
   now        = Time.now.to_i
   intent_id  = SecureRandom.uuid
   cart_id    = SecureRandom.uuid
@@ -169,7 +169,7 @@ total_cents_a = order_a_resp["total_cents"].to_i
 abort "order_id_a missing" unless order_id_a
 
 # ── Step 5: A pays for order_a ────────────────────────────────────────────────
-rc, _pay_a = pay_for_order(SERVER, ISSUER, token_a, key_a, user_id_a, agent_id_a, order_id_a, total_cents_a, mirror_items)
+rc, _pay_a = pay_for_order(ISSUER, token_a, key_a, user_id_a, agent_id_a, order_id_a, total_cents_a, mirror_items)
 abort "A pay failed (#{rc})" unless rc == 200
 
 # ── Step 6: B queries my_orders (before having any orders) ───────────────────
@@ -249,7 +249,7 @@ order_id_b    = order_b_resp["order_id"]
 total_cents_b = order_b_resp["total_cents"].to_i
 abort "order_id_b missing" unless order_id_b
 
-rc, _pay_b = pay_for_order(SERVER, ISSUER, token_b, key_b, user_id_b, agent_id_b, order_id_b, total_cents_b, mirror_items)
+rc, _pay_b = pay_for_order(ISSUER, token_b, key_b, user_id_b, agent_id_b, order_id_b, total_cents_b, mirror_items)
 abort "B pay failed (#{rc})" unless rc == 200
 
 # ── Step 10b: a re-pay of an ALREADY-SETTLED order must return a problem

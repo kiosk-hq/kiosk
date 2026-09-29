@@ -76,7 +76,7 @@ end
 # Find an open (restaurant, table, seating) row for a party across the
 # aggregator, excluding any
 # already-claimed (restaurant_table_id, seating_at) pairs. Returns the full row.
-def find_open_slot(server, token, party, exclude: [])
+def find_open_slot(token, party, exclude: [])
   rc, avail = WIRE.get_json(
     "/kiosk/availability",
     { party_size: party },
@@ -91,7 +91,7 @@ def find_open_slot(server, token, party, exclude: [])
 end
 
 # Book the given availability row as `token`, optionally injecting extra args.
-def book_slot(server, token, slot, party, extra = {})
+def book_slot(token, slot, party, extra = {})
   WIRE.post_json(
     "/kiosk/book_table",
     { restaurant_id: slot.fetch("restaurant_id"),
@@ -104,7 +104,7 @@ end
 
 # A my_bookings read as `token` — a query, so a GET, and the answer is the bare
 # array of rows.
-def my_booking_ids(server, token, label)
+def my_booking_ids(token, label)
   rc, resp = WIRE.get_json("/kiosk/my_bookings", {}, WIRE.bearer(token))
   abort "#{label} my_bookings failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
   Array(resp).map { |r| r["booking_id"] }
@@ -115,8 +115,8 @@ a = register(SERVER, ISSUER)
 b = register(SERVER, ISSUER)
 
 # ── Step 2: A books table oA (a 2-top) ───────────────────────────────────────
-slot_a = find_open_slot(SERVER, a[:token], 2)
-rc, book_a = book_slot(SERVER, a[:token], slot_a, 2)
+slot_a = find_open_slot(a[:token], 2)
+rc, book_a = book_slot(a[:token], slot_a, 2)
 abort "A book_table failed (#{rc}): #{JSON.generate(book_a)}" unless rc == 200
 booking_id_a = book_a["booking_id"]
 abort "A's booking_id missing: #{JSON.generate(book_a)}" unless booking_id_a
@@ -129,7 +129,7 @@ b_cancel_on_a_status, _b_cancel_on_a = WIRE.post_json(
 )
 
 # ── Step 4: B queries my_bookings BEFORE booking (Assertion 1 data) ──────────
-b_booking_ids_before = my_booking_ids(SERVER, b[:token], "B (before)")
+b_booking_ids_before = my_booking_ids(b[:token], "B (before)")
 
 # ── Step 5a: B books with a FORGED user_id arg (Assertion 2a) ────────────────
 #
@@ -140,25 +140,25 @@ b_booking_ids_before = my_booking_ids(SERVER, b[:token], "B (before)")
 # naming the parameter, which is what the published contract requires. The
 # refusal writes nothing, so no seating is consumed and the legitimate booking
 # below can take the very slot this attempt named.
-slot_b = find_open_slot(SERVER, b[:token], 2,
+slot_b = find_open_slot(b[:token], 2,
                         exclude: [[slot_a["restaurant_table_id"], slot_a["seating_at"]]])
-forged_rc, forged_resp = book_slot(SERVER, b[:token], slot_b, 2,
+forged_rc, forged_resp = book_slot(b[:token], slot_b, 2,
                                    user_id: a[:user_id])  # adversarial: B supplies A's user_id
 STDERR.puts "  B book_table with a forged user_id → #{forged_rc} #{forged_resp["code"].inspect}"
 
 # ── Step 5b: and the second half, which the refusal does not itself prove ────
 # Ownership is taken from the AUTHENTICATED identity. B books LEGITIMATELY; the
 # rake task reads the row back and asserts bookings.user_id == B.
-rc, book_b = book_slot(SERVER, b[:token], slot_b, 2)
+rc, book_b = book_slot(b[:token], slot_b, 2)
 abort "B book_table failed (#{rc}): #{JSON.generate(book_b)}" unless rc == 200
 booking_id_b = book_b["booking_id"]
 abort "B's booking_id missing: #{JSON.generate(book_b)}" unless booking_id_b
 
 # ── Step 6: B queries my_bookings AFTER booking (must include oB, not oA) ─────
-b_booking_ids_after = my_booking_ids(SERVER, b[:token], "B (after)")
+b_booking_ids_after = my_booking_ids(b[:token], "B (after)")
 
 # ── Step 7: A queries my_bookings AFTER B's booking (must NOT include oB) ─────
-a_booking_ids_after = my_booking_ids(SERVER, a[:token], "A (after)")
+a_booking_ids_after = my_booking_ids(a[:token], "A (after)")
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(

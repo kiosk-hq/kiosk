@@ -86,16 +86,11 @@ WIRE    = Kiosk::Redteam::Wire.new(base_url: SERVER)
 SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 def request(req) = SESSION.request(req)
-def get_html(path) = SESSION.get_html(path)
-def post_form(path, form) = SESSION.post_form(path, form)
-def csrf_token(html) = SESSION.csrf_token(html)
 
 # session: true sends the human's cookie jar (the Devise session channel);
 # agent calls send only their Bearer header — never the human's cookies.
 def post_json(path, body, headers = {}) = SESSION.post_json(path, body, headers)
 def get_json(path, params = {}, headers = {}) = SESSION.get_json(path, params, headers)
-
-def csrf_token(html) = html[/name="authenticity_token" value="([^"]+)"/, 1]
 
 def pop_proof(key, pem)
   rc, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")

@@ -55,8 +55,6 @@ SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 def request(req) = SESSION.request(req)
 def get_html(path) = SESSION.get_html(path)
-def post_form(path, form) = SESSION.post_form(path, form)
-def csrf_token(html) = SESSION.csrf_token(html)
 
 # session: true sends the human's cookie jar (the Devise session channel);
 # agent calls send only their Bearer header — never the human's cookies.

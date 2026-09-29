@@ -77,10 +77,18 @@ module Kiosk
       # sees the caller's headers, address and request id. Everything else is
       # rebuilt: the outer env carries a CONSUMED `rack.input` and memoised
       # `action_dispatch.request.parameters`, which must not leak in.
+      #
+      # `action_dispatch.parameter_filter` is here because this dispatch logs a
+      # SECOND `Processing by … / Parameters:` pair, at `info`, carrying the
+      # handler's own arguments. Without the host's filter on this env that
+      # line is unfiltered, so a field the app named in
+      # `config.filter_parameters` is masked on the wire request's line and
+      # written out in full on the handler's.
       SEEDED_KEYS = %w[
         REMOTE_ADDR SERVER_NAME SERVER_PORT SERVER_PROTOCOL
         rack.url_scheme rack.session rack.errors
         action_dispatch.request_id action_dispatch.remote_ip
+        action_dispatch.parameter_filter
       ].freeze
 
       attr_reader :method_name, :wire_name, :kind

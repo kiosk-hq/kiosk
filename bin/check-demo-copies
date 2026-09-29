@@ -4167,6 +4167,12 @@ DEVISE_DELEGATION =
   "place the human's cookie jar, CSRF read and sign-in POST are reached from, so a copy that " \
   "inlines its own Net::HTTP call here is precisely the drift the file-level rule cannot see."
 
+HTML_DELEGATION =
+  DEVISE_DELEGATION + " This half of the façade reaches the HTML of the RFC 8628 verify page — a " \
+  "cookie jar, a CSRF read, a form POST — so it ships only in the two drivers that walk that " \
+  "page. atablefor's ceremony is a link code plus a possession proof and touches no HTML at all, " \
+  "so a copy there would be four definitions a reader has to decide to ignore."
+
 WIRE_PAIR =
   "One of the HTTP helpers the driver opens with, answering the `[status, parsed_body]` pair every " \
   "assertion below it reads. On its own it is four lines; what makes it worth holding is that the " \
@@ -4360,10 +4366,12 @@ FRAGMENTS = {
 
   # ── script/binding_flow.rb — atablefor, philslist, stylish (T-136) ─────────
   #
-  # All sixteen shared units are identical, which makes this the clearest case in
-  # the fleet: everything these three drivers share IS the harness, and
-  # everything they do with it — Diego's table, a philslist listing, a stylish
-  # appointment — is top-level code the `:per_demo` file entry covers.
+  # Everything these drivers share IS the harness, and everything they do with
+  # it — Diego's table, a philslist listing, a stylish appointment — is
+  # top-level code the `:per_demo` file entry covers. The four HTML delegations
+  # are narrower than the rest: only the two drivers that walk the device-grant
+  # verify page call them, so they ship in DEVICE_GRANT rather than in all
+  # three.
   "script/binding_flow.rb#SERVER" => { rule: :code, ships: BINDING_DEMOS, why: DRIVER_ENV },
   "script/binding_flow.rb#ISSUER" => {
     rule:  :code,
@@ -4398,13 +4406,13 @@ FRAGMENTS = {
     rule:  :code,
     ships: BINDING_DEMOS,
     why:   "The single construction of {DeviseSession} each driver builds its human channel from. " \
-           "One line, and the one that decides whether the six delegations below reach the shared " \
+           "One line, and the one that decides whether the delegations below reach the shared " \
            "class or a local re-implementation. " + DEVISE_DELEGATION,
   },
-  "script/binding_flow.rb#request"    => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
-  "script/binding_flow.rb#get_html"   => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
-  "script/binding_flow.rb#post_form"  => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
-  "script/binding_flow.rb#csrf_token" => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
+  "script/binding_flow.rb#request"    => { rule: :code, ships: DEVICE_GRANT, why: HTML_DELEGATION },
+  "script/binding_flow.rb#get_html"   => { rule: :code, ships: DEVICE_GRANT, why: HTML_DELEGATION },
+  "script/binding_flow.rb#post_form"  => { rule: :code, ships: DEVICE_GRANT, why: HTML_DELEGATION },
+  "script/binding_flow.rb#csrf_token" => { rule: :code, ships: DEVICE_GRANT, why: HTML_DELEGATION },
   "script/binding_flow.rb#post_json"  => {
     rule:  :code,
     ships: BINDING_DEMOS,

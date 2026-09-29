@@ -9,9 +9,9 @@
 # is a flake in every example after it.
 #
 # It boots a Rails application with kiosk-server loaded and the engine mounted,
-# declares one topic of each reach, installs a fake agent-IdP that accepts one
-# bearer token, serves the app on an ephemeral port, then drives the scenarios
-# below over a REAL WebSocket and prints one JSON report on stdout.
+# declares the topics the scenarios need, installs a fake agent-IdP that accepts
+# one bearer token, serves the app on an ephemeral port, then drives the
+# scenarios below over a REAL WebSocket and prints one JSON report on stdout.
 #
 # The client is built on `websocket-driver`, which Action Cable already depends
 # on — so the suite gains no dependency and no interpreter but Ruby.
@@ -25,8 +25,12 @@ require "puma/configuration"
 require "puma/launcher"
 require "websocket/driver"
 require "openssl"
+require "stringio"
 
 REPORT = {}
+# The engine's own log, so a scenario can assert a line the wire cannot carry.
+# ERROR level only: everything below it is request noise.
+LOG = StringIO.new
 
 # ── a fake agent-IdP: one token, one identity ────────────────────────────────
 GOOD_TOKEN = "good-token"
@@ -65,6 +69,13 @@ class ProbeController < ActionController::Base
     subject_reachable ->(subject, _identity) { REACHABLE[:value] && subject.to_s == "list_ok" }
   end
 
+  topic :boom do
+    reach :consented
+    description "A topic whose own subject rule raises."
+    payload_schema type: "object"
+    subject_reachable ->(_subject, _identity) { raise "operator rule blew up" }
+  end
+
   kind :query
   description "Lists nothing, so the origin has a verb and a catalogue."
   input_schema type: "object", additionalProperties: false, properties: {}
@@ -77,7 +88,7 @@ end
 class ProbeApp < Rails::Application
   config.eager_load = false
   config.hosts.clear
-  config.logger = Logger.new(IO::NULL)
+  config.logger = Logger.new(LOG, level: Logger::ERROR)
   config.secret_key_base = "x" * 64
 end
 
@@ -353,6 +364,22 @@ begin
   REPORT[:foreign_origin_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
   sock.close
 
+  # 15 — an operator's OWN subject rule raises. The refusal is right, because
+  #      the safe reading of a broken authorisation rule is NO — and the
+  #      operator whose lambda raised has to be able to find out, which the
+  #      wire cannot tell them.
+  sock = connect(port)
+  sock.pump_until { sock.frames.any? }
+  sock.subscribe(identifier("boom", subject: "anything"))
+  sock.pump_until do
+    sock.frames.any? { |f| f["type"] == "reject_subscription" && f["identifier"].include?("boom") }
+  end
+  REPORT[:raising_rule_rejected] =
+    sock.frames.any? { |f| f["type"] == "reject_subscription" && f["identifier"].include?("boom") }
+  REPORT[:raising_rule_logged] =
+    LOG.string.include?(%([kiosk] events subject rule raised for topic "boom": RuntimeError: operator rule blew up))
+  sock.close
+
   # ── re-authorisation while the subscription stands (spec Section 8.5.6) ───
   #
   # Two sockets are opened and HELD while the operator's answers change under
@@ -365,7 +392,7 @@ begin
   plain = connect(port, path: "/kiosk/events?topic=order_payment")
   plain.pump_until { plain.messages.any? { |m| m["type"] == "subscribed" } }
 
-  # 15 — nothing has changed, so several periods later neither socket has been
+  # 16 — nothing has changed, so several periods later neither socket has been
   #      told anything. A timer that tore a valid subscription down would be as
   #      wrong as one that never ran.
   held.pump_until(seconds: 3) { false }
@@ -373,7 +400,7 @@ begin
   REPORT[:steady_unsubscribed] = held.messages.any? { |m| m["type"] == "unsubscribed" }
   REPORT[:steady_disconnected] = plain.frames.any? { |f| f["type"] == "disconnect" }
 
-  # 16 — the operator's own rule stops saying yes. Delivery stops and the
+  # 17 — the operator's own rule stops saying yes. Delivery stops and the
   #      client is told why, on the subscription that lost it and no other.
   REACHABLE[:value] = false
   held.pump_until(seconds: 5) { held.messages.any? { |m| m["type"] == "unsubscribed" } }
@@ -381,7 +408,7 @@ begin
   plain.pump_until(seconds: 2) { false }
   REPORT[:other_socket_unsubscribed] = plain.messages.any? { |m| m["type"] == "unsubscribed" }
 
-  # 17 — the credential stops resolving for a reason that is not expiry. The
+  # 18 — the credential stops resolving for a reason that is not expiry. The
   #      whole connection goes, and the client is told that coming back with
   #      this token will not help.
   REVOKED[:value] = true
@@ -392,7 +419,7 @@ begin
   held.close
   plain.close
 
-  # 18 — the access token AGES OUT under a held socket. The two sockets differ
+  # 19 — the access token AGES OUT under a held socket. The two sockets differ
   #      in nothing but their credential's `exp`, and that is what separates
   #      "come back" from "stop". Last, because after it no upgrade resolves.
   REVOKED[:value] = false

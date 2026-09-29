@@ -163,7 +163,12 @@ class KioskEvents < ActionCable::Channel::Base
     return declaration[:reach] == :principal if callable.nil?
 
     !!callable.call(@subject, identity)
-  rescue StandardError
+  rescue StandardError => e
+    # The refusal is right — the safe reading of a broken authorisation rule is
+    # NO — but it is the operator's own code that raised, and a refusal alone
+    # is indistinguishable from the rule saying no.
+    logger&.error("[kiosk] events subject rule raised for topic #{@topic.inspect}: " \
+                  "#{e.class}: #{e.message}")
     false
   end
 

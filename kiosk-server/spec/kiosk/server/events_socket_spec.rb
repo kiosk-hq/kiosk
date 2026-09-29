@@ -121,6 +121,15 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     it "accepts the same topic for a subject the operator says IS reachable" do
       expect(report["reachable_subject_subscribed"]).to be(true)
     end
+
+    # The refusal is right — the safe reading of a broken authorisation rule is
+    # NO. What the wire cannot carry is WHOSE code broke, so the engine says it
+    # in its own log; without that line the operator sees a refusal
+    # indistinguishable from their rule answering no.
+    it "REFUSES when the operator's own subject rule raises, and logs what raised" do
+      expect(report["raising_rule_rejected"]).to be(true)
+      expect(report["raising_rule_logged"]).to be(true)
+    end
   end
 
   describe "delivery" do

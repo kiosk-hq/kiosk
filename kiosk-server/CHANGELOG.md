@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-29: **An operator's own `subject_reachable` rule that RAISES is now named in the engine's log.** The refusal is unchanged; it simply stopped being indistinguishable from the rule saying no.
+
 - 2026-09-29: **`topic … do description nil end` is accepted**, on the same terms as a verb's null description. The macro must be called; its value may be null, as the schema types it.
 
 - 2026-09-29: **`EventStore#truncated?` agrees with the durable store at the floor.** A cursor one below it holds a complete range, so it no longer costs a subscriber an ordinary re-read.

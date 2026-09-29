@@ -11,8 +11,8 @@
 # while no longer asserting the statement the matrix claims it covers.
 #
 # So the matrix is walked instead — by a human, or an agent with a finite budget,
-# against a work-list of ~185 rows with no change-detection on it. Predictably
-# that samples: the last sweep hand-verified about ten rows, chosen by section
+# against a work-list with no change-detection on it. Predictably that samples:
+# the last sweep hand-verified about ten rows, chosen by section
 # recency rather than by what had changed, while 257 commits had landed since the
 # matrix was rebuilt. Nothing was wrong with the judgement; there was simply no
 # way to ask which rows deserved it.

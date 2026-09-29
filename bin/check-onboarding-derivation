@@ -2713,11 +2713,10 @@ end
 # assumes exactly one vacuity arm per rule and every other arm planted. Both
 # halves of that assumption are false and were already false when it was
 # written: PROPERTY_KEYWORDS carries TWO vacuity arms, and the network reader's
-# arms are neither kind. MEASURED at the fix: 25 planted, 18 vacuity, 4 network
-# = 47, against a printed «30 planted breaks, 17 vacuity». The verdict was never
-# wrong -- it counts the failures, not the split -- but a guard that derives a
-# self-description WRONGLY is the K-1340 class exactly, and the error grows with
-# every arm that is not one of the two assumed kinds.
+# arms are neither kind. The verdict was never wrong -- it counts the failures,
+# not the split -- but a guard that derives a self-description WRONGLY is the
+# K-1340 class exactly, and the error grows with every arm that is not one of
+# the two assumed kinds. `--self-test` prints the live split.
 #
 # So the kind is DECLARED by the helper the call site uses, and the summary
 # COUNTS. Three kinds, and the names say what question the arm answers:

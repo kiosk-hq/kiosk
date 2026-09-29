@@ -142,8 +142,8 @@
 # `{lib,app}`, so it cannot see the `CHANGELOG.md` beside them -- the one file of
 # that gem `spec.files` PACKAGES and an adopter installs. A verify wave measured
 # it rather than reasoning about it: the retired sentence written back into a
-# fresh Unreleased entry left the sweep at 48 examples 0 failures and all 27
-# `bin/check-*` guards at exit 0. The sweep DECLINED to widen, and its stated
+# fresh Unreleased entry left the sweep at 48 examples 0 failures and every
+# `bin/check-*` at exit 0. The sweep DECLINED to widen, and its stated
 # reason -- an append-only file would redden on frozen history for ever -- is
 # true of a WHOLE-FILE scan and only of that. The baseline tier is the shape
 # that is not: it reads what is new and counts the rest.

@@ -401,10 +401,10 @@
 # this file that is not about WHO is reading: a dangling path is equally wrong
 # for the maintainer, the adopter and the stranger.
 #
-# WHAT MAKES IT SAFE, measured at head when it was written over the 936 files in
-# scope: 209 path tokens resolve and 3 distinct ones did not, at 5 sites — the
-# two that reopened K-1409, a stale `lib/prove_key.rb` in two files that named a
-# path a move had emptied (K-1504), and one extensionless `e2e/README`. Zero
+# WHAT MAKES IT SAFE, measured when the rule was written: 3 distinct path tokens
+# did not resolve, at 5 sites — the two that reopened K-1409, a stale
+# `lib/prove_key.rb` in two files that named a path a move had emptied (K-1504),
+# and one extensionless `e2e/README`. Zero
 # false positives. Its vacuity arm asserts the RESOLVING count is non-zero,
 # because a pattern that stopped matching paths would print the same clean line
 # as a repository with no dangling ones.
@@ -459,9 +459,9 @@
 # than the declared pattern — a prefilter narrower than the decision is a rule
 # that never reaches its own predicate, and that, not the predicate, is what
 # was wrong twice. MEASURED with the third leg live over the eight scopes this
-# guard reads (975 files: gem 207, demo 508, spec 172, demo_spec 18, e2e 34,
-# deploy 18, firmware 13, root 5): exactly ONE hit, the K-1565 line, and every
-# other scope OK — so the widening lands with no new exemption either.
+# guard reads: exactly ONE hit, the K-1565 line, and every other scope OK — so
+# the widening lands with no new exemption either. The run prints the size of
+# each scope; it is not restated here.
 #
 # ── C1: THE `used to` CENSUS — PRINTED, NEVER RED ──────────────────────────
 #

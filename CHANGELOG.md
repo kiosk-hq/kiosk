@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **The spent `box-prep-2026-08-11.sh` one-shot is out of `deploy/`.** `rollout.sh` renders every env file from its template on every run; the runbook no longer ships it.
+
 - 2026-09-29: **Security: getgrocery filters the customer's postal address out of its request log.** A demo-domain personal field is the operator's to name; the engine names only the wire's.
 
 - 2026-09-29: **Security: an origin no longer writes the caller's proofs and mandates into its request log.** The engine filters its own field names; the three demos missing Rails' list now ship it.

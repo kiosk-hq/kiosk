@@ -134,8 +134,8 @@ ROOT = File.expand_path("..", __dir__)
 # The reference fleet was last rebuilt from scratch on this date —
 # deploy/demo-reset.sh reloaded every box from the head tree (2e4a767d) — so no
 # database in service holds a schema older than the tree of that day. It was
-# first provisioned 2026-08-11 (deploy/box-prep-2026-08-11.sh); the reset resets
-# this window. See "HOW FAR BACK" above before changing it.
+# first provisioned 2026-08-11; the reset resets this window. See "HOW FAR
+# BACK" above before changing it.
 FLEET_SCHEMA_BASELINE = "2026-08-28"
 
 # ── The leftovers that are ACCEPTED, and the row that made each one so (T-132)

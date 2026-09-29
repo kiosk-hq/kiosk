@@ -73,7 +73,6 @@ What each unit must carry. For EACH of the 7 apps:
       no template declares does not come across and this is no longer a thing to remember. It edits only
       `/etc/kiosk-demo/*.env`; it does
       NOT touch Caddy or any throttle (there is deliberately none; see `deploy/README.md` §"Edge rate-limit").
-      `deploy/box-prep-2026-08-11.sh` did this once, on that date, and is kept as the record of it — not a step.
 - [ ] **PoW secret (all 7 demos):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
       without it outside dev/test (a shipped default would be world-readable in the public repo, letting anyone forge a
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.

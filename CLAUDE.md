@@ -124,8 +124,9 @@ universal agent skill is `skill.md` on the same site.
   The `db/migrate` copies are ALSO held against the engine's install-generator
   `.rb.tt` templates (rendered with the generator's defaults, byte-matched), so
   editing a template in kiosk-server without regenerating the demos — or
-  vice versa — fails the build; known divergences live in `GENERATOR_TEMPLATES`
-  as `drift:` records that error the day their copies converge.
+  vice versa — fails the build. Every template is declared in `GENERATOR_TEMPLATES`
+  either `emits:` (compared in all seven) or `not_compared:` with its reason;
+  there is no third state, so a divergence is fixed rather than recorded.
   Most of the Rails skeleton (`bin/`, `config/`, `public/`, `Rakefile`,
   `config.ru`, `db/seeds.rb`) is deliberately NOT compared — each demo edits it
   for its own port and host — and that exclusion is recorded, path by path with

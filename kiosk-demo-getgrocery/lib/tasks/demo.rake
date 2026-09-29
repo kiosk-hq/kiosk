@@ -111,6 +111,19 @@ def start_stripe_mock
   abort "stripe-mock did not become ready on #{url} — see /tmp/stripe-mock.log"
 end
 
+# ── The port has to be free before we boot on it ─────────────────────────────
+#
+# A server already listening there answers the readiness poll below, so the task
+# would drive an origin it never started and pass. Puma renames its own process,
+# so the holder is found by PORT, never by matching a command line.
+def getgrocery_require_free_port(port)
+  require "socket"
+  TCPServer.new("127.0.0.1", port.to_i).close
+rescue Errno::EADDRINUSE
+  abort "Port #{port} is already held by pid #{`lsof -ti :#{port}`.split.join(' ')} — this task " \
+        "would drive that server instead of the one it starts. Stop it and run the task again."
+end
+
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
@@ -273,6 +286,7 @@ namespace :check do
     end
 
     port         = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
     log          = "/tmp/kiosk-getgrocery-demo.log"
     db           = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
     flow_rb      = File.expand_path("../../script/getgrocery_flow.rb", __dir__)
@@ -622,6 +636,7 @@ namespace :check do
     Rake::Task["demo:setup"].invoke
 
     port = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
     log  = "/tmp/kiosk-getgrocery-claim.log"
     db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
 
@@ -821,6 +836,7 @@ namespace :check do
     puts "  (stripe-mock at #{mock_url} — adversarial suite, no real Stripe)"
 
     port = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
     log  = "/tmp/kiosk-getgrocery-isolation.log"
     db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
 
@@ -1021,6 +1037,7 @@ namespace :check do
     require "json"
 
     port = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
     log  = "/tmp/kiosk-getgrocery-schema.log"
 
     host = begin
@@ -1486,6 +1503,7 @@ namespace :check do
     puts "  (stripe-mock at #{mock_url} — adversarial battery, no real Stripe)"
 
     port = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
     log  = "/tmp/kiosk-getgrocery-redteam.log"
 
     # ── host resolution ────────────────────────────────────────────────
@@ -1686,6 +1704,7 @@ namespace :check do
     Rake::Task["demo:setup"].invoke
 
     port         = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
 
     # ── host resolution ────────────────────────────────────────────────
     host = begin
@@ -1988,6 +2007,7 @@ namespace :check do
     puts "  (stripe-mock at #{mock_url} — age-gate flow, no real Stripe)"
 
     port = ENV.fetch("PORT", "3001")
+    getgrocery_require_free_port(port)
     log  = "/tmp/kiosk-getgrocery-agecheck.log"
 
     host = begin

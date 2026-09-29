@@ -67,6 +67,19 @@ def skooti_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
   end
 end
 
+# ── The port has to be free before we boot on it ─────────────────────────────
+#
+# A server already listening there answers the readiness poll below, so the task
+# would drive an origin it never started and pass. Puma renames its own process,
+# so the holder is found by PORT, never by matching a command line.
+def skooti_require_free_port(port)
+  require "socket"
+  TCPServer.new("127.0.0.1", port.to_i).close
+rescue Errno::EADDRINUSE
+  abort "Port #{port} is already held by pid #{`lsof -ti :#{port}`.split.join(' ')} — this task " \
+        "would drive that server instead of the one it starts. Stop it and run the task again."
+end
+
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
@@ -109,6 +122,7 @@ namespace :check do
     require_relative "../../script/dev_unlock_key"
 
     port = ENV.fetch("PORT", "3004")
+    skooti_require_free_port(port)
     log  = "/tmp/kiosk-skooti-demo.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -669,6 +683,7 @@ namespace :check do
     require "json"
 
     port = ENV.fetch("PORT", "3004")
+    skooti_require_free_port(port)
     log  = "/tmp/kiosk-skooti-isolation.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -911,6 +926,7 @@ namespace :check do
     require_relative "../../script/prove_test_issuer"
 
     port = ENV.fetch("PORT", "3004")
+    skooti_require_free_port(port)
     log  = "/tmp/kiosk-skooti-redteam.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -1044,6 +1060,7 @@ namespace :check do
     require "json"
 
     port = ENV.fetch("PORT", "3004")
+    skooti_require_free_port(port)
     log  = "/tmp/kiosk-skooti-schema.log"
 
     host = begin
@@ -1416,6 +1433,7 @@ namespace :check do
     require_relative "../../script/prove_broker_boot"
 
     port = ENV.fetch("PORT", "3004")
+    skooti_require_free_port(port)
     log  = "/tmp/kiosk-skooti-kyc.log"
 
     host = begin

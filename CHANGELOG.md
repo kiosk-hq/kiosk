@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **Every demo task that boots a server, and `e2e/run.sh`, now refuse to start when something already holds the port, naming the pid.** They used to drive it and pass.
+
 - 2026-09-29: **A database now records which MAJOR of the Kiosk schema it carries, and the engine refuses a boot two or more majors ahead of it.** Crossing a major stops at it (T-103).
 
 - 2026-09-28: **`rails g kiosk:install` now draws the wire**: it writes `config/routes/kiosk.rb` with the engine mounted and the `draw(:kiosk)` line that reaches it.

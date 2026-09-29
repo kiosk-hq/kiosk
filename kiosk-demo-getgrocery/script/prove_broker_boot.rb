@@ -178,6 +178,16 @@ module ProveBrokerBoot
       # reachable origin (host:port), so the human/driver can approve on it.
       "PROVE_PUBLIC_URL"   => broker_url,
     }.merge(broker_operator_env(operator_host, signing_key_pem))
+# The broker's port has to be free: a broker already listening there answers
+# the readiness poll below, so this run would trust a key it never started.
+begin
+  require "socket"
+  TCPServer.new(broker_host, BROKER_PORT.to_i).close
+rescue Errno::EADDRINUSE
+  abort "Port #{BROKER_PORT} is already held by pid #{`lsof -ti :#{BROKER_PORT}`.split.join(' ')} — " \
+        "this run would trust that broker instead of the one it starts. Stop it and run again."
+end
+
     broker_pid = spawn(
       broker_env,
       "bundle exec rails s -p #{BROKER_PORT} -b #{broker_host} -e development",

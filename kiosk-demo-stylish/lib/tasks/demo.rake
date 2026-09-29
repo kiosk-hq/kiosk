@@ -87,6 +87,19 @@ DEMO_CREDENTIALS = {
   bob_email:   "bob@example.com",
 }.freeze
 
+# ── The port has to be free before we boot on it ─────────────────────────────
+#
+# A server already listening there answers the readiness poll below, so the task
+# would drive an origin it never started and pass. Puma renames its own process,
+# so the holder is found by PORT, never by matching a command line.
+def stylish_require_free_port(port)
+  require "socket"
+  TCPServer.new("127.0.0.1", port.to_i).close
+rescue Errno::EADDRINUSE
+  abort "Port #{port} is already held by pid #{`lsof -ti :#{port}`.split.join(' ')} — this task " \
+        "would drive that server instead of the one it starts. Stop it and run the task again."
+end
+
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
@@ -187,6 +200,7 @@ namespace :check do
     require "shellwords"
 
     port = ENV.fetch("PORT", "3005")
+    stylish_require_free_port(port)
     log  = "/tmp/kiosk-stylish-isolation.log"
     db   = "kiosk_stylish_development"
 
@@ -363,6 +377,7 @@ namespace :check do
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
     port         = ENV.fetch("PORT", "3005")
+    stylish_require_free_port(port)
     host = begin
       addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
         begin
@@ -458,6 +473,7 @@ namespace :check do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     port         = ENV.fetch("PORT", "3005")
+    stylish_require_free_port(port)
     host = begin
       addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
         begin
@@ -593,6 +609,7 @@ namespace :check do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
     port         = ENV.fetch("PORT", "3005")
+    stylish_require_free_port(port)
     host = begin
       addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
         begin
@@ -765,6 +782,7 @@ namespace :check do
     require "uri"
 
     port         = ENV.fetch("PORT", "3005")
+    stylish_require_free_port(port)
     log          = "/tmp/kiosk-stylish-redteam.log"
     host = begin
       addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"
@@ -877,6 +895,7 @@ namespace :check do
     require "json"
 
     port         = ENV.fetch("PORT", "3005")
+    stylish_require_free_port(port)
     log          = "/tmp/kiosk-stylish-schema.log"
     host = begin
       addr = if ENV["KIOSK_DEMO_HOST_LOOKUP"] == "1"

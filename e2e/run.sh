@@ -453,6 +453,11 @@ ok "signing key generated"
 # ─── start server ───────────────────────────────────────────────────────
 
 log "start rails server on port $SERVER_PORT"
+# A server already listening there answers the readiness poll below, so the run
+# would drive an origin it never started and pass. Puma renames its own process,
+# so the holder is found by PORT, never by matching a command line.
+port_held=$(lsof -ti ":$SERVER_PORT" | tr '\n' ' ' || true)
+[ -z "$port_held" ] || fail "port $SERVER_PORT is already held by pid $port_held— this run would drive that server instead of the one it starts. Stop it and run again."
 export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
 # Where the operator's sink writes. Its PRESENCE is what makes the initializer
 # configure a sink at all, so the second boot below (which unsets it) is the

@@ -74,6 +74,19 @@ def hoteling_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
   end
 end
 
+# ── The port has to be free before we boot on it ─────────────────────────────
+#
+# A server already listening there answers the readiness poll below, so the task
+# would drive an origin it never started and pass. Puma renames its own process,
+# so the holder is found by PORT, never by matching a command line.
+def hoteling_require_free_port(port)
+  require "socket"
+  TCPServer.new("127.0.0.1", port.to_i).close
+rescue Errno::EADDRINUSE
+  abort "Port #{port} is already held by pid #{`lsof -ti :#{port}`.split.join(' ')} — this task " \
+        "would drive that server instead of the one it starts. Stop it and run the task again."
+end
+
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
@@ -341,6 +354,7 @@ namespace :check do
     require "shellwords"
 
     port = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
     log  = "/tmp/kiosk-hoteling-demo.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -641,6 +655,7 @@ namespace :check do
     require "shellwords"
 
     port = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
     log  = "/tmp/kiosk-hoteling-spending-cap.log"
     db   = "kiosk_hoteling_development"
 
@@ -857,6 +872,7 @@ namespace :check do
     require "json"
 
     port = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
     log  = "/tmp/kiosk-hoteling-isolation.log"
 
     host = begin
@@ -1062,6 +1078,7 @@ namespace :check do
     require "uri"
 
     port = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
     log  = "/tmp/kiosk-hoteling-redteam.log"
 
     host = begin
@@ -1169,6 +1186,7 @@ namespace :check do
     require "json"
 
     port = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
     log  = "/tmp/kiosk-hoteling-schema.log"
 
     host = begin
@@ -1515,6 +1533,7 @@ namespace :check do
     require "json"
 
     port = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
     log  = "/tmp/kiosk-hoteling-search.log"
 
     host = begin
@@ -1776,6 +1795,7 @@ namespace :check do
     abort "numpy not found. Install with: pip install numpy" unless python_ok
 
     port         = ENV.fetch("PORT", "3003")
+    hoteling_require_free_port(port)
 
     # ── host resolution ────────────────────────────────────────────────
     host = begin

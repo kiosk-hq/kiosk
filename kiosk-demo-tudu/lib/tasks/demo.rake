@@ -102,6 +102,19 @@ def tudu_run_flow(flow_rb, server_url, extra_env = {})
   end
 end
 
+# ── The port has to be free before we boot on it ─────────────────────────────
+#
+# A server already listening there answers the readiness poll below, so the task
+# would drive an origin it never started and pass. Puma renames its own process,
+# so the holder is found by PORT, never by matching a command line.
+def tudu_require_free_port(port)
+  require "socket"
+  TCPServer.new("127.0.0.1", port.to_i).close
+rescue Errno::EADDRINUSE
+  abort "Port #{port} is already held by pid #{`lsof -ti :#{port}`.split.join(' ')} — this task " \
+        "would drive that server instead of the one it starts. Stop it and run the task again."
+end
+
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
@@ -172,6 +185,7 @@ namespace :check do
   DESC
   task collab: "demo:setup" do
     port = ENV.fetch("PORT", "3007")
+    tudu_require_free_port(port)
     log  = "/tmp/kiosk-tudu-collab.log"
     puts "\n── Starting tudu (collaboration happy path) ──"
     host = begin
@@ -264,6 +278,7 @@ namespace :check do
   DESC
   task link: "demo:setup" do
     port = ENV.fetch("PORT", "3007")
+    tudu_require_free_port(port)
     log  = "/tmp/kiosk-tudu-link.log"
     db   = "kiosk_tudu_development"
     holder_id       = "00000000-0000-0000-0000-000000000001"
@@ -416,6 +431,7 @@ namespace :check do
       unless system("bundle", "exec", "rails", "runner", probe)
 
     port = ENV.fetch("PORT", "3007")
+    tudu_require_free_port(port)
     log  = "/tmp/kiosk-tudu-isolation.log"
     db   = "kiosk_tudu_development"
 
@@ -534,6 +550,7 @@ namespace :check do
   DESC
   task redteam: "demo:setup" do
     port = ENV.fetch("PORT", "3007")
+    tudu_require_free_port(port)
     log  = "/tmp/kiosk-tudu-redteam.log"
     holder_id       = "00000000-0000-0000-0000-000000000001"
     holder_email    = "alice@example.com"
@@ -593,6 +610,7 @@ namespace :check do
   DESC
   task schema: "demo:setup" do
     port = ENV.fetch("PORT", "3007")
+    tudu_require_free_port(port)
     log  = "/tmp/kiosk-tudu-schema.log"
 
     puts "\n── Starting tudu (schema proof) ──"

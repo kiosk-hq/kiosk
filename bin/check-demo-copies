@@ -195,7 +195,7 @@ if ARGV.include?("--self-test")
   # The floor is the number of guarded sections measured when this was written.
   # It is a MEASUREMENT, not a target: it may rise freely, and a fall means
   # either a guard was deleted or the vocabulary above stopped reading one.
-  SELF_TEST_VACUITY_FLOOR = 15
+  SELF_TEST_VACUITY_FLOOR = 16
 
   # The one rule with no `# ── … ──` banner, declared so the check below can tell
   # «an arm for an unbannered rule» from «an arm for a banner that has moved».
@@ -553,10 +553,11 @@ if ARGV.include?("--self-test")
             "plant that left the lockstep rule above at exit 0",
       ops:  [[:edit, "kiosk-demo-stylish/lib/tasks/demo.rake",
               "  task roles: \"demo:setup\" do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
-              "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    host = begin\n",
+              "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    " \
+              "stylish_require_free_port(port)\n    host = begin\n",
               "  task roles: \"demo:setup\" do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
               "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    " \
-              "host = \"127.0.0.1\"\n    _dropped = begin\n"]],
+              "stylish_require_free_port(port)\n    host = \"127.0.0.1\"\n    _dropped = begin\n"]],
       expect: /lib\/tasks\/demo\.rake: every task that boots a server must carry exactly one/ },
     { id: "host-pair-block-outlives-boot", kind: :break,
       rule: "Every task that boots a server detects its host (K-1413)",
@@ -570,6 +571,30 @@ if ARGV.include?("--self-test")
       what: "the boot sites stop being counted, so a pairing rule with nothing paired must say so",
       ops:  [[:edit, "bin/check-demo-copies", "    host_pair_booting += 1 if boots.positive?\n", ""]],
       expect: /the K-1413 host-pairing rule found 0 server-booting tasks/ },
+
+    { id: "free-port-task-loses-it", kind: :break,
+      rule: "Every task that boots a server asserts its port is free (T-077)",
+      what: "ONE of stylish's booting tasks loses the assertion and boots onto whatever already " \
+            "holds the port — the exact false green measured on tudu's check:collab",
+      ops:  [[:edit, "kiosk-demo-stylish/lib/tasks/demo.rake",
+              "  task roles: \"demo:setup\" do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
+              "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n    " \
+              "stylish_require_free_port(port)\n",
+              "  task roles: \"demo:setup\" do\n    require \"net/http\"; require \"uri\"; require \"json\"; " \
+              "require \"shellwords\"\n\n    port         = ENV.fetch(\"PORT\", \"3005\")\n"]],
+      expect: /lib\/tasks\/demo\.rake: every task that boots a server must call/ },
+    { id: "free-port-one-sided", kind: :break,
+      rule: "Every task that boots a server asserts its port is free (T-077)",
+      what: "one demo's copy of the helper drifts, so six tasks assert one thing and that demo's assert another",
+      ops:  [[:edit, "kiosk-demo-philslist/lib/tasks/demo.rake",
+              "  TCPServer.new(\"127.0.0.1\", port.to_i).close\n",
+              "  TCPServer.new(\"127.0.0.1\", port.to_i + 1).close\n"]],
+      expect: /the `<demo>_require_free_port` helpers must agree byte-for-byte/ },
+    { id: "vacuity-free-port", kind: :vacuity,
+      rule: "Every task that boots a server asserts its port is free (T-077)",
+      what: "the helpers stop being extracted, so a lockstep rule with nothing to compare must say so",
+      ops:  [[:edit, "bin/check-demo-copies", "  free_port_blocks[demo] = block\n", ""]],
+      expect: /the T-077 port-assertion rule read 0 helpers/ },
 
     { id: "desc-heredoc-flush-left", kind: :break,
       rule: "A `desc <<~` BODY MAY NOT DEDENT TO COLUMN 0 (K-1549)",
@@ -3538,14 +3563,14 @@ FLOW_RUNNER_VARIANTS = {
 # The helper's comment header + `def`, with the demo-specific name normalised
 # away. A rake file's helper is a top-level `def`, so the block runs from the
 # contiguous `#` lines above it down to the first column-0 `end`.
-def flow_runner_block(path, helper)
+def flow_runner_block(path, helper, as: "run_flow")
   lines = File.readlines(path)
   di = lines.index { |l| l.start_with?("def #{helper}(") } or return nil
   ei = (di...lines.size).find { |i| lines[i] == "end\n" } or return nil
 
   si = di
   si -= 1 while si.positive? && lines[si - 1].start_with?("#")
-  lines[si..ei].join.gsub(helper, "run_flow")
+  lines[si..ei].join.gsub(helper, as)
 end
 
 flow_runner_helpers = demos.filter_map do |dir|
@@ -3833,7 +3858,7 @@ end
 HOST_PAIR_BOOT = "bundle exec rails s "
 HOST_PAIR_TASK = /\A\s*task[\s(:]/
 
-# One entry per rake task: [line, declaration, boot sites, host blocks].
+# One entry per rake task: [line, declaration, boot sites, host blocks, port assertions].
 def host_pair_tasks(path, demo)
   lines  = File.readlines(path)
   starts = lines.each_index.select { |i| lines[i] =~ HOST_PAIR_TASK }
@@ -3841,27 +3866,42 @@ def host_pair_tasks(path, demo)
     body  = lines[a..((starts[k + 1] || lines.size) - 1)]
     boots = body.count { |l| l.include?(HOST_PAIR_BOOT) } +
             body.count { |l| l.include?("#{demo}_boot_server(") && l !~ /\A\s*def\s/ }
-    [a + 1, lines[a].strip, boots, body.count { |l| HOST_BLOCK_OPEN.match?(l) }]
+    ports = body.count { |l| l.include?("#{demo}_require_free_port(") && l !~ /\A\s*def\s/ }
+    [a + 1, lines[a].strip, boots, body.count { |l| HOST_BLOCK_OPEN.match?(l) }, ports]
   end
 end
 
 host_pair_booting = 0
 host_pair_bad     = []
+port_pair_bad     = []
 demos.each do |dir|
   demo = short.(File.basename(dir))
   path = File.join(dir, HOST_BLOCK_REL)
   next unless File.exist?(path)
 
-  host_pair_tasks(path, demo).each do |line, decl, boots, blocks|
-    next if boots.zero? && blocks.zero?
+  host_pair_tasks(path, demo).each do |line, decl, boots, blocks, ports|
+    next if boots.zero? && blocks.zero? && ports.zero?
 
     host_pair_booting += 1 if boots.positive?
     want = boots.positive? ? 1 : 0
+
+    unless ports == want
+      port_pair_bad << "#{demo}:#{line} `#{decl}` boots #{boots} server#{boots == 1 ? '' : 's'} " \
+                       "and asserts the port is free #{ports} time#{ports == 1 ? '' : 's'}"
+    end
     next if blocks == want
 
     host_pair_bad << "#{demo}:#{line} `#{decl}` boots #{boots} server#{boots == 1 ? '' : 's'} " \
                      "and detects its host #{blocks} time#{blocks == 1 ? '' : 's'}"
   end
+end
+
+unless port_pair_bad.empty?
+  errors << "#{HOST_BLOCK_REL}: every task that boots a server must call " \
+            "`<demo>_require_free_port(port)` exactly once, and a task that boots none may not " \
+            "call it — #{port_pair_bad.sort.join('; ')}. Without it a server left listening on " \
+            "that port answers the task's readiness poll, so the task drives an origin it never " \
+            "started and passes (T-077)."
 end
 
 unless host_pair_bad.empty?
@@ -3877,6 +3917,43 @@ if host_pair_booting < 2
   errors << "check-demo-copies: the K-1413 host-pairing rule found #{host_pair_booting} " \
             "server-booting task#{host_pair_booting == 1 ? '' : 's'} — the boot construct has moved " \
             "out of #{HOST_BLOCK_REL}, and a pairing rule with nothing paired passes everything."
+end
+
+# ── Every task that boots a server asserts its port is free (T-077) ──────────
+#
+# The pairing rule holds that every booting task CALLS it; this holds that the
+# seven copies of the helper it calls still say the same thing — the bind test
+# decides, and the abort names the pid holding the port. A demo losing the helper
+# altogether is already red above, because its tasks then call nothing.
+free_port_blocks = {}
+demos.each do |dir|
+  demo = short.(File.basename(dir))
+  path = File.join(dir, HOST_BLOCK_REL)
+  next unless File.exist?(path) && File.read(path).include?("def #{demo}_require_free_port(")
+
+  block = flow_runner_block(path, "#{demo}_require_free_port", as: "require_free_port")
+  if block.nil? || Ripper.sexp(block).nil?
+    errors << "#{demo}: #{HOST_BLOCK_REL} defines #{demo}_require_free_port but its comment+`def` " \
+              "block could not be read back as valid Ruby — the helper is no longer a top-level " \
+              "`def` closed by a column-0 `end`, so the port-assertion rule compared NOTHING for " \
+              "this demo. Fix the extraction in bin/check-demo-copies, do not drop the rule (T-077)."
+    next
+  end
+  free_port_blocks[demo] = block
+end
+
+if free_port_blocks.size < 2
+  errors << "check-demo-copies: the T-077 port-assertion rule read #{free_port_blocks.size} " \
+            "helper#{free_port_blocks.size == 1 ? '' : 's'} — the construct has moved out of " \
+            "#{HOST_BLOCK_REL}, and a lockstep rule that compares nothing passes everything."
+end
+
+free_port_groups = free_port_blocks.group_by { |_demo, block| block }
+if free_port_groups.size > 1
+  listed = free_port_groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
+  errors << "#{HOST_BLOCK_REL}: the `<demo>_require_free_port` helpers must agree byte-for-byte " \
+            "once the helper's own name is substituted, and they do not: #{listed}. This block is " \
+            "hand-copied into every demo — propagate the edit to all of them (T-077)."
 end
 
 # ── A `desc <<~` BODY MAY NOT DEDENT TO COLUMN 0 (K-1549) ────────────────────
@@ -7497,7 +7574,9 @@ if errors.empty?
        "with its exit-status tail compared in all #{flow_tails.size}, " \
        "#{host_block_sites} host-detection block(s) in #{host_blocks.size} demo(s) held in one form " \
        "modulo each demo's own vanity host and paired one-to-one with the " \
-       "#{host_pair_booting} rake task(s) that boot a server, " \
+       "#{host_pair_booting} rake task(s) that boot a server, each of which also asserts its port " \
+       "is free through one of #{free_port_blocks.size} identical `<demo>_require_free_port` " \
+       "helper(s), " \
 "#{desc_indent_parsed} `desc <<~` description bod#{desc_indent_parsed == 1 ? 'y' : 'ies'} " \
 "in the rake files of #{demos.length} demo(s) dedent to a column of their own — none is " \
 "flush left, so none re-indents the `rake -D` text around it, " \

@@ -1016,7 +1016,7 @@ namespace :check do
     Asserts:
       • `GET /kiosk/schema` answers 200 with NO Authorization header
       • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped)
-      • capabilities is the MODULE set schema/queries/actions/pay and NOT events
+      • capabilities is the MODULE set schema/queries/actions/pay and events
       • schema.queries includes catalog, delivery_slots, my_orders (each with description)
       • schema.actions includes create_order, reschedule_delivery (each with description)
       • `create_order` declares NO `order_id` and closes its input object, so a sent

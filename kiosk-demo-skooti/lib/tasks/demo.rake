@@ -1041,7 +1041,7 @@ namespace :check do
     Asserts:
       • `GET /kiosk/schema` answers 200 with NO Authorization header
       • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped)
-      • capabilities is the MODULE set schema/queries/actions/pay and NOT events
+      • capabilities is the MODULE set schema/queries/actions/pay and events
       • schema.actions includes reserve, start_rental, rent_motorcycle,
         payment_setup with descriptions
       • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon

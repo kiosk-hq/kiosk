@@ -164,17 +164,9 @@ def check_sibling
     elsif File.binread(copy) == File.binread(SOLVER)
       pass "kiosk.tech/pow/#{basename} is byte-identical to the source of truth"
     else
-      fail! "kiosk.tech/pow/#{basename} differs from kiosk-pow-equihash/solve.py"
+      fail! "kiosk.tech/pow/#{basename} differs from kiosk-pow-equihash/solve.py " \
+            "(#{sha256_of(copy)} vs #{sha256_of(SOLVER)})"
     end
-  end
-  hosted = File.join(SITE_ROOT, "pow", "solve.py")
-  if !File.exist?(hosted)
-    fail! "kiosk.tech/pow/solve.py is missing — the URL the skill pins would 404"
-  elsif File.binread(hosted) == File.binread(SOLVER)
-    pass "kiosk.tech/pow/solve.py is byte-identical to the source of truth"
-  else
-    fail! "kiosk.tech/pow/solve.py differs from kiosk-pow-equihash/solve.py " \
-          "(#{sha256_of(hosted)} vs #{sha256_of(SOLVER)})"
   end
 
   # Only the skill files that adopted the FIRST-PARTY url are in scope. Earlier

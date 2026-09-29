@@ -168,7 +168,7 @@
 #             a rewrite of the parameter builder this reader stops recognising,
 #             costs a decision instead of shrinking the corpus quietly.
 #             Each of the four is itself proved able to go red, off a corpus
-#             emptied or quietened on purpose, in `--self-test`.
+#             emptied, quietened or enlarged on purpose, in `--self-test`.
 #
 # ── WHAT IT DELIBERATELY DOES NOT DO ────────────────────────────────────────
 #
@@ -1161,6 +1161,42 @@ def self_test(root)
   if reserved_argument_names(root).empty?
     failures << "STRUCTURE: #{ARGUMENT_DECODER} yields no reserved argument names on disk, so " \
                 "arm (d) has no subject to compare the parameter corpus against"
+  end
+
+  # Arm (b) proved able to go red, driven off a corpus whose property
+  # descriptions have all been moved inside `kiosk-demo-*` — the demos-only
+  # scope the arm exists to refuse. The empty-corpus arm cannot stand in for
+  # it: an empty corpus returns at the VACUITY line before arm (b) is reached.
+  demos_only = Corpus.new(
+    descriptions: corpus.descriptions.reject { |d|
+      d.kind == :property && !d.file.start_with?("kiosk-demo-")
+    },
+    files_read: corpus.files_read, parse_errors: []
+  )
+  if structural_faults(root, demos_only).none? { |f| f.include?("narrowed to the demos") }
+    failures << "STRUCTURE: a corpus whose every property description sits inside a " \
+                "`kiosk-demo-*` directory raises no fault, so the arm that keeps the scope " \
+                "reaching past the demos asserts nothing"
+  end
+
+  # Arm (c) proved able to go red, driven off a corpus carrying one verb
+  # description more than the file's own text does — which is what a parser
+  # reading a line the text scan cannot see would produce.
+  seen = corpus.descriptions.find { |d| d.kind == :verb }
+  if seen.nil?
+    failures << "STRUCTURE: no verb description was read from disk, so arm (c) has no file to " \
+                "read a second time"
+  else
+    phantom = Corpus.new(
+      descriptions: corpus.descriptions +
+                    [Desc.new(kind: :verb, file: seen.file, line: 0, prop: nil,
+                              required: nil, text: "a description the file does not carry")],
+      files_read: corpus.files_read, parse_errors: []
+    )
+    if structural_faults(root, phantom).none? { |f| f.include?("come apart") }
+      failures << "STRUCTURE: a syntax tree reporting one more verb description than the " \
+                  "file's own text raises no fault, so the second-reading arm asserts nothing"
+    end
   end
 
   failures.concat(lockstep_arms)

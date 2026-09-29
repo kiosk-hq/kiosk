@@ -23,13 +23,10 @@
 #   signature b64url: SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg
 #   pubkey hex      : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 #
-# THE VECTOR IS DERIVED FROM THE KEY, NEVER HAND-EDITED. It moved once, when
-# the dev keypair was regenerated: an earlier private half (public 8857880d…)
-# had shipped hard-coded in a PUBLIC repo *and* was wired as the production
-# signer, so it is burned — any lock still provisioned with 8857880d… must be
-# reflashed. Whenever the key moves, the signature and pubkey here, the byte
-# arrays and wire tokens in firmware/{host_test.c,skooti_lock.ino,
-# crosscheck_main.c} and firmware/README.md are all recomputed from it together.
+# THE VECTOR IS DERIVED FROM THE KEY, NEVER HAND-EDITED. Whenever the key moves,
+# the signature and pubkey here and the byte arrays and wire tokens in
+# firmware/{host_test.c,skooti_lock.ino,crosscheck_main.c} and firmware/README.md
+# are all recomputed from it together.
 
 require "openssl"
 require "base64"

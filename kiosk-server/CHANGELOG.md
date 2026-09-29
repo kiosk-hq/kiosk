@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-09-29: **`topic … do description nil end` is accepted**, on the same terms as a verb's null description. The macro must be called; its value may be null, as the schema types it.
+
 - 2026-09-29: **`EventStore#truncated?` agrees with the durable store at the floor.** A cursor one below it holds a complete range, so it no longer costs a subscriber an ordinary re-read.
 
 - 2026-09-29: **The stream tells an expired credential from a revoked one**: `token_expired` with `reconnect: true` where the identity chain refused a token that had simply reached its `exp`.

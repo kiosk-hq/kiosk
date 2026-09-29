@@ -279,17 +279,27 @@ module Kiosk
           @reach_value = value
         end
 
-        def description(text) = @description_value = text
+        def description(text)
+          declared << :description
+          @description_value = text
+        end
 
-        def payload_schema(schema = nil, **kwargs) = @payload_schema_value = schema || kwargs
+        def payload_schema(schema = nil, **kwargs)
+          declared << :payload_schema
+          @payload_schema_value = schema || kwargs
+        end
 
         # `(subject, identity) -> Boolean`, re-run on every subscribe AND on the
         # re-authorisation timer — never reading {CurrentRequest}, which is
         # fiber-local and does not reach a socket callback.
         def subject_reachable(callable) = @subject_reachable_value = callable
 
+        # What is required is that the macro was CALLED, not that its value is
+        # truthy: spec Section 8.5.1 types a topic's `description` as a string
+        # or `null`, on the same terms as a verb's, so `description nil` is an
+        # operator saying "no prose" rather than one who forgot.
         def validate!(owner:, name:)
-          missing = Events::REQUIRED.reject { |field| public_send(:"#{field}_value") }
+          missing = Events::REQUIRED - declared
           return if missing.empty?
 
           raise ArgumentError,
@@ -298,6 +308,10 @@ module Kiosk
             "`payload_schema` for shape; a subscriber with neither has to receive a " \
             "message to find out what it is."
         end
+
+        private
+
+        def declared = (@declared ||= [])
       end
 
       module ClassMethods

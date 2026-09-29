@@ -203,6 +203,23 @@ RSpec.describe Kiosk::Server::Events do
     }.to raise_error(ArgumentError, /description/)
   end
 
+  # Spec Section 8.5.1 types a topic's `description` as a string or null, on
+  # the same terms as a verb's — and a verb's null is accepted. What is
+  # required is the declaration, not a truthy value.
+  it "accepts a description declared null, and publishes it" do
+    controller.class_eval do
+      topic :todo do
+        description nil
+        payload_schema type: "object"
+      end
+    end
+    controller.kiosk_register!
+
+    expect(described_class.catalog).to eq(
+      [{ name: "todo", description: nil, reach: "principal", payload_schema: { type: "object" } }],
+    )
+  end
+
   it "refuses a second declaration of the same name" do
     controller.class_eval do
       topic :todo do

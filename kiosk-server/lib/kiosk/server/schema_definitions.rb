@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require "kiosk/server/version"
+
 module Kiosk
   module Server
     # Pure SQL generators for the six canonical Kiosk migrations.
     #
-    #   001 create_kiosk_schema                → schema + four current_*() helpers
+    #   001 create_kiosk_schema                → schema + four current_*() helpers + the schema-major marker
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
     #   003 create_kiosk_reservations          → kiosk.reservations
     #   004 create_kiosk_device_authorizations → kiosk.device_authorizations (account binding)
@@ -68,6 +70,27 @@ module Kiosk
 
           CREATE OR REPLACE FUNCTION "#{schema}".current_agent_id() RETURNS uuid LANGUAGE sql STABLE AS $$
             SELECT NULLIF(current_setting('#{guc_namespace}.current_agent_id', true), '')::uuid
+          $$;
+
+          #{schema_major_sql(schema: schema)}
+        SQL
+      end
+
+      # `<schema>.schema_major()` — the MAJOR of the Kiosk schema this database
+      # carries. A fresh install records the installing gem's major; crossing a
+      # major re-emits this function with the new one.
+      #
+      # {Engine.schema_major_error} reads it at boot and refuses a gem two or
+      # more majors ahead of it, because an adopter crossing a major stops at
+      # it: the migrations that take an older major forward are not in a later
+      # gem at all.
+      def schema_major_sql(schema: nil, major: nil)
+        schema ||= Kiosk.configuration.schema
+        major  ||= Kiosk::Server::SCHEMA_MAJOR
+
+        <<~SQL.strip
+          CREATE OR REPLACE FUNCTION "#{schema}".schema_major() RETURNS integer LANGUAGE sql IMMUTABLE AS $$
+            SELECT #{Integer(major)}
           $$;
         SQL
       end

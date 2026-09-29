@@ -420,6 +420,67 @@ module Kiosk
         raise Kiosk::Server::Errors::ConfigurationError, message if message
       end
 
+      # ── AN ADOPTER CROSSING A MAJOR STOPS AT IT ───────────────────────────
+      #
+      # `<schema>.schema_major()` records which MAJOR of the Kiosk schema this
+      # database carries ({SchemaDefinitions.schema_major_sql}). A gem two or
+      # more majors ahead of it cannot take that database forward, because the
+      # migrations for the majors in between are not in this gem: each major
+      # drops the previous one's chain and publishes a squashed genesis in its
+      # place. So the jump is refused here, naming both numbers, rather than
+      # discovered as a missing column on the first query.
+      #
+      # ONE MAJOR AHEAD IS THE UPGRADE ITSELF and boots: `db:migrate` runs
+      # inside a booted application, so refusing it would make the upgrade
+      # unreachable. A gem BEHIND the recorded major boots too — refusing a
+      # deploy rollback would turn it into an outage.
+      #
+      # A database with no marker — one provisioned before the marker shipped —
+      # is not accused: {.recorded_schema_major} answers nil and this passes.
+      #
+      # The condition is a CLASS METHOD for the reason its three siblings above
+      # give: an `after_initialize` body is reachable only by booting a real
+      # application, and a control whose condition cannot be unit-tested is a
+      # control nobody can prove fires.
+      #
+      # @param schema_major [Integer, nil] normally {.recorded_schema_major}
+      # @param gem_major [Integer] normally `Kiosk::Server::SCHEMA_MAJOR`
+      # @return [String, nil]
+      def self.schema_major_error(schema_major:, gem_major:)
+        return nil if schema_major.nil?
+        return nil if gem_major - schema_major < 2
+
+        "[kiosk-server] this database's Kiosk schema is at major #{schema_major} and kiosk-server " \
+          "#{Kiosk::Server::VERSION} installs major #{gem_major}. An adopter crossing a major stops " \
+          "at it, so the migrations that take a major-#{schema_major} schema forward are not in this " \
+          "gem at all: pin kiosk-server to major #{schema_major + 1}, run `bin/rails db:migrate`, and " \
+          "repeat one major at a time. See the kiosk-server README, \"Upgrading\"."
+      end
+
+      # The major recorded in this database, or nil when there is nothing to
+      # read: no database, no connection, no kiosk schema, or a schema laid down
+      # before the marker existed. Absence is not an answer about the major, so
+      # it is not one the check can act on — and a boot that runs before
+      # `db:create` must not raise.
+      #
+      # @param schema [String, nil] normally `Kiosk.configuration.schema`
+      # @return [Integer, nil]
+      def self.recorded_schema_major(schema: nil)
+        schema ||= Kiosk.configuration.schema
+        ::ActiveRecord::Base.lease_connection
+          .select_value(%(SELECT "#{schema}".schema_major()))&.to_i
+      rescue ::ActiveRecord::ActiveRecordError
+        nil
+      end
+
+      config.after_initialize do
+        message = Kiosk::Server::Engine.schema_major_error(
+          schema_major: Kiosk::Server::Engine.recorded_schema_major,
+          gem_major: Kiosk::Server::SCHEMA_MAJOR,
+        )
+        raise Kiosk::Server::Errors::ConfigurationError, message if message
+      end
+
       # Root-relative discovery surface. `routes.append` blocks run when the
       # host's route set is FINALIZED — after config/routes.rb has been
       # drawn — so the mount is already visible when the gate below asks

@@ -85,6 +85,53 @@ end
 ```
 
 
+## Upgrading
+
+### The schema
+
+`rails generate kiosk:install` emits the **genesis** — the whole current shape,
+as migrations. That is the fresh-install path. Migrations already in
+`db/migrate/` are never re-emitted and never edited: a change to the Kiosk
+schema arrives as a new file you copy in and migrate, so `db:migrate` on your
+existing database transfers only what it has not run.
+
+Each MAJOR publishes its own genesis and drops the previous major's chain, so
+**an upgrade crossing a major stops at it.** Install that major, `bin/rails
+db:migrate`, then move on — one major at a time. A fresh install at any major
+gets that major's genesis and replays no history at all.
+
+The database records which major it carries, as `<schema>.schema_major()`. The
+engine reads it at boot and refuses to start when the gem installs a major two
+or more ahead of it, naming both numbers and the major to install next — rather
+than letting the mismatch surface as a missing column on the first request. One
+major ahead is the upgrade itself and boots; a gem behind the recorded major
+boots too, so a deploy rollback stays a rollback.
+
+MINOR and PATCH releases only ever add files to the chain.
+
+### The configuration
+
+`config/initializers/kiosk.rb` is **yours**. Nothing regenerates it, and no
+upgrade edits it.
+
+- **Every new setting ships a working default**, so an initializer you never
+  touch keeps working across an upgrade. The generated file is documentation of
+  what can be set, not the source of truth for what is set.
+- **A setting that cannot have a safe default fails closed at boot, naming
+  itself** — `c.pow_secret` with the toll enabled is the worked example. You get
+  a `Kiosk::Server::Errors::ConfigurationError` that says which setting is
+  missing, at boot, not a wrong answer later.
+- **A setting that is removed or renamed keeps a setter that raises**, naming
+  what to use instead, so an initializer carrying the old name stops the boot
+  instead of being silently ignored.
+- **An unknown setting is a `NoMethodError` on `Kiosk::Configuration`**, which
+  names the key you typed.
+
+The principle behind all four: generate as little as possible, derive at boot
+whatever can be derived, default whatever can be defaulted, and fail closed on
+what can be neither.
+
+
 ## Multi-process deployments
 
 One setting is **not** optional once you run more than one process.

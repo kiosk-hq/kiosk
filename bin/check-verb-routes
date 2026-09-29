@@ -128,11 +128,12 @@ KIND_METHOD = { query: "get", run: "post" }.freeze
 # ── the derivations ────────────────────────────────────────────────────────
 
 # The verbs a handler controller declares, as [wire_name, :query|:action].
-# Identical to bin/check-kiosk-names' parser and for the same reason: a verb is
-# declared by a class-level macro run above the method it binds to, and the
-# `kind` in that run is what decides which registry — and therefore which HTTP
-# method — it belongs to. A run with no `kind` is not a verb, exactly as the
-# mixin refuses to register one.
+# bin/check-kiosk-names' parser, for the same reason: a verb is declared by a
+# class-level macro run above the method it binds to, and the `kind` in that
+# run is what decides which registry — and therefore which HTTP method — it
+# belongs to. A run with no `kind` is not a verb, exactly as the mixin refuses
+# to register one. One line differs, the last: this one answers with the ROUTE
+# an action is drawn at, `:run`, where that one answers with the kind.
 def verbs_in(source)
   return [] unless source.match?(/include\s+Kiosk::Handler\b/)
 

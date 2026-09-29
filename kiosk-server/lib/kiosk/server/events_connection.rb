@@ -74,6 +74,14 @@ module Kiosk
         super if (@beats % BEATS_PER_PING).zero?
       end
 
+      # Whether the credential this socket was opened with still resolves —
+      # the question the channel's re-authorisation timer asks every
+      # `KioskEvents::REAUTHORISE_EVERY_SECONDS` (spec Section 8.5.6). The
+      # connection answers it because the upgrade request is the connection's
+      # own: `request` is private on `ActionCable::Connection::Base`, and what
+      # the timer needs from it is this one answer.
+      def kiosk_identity_resolves? = !resolve_identity.nil?
+
       private
 
       def auto_subscribe!

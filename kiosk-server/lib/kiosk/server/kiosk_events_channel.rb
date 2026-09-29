@@ -177,10 +177,15 @@ class KioskEvents < ActionCable::Channel::Base
   # revoked token is about the whole connection and will not change by
   # reconnecting — a client that retries into it is a reconnect storm against
   # an origin whose answer is fixed.
+  #
+  # Either answer is FINAL for this subscription, so the declaration is
+  # dropped with it: the timer goes on firing until the client closes, and
+  # without that the same frame would be repeated every period.
   def reauthorise!
     return if @declaration.nil?
 
-    unless Kiosk::Server::IdentityResolution.resolve(connection.request)
+    unless connection.kiosk_identity_resolves?
+      @declaration = nil
       connection.transmit(
         "type" => "disconnect", "reason" => "revoked", "reconnect" => false
       )
@@ -190,7 +195,14 @@ class KioskEvents < ActionCable::Channel::Base
 
     return if reachable?(@declaration)
 
-    transmit("type" => "unsubscribed", "topic" => @topic, "reason" => "reach_revoked")
+    @declaration = nil
+    # BRACES REQUIRED: `transmit` takes `via:`, so bare pairs at the call site
+    # are read as keyword arguments and never reach it as the frame.
+    transmit({ "type" => "unsubscribed", "topic" => @topic, "reason" => "reach_revoked" })
     stop_all_streams
+  rescue StandardError => e
+    # Action Cable's worker pool swallows this into the HOST application's
+    # logger, where nothing of ours reads it. Say it here instead.
+    logger&.error("[kiosk] events re-authorisation failed: #{e.class}: #{e.message}")
   end
 end

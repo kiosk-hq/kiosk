@@ -155,4 +155,27 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["truncated_frame"]).to include("truncated" => true)
     end
   end
+
+  # Spec Section 8.5.6: a subscription is authorised again WHILE IT STANDS, at
+  # least every 60 seconds. The three examples are the three answers the timer
+  # can reach, and the first is the one that makes the other two mean
+  # something: a socket nothing has changed under is left alone.
+  describe "re-authorisation while the subscription stands" do
+    it "leaves a subscription whose reach and credential still hold alone" do
+      expect(report["steady_unsubscribed"]).to be(false)
+      expect(report["steady_disconnected"]).to be(false)
+    end
+
+    it "stops delivering and says why when the subject's reach is withdrawn" do
+      expect(report["reach_revoked_frame"])
+        .to eq("type" => "unsubscribed", "topic" => "todo", "reason" => "reach_revoked")
+      expect(report["other_socket_unsubscribed"]).to be(false)
+    end
+
+    it "closes the connection with reconnect false when the credential stops resolving" do
+      expect(report["revoked_frame"])
+        .to eq("type" => "disconnect", "reason" => "revoked", "reconnect" => false)
+      expect(report["revoked_socket_closed"]).to be(true)
+    end
+  end
 end

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **Security: the event stream now stops when a human revokes.** Its re-authorisation raised every tick, so a withdrawn reach kept delivering and a revoked token kept its socket.
+
 - 2026-09-29: **The manage-assistants listing now only falls back to a spend-free query when the settlements table is absent.** Every other statement error reaches the operator.
 
 - 2026-09-29: **Every demo task that boots a server, and `e2e/run.sh`, now refuse to start when something already holds the port, naming the pid.** They used to drive it and pass.

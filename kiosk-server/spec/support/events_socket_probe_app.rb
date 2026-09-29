@@ -31,6 +31,9 @@ REPORT = {}
 # ── a fake agent-IdP: one token, one identity ────────────────────────────────
 GOOD_TOKEN = "good-token"
 REVOKED    = { value: false }
+# The operator's answer to "may this subscriber read this subject", flipped
+# under a socket that is already holding one.
+REACHABLE  = { value: true }
 
 class ProbeIdp
   def verify(request)
@@ -54,7 +57,7 @@ class ProbeController < ActionController::Base
     reach :consented
     description "A todo on a list you can reach changed."
     payload_schema type: "object"
-    subject_reachable ->(subject, _identity) { subject.to_s == "list_ok" }
+    subject_reachable ->(subject, _identity) { REACHABLE[:value] && subject.to_s == "list_ok" }
   end
 
   kind :query
@@ -82,6 +85,12 @@ Kiosk.configure do |c|
   # booted in production has to bring its own.
   c.signing_key = Kiosk::Server::SigningKey.from_pem(OpenSSL::PKey::RSA.new(2048).to_pem)
 end
+
+# The shipped re-authorisation period is thirty seconds. Shortened to one so a
+# scenario that waits for a tick finishes inside the suite; the registration
+# itself — `periodically :reauthorise!` — is the shipped one, untouched.
+KioskEvents.periodic_timers =
+  KioskEvents.periodic_timers.map { |callback, options| [callback, options.merge(every: 1)] }
 
 ProbeApp.initialize!
 ProbeApp.routes.draw do
@@ -327,6 +336,45 @@ begin
   sock.pump_until { sock.frames.any? }
   REPORT[:foreign_origin_welcomed] = sock.frames.any? { |f| f["type"] == "welcome" }
   sock.close
+
+  # ── re-authorisation while the subscription stands (spec Section 8.5.6) ───
+  #
+  # Two sockets are opened and HELD while the operator's answers change under
+  # them. `held` carries the subject-scoped `consented` subscription, whose
+  # reach is withdrawn; `plain` carries a principal one and only reacts to the
+  # credential. Both run the same timer, so `plain` staying quiet through the
+  # first change is what says the teardown was aimed rather than global.
+  held = connect(port, path: "/kiosk/events?topic=todo:list_ok")
+  held.pump_until { held.messages.any? { |m| m["type"] == "subscribed" } }
+  plain = connect(port, path: "/kiosk/events?topic=order_payment")
+  plain.pump_until { plain.messages.any? { |m| m["type"] == "subscribed" } }
+
+  # 15 — nothing has changed, so several periods later neither socket has been
+  #      told anything. A timer that tore a valid subscription down would be as
+  #      wrong as one that never ran.
+  held.pump_until(seconds: 3) { false }
+  plain.pump_until(seconds: 1) { false }
+  REPORT[:steady_unsubscribed] = held.messages.any? { |m| m["type"] == "unsubscribed" }
+  REPORT[:steady_disconnected] = plain.frames.any? { |f| f["type"] == "disconnect" }
+
+  # 16 — the operator's own rule stops saying yes. Delivery stops and the
+  #      client is told why, on the subscription that lost it and no other.
+  REACHABLE[:value] = false
+  held.pump_until(seconds: 5) { held.messages.any? { |m| m["type"] == "unsubscribed" } }
+  REPORT[:reach_revoked_frame] = held.messages.find { |m| m["type"] == "unsubscribed" }
+  plain.pump_until(seconds: 2) { false }
+  REPORT[:other_socket_unsubscribed] = plain.messages.any? { |m| m["type"] == "unsubscribed" }
+
+  # 17 — the credential stops resolving. The whole connection goes, and the
+  #      client is told that coming back with this token will not help. Last,
+  #      because from here no upgrade on this origin is accepted at all.
+  REVOKED[:value] = true
+  plain.pump_until(seconds: 5) { plain.frames.any? { |f| f["type"] == "disconnect" } }
+  REPORT[:revoked_frame] = plain.frames.find { |f| f["type"] == "disconnect" }
+  plain.pump_until(seconds: 3) { plain.closed? }
+  REPORT[:revoked_socket_closed] = plain.closed?
+  held.close
+  plain.close
 
   REPORT[:ok] = true
 rescue StandardError => e

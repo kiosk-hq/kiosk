@@ -33,6 +33,15 @@ RSpec.describe Kiosk::Server::Errors do
   # disagree about a status without something here going red.
   vendored_problem_schema = File.expand_path("../../../../e2e/schemas/problem.schema.json", __dir__)
 
+  # Every Errors class with a CODE constant, found rather than listed, so a class
+  # added without a vocabulary entry cannot slip past the contracts below. Two
+  # groups read it, which is why it sits at the top.
+  def coded_classes
+    described_class.constants
+                   .map { |name| described_class.const_get(name) }
+                   .select { |c| c.is_a?(Class) && c < described_class::Base && c.const_defined?(:CODE, false) }
+  end
+
   describe "CODES — the wire vocabulary" do
     it "is exactly the spec's closed `code` table, derived from the published schema rather than restated" do
       expect(File).to exist(vendored_problem_schema)
@@ -147,14 +156,6 @@ RSpec.describe Kiosk::Server::Errors do
   end
 
   describe "the exception classes" do
-    # Every Errors class with a CODE constant, found rather than listed, so a
-    # class added without a vocabulary entry cannot slip past this contract.
-    def coded_classes
-      described_class.constants
-                     .map { |name| described_class.const_get(name) }
-                     .select { |c| c.is_a?(Class) && c < described_class::Base && c.const_defined?(:CODE, false) }
-    end
-
     it "each agrees with the CODES table on both code and status" do
       expect(coded_classes).not_to be_empty
       coded_classes.each do |klass|
@@ -333,21 +334,17 @@ RSpec.describe Kiosk::Server::Errors do
   end
 
   describe "rescue-by-Base contract" do
+    # Found rather than listed — every class defined under Errors, so one added
+    # without Base in its ancestry cannot slip past. `rescue` matches on
+    # ancestry, so that IS the contract; `WireError` above raises and catches one
+    # for real. ConfigurationError is the deliberate outsider: it is raised at
+    # boot, never on the wire, so nothing rescues it as a wire error.
     it "every Kiosk::Server::Errors::* subclass rescues as Base" do
-      [Kiosk::Server::Errors::BadRequest, Kiosk::Server::Errors::Unauthenticated,
-       Kiosk::Server::Errors::Forbidden,  Kiosk::Server::Errors::RLSDenied,
-       Kiosk::Server::Errors::SpendingCapExceeded,
-       Kiosk::Server::Errors::KycRequired,
-       Kiosk::Server::Errors::NotFound,
-       Kiosk::Server::Errors::VerbNotFound,
-       Kiosk::Server::Errors::ModuleNotServed,
-       Kiosk::Server::Errors::ActionFailed].each do |klass|
-        begin
-          raise klass, "x"
-        rescue Kiosk::Server::Errors::Base => caught
-          expect(caught).to be_a(klass)
-        end
-      end
+      wire = described_class.constants.map { described_class.const_get(_1) }.grep(Class) -
+             [described_class::Base, described_class::ConfigurationError]
+
+      expect(wire).not_to be_empty
+      expect(wire).to all(be < described_class::Base)
     end
   end
 end

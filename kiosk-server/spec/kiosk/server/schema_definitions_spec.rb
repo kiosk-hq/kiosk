@@ -181,17 +181,17 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
   # the unit-level tripwire, so a new emitter cannot reintroduce the class
   # without a red spec.
   describe "replay safety (K-1083)" do
-    let(:every_emitter) do
-      %i[
-        helper_functions_sql schema_major_sql identity_tables_sql reservations_sql
-        device_authorizations_sql mandates_sql kyc_attributes_sql events_sql
-        pow_spent_sql auth_challenge_sql
-      ].map { described_class.public_send(_1) }
-    end
+    # Found rather than listed: the emitters are this module's own `*_sql`
+    # singleton methods, so an eleventh is covered the day it is defined.
+    let(:emitter_names) { described_class.singleton_methods(false).grep(/_sql\z/).sort }
 
     it "guards every CREATE it emits, so a second run against the same database is a no-op" do
-      unguarded = every_emitter.flat_map(&:lines).grep(/^\s*CREATE /).reject do |line|
-        line.include?("IF NOT EXISTS") || line.include?("CREATE OR REPLACE")
+      expect(emitter_names).not_to be_empty
+
+      unguarded = emitter_names.flat_map do |name|
+        described_class.public_send(name).lines.grep(/^\s*CREATE /)
+                       .reject { |line| line.include?("IF NOT EXISTS") || line.include?("CREATE OR REPLACE") }
+                       .map { |line| "#{name}: #{line}" }
       end
 
       expect(unguarded).to be_empty,

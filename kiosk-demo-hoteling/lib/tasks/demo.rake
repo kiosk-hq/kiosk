@@ -1,27 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk demo orchestration for kiosk-demo-hoteling.
-# Tasks:
-#
-#   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake check:wire_args_spec DB-free unit spec for the WireArguments shape guard —
-#                        the gate every verb opens with, and the only executable
-#                        coverage of it that needs no origin, no database and no
-#                        Equihash toll
-#   rake check:conformance the four properties the protocol makes normative of
-#                        this origin — routes resolve, a verb executes, a query
-#                        answers its declared shape, data access is scoped to
-#                        the principal — asserted with `bundle exec rspec`
-#   rake check:book       boots the server, runs script/hoteling_flow.rb (no-human full
-#                        booking chain), asserts happy path + negative gate, then runs
-#                        script/pay_window.rb in-process (capture-anchored paid state)
-#   rake check:spending_cap the per-assistant spending cap: a spend under it settles,
-#                        one that would cross it is 403 spending_cap_exceeded, and two
-#                        spellings of one currency hit ONE cap
-#   rake check:isolation  adversarial cross-tenant isolation test
-#   rake check:redteam    adversarial regression battery (kiosk-redteam)
-#   rake check:schema     self-discovery proof — verifies the schema verb over HTTP
-#   rake check:browse     browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1)
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #

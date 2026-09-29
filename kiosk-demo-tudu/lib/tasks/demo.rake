@@ -5,19 +5,7 @@
 require "resolv"
 
 # tudu demo orchestration (MULTI-USER COLLABORATIVE todo app, NO payments).
-# Sub-tasks:
-#
-#   rake check:clock_spec  DB-free unit spec for the reader clock a todo's
-#                        deadline is read on, run under two TZ values
-#   rake check:access_spec DB-free unit spec for the list-access gate — the
-#                        shape check, the membership refusals, the owner demand
-#   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake check:collab     happy path: two agents, shared list via invite,
-#                        attribution asserted
-#   rake check:link       W5 rebind + list-transfer (assistant_claimed hook)
-#   rake check:isolation  adversarial membership isolation (Mallory walled out)
-#   rake check:redteam    adversarial regression battery (0 BREACH)
-#   rake check:schema     self-discovery + NOT-ONLY-COMMERCE proof (pay absent)
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
 # ── shared server-spawn/readiness helper ──────────────────────────────────────
 def tudu_boot_server(log:, port:, host: "127.0.0.1", extra_env: {})

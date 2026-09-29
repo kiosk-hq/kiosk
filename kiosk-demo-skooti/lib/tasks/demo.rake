@@ -1,20 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk demo orchestration for kiosk-demo-skooti (Ed25519 offline token).
-# Tasks:
-#
-#   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake check:kat        DB-free known-answer test for the RentalTokenIssuer
-#                        demo lib (byte-exact wire vector the firmware mirrors)
-#   rake check:rideflow   boots the server, runs script/rental_flow.rb (no-human full
-#                        rental chain), asserts happy path + all negative gates,
-#                        tears down, then runs script/pay_window.rb in-process
-#                        (capture-anchored paid state)
-#   rake check:isolation  adversarial cross-tenant + ownership isolation test
-#   rake check:kyc        named-anonymized-attribute KYC gate proof (age_over_18 +
-#                        licence_a): motorcycle 403→attest→200, scooter stays KYC-free
-#   rake check:redteam    adversarial regression battery (kiosk-redteam scenarios)
-#   rake check:schema     self-discovery proof over the schema verb
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #

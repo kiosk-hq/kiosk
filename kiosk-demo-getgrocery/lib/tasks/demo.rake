@@ -1,32 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk demo orchestration for kiosk-demo-getgrocery.
-# Tasks:
-#   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake check:shop       boots the server, runs script/getgrocery_flow.rb, asserts happy path
-#   rake check:claim      claim-rebind walkthrough: a standalone assistant's key is
-#                        re-bound to the human's account, then pays with its saved card
-#   rake check:isolation  adversarial cross-tenant + order-ownership isolation test
-#   rake check:rls        opt-in Postgres RLS showcase — enforced-session three-way
-#                        proof (script/rls_proof.rb) that a non-owner app_role is order-scoped
-#   rake check:schema     self-discovery proof over the schema verb
-#   rake check:redteam    adversarial regression battery (kiosk-redteam scenarios)
-#   rake check:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200) at TOY
-#                        params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
-#   rake check:slots_spec DB-free unit spec for the delivery-slot past-filter
-#   rake check:clock_spec DB-free unit spec, clock STUBBED, for where the caller's
-#                        zone may be read from and where it may not reach
-#   rake check:cashier_spec DB-free unit spec for the order-ref uuid shape check
-#   rake check:wire_args_spec DB-free unit spec for the whole WireArguments shape
-#                        guard — the module that decides whether a hostile wire
-#                        argument is a typed 400 or a booked order
-#   rake check:conformance the four properties the protocol makes normative of
-#                        this origin — routes resolve, a verb executes, a query
-#                        answers its declared shape, data access is scoped to
-#                        the principal — asserted with `bin/rails test`
-#   rake check:race       pay-path regression: concurrency + typed 4xx
-#                        + stuck-`paying` self-heal
-#   rake demo:reconcile  resolve orders stuck in `paying` from local evidence
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #

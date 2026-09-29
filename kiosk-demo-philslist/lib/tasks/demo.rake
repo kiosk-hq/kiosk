@@ -4,22 +4,8 @@
 # runs in EVERY task that boots a server.
 require "resolv"
 
-# philslist demo orchestration (NON-COMMERCE classifieds board). Sub-tasks:
-#
-#   rake check:clock_spec   DB-free unit spec for the board clock a listing's
-#                          publication time is read on, run under two TZ values
-#   rake check:access_spec  DB-free unit spec for the owner-scoped refusal
-#                          surface — the listing_id shape guard and the
-#                          not-owner sentence both write verbs share
-#   rake demo:setup        idempotent db:drop / create / schema:load / seed
-#   rake check:walkthrough  boots the server, runs the browse→post→edit→close
-#                          curl showcase (NO payment step), tears down
-#   rake check:isolation    adversarial cross-owner denial test (write denial)
-#   rake check:register     registration-PoW demo (no-proof 402 → solve → 201)
-#   rake check:binding      account-binding walkthrough (claim ceremony over the
-#                          real Devise session + link-code redeem + unlink)
-#   rake check:redteam      adversarial regression battery against the live surface
-#   rake check:schema       self-discovery + NOT-ONLY-COMMERCE proof (pay absent)
+# philslist demo orchestration (NON-COMMERCE classifieds board).
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.

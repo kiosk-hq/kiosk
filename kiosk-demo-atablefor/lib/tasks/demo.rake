@@ -1,25 +1,7 @@
 # frozen_string_literal: true
 
-# Kiosk demo orchestration (atablefor — restaurant table-booking). Tasks:
-#
-#   rake demo:setup        idempotent db:drop / create / schema:load / seed
-#   rake check:wire_args_spec DB-free unit spec for the WireArguments shape guards —
-#                          party_size, whole_number, the two filter guards and
-#                          booking_id, with no origin, no database and no toll
-#   rake check:walkthrough  boots the server, runs a curl-driven showcase, tears down
-#   rake check:book         boots the server, runs script/book_flow.rb (no-human table booking),
-#                          asserts the confirmed booking, tears down
-#   rake check:pow          boots with KIOSK_POW_DEMO=1, runs script/pow_flow.rb (402→solve→200)
-#                          at TOY params (n=96 k=5) unless KIOSK_POW_DIFFICULTY=high
-#   rake check:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
-#   rake check:backoff      count-based PoW backoff (solve once → next N calls free →
-#                          re-challenge; sets KIOSK_POW_BACKOFF_DEMO=3 — the value
-#                          is the free-call count)
-#   rake check:binding      account-binding: a diner links their assistant, whose
-#                          booking then ties to the diner's account
-#   rake check:isolation    adversarial cross-tenant isolation test
-#   rake check:schema       self-discovery proof — verifies the schema verb + pay-absent
-#   rake check:redteam      adversarial regression battery
+# Kiosk demo orchestration (atablefor — restaurant table-booking).
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 #
 # atablefor takes NO payments (a reservation needs none), so there is no
 # check:rls / demo:order / pay path — the RLS *showcase* lives in getgrocery.

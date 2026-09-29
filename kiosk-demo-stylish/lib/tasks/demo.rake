@@ -4,22 +4,8 @@
 # runs in EVERY task that boots a server.
 require "resolv"
 
-# Kiosk demo orchestration. Sub-tasks:
-#
-#   rake check:clock_spec   DB-free unit spec for the salon-clock slot parse,
-#                          run under two TZ values
-#   rake demo:setup        idempotent db:drop / create / schema:load / seed
-#   rake check:walkthrough  boots the server, runs a curl-driven showcase,
-#                          tears down
-#   rake check:isolation    adversarial cross-tenant denial test
-#   rake check:register     registration-PoW demo (no-proof 402 → solve → 201)
-#   rake check:binding      account-binding walkthrough (claim ceremony over the
-#                          real Devise session + link-code redeem + unlink)
-#   rake check:roles        roles-from-IdP demo — owner-linked assistant sees
-#                          the whole salon_calendar + forecast, a customer-linked
-#                          one sees only its own bookings
-#   rake check:redteam      adversarial regression battery against the live surface
-#   rake check:schema       self-discovery proof over the schema verb
+# Kiosk demo orchestration.
+# `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.

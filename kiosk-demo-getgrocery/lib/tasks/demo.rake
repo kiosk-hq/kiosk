@@ -1989,9 +1989,6 @@ namespace :check do
 
     Exits 0 when all hold; exits 1 on any miss. A red assertion = the age-gate is
     broken (or leaked onto the non-alcohol path) — fix the app, not the test.
-
-    DEPLOY FOLLOW-UP: getgrocery is allow-listed at the broker only by this test
-    harness; a standing deploy allow-list entry for getgrocery is a follow-up.
   DESC
   task agecheck: "demo:setup" do
     require "resolv"

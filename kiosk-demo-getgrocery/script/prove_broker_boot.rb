@@ -17,10 +17,6 @@ require "uri"
 # KIOSK_PROVE_PUBLIC_KEY_PEM, alongside the URLs, the shared intake secret and
 # the callback host.
 #
-# DEPLOY FOLLOW-UP: getgrocery is allow-listed at the broker only by THIS test
-# harness (via KIOSK_PROVE_GETGROCERY_* env). Registering getgrocery as a
-# standing broker operator in the hosted deploy is a follow-up.
-#
 # THE FILE IS SPLIT THE WAY IT IS SO A GATE CAN HOLD THE SHARED HALF. skooti
 # ships the same helper, and {with_broker} is ~55 of its ~64 normalised lines
 # identical between the two copies — the DB setup, the spawn, the at_exit stop,

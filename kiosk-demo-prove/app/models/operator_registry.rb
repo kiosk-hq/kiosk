@@ -93,9 +93,9 @@ module OperatorRegistry
       }
     end
     # getgrocery is a SECOND operator — its alcohol age-gate asks the broker for
-    # the age_over_18 claim. Used by the two-server test harness; a standing
-    # production allow-list entry is a follow-up, so in production it registers
-    # only when KIOSK_PROVE_GETGROCERY_SECRET is explicitly set.
+    # the age_over_18 claim. It registers only when KIOSK_PROVE_GETGROCERY_SECRET
+    # is set, so an origin that has not been given a secret is not an operator
+    # here.
     if (gg = cfg.getgrocery_secret.presence)
       entries["getgrocery"] = {
         secret:        gg,

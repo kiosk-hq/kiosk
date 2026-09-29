@@ -195,22 +195,9 @@ module Kiosk
         render :show, status: status
       end
 
-      # Same session rule as the verify page: the provider's `user_idp`
-      # session, never an agent Bearer token.
-      #
-      # When identity is absent: if the provider wired a neutral
-      # `config.sign_in_path` AND this is a browser (HTML-preferring)
-      # request, REDIRECT there with a flash alert and a stored return-to, so
-      # a human who bookmarked the manage page lands on the operator's login
-      # and is bounced back after signing in (MANAGE-PAGE-UNAUTH-UX). For a
-      # non-HTML/API request, or when no sign_in_path is configured, keep the
-      # bare 401 — this preserves the API contract (the engine stays
-      # IdP-neutral).
-      # A machine caller for signposting purposes: an explicit JSON `Accept`,
-      # or a JSON request body. Deliberately NARROW — anything ambiguous
-      # (`*/*`, a form post, no headers at all) counts as a browser and keeps
-      # today's behaviour, so the forgery gate stays exactly as strict as it
-      # was for the surface it protects.
+      # A machine caller for signposting purposes: an explicit JSON `Accept`, or
+      # a JSON request body. Deliberately narrow — anything ambiguous (`*/*`, a
+      # form post, no headers at all) counts as a browser.
       def json_request?
         return true if request.format.json?
 

@@ -7,11 +7,12 @@ module Kiosk
     # manage-assistants page ({AssistantsController}).
     #
     # Both authenticate the approving human through the provider's own session
-    # (`Kiosk.configuration.user_idp`), and neither ships a login screen — the
-    # engine is IdP-neutral and cannot know the operator's sign-in URL. An
-    # operator that sets `Kiosk.configuration.sign_in_path` sends a browser
-    # there instead of a bare 401; an API caller, and an operator that sets
-    # nothing, gets the 401 and the sentence the page passes in.
+    # (`Kiosk.configuration.user_idp`) and never through an agent Bearer token,
+    # and neither ships a login screen — the engine is IdP-neutral and cannot
+    # know the operator's sign-in URL. An operator that sets
+    # `Kiosk.configuration.sign_in_path` sends a browser there instead of a bare
+    # 401; an API caller, and an operator that sets nothing, gets the 401 and the
+    # sentence the page passes in.
     module AccountHolderGate
       private
 

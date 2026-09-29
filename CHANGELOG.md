@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-09-29: **A database now records which MAJOR of the Kiosk schema it carries, and the engine refuses a boot two or more majors ahead of it.** Crossing a major stops at it (T-103).
+
 - 2026-09-28: **`rails g kiosk:install` now draws the wire**: it writes `config/routes/kiosk.rb` with the engine mounted and the `draw(:kiosk)` line that reaches it.
 
 - 2026-09-28: **getgrocery's stuck-`paying` sweep now asks Stripe**: charged heals the order, not charged releases the claim, no answer keeps it. `check:reconcile` gates all three.

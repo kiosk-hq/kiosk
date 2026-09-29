@@ -1792,7 +1792,18 @@ COPIES = {
   # `kiosk:install` run copied across — which is what lets the paths be declared
   # here at all, and what GENERATOR_TEMPLATES below keeps true.
   "db/migrate/20260820130112_create_kiosk_schema.rb" => {
-    rule: :identical, why: "kiosk:install 001 — the schema and the four current_*() helpers.",
+    rule: :identical, why: "kiosk:install 001 — the schema, the four current_*() helpers and the " \
+                           "schema_major() marker the engine reads at boot.",
+  },
+  "db/migrate/20260929000001_add_kiosk_schema_major.rb" => {
+    rule:  :identical,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:  "`kiosk.schema_major()` on the databases whose kiosk genesis predates it (T-103). The " \
+          "marker rides in migration 001, so a new adopter has nothing separate to run; these " \
+          "seven boxes recorded 001 before it carried the function, and a recorded migration " \
+          "never re-runs. NOT generator output, for the same reason the raw_jws DROP above is " \
+          "not. `ships:` is declared because prove adopts no engine schema and must not acquire " \
+          "a copy by accident.",
   },
   "db/migrate/20260820130113_create_kiosk_identity_tables.rb" => {
     rule: :identical, why: "kiosk:install 002 — agents (with kyc_verified_at, spending_cap_cents " \

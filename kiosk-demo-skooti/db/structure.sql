@@ -75,6 +75,17 @@ CREATE FUNCTION kiosk.current_user_id() RETURNS uuid
 $$;
 
 
+--
+-- Name: schema_major(); Type: FUNCTION; Schema: kiosk; Owner: -
+--
+
+CREATE FUNCTION kiosk.schema_major() RETURNS integer
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT 0
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -877,6 +888,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260929000001'),
 ('20260920000002'),
 ('20260920000001'),
 ('20260827000002'),

@@ -176,7 +176,7 @@ if ARGV.include?("--self-test")
     /matched nothing/i, /matches nothing/i, /holding nothing/i, /compares nothing/i,
     /has stopped/i, /no live subject/i, /means nothing/i, /switched off/i,
     /cannot read is not/i, /over an empty/i, /empty corpus/i, /did not check them/i,
-    /stopped being/i, /reads exactly like/i, /no rule read/i
+    /stopped being/i, /reads exactly like/i, /no rule read/i, /inspects nothing/i
   )
 
   # Sections the vocabulary reads as guarded that are NOT: a per-item complaint
@@ -195,7 +195,7 @@ if ARGV.include?("--self-test")
   # The floor is the number of guarded sections measured when this was written.
   # It is a MEASUREMENT, not a target: it may rise freely, and a fall means
   # either a guard was deleted or the vocabulary above stopped reading one.
-  SELF_TEST_VACUITY_FLOOR = 16
+  SELF_TEST_VACUITY_FLOOR = 19
 
   # The one rule with no `# ── … ──` banner, declared so the check below can tell
   # «an arm for an unbannered rule» from «an arm for a banner that has moved».
@@ -699,6 +699,14 @@ if ARGV.include?("--self-test")
               "ActiveRecord::Migration.include(Kiosk::RLS::DSL)\n"]],
       expect: /hoteling: config\/initializers\/kiosk\.rb:1 calls ActiveRecord::Migration\.include/ },
 
+    { id: "vacuity-initializer-corpus", kind: :vacuity,
+      rule: "No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT)",
+      what: "the per-demo initializer walk comes back empty, so both initializer rules scan " \
+            "nothing while seven per-demo complaints speak in their place",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "  paths = Dir[File.join(ROOT, demo, \"config/initializers\", \"*.rb\")].sort\n",
+              "  paths = []\n"]],
+      expect: /the K-504 framework-patch rule scanned NO initializers/ },
     { id: "initializer-resolves-env", kind: :break,
       rule: "No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT)",
       what: "an initializer resolves configuration instead of reading it",
@@ -868,6 +876,13 @@ if ARGV.include?("--self-test")
               "on in production would convert a descriptor typo into a 500 for a caller",
               "in production is fine for a caller"]],
       expect: /response_validation\.rb no longer says .+ \(K-1332\)/ },
+    { id: "vacuity-validate-responses-corpus", kind: :vacuity,
+      rule: "`validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332)",
+      what: "the rule stops reading the initializer, so it counts nothing while seven " \
+            "per-demo complaints speak in its place",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "\n  values = File.read(path)", "\n  values = String.new"]],
+      expect: /the K-1332 rule read NO operator initializer/ },
     { id: "readme-names-absent-script", kind: :break,
       rule: "Every `bin/` script a demo names EXISTS and is runnable (K-1315)",
       what: "a README tells the operator to run a script the demo does not ship",
@@ -5878,7 +5893,7 @@ INITIALIZER_ENV_FETCH_ALLOWED.each_key do |var|
             "allowance rather than leave a standing permission nothing needs (K-699)."
 end
 
-if initializer_demos.zero? && errors.empty?
+if initializer_demos.zero?
   errors << "check-demo-copies: the K-504 framework-patch rule scanned NO initializers — " \
             "operator_demos is empty or config/initializers/ has moved. A rule that inspects " \
             "nothing passes everything."
@@ -6014,7 +6029,7 @@ operator_demos.each do |demo|
   end
 end
 
-if vr_demos.zero? && errors.empty?
+if vr_demos.zero?
   errors << "check-demo-copies: the K-1332 rule read NO operator initializer, so it asserted " \
             "nothing about a posture that ships to the public demo subdomains. A rule that " \
             "inspects nothing passes everything."

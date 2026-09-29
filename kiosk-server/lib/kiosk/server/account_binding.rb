@@ -126,14 +126,11 @@ module Kiosk
         # {RevocationStore} compares `iat < watermark` and JWT timestamps are
         # second-resolution, so a watermark of `Time.now.to_i` leaves a token
         # minted in the SAME wall-clock second uncovered — and, because unlink
-        # also 404s `/auth/login`, that token is then the LAST one the key will
-        # ever hold and it keeps full access to the human's account for its
-        # whole remaining lifetime (measured: 3600s). `/auth/revoke` can live
-        # with that ambiguity because it hands the caller a replacement token
-        # that must survive its own watermark; unlink returns no token, so it
-        # has nothing to preserve and simply covers the whole second. That is
-        # what makes spec §6.3 / §15.4 — "an unlinked key's tokens stop
-        # verifying" — literally true rather than true-except-for-one-second.
+        # also 404s `/auth/login`, that token is the LAST one the key will ever
+        # hold and keeps full access for its whole remaining lifetime. Unlink
+        # returns no token, so it has nothing to preserve and covers the whole
+        # second, which is what makes spec §6.3 / §15.4 — "an unlinked key's
+        # tokens stop verifying" — literally true.
         config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
         config.assistant_unlinked&.call(agent: agent_id, user_id: user_id)
         { agent_id: agent_id }
@@ -167,29 +164,20 @@ module Kiosk
           previous = existing.fetch("user_id")
           role     = resolved_role(config, requested_role)
 
-          # A re-bind to the SAME principal transitions nothing, so the hook
-          # does not fire. `assistant_claimed` is a NOTIFICATION —
-          # "this key's holder changed from A to B, migrate A's domain rows to
-          # B" — and every host that acts on it is entitled to believe it. Call
-          # it with `previous_user_id == user_id` and the host is being told a
-          # migration is due when there is nothing to migrate: tudu's hook, the
-          # only one in the fleet, then found the human already a member of all
-          # her own lists, moved nothing, and ran its "drop the now-redundant
-          # HEADLESS memberships" DELETE against her own rows — deleting every
-          # membership she had while leaving her owning the lists.
-          #
-          # The engine cannot fix that in the host: a hook is the operator's
-          # code, and a no-op transition is not a thing an operator should have
-          # to defend against. So the guard is here, at the one place that knows
-          # whether a transition happened.
+          # A re-bind to the SAME principal transitions nothing, so the hook does
+          # not fire. `assistant_claimed` is a NOTIFICATION — "this key's holder
+          # changed from A to B, migrate A's domain rows to B" — and a host is
+          # entitled to act on it; called with `previous_user_id == user_id` it
+          # would be told to migrate rows that are already this human's own, and
+          # a hook is the operator's code, so the guard belongs at the one place
+          # that knows whether a transition happened.
           #
           # ONLY the hook is skipped. The UPDATE still runs (it carries the
           # roles-from-IdP `allowed_roles` remap — re-binding a key to the same
-          # human under a NEW role is a real change, and a blanket no-op on
-          # `bind!` would silently drop it), and the watermark revocation +
-          # fresh token still happen, so nothing an assistant can observe on the
-          # wire moved. That an idempotent re-bind STILL revokes is normative:
-          # protocol.md §6.3 says so, and says the response is
+          # human under a NEW role is a real change), and the watermark
+          # revocation + fresh token still happen, so nothing an assistant can
+          # observe on the wire moved. That an idempotent re-bind STILL revokes
+          # is normative: protocol.md §6.3 says so, and says the response is
           # indistinguishable from any other rebind's.
           transition = previous.to_s != user_id.to_s
           # "No role" is a STATEMENT SHAPE, not a value (the same distinction
@@ -220,22 +208,17 @@ module Kiosk
           #
           # The watermark is the NEXT second, not this one. JWT timestamps are
           # second-resolution and the store's comparison is a strict
-          # `iat < watermark`, so a watermark of `Time.now.to_i` leaves EVERY
-          # pre-link token minted in the same wall-clock second verifying for
-          # its full remaining lifetime —
-          # measured 3/3 against a booted demo: a pre-link token whose `iat`
-          # equals the rebind second still authenticated 200 afterwards.
+          # `iat < watermark`, so a watermark of `Time.now.to_i` leaves every
+          # pre-link token minted in the same wall-clock second verifying for its
+          # full remaining lifetime.
           #
-          # `unlink!` can simply pass `+1` because it returns no token. A rebind
-          # DOES return one — and §6.3 also names `/auth/login` as the other way
-          # back in, which an assistant may reach for in this very second
-          # (`kiosk-demo-tudu/script/link_flow.rb` does exactly that). Both are
-          # covered without a second rule here: the bundled IdP clamps every
-          # mint to the agent's current watermark, so any token minted after
-          # this line is dated AT the watermark and survives it — the
-          # replacement below, and a later login alike. The invariant lives in
-          # ONE place, {AgentIdentityProviders::DefaultAgentIdp#mint_instant},
-          # rather than in each caller.
+          # A rebind returns a token, and §6.3 also names `/auth/login` as the
+          # other way back in, which an assistant may reach for in this very
+          # second. Both are covered without a second rule here: the bundled IdP
+          # clamps every mint to the agent's current watermark, so a token minted
+          # after this line is dated AT the watermark and survives it. That
+          # invariant lives in ONE place,
+          # {AgentIdentityProviders::DefaultAgentIdp#mint_instant}.
           config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
 
           token = issue_token(agent_id, role)
@@ -278,11 +261,8 @@ module Kiosk
         # product is a human's consent may not hand out a privilege resolved
         # from somebody else's account.
         #
-        # Fresh key and rebind share the call rather than each spelling it,
-        # because they disagreeing is precisely the defect this closes: the
-        # rebind branch used to fall back to the agent's own `allowed_roles`,
-        # so the one path on which a role can NARROW would otherwise be the one
-        # path that did not reach for the configured default.
+        # Fresh key and rebind both ask HERE, so the two branches of `bind!`
+        # cannot resolve a role differently.
         def resolved_role(config, requested_role)
           validated_role(config, requested_role || config.registration_role)
         end
@@ -309,35 +289,23 @@ module Kiosk
         # ceremony has to define. kiosk.tech `protocol.md` §6.3 and
         # `specification.html` state the contract.
         #
-        # WHY THIS WARNS INSTEAD OF CRASHING AT BOOT — AND WHAT DOES CRASH
-        # THERE. The contract has two halves and they are decidable in
-        # different places. The CONFIGURATION half — that an origin declaring a
-        # role vocabulary also configures a default to fall back to — is two
-        # settings in the operator's own initializer, and the engine refuses to
-        # start without it ({Engine.default_role_configuration_error}). That is
-        # why `config.registration_role` is known to be a declared role by the
-        # time this method runs at all.
+        # WHY HERE AND NOT AT BOOT. The configuration half — an origin that
+        # declares a role vocabulary also configures a default — is decidable in
+        # the initializer, and the engine refuses to start without it
+        # ({Engine.default_role_configuration_error}), which is why
+        # `config.registration_role` is a declared role by the time this runs.
+        # The half left is a property of the host's `#kiosk_role` over every row
+        # in its users table, and a ceremony arriving with no role at an origin
+        # that declares more than one is the only moment it is decidable: a
+        # single-role origin cannot exhibit it (its default IS its only role) and
+        # a role-less origin has nothing to resolve.
         #
-        # The half LEFT is not that fact. It is a property of the host's
-        # `#kiosk_role` over every row in the host's users table, and nothing
-        # in the initializer, the schema or the adapter can decide it — an
-        # origin declaring two roles and defining `#kiosk_role` is the CORRECT
-        # multi-role shape, so a boot check THERE would either accuse every such
-        # origin or catch nothing. The one moment it IS decidable with
-        # certainty is this one: a ceremony arriving with no role at an origin
-        # that declares more than one is the unsupported mixture and nothing
-        # else, because a single-role origin cannot exhibit it (its default IS
-        # its only role) and a role-less origin has nothing to resolve.
-        #
-        # WHAT IT IS NOT. It is not a stand-in for a fix: the ceremony does
-        # nothing surprising with a role it cannot resolve — it applies the
-        # operator's configured default exactly as registration would. What the
-        # operator still cannot see without this line is the OTHER direction —
-        # a member of staff whose identity system answers nothing gets an
-        # assistant at the customer default, quietly, and every privileged verb
-        # then reads as if they had no standing. That is worth one line per
-        # ceremony rather than one at boot: a misconfiguration that shows up
-        # once and never again is one nobody reads.
+        # It warns rather than refuses because the ceremony does nothing
+        # surprising — it applies the configured default, as registration would.
+        # What the operator cannot otherwise see is the other direction: a member
+        # of staff whose identity system answers nothing gets an assistant at the
+        # customer default, and every privileged verb then reads as if they had
+        # no standing.
         def warn_role_resolution_not_total(config, requested_role)
           return unless requested_role.nil? || requested_role.to_s.strip.empty?
           return unless config.roles.to_a.size > 1

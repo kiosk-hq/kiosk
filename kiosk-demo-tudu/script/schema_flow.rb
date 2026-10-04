@@ -12,8 +12,9 @@
 #
 # The `pay`-absent proof reads the ONE self-description that carries the module
 # set: `/.well-known/kiosk.json`. `schema` does not publish a second copy of it,
-# so the honest assertion is `capabilities == [schema, queries, actions]` there,
-# and no payments block in agents.json / agents.txt.
+# so the assertion is on `capabilities` there — `schema`, `queries`, `actions`
+# and `events` present, `pay` absent — and no payments block in agents.json /
+# agents.txt.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3007 bundle exec ruby script/schema_flow.rb

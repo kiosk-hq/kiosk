@@ -291,6 +291,62 @@ module Kiosk
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
+      # ── A WRONG `issuer` IS A SILENT AUTH OUTAGE ───────────────────────────
+      #
+      # `issuer` is the `aud` {PopVerifier} requires by STRICT equality and the
+      # `iss` of every token and mandate this origin mints. Wrong, the app
+      # boots, serves HTML and advertises discovery while refusing EVERY
+      # assistant with "proof audience mismatch" — nothing fails that an
+      # operator can see.
+      #
+      # WHAT COUNTS AS WRONG, and nothing wider. UNSET is wrong in every
+      # environment: no origin is the empty string, and {JwtIssuer.issue}
+      # raises on the first registration. A LOOPBACK origin is wrong only
+      # OUTSIDE development and test, where it is exactly what `rails server`
+      # and every demo configure; a line printed on each local boot would cost
+      # the deployed warning its only reader.
+      #
+      # IT WARNS AND DOES NOT RAISE: an operator mid-setup installs, migrates
+      # and seeds before the public origin exists.
+      #
+      # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
+      # @param local [Boolean] normally `Rails.env.local?` — development or test
+      # @return [String, nil]
+      LOOPBACK_ISSUER =
+        %r{\A(?:https?://)?(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?/?\z}i
+
+      def self.issuer_warning(config:, local:)
+        issuer = config.issuer.to_s.strip
+
+        if issuer.empty?
+          return "[kiosk-server] `c.issuer` is not set. It is the `aud` every assistant signs " \
+                 "its proof of possession for and the `iss` of every token and mandate this " \
+                 "origin mints, so until it is set every authenticated request is refused with " \
+                 "\"proof audience mismatch\" and no assistant can work around it. Set it to " \
+                 "the origin assistants dial — scheme, host and port, no trailing slash: " \
+                 "Kiosk.configure { |c| c.issuer = \"https://api.example.com\" }."
+        end
+
+        return nil if local
+        return nil unless LOOPBACK_ISSUER.match?(issuer)
+
+        "[kiosk-server] `c.issuer` is #{issuer.inspect} outside development and test. No " \
+          "assistant can reach a loopback origin, and the value is compared to the `aud` they " \
+          "sign by strict equality, so every authenticated request is refused with \"proof " \
+          "audience mismatch\". Set it to this deployment's public origin — scheme, host and " \
+          "port, no trailing slash. One instance serves exactly one origin: point alias " \
+          "hostnames at the canonical one with a redirect."
+      end
+
+      config.after_initialize do
+        message = Kiosk::Server::Engine.issuer_warning(
+          config: Kiosk.configuration, local: ::Rails.env.local?,
+        )
+        next unless message
+
+        ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
+      end
+
       # ── THERE IS ALWAYS A DEFAULT ROLE ────────────────────────────────────
       #
       # `registration_role` is what every role resolution in this engine falls

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **A boot warning for an `issuer` that cannot be right.** Unset warns in every environment; a loopback origin only outside development and test, so local demo boots stay quiet.
+
 - 2026-10-04: **The demo discovery drivers name the `schema` catalogue as it is served.** Four copies printed `{queries, actions}`, or the retired `{verbs, …}`, where the origin answers `events` too.
 
 - 2026-10-04: **Three more event-stream frames are answered, not dropped.** An `unsubscribe` nothing resolves and an unreadable `since` are refused; a duplicate `subscribe` is re-confirmed.

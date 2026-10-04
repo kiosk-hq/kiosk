@@ -128,6 +128,8 @@ module Kiosk
       initializer "kiosk-server.middleware" do |app|
         app.middleware.insert_before ::ActionDispatch::ShowExceptions,
                                      Kiosk::Server::HeadersMiddleware
+        app.middleware.insert_before ::ActionDispatch::ShowExceptions,
+                                     Kiosk::Server::IssuerMiddleware
       end
 
       # The wire's credential-bearing request fields, kept out of the host's

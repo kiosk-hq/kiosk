@@ -45,9 +45,12 @@ REACHABLE  = { value: true }
 # The `exp` this IdP stamps on the identity it resolves, and after which it
 # stops resolving at all. Moved back under a held socket to age its token out.
 EXPIRES_AT = { value: Time.now.to_i + 3600 }
+# The issuer in force each time the IdP was asked, newest last.
+ISSUERS_SEEN = []
 
 class ProbeIdp
   def verify(request)
+    ISSUERS_SEEN << Kiosk.current_issuer
     header = request.headers["Authorization"] || request.headers["HTTP_AUTHORIZATION"]
     return nil unless header.to_s == "Bearer #{GOOD_TOKEN}"
     return nil if REVOKED[:value]
@@ -100,6 +103,7 @@ end
 
 Kiosk.configure do |c|
   c.issuer    = "http://127.0.0.1:#{ENV.fetch("PROBE_PORT")}"
+  c.additional_origins = ["http://localhost:#{ENV.fetch("PROBE_PORT")}"]
   c.handlers  = ["ProbeController"]
   c.agent_idp = ProbeIdp.new
   # A real key, generated here: the engine crashes rather than inventing one
@@ -124,8 +128,8 @@ end
 class ProbeSocket
   attr_reader :frames
 
-  def initialize(port, path, headers)
-    @url = "ws://127.0.0.1:#{port}#{path}"
+  def initialize(port, path, headers, host: "127.0.0.1")
+    @url = "ws://#{host}:#{port}#{path}"
     @tcp = TCPSocket.new("127.0.0.1", port)
     @frames = []
     @open = false
@@ -261,11 +265,11 @@ def raw_get(port, path, headers)
     "body" => body }
 end
 
-def connect(port, headers: nil, path: "/kiosk/events")
+def connect(port, headers: nil, path: "/kiosk/events", host: "127.0.0.1")
   ProbeSocket.new(port, path, headers || {
     "Origin" => Kiosk.configuration.issuer,
     "Authorization" => "Bearer #{GOOD_TOKEN}",
-  })
+  }, host: host)
 end
 
 # ── boot Puma ────────────────────────────────────────────────────────────────
@@ -361,6 +365,17 @@ begin
   sock.pump_until { sock.frames.any? }
   REPORT[:opened] = sock.open?
   REPORT[:welcome] = sock.frames.first
+
+  REPORT[:default_origin_issuer] = ISSUERS_SEEN.last
+
+  # 3b — the same upgrade on the second origin resolves under that origin.
+  other = connect(port, host: "localhost")
+  other.pump_until { other.frames.any? }
+  REPORT[:second_origin_welcomed] = other.frames.any? { |f| f["type"] == "welcome" }
+  REPORT[:second_origin_issuer] = ISSUERS_SEEN.last
+  REPORT[:second_origin] = "http://localhost:#{port}"
+  REPORT[:default_origin] = Kiosk.configuration.issuer
+  other.close
 
   # 4 — subscribe to a declared, principal-reach topic.
   sock.subscribe(identifier("order_payment"))

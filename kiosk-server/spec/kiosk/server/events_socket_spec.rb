@@ -65,6 +65,14 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     # `Origin`. That header is a browser's forgery control, and a browser
     # cannot attach `Authorization` cross-origin in the first place — so
     # requiring it would only lock out the stacks this wire is written for.
+    # ADR-0040: `connect` runs after the upgrade request has returned, so the
+    # connection resolves the issuer from its own request.
+    it "resolves the identity under the origin the upgrade arrived on" do
+      expect(report["default_origin_issuer"]).to eq(report["default_origin"])
+      expect(report["second_origin_welcomed"]).to be(true)
+      expect(report["second_origin_issuer"]).to eq(report["second_origin"])
+    end
+
     it "accepts an upgrade that carries NO Origin header" do
       expect(report["no_origin_welcomed"]).to be(true)
     end

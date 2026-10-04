@@ -209,12 +209,16 @@ module Kiosk
         value.match?(/\A\d+\z/) ? value.to_i : value
       end
 
+      # Under the issuer of the origin the upgrade arrived on: `connect` runs
+      # after the upgrade request has returned, outside {IssuerMiddleware}.
+      #
       # An adapter returns nil for a credential it does not recognise; it does
       # not raise. A raise here would be a bug in an operator's own IdP, and the
       # right answer to it is still a refused upgrade rather than a 500 on a
       # socket nobody can read.
       def resolve_identity
-        Kiosk::Server::IdentityResolution.resolve(request)
+        issuer = Kiosk.configuration.issuer_for(request.base_url)
+        Kiosk.with_issuer(issuer) { Kiosk::Server::IdentityResolution.resolve(request) }
       rescue StandardError => e
         logger.error("[kiosk] events connection identity resolution failed: #{e.class}") if logger
         nil

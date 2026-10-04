@@ -17,7 +17,8 @@
     "id": {
       "type": "integer",
       "minimum": 1,
-      "description": "A PER-ORIGIN monotonic integer -- not per topic and not per subscriber. One integer therefore resumes every subscription a socket holds, and a subscriber compares integers instead of keeping a cursor per topic. A subscriber MUST ignore an id it has already seen: delivery is at-least-once."
+      "maximum": 9007199254740991,
+      "description": "A PER-ORIGIN monotonic integer, at most 2^53 - 1 -- the range JSON carries exactly (RFC 7493 Section 2.2), and the range of the cursor a subscriber presents as `since`. Not per topic and not per subscriber. One integer therefore resumes every subscription a socket holds, and a subscriber compares integers instead of keeping a cursor per topic. A subscriber MUST ignore an id it has already seen: delivery is at-least-once."
     },
     "topic": {
       "type": "string",

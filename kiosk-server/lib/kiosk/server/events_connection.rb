@@ -161,19 +161,12 @@ module Kiosk
       # echoed, whose members are the same in another order, which is a
       # different string and so a different subscription.
       #
-      # A `subscribe` names this channel, and the `since` it sent is a cursor
-      # the stream can read. Without that second clause {KioskEvents#since}
-      # raises on a `since` that is not a scalar, and the raise lands in Action
-      # Cable's own `rescue Exception` — so the subscription is neither live
-      # nor refused, and the subscriber waits on a stream that never speaks.
+      # A `subscribe` names this channel; what it asks of the channel —
+      # topic, subject, cursor — is {KioskEvents}' to refuse.
       def actionable?(command, identifier, live)
         return live if command == "unsubscribe"
 
-        declaration = parse_object(identifier)
-        return false unless declaration&.dig("channel") == CHANNEL
-
-        cursor = declaration["since"]
-        cursor.nil? || cursor.is_a?(::String) || cursor.is_a?(::Integer)
+        parse_object(identifier)&.dig("channel") == CHANNEL
       end
 
       def auto_subscribe!
@@ -206,12 +199,14 @@ module Kiosk
                   .map { |topic, subject| [topic, (subject unless subject.to_s.empty?)] }
       end
 
+      # Decimal digits are a cursor's URL spelling; anything else travels on
+      # unchanged, so {KioskEvents} refuses it rather than reading it as 0.
       def requested_since
         value = ::Rack::Utils.parse_query(request.query_string)["since"]
         value = value.last if value.is_a?(Array)
-        return nil if value.nil? || value.to_s.empty?
+        return nil if value.nil? || value.empty?
 
-        value.to_i
+        value.match?(/\A\d+\z/) ? value.to_i : value
       end
 
       # An adapter returns nil for a credential it does not recognise; it does

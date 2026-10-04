@@ -224,6 +224,12 @@ BAD_FRAMES = {
   "foreign_channel" => '{"command":"subscribe","identifier":"{\"channel\":\"Object\",\"topic\":\"todo\"}"}',
 }.freeze
 
+# Values a `subscribe` may present as `since` that are not a cursor.
+NOT_CURSORS = {
+  "word" => "abc", "digits_as_string" => "880", "negative" => -1,
+  "below_range" => -10**30, "above_range" => 2**53, "fraction" => 1.5,
+}.freeze
+
 UPGRADE_HEADERS = {
   "Connection" => "Upgrade", "Upgrade" => "websocket", "Sec-WebSocket-Version" => "13",
   "Sec-WebSocket-Key" => "dGhlIHNhbXBsZSBub25jZQ==",
@@ -517,10 +523,8 @@ begin
     sock.messages.select { |m| m["type"] == "subscribed" }.map { |m| m["topic"] }
   sock.close
 
-  # 15d — frames the gate above PASSES, which Action Cable then answers with a
-  #       silence of its own: `Subscriptions#find` raises into its own `rescue
-  #       Exception` for a subscription the socket does not hold, and
-  #       `KioskEvents#since` raises there for a `since` that is not a cursor.
+  # 15d — frames that name a subscription the origin cannot act on: one the
+  #       socket does not hold, and a `since` that is not a cursor.
   REPORT[:unopened_unsubscribe] =
     frame_answer(port, frame("unsubscribe", identifier("order_payment")))
   REPORT[:reserialised_unsubscribe] = frame_answer(
@@ -531,6 +535,25 @@ begin
   )
   REPORT[:unreadable_cursor] =
     frame_answer(port, frame("subscribe", identifier("todo", subject: "list_ok", since: {})))
+
+  # 15d2 — every other `since` that is not a cursor, in both spellings; a
+  #        `subject` that is not a string; and the largest cursor there is.
+  REPORT[:not_cursors] = NOT_CURSORS.transform_values do |since|
+    frame_answer(port, frame("subscribe", identifier("todo", subject: "list_ok", since: since)))
+  end
+  REPORT[:url_not_cursors] = %w[abc -5 1e3].to_h do |since|
+    url = connect(port, path: "/kiosk/events?topic=todo:list_ok&since=#{since}")
+    url.pump_until { url.frames.any? { |f| f["type"] == "reject_subscription" } }
+    answer = url.frames.reject { |f| f["type"] == "welcome" }
+    url.close
+    [since, answer]
+  end
+  REPORT[:not_subjects] = { "list" => %w[ord_1 ord_2], "number" => 5 }.transform_values do |subject|
+    frame_answer(port, frame("subscribe", identifier("order_payment", subject: subject)))
+  end
+  REPORT[:largest_cursor] = frame_answer(
+    port, frame("subscribe", identifier("todo", subject: "list_ok", since: 2**53 - 1)),
+  )
 
   # 15e — and the one frame on that list the origin CAN act on, where the
   #       action is nothing: a second identical `subscribe`.

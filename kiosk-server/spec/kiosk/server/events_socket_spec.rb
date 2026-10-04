@@ -224,6 +224,45 @@ RSpec.describe "the Kiosk event stream over a real socket" do
                   "type" => "reject_subscription" }])
       expect(report.dig("unreadable_cursor", "closed")).to be(false)
     end
+
+    # Spec Section 8.5.4: a cursor is an `id` or a `head` the origin sent — a
+    # non-negative JSON integer within the range JSON carries exactly.
+    {
+      "word" => "abc", "digits_as_string" => "880", "negative" => -1,
+      "below_range" => -10**30, "above_range" => 2**53, "fraction" => 1.5,
+    }.each do |name, since|
+      it "REJECTS a subscribe whose since is #{name.tr('_', ' ')}" do
+        sent = JSON.generate("channel" => "KioskEvents", "topic" => "todo",
+                             "subject" => "list_ok", "since" => since)
+        expect(report.dig("not_cursors", name, "answer"))
+          .to eq([{ "identifier" => sent, "type" => "reject_subscription" }])
+        expect(report.dig("not_cursors", name, "closed")).to be(false)
+      end
+    end
+
+    %w[abc -5 1e3].each do |since|
+      it "REJECTS a URL subscription whose since is #{since.inspect}" do
+        sent = JSON.generate("channel" => "KioskEvents", "topic" => "todo",
+                             "subject" => "list_ok", "since" => since)
+        expect(report.dig("url_not_cursors", since))
+          .to eq([{ "identifier" => sent, "type" => "reject_subscription" }])
+      end
+    end
+
+    # A topic whose reach needs no rule of the operator's would otherwise open
+    # these, and no event's subject can match them.
+    { "list" => %w[ord_1 ord_2], "number" => 5 }.each do |name, subject|
+      it "REJECTS a subscribe whose subject is a #{name}" do
+        sent = JSON.generate("channel" => "KioskEvents", "topic" => "order_payment",
+                             "subject" => subject)
+        expect(report.dig("not_subjects", name, "answer"))
+          .to eq([{ "identifier" => sent, "type" => "reject_subscription" }])
+      end
+    end
+
+    it "accepts the largest cursor" do
+      expect(report.dig("largest_cursor", "answer").first.dig("message", "type")).to eq("subscribed")
+    end
   end
 
   # Spec Section 8.5.4: the one frame the origin CAN act on where the action is

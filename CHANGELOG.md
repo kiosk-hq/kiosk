@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-05: **The event stream refuses a `since` that is not a cursor and a `subject` that is not a string.** A word read as 0; an out-of-range integer opened it without its replay.
+
 - 2026-10-04: **A boot warning for an `issuer` that cannot be right.** Unset warns in every environment; a loopback origin only outside development and test, so local demo boots stay quiet.
 
 - 2026-10-04: **The demo discovery drivers name the `schema` catalogue as it is served.** Four copies printed `{queries, actions}`, or the retired `{verbs, …}`, where the origin answers `events` too.

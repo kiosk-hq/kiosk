@@ -30,6 +30,12 @@ class KioskEvents < ActionCable::Channel::Base
 
   periodically :reauthorise!, every: REAUTHORISE_EVERY_SECONDS
 
+  # A cursor is an event `id` or a `head` this origin sent (spec Section
+  # 8.5.4): a non-negative integer no larger than JSON carries exactly
+  # (RFC 7493 Section 2.2). Anything else is refused rather than read as some
+  # other cursor, because the replay it asked for cannot be served.
+  MAX_CURSOR = 2**53 - 1
+
   def subscribed
     topic = params[:topic].to_s
     declaration = Kiosk::Server::Events.fetch(topic)
@@ -38,6 +44,11 @@ class KioskEvents < ActionCable::Channel::Base
     # empty: a silent subscription to nothing is indistinguishable from a quiet
     # topic, and the client would wait forever on a name it got wrong.
     return reject unless declaration
+    return reject unless since.nil? || cursor?(since)
+    # A subject is a string, as an event carries it. Anything else reaches the
+    # operator's own rule as a value it was never written for — an array is an
+    # IN list there — and opens a subscription no event can match.
+    return reject unless params[:subject].nil? || params[:subject].is_a?(String)
 
     # ORDER MATTERS: `reachable?` reads `@subject`, so the assignment has to
     # precede it. After it, every `consented` subscription authorises against a
@@ -123,12 +134,9 @@ class KioskEvents < ActionCable::Channel::Base
     end
   end
 
-  def since
-    value = params[:since]
-    return nil if value.nil? || value.to_s.empty?
+  def since = params[:since]
 
-    value.to_i
-  end
+  def cursor?(value) = value.is_a?(Integer) && value.between?(0, MAX_CURSOR)
 
   # A subscription sees its own topic, and its own subject when it named one.
   #

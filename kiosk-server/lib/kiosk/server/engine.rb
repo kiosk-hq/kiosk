@@ -303,10 +303,11 @@ module Kiosk
       #
       # WHAT COUNTS AS WRONG, and nothing wider. UNSET is wrong in every
       # environment: no origin is the empty string, and {JwtIssuer.issue}
-      # raises on the first registration. A LOOPBACK origin is wrong only
-      # OUTSIDE development and test, where it is exactly what `rails server`
-      # and every demo configure; a line printed on each local boot would cost
-      # the deployed warning its only reader.
+      # raises on the first registration. A LOOPBACK served origin — `issuer`
+      # or one of `additional_origins` — is wrong only OUTSIDE development and
+      # test, where it is exactly what `rails server` and every demo configure;
+      # a line printed on each local boot would cost the deployed warning its
+      # only reader.
       #
       # IT WARNS AND DOES NOT RAISE: an operator mid-setup installs, migrates
       # and seeds before the public origin exists.
@@ -330,14 +331,17 @@ module Kiosk
         end
 
         return nil if local
-        return nil unless LOOPBACK_ISSUER.match?(issuer)
 
-        "[kiosk-server] `c.issuer` is #{issuer.inspect} outside development and test. No " \
-          "assistant can reach a loopback origin, and the value is compared to the `aud` they " \
-          "sign by strict equality, so every authenticated request is refused with \"proof " \
-          "audience mismatch\". Set it to this deployment's public origin — scheme, host and " \
-          "port, no trailing slash. One instance serves exactly one origin: point alias " \
-          "hostnames at the canonical one with a redirect."
+        loopback = [issuer, *config.additional_origins].map { |o| o.to_s.strip }
+                                                        .find { |o| LOOPBACK_ISSUER.match?(o) }
+        return nil unless loopback
+
+        "[kiosk-server] A served origin is #{loopback.inspect} outside development and test. No " \
+          "assistant can reach a loopback origin, and it is compared to the `aud` they sign by " \
+          "strict equality, so every authenticated request there is refused with \"proof " \
+          "audience mismatch\". Set `c.issuer` to this deployment's public origin — scheme, " \
+          "host and port, no trailing slash. Redirect an alias of the same business to it; " \
+          "list a second business in `c.additional_origins`."
       end
 
       config.after_initialize do

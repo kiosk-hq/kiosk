@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **The boot warning reads every served origin**, `c.additional_origins` included, and names the loopback one it found.
+
 - 2026-10-05: **An assistant account belongs to one origin.** Register, login, bind, unlink and the manage page look a key up on the origin being served only.
 
 - 2026-10-05: **`kiosk.agents` gains `issuer`**, and a live key is unique per origin. `SchemaDefinitions.agents_issuer_sql` backfills an existing table with `c.issuer`.

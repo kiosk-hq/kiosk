@@ -44,8 +44,9 @@ RSpec.describe Kiosk::Server::Engine, ".issuer_warning" do
       expect(warning).to include("No assistant can reach a loopback origin")
     end
 
-    it "says to redirect alias hostnames instead of serving both" do
-      expect(warning).to include("One instance serves exactly one origin")
+    it "says to redirect an alias and to list a second business" do
+      expect(warning).to include("Redirect an alias")
+      expect(warning).to include("c.additional_origins")
     end
 
     ["http://127.0.0.1:3000", "https://localhost", "0.0.0.0:3000", "http://[::1]:9292"].each do |issuer|
@@ -53,6 +54,24 @@ RSpec.describe Kiosk::Server::Engine, ".issuer_warning" do
         Kiosk.configure { |c| c.issuer = issuer }
         expect(warning).to include("loopback origin")
       end
+    end
+  end
+
+  context "when one of `additional_origins` is a loopback origin" do
+    before do
+      Kiosk.configure do |c|
+        c.issuer = "https://api.example.com"
+        c.additional_origins = ["https://shop.example.com", "http://127.0.0.1:3001"]
+      end
+    end
+
+    it "names that origin outside development and test" do
+      expect(warning).to include(%("http://127.0.0.1:3001"))
+      expect(warning).to include("loopback origin")
+    end
+
+    it "stays quiet in development and test" do
+      expect(warning(local: true)).to be_nil
     end
   end
 

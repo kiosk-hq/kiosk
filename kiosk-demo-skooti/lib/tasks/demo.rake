@@ -81,9 +81,8 @@ namespace :check do
   desc "Known-answer test for the RentalTokenIssuer demo lib (DB-free; no server boot)."
   task :kat do
     # Run standalone (fresh ruby, no Rails): the KAT stands up its own tiny
-    # Kiosk.configuration carrier and self-configures its load path, so it must
-    # NOT be required into the booted Rails process (where the real
-    # Kiosk::Configuration is present). Exit status propagates the pass/fail.
+    # Kiosk.configuration carrier, so it must NOT be required into the booted
+    # Rails process, where the real Kiosk::Configuration is present.
     sh "ruby #{Rails.root.join('script/rental_token_issuer_kat.rb')}"
   end
 
@@ -100,11 +99,6 @@ namespace :check do
     require "securerandom"
     require "shellwords"
 
-    $LOAD_PATH.unshift File.expand_path("../", __dir__)
-    # script/, not lib/: both are flow-only helpers and sit OUTSIDE the app's
-    # eager-load set, so they are reached by `require_relative` rather than a
-    # bare `require` — which would depend on whatever load path Rails happens
-    # to set up for lib/, an implicit dependency a file move breaks.
     require_relative "../../script/lock_sim"
     require_relative "../../script/dev_unlock_key"
 

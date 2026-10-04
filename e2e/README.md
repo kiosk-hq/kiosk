@@ -41,23 +41,27 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **PostgreSQL** reachable (default: `localhost` with the running user as superuser; e.g. `brew services start postgresql`)
 - **`rails` gem** — the script installs it automatically if missing
 - **`curl`** and **`jq`** on the PATH
-- **`python3` with `numpy`** — the golden path registers by paying a real
-  register-time Equihash toll, and the bundled solver needs both
-- **a python with `websockets`** — the event-stream leg runs
-  `kiosk-server/listen.py`, the SAME file an assistant fetches from kiosk.tech
-  and verifies by SHA-256 before executing, so the harness needs what that file
-  needs. On a Homebrew or system python PEP 668 refuses `pip install`
-  outright, so point the harness at an interpreter that has it rather than
-  fighting that:
+- **python packages** — `e2e/requirements.txt` declares both: `numpy` for the
+  register-time Equihash toll the golden path pays, and `websockets` for the
+  event-stream leg, which runs `kiosk-server/listen.py` — the SAME file an
+  assistant fetches from kiosk.tech and verifies by SHA-256 before executing.
+  CI installs that file; so should you:
 
   ```bash
-  python3 -m venv .venv && .venv/bin/pip install 'websockets>=12'
+  python3 -m pip install -r e2e/requirements.txt
+  ```
+
+  Where a Homebrew or system python refuses that (PEP 668), install into a venv
+  and point the listener at it:
+
+  ```bash
+  python3 -m venv .venv && .venv/bin/pip install -r e2e/requirements.txt
   KIOSK_PYTHON=.venv/bin/python bash e2e/run.sh
   ```
 
   `KIOSK_PYTHON` defaults to `python3` and is read for the listener only; the
-  Equihash solver keeps using plain `python3`, because numpy is normally
-  installed system-wide and the two requirements are separate.
+  Equihash solver keeps using plain `python3`, which is the interpreter
+  `kiosk-pow-equihash` names itself.
 
 ## Run locally
 
@@ -103,6 +107,7 @@ e2e/
 ├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes, §5/§6 included
 ├── schemas/                                # vendored copies of the published normative schemas this harness alone reads (the five kiosk-server ENFORCES are vendored in the gem instead; `bin/check-spec-schemas` holds every copy against its original and prints how many it matched)
 ├── README.md                               # this file
+├── requirements.txt                        # the harness's python dependencies: numpy for the Equihash register-PoW solver, websockets for the event-stream listener
 └── fixtures/                               # files copied into the generated app
     ├── create_users.rb                     # provider's user table (UUID PK)
     ├── add_devise_columns_to_users.rb      # the human-login columns on that table (email + encrypted_password)

@@ -100,26 +100,18 @@ rails --version 2>/dev/null | grep -qE '^Rails [0-9]' || fail "rails still not r
 command -v psql     >/dev/null || fail "psql not on PATH"
 command -v curl     >/dev/null || fail "curl not on PATH"
 command -v jq       >/dev/null || fail "jq not on PATH"
-# The golden path registers with a real register-time Equihash PoW, solved by
-# the bundled numpy-vectorised solver (kiosk-pow-equihash/solve.py).
+# Both python requirements are declared in e2e/requirements.txt, and the two
+# interpreters are separate because their callers are. The register-time
+# Equihash solver needs numpy under plain `python3` — kiosk-pow-equihash names
+# that interpreter itself. The event-stream leg runs the PINNED listener (the
+# same file an assistant fetches from kiosk.tech and verifies by SHA-256) and
+# needs websockets under `KIOSK_PYTHON`, which is how a venv is pointed at
+# where `pip install` is refused system-wide.
 command -v python3  >/dev/null || fail "python3 not on PATH (needed by the Equihash register-PoW solver)"
-python3 -c "import numpy" 2>/dev/null || fail "python numpy missing (pip install numpy) — needed by the Equihash register-PoW solver"
-# The event-stream leg runs the PINNED listener — the same file an assistant
-# fetches from kiosk.tech and verifies by SHA-256 — so the harness needs what
-# that file needs. `websockets` is one pure-Python package with no transitive
-# dependencies; the alternative measured at 2.8x the code, 117 lines of it a
-# hand-rolled RFC 6455 frame parser.
-#
-# IT GETS ITS OWN INTERPRETER KNOB, and the reason is the one every macOS
-# developer meets: PEP 668 makes a Homebrew or system python refuse
-# `pip install` outright, so «just install it» is not available there. The
-# skill already tells an assistant to make a venv for `pyjwt`, `cryptography`
-# and `numpy`; `KIOSK_PYTHON` is how this harness is pointed at one. The
-# SOLVER keeps using plain `python3` — numpy is normally installed system-wide
-# and the two requirements are separate.
+python3 -c "import numpy" 2>/dev/null || fail "python numpy missing — needed by the Equihash register-PoW solver. Install it: python3 -m pip install -r e2e/requirements.txt"
 KIOSK_PYTHON="${KIOSK_PYTHON:-python3}"
 command -v "$KIOSK_PYTHON" >/dev/null || fail "KIOSK_PYTHON=$KIOSK_PYTHON is not on PATH"
-"$KIOSK_PYTHON" -c "import websockets" 2>/dev/null || fail "python websockets missing — needed by the pinned event-stream listener. Either install it (pip install 'websockets>=12') or point the harness at an interpreter that has it: python3 -m venv .venv && .venv/bin/pip install 'websockets>=12' && KIOSK_PYTHON=.venv/bin/python ./e2e/run.sh"
+"$KIOSK_PYTHON" -c "import websockets" 2>/dev/null || fail "python websockets missing — needed by the pinned event-stream listener. Install it: $KIOSK_PYTHON -m pip install -r e2e/requirements.txt — or, where that is refused, point the harness at a venv: python3 -m venv .venv && .venv/bin/pip install -r e2e/requirements.txt && KIOSK_PYTHON=.venv/bin/python ./e2e/run.sh"
 
 pg_isready -q || fail "postgres not accepting connections (run: brew services start postgresql)"
 

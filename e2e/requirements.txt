@@ -1,0 +1,6 @@
+# numpy — the register-time Equihash solver (kiosk-pow-equihash/solve.py), which
+# runs under plain `python3`.
+numpy
+# websockets — the pinned event-stream listener (kiosk-server/listen.py), which
+# runs under `KIOSK_PYTHON`.
+websockets>=12

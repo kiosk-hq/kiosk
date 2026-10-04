@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **The end-to-end harness declares its python dependencies in `e2e/requirements.txt`.** CI installs that file, the pre-flight's remedy names it, and a fresh clone needs no prose.
+
 - 2026-10-04: **The demos' binding helper returns only what a driver reads.** `BoundAssistant` drops `key`, `pem` and `session`, and the `session:` reuse parameter no caller passed is gone.
 
 - 2026-10-04: **A frame the event stream cannot act on is now answered instead of dropped.** A malformed `subscribe` gets `reject_subscription`; a frame naming no subscription closes the socket.

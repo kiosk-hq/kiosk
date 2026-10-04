@@ -106,7 +106,7 @@
 # reader differs from the one the gem and demo scopes are written for, and
 # the ban stopped at the harness door for no stated reason until it did not.
 #
-#   * `e2e/**` restricted to `.md .sh .rb .json`, excluding `e2e/.gems/` —
+#   * `e2e/**` restricted to `.md .sh .rb .json .txt`, excluding `e2e/.gems/` —
 #     the harness's INSTALLED bundle, gitignored, thousands of files deep and
 #     none of them ours.
 #   * `e2e/schemas/*.schema.json` are VENDORED MIRRORS and are read for one
@@ -1284,7 +1284,7 @@ end
 # SCOPES table wants a per-directory shape and there is no reason to give this
 # one a different one.
 E2E_ROOT = File.join(REPO, "e2e").freeze
-E2E_EXTS = %w[.md .sh .rb .json].freeze
+E2E_EXTS = %w[.md .sh .rb .json .txt].freeze
 
 def e2e_dirs
   File.directory?(E2E_ROOT) ? [E2E_ROOT] : []

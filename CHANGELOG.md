@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **The demos' binding helper returns only what a driver reads.** `BoundAssistant` drops `key`, `pem` and `session`, and the `session:` reuse parameter no caller passed is gone.
+
 - 2026-10-04: **A frame the event stream cannot act on is now answered instead of dropped.** A malformed `subscribe` gets `reject_subscription`; a frame naming no subscription closes the socket.
 
 - 2026-10-04: **An origin that declares no topic answers `501 module_not_served` at `<endpoint>/events`.** It no longer welcomes an authenticated socket it can never stream on.

@@ -42,10 +42,8 @@ require_relative "equihash_register"
 # `agent_id` is a UUID here because `/auth/register` minted it: every `agent_id`
 # column in the canonical schema is typed `uuid`, so a driver cannot choose a
 # shape the tables cannot store.
-BoundAssistant = Struct.new(:agent_id, :user_id, :token, :key, :pem, :session,
-                            keyword_init: true) do
-  # The header an agent's call carries — and the only thing it carries. The
-  # human's cookie jar lives on `session` and never travels with these.
+BoundAssistant = Struct.new(:agent_id, :user_id, :token, keyword_init: true) do
+  # The header an agent's call carries — and the only thing it carries.
   def bearer = { "Authorization" => "Bearer #{token}" }
 
   # Claims of the currently held token, for drivers that assert on them.
@@ -61,13 +59,9 @@ end
 # @param issuer [String] issuer origin for the possession proof's `aud` claim
 # @param email [String] a SEEDED human's Devise email
 # @param password [String] that human's password (db/seeds.rb)
-# @param session [Kiosk::UserIdentityProviders::DeviseSession, nil] reuse an
-#   existing human session; a fresh one is signed in when omitted. Two assistants for the SAME human should
-#   share one session — two humans must never share one.
 # @return [BoundAssistant]
-def bind_assistant(server:, issuer:, email:, password:, session: nil)
-  fresh_session = session.nil?
-  session ||= Kiosk::UserIdentityProviders::DeviseSession.new(server)
+def bind_assistant(server:, issuer:, email:, password:)
+  session = Kiosk::UserIdentityProviders::DeviseSession.new(server)
 
   # 1. Headless registration. These calls carry no cookies (no `session: true`)
   #    — an assistant's handshake is its own, and the jar is opt-in per request.
@@ -79,7 +73,7 @@ def bind_assistant(server:, issuer:, email:, password:, session: nil)
   pem = key.public_key.to_pem
 
   # 2. The human, for real, on the shipped Devise form.
-  session.sign_in!(email: email, password: password) if fresh_session
+  session.sign_in!(email: email, password: password)
 
   # 3. Link code on the human's session, redeemed by the key from step 1.
   rc, link = session.post_json("/kiosk/auth/link", {}, { session: true })
@@ -98,6 +92,6 @@ def bind_assistant(server:, issuer:, email:, password:, session: nil)
 
   BoundAssistant.new(
     agent_id: claimed.fetch("agent_id"), user_id: claimed.fetch("user_id"),
-    token: claimed.fetch("access_token"), key: key, pem: pem, session: session,
+    token: claimed.fetch("access_token"),
   )
 end

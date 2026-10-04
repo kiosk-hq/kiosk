@@ -22,8 +22,8 @@ SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 PASSWORD = ENV.fetch("HUMAN_PASSWORD")
 
-alice = bind_assistant(server: SERVER, issuer: ISSUER, email: "alice@example.com", password: PASSWORD)
-bob   = bind_assistant(server: SERVER, issuer: ISSUER, email: "bob@example.com",   password: PASSWORD)
+alice = bind_assistant(server: SERVER, issuer: ISSUER, email: ENV.fetch("ALICE_EMAIL"), password: PASSWORD)
+bob   = bind_assistant(server: SERVER, issuer: ISSUER, email: ENV.fetch("BOB_EMAIL"),   password: PASSWORD)
 
 # The whole point of the ceremony is that the principal is the HUMAN's, so say
 # so out loud rather than trusting it: a rebind remaps `agents.user_id`, and

@@ -45,6 +45,8 @@ if command -v ruby >/dev/null 2>&1; then
 fi
 SERVER_PORT="${SERVER_PORT:-3001}"
 DB_NAME="kiosk_e2e_$$"
+# The two seeded humans: fixtures/seeds.rb creates them, the fixtures sign in as them.
+export ALICE_EMAIL="alice@example.com" BOB_EMAIL="bob@example.com" HUMAN_PASSWORD="e2e-demo-password"
 APP_NAME="demo_app"
 TMP_DIR="$(mktemp -d -t kiosk-e2e.XXXX)"
 SERVER_PID=""
@@ -491,7 +493,7 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 # assertions need two principals that are genuinely different people.
 log "bind two assistants to the seeded humans (register -> link -> claim)"
 bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
-               KIOSK_ISSUER="$KIOSK_ISSUER" HUMAN_PASSWORD="e2e-demo-password" \
+               KIOSK_ISSUER="$KIOSK_ISSUER" \
                bundle exec ruby "$FIXTURES/bind_assistants.rb" ) \
   || fail "the binding ceremony did not produce two assistants"
 export ALICE_AGENT=$(echo "$bind_json" | jq -r '.alice_agent')
@@ -551,8 +553,7 @@ log "drive the §5/§6 auth and binding ceremonies (for their live bytes)"
 AUTH_CAPTURE="$TMP_DIR/auth-capture.json"
 auth_capture_out=$( SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                       KIOSK_ISSUER="$KIOSK_ISSUER" \
-                      HUMAN_EMAIL="alice@example.com" \
-                      HUMAN_PASSWORD="e2e-demo-password" \
+                      HUMAN_EMAIL="$ALICE_EMAIL" \
                       AUTH_CAPTURE="$AUTH_CAPTURE" \
                       bundle exec ruby "$FIXTURES/auth_wire_capture.rb" ) \
   || fail "the §5/§6 ceremonies did not complete"

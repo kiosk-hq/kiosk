@@ -35,6 +35,7 @@
 #   KIOSK_ISSUER — issuer/audience passed through to pay_flow.rb
 #   ALICE_AGENT / ALICE_AGENT_TOKEN, BOB_AGENT / BOB_AGENT_TOKEN — the two
 #                  agent principals, minted by the binding ceremony
+#   ALICE_EMAIL / HUMAN_PASSWORD — the seeded human claim_flow.rb signs in as
 
 set -euo pipefail
 
@@ -973,8 +974,7 @@ authmd=$(curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/auth.md")
 assert "binding: /auth.md served"           "$authmd" "200"
 
 bind_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
-              HUMAN_USER_ID="$ALICE" HUMAN_EMAIL="alice@example.com" \
-              HUMAN_PASSWORD="e2e-demo-password" \
+              HUMAN_USER_ID="$ALICE" HUMAN_EMAIL="$ALICE_EMAIL" \
               bundle exec ruby "$FIXTURES/claim_flow.rb" )
 
 # THE ROLE IS NOT THE CALLER'S TO NAME.

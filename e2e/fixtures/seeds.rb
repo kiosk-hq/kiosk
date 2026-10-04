@@ -11,16 +11,15 @@
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"
 
-# Fixture credentials (a throwaway database this harness drops on every run).
-DEMO_PASSWORD = "e2e-demo-password"
-
+# Credentials come from run.sh, which hands the same values to the fixtures
+# that sign in (a throwaway database this harness drops on every run).
 User.find_or_create_by!(id: ALICE_ID) do |u|
-  u.email    = "alice@example.com"
-  u.password = DEMO_PASSWORD
+  u.email    = ENV.fetch("ALICE_EMAIL")
+  u.password = ENV.fetch("HUMAN_PASSWORD")
 end
 User.find_or_create_by!(id: BOB_ID) do |u|
-  u.email    = "bob@example.com"
-  u.password = DEMO_PASSWORD
+  u.email    = ENV.fetch("BOB_EMAIL")
+  u.password = ENV.fetch("HUMAN_PASSWORD")
 end
 
 Salon.find_or_create_by!(name: "Combette on Park")

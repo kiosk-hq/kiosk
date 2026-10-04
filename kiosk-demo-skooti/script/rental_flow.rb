@@ -156,9 +156,6 @@ STDERR.puts "  payment_setup: #{setup_status.inspect}"
 
 # ── Step 4: pay ──────────────────────────────────────────────────────────────
 
-rc_pay   = nil
-pay_resp = {}
-
 unless SKIP_PAY
   now         = Time.now.to_i
   intent_id   = SecureRandom.uuid
@@ -268,10 +265,8 @@ end
 puts JSON.generate(
   http_register:          rc_register,
   http_browse:            rc_browse,
-  http_reserve:           rc_rsv,
   http_payment_setup:     rc_setup,
   payment_setup_status:   setup_status,
-  http_pay:               rc_pay,
   http_start_rental:      rc_rental,
   user_id:                user_id,
   agent_id:               agent_id,

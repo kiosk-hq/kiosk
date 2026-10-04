@@ -155,7 +155,6 @@ abort "expected 200 + rows, got #{rc_served}: #{JSON.generate(served_resp)}" unl
 
 puts JSON.generate(
   http_challenge:             rc_challenge,
-  http_served_after_solve:    rc_served,
   http_wrong_nonce:           rc_wrong,
   served:                     served,
   # EVERY solve the flow performed, register included — the count the

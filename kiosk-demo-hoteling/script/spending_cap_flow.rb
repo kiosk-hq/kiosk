@@ -205,7 +205,6 @@ set_cap!(agent_id, cap)
 # ── Step 5: UNDER the cap, spelled "eur" — settles ──────────────────────────
 rc, resp = pay(first, currency: "eur", key: key, token: token, user_id: user_id, agent_id: agent_id)
 results[:http_pay_under_cap]     = rc
-results[:pay_under_cap_currency] = resp["currency"]
 abort "the under-cap charge did not settle (#{rc}): #{JSON.generate(resp)}" unless rc == 200
 STDERR.puts "  Under the cap: settled #{format("€%.2f", first.fetch(:total_cents) / 100.0)} as \"eur\""
 
@@ -213,7 +212,6 @@ STDERR.puts "  Under the cap: settled #{format("€%.2f", first.fetch(:total_cen
 rc, resp = pay(second, currency: "EUR", key: key, token: token, user_id: user_id, agent_id: agent_id)
 results[:http_pay_over_cap] = rc
 results[:pay_over_cap_code] = resp["code"]
-results[:pay_over_cap_hint] = resp["hint"]
 STDERR.puts "  Over the cap, spelled \"EUR\": HTTP #{rc} #{resp["code"].inspect}"
 
 # ── Step 7: raise the cap by ONE CENT and re-sign the SAME chain ────────────

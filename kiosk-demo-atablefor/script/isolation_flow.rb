@@ -164,8 +164,6 @@ a_booking_ids_after = my_booking_ids(a[:token], "A (after)")
 puts JSON.generate(
   user_id_a:               a[:user_id],
   user_id_b:               b[:user_id],
-  agent_id_a:              a[:agent_id],
-  agent_id_b:              b[:agent_id],
   booking_id_a:            booking_id_a,
   booking_id_b:            booking_id_b,
   b_cancel_on_a_status:    b_cancel_on_a_status,

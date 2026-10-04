@@ -264,8 +264,6 @@ STDERR.puts "  limit=500: HTTP #{rc12}, #{over_rows.size} row(s)"
 
 puts JSON.generate(
   http_page1:        rc1,
-  http_page2:        rc2,
-  http_filtered:     rc3,
   http_detail:       rc4,
   page1_count:       page1_rows.size,
   page1_next:        page1_next,
@@ -278,7 +276,6 @@ puts JSON.generate(
   filtered_is_array: filtered_is_array,
   filtered_total:    filtered_total,
   detail_id:         detail_id,
-  detail_name:       detail["name"],
   detail_room_count: detail_room_count,
   detail_is_array:   detail_is_array,
   detail_row_count:  detail_row_count,

@@ -316,7 +316,6 @@ puts JSON.generate(
   kyc_jws_relayed:            (!kyc_jws.nil? && !kyc_jws.empty?),
   http_kyc_submit:            rc_kyc,
   kyc_attributes:             kyc_body["attributes"],
-  http_schema:                rc_schema,
   kyc_payload_schema:         kyc_topic && kyc_topic["payload_schema"],
   kyc_identity_key:           a_user,
   http_alcohol_with_kyc:      rc_a_kyc,

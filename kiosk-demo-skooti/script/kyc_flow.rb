@@ -102,7 +102,7 @@ def reserve(token, code)
   rc, rsv = post_json("#{SERVER}/kiosk/reserve", { scooter_code: code },
                       { "Authorization" => "Bearer #{token}" })
   abort "reserve #{code} failed (#{rc}): #{JSON.generate(rsv)}" unless rc == 200
-  [rsv.fetch("reservation_id"), rsv.fetch("price_per_min_cents"), rc]
+  [rsv.fetch("reservation_id"), rsv.fetch("price_per_min_cents")]
 end
 
 # Sign + settle a payment for a reservation (mirrors script/rental_flow.rb's pay step).
@@ -129,7 +129,6 @@ def pay(token, key, user_id, agent_id, code, reservation_id, price_per_min)
                          payment_mandate_jws: JWT.encode(payment, key, "RS256") },
                        { "Authorization" => "Bearer #{token}" })
   abort "pay for #{code} failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
-  rc
 end
 
 # An action: its name is the PATH SEGMENT, its arguments are the whole body.
@@ -154,8 +153,8 @@ STDERR.puts "── PART A: motorcycle (KYC-gated) ──"
 mc_key, mc_agent, mc_user, mc_token, = register_agent
 STDERR.puts "  Registered motorcycle-renter agent #{mc_agent} (own keypair only — no issuer key)"
 
-mc_resv, mc_price, rc_mc_reserve = reserve(mc_token, "MC-001")
-rc_mc_pay = pay(mc_token, mc_key, mc_user, mc_agent, "MC-001", mc_resv, mc_price)
+mc_resv, mc_price = reserve(mc_token, "MC-001")
+pay(mc_token, mc_key, mc_user, mc_agent, "MC-001", mc_resv, mc_price)
 STDERR.puts "  Reserved + paid MC-001 (reservation #{mc_resv})"
 
 # A1: rent_motorcycle WITHOUT KYC → 403 kyc_required (Gate 0 fires first).
@@ -255,7 +254,7 @@ end
 
 STDERR.puts "── PART B: scooter (positive control — NO KYC) ──"
 sc_key, sc_agent, sc_user, sc_token, = register_agent
-sc_resv, sc_price, = reserve(sc_token, "SK-001")
+sc_resv, sc_price = reserve(sc_token, "SK-001")
 pay(sc_token, sc_key, sc_user, sc_agent, "SK-001", sc_resv, sc_price)
 # NO KYC submitted at all — a fresh agent that has never attested rents a
 # licence-free scooter. Proves start_rental carries NO KYC gate.
@@ -294,8 +293,6 @@ puts JSON.generate(
   # BOTH codes, MEASURED: a constant `200` here would summarise two calls whose
   # response codes were thrown away — the aborts inside reserve/pay would be
   # the only gate, and the reported field could not say anything else.
-  http_mc_reserve:             rc_mc_reserve,
-  http_mc_paid:                rc_mc_pay,
   http_mc_rent_no_kyc:         rc_mc_nokyc,
   mc_rent_no_kyc_code:         mc_nokyc_code,
   mc_rent_no_kyc_hint_to_req:  hint_points_to_request_kyc,
@@ -308,7 +305,6 @@ puts JSON.generate(
   kyc_jws_relayed:             (!kyc_jws.nil? && !kyc_jws.empty?),
   http_kyc_submit:             rc_kyc,
   kyc_attributes:              kyc_body["attributes"],
-  http_schema:                 rc_schema,
   kyc_payload_schema:          kyc_topic && kyc_topic["payload_schema"],
   kyc_identity_key:            mc_user,
   http_mc_rent_with_kyc:       rc_mc_kyc,

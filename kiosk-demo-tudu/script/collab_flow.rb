@@ -89,7 +89,6 @@ results = {}
 
 # ── Alice's agent: register → create "Hike" (owner) → add a todo → invite ─────
 alice = register_agent("alice")
-results[:alice_agent_id] = alice[:agent_id]
 
 rc, created = post_json("/kiosk/create_list", { title: "Hike" }, bearer(alice[:token]))
 abort "create_list failed (#{rc}): #{JSON.generate(created)}" unless rc == 200
@@ -128,10 +127,8 @@ STDERR.puts "  Alice's agent minted an invite code"
 
 # ── Bob's agent: register → accept_invite (member) → add a todo ───────────────
 bob = register_agent("bob")
-results[:bob_agent_id] = bob[:agent_id]
 
 rc, acc = post_json("/kiosk/accept_invite", { code: code }, bearer(bob[:token]))
-results[:accept_status]  = rc
 results[:accept_joined]  = acc["joined"] == true
 results[:accept_list_id] = acc["list_id"]
 abort "accept_invite failed (#{rc}): #{JSON.generate(acc)}" unless rc == 200

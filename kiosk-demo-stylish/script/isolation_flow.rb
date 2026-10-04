@@ -222,8 +222,6 @@ STDERR.puts "  A my_appointments (after B's booking): #{a_appt_ids_after.inspect
 puts JSON.generate(
   user_id_a:        alice.user_id,
   user_id_b:        bob.user_id,
-  agent_id_a:       alice.agent_id,
-  agent_id_b:       bob.agent_id,
   appt_id_a:        appt_id_a,
   appt_id_b:        appt_id_b,
   b_appt_ids:       b_appt_ids,

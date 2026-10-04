@@ -88,8 +88,6 @@ pem = key.public_key.to_pem
 headless_token   = reg.fetch("access_token")
 agent_id         = reg.fetch("agent_id")
 headless_user_id = reg.fetch("user_id")
-results[:headless_agent_id]    = agent_id
-results[:headless_user_id]     = headless_user_id
 STDERR.puts "  Assistant registered headless: agent_id=#{agent_id} user_id=#{headless_user_id}"
 
 rc, created = post_json("/kiosk/create_list", { title: "Hike" }, bearer(headless_token))
@@ -168,7 +166,6 @@ key2 = OpenSSL::PKey::RSA.generate(2048)
 pem2 = key2.public_key.to_pem
 rc, claimed2 = post_json("/kiosk/auth/claim",
                          { code: link2.fetch("link_code", ""), public_key: pem2, signed: pop_proof(key2, pem2) })
-results[:second_agent_id]        = claimed2["agent_id"]
 results[:second_bound_to_holder] = claimed2["user_id"] == HOLDER
 
 # ── 4. RE-LINKING AN ALREADY-BOUND KEY IS A NO-OP, NOT A MIGRATION ───────────
@@ -185,7 +182,6 @@ results[:second_bound_to_holder] = claimed2["user_id"] == HOLDER
 # memberships — would take all of Alice's instead. She would keep owning the
 # rows and stop being able to see them.
 rc, link3 = post_json("/kiosk/auth/link", {}, { session: true })
-results[:relink_mint] = rc
 abort "re-link mint failed (#{rc}): #{JSON.generate(link3)}" unless rc == 201
 rc, claimed3 = post_json("/kiosk/auth/claim",
                          { code: link3.fetch("link_code", ""), public_key: pem, signed: pop_proof(key, pem) })

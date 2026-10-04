@@ -357,7 +357,6 @@ puts JSON.generate(
   total_cents:        total_cents,
   slot_at:            slot_at,
   chosen_slot_at:     chosen_slot_at,
-  slot_date:          slot_date,
   past_slot_check:    past_slot_check,
   payment_state:      payment_state,
   psp_reference:      psp_ref,

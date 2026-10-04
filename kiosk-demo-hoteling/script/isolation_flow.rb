@@ -106,7 +106,7 @@ CHECK_OUT_B = (Date.today + 63).to_s
 NIGHTS      = 3
 
 # ── Step 1: Register Principal A ─────────────────────────────────────────────
-user_id_a, agent_id_a, token_a, _key_a = register_principal(name: "alice-hoteling")
+user_id_a, _agent_id_a, token_a, _key_a = register_principal(name: "alice-hoteling")
 
 # ── Step 2: Register Principal B ─────────────────────────────────────────────
 user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-hoteling")
@@ -321,8 +321,6 @@ STDERR.puts "  B confirm_booking on A's rA: HTTP #{rc_confirm_b} (expected 403)"
 puts JSON.generate(
   user_id_a:               user_id_a,
   user_id_b:               user_id_b,
-  agent_id_a:              agent_id_a,
-  agent_id_b:              agent_id_b,
   booking_id_a:            booking_id_a,
   booking_id_b:            booking_id_b,
   forged_refusal:          [rc_forge, forged_resp["code"], forged_resp["detail"]],

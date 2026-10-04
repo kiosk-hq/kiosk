@@ -184,7 +184,6 @@ results[:standalone_order_not_migrated] = Array(mine).none? { |o| o["order_id"] 
 
 # ── Beat 3: a NEW order as the human, paid with the saved card ──────────────
 new_order_id, total_cents, total_eur = create_order(human_token, items)
-results[:new_order_id] = new_order_id
 
 # The human's account HAS a card on file (the seeded mapping) — ready.
 rc, setup = post_json("#{SERVER}/kiosk/payment_setup", {}, { "Authorization" => "Bearer #{human_token}" })

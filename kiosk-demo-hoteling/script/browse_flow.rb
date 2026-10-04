@@ -167,7 +167,6 @@ became_priced = curve.any?(&:positive?)
 monotonic     = curve.each_cons(2).all? { |a, b| b >= a }
 
 puts JSON.generate(
-  browses:       BROWSES,
   curve:         curve,
   free_prefix:   free_prefix,
   became_priced: became_priced,
@@ -176,7 +175,6 @@ puts JSON.generate(
   # 402 means an action reached the policy as `:run`; a 200 means the branch
   # never fired at all.
   http_availability:     rc_avail,
-  availability_proofs:   avail_proofs,
   write_first_status:    rc_write_first,
   write_challenge_count: write_challenges.size,
   write_status:          rc_write,

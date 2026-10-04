@@ -230,7 +230,7 @@ rc_confirm, confirm_resp = post_json(
 # matched when a guest quotes it at the desk.
 # Re-query my_bookings for this booking and report the stored code, so
 # check:book can assert the two are the same string.
-rc_mine, mine_resp = query_json(
+_rc_mine, mine_resp = query_json(
   "my_bookings", {},
   { "Authorization" => "Bearer #{token}" },
 )
@@ -257,6 +257,5 @@ puts JSON.generate(
   # exist, where the honest answer is "the booking was never confirmed".
   confirm_status:       (confirm_resp["status"] if rc_confirm == 200),
   confirmation_code:    confirm_resp["confirmation_code"],
-  http_my_bookings:     rc_mine,
   stored_confirmation_code: stored_row && stored_row["confirmation_code"],
 )

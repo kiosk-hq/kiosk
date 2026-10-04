@@ -118,7 +118,7 @@ end
 # document whose branch point is the TOP-LEVEL `code`.
 
 # ── Step 1: Register Principal A ─────────────────────────────────────────────
-user_id_a, agent_id_a, token_a, _key_a = register_principal(name: "alice-agent")
+user_id_a, _agent_id_a, token_a, _key_a = register_principal(name: "alice-agent")
 
 # ── Step 2: Register Principal B ─────────────────────────────────────────────
 user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-agent")
@@ -267,8 +267,6 @@ STDERR.puts "  B start_rental on A's rA: HTTP #{rc_start_b} (expected 403)"
 puts JSON.generate(
   user_id_a:         user_id_a,
   user_id_b:         user_id_b,
-  agent_id_a:        agent_id_a,
-  agent_id_b:        agent_id_b,
   reservation_id_a:  reservation_id_a,
   reservation_id_b:  reservation_id_b,
   forged_refusal:    [forged_rc, forged_resp["code"], forged_resp["detail"]],

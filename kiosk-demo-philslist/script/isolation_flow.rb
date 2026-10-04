@@ -231,9 +231,7 @@ STDERR.puts "  A edit(title only) → #{absent_rc} #{absent_body['code'].inspect
             "price #{price_after_null.inspect}"
 
 puts JSON.generate(
-  user_id_a:          alice.user_id,
   user_id_b:          bob.user_id,
-  agent_id_a:         alice.agent_id,
   agent_id_b:         bob.agent_id,
   alice_listing_id:   alice_listing_id,
   bob_listing_id:     bob_listing_id,

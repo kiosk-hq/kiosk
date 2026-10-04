@@ -307,10 +307,7 @@ a_my_orders_after = Array(a_after_resp).map { |r| r["order_id"] }
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(
-  user_id_a:                user_id_a,
   user_id_b:                user_id_b,
-  agent_id_a:               agent_id_a,
-  agent_id_b:               agent_id_b,
   order_id_a:               order_id_a,
   order_id_b:               order_id_b,
   forged_refusal:           [forged_rc, forged_resp["code"], forged_resp["detail"]],

@@ -14,6 +14,12 @@ on:
     - cron: "23 5 * * *"
   workflow_dispatch:
 
+# stripe-mock validates every request against ONE Stripe API version, its
+# newest. The stripe gem (~> 19) sends a dahlia version, so the mock is held to
+# its last dahlia release. Move this pin together with the stripe gem.
+env:
+  STRIPE_MOCK_VERSION: v0.205.0
+
 jobs:
   gems:
     name: ${{ matrix.gem }}
@@ -109,7 +115,7 @@ jobs:
       - name: Set up stripe-mock (kiosk-pay-stripe, no key in CI)
         if: matrix.gem == 'kiosk-pay-stripe'
         run: |
-          go install github.com/stripe/stripe-mock@latest
+          go install github.com/stripe/stripe-mock@${{ env.STRIPE_MOCK_VERSION }}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
@@ -669,7 +675,7 @@ jobs:
       - name: Set up stripe-mock (getgrocery, no key in CI)
         if: matrix.stripe_mock
         run: |
-          go install github.com/stripe/stripe-mock@latest
+          go install github.com/stripe/stripe-mock@${{ env.STRIPE_MOCK_VERSION }}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           echo "STRIPE_MOCK_URL=http://127.0.0.1:12111" >> "$GITHUB_ENV"
 

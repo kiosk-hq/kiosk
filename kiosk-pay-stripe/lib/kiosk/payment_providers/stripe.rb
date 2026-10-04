@@ -34,6 +34,8 @@ module Kiosk
       # #outstanding_setup_session.
       SETUP_SESSION_LIST_LIMIT = 10
 
+      DEFAULT_RETURN_PATH = "/payment/return"
+
       # @param api_key [String] Stripe secret key (sk_test_… for the PoC)
       # @param test_payment_method [String, nil] Stripe test PaymentMethod id
       #   used as a back-compat fallback when no customer resolver is
@@ -52,12 +54,10 @@ module Kiosk
       #   environment (e.g. getgrocery when KIOSK_TEST_AUTOCARD=1); it is
       #   never enabled in production or the live demo, where the real hosted
       #   SetupIntent flow runs.
-      # @param return_url [String, nil] the operator-owned https origin Stripe
-      #   redirects the human's browser to after they enter a card on the
-      #   hosted page. Pass it unless Kiosk's `issuer` is configured and
-      #   `<issuer>/payment/return` is the right target: with neither,
-      #   #setup_url raises rather than fall back to a localhost address a real
-      #   customer's browser would follow. See #resolved_return_url.
+      # @param return_url [String, nil] where Stripe redirects the human's
+      #   browser after they enter a card on the hosted page. A path (leading
+      #   `/`) is joined to the origin being served; an absolute url is used
+      #   as is. Default `/payment/return`. See #resolved_return_url.
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",
                      customer_resolver: nil, customer_saver: nil, test_autocard: false,
                      return_url: nil)
@@ -346,48 +346,34 @@ module Kiosk
       end
 
       # The `success_url` Stripe redirects the human's BROWSER to after they
-      # enter a card on the hosted page. It MUST be a real, operator-owned
-      # origin: a hardcoded localhost fallback would send a paying customer to
-      # their OWN machine on a deploy that forgot to wire it. Resolution
-      # order:
-      #   1. the explicit return_url the host injected (e.g. getgrocery passes
-      #      "#{Kiosk.configuration.issuer}/payment/return");
-      #   2. else derive it from the configured Kiosk issuer/origin — the
-      #      operator's real https origin in production and localhost:PORT in
-      #      local dev, so it is correct in both WITHOUT ever hardcoding
-      #      localhost;
-      #   3. else (no return_url and no configured issuer) fail LOUD — a hosted
-      #      SetupIntent with no valid return target is a misconfiguration, not
-      #      something to paper over with a localhost address a real human's
-      #      browser would follow.
+      # enter a card on the hosted page. A path is joined to the origin being
+      # served ({Kiosk.current_issuer}), so a deployment serving several
+      # origins returns each human to the one they came from; an absolute url
+      # is used as is. With no origin to join, it raises rather than fall back
+      # to a localhost address a paying human's browser would follow.
       #
       # IF THE RETURN PAGE HAS TO KNOW WHO CAME BACK, the operator puts Stripe's
-      # own placeholder in the url it injects:
+      # own placeholder in the path:
       #
-      #   return_url: "\#{Kiosk.configuration.issuer}/payment/return?session_id={CHECKOUT_SESSION_ID}"
+      #   return_url: "/payment/return?session_id={CHECKOUT_SESSION_ID}"
       #
       # Stripe substitutes the id on the redirect, and the page retrieves the
-      # session to learn the customer. Without it the page is ANONYMOUS — the
-      # url is one constant for every principal, so a handler that wanted to
-      # record readiness, or push an event about it, has nothing to address.
-      #
-      # This adapter does NOT add the placeholder itself, and that is the
-      # boundary rather than an omission: the return page is the operator's
-      # own, its shape is theirs, and an adapter that rewrote their url would be
-      # deciding what their page needs. Note the literal is STABLE — it is the
-      # same bytes for every caller — so {#outstanding_setup_session}'s
-      # `success_url` equality still matches and session reuse is unaffected.
+      # session to learn the customer. The adapter does not add it: the return
+      # page is the operator's own. The literal is the same for every caller on
+      # one origin, so {#outstanding_setup_session}'s `success_url` equality
+      # still matches.
       def resolved_return_url
-        return @return_url if @return_url && !@return_url.to_s.strip.empty?
+        url = @return_url.to_s.strip
+        url = DEFAULT_RETURN_PATH if url.empty?
+        return url unless url.start_with?("/")
 
-        issuer = configured_issuer
-        return "#{issuer.to_s.chomp("/")}/payment/return" unless issuer.to_s.strip.empty?
+        issuer = configured_issuer.to_s.strip
+        return "#{issuer.chomp("/")}#{url}" unless issuer.empty?
 
-        raise "Stripe SetupIntent needs a return URL (success_url) but none is configured. " \
-              "Pass return_url: to Kiosk::PaymentProviders::Stripe.new " \
-              "(e.g. \"\#{Kiosk.configuration.issuer}/payment/return\"), or configure Kiosk's " \
-              "issuer so it can be derived. A localhost fallback is refused because it would " \
-              "send the paying human's browser to their own machine."
+        raise "Stripe SetupIntent needs a return URL (success_url) but no origin is being served " \
+              "to join #{url.inspect} to. Configure Kiosk's issuer, or pass an absolute " \
+              "return_url: to Kiosk::PaymentProviders::Stripe.new. A localhost fallback is " \
+              "refused because it would send the paying human's browser to their own machine."
       end
 
       # The issuer of the origin being served, or nil if Kiosk is not configured

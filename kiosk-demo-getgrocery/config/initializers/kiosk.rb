@@ -203,14 +203,11 @@ Kiosk.configure do |c|
       customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
       customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
       test_autocard:     Rails.configuration.x.kiosk.test_autocard,
+      # A path: the adapter joins it to the origin being served.
       # `{CHECKOUT_SESSION_ID}` is Stripe's own placeholder, substituted on the
-      # redirect. WITHOUT IT THE RETURN PAGE IS ANONYMOUS: the url is one
-      # constant for every principal, so the page cannot tell whose human just
-      # saved a card — and therefore cannot push the `payment_setup` event to
-      # them. The literal is stable for every caller, so the adapter's
-      # outstanding-session reuse (which matches on `success_url` equality) is
-      # unaffected.
-      return_url:        "#{Kiosk.configuration.issuer}/payment/return?session_id={CHECKOUT_SESSION_ID}",
+      # redirect. WITHOUT IT THE RETURN PAGE IS ANONYMOUS: the page cannot tell
+      # whose human just saved a card, and so cannot push `payment_setup` to them.
+      return_url:        "/payment/return?session_id={CHECKOUT_SESSION_ID}",
     ),
     currency: "eur",
   )

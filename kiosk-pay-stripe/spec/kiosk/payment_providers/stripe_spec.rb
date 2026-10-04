@@ -277,6 +277,20 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       Kiosk.with_issuer("https://second.example") { adapter.setup_url(user_id: "user-1") }
     end
 
+    it "joins a return path to the origin being served" do
+      Kiosk.configure { |c| c.issuer = "https://derived.example" }
+      adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { "cus_existing" },
+        return_url:        "/payment/return?session_id={CHECKOUT_SESSION_ID}",
+      )
+      expect(::Stripe::Checkout::Session).to receive(:create).with(
+        hash_including(success_url: "https://second.example/payment/return?session_id={CHECKOUT_SESSION_ID}"),
+      ).and_return(session)
+
+      Kiosk.with_issuer("https://second.example") { adapter.setup_url(user_id: "user-1") }
+    end
+
     it "raises rather than falling back to localhost when neither is configured" do
       allow(Kiosk).to receive(:configuration).and_return(double(issuer: nil))
       adapter = described_class.new(

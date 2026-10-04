@@ -44,7 +44,7 @@ Kiosk.configure do |c|
     api_key:           ENV["STRIPE_SECRET_KEY"], # sk_test_… for the PoC
     customer_resolver: ->(user_id) { store.customer_id_for(user_id) },
     customer_saver:    ->(user_id, cus_id) { store.save(user_id, cus_id) },
-    return_url:        "https://provider.example/payment/return",
+    return_url:        "/payment/return", # joined to the origin being served
   )
 end
 ```

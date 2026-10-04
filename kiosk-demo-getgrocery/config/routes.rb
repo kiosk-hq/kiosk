@@ -32,8 +32,6 @@ Rails.application.routes.draw do
 
   # ─── Stripe Checkout return page ──────────────────────────────────────────
   # The SetupIntent success_url (return_url in the initializer) lands the human
-  # here after they save a card. Without this route the human hit a 404
-  # post-card-entry (a demo gap this route closes). Production providers point at
-  # kiosk.tech/payment/return; a self-hosted demo serves its own.
+  # here after they save a card.
   get "/payment/return", to: "payment_return#show"
 end

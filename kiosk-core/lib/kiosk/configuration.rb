@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "uri"
+
 module Kiosk
   # Holds host-application choices: which user model, which IdP adapters,
   # which GUC namespace, role vocabulary, issuer URL.
@@ -66,40 +68,25 @@ module Kiosk
     # (job-titled roles beat privilege-titled ones).
     attr_accessor :roles
 
-    # Canonical issuer URL — used in the JWT `iss` claim and the AP2 mandate
-    # `iss`. MUST equal `kiosk.issuer` advertised in
-    # `/.well-known/kiosk.json`, and MUST be the origin assistants actually
-    # dial (scheme + host + port, no trailing slash).
-    #
-    # WHY IT IS CONFIGURED AND NOT DERIVED FROM THE REQUEST HOST. This value
-    # is an anchor twice over, and both uses need it to be a fact about the
-    # deployment rather than a fact about the incoming request:
-    #
-    #   * AP2 anchor — it is the `iss` a mandate is signed under. Mandates
-    #     outlive the request that minted them, so the identity they name has
-    #     to be the operator's, not whatever Host header happened to arrive.
-    #   * Origin-binding anchor — `PopVerifier` requires the assistant's
-    #     proof-of-possession JWS to carry `aud` equal to this value by STRICT
-    #     equality. That is the relay defense: a proof minted for provider M
-    #     cannot be replayed at provider L because L checks `aud == L`. Derived
-    #     from the request host it would defend nothing — an attacker sets the
-    #     Host header, and the check compares the request against itself.
+    # The DEFAULT origin this deployment serves (scheme + host + port, no
+    # trailing slash): the `iss` of its tokens and mandates, the `aud` a
+    # possession proof must carry, and the `issuer` discovery advertises — for
+    # every request whose origin is not one of {#additional_origins}. Readers
+    # ask `Kiosk.current_issuer`, which answers the origin being served.
     #
     # CONSEQUENCE OF A WRONG VALUE: a total, silent auth outage. The app boots
     # happily, advertises the wrong issuer in discovery, and then rejects EVERY
     # assistant with «proof audience mismatch» — because each one correctly
-    # signed the origin it dialed and this value disagrees. Nothing is
-    # recoverable client-side; only the operator can fix it. Check the
-    # operator log for the audience-mismatch diagnostic PopVerifier writes.
-    #
-    # ONE INSTANCE SERVES EXACTLY ONE ORIGIN, by construction: the equality
-    # check accepts a single value, so vanity/alias hostnames must redirect to
-    # the canonical origin BEFORE any Kiosk verb, and hosting a second merchant
-    # means a second instance. (Rails' `config.hosts` does not help here — it
-    # governs which Host headers are ACCEPTED, not which origin the provider
-    # IS.) Per-host issuer resolution is a possible future direction; what
-    # ships is the one-origin behaviour described above.
+    # signed the origin it dialed and this value disagrees. Only the operator
+    # can fix it; PopVerifier writes the mismatch to the operator log.
     attr_accessor :issuer
+
+    # Further origins this deployment serves, each a separate operator on the
+    # wire with its own discovery document and its own assistant accounts.
+    # Exact origins only. An alias of the SAME business is better redirected
+    # to the issuer at the edge. (Rails' `config.hosts` governs which Host
+    # headers are accepted, not which origin the operator is.)
+    attr_accessor :additional_origins
 
     def initialize
       @user_model       = nil
@@ -113,6 +100,32 @@ module Kiosk
       @app_role         = "app_role"
       @roles            = []
       @issuer           = nil
+      @additional_origins = []
+    end
+
+    # Every origin served: `[issuer, *additional_origins]`, normalised.
+    def origins
+      [issuer, *additional_origins].compact.map { |o| self.class.normalize_origin(o) }.compact.uniq
+    end
+
+    # The issuer for a request that arrived on `origin`: that origin when it is
+    # served, else {#issuer}. The Host only selects among declared origins; it
+    # never adds one, so a proof signed for an undeclared origin never verifies.
+    def issuer_for(origin)
+      normalized = self.class.normalize_origin(origin)
+      origins.include?(normalized) ? normalized : issuer
+    end
+
+    # Lower-case scheme and host, default port dropped, no path. Nil when
+    # `value` is not an absolute http(s) URL.
+    def self.normalize_origin(value)
+      uri = URI.parse(value.to_s.strip)
+      return unless uri.is_a?(URI::HTTP) && uri.host
+
+      port = uri.port == uri.default_port ? "" : ":#{uri.port}"
+      "#{uri.scheme.downcase}://#{uri.host.downcase}#{port}"
+    rescue URI::InvalidURIError
+      nil
     end
 
     # Full GUC name for one of the four well-known suffix names.

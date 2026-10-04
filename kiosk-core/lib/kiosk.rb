@@ -63,6 +63,24 @@ module Kiosk
       CONFIGURATION_MUTEX.synchronize { @configuration ||= Configuration.new }
   end
 
+  CURRENT_ISSUER_KEY = :kiosk_current_issuer
+
+  # The origin of the request being served — set by {with_issuer} — or the
+  # configured issuer when no request is in scope (a rake task, a console).
+  def self.current_issuer
+    Thread.current[CURRENT_ISSUER_KEY] || configuration.issuer
+  end
+
+  # Runs `block` with {current_issuer} answering `issuer`, restoring the
+  # previous value afterwards. Fiber-local, like a database connection.
+  def self.with_issuer(issuer)
+    previous = Thread.current[CURRENT_ISSUER_KEY]
+    Thread.current[CURRENT_ISSUER_KEY] = issuer
+    yield
+  ensure
+    Thread.current[CURRENT_ISSUER_KEY] = previous
+  end
+
   # Reset the configuration to a fresh default instance. Primarily for tests.
   # Takes the same lock as the first read, so a reset racing a first touch
   # settles one way or the other instead of interleaving inside it.

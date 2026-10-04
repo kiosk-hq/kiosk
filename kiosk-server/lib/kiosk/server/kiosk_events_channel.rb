@@ -130,10 +130,16 @@ class KioskEvents < ActionCable::Channel::Base
     value.to_i
   end
 
-  # A subject-scoped subscription sees only its subject. The stream is per
-  # (identity, topic), so this is where the narrowing happens — see
-  # {Kiosk::Server::EventsCable} for why a subject is not in the stream name.
+  # A subscription sees its own topic, and its own subject when it named one.
+  #
+  # THE TOPIC COMPARISON IS FOR THE REPLAY. The live stream is per (identity,
+  # topic), so a pushed event is already this topic's; `replay!` reads the
+  # identity's WHOLE tail, every topic in it, and an event handed to the wrong
+  # subscription arrives inside that subscription's `identifier` carrying
+  # `data` the subscriber validates against the other topic's `payload_schema`.
+  # See {Kiosk::Server::EventsCable} for why a subject is not in a stream name.
   def for_this_subscription?(event)
+    return false unless event["topic"] == @topic
     return true if @subject.nil?
 
     event["subject"].to_s == @subject.to_s

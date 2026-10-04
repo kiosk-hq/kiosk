@@ -143,6 +143,16 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     it "does NOT deliver another subject's event to a subject-scoped subscription" do
       expect(report["other_subject_delivered"]).to be(false)
     end
+
+    # Spec Sections 8.5.2 and 8.5.4: `data` MUST validate against the topic's
+    # own `payload_schema`, and a subscriber tells one subscription's frames
+    # from another's by the echoed `identifier`. The live stream is per
+    # (identity, topic), so only the REPLAY can reach another topic — it reads
+    # the identity's whole tail — and a subscriber handed another topic's event
+    # inside this identifier rejects a legitimately delivered frame.
+    it "does NOT replay another TOPIC's event to a subscription that named one" do
+      expect(report["replayed_topics"]).to eq(["order_payment"])
+    end
   end
 
   describe "subscriptions declared in the URL" do

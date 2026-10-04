@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **An event replay no longer hands a subscription another topic's events.** The filter compared the subject alone, so a subscriber got `data` its own topic's schema rejects.
+
 - 2026-10-04: **A revoked event stream is told `reconnect: false` once.** Action Cable's own `close` carries the typed reason and the flag, so no defaulted `true` follows a millisecond later.
 
 - 2026-09-29: **Security: philslist keeps the seller's contact line out of its request log.** The board publishes that text; the operator need not keep a second copy.

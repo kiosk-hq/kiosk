@@ -313,6 +313,10 @@ begin
   resumed.subscribe(identifier("order_payment", since: first_id))
   resumed.pump_until { resumed.messages.any? { |m| m["id"] == gap_id } }
   REPORT[:resumed_ids] = resumed.messages.filter_map { |m| m["id"] }
+  # The tail between the two cursors also holds the step-9 `todo` event, which
+  # this subscription did not ask for. Replay reads the whole tail, so this is
+  # the one path that can reach another topic at all.
+  REPORT[:replayed_topics] = resumed.messages.select { |m| m["id"] }.map { |m| m["topic"] }.uniq
   REPORT[:resume_head] = resumed.messages.find { |m| m["type"] == "subscribed" }
   resumed.close
 

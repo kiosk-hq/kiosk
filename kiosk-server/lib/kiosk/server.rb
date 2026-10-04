@@ -216,7 +216,7 @@ module Kiosk
     #
     # This accessor exists so nothing hardcodes a checkout path — the gem is
     # installed, not cloned, and only the running file's own directory knows
-    # where it landed. Same spelling as the Equihash solver's, same reason.
+    # where it landed. Its python dependency is `requirements.txt` beside it.
     #
     # @return [String]
     def self.listener_path

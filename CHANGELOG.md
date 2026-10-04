@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-05: **`kiosk-server` ships a `requirements.txt` for `listen.py`**, so every shipped python file with a third-party import has a manifest beside it.
+
 - 2026-10-05: **The e2e harness serves `localhost` beside `127.0.0.1` as a second origin** and proves one key makes two accounts and no token crosses between them.
 
 - 2026-10-05: **One deployment may serve several origins, each its own operator** (`c.additional_origins`). Accounts, tokens, proofs and mandates made on one are refused on another.

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **The package ships `requirements.txt` beside `listen.py`**, declaring the event-stream listener's `websockets>=12` in a manifest.
+
 - 2026-10-05: **The boot warning reads every served origin**, `c.additional_origins` included, and names the loopback one it found.
 
 - 2026-10-05: **An assistant account belongs to one origin.** Register, login, bind, unlink and the manage page look a key up on the origin being served only.

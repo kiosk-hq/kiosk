@@ -58,8 +58,9 @@
 #                     their templates from it, so it is packaged, not optional.
 #   * `README.md`   — listed in every gemspec's `spec.files`.
 #   * the packaged assets that are in NEITHER of those directories — the
-#     three PoW backends' `solve*.py` and `requirements.txt`, and
-#     `kiosk-pow-equihash`'s `bench/` pair.
+#     three PoW backends' `solve*.py` and `requirements.txt`,
+#     `kiosk-pow-equihash`'s `bench/` pair, and `kiosk-server`'s `listen.py`
+#     and `requirements.txt`.
 #   * `<gem>.gemspec` — added on top, because it is not in `spec.files` and
 #     RubyGems renders its description on the gem's page.
 #
@@ -2386,7 +2387,7 @@ def self_test
 
     # ── PYTHON IS CODE, AND ITS COMMENT MARKER IS `#` (K-1511) ─────────────
     #
-    # Four `.py` files ship inside three gems. Before the gem scope was derived
+    # Five `.py` files ship inside four gems. Before the gem scope was derived
     # from `spec.files` they were in no scope at all; the moment they were read,
     # a keyword default `poll=0.1` was «a retired wire version in prose», which
     # is precisely the shape the R5 header says must never redden.

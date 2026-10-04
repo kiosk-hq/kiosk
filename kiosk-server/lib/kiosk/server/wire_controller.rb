@@ -483,7 +483,7 @@ module Kiosk
       # change in the still-draft IETF scheme (draft-ryan-httpauth-payment) is
       # a one-place edit.
       def www_authenticate_for(error)
-        issuer = Kiosk.configuration.issuer
+        issuer = Kiosk.current_issuer
         case error.code
         when "pow_required"
           %(Kiosk-PoW realm="#{issuer}")

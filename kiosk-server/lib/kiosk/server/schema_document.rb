@@ -239,7 +239,7 @@ module Kiosk
           {
             gem_version:      Kiosk::Server::VERSION,
             protocol_version: Kiosk::Protocol::API_VERSION,
-            issuer:           config.issuer.to_s,
+            origins:          config.origins,
             mount_path:       config.mount_path.to_s,
             capabilities:     Array(config.capabilities),
             min_client:       config.min_client.to_s,

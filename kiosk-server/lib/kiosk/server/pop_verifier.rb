@@ -75,7 +75,7 @@ module Kiosk
         )
         payload = payload.transform_keys(&:to_sym)
 
-        issuer = Kiosk.configuration.issuer
+        issuer = Kiosk.current_issuer
         unless payload[:aud] == issuer
           log_audience_mismatch(signed_aud: payload[:aud], issuer: issuer)
           raise Errors::Unauthenticated.new("proof audience mismatch", hint: AUDIENCE_HINT)
@@ -98,8 +98,8 @@ module Kiosk
       # tell them apart:
       #
       #   * the caller signed the wrong value (its bug — the wire hint covers it), or
-      #   * `c.issuer` does not match the host this instance is actually served
-      #     on — the operator's bug, and the expensive one: a value that is
+      #   * the origin assistants reach is neither `c.issuer` nor one of
+      #     `c.additional_origins` — the operator's bug, and the expensive one: a value that is
       #     right in development and wrong where the assistants dial rejects
       #     every real caller. The remedy is to read it from the environment
       #     and FAIL THE BOOT when it is absent in production rather than
@@ -111,16 +111,12 @@ module Kiosk
       # A run of these lines where the SIGNED aud is the host your users reach
       # is the second case. This goes to the operator's log and never onto the
       # wire — the response must not name an origin (see {AUDIENCE_HINT}).
-      #
-      # This module is a pure verifier called from the registration, login,
-      # link-claim and device-grant paths, none of which carry the Rack request,
-      # so it cannot compare the issuer against the actual request origin
-      # without widening four service-object signatures. It logs what it can
-      # see — the signed aud — which is the same signal.
+
       def log_audience_mismatch(signed_aud:, issuer:)
         message = "[kiosk] PoP audience mismatch: caller signed aud=#{signed_aud.inspect}, " \
-                  "this instance's configured issuer is #{issuer.inspect}. If the signed " \
-                  "value is the origin your assistants actually reach, `c.issuer` is wrong."
+                  "the issuer for this request is #{issuer.inspect}. If the signed value is " \
+                  "an origin your assistants actually reach, list it in `c.issuer` or " \
+                  "`c.additional_origins`."
         # Rails.logger is nil until the host app boots (rake tasks, console
         # helpers, the gem's own specs), so keep the Kernel#warn fallback.
         logger = ::Rails.logger

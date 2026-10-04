@@ -17,8 +17,8 @@ module Kiosk
           claims = JwtIssuer.verify(
             token:    token,
             jwks:     Jwks.build(keys: [config.signing_key]),
-            audience: config.issuer,
-            issuer:   config.issuer,
+            audience: Kiosk.current_issuer,
+            issuer:   Kiosk.current_issuer,
           )
           Kiosk::Identity.new(
             user_id:  claims[:sub], role: claims[:role], actor: "agent",
@@ -37,7 +37,7 @@ module Kiosk
           # claim would round-trip into an unusable Identity.
           claims[:role] = role.to_s unless role.nil? || role.to_s.empty?
           JwtIssuer.issue(
-            claims: claims, audience: Kiosk.configuration.issuer, now: mint_instant(agent_id),
+            claims: claims, audience: Kiosk.current_issuer, now: mint_instant(agent_id),
           )
         end
 

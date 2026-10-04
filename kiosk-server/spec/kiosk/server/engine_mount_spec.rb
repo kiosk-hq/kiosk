@@ -468,4 +468,21 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       expect(kiosk.fetch("capabilities").grep(/bind/)).to be_empty
     end
   end
+
+  # ADR-0040: the engine's issuer middleware makes every request answer for its
+  # own origin, so this is measured through the booted stack.
+  context "when a second origin is served" do
+    def issuer_on(key) = JSON.parse(probe("two_origins", key)["body"]).dig("kiosk", "issuer")
+
+    it "advertises each origin as its own issuer" do
+      expect(issuer_on("localhost kiosk.json")).to eq("http://localhost")
+      expect(issuer_on("buymilk kiosk.json")).to eq("http://buymilk.example")
+    end
+
+    it "accepts a token only on the origin that minted it" do
+      expect(probe("two_origins", "buymilk token on buymilk")["status"]).to eq(400)
+      expect(probe("two_origins", "buymilk token on localhost")["status"]).to eq(401)
+      expect(probe("two_origins", "localhost token on buymilk")["status"]).to eq(401)
+    end
+  end
 end

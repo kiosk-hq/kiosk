@@ -76,9 +76,9 @@ TOKEN = Kiosk::Server::JwtIssuer.issue(
   audience: "http://localhost",
 ).freeze
 
-def request(method, path, auth: false)
-  env = Rack::MockRequest.env_for("http://localhost#{path}", method: method)
-  env["HTTP_AUTHORIZATION"] = "Bearer #{TOKEN}" if auth
+def request(method, path, auth: false, origin: "http://localhost")
+  env = Rack::MockRequest.env_for("#{origin}#{path}", method: method)
+  env["HTTP_AUTHORIZATION"] = "Bearer #{auth == true ? TOKEN : auth}" if auth
   status, headers, raw = Rails.application.call(env)
   body = +""
   raw.each { |chunk| body << chunk }
@@ -281,6 +281,24 @@ report["binding_declined"] = {
   # operator, and an assistant registers plainly instead.
   "GET /kiosk/auth/challenge"          => request("GET",  "/kiosk/auth/challenge"),
   "GET /kiosk/schema"                  => request("GET",  "/kiosk/schema"),
+}
+
+# Scenario 7 — TWO ORIGINS ON ONE DEPLOYMENT (ADR-0040). The engine's issuer
+# middleware is what makes each request answer for its own origin, so this is
+# measured through the booted stack: discovery per origin, and a token minted
+# on one origin presented on the other.
+Kiosk.configure { |c| c.additional_origins = ["http://buymilk.example"] }
+SECOND_TOKEN = Kiosk.with_issuer("http://buymilk.example") do
+  Kiosk::Server::JwtIssuer.issue(claims: { sub: "u-1", agent_id: "a-1", actor: "agent" },
+                                 audience: "http://buymilk.example")
+end
+report["two_origins"] = {
+  "localhost kiosk.json" => request("GET", "/.well-known/kiosk.json"),
+  "buymilk kiosk.json"   => request("GET", "/.well-known/kiosk.json", origin: "http://buymilk.example"),
+  "buymilk token on localhost" => request("POST", "/kiosk/pay", auth: SECOND_TOKEN),
+  "localhost token on buymilk" => request("POST", "/kiosk/pay", auth: true, origin: "http://buymilk.example"),
+  "buymilk token on buymilk" =>
+    request("POST", "/kiosk/pay", auth: SECOND_TOKEN, origin: "http://buymilk.example"),
 }
 
 puts JSON.generate(report)

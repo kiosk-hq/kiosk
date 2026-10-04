@@ -390,12 +390,12 @@ module Kiosk
               "send the paying human's browser to their own machine."
       end
 
-      # The configured Kiosk issuer/origin, or nil if Kiosk is not configured
+      # The issuer of the origin being served, or nil if Kiosk is not configured
       # (e.g. this adapter used in isolation). Never raises.
       def configured_issuer
-        return nil unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
+        return nil unless defined?(Kiosk) && Kiosk.respond_to?(:current_issuer)
 
-        Kiosk.configuration&.issuer
+        Kiosk.current_issuer
       rescue StandardError
         nil
       end

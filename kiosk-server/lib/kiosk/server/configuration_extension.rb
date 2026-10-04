@@ -286,13 +286,13 @@ module Kiosk
       # any attestation whose `aud` does not equal this value, so a claim the
       # broker minted for operator A cannot be replayed to operator B at the
       # WIRE level (not merely by a demo's own callback). Defaults to
-      # {#issuer} — the operator's own origin — so a provider that does nothing
+      # `Kiosk.current_issuer` — the origin being served — so a provider that does nothing
       # binds attestations to its origin automatically. An operator whose KYC
       # provider addresses it by a stable handle (rather than its per-deploy
       # origin URL) sets this to that handle.
       attr_writer :kyc_audience
       def kyc_audience
-        @kyc_audience || issuer
+        @kyc_audience || Kiosk.current_issuer
       end
 
       # RSA public key ({OpenSSL::PKey::RSA} or PEM string) of the trusted

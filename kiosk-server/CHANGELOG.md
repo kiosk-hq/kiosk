@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **Each served origin is its own issuer.** Discovery, the possession proof, tokens, mandates, the realm and the KYC audience read `Kiosk.current_issuer`, set per request.
+
+
 - 2026-10-05: **`KioskEvents` refuses a `since` that is not a cursor and a `subject` that is not a string.** A cursor is a non-negative integer up to 2^53 - 1, in the frame or the URL.
 
 - 2026-10-04: **`Engine.issuer_warning` names an `issuer` that cannot be right at boot.** Unset in any environment, loopback outside development and test; it warns rather than refusing.

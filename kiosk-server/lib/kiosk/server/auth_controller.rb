@@ -267,7 +267,7 @@ module Kiosk
       # `WWW-Authenticate: Kiosk-PoW` like the wire-verb PoW gate — the spec error
       # table states every pow_required 402 carries the header.
       def www_authenticate_for(err)
-        issuer = Kiosk.configuration.issuer
+        issuer = Kiosk.current_issuer
         case err
         when Errors::PowRequired          then %(Kiosk-PoW realm="#{issuer}")
         when Errors::PaymentSetupRequired then %(Payment realm="#{issuer}", method="ap2")

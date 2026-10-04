@@ -412,7 +412,7 @@ module Kiosk
       # in the chain. Returns the symbol-keyed payload Hash.
       def decode_and_check(raw_jws, identity)
         key    = AgentIdentityProviders::DefaultAgentIdp.new.agent_payment_key(identity.agent_id)
-        issuer = Kiosk.configuration.issuer
+        issuer = Kiosk.current_issuer
         payload, = ::JWT.decode(raw_jws, key, true, algorithms: ["RS256"], required_claims: REQUIRED_CLAIMS)
         payload  = payload.transform_keys(&:to_sym)
 

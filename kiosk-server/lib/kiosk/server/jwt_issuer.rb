@@ -78,7 +78,7 @@ module Kiosk
       # @param signing_key [SigningKey] key whose private half signs the
       #   token. Defaults to `Kiosk.configuration.signing_key`.
       # @param issuer [String] value for the `iss` claim. Defaults to
-      #   `Kiosk.configuration.issuer`.
+      #   `Kiosk.current_issuer`.
       # @param audience [String, Array<String>] value for the `aud` claim.
       #   Required — every Kiosk-issued token is bound to an audience.
       # @param expires_in [Integer] lifetime in seconds. Default
@@ -87,7 +87,7 @@ module Kiosk
       # @return [String] compact-serialised JWS.
       def issue(claims:, audience:, signing_key: nil, issuer: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
         signing_key ||= Kiosk.configuration.signing_key
-        issuer      ||= Kiosk.configuration.issuer
+        issuer      ||= Kiosk.current_issuer
         raise ArgumentError, "issuer is required (set Kiosk.configuration.issuer or pass :issuer)" if issuer.nil? || issuer.empty?
         raise ArgumentError, "signing_key must carry a private key for issuance" unless signing_key.private?
 

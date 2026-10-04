@@ -104,7 +104,7 @@ module Kiosk
           # URL.
           schema_url:   "#{endpoint}/schema?v=#{SchemaDocument.digest(config: config)}",
           min_client:   config.min_client,
-          issuer:       config.issuer,
+          issuer:       Kiosk.current_issuer,
           owner:        config.owner,
         }
         # WHERE THE EVENT STREAM IS, present iff this origin registers a topic
@@ -244,7 +244,7 @@ module Kiosk
         endpoint = base + config.mount_path
 
         {
-          issuer:     config.issuer,
+          issuer:     Kiosk.current_issuer,
           endpoints:  auth_urls(endpoint),
           jwks_uri:   "#{endpoint}/.well-known/jwks.json",
           # kiosk-pop = the anonymous-class + PoP self-registration story;
@@ -597,7 +597,7 @@ module Kiosk
       private_class_method :pay_served?
 
       # site.name for agents.json: the provider's owner name when set, else the
-      # issuer host (a stable, always-present fallback).
+      # host of the origin being served (a stable, always-present fallback).
       #
       # PUBLIC because {OpenApi} titles the derived document with it. Naming
       # the origin is a model question, not a per-renderer one — a second
@@ -607,7 +607,7 @@ module Kiosk
         name = config.owner.is_a?(Hash) ? config.owner[:name] : nil
         return name if name && !name.to_s.empty?
 
-        host_of(config.issuer)
+        host_of(Kiosk.current_issuer)
       end
 
       def self.host_of(issuer)

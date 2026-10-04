@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::PopVerifier do
 
       expect(output).to include(issuer)                      # what we are configured as
       expect(output).to include("https://real-host.example") # what the caller signed
-      expect(output).to include("`c.issuer` is wrong")
+      expect(output).to include("`c.additional_origins`")
     end
 
     it "prefers Rails.logger for the diagnostic when a Rails logger is present" do

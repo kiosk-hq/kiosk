@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 require "action_cable"
+require "json"
+require "kiosk/server/errors"
+require "kiosk/server/headers"
+require "rack"
 
 module Kiosk
   module Server
@@ -37,9 +41,28 @@ module Kiosk
       # object so the server is built on FIRST REQUEST rather than at
       # route-draw time, by which point the host application is fully loaded
       # and `cable_config` below can read its `config/cable.yml`.
-      RACK_APP = ->(env) { Kiosk::Server::EventsCable.server.call(env) }
+      RACK_APP = ->(env) { Kiosk::Server::EventsCable.serve(env) }
+
+      UNSERVED_DETAIL = "this operator does not serve the events module"
+      UNSERVED_HINT   = "`events` is absent from this origin's capabilities and it publishes no " \
+                        "events_url; there is nothing to subscribe to here"
 
       class << self
+        # Everything the mount answers, and the module check comes first: an
+        # origin that declares no topic serves no events module, so this path
+        # answers `501 module_not_served` — spec Section 8.5.3 and Section 16.1
+        # item 9, the answer `pay` and KYC give at their own published paths.
+        #
+        # It answers BEFORE the credential is read, because whether this origin
+        # publishes events at all is a fact about the ORIGIN and true of every
+        # caller — the ordering {BindingModuleGate} gives for binding. So an
+        # upgrade gets an ordinary HTTP response and never a handshake.
+        def serve(env)
+          return unserved_module if Kiosk::Server::Events.known.empty?
+
+          server.call(env)
+        end
+
         def server
           @server ||= ::ActionCable::Server::Base.new(config: configuration)
         end
@@ -74,6 +97,15 @@ module Kiosk
         end
 
         private
+
+        def unserved_module
+          error   = Errors::ModuleNotServed.new(UNSERVED_DETAIL, hint: UNSERVED_HINT)
+          headers = ::Rack::Headers.new
+          headers["content-type"] = Errors::PROBLEM_CONTENT_TYPE
+          Headers.add_to(headers)
+          Headers.add_cache_policy(headers, status: error.http_status)
+          [error.http_status, headers, [::JSON.generate(error.to_problem)]]
+        end
 
         # The host's own `config/cable.yml` if it has one, so an operator
         # configures pubsub in the one place Rails already taught them and the

@@ -32,6 +32,10 @@ REPORT = {}
 # ERROR level only: everything below it is request noise.
 LOG = StringIO.new
 
+# Declare no topic, so this boots the OTHER origin the spec needs: one that
+# serves no events module at all and answers the mount accordingly.
+NO_TOPICS = ENV["PROBE_NO_TOPICS"] == "1"
+
 # ── a fake agent-IdP: one token, one identity ────────────────────────────────
 GOOD_TOKEN = "good-token"
 REVOKED    = { value: false }
@@ -57,23 +61,25 @@ end
 class ProbeController < ActionController::Base
   include Kiosk::Handler
 
-  topic :order_payment do
-    description "Your order was paid."
-    payload_schema type: "object"
-  end
+  unless NO_TOPICS
+    topic :order_payment do
+      description "Your order was paid."
+      payload_schema type: "object"
+    end
 
-  topic :todo do
-    reach :consented
-    description "A todo on a list you can reach changed."
-    payload_schema type: "object"
-    subject_reachable ->(subject, _identity) { REACHABLE[:value] && subject.to_s == "list_ok" }
-  end
+    topic :todo do
+      reach :consented
+      description "A todo on a list you can reach changed."
+      payload_schema type: "object"
+      subject_reachable ->(subject, _identity) { REACHABLE[:value] && subject.to_s == "list_ok" }
+    end
 
-  topic :boom do
-    reach :consented
-    description "A topic whose own subject rule raises."
-    payload_schema type: "object"
-    subject_reachable ->(_subject, _identity) { raise "operator rule blew up" }
+    topic :boom do
+      reach :consented
+      description "A topic whose own subject rule raises."
+      payload_schema type: "object"
+      subject_reachable ->(_subject, _identity) { raise "operator rule blew up" }
+    end
   end
 
   kind :query
@@ -179,6 +185,37 @@ def identifier(topic, **rest)
   { "channel" => "KioskEvents", "topic" => topic }.merge(rest.transform_keys(&:to_s))
 end
 
+UPGRADE_HEADERS = {
+  "Connection" => "Upgrade", "Upgrade" => "websocket", "Sec-WebSocket-Version" => "13",
+  "Sec-WebSocket-Key" => "dGhlIHNhbXBsZSBub25jZQ==",
+  "Sec-WebSocket-Protocol" => "actioncable-v1-json",
+}.freeze
+
+# One request, and the whole of what came back off the socket — which is what a
+# client reads when an upgrade is answered at the HTTP layer instead.
+def raw_get(port, path, headers)
+  socket = TCPSocket.new("127.0.0.1", port)
+  lines  = ["GET #{path} HTTP/1.1", "Host: 127.0.0.1:#{port}"] + headers.map { |k, v| "#{k}: #{v}" }
+  socket.write("#{lines.join("\r\n")}\r\n\r\n")
+  raw      = +""
+  deadline = Time.now + 3
+  while Time.now < deadline && IO.select([socket], nil, nil, 0.2)
+    begin
+      raw << socket.readpartial(4096)
+    rescue EOFError
+      break
+    end
+    head, separator, body = raw.partition("\r\n\r\n")
+    length = head[/^content-length:[[:space:]]*([[:digit:]]+)/i, 1]
+    break if !separator.empty? && length && body.bytesize >= length.to_i
+  end
+  socket.close
+  head, _, body = raw.partition("\r\n\r\n")
+  { "status" => head.lines.first.to_s.strip,
+    "content_type" => head.lines.grep(/^content-type:/i).first.to_s.strip,
+    "body" => body }
+end
+
 def connect(port, headers: nil, path: "/kiosk/events")
   ProbeSocket.new(port, path, headers || {
     "Origin" => Kiosk.configuration.issuer,
@@ -212,6 +249,32 @@ listening = false
 end
 unless listening
   puts JSON.generate(error: "puma never listened on #{port}")
+  exit 0
+end
+
+# ── the origin that declares no topic ────────────────────────────────────────
+#
+# It serves no events module, so the mount answers the problem document rather
+# than upgrading — for a plain request, for an upgrade, and before any
+# credential is read. Nothing below this applies to such an origin.
+if NO_TOPICS
+  REPORT[:known_topics] = Kiosk::Server::Events.known
+  REPORT[:capabilities] =
+    JSON.parse(raw_get(port, "/.well-known/kiosk.json", "Connection" => "close")["body"])
+        .dig("kiosk", "capabilities")
+  REPORT[:plain]   = raw_get(port, "/kiosk/events", "Connection" => "close")
+  REPORT[:upgrade] =
+    raw_get(port, "/kiosk/events", UPGRADE_HEADERS.merge("Authorization" => "Bearer #{GOOD_TOKEN}"))
+  REPORT[:anonymous_upgrade] = raw_get(port, "/kiosk/events", UPGRADE_HEADERS)
+  # And what a real client makes of it: the driver never opens, and no frame
+  # arrives for it to read.
+  sock = connect(port)
+  sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
+  REPORT[:upgrade_frames] = sock.frames
+  REPORT[:upgrade_open]   = sock.open?
+  sock.close
+  REPORT[:ok] = true
+  puts JSON.generate(REPORT)
   exit 0
 end
 

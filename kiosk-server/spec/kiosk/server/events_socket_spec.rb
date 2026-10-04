@@ -234,4 +234,74 @@ RSpec.describe "the Kiosk event stream over a real socket" do
         .to eq([{ "type" => "disconnect", "reason" => "token_expired", "reconnect" => true }])
     end
   end
+
+  # Spec Sections 8.5.3 and 16.1 item 9: `events` is an OPTIONAL module, and an
+  # origin that declares no topic answers `501 module_not_served` at
+  # `<endpoint>/events` — the answer `pay` and KYC give at their own published
+  # paths — rather than welcoming a socket that can never carry anything.
+  #
+  # Its own subprocess, because the subject is the whole origin: the topics are
+  # declared at boot and there is no later moment at which one goes away.
+  describe "an origin that declares no topic" do
+    before(:context) do
+      port = TCPServer.open("127.0.0.1", 0) { |s| s.addr[1] }
+      probe = File.expand_path("../../support/events_socket_probe_app.rb", __dir__)
+      output = IO.popen({ "PROBE_PORT" => port.to_s, "PROBE_NO_TOPICS" => "1" },
+                        ["ruby", probe], err: File::NULL, &:read)
+      line = output.to_s.lines.reverse.find { |l| l.strip.start_with?("{") }
+      @bare = line ? JSON.parse(line) : { "error" => "probe printed no report: #{output.to_s[0, 400]}" }
+    end
+
+    let(:bare) { @bare }
+
+    let(:problem) do
+      { "type" => "https://kiosk.tech/problems/module_not_served",
+        "title" => "Module not served",
+        "status" => 501,
+        "detail" => "this operator does not serve the events module",
+        "code" => "module_not_served",
+        "hint" => "`events` is absent from this origin's capabilities and it publishes no " \
+                  "events_url; there is nothing to subscribe to here" }
+    end
+
+    it "completed every scenario" do
+      expect(bare["error"]).to be_nil
+      expect(bare["ok"]).to be(true)
+    end
+
+    # Which is what makes the refusals below mean something: the module is
+    # absent because nothing declared a topic, not because anything failed.
+    it "declares no topic, and advertises no events capability" do
+      expect(bare["known_topics"]).to eq([])
+      expect(bare["capabilities"]).to eq(%w[schema queries])
+    end
+
+    it "answers a plain request with the module_not_served problem document" do
+      expect(bare["plain"]["status"]).to eq("HTTP/1.1 501 Not Implemented")
+      expect(bare["plain"]["content_type"]).to eq("content-type: application/problem+json")
+      expect(JSON.parse(bare["plain"]["body"])).to eq(problem)
+    end
+
+    it "answers a WebSocket upgrade the same way, at the HTTP layer" do
+      expect(bare["upgrade"]["status"]).to eq("HTTP/1.1 501 Not Implemented")
+      expect(bare["upgrade"]["content_type"]).to eq("content-type: application/problem+json")
+      expect(JSON.parse(bare["upgrade"]["body"])).to eq(problem)
+    end
+
+    # Whether this origin publishes events at all is a fact about the ORIGIN and
+    # true of every caller, so it is answered before a credential is read —
+    # where an origin that DOES serve topics completes the handshake and then
+    # sends the `unauthorized` disconnect asserted above.
+    it "answers an upgrade carrying no credential identically" do
+      expect(JSON.parse(bare["anonymous_upgrade"]["body"])).to eq(problem)
+      expect(bare["anonymous_upgrade"]).to eq(bare["upgrade"])
+    end
+
+    # Asserted as a LIST for the reason the refused upgrade above is: the defect
+    # would be a socket that opens and then says something.
+    it "leaves a real client with no socket and no frame" do
+      expect(bare["upgrade_frames"]).to eq([])
+      expect(bare["upgrade_open"]).to be(false)
+    end
+  end
 end

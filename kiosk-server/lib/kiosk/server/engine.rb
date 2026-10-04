@@ -564,6 +564,12 @@ module Kiosk
         # `events` is in {HandlerMixin::RESERVED_NAMES} in the same commit —
         # `bin/check-kiosk-names` holds that list against THIS table in both
         # directions, so either half alone is a build failure.
+        #
+        # Drawn unconditionally, like `pay` and `agents/kyc`: an origin that
+        # declares no topic answers it `module_not_served` (501, "this operator
+        # does not serve the events module"), and discovery already drops
+        # `events` from the advertised capabilities and publishes no
+        # `events_url`. {EventsCable.serve} is where that answer lives.
         mount Kiosk::Server::EventsCable::RACK_APP => "events",
               internal: true, anchor: true, as: :kiosk_events
 

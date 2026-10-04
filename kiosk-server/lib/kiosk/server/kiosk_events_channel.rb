@@ -146,10 +146,10 @@ class KioskEvents < ActionCable::Channel::Base
   end
 
   # Spec Section 8.5.6. `reach` authorises the SUBSCRIPTION, exactly as it
-  # authorises a call
-  # to the verb beside it; `subject_reachable` answers the operator's own
-  # question about THIS subject, and takes the subject and the identity rather
-  # than reading CurrentRequest — which is fiber-local and does not reach here.
+  # authorises a call to the verb beside it; `subject_reachable` answers the
+  # operator's own question about THIS subject, and takes the subject and the
+  # identity rather than reading CurrentRequest — which is fiber-local and
+  # does not reach here.
   def reachable?(declaration)
     case declaration[:reach]
     when :published then true

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-04: **`SchemaDocument`'s own comments name the three members it builds.** They said `{queries, actions}` directly above the line that adds `events`.
+
 - 2026-10-04: **`EventsConnection` answers the frames Action Cable swallowed.** An `unsubscribe` it cannot resolve and a non-cursor `since` are refused; a duplicate `subscribe` is re-confirmed.
 
 - 2026-10-04: **`EventsConnection` answers an unusable frame.** Action Cable logged and returned, leaving a subscriber on a socket that would never speak; now a `reject_subscription` or a typed close.

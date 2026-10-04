@@ -11,8 +11,10 @@ module Kiosk
   module Server
     # THE `schema` CATALOG, DERIVED ONCE PER BOOT AND SERVED FROM MEMORY.
     #
-    # `GET <endpoint>/schema` answers `{queries, actions}` — the descriptors of
-    # every verb this origin registered. Nothing in it is per-request or
+    # `GET <endpoint>/schema` answers `{queries, actions, events}` — the
+    # descriptors of every verb and every topic this origin registered, all
+    # three members always present and `events` empty where no topic is
+    # declared. Nothing in it is per-request or
     # per-agent, which is why it is PUBLIC and cacheable at all, and why the
     # same bytes can be handed to every caller for as long as the process
     # lives.
@@ -85,7 +87,8 @@ module Kiosk
       MUTEX = Mutex.new
 
       class << self
-        # The catalog document, ready to serialize: `{queries:, actions:}`.
+        # The catalog document, ready to serialize: `{queries:, actions:,
+        # events:}`.
         #
         # THE MODULE SET IS NOT HERE. `Array(Kiosk.configuration.capabilities)`
         # is published once, as `capabilities` in `/.well-known/kiosk.json` —

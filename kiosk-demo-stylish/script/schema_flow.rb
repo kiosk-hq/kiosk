@@ -35,9 +35,10 @@ WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 rc, body = WIRE.get_json("/kiosk/schema")
 abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
 
-# `GET <endpoint>/schema` answers `{queries, actions}` DIRECTLY: no
+# `GET <endpoint>/schema` answers `{queries, actions, events}` DIRECTLY: no
 # `{ok, kind, value}` envelope, and no `verbs` — that would only duplicate
-# `capabilities` byte for byte.
+# `capabilities` byte for byte. `events` is an empty array here: this origin
+# declares no topic, and the member is still served.
 schema_value = body || {}
 
 # ── /.well-known/kiosk.json — where the MODULE set lives ─────────────────────

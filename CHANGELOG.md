@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **A frame the event stream cannot act on is now answered instead of dropped.** A malformed `subscribe` gets `reject_subscription`; a frame naming no subscription closes the socket.
+
 - 2026-10-04: **An origin that declares no topic answers `501 module_not_served` at `<endpoint>/events`.** It no longer welcomes an authenticated socket it can never stream on.
 
 - 2026-10-04: **The two KYC demos stop publishing an opaque broker token as `format: "uuid"`, and each check task now validates the event it emitted against the schema its origin serves.**

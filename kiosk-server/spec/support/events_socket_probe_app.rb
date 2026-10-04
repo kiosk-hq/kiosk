@@ -168,8 +168,12 @@ class ProbeSocket
   def open? = @open
   def closed? = @closed
 
+  # A frame exactly as typed. Several scenarios below drive strings no client
+  # library would construct, which is the whole point of them.
+  def send_raw(text) = @driver.text(text)
+
   def subscribe(identifier)
-    @driver.text(JSON.generate("command" => "subscribe", "identifier" => JSON.generate(identifier)))
+    send_raw(JSON.generate("command" => "subscribe", "identifier" => JSON.generate(identifier)))
   end
 
   def messages = frames.filter_map { |f| f["message"] }
@@ -184,6 +188,17 @@ end
 def identifier(topic, **rest)
   { "channel" => "KioskEvents", "topic" => topic }.merge(rest.transform_keys(&:to_s))
 end
+
+# Frames an origin cannot act on, as the literal strings a broken client sends.
+# A `subscribe` naming a subscription is refusable, however little sense the
+# `identifier` makes; the rest name none.
+BAD_FRAMES = {
+  "not_json"        => "this is not json",
+  "no_identifier"   => '{"command":"subscribe"}',
+  "unparsed_id"     => '{"command":"subscribe","identifier":"NOT JSON"}',
+  "unknown_command" => '{"command":"detonate","identifier":"{\"channel\":\"KioskEvents\",\"topic\":\"todo\"}"}',
+  "foreign_channel" => '{"command":"subscribe","identifier":"{\"channel\":\"Object\",\"topic\":\"todo\"}"}',
+}.freeze
 
 UPGRADE_HEADERS = {
   "Connection" => "Upgrade", "Upgrade" => "websocket", "Sec-WebSocket-Version" => "13",
@@ -445,6 +460,37 @@ begin
     sock.frames.any? { |f| f["type"] == "reject_subscription" && f["identifier"].include?("boom") }
   REPORT[:raising_rule_logged] =
     LOG.string.include?(%([kiosk] events subject rule raised for topic "boom": RuntimeError: operator rule blew up))
+  sock.close
+
+  # 15b — a frame the origin cannot act on (spec Section 8.5.4). Each on its
+  #       own socket, because three of the five answers close it, and each sent
+  #       AFTER the welcome so the answer is to the frame and not to the
+  #       upgrade. Everything that arrived after the welcome is collected, so a
+  #       second frame contradicting the first is visible.
+  REPORT[:bad_frames] = {}
+  BAD_FRAMES.each do |name, text|
+    bad = connect(port)
+    bad.pump_until { bad.frames.any? }
+    welcomed = bad.frames.length
+    bad.send_raw(text)
+    bad.pump_until(seconds: 3) { bad.frames.length > welcomed }
+    bad.pump_until(seconds: 2) { bad.closed? }
+    REPORT[:bad_frames][name] = { "sent" => text, "answer" => bad.frames[welcomed..],
+                                  "closed" => bad.closed? }
+    bad.close
+  end
+
+  # 15c — and a well-formed subscribe on a socket that has just been told off
+  #       still works, which is what says the seam above refuses a FRAME and
+  #       not a client.
+  sock = connect(port)
+  sock.pump_until { sock.frames.any? }
+  sock.send_raw(BAD_FRAMES["unparsed_id"])
+  sock.pump_until { sock.frames.any? { |f| f["type"] == "reject_subscription" } }
+  sock.subscribe(identifier("order_payment"))
+  sock.pump_until { sock.messages.any? { |m| m["type"] == "subscribed" } }
+  REPORT[:after_bad_frame_subscribed] =
+    sock.messages.select { |m| m["type"] == "subscribed" }.map { |m| m["topic"] }
   sock.close
 
   # ── re-authorisation while the subscription stands (spec Section 8.5.6) ───

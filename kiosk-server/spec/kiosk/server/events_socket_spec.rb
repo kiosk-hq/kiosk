@@ -131,6 +131,68 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     end
   end
 
+  # Spec Section 8.5.4 forbids a silent subscription because a subscriber would
+  # wait on it forever, and Section 8.5.7 leaves exactly two forms to refuse
+  # one with. A frame the origin cannot act on is the same harm by another
+  # route, so it gets one of the same two.
+  #
+  # Every example reads the whole frame LIST that arrived after the welcome,
+  # never the first match: a second frame contradicting the first is the defect
+  # worth catching, and `reconnect` is what a subscriber acts on.
+  describe "a frame the origin cannot act on" do
+    let(:bad) { report["bad_frames"] || {} }
+
+    def answer(name) = bad.dig(name, "answer")
+
+    # A `subscribe` names a subscription by its `identifier` STRING, which the
+    # wire compares and never parses — so the string correlates the refusal
+    # whether or not it happens to be a JSON document, and the per-subscription
+    # form is the one that leaves the rest of the socket working.
+    it "REJECTS a subscribe whose identifier is not a JSON document, echoing it" do
+      expect(answer("unparsed_id"))
+        .to eq([{ "identifier" => "NOT JSON", "type" => "reject_subscription" }])
+      expect(bad.dig("unparsed_id", "closed")).to be(false)
+    end
+
+    it "REJECTS a subscribe naming a channel that is not KioskEvents, echoing it" do
+      expect(answer("foreign_channel"))
+        .to eq([{ "identifier" => '{"channel":"Object","topic":"todo"}',
+                  "type" => "reject_subscription" }])
+      expect(bad.dig("foreign_channel", "closed")).to be(false)
+    end
+
+    # The rest name no subscription, so there is nothing to echo and nothing to
+    # refuse. `reconnect: false` because a client whose frames are malformed
+    # does not fix them by coming back — the reconnect-storm reasoning Section
+    # 8.5.6 states for `revoked`.
+    %w[not_json no_identifier unknown_command].each do |shape|
+      it "CLOSES with reconnect false on #{shape.tr('_', ' ')}" do
+        expect(answer(shape))
+          .to eq([{ "type" => "disconnect", "reason" => "invalid_request",
+                    "reconnect" => false }])
+        expect(bad.dig(shape, "closed")).to be(true)
+      end
+    end
+
+    it "drives the five literal strings the finding drove" do
+      expect(bad.transform_values { |v| v["sent"] }).to eq(
+        "not_json" => "this is not json",
+        "no_identifier" => '{"command":"subscribe"}',
+        "unparsed_id" => '{"command":"subscribe","identifier":"NOT JSON"}',
+        "unknown_command" =>
+          '{"command":"detonate","identifier":"{\"channel\":\"KioskEvents\",\"topic\":\"todo\"}"}',
+        "foreign_channel" =>
+          '{"command":"subscribe","identifier":"{\"channel\":\"Object\",\"topic\":\"todo\"}"}',
+      )
+    end
+
+    # What says the refusal is aimed at a FRAME and not at a client: the socket
+    # that was just told off subscribes normally straight afterwards.
+    it "goes on serving a well-formed subscribe on the same socket" do
+      expect(report["after_bad_frame_subscribed"]).to eq(["order_payment"])
+    end
+  end
+
   describe "delivery" do
     it "pushes an emitted event carrying the five closed members and no others" do
       expect(report["live"]).not_to be_nil

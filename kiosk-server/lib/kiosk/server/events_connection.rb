@@ -45,6 +45,17 @@ module Kiosk
       # host's own channels keep Rails' cadence.
       BEATS_PER_PING = 10
 
+      # The channel name on the WIRE, which is also the Ruby class name Action
+      # Cable constantizes out of a subscribe frame's `identifier` — see
+      # {KioskEvents}. This connection serves the Kiosk stream and no channel
+      # of the host's, so it is the one channel a frame here may name.
+      CHANNEL = "KioskEvents"
+
+      # The commands this wire has. A subscriber names a topic (spec Section
+      # 8.5.4) and may drop it again; it never publishes (Section 8.5.5), so
+      # Action Cable's `message` command is not part of the contract.
+      COMMANDS = %w[subscribe unsubscribe].freeze
+
       def connect
         identity = resolve_identity || reject_unauthorized_connection
         @kiosk_identity = identity
@@ -73,6 +84,35 @@ module Kiosk
         super if (@beats % BEATS_PER_PING).zero?
       end
 
+      # Spec Section 8.5.4: a frame this origin cannot act on is ANSWERED, and
+      # Section 8.5.7 leaves exactly two forms to answer it with.
+      #
+      # A `subscribe` carrying an `identifier` STRING names a subscription, so
+      # a refusal of it is `reject_subscription` echoing that string — the wire
+      # compares the identifier and never parses it, so it correlates whether
+      # or not the string is a JSON document.
+      #
+      # Anything else names no subscription, so there is nothing to refuse and
+      # the only form left is the typed `disconnect`, with `reconnect: false`:
+      # a client whose frames are malformed does not fix them by coming back.
+      # `close` transmits that frame itself, so it is the whole call.
+      def dispatch_websocket_message(websocket_message)
+        frame = parse_object(websocket_message) || {}
+        identifier = frame["identifier"]
+
+        unless COMMANDS.include?(frame["command"]) && identifier.is_a?(::String)
+          return close(reason: ::ActionCable::INTERNAL[:disconnect_reasons][:invalid_request],
+                       reconnect: false)
+        end
+
+        unless kiosk_subscription?(identifier)
+          return transmit(identifier: identifier,
+                          type: ::ActionCable::INTERNAL[:message_types][:rejection])
+        end
+
+        super
+      end
+
       # Whether the credential this socket was opened with still resolves —
       # the question the channel's re-authorisation timer asks every
       # `KioskEvents::REAUTHORISE_EVERY_SECONDS` (spec Section 8.5.6). The
@@ -92,9 +132,22 @@ module Kiosk
 
       private
 
+      # Nil for anything that is not a JSON object, which includes a frame that
+      # is not JSON at all.
+      def parse_object(document)
+        parsed = ::JSON.parse(document)
+        parsed if parsed.is_a?(::Hash)
+      rescue ::JSON::ParserError
+        nil
+      end
+
+      def kiosk_subscription?(identifier)
+        parse_object(identifier)&.dig("channel") == CHANNEL
+      end
+
       def auto_subscribe!
         requested_topics.each do |topic, subject|
-          identifier = { "channel" => "KioskEvents", "topic" => topic }
+          identifier = { "channel" => CHANNEL, "topic" => topic }
           identifier["subject"] = subject if subject
           identifier["since"] = requested_since if requested_since
           subscriptions.execute_command(

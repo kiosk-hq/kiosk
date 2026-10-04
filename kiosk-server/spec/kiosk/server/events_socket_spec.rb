@@ -205,9 +205,13 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["other_socket_unsubscribed"]).to be(false)
     end
 
+    # Asserted as a LIST, exactly as the refused upgrade above is. `reconnect`
+    # is the thing a subscriber acts on, so a second disconnect frame carrying
+    # the opposite flag is the whole defect — and reading the first matching
+    # frame cannot see one.
     it "closes the connection with reconnect false when the credential stops resolving" do
-      expect(report["revoked_frame"])
-        .to eq("type" => "disconnect", "reason" => "revoked", "reconnect" => false)
+      expect(report["revoked_frames"])
+        .to eq([{ "type" => "disconnect", "reason" => "revoked", "reconnect" => false }])
       expect(report["revoked_socket_closed"]).to be(true)
     end
 
@@ -216,8 +220,8 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     # by challenge-response and resumes from its cursor. The two sockets differ
     # in nothing but their credential's `exp`.
     it "tells a client whose access token merely aged out to come back" do
-      expect(report["expired_frame"])
-        .to eq("type" => "disconnect", "reason" => "token_expired", "reconnect" => true)
+      expect(report["expired_frames"])
+        .to eq([{ "type" => "disconnect", "reason" => "token_expired", "reconnect" => true }])
     end
   end
 end

@@ -413,9 +413,12 @@ begin
   #      this token will not help.
   REVOKED[:value] = true
   plain.pump_until(seconds: 5) { plain.frames.any? { |f| f["type"] == "disconnect" } }
-  REPORT[:revoked_frame] = plain.frames.find { |f| f["type"] == "disconnect" }
   plain.pump_until(seconds: 3) { plain.closed? }
   REPORT[:revoked_socket_closed] = plain.closed?
+  # EVERY disconnect frame the socket was sent, collected after it closed:
+  # `reconnect` is what a client acts on, so a second frame carrying the
+  # opposite flag is the defect, and reading only the first cannot see it.
+  REPORT[:revoked_frames] = plain.frames.select { |f| f["type"] == "disconnect" }
   held.close
   plain.close
 
@@ -427,7 +430,8 @@ begin
   expiring = connect(port, path: "/kiosk/events?topic=order_payment")
   expiring.pump_until { expiring.messages.any? { |m| m["type"] == "subscribed" } }
   expiring.pump_until(seconds: 8) { expiring.frames.any? { |f| f["type"] == "disconnect" } }
-  REPORT[:expired_frame] = expiring.frames.find { |f| f["type"] == "disconnect" }
+  expiring.pump_until(seconds: 3) { expiring.closed? }
+  REPORT[:expired_frames] = expiring.frames.select { |f| f["type"] == "disconnect" }
   expiring.close
 
   REPORT[:ok] = true

@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **A revoked event stream is told `reconnect: false` once.** Action Cable's own `close` carries the typed reason and the flag, so no defaulted `true` follows a millisecond later.
+
 - 2026-09-29: **Security: philslist keeps the seller's contact line out of its request log.** The board publishes that text; the operator need not keep a second copy.
 
 - 2026-09-29: **Security: a handler dispatch inherits the host's parameter filter.** A filtered field was masked on the wire request's log line and written in full on the handler's.

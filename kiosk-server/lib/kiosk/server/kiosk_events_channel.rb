@@ -182,8 +182,7 @@ class KioskEvents < ActionCable::Channel::Base
 
     unless connection.kiosk_identity_resolves?
       @declaration = nil
-      connection.transmit(disconnect_frame)
-      connection.close
+      disconnect!
       return
     end
 
@@ -206,11 +205,17 @@ class KioskEvents < ActionCable::Channel::Base
   # the identity chain refuses — a revoked watermark above all — answers the
   # same to a fresh socket, and a client that retries into it is a reconnect
   # storm against an origin whose answer is fixed.
-  def disconnect_frame
+  #
+  # `Connection::Base#close` TRANSMITS THE TYPED DISCONNECT ITSELF, so the
+  # reason and the flag are its arguments. Transmitting a frame and then
+  # closing publishes the flag twice, the second time with that method's
+  # `reconnect: true` default — and the flag is the whole of what a client
+  # acts on.
+  def disconnect!
     if connection.kiosk_credential_expired?
-      { "type" => "disconnect", "reason" => "token_expired", "reconnect" => true }
+      connection.close(reason: "token_expired", reconnect: true)
     else
-      { "type" => "disconnect", "reason" => "revoked", "reconnect" => false }
+      connection.close(reason: "revoked", reconnect: false)
     end
   end
 end

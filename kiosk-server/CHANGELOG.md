@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-04: **The revoked and expired disconnects are each published once.** `Connection::Base#close` carries the reason and the flag; a frame transmitted before it published them twice.
+
 - 2026-09-29: **Security: the handler dispatch inherits the host's parameter filter.** A filtered field was masked on the wire request's log line and written in full on the handler's.
 
 - 2026-09-29: **Security: the engine keeps the wire's own credentials out of the request log.** The possession proof, the link and device codes, the KYC attestation and the three mandates are filtered.

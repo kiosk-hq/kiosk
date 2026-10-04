@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1763 anchors.
+# 1765 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -198,6 +198,8 @@ e2e/assistant.sh	the descriptor's description travels verbatim
 e2e/assistant.sh	the reserved parameters are form/explode:true
 e2e/assistant.sh	the two 'it is not here' answers are two DIFFERENT codes
 e2e/assistant.sh	title is the code's, not the incident's
+e2e/assistant.sh	two origins: first's token on second → 401
+e2e/assistant.sh	two origins: same key, second account
 e2e/assistant.sh	type names the code
 e2e/assistant.sh	unknown query → 404
 e2e/assistant.sh	…a query is advertised GET

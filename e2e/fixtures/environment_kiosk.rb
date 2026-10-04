@@ -56,6 +56,9 @@
   # run.sh exports the real one (http://127.0.0.1:$SERVER_PORT) before it starts
   # the server; the default is for a hand-started harness app.
   config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
+  # Further origins this deployment serves, comma-separated. run.sh serves
+  # http://localhost:$SERVER_PORT as a second origin beside the issuer.
+  config.x.kiosk.additional_origins = ENV.fetch("KIOSK_ADDITIONAL_ORIGINS", "").split(",")
 
   # The operator audit sink's two files. The PRESENCE of
   # KIOSK_AUDIT_SINK_FILE is what makes the initializer configure a sink at all,

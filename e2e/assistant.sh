@@ -1049,7 +1049,7 @@ assert "the two 'it is not here' answers are two DIFFERENT codes" \
 printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → wire ===\033[0m\n"
 
 reg_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
-             POW_CAPTURE="${POW_CAPTURE:-}" \
+             KIOSK_ADDITIONAL_ORIGINS="$KIOSK_ADDITIONAL_ORIGINS" POW_CAPTURE="${POW_CAPTURE:-}" \
              bundle exec ruby "$FIXTURES/register_pow_flow.rb" )
 
 assert "register-pow: no-proof → 402"          "$(echo "$reg_out" | jq -r '.no_proof_status')"        "402"
@@ -1086,6 +1086,15 @@ assert "register-pow: solve+proof → registered" "$(echo "$reg_out" | jq -r '.w
 assert "register-pow: role pinned customer"    "$(echo "$reg_out" | jq -r '.role')"                   "customer"
 assert "register-pow: minted token wire → 200" "$(echo "$reg_out" | jq -r '.wire_status')"            "200"
 assert "register-pow: wire answered rows"      "$(echo "$reg_out" | jq -r '.wire_payload_is_array')"  "true"
+
+# The deployment's second origin is its own operator (one key, two accounts,
+# no token crossing between them).
+assert "two origins: issuer is the first origin"   "$(echo "$reg_out" | jq -r '.first_origin_issuer')"  "$KIOSK_ISSUER"
+assert "two origins: issuer is the second origin"  "$(echo "$reg_out" | jq -r '.second_origin_issuer')" "${KIOSK_ADDITIONAL_ORIGINS%%,*}"
+assert "two origins: same key, second account"     "$(echo "$reg_out" | jq -r '.second_origin_new_account')" "true"
+assert "two origins: own token → 200"              "$(echo "$reg_out" | jq -r '.second_token_on_second')" "200"
+assert "two origins: first's token on second → 401" "$(echo "$reg_out" | jq -r '.first_token_on_second')" "401"
+assert "two origins: second's token on first → 401" "$(echo "$reg_out" | jq -r '.second_token_on_first')" "401"
 
 # ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"

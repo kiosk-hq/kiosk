@@ -452,6 +452,7 @@ log "start rails server on port $SERVER_PORT"
 port_held=$(lsof -ti ":$SERVER_PORT" | tr '\n' ' ' || true)
 [ -z "$port_held" ] || fail "port $SERVER_PORT is already held by pid $port_held— this run would drive that server instead of the one it starts. Stop it and run again."
 export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
+export KIOSK_ADDITIONAL_ORIGINS="http://localhost:$SERVER_PORT"
 # Where the operator's sink writes. Its PRESENCE is what makes the initializer
 # configure a sink at all, so the second boot below (which unsets it) is the
 # default-off proof.
@@ -513,6 +514,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        FIXTURES="$FIXTURES" \
        DB_NAME="$DB_NAME" \
        KIOSK_ISSUER="$KIOSK_ISSUER" \
+       KIOSK_ADDITIONAL_ORIGINS="$KIOSK_ADDITIONAL_ORIGINS" \
        ALICE_AGENT="$ALICE_AGENT" \
        ALICE_AGENT_TOKEN="$ALICE_AGENT_TOKEN" \
        BOB_AGENT="$BOB_AGENT" \

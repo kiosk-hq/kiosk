@@ -45,9 +45,9 @@ end
 #   lands on `#/$defs/challenge` — the half the SERVER writes.  The half the
 #   CLIENT writes, where `indices` and its u64 bound live, was unvalidated on
 #   the wire.  Not called when the toll never fired.
+# @param key [OpenSSL::PKey::RSA] the keypair to register; a fresh one by default
 # @return [Array(OpenSSL::PKey::RSA, Hash)] the keypair and the 201 register body
-def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil)
-  key = OpenSSL::PKey::RSA.generate(2048)
+def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil, key: OpenSSL::PKey::RSA.generate(2048))
   pem = key.public_key.to_pem
 
   rc_ch, ch = get_json.call("#{server}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")

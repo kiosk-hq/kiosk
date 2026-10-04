@@ -75,6 +75,7 @@ Kiosk.configure do |c|
   c.system_role = Rails.configuration.x.kiosk.system_role
 
   c.issuer = Rails.configuration.x.kiosk.issuer
+  c.additional_origins = Rails.configuration.x.kiosk.additional_origins
   # ONE ROLE, AND THE HARNESS ASSERTS THE BINDING CEREMONY WITH ONE.
   #
   # A second declared role was considered and deliberately not added. It would

@@ -10,12 +10,14 @@
 #      with the Kiosk-PoW header carrying the solved `{challenge, nonce}`
 #      proofs as raw JSON SUCCEEDS (201) and mints a usable token.
 #   3. The minted token authenticates a real wire verb.
+#   4. The same key on the deployment's second origin is a second account,
+#      and each origin refuses the other's token.
 #
 # Same mechanism the demos use (kiosk-demo-skooti). Emits ONE JSON line on
 # stdout for assistant.sh to assert on; non-zero exit on any HTTP failure.
 #
 # Usage (invoked by assistant.sh — needs a running server + numpy on PATH):
-#   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby register_pow_flow.rb
+#   SERVER_URL=… KIOSK_ISSUER=… KIOSK_ADDITIONAL_ORIGINS=… bundle exec ruby register_pow_flow.rb
 require "jwt"; require "json"; require "net/http"; require "kiosk/redteam/wire"; require "uri"; require "openssl"; require "securerandom"; require "base64"
 
 SERVER = ENV.fetch("SERVER_URL")
@@ -70,7 +72,7 @@ results[:challenge_params_nk] = [challenge_params["n"], challenge_params["k"]].j
 # real solved proof against the published `pow.schema.json`. Until this
 # existed, `#/$defs/proof` — where `indices`, its Zcash canonical order and the
 # inclusive u64 `maximum` live — had no over-the-wire coverage at all.
-_reg_key, reg = equihash_register(
+reg_key, reg = equihash_register(
   server:    SERVER,
   issuer:    ISSUER,
   get_json:  ->(url) { get_json(url) },
@@ -96,5 +98,27 @@ results[:wire_status] = rc_wire
 # the proof that the wire served this token is that a LIST came back — there
 # is no `ok` flag left to read, and the status line carries success.
 results[:wire_payload_is_array] = wire.is_a?(Array)
+
+# ── 4. A second origin of the same deployment is its own operator ───────────
+# The request reaches the same server under the second origin's Host, so the
+# deployment resolves it to that origin. The key registered above is unknown
+# there: it registers again as a second account, and neither origin's token is
+# accepted on the other.
+SECOND = ENV.fetch("KIOSK_ADDITIONAL_ORIGINS").split(",").first
+second_host = { "Host" => URI(SECOND).authority }
+results[:first_origin_issuer]  = get_json("#{SERVER}/.well-known/kiosk.json").last.dig("kiosk", "issuer")
+results[:second_origin_issuer] = get_json("#{SERVER}/.well-known/kiosk.json", second_host).last.dig("kiosk", "issuer")
+_, second_reg = equihash_register(
+  server:    SERVER,
+  issuer:    SECOND,
+  key:       reg_key,
+  get_json:  ->(url) { get_json(url, second_host) },
+  post_json: ->(url, body, headers = {}) { post_json(url, body, headers.merge(second_host)) },
+)
+results[:second_origin_new_account] = second_reg.fetch("agent_id") != reg.fetch("agent_id")
+second_token = second_reg.fetch("access_token")
+results[:second_token_on_second] = get_json("#{SERVER}/kiosk/salons", second_host.merge("Authorization" => "Bearer #{second_token}")).first
+results[:first_token_on_second]  = get_json("#{SERVER}/kiosk/salons", second_host.merge("Authorization" => "Bearer #{token}")).first
+results[:second_token_on_first]  = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{second_token}" }).first
 
 puts JSON.generate(results)

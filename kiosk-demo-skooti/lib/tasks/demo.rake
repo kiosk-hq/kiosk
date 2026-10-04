@@ -1424,6 +1424,7 @@ namespace :check do
     require "uri"
     require "json"
     require "shellwords"
+    require "open3"
     require_relative "../../script/prove_broker_boot"
 
     port = ENV.fetch("PORT", "3004")
@@ -1600,6 +1601,43 @@ namespace :check do
       failures << "C2: rent_motorcycle after the spelled attestation expected 403 kyc_required, got " \
                   "#{result["http_mc_rent_after_spelling"].inspect}/#{result["mc_rent_after_spelling_code"].inspect}"
       puts "  FAIL  C2 rent_motorcycle after spelling → #{result["http_mc_rent_after_spelling"].inspect}/#{result["mc_rent_after_spelling_code"].inspect}"
+    end
+
+    # ── THE EMITTED EVENT, AGAINST THE SCHEMA THIS ORIGIN PUBLISHES FOR IT ────
+    #
+    # A topic's `payload_schema` is the whole contract for an event's `data`
+    # (§8.5.1), and nothing else here compares the two: the beats above assert
+    # the HTTP legs, and `check:schema` asserts the descriptors against their
+    # own examples. A schema that describes an event this operator never sends
+    # satisfies both.
+    #
+    # The schema is the SERVED one, carried out of the flow because only a
+    # running origin can be asked what it publishes; the events are the rows
+    # `POST /kyc/callback` wrote. `:setup` shells out and this task holds no
+    # Rails environment of its own, so the comparison runs in its own `rails
+    # runner`. json_schemer ASSERTS `format` rather than annotating it, which
+    # is what makes the declaration a claim and not a decoration.
+    compare = <<~'RUBY'
+      require "json_schemer"
+      schemer = JSONSchemer.schema(JSON.parse(ARGV[0]),
+                                   meta_schema: "https://json-schema.org/draft/2020-12/schema")
+      data = Kiosk.configuration.event_store.since(ARGV[1], 0)
+                  .select { |e| e["topic"] == "kyc_verification" }.map { |e| e["data"] }
+      puts JSON.generate(events: data.size,
+                         errors: data.flat_map { |d| schemer.validate(d).to_a.map { |v| v["error"] } })
+    RUBY
+    raw, st = Open3.capture2e("bundle", "exec", "rails", "runner", compare,
+                              JSON.generate(result["kyc_payload_schema"]),
+                              result["kyc_identity_key"].to_s)
+    abort "E1 could not read the event tail (exit #{st.exitstatus}):\n#{raw}" unless st.success?
+    emitted = JSON.parse(raw.lines.grep(/^\{/).last.to_s)
+    if emitted["events"].to_i.positive? && emitted["errors"].empty?
+      puts "  OK  E1 every emitted kyc_verification `data` satisfies the payload_schema this origin serves"
+    else
+      failures << "E1: #{emitted["events"]} emitted kyc_verification event(s), " \
+                  "#{emitted["errors"].size} violating the payload_schema this origin serves " \
+                  "for the topic — #{emitted["errors"].first(3).join("; ")}"
+      puts "  FAIL  E1 emitted kyc_verification `data` against the served payload_schema"
     end
 
     if failures.empty?

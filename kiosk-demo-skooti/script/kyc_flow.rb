@@ -231,6 +231,14 @@ rc_kyc, kyc_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: kyc_jws },
 abort "kyc submit failed (#{rc_kyc}): #{JSON.generate(kyc_body)}" unless rc_kyc == 200
 STDERR.puts "  KYC accepted: attributes=#{kyc_body["attributes"].inspect}"
 
+# The SERVED `payload_schema` for the topic the broker callback just emitted on.
+# It travels out of here because the caller validates the emitted event against
+# it, and only a running origin can be asked what it publishes.
+rc_schema, served_schema = get_json("#{SERVER}/kiosk/schema",
+                                    { "Authorization" => "Bearer #{mc_token}" })
+kyc_topic = Array(served_schema["events"]).find { |t| t["name"] == "kyc_verification" }
+STDERR.puts "  /kiosk/schema: http=#{rc_schema} kyc_verification topic served=#{!kyc_topic.nil?}"
+
 # A6: retry rent_motorcycle WITH the granted KYC attributes → 200.
 rc_mc_kyc, mc_kyc_body = run_action(mc_token, "rent_motorcycle", { reservation_id: mc_resv })
 STDERR.puts "  rent_motorcycle (with KYC): http=#{rc_mc_kyc}"
@@ -300,6 +308,9 @@ puts JSON.generate(
   kyc_jws_relayed:             (!kyc_jws.nil? && !kyc_jws.empty?),
   http_kyc_submit:             rc_kyc,
   kyc_attributes:              kyc_body["attributes"],
+  http_schema:                 rc_schema,
+  kyc_payload_schema:          kyc_topic && kyc_topic["payload_schema"],
+  kyc_identity_key:            mc_user,
   http_mc_rent_with_kyc:       rc_mc_kyc,
   mc_unlocked:                 mc_unlocked,
   http_scooter_rent_no_kyc:    rc_sc,

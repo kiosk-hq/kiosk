@@ -225,6 +225,14 @@ rc_kyc, kyc_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: kyc_jws },
                              { "Authorization" => "Bearer #{a_token}" })
 STDERR.puts "  KYC submit: http=#{rc_kyc} attributes=#{kyc_body["attributes"].inspect}"
 
+# The SERVED `payload_schema` for the topic the callback above just emitted on.
+# It travels out of here because the caller validates the emitted event against
+# it, and only a running origin can be asked what it publishes.
+rc_schema, served_schema = get_json("#{SERVER}/kiosk/schema",
+                                    { "Authorization" => "Bearer #{a_token}" })
+kyc_topic = Array(served_schema["events"]).find { |t| t["name"] == "kyc_verification" }
+STDERR.puts "  /kiosk/schema: http=#{rc_schema} kyc_verification topic served=#{!kyc_topic.nil?}"
+
 # A6: retry create_order WITH the wine → 200 now that age_over_18 is on file.
 rc_a_kyc, a_kyc_body = create_order(a_token, alcohol_items)
 a_order_id = a_kyc_body["order_id"]
@@ -308,6 +316,9 @@ puts JSON.generate(
   kyc_jws_relayed:            (!kyc_jws.nil? && !kyc_jws.empty?),
   http_kyc_submit:            rc_kyc,
   kyc_attributes:             kyc_body["attributes"],
+  http_schema:                rc_schema,
+  kyc_payload_schema:         kyc_topic && kyc_topic["payload_schema"],
+  kyc_identity_key:           a_user,
   http_alcohol_with_kyc:      rc_a_kyc,
   alcohol_order_id:           a_order_id,
   http_payment_setup:         rc_setup,

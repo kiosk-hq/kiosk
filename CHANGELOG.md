@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **The two KYC demos stop publishing an opaque broker token as `format: "uuid"`, and each check task now validates the event it emitted against the schema its origin serves.**
+
 - 2026-10-04: **An event replay no longer hands a subscription another topic's events.** The filter compared the subject alone, so a subscriber got `data` its own topic's schema rejects.
 
 - 2026-10-04: **A revoked event stream is told `reconnect: false` once.** Action Cable's own `close` carries the typed reason and the flag, so no defaulted `true` follows a millisecond later.

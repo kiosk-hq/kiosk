@@ -31,7 +31,10 @@ class Kiosk::FleetController < ActionController::API
     description "An identity check you opened with request_kyc was answered. Submit the " \
                 "attestation to /kiosk/agents/kyc and retry what you were doing."
     payload_schema type: "object", additionalProperties: false,
-                   properties: { request_id: { type: "string", format: "uuid" },
+                   properties: { request_id: { type: "string",
+                                               description: "The BROKER's own request id, echoed " \
+                                                            "back opaquely — not a UUID, and not " \
+                                                            "this operator's to shape." },
                                  status:     { enum: %w[approved] } },
                    required: %w[request_id status]
     subject_reachable lambda { |request_id, identity|

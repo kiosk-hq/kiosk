@@ -1971,6 +1971,7 @@ namespace :check do
     require "uri"
     require "json"
     require "shellwords"
+    require "open3"
     require_relative "../../script/prove_broker_boot"
 
     # The full flow pays for the alcohol order → needs the Stripe adapter to
@@ -2104,6 +2105,41 @@ namespace :check do
                result["http_spelling_kyc_submit"] == 200 && (result["spelling_attributes"] || {}).empty?)
     check.call("R3 the alcohol gate fails CLOSED on it — back to 403 for an agent that HAD passed",
                result["http_alcohol_after_spelling"] == 403)
+
+    # ── THE EMITTED EVENT, AGAINST THE SCHEMA THIS ORIGIN PUBLISHES FOR IT ────
+    #
+    # A topic's `payload_schema` is the whole contract for an event's `data`
+    # (§8.5.1), and nothing else here compares the two: the beats above assert
+    # the HTTP legs, and `check:schema` asserts the descriptors against their
+    # own examples. A schema that describes an event this operator never sends
+    # satisfies both.
+    #
+    # The schema is the SERVED one, carried out of the flow because only a
+    # running origin can be asked what it publishes; the events are the rows
+    # `POST /kyc/callback` wrote. `:setup` shells out and this task holds no
+    # Rails environment of its own, so the comparison runs in its own `rails
+    # runner`. json_schemer ASSERTS `format` rather than annotating it, which
+    # is what makes the declaration a claim and not a decoration.
+    compare = <<~'RUBY'
+      require "json_schemer"
+      schemer = JSONSchemer.schema(JSON.parse(ARGV[0]),
+                                   meta_schema: "https://json-schema.org/draft/2020-12/schema")
+      data = Kiosk.configuration.event_store.since(ARGV[1], 0)
+                  .select { |e| e["topic"] == "kyc_verification" }.map { |e| e["data"] }
+      puts JSON.generate(events: data.size,
+                         errors: data.flat_map { |d| schemer.validate(d).to_a.map { |v| v["error"] } })
+    RUBY
+    raw, st = Open3.capture2e("bundle", "exec", "rails", "runner", compare,
+                              JSON.generate(result["kyc_payload_schema"]),
+                              result["kyc_identity_key"].to_s)
+    abort "E1 could not read the event tail (exit #{st.exitstatus}):\n#{raw}" unless st.success?
+    emitted = JSON.parse(raw.lines.grep(/^\{/).last.to_s)
+    check.call("E1 the flow emitted at least one kyc_verification event",
+               emitted["events"].to_i.positive?)
+    check.call("E1 every emitted kyc_verification `data` satisfies the payload_schema this " \
+               "origin serves for the topic" \
+               "#{emitted["errors"].empty? ? "" : " — #{emitted["errors"].first(3).join("; ")}"}",
+               emitted["errors"].empty?)
 
     if failures.empty?
       puts "\n  All age-gate assertions passed."

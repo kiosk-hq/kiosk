@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1756 anchors.
+# 1763 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -233,7 +233,7 @@ e2e/fixtures/bookings_controller.rb	      "WHERE user_id = kiosk.current_user_id
 e2e/fixtures/bookings_controller.rb	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/equihash_register.rb	body = { public_key: pem, signed: pop }
-e2e/fixtures/equihash_register.rb	def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil)
+e2e/fixtures/equihash_register.rb	def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil, key: OpenSSL::PKey::RSA.generate(2048))
 e2e/fixtures/equihash_register.rb	pop = JWT.encode(
 e2e/fixtures/pay_flow.rb	                cart_mandate_jws:   JWT.encode(cart, key, "RS256"),
 e2e/fixtures/pay_flow.rb	                payment_mandate_jws: JWT.encode(payment, key, "RS256") }
@@ -291,8 +291,9 @@ kiosk-core/README.md	No Rails dependency. Loadable in any Ruby app.
 kiosk-core/README.md	The foundation. Defines:
 kiosk-core/kiosk-core.gemspec	  spec.add_development_dependency "rake",  "~> 13.2"
 kiosk-core/kiosk-core.gemspec	  spec.add_development_dependency "rspec", "~> 3.13"
-kiosk-core/lib/kiosk/configuration.rb	    # means a second instance. (Rails' `config.hosts` does not help here — it
+kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `config.hosts` governs which Host
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
+kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
 kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.5.0"
 kiosk-core/spec/spec_helper.rb	require "kiosk"
@@ -1127,6 +1128,7 @@ kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth e
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this line — render the envelope, or raise
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
+kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	      def mark_kyc_verified!(agent_id, attributes: {})
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",
@@ -1155,7 +1157,7 @@ kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	public_ke
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	grant_type required
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	only the device_code grant is served here — 
 kiosk-server/lib/kiosk/server/pop_verifier.rb	PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
-kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.configuration.issuer
+kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.current_issuer
 kiosk-server/lib/kiosk/server/pow_gate.rb	            expect:               { alg: spec[:alg] || spec["alg"], params: spec[:params] || spec["params"] },
 kiosk-server/lib/kiosk/server/pow_gate.rb	          # and proceeds; the losers get false and treat it as a replay — a
 kiosk-server/lib/kiosk/server/pow_gate.rb	          when :expired, :bad_sig, :bad_params
@@ -1290,6 +1292,7 @@ kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 400 bad_request w
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated when NO Authorization header is present
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	revokes all sessions for the caller and hands back a fresh usable token
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers one key on each origin as two assistant accounts
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	keeps the OAuth error object for an ordinary refusal
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all six auth URLs and adds no capability for binding
@@ -1351,6 +1354,7 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 applicat
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a routing 404 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	accepts a token only on the origin that minted it
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an explicit line reaches the VERB wire
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an unhandled 500 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers #{line} with a 501 module_not_served problem document
@@ -1652,6 +1656,9 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when kiosk-server's
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when only a DESCRIPTION changes
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the mount path moves
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the skill pin is re-issued
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a mandate issued for the origin being served and refuses one issued for the other
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	rejects a proof for A presented on B
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	NOT on a refusal: a 4xx keeps the wire's own policy
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a query is a GET at its own path
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	accepts limit and cursor on a verb that declares neither, with a CLOSED schema

@@ -135,6 +135,12 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(sql).not_to include("idx_agents_public_key_live")
     end
 
+    it "keeps the public_key uniqueness partial so a revoked key can re-register" do
+      # A bare (non-partial) UNIQUE would block re-registering a revoked key —
+      # the index MUST be scoped to revoked_at IS NULL.
+      expect(sql).not_to match(/idx_agents_issuer_public_key_live\s+ON "kiosk"\.agents \(issuer, public_key\);/)
+    end
+
     it "declares issuer NOT NULL with no default, last on agents" do
       agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\);/m]
       expect(agents).to match(/revoked_at\s+timestamptz,\s+issuer\s+text NOT NULL\s+\);/)

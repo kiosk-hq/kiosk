@@ -183,7 +183,7 @@ module Kiosk
       end
 
       # `agents.issuer` on a database whose `agents` predates it: the origin an
-      # assistant account belongs to (ADR-0040). Existing rows were registered
+      # assistant account belongs to. Existing rows were registered
       # on the one origin served then, so they are backfilled with `issuer`,
       # by default the `c.issuer` in force when the migration runs. No column default: a
       # default would write one environment's origin into `db/structure.sql`.

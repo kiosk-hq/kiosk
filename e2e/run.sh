@@ -403,7 +403,7 @@ ok "schema + seeds applied"
 # not via a TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
 log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
 REGISTER_DUP_KEY="register-dup-$$"
-REGISTER_DUP_ISSUER="http://dup.e2e.invalid"
+REGISTER_DUP_ISSUER="http://127.0.0.1:0"
 # STDOUT only. `-qtA` prints row counts nobody reads, but ON_ERROR_STOP reports
 # the constraint name, a missing pgcrypto or a typo in the SQL below on STDERR —
 # and the one-sentence `fail` message cannot reconstruct any of them, so stderr

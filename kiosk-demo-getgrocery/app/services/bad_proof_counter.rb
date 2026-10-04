@@ -11,24 +11,14 @@ require "sqlite3"
 # single-writer lock also stops concurrent server processes fighting over one
 # read-modify-write cycle.
 #
-# ⚠ STILL A TOY in two labelled ways — fine for a demo, wrong for production:
-#   · TRUNCATED AT BOOT — reset! wipes the table, so a redeploy zeroes every
-#     accumulated signal;
-#   · NO TTL / DECAY — within one boot the count only grows, where a real signal
-#     decays over a window so an identity is not condemned forever.
-# A production counter keeps the per-identity keying and adds decay plus
-# durability.
+# ⚠ A TOY: the count only grows, where a real signal decays over a window so an
+# identity is not condemned forever. A production counter keeps the
+# per-identity keying and adds decay.
 #
-# Consumers: the demo initializer (reset! at boot, increment on rejection) and
+# Consumers: the demo initializer (increment on rejection) and
 # script/pow_flow.rb (count, to assert the server counted what the flow sent).
 module BadProofCounter
   module_function
-
-  # Wipe the store at boot: the demo flows assert exact counts, so every boot
-  # starts from zero.
-  def reset!(path)
-    with_db(path) { |db| db.execute("DELETE FROM bad_proofs") }
-  end
 
   # Record one rejected proof for this identity (atomic upsert — safe under
   # concurrent writers thanks to sqlite's write lock + busy_timeout).

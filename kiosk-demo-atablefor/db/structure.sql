@@ -128,7 +128,8 @@ CREATE TABLE kiosk.agents (
     spending_cap_cents bigint,
     kyc_verified_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    revoked_at timestamp with time zone
+    revoked_at timestamp with time zone,
+    issuer text NOT NULL
 );
 
 
@@ -671,10 +672,10 @@ CREATE UNIQUE INDEX idx_agent_tokens_hash ON kiosk.agent_tokens USING btree (tok
 
 
 --
--- Name: idx_agents_public_key_live; Type: INDEX; Schema: kiosk; Owner: -
+-- Name: idx_agents_issuer_public_key_live; Type: INDEX; Schema: kiosk; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_agents_public_key_live ON kiosk.agents USING btree (public_key) WHERE (revoked_at IS NULL);
+CREATE UNIQUE INDEX idx_agents_issuer_public_key_live ON kiosk.agents USING btree (issuer, public_key) WHERE (revoked_at IS NULL);
 
 
 --
@@ -954,6 +955,7 @@ ALTER TABLE ONLY public.restaurant_tables
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261005000001'),
 ('20260929000001'),
 ('20260920000002'),
 ('20260920000001'),

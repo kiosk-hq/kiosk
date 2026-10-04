@@ -144,7 +144,8 @@ module Kiosk
             spending_cap_cents  bigint,
             kyc_verified_at     timestamptz,
             created_at          timestamptz NOT NULL DEFAULT now(),
-            revoked_at          timestamptz
+            revoked_at          timestamptz,
+            issuer              text NOT NULL
           );
           -- Brings an older `agents` table up to the shape above: these three
           -- columns are optional, so a database provisioned from an earlier
@@ -157,10 +158,9 @@ module Kiosk
 
           CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
           -- Dedupe at the DB, not via SELECT-then-INSERT (TOCTOU): two LIVE
-          -- rows for one public key cannot coexist. Partial (WHERE revoked_at
-          -- IS NULL) so a revoked key can re-register.
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_public_key_live
-            ON "#{schema}".agents (public_key) WHERE revoked_at IS NULL;
+          -- rows for one public key on one origin cannot coexist. Partial
+          -- (WHERE revoked_at IS NULL) so a revoked key can re-register.
+          #{agents_issuer_index(schema)}
 
           CREATE TABLE IF NOT EXISTS "#{schema}".agent_tokens (
             id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -179,6 +179,32 @@ module Kiosk
             agent_id     uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
             PRIMARY KEY (provider, external_id)
           );
+        SQL
+      end
+
+      # `agents.issuer` on a database whose `agents` predates it: the origin an
+      # assistant account belongs to (ADR-0040). Existing rows were registered
+      # on the one origin served then, so they are backfilled with `issuer`,
+      # by default the `c.issuer` in force when the migration runs. No column default: a
+      # default would write one environment's origin into `db/structure.sql`.
+      def agents_issuer_sql(schema: nil, issuer: nil)
+        schema ||= Kiosk.configuration.schema
+        issuer ||= Kiosk.configuration.issuer
+        raise ArgumentError, "agents_issuer_sql needs the issuer existing agents belong to" if issuer.to_s.strip.empty?
+
+        <<~SQL.strip
+          ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS issuer text;
+          UPDATE "#{schema}".agents SET issuer = '#{issuer.to_s.gsub("'", "''")}' WHERE issuer IS NULL;
+          ALTER TABLE "#{schema}".agents ALTER COLUMN issuer SET NOT NULL;
+          DROP INDEX IF EXISTS "#{schema}".idx_agents_public_key_live;
+          #{agents_issuer_index(schema)}
+        SQL
+      end
+
+      def agents_issuer_index(schema)
+        <<~SQL.strip
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_issuer_public_key_live
+            ON "#{schema}".agents (issuer, public_key) WHERE revoked_at IS NULL;
         SQL
       end
 

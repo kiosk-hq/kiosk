@@ -126,17 +126,18 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(out).to include("user_id             bigint NOT NULL")
     end
 
-    # DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT.
-    it "adds a PARTIAL unique index on public_key for LIVE (non-revoked) rows only" do
+    # DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT, per
+    # origin (ADR-0040): one key may hold a live row on each origin served.
+    it "adds a PARTIAL unique index on (issuer, public_key) for LIVE rows only" do
       expect(sql).to match(
-        /CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\) WHERE revoked_at IS NULL/,
+        /CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_issuer_public_key_live\s+ON "kiosk"\.agents \(issuer, public_key\) WHERE revoked_at IS NULL/,
       )
+      expect(sql).not_to include("idx_agents_public_key_live")
     end
 
-    it "keeps the public_key uniqueness partial so a revoked key can re-register" do
-      # A bare (non-partial) UNIQUE on public_key would block re-registering a
-      # revoked key — the index MUST be scoped to revoked_at IS NULL.
-      expect(sql).not_to match(/UNIQUE INDEX IF NOT EXISTS idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\);/)
+    it "declares issuer NOT NULL with no default, last on agents" do
+      agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\);/m]
+      expect(agents).to match(/revoked_at\s+timestamptz,\s+issuer\s+text NOT NULL\s+\);/)
     end
 
     # Folded in from the three later migrations that used to ALTER them onto
@@ -184,6 +185,8 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # Found rather than listed: the emitters are this module's own `*_sql`
     # singleton methods, so an eleventh is covered the day it is defined.
     let(:emitter_names) { described_class.singleton_methods(false).grep(/_sql\z/).sort }
+
+    before { Kiosk.configure { |c| c.issuer = "https://a.example" } }
 
     it "guards every CREATE it emits, so a second run against the same database is a no-op" do
       expect(emitter_names).not_to be_empty
@@ -366,5 +369,26 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect { described_class.user_id_cast(:bigserial) }
         .to raise_error(ArgumentError, /user_id_type/)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::SchemaDefinitions, ".agents_issuer_sql" do
+  subject(:sql) { described_class.agents_issuer_sql(schema: "kiosk", issuer: "https://o'brien.example") }
+
+  it "adds the column, backfills it with the issuer, then makes it NOT NULL" do
+    expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS issuer text;))
+    expect(sql).to include(%(UPDATE "kiosk".agents SET issuer = 'https://o''brien.example' WHERE issuer IS NULL;))
+    expect(sql).to include(%(ALTER TABLE "kiosk".agents ALTER COLUMN issuer SET NOT NULL;))
+  end
+
+  it "replaces the live public_key index with the per-origin one" do
+    expect(sql).to include(%(DROP INDEX IF EXISTS "kiosk".idx_agents_public_key_live;))
+    expect(sql).to match(
+      /CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_issuer_public_key_live\s+ON "kiosk"\.agents \(issuer, public_key\) WHERE revoked_at IS NULL/,
+    )
+  end
+
+  it "refuses to backfill with no issuer" do
+    expect { described_class.agents_issuer_sql(schema: "kiosk", issuer: " ") }.to raise_error(ArgumentError)
   end
 end

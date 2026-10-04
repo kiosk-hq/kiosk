@@ -68,11 +68,11 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       expect(insert_sql).not_to be_nil
       # `name` was removed from the wire + the row: the INSERT must not reference it.
       expect(insert_sql).not_to match(/\bname\b/)
-      # K-782: the principal, the key and the role are `$1..$3` and NONE of them
-      # is in the statement text — the register door is where a caller-supplied
-      # key first reaches the database.
-      expect(insert_sql).to include("VALUES ($1, ARRAY[$3]::text[], $2)")
-      expect(binds).to eq([42, pem, "customer"])
+      # K-782: the principal, the key, the origin and the role are `$1..$4` and
+      # NONE of them is in the statement text — the register door is where a
+      # caller-supplied key first reaches the database.
+      expect(insert_sql).to include("VALUES ($1, ARRAY[$4]::text[], $2, $3)")
+      expect(binds).to eq([42, pem, Kiosk.current_issuer, "customer"])
       expect(con.all_sql).not_to include(pem)
       expect(con).not_to have_received(:quote)
     end
@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       expect(insert_sql).to include("'{}'::text[]")
       expect(insert_sql).not_to match(/NULL/)
       expect(insert_sql).not_to match(/ARRAY\[/)
-      expect(binds).to eq([42, pem]) # no third bind: the empty set is a shape
+      expect(binds).to eq([42, pem, Kiosk.current_issuer]) # no role bind: the empty set is a shape
     end
 
     it "treats an empty-string registration_role as unset (no ConfigurationError)" do

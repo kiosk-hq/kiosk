@@ -232,20 +232,20 @@ module Kiosk
           role = resolved_role(config, requested_role)
 
           # `'{}'::text[]` is a statement shape (no role at all),
-          # `ARRAY[$3]::text[]` a bound value — same split as the rebind UPDATE
+          # `ARRAY[$4]::text[]` a bound value — same split as the rebind UPDATE
           # above. The empty array and NOT `NULL` for the reason spelled out on
           # `agent_registration.rb`'s copy of this branch: the column is
           # `NOT NULL`, so a literal NULL 500'd every fresh-key bind for a
           # provider that configures no role.
           allowed_roles_sql, role_binds =
-            role ? ["ARRAY[$3]::text[]", [role]] : ["'{}'::text[]", []]
+            role ? ["ARRAY[$4]::text[]", [role]] : ["'{}'::text[]", []]
           sql = <<~SQL
-            INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
-            VALUES ($1, #{allowed_roles_sql}, $2)
+            INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key, issuer)
+            VALUES ($1, #{allowed_roles_sql}, $2, $3)
             RETURNING id
           SQL
           agent_id = conn.transaction do
-            conn.exec_query(sql, "Kiosk linked agent insert", [user_id, pem, *role_binds])
+            conn.exec_query(sql, "Kiosk linked agent insert", [user_id, pem, Kiosk.current_issuer, *role_binds])
                 .to_a.first.fetch("id")
           end
 

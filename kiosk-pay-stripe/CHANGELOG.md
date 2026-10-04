@@ -12,7 +12,6 @@ already written is edited.
 
 - 2026-10-05: **The derived return URL names the origin being served** (`Kiosk.current_issuer`), not only the default issuer.
 
-
 ## [0.5.0] — 2026-09-26
 - **The rubygems blurb stopped forecasting PSP adapters that do not exist (K-1673).** It names the base class a host subclasses instead.
 - **The rubygems blurb credited this gem's charging to a `kiosk-core` method that only raises (K-1688).** It names this adapter's own `#capture` now.

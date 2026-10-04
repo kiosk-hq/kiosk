@@ -398,19 +398,20 @@ bundle exec rails db:create db:migrate db:seed RAILS_ENV=development \
 ok "schema + seeds applied"
 
 # ─── DB-level dedupe of live agent keys ─────────────────────────────────
-# Prove the partial UNIQUE index (public_key WHERE revoked_at IS NULL)
-# rejects a SECOND live agent row for one key at the DB level — not via a
-# TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
+# Prove the partial UNIQUE index ((issuer, public_key) WHERE revoked_at IS NULL)
+# rejects a SECOND live agent row for one key on one origin at the DB level —
+# not via a TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
 log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
 REGISTER_DUP_KEY="register-dup-$$"
+REGISTER_DUP_ISSUER="http://dup.e2e.invalid"
 # STDOUT only. `-qtA` prints row counts nobody reads, but ON_ERROR_STOP reports
 # the constraint name, a missing pgcrypto or a typo in the SQL below on STDERR —
 # and the one-sentence `fail` message cannot reconstruct any of them, so stderr
 # is let through. Costs no noise on the success path: there is none.
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "live-key uniqueness setup insert failed"
   INSERT INTO users (id, created_at, updated_at) VALUES (gen_random_uuid(), now(), now());
-  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
-    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
+  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, issuer)
+    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', '$REGISTER_DUP_ISSUER' FROM users LIMIT 1;
 SQL
 # Second LIVE insert of the same key must be REJECTED by the unique index.
 # THE ONE PLACE `2>&1` IS CORRECT AND MUST STAY: this is the NEGATIVE
@@ -418,8 +419,8 @@ SQL
 # printing it would make a passing run read as broken. Do not "fix" this line to
 # match the two around it, which discard a diagnostic instead of an expectation.
 if psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL
-  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
-    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
+  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, issuer)
+    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', '$REGISTER_DUP_ISSUER' FROM users LIMIT 1;
 SQL
 then
   fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
@@ -428,8 +429,8 @@ fi
 # stderr let through for the same reason as the setup insert above: if
 # the partial index is wrong, Postgres NAMES it and "wrongly rejected" does not.
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "revoked-key re-insert wrongly rejected"
-  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, revoked_at)
-    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', now() FROM users LIMIT 1;
+  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, issuer, revoked_at)
+    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', '$REGISTER_DUP_ISSUER', now() FROM users LIMIT 1;
 SQL
 psql -d "$DB_NAME" -qtA >/dev/null 2>&1 <<SQL || true
   DELETE FROM kiosk.agents WHERE public_key = '$REGISTER_DUP_KEY';

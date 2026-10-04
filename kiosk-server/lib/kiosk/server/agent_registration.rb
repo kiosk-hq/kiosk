@@ -92,7 +92,7 @@ module Kiosk
 
           # No registration_role configured → the EMPTY SET of roles, written
           # explicitly. That is a statement SHAPE — there is no value to bind —
-          # while the role itself, when there is one, is `$3`.
+          # while the role itself, when there is one, is `$4`.
           #
           # `'{}'::text[]` and NOT `NULL`: the shipped migration declares
           # `allowed_roles text[] NOT NULL DEFAULT '{}'::text[]`, so a literal
@@ -106,14 +106,14 @@ module Kiosk
           # `"on_file"` sentinel rather than writing NULL into a NOT NULL
           # column.
           allowed_roles_sql, role_binds =
-            role ? ["ARRAY[$3]::text[]", [role]] : ["'{}'::text[]", []]
+            role ? ["ARRAY[$4]::text[]", [role]] : ["'{}'::text[]", []]
           sql = <<~SQL
-            INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
-            VALUES ($1, #{allowed_roles_sql}, $2)
+            INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key, issuer)
+            VALUES ($1, #{allowed_roles_sql}, $2, $3)
             RETURNING id
           SQL
           agent_id = conn.exec_query(
-            sql, "Kiosk agent insert", [assistant_account_id, public_key_pem, *role_binds],
+            sql, "Kiosk agent insert", [assistant_account_id, public_key_pem, Kiosk.current_issuer, *role_binds],
           ).to_a.first.fetch("id")
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
           # Wire key stays `user_id`: the factory-surface rename touches only that,

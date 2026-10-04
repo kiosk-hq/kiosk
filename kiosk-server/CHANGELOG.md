@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **`kiosk.agents` gains `issuer`**, and a live key is unique per origin. `SchemaDefinitions.agents_issuer_sql` backfills an existing table with `c.issuer`.
+
 - 2026-10-05: **Each served origin is its own issuer.** Discovery, the possession proof, tokens, mandates, the realm and the KYC audience read `Kiosk.current_issuer`, set per request.
 
 

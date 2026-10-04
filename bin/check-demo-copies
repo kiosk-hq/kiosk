@@ -1865,6 +1865,13 @@ COPIES = {
           "not. `ships:` is declared because prove adopts no engine schema and must not acquire " \
           "a copy by accident.",
   },
+  "db/migrate/20261005000001_add_kiosk_agents_issuer.rb" => {
+    rule:  :identical,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:  "`kiosk.agents.issuer` and the per-origin live-key index on the databases whose " \
+          "agents table predates them. Migration 002 carries both for a new adopter; NOT " \
+          "generator output for the same reason the schema_major marker above is not.",
+  },
   "db/migrate/20260820130113_create_kiosk_identity_tables.rb" => {
     rule: :identical, why: "kiosk:install 002 — agents (with kyc_verified_at, spending_cap_cents " \
                            "and human_label declared in the CREATE since K-646), agent_tokens, " \

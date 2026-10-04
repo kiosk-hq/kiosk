@@ -39,11 +39,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
       )
       sql, binds = con.bound(/INSERT/i).first
       expect(sql).to include("kiosk.agents")
-      # K-782: the principal is `$1`, the key `$2` — and neither appears in the
-      # statement text, which is the property that makes a forgotten `quote`
-      # impossible rather than merely absent.
-      expect(sql).to include("VALUES ($1, '{}'::text[], $2)")
-      expect(binds).to eq([user_id, pem])
+      # K-782: the principal is `$1`, the key `$2`, the origin `$3` — and none
+      # appears in the statement text, which is the property that makes a
+      # forgotten `quote` impossible rather than merely absent.
+      expect(sql).to include("VALUES ($1, '{}'::text[], $2, $3)")
+      expect(binds).to eq([user_id, pem, Kiosk.current_issuer])
       expect(con.all_sql).not_to include(user_id)
       expect(con).not_to have_received(:quote)
     end
@@ -78,12 +78,12 @@ RSpec.describe Kiosk::Server::AccountBinding do
     it "pins the ceremony's requested_role into allowed_roles" do
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "customer")
       sql, binds = con.bound(/INSERT/i).first
-      # `ARRAY[$3]::text[]` and not `$3::text[]`: the cast alone would ask
+      # `ARRAY[$4]::text[]` and not `$4::text[]`: the cast alone would ask
       # Postgres to parse the role as an ARRAY LITERAL — proven in
       # auth_plane_persistence_spec.rb by removing the ARRAY[] and watching
       # `malformed array literal: "customer"`.
-      expect(sql).to include("ARRAY[$3]::text[]")
-      expect(binds).to eq([user_id, pem, "customer"])
+      expect(sql).to include("ARRAY[$4]::text[]")
+      expect(binds).to eq([user_id, pem, Kiosk.current_issuer, "customer"])
     end
 
     it "falls back to registration_role, and the empty role set when neither is set" do
@@ -101,13 +101,13 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # cannot see that, so the real proof is in auth_plane_persistence_spec.rb.
       expect(sql).to include("'{}'::text[]")
       expect(sql).not_to include("NULL")
-      expect(binds).to eq([user_id, pem])
+      expect(binds).to eq([user_id, pem, Kiosk.current_issuer])
 
       Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :customer }
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       sql, binds = con.bound(/INSERT/i).last
-      expect(sql).to include("ARRAY[$3]::text[]")
-      expect(binds).to eq([user_id, pem, "customer"])
+      expect(sql).to include("ARRAY[$4]::text[]")
+      expect(binds).to eq([user_id, pem, Kiosk.current_issuer, "customer"])
     end
 
     it "raises ConfigurationError for a role outside the declared set" do

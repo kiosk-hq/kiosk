@@ -158,12 +158,13 @@ module Kiosk
         if assignments.any?
           # The ownership predicate is the security boundary of this action:
           # the caller supplies `agent_id`, the session supplies `user_id`.
-          binds.concat([params[:agent_id].to_s, @identity.user_id])
+          binds.concat([params[:agent_id].to_s, @identity.user_id, Kiosk.current_issuer])
           conn.exec_query(<<~SQL, "Kiosk assistant update", binds)
             UPDATE #{Kiosk.configuration.schema}.agents
             SET #{assignments.join(", ")}
-            WHERE id = $#{binds.size - 1}
-              AND user_id = $#{binds.size}
+            WHERE id = $#{binds.size - 2}
+              AND user_id = $#{binds.size - 1}
+              AND issuer = $#{binds.size}
               AND revoked_at IS NULL
           SQL
         end
@@ -278,10 +279,10 @@ module Kiosk
           SELECT id, public_key, created_at, human_label, spending_cap_cents,
                  #{settled_cents_expr(config, settled_spend: settled_spend)} AS settled_cents
           FROM #{config.schema}.agents
-          WHERE user_id = $1 AND revoked_at IS NULL
+          WHERE user_id = $1 AND issuer = $2 AND revoked_at IS NULL
           ORDER BY created_at
         SQL
-        [sql, [@identity.user_id, *Array(window_days)]]
+        [sql, [@identity.user_id, Kiosk.current_issuer, *Array(window_days)]]
       end
 
       # Correlated subquery summing this agent's settled spend from the
@@ -289,13 +290,13 @@ module Kiosk
       # table has no rows), honouring spending_cap_window_days when set.
       #
       # WHETHER there is a window is a statement shape (no predicate at all
-      # when there is none); HOW MANY DAYS is a value, so it is `$2` through
+      # when there is none); HOW MANY DAYS is a value, so it is `$3` through
       # `make_interval` — the same treatment `executor.rb#settled_total_cents`
       # gives the identical expression.
       def settled_cents_expr(config, settled_spend:)
         return "0" unless settled_spend
 
-        window = config.spending_cap_window_days ? "AND settled_at >= now() - make_interval(days => $2)" : ""
+        window = config.spending_cap_window_days ? "AND settled_at >= now() - make_interval(days => $3)" : ""
         <<~SQL.strip
           (SELECT COALESCE(SUM(settled_amount_cents), 0)
            FROM #{config.schema}.settlements

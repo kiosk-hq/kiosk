@@ -67,9 +67,9 @@ module Kiosk
         #
         # The key is CALLER-SUPPLIED — it is the request body — so it travels as
         # a bind, here and in the INSERT below.
-        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [public_key_pem]).to_a.first
+        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [public_key_pem, Kiosk.current_issuer]).to_a.first
           SELECT id FROM #{config.schema}.agents
-          WHERE public_key = $1 AND revoked_at IS NULL
+          WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1
         SQL
         if existing

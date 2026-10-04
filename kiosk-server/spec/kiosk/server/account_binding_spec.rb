@@ -54,8 +54,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
       described_class.bind!(public_key_pem: hostile, user_id: user_id)
 
       sql, binds = con.bound(/SELECT/i).first
-      expect(sql).to include("public_key = $1")
-      expect(binds).to eq([hostile])
+      expect(sql).to include("public_key = $1 AND issuer = $2")
+      expect(binds).to eq([hostile, Kiosk.current_issuer])
       expect(con.all_sql).not_to include("OR '1'='1")
     end
 
@@ -630,8 +630,9 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # supplies the holder.
       expect(sql).to include("WHERE id = $1")
       expect(sql).to include("AND user_id = $2")
+      expect(sql).to include("AND issuer = $3")
       expect(sql).to include("revoked_at IS NULL")
-      expect(binds).to eq(["agent-1", user_id])
+      expect(binds).to eq(["agent-1", user_id, Kiosk.current_issuer])
       expect(con).not_to have_received(:quote)
     end
 

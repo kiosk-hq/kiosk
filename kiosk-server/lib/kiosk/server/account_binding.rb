@@ -73,9 +73,9 @@ module Kiosk
         # The presented key is CALLER-SUPPLIED (the wire body's `public_key`,
         # or the device-authorization row the caller populated), so it travels
         # as a bind and never as SQL text.
-        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem]).to_a.first
+        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem, Kiosk.current_issuer]).to_a.first
           SELECT id, user_id FROM #{config.schema}.agents
-          WHERE public_key = $1 AND revoked_at IS NULL
+          WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1
         SQL
 
@@ -105,11 +105,12 @@ module Kiosk
         # comes off the authenticated session. Both are binds — the ownership
         # predicate is the security boundary here, so neither may be text.
         conn = ::ActiveRecord::Base.lease_connection
-        row = conn.exec_query(<<~SQL, "Kiosk agent unlink", [agent_id, user_id]).to_a.first
+        row = conn.exec_query(<<~SQL, "Kiosk agent unlink", [agent_id, user_id, Kiosk.current_issuer]).to_a.first
           UPDATE #{config.schema}.agents
           SET revoked_at = now()
           WHERE id = $1
             AND user_id = $2
+            AND issuer = $3
             AND revoked_at IS NULL
           RETURNING id
         SQL

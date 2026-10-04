@@ -38,8 +38,8 @@ RSpec.describe Kiosk::Server::AgentLogin do
     described_class.call(public_key_pem: hostile, signed: "sig")
 
     sql, binds = con.bound(/SELECT/i).first
-    expect(sql).to include("public_key = $1")
-    expect(binds).to eq([hostile])
+    expect(sql).to include("public_key = $1 AND issuer = $2")
+    expect(binds).to eq([hostile, Kiosk.current_issuer])
     expect(con.all_sql).not_to include("OR '1'='1")
     expect(con).not_to have_received(:quote)
   end

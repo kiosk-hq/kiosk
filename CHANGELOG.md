@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-05: **One deployment may serve several origins, each its own operator** (`c.additional_origins`). Accounts, tokens, proofs and mandates made on one are refused on another.
+
 - 2026-10-05: **`kiosk-pow-equihash` ships a `requirements.txt` for its solver**, so all three PoW backends declare their python dependency in a manifest rather than in prose.
 
 - 2026-10-05: **The event stream refuses a `since` that is not a cursor and a `subject` that is not a string.** A word read as 0; an out-of-range integer opened it without its replay.

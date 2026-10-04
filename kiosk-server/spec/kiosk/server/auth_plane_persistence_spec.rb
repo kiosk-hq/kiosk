@@ -342,6 +342,55 @@ RSpec.describe "auth plane persistence (real Postgres)" do
     end
   end
 
+  # ── Two origins: the account namespace is per origin (ADR-0040) ───────────
+
+  describe "two origins on one deployment" do
+    let(:a) { "https://provider.example" }
+    let(:b) { "https://second.example" }
+
+    before do
+      allow(Kiosk::Server::RegistrationPow).to receive(:gate)
+      allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return(nonce: "n")
+      allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
+      Kiosk.configure do |c|
+        c.additional_origins = [b]
+        c.assistant_creation = ->(_pubkey) { holder }
+      end
+    end
+
+    def register_on(origin) = Kiosk.with_issuer(origin) { Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: "sig") }
+
+    it "registers one key on each origin as two assistant accounts" do
+      on_a = register_on(a)
+      on_b = register_on(b)
+
+      expect(on_b[:agent_id]).not_to eq(on_a[:agent_id])
+      expect(agent_row(on_a[:agent_id]).fetch("issuer")).to eq(a)
+      expect(agent_row(on_b[:agent_id]).fetch("issuer")).to eq(b)
+    end
+
+    it "does not log a key in on an origin it never registered on" do
+      register_on(a)
+      expect { Kiosk.with_issuer(b) { Kiosk::Server::AgentLogin.call(public_key_pem: pem, signed: "sig") } }
+        .to raise_error(Kiosk::Server::Errors::NotFound)
+    end
+
+    it "binds a key known on A as a fresh account on B" do
+      on_a = register_on(a)
+      bound = Kiosk.with_issuer(b) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: other) }
+
+      expect(bound[:fresh]).to be(true)
+      expect(agent_row(on_a[:agent_id]).fetch("user_id")).to eq(holder)
+    end
+
+    it "does not unlink across origins" do
+      on_a = register_on(a)
+      expect { Kiosk.with_issuer(b) { Kiosk::Server::AccountBinding.unlink!(agent_id: on_a[:agent_id], user_id: holder) } }
+        .to raise_error(Kiosk::Server::Errors::NotFound)
+      expect(agent_row(on_a[:agent_id]).fetch("revoked_at")).to be_nil
+    end
+  end
+
   # ── KYC: the grant is a ROW, and the spelling of `true` is Postgres' call ──
 
   describe "KycAttestationController#mark_kyc_verified! (kyc_attributes rows)" do
@@ -532,6 +581,22 @@ RSpec.describe "auth plane persistence (real Postgres)" do
       row = agent_row(agent_id)
       expect(row.fetch("human_label")).to eq(hostile)   # stored verbatim, not executed
       expect(row.fetch("spending_cap_cents")).to eq(2500)
+    end
+
+    it "lists and writes only the assistants of the origin being served" do
+      Kiosk.configure { |c| c.additional_origins = ["https://second.example"] }
+      elsewhere = Kiosk.with_issuer("https://second.example") do
+        Kiosk::Server::AccountBinding.bind!(public_key_pem: "#{pem}-second", user_id: holder)[:agent_id]
+      end
+
+      _, body = Kiosk.with_issuer("https://provider.example") { dispatch(:show, method: "GET") }
+      expect(body).to include(agent_id[0, 8])
+      expect(body).not_to include(elsewhere[0, 8])
+
+      Kiosk.with_issuer("https://provider.example") do
+        dispatch(:update, method: "POST", params: { agent_id: elsewhere, human_label: "crossed" })
+      end
+      expect(agent_row(elsewhere).fetch("human_label")).to be_nil
     end
 
     it "will not write across holders (the ownership predicate is a bind pair)" do

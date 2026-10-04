@@ -114,12 +114,12 @@ RSpec.describe "AssistantsController" do
     expect(html).to include("Linked assistant accounts")
     expect(html).to include(Kiosk::Server::SigningKey.from_pem(pem).kid)
     expect(html).to include(%(value="agent-1"))
-    # The SELECT is scoped to the session holder's live rows — through a bind
-    # (K-782), so the holder's id is nowhere in the statement text.
+    # The SELECT is scoped to the session holder's live rows on this origin —
+    # through binds (K-782), so the holder's id is nowhere in the statement text.
     select, binds = con.bound(/SELECT/i).first
-    expect(select).to include("WHERE user_id = $1")
+    expect(select).to include("WHERE user_id = $1 AND issuer = $2")
     expect(select).to include("revoked_at IS NULL")
-    expect(binds).to eq([user_id])
+    expect(binds).to eq([user_id, "https://provider.example"])
     expect(con.all_sql).not_to include(user_id)
     expect(con).not_to have_received(:quote)
   end
@@ -258,14 +258,14 @@ RSpec.describe "AssistantsController" do
     expect(select).to include("human_label")
     expect(select).to include("spending_cap_cents")
     expect(select).to include("settled_amount_cents")
-    # No window configured → the statement declares ONE parameter and is sent
-    # ONE argument. Postgres rejects a mismatch, which is why the statement and
+    # No window configured → the statement declares TWO parameters and is sent
+    # TWO arguments. Postgres rejects a mismatch, which is why the statement and
     # its binds are built together (see #bound_assistants_query).
-    expect(select).not_to include("$2")
-    expect(binds).to eq([user_id])
+    expect(select).not_to include("$3")
+    expect(binds).to eq([user_id, "https://provider.example"])
   end
 
-  # The rolling window is a VALUE, so it is `$2` through `make_interval` — the
+  # The rolling window is a VALUE, so it is `$3` through `make_interval` — the
   # same treatment executor.rb#settled_total_cents gives the same expression.
   it "binds the spending-cap window rather than splicing the day count" do
     Kiosk.configure { |c| c.spending_cap_window_days = 30 }
@@ -276,9 +276,9 @@ RSpec.describe "AssistantsController" do
     dispatch(:show, method: "GET")
 
     select, binds = con.bound(/SELECT/i).first
-    expect(select).to include("make_interval(days => $2)")
+    expect(select).to include("make_interval(days => $3)")
     expect(select).not_to include("INTERVAL '1 day'")
-    expect(binds).to eq([user_id, 30])
+    expect(binds).to eq([user_id, "https://provider.example", 30])
   end
 
   it "shows «(unnamed)» / «cap: none» when the label and cap are unset" do
@@ -337,7 +337,7 @@ RSpec.describe "AssistantsController" do
     expect(html).to include("cap: disabled")
   end
 
-  it "updates the label and spending cap, scoped by both agent id AND user_id" do
+  it "updates the label and spending cap, scoped by agent id, user_id AND origin" do
     status, html = dispatch(
       :update, method: "POST",
       params: { "agent_id" => "agent-1", "human_label" => "Alice's shopper", "spending_cap_cents" => "5000" },
@@ -352,11 +352,13 @@ RSpec.describe "AssistantsController" do
     # "Alice's shopper" is exactly the character that used to need a `quote`.
     expect(upd).to include("human_label = $1")
     expect(upd).to include("spending_cap_cents = $2")
-    # Ownership scoping: the WHERE pins BOTH the agent id and the session holder.
+    # Ownership scoping: the WHERE pins the agent id, the session holder and
+    # the origin being served.
     expect(upd).to include("WHERE id = $3")
     expect(upd).to include("AND user_id = $4")
+    expect(upd).to include("AND issuer = $5")
     expect(upd).to include("revoked_at IS NULL")
-    expect(binds).to eq(["Alice's shopper", 5000, "agent-1", user_id])
+    expect(binds).to eq(["Alice's shopper", 5000, "agent-1", user_id, "https://provider.example"])
     expect(con.all_sql).not_to include("Alice")
     expect(con).not_to have_received(:quote)
   end
@@ -369,11 +371,11 @@ RSpec.describe "AssistantsController" do
 
     upd, binds = con.bound(/UPDATE/i).first
     # NULL is a statement shape (there is no value), so it takes no bind and the
-    # ownership pair shifts down to $1/$2.
+    # ownership triple shifts down to $1..$3.
     expect(upd).to include("spending_cap_cents = NULL")
     expect(upd).to include("WHERE id = $1")
     expect(upd).to include("AND user_id = $2")
-    expect(binds).to eq(["agent-1", user_id])
+    expect(binds).to eq(["agent-1", user_id, "https://provider.example"])
   end
 
   it "rejects a non-integer spending cap with 400 and writes no UPDATE" do

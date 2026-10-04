@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1765 anchors.
+# 1766 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1660,6 +1660,7 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the mount path
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the skill pin is re-issued
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a mandate issued for the origin being served and refuses one issued for the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	answers a host it does not serve as the default origin, and rejects a proof carrying that host
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	rejects a proof for A presented on B
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	NOT on a refusal: a 4xx keeps the wire's own policy
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a query is a GET at its own path

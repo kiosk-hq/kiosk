@@ -66,6 +66,20 @@ RSpec.describe "two origins on one deployment" do
       expect(payload[:aud]).to eq(b)
     end
 
+    it "answers a host it does not serve as the default origin, and rejects a proof carrying that host" do
+      unserved = "https://www.example.com"
+      original = $stderr
+      $stderr = StringIO.new
+      Kiosk.with_issuer(Kiosk.configuration.issuer_for(unserved)) do
+        payload = Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(a))
+        expect(payload[:aud]).to eq(a)
+        expect { Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(unserved)) }
+          .to raise_error(Kiosk::Server::Errors::Unauthenticated, "proof audience mismatch")
+      end
+    ensure
+      $stderr = original
+    end
+
     it "rejects a proof for A presented on B" do
       original = $stderr
       $stderr = StringIO.new

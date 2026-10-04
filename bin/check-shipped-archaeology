@@ -57,11 +57,9 @@
 #   * `app/**`      — `kiosk-server` ships `app/views`; two controllers resolve
 #                     their templates from it, so it is packaged, not optional.
 #   * `README.md`   — listed in every gemspec's `spec.files`.
-#   * the packaged assets that are in NEITHER of those directories — the two
-#     PoW backends' `solve*.py` and `requirements.txt`, and
-#     `kiosk-pow-equihash`'s `solve.py` and `bench/` pair. Those seven were the
-#     hole: the hand-list that stood here matched what MOST gems package, and a
-#     file inside the `.gem` but outside the list was read by nobody.
+#   * the packaged assets that are in NEITHER of those directories — the
+#     three PoW backends' `solve*.py` and `requirements.txt`, and
+#     `kiosk-pow-equihash`'s `bench/` pair.
 #   * `<gem>.gemspec` — added on top, because it is not in `spec.files` and
 #     RubyGems renders its description on the gem's page.
 #

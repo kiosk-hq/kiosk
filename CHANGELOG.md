@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-05: **`kiosk-pow-equihash` ships a `requirements.txt` for its solver**, so all three PoW backends declare their python dependency in a manifest rather than in prose.
+
 - 2026-10-05: **The event stream refuses a `since` that is not a cursor and a `subject` that is not a string.** A word read as 0; an out-of-range integer opened it without its replay.
 
 - 2026-10-04: **A boot warning for an `issuer` that cannot be right.** Unset warns in every environment; a loopback origin only outside development and test, so local demo boots stay quiet.

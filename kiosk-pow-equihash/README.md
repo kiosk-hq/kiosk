@@ -38,9 +38,10 @@ That is the whole install for an **operator**, and it is deliberately this
 small: verifying is what a served request does. **Solving is the caller's
 side**, and it is the only part with a prerequisite outside Ruby — `solve.py`
 ships inside the package and needs **`python3` with `numpy`**
-(`pip install numpy`). Ask the gem for the file's installed location rather
-than hardcoding a path, and read the Solver section below first: numpy is not
-optional there, and the default parameters cost real time and memory to solve.
+(`pip install -r requirements.txt`, which ships beside it). Ask the gem for
+the file's installed location rather than hardcoding a path, and read the
+Solver section below first: numpy is not optional there, and the default
+parameters cost real time and memory to solve.
 
 ## Why Equihash is the shipped default
 

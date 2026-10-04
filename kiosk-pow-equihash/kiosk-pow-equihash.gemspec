@@ -60,7 +60,7 @@ Gem::Specification.new do |spec|
   # truth only by accident, and ships a package silently missing a file the
   # gemspec promises.
   spec.files = Dir.glob("lib/**/*") + Dir.glob("bench/**/*") +
-               %w[solve.py README.md LICENSE.txt CHANGELOG.md]
+               %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "rspec", "~> 3.13"

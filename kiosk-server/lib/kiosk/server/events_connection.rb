@@ -84,31 +84,40 @@ module Kiosk
         super if (@beats % BEATS_PER_PING).zero?
       end
 
-      # Spec Section 8.5.4: a frame this origin cannot act on is ANSWERED, and
-      # Section 8.5.7 leaves exactly two forms to answer it with.
+      # Spec Section 8.5.4: EVERY frame this socket receives is answered, and
+      # Section 8.5.7 leaves two forms to refuse with. Which one applies turns
+      # on whether the frame names a subscription.
       #
-      # A `subscribe` carrying an `identifier` STRING names a subscription, so
-      # a refusal of it is `reject_subscription` echoing that string — the wire
-      # compares the identifier and never parses it, so it correlates whether
-      # or not the string is a JSON document.
+      # A frame naming none — not a JSON object, no `identifier` STRING, a
+      # `command` outside the two — has nothing to echo, so the only form left
+      # is the typed `disconnect`, with `reconnect: false`: a client whose
+      # frames are malformed does not fix them by coming back. `close`
+      # transmits that frame itself, so it is the whole call.
       #
-      # Anything else names no subscription, so there is nothing to refuse and
-      # the only form left is the typed `disconnect`, with `reconnect: false`:
-      # a client whose frames are malformed does not fix them by coming back.
-      # `close` transmits that frame itself, so it is the whole call.
+      # Otherwise it names one, because the wire compares the identifier and
+      # never parses it — so `reject_subscription` echoing that string
+      # correlates the refusal and leaves the socket's other subscriptions
+      # working.
+      #
+      # A `subscribe` for a subscription already live is the one frame here the
+      # origin CAN act on, and the action is nothing: it gets the confirmation
+      # again. Not `reject_subscription`, which would tell a client correlating
+      # by identifier alone to tear down a subscription that works; and not a
+      # second `subscribed`, which would replay the tail to a subscriber that
+      # asked for it once.
       def dispatch_websocket_message(websocket_message)
         frame = parse_object(websocket_message) || {}
+        command = frame["command"]
         identifier = frame["identifier"]
 
-        unless COMMANDS.include?(frame["command"]) && identifier.is_a?(::String)
+        unless COMMANDS.include?(command) && identifier.is_a?(::String)
           return close(reason: ::ActionCable::INTERNAL[:disconnect_reasons][:invalid_request],
                        reconnect: false)
         end
 
-        unless kiosk_subscription?(identifier)
-          return transmit(identifier: identifier,
-                          type: ::ActionCable::INTERNAL[:message_types][:rejection])
-        end
+        live = subscriptions.identifiers.include?(identifier)
+        return transmit_about(identifier, :confirmation) if command == "subscribe" && live
+        return transmit_about(identifier, :rejection) unless actionable?(command, identifier, live)
 
         super
       end
@@ -141,8 +150,30 @@ module Kiosk
         nil
       end
 
-      def kiosk_subscription?(identifier)
-        parse_object(identifier)&.dig("channel") == CHANNEL
+      def transmit_about(identifier, type)
+        transmit(identifier: identifier, type: ::ActionCable::INTERNAL[:message_types][type])
+      end
+
+      # Whether this origin can act on the frame at all.
+      #
+      # An `unsubscribe` names a subscription this socket holds, or it names
+      # one that was never opened — including one re-serialised rather than
+      # echoed, whose members are the same in another order, which is a
+      # different string and so a different subscription.
+      #
+      # A `subscribe` names this channel, and the `since` it sent is a cursor
+      # the stream can read. Without that second clause {KioskEvents#since}
+      # raises on a `since` that is not a scalar, and the raise lands in Action
+      # Cable's own `rescue Exception` — so the subscription is neither live
+      # nor refused, and the subscriber waits on a stream that never speaks.
+      def actionable?(command, identifier, live)
+        return live if command == "unsubscribe"
+
+        declaration = parse_object(identifier)
+        return false unless declaration&.dig("channel") == CHANNEL
+
+        cursor = declaration["since"]
+        cursor.nil? || cursor.is_a?(::String) || cursor.is_a?(::Integer)
       end
 
       def auto_subscribe!

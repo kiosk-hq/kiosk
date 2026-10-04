@@ -189,6 +189,30 @@ def identifier(topic, **rest)
   { "channel" => "KioskEvents", "topic" => topic }.merge(rest.transform_keys(&:to_s))
 end
 
+def frame(command, identifier) = JSON.generate("command" => command,
+                                               "identifier" => JSON.generate(identifier))
+
+# The subscription the already-live scenarios below are driven against.
+SUBSCRIBE_TODO = frame("subscribe", identifier("todo", subject: "list_ok"))
+
+# One frame on its own socket, and everything that came back after it. `live`
+# opens a subscription first, for the cases that are about a frame naming one
+# the socket already holds.
+def frame_answer(port, text, live: nil)
+  sock = connect(port)
+  sock.pump_until { sock.frames.any? }
+  if live
+    sock.send_raw(live)
+    sock.pump_until { sock.frames.any? { |f| f["type"] == "confirm_subscription" } }
+  end
+  sent = sock.frames.length
+  sock.send_raw(text)
+  sock.pump_until(seconds: 3) { sock.frames.length > sent }
+  answer = { "sent" => text, "answer" => sock.frames[sent..], "closed" => sock.closed? }
+  sock.close
+  answer
+end
+
 # Frames an origin cannot act on, as the literal strings a broken client sends.
 # A `subscribe` naming a subscription is refusable, however little sense the
 # `identifier` makes; the rest name none.
@@ -492,6 +516,41 @@ begin
   REPORT[:after_bad_frame_subscribed] =
     sock.messages.select { |m| m["type"] == "subscribed" }.map { |m| m["topic"] }
   sock.close
+
+  # 15d — frames the gate above PASSES, which Action Cable then answers with a
+  #       silence of its own: `Subscriptions#find` raises into its own `rescue
+  #       Exception` for a subscription the socket does not hold, and
+  #       `KioskEvents#since` raises there for a `since` that is not a cursor.
+  REPORT[:unopened_unsubscribe] =
+    frame_answer(port, frame("unsubscribe", identifier("order_payment")))
+  REPORT[:reserialised_unsubscribe] = frame_answer(
+    port,
+    frame("unsubscribe",
+          "subject" => "list_ok", "topic" => "todo", "channel" => "KioskEvents"),
+    live: SUBSCRIBE_TODO,
+  )
+  REPORT[:unreadable_cursor] =
+    frame_answer(port, frame("subscribe", identifier("todo", subject: "list_ok", since: {})))
+
+  # 15e — and the one frame on that list the origin CAN act on, where the
+  #       action is nothing: a second identical `subscribe`.
+  REPORT[:duplicate_subscribe] = frame_answer(port, SUBSCRIBE_TODO, live: SUBSCRIBE_TODO)
+
+  # 15f — the subscription that duplicate named is untouched. One event emitted
+  #       afterwards arrives ONCE, which is what says the second frame neither
+  #       tore the subscription down nor replayed its tail.
+  dup = connect(port)
+  dup.pump_until { dup.frames.any? }
+  dup.send_raw(SUBSCRIBE_TODO)
+  dup.pump_until { dup.frames.any? { |f| f["type"] == "confirm_subscription" } }
+  dup.send_raw(SUBSCRIBE_TODO)
+  dup.pump_until(seconds: 2) { false }
+  dup_id = Kiosk::Server::Events.emit(topic: :todo, subject: "list_ok", identity_scope: %w[u1],
+                                      data: { "done" => true })
+  dup.pump_until { dup.messages.any? { |m| m["id"] == dup_id } }
+  REPORT[:after_duplicate_subscribed] = dup.messages.count { |m| m["type"] == "subscribed" }
+  REPORT[:after_duplicate_delivered] = dup.messages.count { |m| m["id"] == dup_id }
+  dup.close
 
   # ── re-authorisation while the subscription stands (spec Section 8.5.6) ───
   #

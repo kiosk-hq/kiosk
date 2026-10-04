@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-04: **Three more event-stream frames are answered, not dropped.** An `unsubscribe` nothing resolves and an unreadable `since` are refused; a duplicate `subscribe` is re-confirmed.
+
 - 2026-10-04: **The end-to-end harness declares its python dependencies in `e2e/requirements.txt`.** CI installs that file, the pre-flight's remedy names it, and a fresh clone needs no prose.
 
 - 2026-10-04: **The demos' binding helper returns only what a driver reads.** `BoundAssistant` drops `key`, `pem` and `session`, and the `session:` reuse parameter no caller passed is gone.

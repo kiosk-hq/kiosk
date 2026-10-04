@@ -193,6 +193,57 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     end
   end
 
+  # Spec Section 8.5.4, and the half a gate on the frame's own members cannot
+  # see: each of these IS a JSON object carrying one of the two commands and an
+  # `identifier` string naming `KioskEvents`, and Action Cable answers all
+  # three with a silence of its own.
+  describe "a frame the origin cannot act on for a reason inside the identifier" do
+    it "REJECTS an unsubscribe naming a subscription this socket never opened" do
+      expect(report.dig("unopened_unsubscribe", "answer"))
+        .to eq([{ "identifier" => '{"channel":"KioskEvents","topic":"order_payment"}',
+                  "type" => "reject_subscription" }])
+      expect(report.dig("unopened_unsubscribe", "closed")).to be(false)
+    end
+
+    # The identifier is COMPARED, so the same members in another order name a
+    # different subscription — a client that re-serialised it rather than
+    # echoing it is told so instead of left waiting.
+    it "REJECTS an unsubscribe whose identifier was re-serialised rather than echoed" do
+      expect(report.dig("reserialised_unsubscribe", "answer"))
+        .to eq([{ "identifier" => '{"subject":"list_ok","topic":"todo","channel":"KioskEvents"}',
+                  "type" => "reject_subscription" }])
+      expect(report.dig("reserialised_unsubscribe", "closed")).to be(false)
+    end
+
+    # Subscribing without the cursor would lose exactly the events the cursor
+    # was presented to recover, so the subscription is refused instead.
+    it "REJECTS a subscribe whose since is not a cursor" do
+      expect(report.dig("unreadable_cursor", "answer"))
+        .to eq([{ "identifier" =>
+                    '{"channel":"KioskEvents","topic":"todo","subject":"list_ok","since":{}}',
+                  "type" => "reject_subscription" }])
+      expect(report.dig("unreadable_cursor", "closed")).to be(false)
+    end
+  end
+
+  # Spec Section 8.5.4: the one frame the origin CAN act on where the action is
+  # nothing. Not refused — a subscriber correlates by identifier alone, so it
+  # would read a `reject_subscription` as the live subscription's and tear down
+  # something that works.
+  describe "a second subscribe for a subscription already live" do
+    it "CONFIRMS it again, and says nothing else" do
+      expect(report.dig("duplicate_subscribe", "answer"))
+        .to eq([{ "identifier" => '{"channel":"KioskEvents","topic":"todo","subject":"list_ok"}',
+                  "type" => "confirm_subscription" }])
+      expect(report.dig("duplicate_subscribe", "closed")).to be(false)
+    end
+
+    it "leaves it delivering, with no second subscribed and no second replay" do
+      expect(report["after_duplicate_subscribed"]).to eq(1)
+      expect(report["after_duplicate_delivered"]).to eq(1)
+    end
+  end
+
   describe "delivery" do
     it "pushes an emitted event carrying the five closed members and no others" do
       expect(report["live"]).not_to be_nil

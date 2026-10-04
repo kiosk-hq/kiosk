@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-04: **`EventsConnection` answers the frames Action Cable swallowed.** An `unsubscribe` it cannot resolve and a non-cursor `since` are refused; a duplicate `subscribe` is re-confirmed.
+
 - 2026-10-04: **`EventsConnection` answers an unusable frame.** Action Cable logged and returned, leaving a subscriber on a socket that would never speak; now a `reject_subscription` or a typed close.
 
 - 2026-10-04: **`<endpoint>/events` answers `501 module_not_served` where no topic is declared.** The events module declines like `pay` and KYC, before the credential is read.

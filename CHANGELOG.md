@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-06: **`/auth.md` names the event stream among the modules `501 module_not_served` can mean**, beside binding, payment and KYC.
+
 - 2026-10-06: **Every demo and the engine default pin `skill-v0.5.2.md`**, the cut that waits on the `kyc_verification` event for the attestation and says how an event wakes an idle assistant.
 
 - 2026-10-06: **The pinned listener leaves on `501 module_not_served` with exit 4** rather than reporting a dead token or re-minting for ever, and sends no `Origin` header.

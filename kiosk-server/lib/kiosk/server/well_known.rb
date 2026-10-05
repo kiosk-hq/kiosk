@@ -533,9 +533,9 @@ module Kiosk
             call something that exists. `404 not_found` — the verb is real and
             an ARGUMENT addressed something absent; the answer is final, so
             stop. `501 module_not_served` — this origin does not serve that
-            optional module at all (binding, payment, KYC); do not retry, and
-            fall back to what you would do at an operator that never offered
-            it.
+            optional module at all (binding, payment, KYC, the event stream;
+            `detail` names which); do not retry, and fall back to what you
+            would do at an operator that never offered it.
           - The claim ceremony's OAuth endpoints use the OAuth error shape
             `{ error, error_description }` — a documented exception, and the
             only one, with a single carve-out: an origin that does not serve

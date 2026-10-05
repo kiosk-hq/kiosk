@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-06: **`/auth.md` names the event stream among the modules `501 module_not_served` can mean**, beside binding, payment and KYC.
+
 - 2026-10-06: **`listen.py` leaves on `501 module_not_served` with exit 4** rather than reporting a dead token or re-minting for ever, and sends no `Origin` header.
 
 - 2026-10-06: **The default `skill_url` names `skill-v0.5.2.md`.**

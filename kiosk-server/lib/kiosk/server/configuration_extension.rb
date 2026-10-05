@@ -378,8 +378,9 @@ module Kiosk
       # ── The account-binding module ─────────────────────────────
 
       # Whether this origin SERVES account binding — the claim ceremony and the
-      # link-code redeem. Binding is an OPTIONAL module; payment and KYC are
-      # the other two, and each is declined by leaving its own setting unset.
+      # link-code redeem. Binding is an OPTIONAL module, as are payment, KYC
+      # and the event stream; each of those is declined by leaving its own
+      # setting unset (the stream: by declaring no topic).
       # Default true.
       #
       #   Kiosk.configure { |c| c.serve_account_binding = false }

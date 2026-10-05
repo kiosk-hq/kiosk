@@ -87,13 +87,17 @@ Kiosk.configure do |c|
   # ─── Wire surface ────────────────────────────────────────────────────
   # Issuer URL — MUST match `kiosk.issuer` in /.well-known/kiosk.json AND
   # be the exact origin assistants dial (scheme + host, no trailing slash).
-  # It is configured, not derived from the request Host, because it anchors
-  # both the AP2 mandate `iss` and the `aud` origin-binding that Kiosk checks
-  # by strict equality — derived from the request it would defend nothing.
+  # Configured, not derived from the request Host: it anchors the AP2 mandate
+  # `iss` and the `aud` origin-binding, which Kiosk checks by strict equality.
   # Get it wrong and the app still boots, then rejects EVERY assistant with
-  # "proof audience mismatch". One instance therefore serves exactly one
-  # origin: point aliases at it with a redirect before any Kiosk verb.
+  # "proof audience mismatch". This is the default origin; to serve another
+  # business from this deployment list it below, and point mere aliases of an
+  # origin at it with a redirect before any Kiosk verb.
   # c.issuer = "https://<your-host>"
+
+  # Further origins this deployment serves, each its own operator on the wire.
+  # The request host only selects among the origins listed here.
+  # c.additional_origins = ["https://<another-host>"]
 
   # Role vocabulary your authz (app-layer policies, and RLS if opted in)
   # branches on. Never include `:admin` — prefer job-titled roles like

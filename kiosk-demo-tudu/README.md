@@ -115,6 +115,13 @@ is refused `400`: it is the one value that would mean two different moments to
 two readers with nothing on the wire to say so, and completing it here would
 pick one of them silently.
 
+**And Alice's assistant is told, over `<endpoint>/events`, without asking.** It
+holds the list's `todo` and `list_membership` topics, plus `todo` with no
+subject: Bob joining arrives live, Bob's todo added while it was disconnected
+arrives on reconnecting with `since`, and Bob's removal arrives live while his
+own subscription to the list is withdrawn (`unsubscribed`, `reach_revoked`).
+Every delivered `data` is checked against the `payload_schema` the origin serves.
+
 ### W5 rebind + list transfer (`rake check:link`)
 
 An assistant registers **headless** and creates the "Hike" list; Alice signs in

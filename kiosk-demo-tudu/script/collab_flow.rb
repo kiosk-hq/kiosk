@@ -14,6 +14,9 @@
 #   - list_todos shows BOTH todos with per-agent ATTRIBUTION
 #     (each todo's created_by_agent_id is the agent that added it)
 #   - list_members shows two members: Alice (owner) + Bob (member)
+#   - over <endpoint>/events, Alice's assistant is told of Bob joining, of
+#     Bob's todo (replayed by `since` after a disconnect), and of Bob's
+#     removal, which withdraws Bob's own subscription (`reach_revoked`)
 #
 # Two agents register with real keys → real Kiosk JWTs (UUID agent_ids), so the
 # attribution column is a genuine kiosk.agents.id.
@@ -27,6 +30,8 @@ require "jwt"
 require "time"
 require "net/http"
 require "kiosk/redteam/wire"
+require "kiosk/redteam/event_stream"
+require "json_schemer"
 require "uri"
 require "openssl"
 require "securerandom"
@@ -82,7 +87,7 @@ POST_URL = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body,
 # _label is kept for call-site readability; the helper aborts with detail on failure.
 def register_agent(_label)
   _key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: GET_URL, post_json: POST_URL)
-  { token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id") }
+  { token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
 end
 
 results = {}
@@ -95,6 +100,15 @@ abort "create_list failed (#{rc}): #{JSON.generate(created)}" unless rc == 200
 list_id = created["list_id"]
 results[:list_id] = list_id
 STDERR.puts "  Alice's agent created list #{list_id}"
+
+# Alice's assistant holds the list's two topics, plus `todo` with no subject.
+def stream_for(who) = Kiosk::Redteam::EventStream.new(base_url: SERVER, token: who[:token])
+
+alice_live = stream_for(alice)
+alice_live.subscribe("todo", subject: list_id)
+alice_live.subscribe("list_membership", subject: list_id)
+alice_any = stream_for(alice)
+alice_any.subscribe("todo")
 
 # ALICE'S HUMAN SAID «tomorrow at two». Her assistant resolves that on HER
 # clock, before it reaches the wire, and sends the instant it resolved to.
@@ -134,11 +148,32 @@ results[:accept_list_id] = acc["list_id"]
 abort "accept_invite failed (#{rc}): #{JSON.generate(acc)}" unless rc == 200
 STDERR.puts "  Bob's agent accepted the invite and joined list #{results[:accept_list_id]}"
 
+joined = alice_live.await { |e| e["topic"] == "list_membership" && e.dig("data", "action") == "joined" }
+results[:event_joined_live] = joined.dig("data", "account_id") == bob[:user_id]
+results[:event_own_todo_live] =
+  alice_live.events.any? { |e| e["topic"] == "todo" && e.dig("data", "todo_id") == alice_todo_id }
+
+# Alice's assistant goes away, holding the newest id it saw as its cursor.
+cursor = alice_live.events.map { |e| e["id"] }.max
+alice_live.close
+
+bob_stream = stream_for(bob)
+bob_stream.subscribe("todo", subject: list_id)
+
 rc, btodo = post_json("/kiosk/add_todo",
                       { list_id: list_id, title: "Bring tent" },
                       reader(bob[:token], BOB_TZ))
 abort "bob add_todo failed (#{rc}): #{JSON.generate(btodo)}" unless rc == 200
 bob_todo_id = btodo["todo_id"]
+
+# Back, with `since`: Bob's todo arrives as a replay, and nothing at or before the cursor.
+alice_back = stream_for(alice)
+alice_back.subscribe("todo", subject: list_id, since: cursor)
+alice_back.subscribe("list_membership", subject: list_id)
+bobs = ->(e) { e["topic"] == "todo" && e.dig("data", "todo_id") == bob_todo_id }
+results[:event_replayed_since] = alice_back.await(&bobs).dig("data", "action") == "added"
+results[:event_replay_after_cursor] = alice_back.events.all? { |e| e["id"] > cursor }
+results[:event_subjectless_live] = !alice_any.await(&bobs).nil?
 
 # ── Assert the shared world ──────────────────────────────────────────────────
 rc, a_lists = get_json("/kiosk/my_lists", {}, bearer(alice[:token]))
@@ -182,5 +217,25 @@ mrows = Array(members)
 results[:member_count]  = mrows.size
 results[:has_owner]     = mrows.any? { |m| m["role"] == "owner" }
 results[:has_member]    = mrows.any? { |m| m["role"] == "member" }
+
+# ── Bob is removed: Alice is told, and Bob's standing subscription is withdrawn ──
+rc, = post_json("/kiosk/remove_member", { list_id: list_id, account_id: bob[:user_id] }, bearer(alice[:token]))
+abort "remove_member failed (#{rc})" unless rc == 200
+removed = alice_back.await { |e| e["topic"] == "list_membership" && e.dig("data", "action") == "removed" }
+results[:event_removed_live] = removed.dig("data", "account_id") == bob[:user_id]
+revoked = bob_stream.await_message(timeout: 45) { |m| m["type"] == "unsubscribed" }
+results[:event_reach_revoked] = revoked == { "type" => "unsubscribed", "topic" => "todo", "reason" => "reach_revoked" }
+
+# Every delivered `data` against the `payload_schema` this origin serves for its topic.
+_rc, served = get_json("/kiosk/schema")
+schemers = Array(served["events"]).to_h do |t|
+  [t["name"], JSONSchemer.schema(t["payload_schema"], meta_schema: "https://json-schema.org/draft/2020-12/schema")]
+end
+delivered = [alice_live, alice_any, alice_back, bob_stream].flat_map(&:events)
+results[:event_topics_delivered] = delivered.map { |e| e["topic"] }.uniq.sort
+results[:event_payload_errors] = delivered.flat_map do |e|
+  schemers.fetch(e["topic"]).validate(e["data"]).map { |v| "#{e["topic"]}: #{v["error"]}" }
+end
+[alice_any, alice_back, bob_stream].each(&:close)
 
 puts JSON.generate(results)

@@ -557,7 +557,9 @@ jobs:
           - demo: kiosk-demo-tudu
             # NON-COMMERCE collaborative todo — no payments. check:collab is the
             # happy path (membership-based sharing + agent→agent invites +
-            # per-agent attribution); check:schema asserts `pay` ABSENT like
+            # per-agent attribution + the todo/list_membership event topics,
+            # live, replayed by `since`, and withdrawn on removal);
+            # check:schema asserts `pay` ABSENT like
             # philslist.
             # check:link is the W5 rebind beat, and since K-783 it is the only
             # end-to-end regression for a DATA-LOSS bug: re-linking an already

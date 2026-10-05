@@ -67,11 +67,13 @@ module Kiosk
       # Reads until an event satisfies the block.
       #
       # @return [Hash] the event
-      def await(timeout: 30, &match)
-        found = nil
-        pump(timeout) { found = events.find(&match) }
-        found || raise(Error, "no matching event within #{timeout}s")
-      end
+      def await(timeout: 30, &match) = await_in(:events, timeout, &match)
+
+      # Reads until any message — an event, or a frame such as
+      # `{"type" => "unsubscribed", "reason" => "reach_revoked"}` — satisfies the block.
+      #
+      # @return [Hash] the message
+      def await_message(timeout: 30, &match) = await_in(:messages, timeout, &match)
 
       # Reads for a fixed time, for a caller asserting what did NOT arrive.
       #
@@ -89,7 +91,14 @@ module Kiosk
 
       private
 
-      def messages = @frames.filter_map { |f| f["message"] }
+      # A `ping` frame's message is a bare timestamp, not a message.
+      def messages = @frames.filter_map { |f| f["message"] if f["message"].is_a?(Hash) }
+
+      def await_in(source, timeout, &match)
+        found = nil
+        pump(timeout) { found = send(source).find(&match) }
+        found || raise(Error, "nothing matching arrived within #{timeout}s")
+      end
 
       def open_socket(host, port, tls)
         tcp = TCPSocket.new(host, port)

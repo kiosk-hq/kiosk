@@ -170,6 +170,10 @@ namespace :check do
       • both agents' my_lists include "Hike" (Bob reaches a list he does NOT own)
       • list_todos shows BOTH todos, each attributed to the agent that added it
       • list_members shows an owner + a member
+      • the `todo` and `list_membership` topics deliver Bob's join, todo and
+        removal to Alice, live and replayed by `since`, each `data` valid
+        against the served payload_schema; Bob's removal withdraws his
+        subscription (`reach_revoked`, up to 30 s)
   DESC
   task collab: "demo:setup" do
     port = ENV.fetch("PORT", "3007")
@@ -240,6 +244,19 @@ namespace :check do
     check.call("a zoneless due_at is REFUSED 400 whose detail NAMES due_at, never completed on somebody's clock",
                r["zoneless_due_status"] == 400 && r["zoneless_due_code"] == "bad_request" &&
                r["zoneless_due_detail"].to_s.include?("due_at"))
+
+    puts "\n── Bob's join, todo and removal reach Alice over <endpoint>/events ──"
+    check.call("list_membership `joined` naming Bob arrived live",             r["event_joined_live"])
+    check.call("Alice's own todo arrived live on the subject subscription",    r["event_own_todo_live"])
+    check.call("Bob's todo, added while Alice was away, replayed by `since`",  r["event_replayed_since"])
+    check.call("the replay carried nothing at or before the cursor",            r["event_replay_after_cursor"])
+    check.call("the subject-less `todo` subscription received Bob's todo",     r["event_subjectless_live"])
+    check.call("list_membership `removed` naming Bob arrived live",            r["event_removed_live"])
+    check.call("Bob's standing subscription answered `unsubscribed` reach_revoked", r["event_reach_revoked"])
+    check.call("both topics delivered", r["event_topics_delivered"] == %w[list_membership todo])
+    check.call("every delivered `data` satisfies the served payload_schema" \
+               "#{Array(r["event_payload_errors"]).empty? ? "" : " — #{r["event_payload_errors"].first(3).join("; ")}"}",
+               r["event_payload_errors"] == [])
 
     if failures.empty?
       puts "\n  All collaboration assertions passed — membership-based sharing + attribution hold."

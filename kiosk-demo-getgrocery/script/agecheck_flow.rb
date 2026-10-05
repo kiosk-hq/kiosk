@@ -12,15 +12,16 @@
 #     document's `hint` points to `request_kyc`) → POST /kiosk/request_kyc
 #     (getgrocery calls the KYC broker; get a broker verification_url) →
 #     SIMULATE the human approving on the BROKER page → the broker POSTs its
-#     signed {age_over_18} claim to getgrocery's /kyc/callback → poll
-#     `GET /kiosk/kyc_status?request_id=…` until approved → submit the broker
-#     kyc_jws to POST /kiosk/agents/kyc → retry create_order WITH the wine →
-#     200 → payment_setup → pay (cart mirrors the order at catalog EUR prices)
-#     → settle.
+#     signed {age_over_18} claim to getgrocery's /kyc/callback → the
+#     `kyc_verification` event arrives on the socket the assistant subscribed
+#     BEFORE it acted, carrying the broker's kyc_jws → submit it to POST
+#     /kiosk/agents/kyc → retry create_order WITH the wine → 200 →
+#     payment_setup → pay (cart mirrors the order at catalog EUR prices) →
+#     settle.
 #
 #   The agent NEVER holds the broker's signing key: the claim is minted by the
 #   KYC broker when the human approves, delivered to getgrocery's callback,
-#   and relayed back through kyc_status.
+#   and pushed to the assistant on the event stream.
 #
 #   PART B — non-alcohol positive control (NO KYC at all):
 #     a fresh agent that never attested orders ONLY non-restricted groceries →
@@ -45,6 +46,7 @@ require "date"
 require "json"
 require "net/http"
 require "kiosk/redteam/wire"
+require "kiosk/redteam/event_stream"
 require "openssl"
 require "securerandom"
 require "uri"
@@ -166,6 +168,11 @@ hint_points_to_request_kyc = a_nokyc_hint.include?("request_kyc")
 STDERR.puts "  create_order (alcohol, no KYC): http=#{rc_a_nokyc} code=#{a_nokyc_code.inspect}"
 STDERR.puts "  403 hint points to request_kyc: #{hint_points_to_request_kyc}"
 
+# The assistant opens the stream and subscribes BEFORE it opens the check, so
+# the answer cannot arrive in a gap.
+stream = Kiosk::Redteam::EventStream.new(base_url: SERVER, token: a_token)
+stream.subscribe("kyc_verification")
+
 # A2: discover request_kyc from the hint; get a broker verification_url.
 rc_req, req_body = post_json("#{SERVER}/kiosk/request_kyc", {},
                              { "Authorization" => "Bearer #{a_token}" })
@@ -202,23 +209,12 @@ approve_rc, _html = post_form("#{approve_base}/verify", { request: request_id, d
 STDERR.puts "  human approved KYC broker page: http=#{approve_rc}"
 abort "approve page POST failed (#{approve_rc})" unless approve_rc == 200
 
-# A4: poll query kyc_status until approved → returns the signed kyc_jws.
-kyc_jws    = nil
-kyc_status = nil
-20.times do
-  rc_st, st_body = query(a_token, "kyc_status", { request_id: request_id })
-  abort "kyc_status failed (#{rc_st}): #{JSON.generate(st_body)}" unless rc_st == 200
-  # kyc_status is a query, so its body is the ROW ARRAY itself (one row).
-  row = Array(st_body).first || {}
-  kyc_status = row["status"]
-  if kyc_status == "approved"
-    kyc_jws = row["kyc_jws"]
-    break
-  end
-  sleep 0.2
-end
-STDERR.puts "  kyc_status polled: status=#{kyc_status.inspect}, jws present=#{!kyc_jws.nil? && !kyc_jws.empty?}"
-abort "kyc_status never reached approved (last=#{kyc_status.inspect})" unless kyc_status == "approved"
+# A4: the event arrives carrying the broker's signed attestation.
+kyc_event = stream.await { |e| e["topic"] == "kyc_verification" && e.dig("data", "request_id") == request_id }
+stream.close
+kyc_jws = kyc_event.dig("data", "kyc_jws")
+STDERR.puts "  kyc_verification event: status=#{kyc_event.dig("data", "status").inspect}, " \
+            "jws present=#{!kyc_jws.to_s.empty?}"
 
 # A5: submit the broker-signed jws to /agents/kyc → records {age_over_18}.
 rc_kyc, kyc_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: kyc_jws },
@@ -312,8 +308,8 @@ puts JSON.generate(
   http_request_kyc_capped:    request_kyc_capped_status,
   request_kyc_capped_code:    request_kyc_capped_code,
   http_approve_page:          approve_rc,
-  kyc_status:                 kyc_status,
-  kyc_jws_relayed:            (!kyc_jws.nil? && !kyc_jws.empty?),
+  kyc_event_status:           kyc_event.dig("data", "status"),
+  kyc_jws_relayed:            !kyc_jws.to_s.empty?,
   http_kyc_submit:            rc_kyc,
   kyc_attributes:             kyc_body["attributes"],
   kyc_payload_schema:         kyc_topic && kyc_topic["payload_schema"],

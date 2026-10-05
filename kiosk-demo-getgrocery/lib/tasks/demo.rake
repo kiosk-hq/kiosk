@@ -998,7 +998,7 @@ namespace :check do
         one is a typed 400 rather than a silently ignored second billable order
       • schema.queries does NOT include stores, products_by_store, substitution_options
       • schema.actions does NOT include add_to_cart, apply_substitution, confirm_delivery
-      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon
+      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
         `skill` pin in /.well-known/kiosk.json (protocol.md §4.5)
@@ -1325,8 +1325,8 @@ namespace :check do
     end
 
     # ── THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ────────────
-    # The out-of-band verbs below are learned about by RE-POLLING and nothing
-    # else — the wire has no server→assistant push — so their descriptors carry
+    # An assistant at an origin it holds no stream to learns of card setup by
+    # RE-POLLING `payment_setup`, so its descriptor carries
     # a cadence and a give-up horizon, QUOTING kiosk.tech/skill.md's tiered
     # schedule rather than a rival flat one. NOTHING ELSE THAT RUNS READS EITHER
     # VALUE BACK — they live only in the source they are written into — so
@@ -1341,7 +1341,7 @@ namespace :check do
     # schedule lives, and a derived copy of a schedule is one copy too many.
     poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
     poll_horizon = /GIVE UP after about (\d+) minutes?/
-    { actions => ["payment_setup"], queries => ["kyc_status"] }.each do |list, names|
+    { actions => ["payment_setup"] }.each do |list, names|
       names.each do |vname|
         entry = list.find { |e| e["name"] == vname }
         if entry.nil?
@@ -1948,7 +1948,8 @@ namespace :check do
           whose `hint` points the agent at `request_kyc`.
       A2  run request_kyc → 200 with a broker verification_url; human approves the
           broker page; the broker POSTs its signed {age_over_18} claim to
-          /kyc/callback; poll kyc_status → approved returns the broker jws.
+          /kyc/callback; the kyc_verification event, subscribed before the
+          check was opened, carries the broker jws.
       A3  submit the jws to /agents/kyc → 200 (attribute age_over_18 recorded).
       A4  retry create_order WITH the alcohol item → 200; payment_setup + pay
           (cart mirrors the order at catalog EUR prices) → settle.
@@ -2082,8 +2083,8 @@ namespace :check do
     # the wire's own `quota_exceeded` (429), BEFORE the broker is called.
     check.call("A2b a fourth PENDING request_kyc → 429 quota_exceeded (per-principal cap)",
                result["http_request_kyc_capped"] == 429 && result["request_kyc_capped_code"] == "quota_exceeded")
-    check.call("A2 human approved broker page → callback landed, kyc_status approved, jws relayed",
-               result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true)
+    check.call("A2 human approved broker page → kyc_verification event delivered on the socket, carrying the jws",
+               result["http_approve_page"] == 200 && result["kyc_event_status"] == "approved" && result["kyc_jws_relayed"] == true)
     check.call("A3 relayed kyc_jws accepted at /agents/kyc with {age_over_18}",
                result["http_kyc_submit"] == 200 && (result["kyc_attributes"] || {})["age_over_18"] == true)
     check.call("A4 retry alcohol create_order WITH KYC → 200",

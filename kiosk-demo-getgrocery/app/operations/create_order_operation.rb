@@ -105,8 +105,9 @@ class CreateOrderOperation
           message: "this cart contains an age-restricted (alcohol) item — an 18+ verification " \
                    "is required to order it",
           hint:    "POST <endpoint>/request_kyc to start an 18+ (age_over_18) verification: " \
-                   "it returns a verification_url for the human to approve; then poll " \
-                   "GET <endpoint>/kyc_status for the signed attestation and submit it to " \
+                   "subscribe to the kyc_verification topic first; it returns a " \
+                   "verification_url for the human to approve, and the kyc_verification " \
+                   "event carries the signed attestation (kyc_jws): submit it to " \
                    "POST <endpoint>/agents/kyc, then retry create_order",
         )
       end

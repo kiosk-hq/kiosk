@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/kyc.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/kyc.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed; bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not.",
   "title": "Kiosk KYC attestation",
-  "description": "The decoded JWS payload of a KYC attestation and the POST /kiosk/agents/kyc request body.",
+  "description": "The decoded JWS payload of a KYC attestation, the POST /kiosk/agents/kyc request body, the request_kyc answer, and the data of the kyc_verification event that delivers the attestation.",
   "$defs": {
     "attestation": {
       "type": "object",
@@ -58,6 +58,52 @@
         "kyc_jws"
       ],
       "properties": {
+        "kyc_jws": {
+          "type": "string",
+          "description": "The attestation as a compact RS256 JWS."
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "description": "The answer to the request_kyc action: a verification opened at the KYC provider, whose page the AI assistant relays to its human.",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "verification_url",
+        "status"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "description": "The provider's id for this verification; the kyc_verification event carries it back."
+        },
+        "verification_url": {
+          "type": "string",
+          "description": "The provider page the human completes."
+        },
+        "status": {
+          "const": "pending"
+        }
+      }
+    },
+    "verificationEvent": {
+      "type": "object",
+      "description": "The data of a kyc_verification event: the human approved, and the event carries the provider-signed attestation to submit to POST /kiosk/agents/kyc.",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "status",
+        "kyc_jws"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "description": "The request_id request_kyc returned."
+        },
+        "status": {
+          "const": "approved"
+        },
         "kyc_jws": {
           "type": "string",
           "description": "The attestation as a compact RS256 JWS."

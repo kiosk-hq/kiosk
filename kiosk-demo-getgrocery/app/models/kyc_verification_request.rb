@@ -6,12 +6,12 @@
 # `request_token`, plus the broker's per-request `broker_nonce`. The agent
 # relays the broker's verification_url to a human; on approve the broker POSTs
 # its signed anonymized {age_over_18} claim to POST /kyc/callback, which verifies
-# it (trusted ProveKey + nonce + operator + sub) and parks the jws in `kyc_jws`.
-# The agent polls `kyc_status` and submits the jws to POST /kiosk/agents/kyc
-# (agent contract unchanged), then retries create_order for the alcohol cart.
+# it (trusted ProveKey + nonce + operator + sub), flips the row to approved and
+# pushes the jws on the `kyc_verification` event. The agent submits it to POST
+# /kiosk/agents/kyc, then retries create_order for the alcohol cart.
 #
-#   request_token — the BROKER's request_id (PK); the request_id kyc_status
-#                   polls and the callback correlates on.
+#   request_token — the BROKER's request_id (PK); the request_id the event
+#                   carries and the callback correlates on.
 #   user_id       — the authenticated agent's user_id the request is bound to;
 #                   the broker signs the claim's `sub` to this so KycVerifier
 #                   binds it to the SAME identity (cross-subject theft defense).
@@ -19,8 +19,6 @@
 #                   POST /kyc/callback rejects a callback whose nonce differs.
 #   status        — 'pending' → 'approved'. The broker reports an approval and
 #                   nothing else, so a check the human refused stays 'pending'.
-#   kyc_jws       — the broker's signed anonymized claim, NULL until the callback
-#                   lands. Only booleans are ever carried — never DOB.
 class KycVerificationRequest < ApplicationRecord
   self.primary_key = "request_token"
 
@@ -33,14 +31,13 @@ class KycVerificationRequest < ApplicationRecord
   PENDING, APPROVED = STATUSES
   # The column is a bare varchar with no CHECK constraint (db/structure.sql), so
   # until this validation nothing enforced the set the constant names — and a
-  # status outside it silently fails BOTH `kyc_status` branches, leaving a
-  # request that is neither pending nor approved and never resolves (K-712g).
+  # status outside it leaves a request that is neither pending nor approved: it
+  # never resolves and never stops counting against the intake cap.
   validates :status, inclusion: { in: STATUSES }
 
   # ── THE isolation predicate, the {Order} one on this table ────────────────
-  # `kyc_status` is bound to it: an agent only ever sees the status — and the
-  # jws — of a request IT opened, so it cannot poll (or lift the attestation
-  # from) another agent's verification. Kept SQL-side over a frozen
+  # `request_kyc` counts its intake cap through it, so one principal's open
+  # checks never count against another's. Kept SQL-side over a frozen
   # `Arel.sql` literal for the reason written out in
   # {Order.owned_by_current_principal}: it is the expression an RLS policy is
   # written in.

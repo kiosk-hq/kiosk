@@ -16,12 +16,12 @@ require "jwt"
 #   4. checks `sub` equals the user_id the request was bound to (belt-and-braces;
 #      the agent's own /agents/kyc submit re-checks sub against the authenticated
 #      agent — the IssuedKycJwsTheft defense — so this callback does NOT stamp
-#      kyc_attributes itself; it PARKS the jws for the agent to fetch via
-#      kyc_status, keeping the shipped /agents/kyc sub-binding on the hot path).
+#      kyc_attributes itself; it hands the jws to the agent, keeping the
+#      /agents/kyc sub-binding on the hot path).
 #
-# On success the kyc_verification_requests row flips pending → approved with the
-# broker's jws parked; the agent polls kyc_status, gets the jws, and submits it
-# to the existing POST /kiosk/agents/kyc (unchanged agent contract).
+# On success the kyc_verification_requests row flips pending → approved and the
+# `kyc_verification` event carries the broker's jws to the one principal that
+# opened the check, which submits it to POST /kiosk/agents/kyc.
 #
 # api_only app; this inherits ActionController::API. CSRF is moot — it is a
 # server-to-server call authenticated by the signed claim + the correlated
@@ -67,17 +67,13 @@ class KycCallbackController < ActionController::API
       return render(json: { error: "claim subject does not match the requesting agent" }, status: :forbidden)
     end
 
-    # Park the broker's jws for the agent to fetch via kyc_status and submit to
-    # the existing /agents/kyc (agent contract unchanged; sub-binding preserved).
-    row.update!(status: "approved", kyc_jws: kyc_jws)
+    row.update!(status: KycVerificationRequest::APPROVED)
 
-    # THE WAIT THIS WHOLE SURFACE EXISTS FOR. The operator knows the instant the
-    # human approves — this callback IS that instant — and until now the
-    # assistant discovered it by polling `kyc_status`, on a cadence nobody
-    # specified, paying a proof of work for each ask. One line ends that.
+    # This callback IS the instant the human approves, so the attestation goes
+    # straight to the assistant that opened the check.
     Kiosk::Server::Events.emit(
       topic: :kyc_verification, subject: row.id, identity_scope: [row.user_id],
-      data: { "request_id" => row.id, "status" => "approved" },
+      data: { "request_id" => row.id, "status" => KycVerificationRequest::APPROVED, "kyc_jws" => kyc_jws },
     )
 
     render json: { ok: true }, status: :ok

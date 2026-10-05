@@ -54,14 +54,14 @@ RSpec.describe "descriptor required fields" do
   end
 
   # Non-vacuity floor: the lint is a text matcher, so a reworded or relocated
-  # descriptor would make every example below pass while checking nothing. 52 is
-  # the fleet's verb count at the time this shipped; the assertion is `>=` so
+  # descriptor would make every example below pass while checking nothing. 50 is
+  # the fleet's verb count; the assertion is `>=` so
   # adding a verb never fails it, but losing sight of the fleet does.
   it "sees the whole fleet (the lint is not vacuous)" do
     total = origins.sum { |_origin, paths|
       paths.sum { |path| self.class.verbs_in(File.read(path)).length }
     }
-    expect(total).to be >= 52,
+    expect(total).to be >= 50,
                      "the lint resolved only #{total} verbs across #{origins.size} origins — " \
                      "the descriptors moved somewhere it does not read"
   end

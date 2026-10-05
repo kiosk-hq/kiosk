@@ -46,7 +46,6 @@ mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 # Queries — GET, arguments on the query string.
 get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
 get  "/kiosk/delivery_slots",      to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "delivery_slots" }
-get  "/kiosk/kyc_status",          to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "kyc_status" }
 get  "/kiosk/my_orders",           to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "my_orders" }
 #
 # Actions — POST, a JSON body.

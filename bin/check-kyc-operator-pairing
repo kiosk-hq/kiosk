@@ -17,8 +17,8 @@
 #   * the operator's `request_kyc` answers `501 module_not_served`, which is the
 #     same answer an operator that genuinely serves no KYC module gives, and 501
 #     is cacheable by default, so a well-behaved assistant stops asking;
-#   * the descriptor keeps advertising `request_kyc` and `kyc_status` either
-#     way, because it is static — the verb list does not consult the config;
+#   * the descriptor keeps advertising `request_kyc` either way, because it
+#     is static — the verb list does not consult the config;
 #   * the broker answers an unregistered operator `401 unknown operator or bad
 #     credential`, which is byte-identical to what it answers a caller with a
 #     wrong secret, so nothing an outsider probes can tell the two apart.

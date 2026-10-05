@@ -268,8 +268,7 @@ jobs:
             # every declared verb is routed with the method its kind requires,
             # the read surface executes as an authenticated principal, three
             # queries answer the shape their own output_schema declares, and
-            # `my_orders`/`kyc_status` hand one principal nothing belonging to
-            # another. It is this fleet's MINITEST worked example of the
+            # `my_orders` hands one principal nothing belonging to another. It is this fleet's MINITEST worked example of the
             # kiosk-test-support conformance surface (hoteling is the RSpec
             # one), and it is the only task here that runs in RAILS_ENV=test
             # against its own database, so its position is free of the reseeding

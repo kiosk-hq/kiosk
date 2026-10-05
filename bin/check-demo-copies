@@ -1358,14 +1358,11 @@ OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu]
 
 KYC_DEMOS = %w[getgrocery skooti].freeze
 KYC_SHIPS =
-  "`ships:` pins the set to getgrocery and skooti deliberately (K-657). Phil has DECIDED that " \
-  "`request_kyc`/`kyc_status` do not belong among an operator's business-logic verbs — " \
-  "`request_kyc` becomes part of the WIRE and the poll query should not exist at all " \
-  "(KYC-WIRE-DIRECTION, 2026-08-12) — and the wire that replaces them is T-062, still unbuilt " \
-  "because its design depends on operator-sent events (T-046). So the shape is frozen where it " \
-  "was reviewed: a THIRD demo growing a copy would spread a surface already decided against, " \
-  "and a copy DISAPPEARING is the T-062 migration itself, which must move this declaration in " \
-  "the same wave rather than let it rot."
+  "`ships:` pins the set to getgrocery and skooti deliberately (K-657): they are the two " \
+  "operators that gate a verb on an anonymized KYC attribute, and the attestation reaches the " \
+  "assistant on their `kyc_verification` event (T-062). A THIRD demo growing a copy spreads a " \
+  "surface T-220 is due to move into the framework, and a copy DISAPPEARING is that move, which " \
+  "must carry this declaration with it."
 
 # The two pairs of `app/operations/operation_result.rb` copies that AGREE, and
 # the reason each pair does (K-1262). Written once because the same two groups
@@ -1683,7 +1680,7 @@ COPIES = {
     ships: KYC_DEMOS,
     why:  "The pending age/licence verification a demo started at the broker — same class, " \
           "per-demo prose (skooti's row carries a licence claim, getgrocery's an age gate). Both " \
-          "copies carry the query scoping their `kyc_status` handler needs: an " \
+          "copies carry the query scoping their `request_kyc` intake cap needs: an " \
           "`owned_by_current_principal` scope over a frozen `Arel.sql(\"kiosk.current_user_id()\")` " \
           "literal, plus the status constants that scope's readers name. It was briefly :per_demo " \
           "while T-057 had migrated skooti and not getgrocery and the two genuinely disagreed; the " \
@@ -1891,6 +1888,13 @@ COPIES = {
   "db/migrate/20260820130117_create_kiosk_kyc_attributes.rb" => {
     rule: :identical, why: "kiosk:install 006 — kiosk.kyc_attributes, one row per granted " \
                            "anonymized boolean (K-656; it was a jsonb column on agents before).",
+  },
+  "db/migrate/20261005000002_remove_kyc_jws_from_kyc_verification_requests.rb" => {
+    rule:  :identical,
+    ships: KYC_DEMOS,
+    why:   "The attestation travels on the `kyc_verification` event, so both KYC demos drop the " \
+           "column that held it for a status query." \
+           " " + KYC_SHIPS,
   },
   "db/migrate/20260920000002_create_solid_cable_messages.rb" => {
     rule: :identical, why: "Action Cable's pubsub queue, taken on the PRIMARY database rather " \

@@ -44,7 +44,6 @@ mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 # ── The verbs this origin registers ─────────────────────────────────────────
 #
 # Queries — GET, arguments on the query string.
-get  "/kiosk/kyc_status",         to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "kyc_status" }
 get  "/kiosk/my_reservations",    to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "my_reservations" }
 get  "/kiosk/scooters_available", to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "scooters_available" }
 #

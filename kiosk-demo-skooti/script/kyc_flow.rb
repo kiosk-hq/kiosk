@@ -12,13 +12,14 @@
 #     POST /kiosk/request_kyc (skooti
 #     calls the KYC broker; get a broker verification_url) → SIMULATE the
 #     human approving on the BROKER page (POST <broker>/verify with the request
-#     token) → the broker POSTs its signed claim to skooti's /kyc/callback → poll
-#     query kyc_status until approved → submit the broker kyc_jws to POST
+#     token) → the broker POSTs its signed claim to skooti's /kyc/callback → the
+#     `kyc_verification` event arrives on the socket the assistant subscribed
+#     BEFORE it acted, carrying the broker kyc_jws → submit it to POST
 #     /kiosk/agents/kyc → rent_motorcycle → 200 (offline rental token unlocks).
 #
 #   The agent NEVER holds the broker's signing key: the claim is minted by the
 #   KYC broker when the human approves, delivered to skooti's callback, and
-#   relayed back through kyc_status. This is what makes the flow externally
+#   pushed to the assistant on the event stream. This is what makes the flow externally
 #   completable — and the issuer is now a SHARED broker, not skooti's own stub.
 #
 #   SCOOTER (positive control — NO KYC at all):
@@ -37,6 +38,7 @@
 require "json"
 require "net/http"
 require "kiosk/redteam/wire"
+require "kiosk/redteam/event_stream"
 require "openssl"
 require "securerandom"
 require "uri"
@@ -166,6 +168,11 @@ hint_points_to_request_kyc = mc_nokyc_hint.include?("request_kyc")
 STDERR.puts "  rent_motorcycle (no KYC): http=#{rc_mc_nokyc} code=#{mc_nokyc_code.inspect}"
 STDERR.puts "  403 hint points to request_kyc: #{hint_points_to_request_kyc} (#{mc_nokyc_hint.inspect})"
 
+# The assistant opens the stream and subscribes BEFORE it opens the check, so
+# the answer cannot arrive in a gap.
+stream = Kiosk::Redteam::EventStream.new(base_url: SERVER, token: mc_token)
+stream.subscribe("kyc_verification")
+
 # A2: the agent discovers request_kyc from the hint and starts verification.
 # It gets back a verification_url to relay to the human — NO issuer key involved.
 rc_req, req_body = run_action(mc_token, "request_kyc")
@@ -196,7 +203,7 @@ STDERR.puts "  request_kyc past the cap: http=#{rc_capped} code=#{request_kyc_ca
 # verification_url points at the broker; we POST the approve there (the request
 # token is the only credential — no signing key). The broker signs the
 # anonymized {age_over_18, licence_a} claim and POSTs it to skooti's
-# /kyc/callback, which parks it for the agent to poll. Derive the broker origin
+# /kyc/callback, which pushes it to the agent. Derive the broker origin
 # from the verification_url so the driver need not know the broker port itself.
 approve_uri  = URI(verification_url)
 approve_base = "#{approve_uri.scheme}://#{approve_uri.host}:#{approve_uri.port}"
@@ -204,23 +211,13 @@ approve_rc, _approve_html = post_form("#{approve_base}/verify", { request: reque
 STDERR.puts "  human approved KYC broker page: http=#{approve_rc}"
 abort "approve page POST failed (#{approve_rc})" unless approve_rc == 200
 
-# A4: poll query kyc_status until approved → returns the signed kyc_jws.
-kyc_jws     = nil
-kyc_status  = nil
-20.times do
-  rc_st, st_body = query(mc_token, "kyc_status", { request_id: request_id })
-  abort "kyc_status query failed (#{rc_st}): #{JSON.generate(st_body)}" unless rc_st == 200
-  row        = Array(st_body).first || {}
-  kyc_status = row["status"]
-  if kyc_status == "approved"
-    kyc_jws = row["kyc_jws"]
-    break
-  end
-  sleep 0.2
-end
-STDERR.puts "  kyc_status polled: status=#{kyc_status.inspect}, jws present=#{!kyc_jws.nil? && !kyc_jws.empty?}"
-abort "kyc_status never reached approved (last=#{kyc_status.inspect})" unless kyc_status == "approved"
-abort "kyc_status approved but returned no kyc_jws" if kyc_jws.nil? || kyc_jws.empty?
+# A4: the event arrives carrying the broker's signed attestation.
+kyc_event = stream.await { |e| e["topic"] == "kyc_verification" && e.dig("data", "request_id") == request_id }
+stream.close
+kyc_jws = kyc_event.dig("data", "kyc_jws")
+STDERR.puts "  kyc_verification event: status=#{kyc_event.dig("data", "status").inspect}, " \
+            "jws present=#{!kyc_jws.to_s.empty?}"
+abort "the kyc_verification event carried no kyc_jws" if kyc_jws.to_s.empty?
 
 # A5: submit the ISSUER-signed jws to the EXISTING /agents/kyc endpoint — the
 # KycVerifier accepts it because it is signed by the trusted key and bound to
@@ -301,8 +298,8 @@ puts JSON.generate(
   http_request_kyc_capped:     rc_capped,
   request_kyc_capped_code:     request_kyc_capped_code,
   http_approve_page:           approve_rc,
-  kyc_status:                  kyc_status,
-  kyc_jws_relayed:             (!kyc_jws.nil? && !kyc_jws.empty?),
+  kyc_event_status:            kyc_event.dig("data", "status"),
+  kyc_jws_relayed:             !kyc_jws.to_s.empty?,
   http_kyc_submit:             rc_kyc,
   kyc_attributes:              kyc_body["attributes"],
   kyc_payload_schema:          kyc_topic && kyc_topic["payload_schema"],

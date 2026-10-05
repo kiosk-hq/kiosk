@@ -4,7 +4,7 @@
 # in-stock facts; the assistant makes the substitution decisions.
 #
 # Queries:  catalog, delivery_slots (delivery ADDRESS/zone REQUIRED — validated
-#           against served Dublin districts), my_orders, kyc_status
+#           against served Dublin districts), my_orders
 # Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery,
 #           payment_setup, request_kyc
 # Pay:      capture is wrapped by ValidatingPaymentProvider — the cart must be

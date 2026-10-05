@@ -11,7 +11,7 @@
 #
 # The broker's POST /kyc/callback is NOT a second caller of this Operation: it
 # approves a request, which no wire verb can do, and it looks the row up
-# UNSCOPED, where request_kyc and kyc_status are bound to the principal.
+# UNSCOPED, where request_kyc is bound to the principal.
 class RequestKycOperation
   # `licence_category:A` is the broker's claim vocabulary; it comes back as the
   # anonymized boolean `licence_a`, which {RentMotorcycleOperation} gates on.
@@ -45,12 +45,12 @@ class RequestKycOperation
   # human could still plausibly be on the page, and stops holding one after
   # that. It is this operator's own metering rule and claims nothing about how
   # long the broker keeps a page alive — a page that outlives the window is
-  # still perfectly pollable, it simply no longer counts against the next call.
+  # still answerable, it simply no longer counts against the next call.
   OUTSTANDING_WINDOW = 15.minutes
 
   # @param principal_id [String] the account the wire resolved — the `sub` the
   #   broker binds its signed claim to, and the owner this row is stored under so
-  #   `kyc_status` can only ever return it to the agent that opened it.
+  #   the event reaches only the agent that opened it.
   def self.call(principal_id:)
     # Checked BEFORE the broker call, which is the whole point of a cap: a
     # refusal that has already cost an intake is an apology, not a limit.
@@ -60,8 +60,8 @@ class RequestKycOperation
         message: "too many verifications are already open for this account",
         hint:    "at most #{MAX_OUTSTANDING_REQUESTS} may be open at once. One stops counting " \
                  "the moment your human approves it, and in any case #{OUTSTANDING_WINDOW.inspect} " \
-                 "after it was opened — so poll `kyc_status` on a broker page you were already " \
-                 "given rather than opening another, and if your human has abandoned all of " \
+                 "after it was opened — so wait for the `kyc_verification` event on a broker " \
+                 "page you were already given rather than opening another, and if your human has abandoned all of " \
                  "them, this call works again shortly.",
       )
     end
@@ -148,7 +148,7 @@ class RequestKycOperation
   # Live intakes this principal is already holding — pending AND opened inside
   # the window, which is what makes them live: a `pending` row older than that
   # is a conversation the broker will never report the end of. Counted through
-  # the SAME isolation predicate `kyc_status` reads with, so the cap is per
+  # the table's isolation predicate, so the cap is per
   # principal by construction, not by a `user_id` argument a caller could forget
   # to pass.
   def self.outstanding_for_current_principal

@@ -128,12 +128,9 @@ end
 
 # ── Static VERB inventory (K-987) ────────────────────────────────────────────
 #
-# Same disease as the task list above, one shelf over: getgrocery's README opened
-# by naming three queries and three actions where the demo registers four and
-# four, so `kyc_status` — the verb an assistant must poll to clear the alcohol
-# gate — was undocumented in the demo's own README while `check:agecheck`
-# asserted it. Nothing joined the prose to the registrations, so it rotted the
-# moment a verb was added.
+# Same rule as the task list above, one shelf over: every verb a demo registers
+# must be named in that demo's README, or a verb an assistant can call goes
+# undocumented the moment it is added.
 #
 # A verb is `kind :query` / `kind :action` in `app/controllers/kiosk/*.rb`,
 # followed by the `def <name>` the declaration decorates. A `kind` with no
@@ -266,9 +263,7 @@ tables.each do |demo, table|
   # ── And is the VERB documented at all? (K-987) ────────────────────────────
   #
   # The same presence-only rule for the other inventory a demo README claims to
-  # describe. getgrocery's opening sentence named three queries and three
-  # actions against four and four; `kyc_status` appeared nowhere in the file.
-  # Presence only, never the prose: a reader searching the README for a verb an
+  # describe. Presence only, never the prose: a reader searching the README for a verb an
   # assistant can call must find it somewhere.
   demo_verbs(File.join(ROOT, demo)).each do |v|
     next if body.match?(/(?<![\w])#{Regexp.escape(v)}(?![\w])/)

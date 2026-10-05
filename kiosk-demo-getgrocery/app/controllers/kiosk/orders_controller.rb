@@ -50,15 +50,20 @@ class Kiosk::OrdersController < ActionController::API
   # assistant found out by polling, at a cadence nobody specified and a proof of
   # work per ask — measured live at thirty polls in 2m19s.
   topic :kyc_verification do
-    description "An identity check you opened with request_kyc was answered. Submit the " \
-                "attestation to /kiosk/agents/kyc and retry what you were doing."
+    description "An identity check you opened with request_kyc was approved. The event " \
+                "carries the broker's signed attestation: submit `kyc_jws` to " \
+                "/kiosk/agents/kyc and retry what you were doing."
     payload_schema type: "object", additionalProperties: false,
                    properties: { request_id: { type: "string",
                                                description: "The BROKER's own request id, echoed " \
                                                             "back opaquely — not a UUID, and not " \
                                                             "this operator's to shape." },
-                                 status:     { enum: %w[approved] } },
-                   required: %w[request_id status]
+                                 status:     { enum: %w[approved] },
+                                 kyc_jws:    { type: "string",
+                                               description: "The broker's signed attestation, a " \
+                                                            "full compact JWS. Submit the ENTIRE " \
+                                                            "value to POST /kiosk/agents/kyc." } },
+                   required: %w[request_id status kyc_jws]
     subject_reachable lambda { |request_id, identity|
       KycVerificationRequest.readable_by?(request_id, identity.user_id)
     }
@@ -340,22 +345,22 @@ class Kiosk::OrdersController < ActionController::API
   description "Start an 18+ verification for the authenticated principal — needed only to order " \
               "alcohol, and for nothing else on this shelf. The answer carries a broker page to relay " \
               "to your human: an anonymizing KYC broker confirms the fact and signs an attestation " \
-              "for it, and never hands this operator the documents behind it. Once the human has " \
-              "approved, `kyc_status` is where the signed attestation appears; submit it to " \
-              "`POST <endpoint>/agents/kyc`, then place the order again. No pre-shared issuer key is " \
-              "needed. At most three verifications may be open for one account at a time — a " \
-              "fourth is refused until one of them is approved, or until it has been open long " \
-              "enough that nobody is still on the page, so poll `kyc_status` on a page you were " \
-              "already given rather than opening another. A human's REFUSAL never reaches this " \
-              "operator — the broker reports an approval and nothing else — so a check your human " \
-              "turned down reads as unfinished here, and ages out of that count instead of " \
-              "closing the account down."
+              "for it, and never hands this operator the documents behind it. Subscribe to the " \
+              "`kyc_verification` topic BEFORE calling this: once the human has approved, its event " \
+              "carries the signed attestation; submit it to `POST <endpoint>/agents/kyc`, then place " \
+              "the order again. No pre-shared issuer key is needed. At most three verifications may " \
+              "be open for one account at a time — a fourth is refused until one of them is " \
+              "approved, or until it has been open long enough that nobody is still on the page, so " \
+              "wait on a page you were already given rather than opening another. A human's " \
+              "REFUSAL never reaches this operator — the broker reports an approval and nothing " \
+              "else — so a check your human turned down sends no event, and ages out of that " \
+              "count instead of closing the account down."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "object",
                 description: "The opened verification.",
                 additionalProperties: false,
                 properties: {
-                  request_id:       { type: "string", description: "Pass to kyc_status as `request_id` to poll for the signed attestation." },
+                  request_id:       { type: "string", description: "The `request_id` the kyc_verification event for this check carries." },
                   verification_url: { type: "string", description: "The broker page to relay to your human to approve." },
                   status:           { const: "pending", description: "pending — a freshly opened request is always this." },
                 },

@@ -37,15 +37,6 @@ class KioskConformanceTest < ActiveSupport::TestCase
     @bob_order   = Order.create!(user: @bob,   status: Order::CREATED, total_cents: 449,
                                  address: "9 Grafton Street, Dublin 2",
                                  timezone: DeliverySlots::DEFAULT_ZONE_NAME)
-
-    # `kyc_status` polls ONE verification by the broker's request id, so it is
-    # the one verb here that cannot be called with no arguments at all.
-    @alice_kyc = KycVerificationRequest.create!(request_token: "req-alice-conformance",
-                                                user_id: @alice.id,
-                                                status: KycVerificationRequest::PENDING)
-    @bob_kyc   = KycVerificationRequest.create!(request_token: "req-bob-conformance",
-                                                user_id: @bob.id,
-                                                status: KycVerificationRequest::PENDING)
   end
 
   # ── 1. THE ROUTES RESOLVE ───────────────────────────────────────────────
@@ -53,7 +44,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # Every verb needs a line in `config/routes/kiosk.rb`, and a verb declared
   # without one is a 404 to every caller — something this app's own flow tasks
   # would notice only if one of them happened to call it. This asks the router
-  # about all eight at once.
+  # about all seven at once.
   #
   # Watched fail: delete the `get "/kiosk/delivery_slots"` line and this goes
   # red naming the verb, the method and the path — where `check:shop` would keep
@@ -71,8 +62,6 @@ class KioskConformanceTest < ActiveSupport::TestCase
     assert_kiosk_verb_executes :catalog,        as: @alice
     assert_kiosk_verb_executes :delivery_slots, as: @alice
     assert_kiosk_verb_executes :my_orders,      as: @alice
-    assert_kiosk_verb_executes :kyc_status,     as: @alice,
-                               params: { request_id: @alice_kyc.request_token }
   end
 
   # ── 3. A QUERY ANSWERS THE SHAPE IT DECLARED ────────────────────────────
@@ -98,11 +87,6 @@ class KioskConformanceTest < ActiveSupport::TestCase
     assert_kiosk_answer_matches_declared_schema :delivery_slots, as: @alice
   end
 
-  test "kyc_status answers the shape it publishes" do
-    assert_kiosk_answer_matches_declared_schema :kyc_status, as: @alice,
-                                                params: { request_id: @alice_kyc.request_token }
-  end
-
   # ── 4. DATA ACCESS IS SCOPED TO THE PRINCIPAL ───────────────────────────
   #
   # `my_orders` declares no `reach`, which means `principal` — the strongest
@@ -115,14 +99,5 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # this names the leaked rows.
   test "my_orders hands one shopper nothing belonging to another" do
     assert_kiosk_scoped_to_principal :my_orders, as: @alice, and_not: @bob
-  end
-
-  # The same property on the verb where a leak would be worse: `kyc_status`
-  # carries the broker's signed attestation once it lands, so a caller who could
-  # poll somebody else's request id could lift it. Both principals ask for
-  # ALICE's request; bob must be answered nothing.
-  test "kyc_status hands one principal nothing belonging to another" do
-    assert_kiosk_scoped_to_principal :kyc_status, as: @alice, and_not: @bob,
-                                     params: { request_id: @alice_kyc.request_token }
   end
 end

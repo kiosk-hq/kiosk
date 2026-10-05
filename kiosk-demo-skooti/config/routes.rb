@@ -26,8 +26,8 @@ Rails.application.routes.draw do
   # broker's intake with THIS callback; on the human's
   # approve, the broker POSTs the signed anonymized {age_over_18, licence_a}
   # claim here. skooti verifies it against the trusted ProveKey, checks the
-  # nonce/operator/request_id it stored, and parks the jws for the agent to
-  # fetch via kyc_status and submit to /kiosk/agents/kyc. The broker owns
+  # nonce/operator/request_id it stored, and pushes the jws to the agent on the
+  # kyc_verification event for it to submit to /kiosk/agents/kyc. The broker owns
   # issuance; this origin never mints an attestation of its own.
   post "/kyc/callback",                            to: "kyc_callback#create"
 end

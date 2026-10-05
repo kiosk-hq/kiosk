@@ -125,7 +125,7 @@ What each unit must carry. For EACH of the 7 apps:
       basket as unbuyable by any route. The audit above is the box-side control; `bin/check-kyc-operator-pairing` is the
       tree-side one and says in its own header that it cannot see a box.
       **What a missed pair looks like from outside, so it is not mistaken for a design choice:** the origin still
-      ADVERTISES `request_kyc` and `kyc_status` in `/kiosk/schema` — the descriptor is static — and answers the verb
+      ADVERTISES `request_kyc` in `/kiosk/schema` — the descriptor is static — and answers the verb
       `501 module_not_served`. No unauthenticated probe can tell that apart from an operator that genuinely serves no
       KYC module.
 

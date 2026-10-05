@@ -863,10 +863,8 @@ namespace :check do
       BLOCKED  MalformedUuidArg      — a junk reservation_id, as an arg AND inside a
                                        signed cart, is a typed 400 with no SQL
                                        internals — never a 500
-      BLOCKED  HostileArgShapes      — boolean/array/object/number on scooter_code,
-                                       reservation_id and request_id → typed 400 (or,
-                                       for an unknown id on a query, 404 not_found),
-                                       never a 500
+      BLOCKED  HostileArgShapes      — boolean/array/object/number on scooter_code
+                                       and reservation_id → typed 400, never a 500
       BLOCKED  MotorcycleForgedKyc   — a forged attestation self-asserting
                                        {age_over_18, licence_a} leaves the
                                        attribute-gated rent_motorcycle at 403
@@ -879,7 +877,7 @@ namespace :check do
       BLOCKED  CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
                                        operator is rejected at skooti's /kyc/callback
       BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
-                                       absent) is rejected; kyc_status stays pending
+                                       absent) is rejected; no event is sent
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and POST /kiosk/run
                                        name no registered verb and no route draws them: the
                                        ordinary 404 any undrawn path gets, bearer or not,
@@ -1033,7 +1031,7 @@ namespace :check do
       • capabilities is the MODULE set schema/queries/actions/pay and events
       • schema.actions includes reserve, start_rental, rent_motorcycle,
         payment_setup with descriptions
-      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon
+      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
@@ -1284,18 +1282,9 @@ namespace :check do
       end
     end
 
-    # kyc_status query (poll a request_kyc verification) present with a description
-    kyc_status_entry = queries.find { |q| q["name"] == "kyc_status" }
-    if kyc_status_entry && kyc_status_entry["description"].to_s != ""
-      puts "  ✓  schema.queries includes kyc_status with description"
-    else
-      failures << "schema.queries missing kyc_status (or no description)"
-      puts "  ✗  schema.queries missing kyc_status (or no description)"
-    end
-
     # ── THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ────────────
-    # The out-of-band verbs below are learned about by RE-POLLING and nothing
-    # else — the wire has no server→assistant push — so their descriptors carry
+    # An assistant at an origin it holds no stream to learns of card setup by
+    # RE-POLLING `payment_setup`, so its descriptor carries
     # a cadence and a give-up horizon, QUOTING kiosk.tech/skill.md's tiered
     # schedule rather than a rival flat one. NOTHING ELSE THAT RUNS READS EITHER
     # VALUE BACK — they live only in the source they are written into — so
@@ -1310,7 +1299,7 @@ namespace :check do
     # schedule lives, and a derived copy of a schedule is one copy too many.
     poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
     poll_horizon = /GIVE UP after about (\d+) minutes?/
-    { actions => ["payment_setup"], queries => ["kyc_status"] }.each do |list, names|
+    { actions => ["payment_setup"] }.each do |list, names|
       names.each do |vname|
         entry = list.find { |e| e["name"] == vname }
         if entry.nil?
@@ -1390,8 +1379,9 @@ namespace :check do
           carries the TOP-LEVEL code "kyc_required", and whose `hint` points the
           agent at `request_kyc`
       A2  POST /kiosk/request_kyc            → 200, returns a verification_url on
-          the skooti host; human approves the stub KYC-provider page; poll
-          GET /kiosk/kyc_status?request_id=… → approved returns the signed kyc_jws
+          the skooti host; human approves the stub KYC-provider page; the
+          kyc_verification event, subscribed before the check was opened,
+          carries the signed kyc_jws
       A3  submit the relayed kyc_jws to      → 200 (attributes {age_over_18,
           POST /agents/kyc                      licence_a} recorded)
       A4  rent_motorcycle WITH KYC           → 200, offline token unlocks the lock
@@ -1519,9 +1509,9 @@ namespace :check do
 
     # A2: the SHARED-BROKER issuer path — request_kyc returned a verification_url
     # on the KYC BROKER host, the broker approve page accepted the token,
-    # the broker POSTed its signed claim to skooti's callback, kyc_status reached
-    # approved, and the broker-signed jws was relayed back (the agent never held
-    # the signing key).
+    # the broker POSTed its signed claim to skooti's callback, and the
+    # kyc_verification event delivered the broker-signed jws over the socket
+    # (the agent never held the signing key).
     vurl = result["request_kyc_verification_url"].to_s
     if result["http_request_kyc"] == 200 && vurl.include?("/verify?request=")
       puts "  OK  A2 request_kyc → 200 with broker verification_url #{vurl.inspect}"
@@ -1541,11 +1531,11 @@ namespace :check do
       puts "  FAIL  A2b fourth PENDING request_kyc → #{result["http_request_kyc_capped"].inspect}/#{result["request_kyc_capped_code"].inspect}"
     end
 
-    if result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true
-      puts "  OK  A2 human approved broker page → callback landed, kyc_status approved, broker-signed jws relayed (no pre-shared key)"
+    if result["http_approve_page"] == 200 && result["kyc_event_status"] == "approved" && result["kyc_jws_relayed"] == true
+      puts "  OK  A2 human approved broker page → kyc_verification event delivered on the socket, carrying the broker-signed jws (no pre-shared key)"
     else
-      failures << "A2: broker path expected approve=200/status=approved/jws relayed, got approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
-      puts "  FAIL  A2 broker path → approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
+      failures << "A2: broker path expected approve=200/event status=approved/jws carried, got approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_event_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
+      puts "  FAIL  A2 broker path → approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_event_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
     end
 
     # A3: the relayed jws is accepted at /agents/kyc and records both attributes.

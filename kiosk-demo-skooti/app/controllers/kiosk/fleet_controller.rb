@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# skooti's READ surface: the three verbs an assistant reaches with
+# skooti's READ surface: the two verbs an assistant reaches with
 # `GET /kiosk/<query-name>`, one endpoint per verb, arguments in the query
 # string. Kiosk ships a MIXIN, not a base class — `include Kiosk::Handler` is the
 # whole contract — and each class-level macro records a declaration that the NEXT
@@ -22,21 +22,25 @@ class Kiosk::FleetController < ActionController::API
   # THE WAIT THE EVENT STREAM EXISTS FOR. `request_kyc` hands the human a link
   # and then there is nothing to do but wait for a person to finish on somebody
   # else's page. This operator knows the instant they do — the broker posts to
-  # /kyc/callback — and until this topic the assistant discovered it by polling
-  # `kyc_status`, on a cadence nobody specified, paying a proof of work per ask.
+  # /kyc/callback — and the event hands the assistant the signed attestation.
   #
   # The subject is the verification REQUEST, and the audience is the one
   # principal that opened it.
   topic :kyc_verification do
-    description "An identity check you opened with request_kyc was answered. Submit the " \
-                "attestation to /kiosk/agents/kyc and retry what you were doing."
+    description "An identity check you opened with request_kyc was approved. The event " \
+                "carries the broker's signed attestation: submit `kyc_jws` to " \
+                "/kiosk/agents/kyc and retry what you were doing."
     payload_schema type: "object", additionalProperties: false,
                    properties: { request_id: { type: "string",
                                                description: "The BROKER's own request id, echoed " \
                                                             "back opaquely — not a UUID, and not " \
                                                             "this operator's to shape." },
-                                 status:     { enum: %w[approved] } },
-                   required: %w[request_id status]
+                                 status:     { enum: %w[approved] },
+                                 kyc_jws:    { type: "string",
+                                               description: "The broker's signed attestation, a " \
+                                                            "full compact JWS. Submit the ENTIRE " \
+                                                            "value to POST /kiosk/agents/kyc." } },
+                   required: %w[request_id status kyc_jws]
     subject_reachable lambda { |request_id, identity|
       KycVerificationRequest.readable_by?(request_id, identity.user_id)
     }
@@ -169,79 +173,5 @@ class Kiosk::FleetController < ActionController::API
                                 status:         status,
                                 payment_state:  Reservation.payment_state(payment_status, settled) }
                             }
-  end
-
-  # ── kyc_status — poll a request_kyc verification the caller opened.
-  #
-  # The cadence and the give-up horizon are part of the contract: the wire has
-  # no server→assistant push, so a descriptor that stops at "poll until the
-  # human acts" leaves an agent to invent a loop with no exit.
-  # The schedule below is QUOTED from kiosk.tech/skill.md's KYC-poll paragraph
-  # so the two surfaces cannot publish rival arithmetic. `check:schema` asserts
-  # the SHAPE of it on the SERVED descriptor — two tiers, the second slower than
-  # the first, and a horizon in minutes — and DELIBERATELY not the numbers, so
-  # that the rake file is not a third place the schedule lives. Nothing checks
-  # these digits against the skill: keeping them equal is this comment's job.
-  kind :query
-  description "Poll a verification `request_kyc` opened, until the human has acted on it. TWO " \
-              "answers and that is the whole set: still waiting, and APPROVED — carrying the " \
-              "broker's signed attestation, which you submit to `POST <endpoint>/agents/kyc` " \
-              "before asking for the motorcycle again. There is no third: an anonymizing broker " \
-              "reports an approval to this operator and nothing else, so a verification your " \
-              "human REFUSED reads as still waiting here, for ever, and the polling horizon " \
-              "below is your stop condition. " \
-              "POLLING: while your human is completing the check, re-check every ~5 seconds for the " \
-              "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
-              "check can legitimately take that long, but if it is still waiting by then, stop and " \
-              "tell your human it is not done rather than polling indefinitely. A verification stays " \
-              "pollable, so you can come back to it later; if the human's link has expired since, " \
-              "start a new one."
-  input_schema type: "object",
-               additionalProperties: false,
-               properties: {
-                 request_id: { type: "string",
-                               description: "The verification to poll — the `request_id` request_kyc returned." },
-               },
-               required: ["request_id"]
-  # A ONE-ROW array: this is a query, and a query answers with rows. `kyc_jws`
-  # exists only in the approved shape — nothing to leak before the human acts.
-  output_schema type: "array",
-                description: "Exactly one row: the verification's current state.",
-                minItems: 1, maxItems: 1,
-                items: {
-                  oneOf: [
-                    { type: "object", additionalProperties: false,
-                      description: "Not yet approved.",
-                      properties: { status: { const: "pending",
-                                              description: "pending = this operator has not been told the human approved it. A refusal is never reported here, so a check they turned down reads as this too; the polling horizon in the description is your stop condition." } },
-                      required: ["status"] },
-                    { type: "object", additionalProperties: false,
-                      description: "Approved — the signed attestation is here.",
-                      properties: {
-                        status:  { const: "approved", description: "approved." },
-                        kyc_jws: { type: "string", description: "A full compact JWS. Submit the ENTIRE value to POST /kiosk/agents/kyc, then retry rent_motorcycle." },
-                      },
-                      required: %w[status kyc_jws] },
-                  ],
-                }
-  def kyc_status
-    return render_refusal(WireArguments.missing("request_id")) if params[:request_id].blank?
-
-    # Bound to the caller by `owned_by_current_principal`, so an agent only ever
-    # sees the status (and the jws) of a request IT opened. `pick`, not `find_by!`
-    # — the bang form answers this same 404 with Rails' message, not this one.
-    row = KycVerificationRequest.owned_by_current_principal
-                                .where(request_token: params[:request_id].to_s)
-                                .pick(:status, :kyc_jws)
-    if row.nil?
-      return render_refusal(OperationResult.refused(
-        code: "not_found", message: "no such verification request for this principal",
-      ))
-    end
-
-    status, kyc_jws = row
-    render json: (status == KycVerificationRequest::APPROVED ?
-                    [{ status: status, kyc_jws: kyc_jws }] :
-                    [{ status: status }])
   end
 end

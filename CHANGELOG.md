@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-05: **getgrocery and skooti: the `kyc_verification` event carries the signed attestation**, and `kyc_status` is removed.
+
 - 2026-10-05: **getgrocery and skooti: narrowing `kyc_verification` to a request id works**; the subject rule queried a column the table lacks and refused every one.
 
 - 2026-10-05: **A subscription that names no `subject` is accepted on every topic** and carries what was addressed to the subscriber; the subject rule answers for a named one.

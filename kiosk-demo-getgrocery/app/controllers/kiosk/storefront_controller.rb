@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# getgrocery's READ surface: the four verbs an assistant reaches with
+# getgrocery's READ surface: the three verbs an assistant reaches with
 # `GET /kiosk/<query-name>`, arguments in the query string. Kiosk ships a MIXIN,
 # not a base class — `include Kiosk::Handler` is the whole contract — and each
 # class-level macro records a declaration that the NEXT `def` claims, so a method
@@ -314,75 +314,6 @@ class Kiosk::StorefrontController < ActionController::API
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }
-  end
-
-  # ── kyc_status — poll a request_kyc verification the caller opened.
-  kind :query
-  description "Poll a verification `request_kyc` opened, until the human has acted on it. TWO " \
-              "answers and that is the whole set: still waiting, and APPROVED — carrying the " \
-              "broker's signed attestation, which you submit to `POST <endpoint>/agents/kyc` " \
-              "before placing the order again. There is no third: an anonymizing broker reports " \
-              "an approval to this operator and nothing else, so a verification your human " \
-              "REFUSED reads as still waiting here, for ever. That is what the polling horizon " \
-              "below is for — when it runs out, ask your human what happened instead of polling " \
-              "on. The attestation is a full compact JWS: a long, single-line, " \
-              "dot-separated token, and you submit the ENTIRE value, never a truncated console echo. " \
-              "POLLING: while your human is completing the check, re-check every ~5 seconds for the " \
-              "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
-              "check can legitimately take that long, but if it is still waiting by then, stop and " \
-              "tell your human it is not done rather than polling indefinitely. A verification stays " \
-              "pollable, so you can come back to it later; if the human's link has expired since, " \
-              "start a new one."
-  input_schema type: "object",
-               additionalProperties: false,
-               properties: {
-                 request_id: { type: "string",
-                               description: "The verification to poll — the `request_id` request_kyc returned." },
-               },
-               required: ["request_id"]
-  # A ONE-ROW array: this is a query, and a query answers with rows. The two
-  # shapes are the two states, and `kyc_jws` exists only in the approved one —
-  # there is nothing to hand back before the human acts, and nothing to leak.
-  output_schema type: "array",
-                description: "Exactly one row: the verification's current state.",
-                minItems: 1, maxItems: 1,
-                items: {
-                  oneOf: [
-                    { type: "object", additionalProperties: false,
-                      description: "Not yet approved.",
-                      properties: { status: { const: "pending",
-                                              description: "pending = this operator has not been told the human approved it. A refusal is never reported here, so a check they turned down reads as this too; the polling horizon in the description is your stop condition." } },
-                      required: ["status"] },
-                    { type: "object", additionalProperties: false,
-                      description: "Approved — the signed attestation is here.",
-                      properties: {
-                        status:  { const: "approved", description: "approved." },
-                        kyc_jws: { type: "string", description: "A full compact JWS. Submit the ENTIRE value to POST /kiosk/agents/kyc, then retry create_order." },
-                      },
-                      required: %w[status kyc_jws] },
-                  ],
-                }
-  def kyc_status
-    return render_refusal(WireArguments.missing("request_id")) if params[:request_id].blank?
-
-    # Bound to the caller by `owned_by_current_principal`, so an agent only ever
-    # sees the status — and the jws — of a request IT opened, and cannot lift the
-    # attestation out of another agent's verification. `pick`, not `find_by!`:
-    # the bang form raises RecordNotFound and the mixin's `rescue_from` floor
-    # would render Rails' message instead of the operator's.
-    row = KycVerificationRequest.owned_by_current_principal
-                                .where(request_token: params[:request_id].to_s)
-                                .pick(:status, :kyc_jws)
-    if row.nil?
-      return render_refusal(OperationResult.refused(
-        code: "not_found", message: "no such verification request for this principal",
-      ))
-    end
-
-    status, kyc_jws = row
-    render json: (status == KycVerificationRequest::APPROVED ?
-                    [{ "status" => status, "kyc_jws" => kyc_jws }] :
-                    [{ "status" => status }])
   end
 
   private

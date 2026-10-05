@@ -299,9 +299,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
 
     it "PASSES when the second principal is REFUSED outright" do
       # Refusing is the stronger spelling of scoping: an origin that answers 404
-      # to a row it will not show does not even confirm the row exists. This is
-      # the shape a real demo hit — getgrocery's `kyc_status` answers
-      # `not_found` to a principal polling somebody else's request id.
+      # to a row it will not show does not even confirm the row exists.
       refusal = Class.new(StandardError) do
         def code = "not_found"
         def http_status = 404

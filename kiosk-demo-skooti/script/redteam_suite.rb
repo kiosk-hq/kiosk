@@ -31,9 +31,8 @@
 #   MalformedUuidArg   — a junk reservation_id, as an arg AND inside a signed
 #                        cart, is a typed 400 with no SQL internals — never a 500
 #   HostileArgShapes   — every hostile SHAPE (boolean/array/object/number) on
-#                        scooter_code, reservation_id and request_id is a typed
-#                        400 too — or a 404 for an unknown id on a query, never
-#                        a 500. It also carries a control on its own ORACLE: a
+#                        scooter_code and reservation_id is a typed 400 too,
+#                        never a 500. It also carries a control on its own ORACLE: a
 #                        scooter_code spelling three of the leak strings must
 #                        be BLOCKED, not a BREACH on its echo
 #
@@ -41,8 +40,8 @@
 #   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
 #                        operator is rejected at skooti's /kyc/callback
 #   ForgedCallbackNoSig — a callback whose jws is wrong-key (or absent) is
-#                        rejected, so kyc_status stays pending and the gate
-#                        never opens
+#                        rejected, so no kyc_verification event is sent and
+#                        the gate never opens
 #
 # And two forgery beats at the identity boundary, both over the wire in the
 # SAME environment the drivers run in:
@@ -155,6 +154,17 @@ def post_kyc_callback(body)
   req.body = JSON.generate(body)
   res = Kiosk::Redteam::Wire.http_for(uri).request(req)
   res.code.to_i
+end
+
+# The kyc_verification events this principal's stream replays from the start.
+# An event lands in the tail before the callback answers, so a short read after
+# the callback has returned sees every event there is.
+def kyc_events_for(principal)
+  stream = Kiosk::Redteam::EventStream.new(base_url: BASE_URL, token: principal.token)
+  stream.subscribe("kyc_verification", since: 0)
+  stream.listen(2)
+ensure
+  stream&.close
 end
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -501,7 +511,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     super(
       name:        "HostileArgShapes",
       category:    "input",
-      description: "Boolean/array/object/number arguments on scooter_code, reservation_id and request_id are a typed 400 — never a 500",
+      description: "Boolean/array/object/number arguments on scooter_code and reservation_id are a typed 400 — never a 500",
     )
   end
 
@@ -516,13 +526,6 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.run(a, name: "start_rental", reservation_id: v), supplied: v
       refused "rent_motorcycle reservation_id=#{v.inspect}",
               client.run(a, name: "rent_motorcycle", reservation_id: v), supplied: v
-      # kyc_status is a QUERY, so the wire flattens every one of these to a
-      # STRING before any code sees it — `true` arrives as "true". The honest
-      # assertion is therefore the pair of answers a well-formed-but-unknown
-      # request id may get (a shape 400 or spec §9.1's `404 not_found`), never
-      # a 5xx and never someone else's status served as a 200.
-      absent_or_refused "kyc_status request_id=#{v.inspect}",
-                        client.query(a, name: "kyc_status", request_id: v), supplied: v
     end
 
     # The one that reaches ReserveOperation: a well-typed but unknown handle.
@@ -599,18 +602,6 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
                  "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
-  end
-
-  def absent_or_refused(label, resp, supplied: nil)
-    doc  = resp.body.is_a?(Hash) ? resp.body : {}
-    scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
-    ok   = (resp.status == 400 && doc["code"] == "bad_request") ||
-           (resp.status == 404 && doc["code"] == "not_found")
-    return if ok && !scan.leak?
-
-    @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
-                 "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note} " \
-                 "(want 400/bad_request or 404/not_found)"
   end
 end
 
@@ -880,7 +871,7 @@ mc_verbswap_beat = motorcycle_via_start_rental.call
 # proves an ISSUED, VALID broker jws cannot be lifted onto a DIFFERENT agent:
 # victim B opens request_kyc (skooti calls the broker), the human approves B's
 # request on the BROKER page, the broker POSTs the signed claim to skooti's
-# callback, and B receives via kyc_status a real broker-signed jws bound to B's
+# callback, and B receives on its event stream a real broker-signed jws bound to B's
 # user_id. Attacker A — which has reserved + paid for its OWN motorcycle so ONLY
 # the KYC-attribute gate can block — submits B's jws to /agents/kyc. The
 # KycVerifier binds `sub` to the authenticated identity, so it rejects (subject
@@ -890,24 +881,20 @@ mc_verbswap_beat = motorcycle_via_start_rental.call
 kyc_jws_theft = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 
-  # Victim B obtains a REAL broker-signed attestation: request_kyc → approve on
-  # the broker → broker callback parks the jws → kyc_status returns it.
+  # Victim B obtains a REAL broker-signed attestation: subscribe → request_kyc →
+  # approve on the broker → the kyc_verification event carries the jws.
   b = client.register!(name: "redteam-kyc-victim-b")
+  stream_b = Kiosk::Redteam::EventStream.new(base_url: BASE_URL, token: b.token)
+  stream_b.subscribe("kyc_verification")
   req_b = client.run(b, name: "request_kyc")
   raise "redteam(skooti): request_kyc(B) failed (#{req_b.status})" unless req_b.status == 200
   token_b = req_b.body["request_id"]
   approve_rc = broker_approve(token_b)
   raise "redteam(skooti): approve(B) on broker failed (#{approve_rc})" unless approve_rc == 200
 
-  # Poll kyc_status until the broker's async callback lands the jws.
-  victim_jws = nil
-  20.times do
-    status_b = client.query(b, name: "kyc_status", request_id: token_b)
-    victim_jws = Array(status_b.body).first&.dig("kyc_jws")
-    break if victim_jws && !victim_jws.empty?
-    sleep 0.2
-  end
-  raise "redteam(skooti): kyc_status(B) returned no jws" if victim_jws.nil? || victim_jws.empty?
+  victim_jws = stream_b.await { |e| e.dig("data", "request_id") == token_b }.dig("data", "kyc_jws")
+  stream_b.close
+  raise "redteam(skooti): B's kyc_verification event carried no jws" if victim_jws.to_s.empty?
 
   # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
   a = client.register!(name: "redteam-kyc-attacker-a")
@@ -960,7 +947,7 @@ theft_beat = kyc_jws_theft.call
 # addressed to ITSELF. We open a real skooti request (so the request_id/nonce are
 # valid and pending) but mint the claim for a DIFFERENT operator with the broker
 # ProveKey, then deliver it to skooti's callback. skooti must reject (operator
-# mismatch) → kyc_status stays pending → the agent stays 403 kyc_required. A bug
+# mismatch) → no kyc_verification event → the agent stays 403 kyc_required. A bug
 # that dropped the operator check would let a claim solicited by/for another
 # operator unlock skooti — a real BREACH.
 cross_operator_replay = lambda do
@@ -995,12 +982,10 @@ cross_operator_replay = lambda do
 
   cb_rc = post_kyc_callback(request_id:, kyc_jws: forged_operator_jws, nonce: "any")
 
-  # The callback must reject (403/404). The agent's rent stays blocked because
-  # kyc_status never reaches approved.
-  st = client.query(a, name: "kyc_status", request_id:)
-  status = Array(st.body).first&.dig("status")
+  # The callback must reject (403/404), so no attestation reaches the agent.
   callback_rejected = cb_rc != 200
-  still_pending     = status != "approved"
+  events            = kyc_events_for(a)
+  still_pending     = events.empty?
 
   # ENGINE-LEVEL block (the aud operator-binding): submit the wrong-aud claim
   # DIRECTLY to the wire endpoint POST /kiosk/agents/kyc, bypassing skooti's
@@ -1012,11 +997,11 @@ cross_operator_replay = lambda do
   wire_blocked = Kiosk::Redteam.blocked?(wire_resp)
 
   if callback_rejected && still_pending && wire_blocked
-    { blocked: true, detail: "cross-operator claim rejected at BOTH the engine wire (POST /kiosk/agents/kyc → #{wire_resp.status}, aud mismatch) and /kyc/callback (#{cb_rc}); kyc_status stays #{status.inspect}" }
+    { blocked: true, detail: "cross-operator claim rejected at BOTH the engine wire (POST /kiosk/agents/kyc → #{wire_resp.status}, aud mismatch) and /kyc/callback (#{cb_rc}); no kyc_verification event sent" }
   elsif !wire_blocked
     { blocked: false, detail: "ENGINE BREACH: wrong-aud claim accepted at the wire (POST /kiosk/agents/kyc=#{wire_resp.status})" }
   else
-    { blocked: false, detail: "cross-operator claim accepted at the callback: callback=#{cb_rc}, kyc_status=#{status.inspect}" }
+    { blocked: false, detail: "cross-operator claim accepted at the callback: callback=#{cb_rc}, kyc_verification events=#{events.size}" }
   end
 end
 
@@ -1029,7 +1014,7 @@ xop_beat = cross_operator_replay.call
 # key (trusted issuer, bad signature) — or is missing entirely — must be
 # rejected, so a forged callback cannot stamp a claim. We open a real skooti
 # request, then POST a callback carrying a wrong-key jws for A's subject. skooti
-# must reject → kyc_status stays pending → agent stays 403. A weakened signature
+# must reject → no kyc_verification event → agent stays 403. A weakened signature
 # check would let anyone forge a callback and unlock — a real BREACH.
 forged_callback_no_sig = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
@@ -1053,17 +1038,16 @@ forged_callback_no_sig = lambda do
   # Also a callback with NO jws at all.
   cb_missing = post_kyc_callback(request_id:, nonce: "any")
 
-  st = client.query(a, name: "kyc_status", request_id:)
-  status = Array(st.body).first&.dig("status")
+  events = kyc_events_for(a)
 
   wrong_rejected   = cb_wrong != 200
   missing_rejected = cb_missing != 200
-  still_pending    = status != "approved"
+  still_pending    = events.empty?
 
   if wrong_rejected && missing_rejected && still_pending
-    { blocked: true, detail: "wrong-key callback (#{cb_wrong}) and no-jws callback (#{cb_missing}) both rejected; kyc_status stays #{status.inspect}" }
+    { blocked: true, detail: "wrong-key callback (#{cb_wrong}) and no-jws callback (#{cb_missing}) both rejected; no kyc_verification event sent" }
   else
-    { blocked: false, detail: "forged callback accepted: wrong=#{cb_wrong}, missing=#{cb_missing}, kyc_status=#{status.inspect}" }
+    { blocked: false, detail: "forged callback accepted: wrong=#{cb_wrong}, missing=#{cb_missing}, kyc_verification events=#{events.size}" }
   end
 end
 

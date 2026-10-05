@@ -29,8 +29,9 @@ class RentMotorcycleOperation
         message: "motorcycle rental requires KYC attributes age_over_18 and licence_a",
         # The completable path: no pre-shared issuer key needed.
         hint:    "POST <endpoint>/request_kyc to start age≥18 + category-A licence verification: " \
-                 "it returns a verification_url for the human to approve; then poll " \
-                 "GET <endpoint>/kyc_status for the signed attestation and submit it to " \
+                 "subscribe to the kyc_verification topic first; it returns a " \
+                 "verification_url for the human to approve, and the kyc_verification " \
+                 "event carries the signed attestation (kyc_jws): submit it to " \
                  "POST <endpoint>/agents/kyc, then retry rent_motorcycle",
       )
     end

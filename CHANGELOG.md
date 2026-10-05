@@ -12,6 +12,10 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-06: **Every demo and the engine default pin `skill-v0.5.2.md`**, the cut that waits on the `kyc_verification` event for the attestation and says how an event wakes an idle assistant.
+
+- 2026-10-06: **The pinned listener leaves on `501 module_not_served` with exit 4** rather than reporting a dead token or re-minting for ever, and sends no `Origin` header.
+
 - 2026-10-05: **getgrocery and skooti: the `kyc_verification` event carries the signed attestation**, and `kyc_status` is removed.
 
 - 2026-10-05: **getgrocery and skooti: narrowing `kyc_verification` to a request id works**; the subject rule queried a column the table lacks and refused every one.

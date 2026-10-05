@@ -10,20 +10,19 @@ cadence to invent.
                       --token "$KIOSK_TOKEN" \
                       --topic order_delivery --topic order_payment:<order-id>
 
-WAITING FOR ONE THING to happen -- a human finishing an identity check, a card
-being saved? Add `--until-event` and run it IN THE FOREGROUND: it prints the
-first event and exits 0 the moment it arrives, so a wait costs what the human
-took and not the deadline. At the deadline with nothing it exits 5, and you
-wait again. Do not background it and poll a log file -- a turn-based runtime is
-never woken by a line landing in a file, and an event that arrives between
-turns is an event nobody reads.
+EXIT ON THE EVENT: add `--until-event` and it prints the first event and exits
+0 the moment it arrives, or exits 5 at `--max-seconds` with nothing. Run it in
+the foreground inside one tool call, or as a background process your runtime
+TRACKS and wakes you on when it exits; on waking, act on the event and start it
+again with `--since <its id>`. Keep `--max-seconds` below the longest your
+runtime lets a background process live. A process the runtime does not track --
+nohup, `&`, setsid -- wakes nobody, and neither does a line landing in a file.
 
     python3 listen.py --url … --token … --topic kyc_verification \
                       --until-event --max-seconds 300
 
-For an event that lands hours later, when you are not running, the CURSOR is
-the delivery mechanism: record the highest `id` you saw and start again with
-`--since <id>`.
+When nothing is running, the CURSOR is the delivery mechanism: record the
+highest `id` you saw and start again with `--since <id>`.
 
 Each line is a JSON object with a `type`:
 
@@ -39,9 +38,9 @@ Each line is a JSON object with a `type`:
 EXIT CODES: 0 you asked it to stop (--max-seconds), or --until-event got its
 event; 2 the arguments or the URL are wrong; 3 the operator will not have this
 token back and no --token-command was given — mint a fresh one and start it
-again; 4 every topic you named was refused, so this would have waited forever
-for something that cannot arrive; 5 --until-event reached the deadline with
-nothing.
+again; 4 nothing you asked for can arrive: every topic you named was refused,
+or the origin serves no event stream (`501 module_not_served`); 5
+--until-event reached the deadline with nothing.
 
 It needs `websockets` from PyPI (>= 12, the release that added the threading
 client). Add it to the same venv the skill already has you create:
@@ -80,11 +79,12 @@ def emit(**line):
     sys.stdout.flush()
 
 
-def origin_of(url):
-    """The `Origin` header an operator's CSRF check reads: scheme + host only."""
-    parts = urlsplit(url)
-    scheme = "https" if parts.scheme == "wss" else "http"
-    return urlunsplit((scheme, parts.netloc, "", "", ""))
+def problem_code(response):
+    """The `code` of a refused upgrade's problem document, when it carries one."""
+    try:
+        return json.loads(response.body)["code"]
+    except (TypeError, ValueError, KeyError):
+        return None
 
 
 def stream_url(url, topics, since):
@@ -193,21 +193,18 @@ def main():
     parser.add_argument("--topic", action="append", required=True, metavar="NAME[:SUBJECT]",
                         help="repeatable; NAME:SUBJECT narrows to one row")
     parser.add_argument("--since", type=int, help="resume after this event id")
-    parser.add_argument("--origin", help="override the Origin header")
     parser.add_argument("--token-command",
                         help="shell command printing a fresh bearer token; run when the "
                              "operator says this one will not be accepted back")
     parser.add_argument("--max-seconds", type=float, help="stop after this long")
     parser.add_argument("--until-event", action="store_true",
-                        help="exit 0 on the first event, 5 at --max-seconds with none; "
-                             "run in the foreground to wait for one thing to happen")
+                        help="exit 0 on the first event, 5 at --max-seconds with none")
     args = parser.parse_args()
 
     if urlsplit(args.url).scheme not in ("ws", "wss"):
         parser.error("--url must be ws:// or wss://")
     if args.until_event and not args.max_seconds:
-        parser.error("--until-event needs --max-seconds: a foreground wait with no deadline "
-                     "is a tool call that never returns")
+        parser.error("--until-event needs --max-seconds: a wait with no deadline never returns")
 
     state = {"since": args.since, "token": args.token, "refresh": args.token_command,
              "wanted": len(args.topic), "confirmed": 0, "rejected": 0,
@@ -218,12 +215,11 @@ def main():
     while True:
         if deadline and time.monotonic() >= deadline:
             return 5 if args.until_event else 0
+        renew = True
         try:
             with connect(stream_url(args.url, args.topic, state["since"]),
                          subprotocols=[SUBPROTOCOL],
-                         additional_headers={
-                             "Authorization": f"Bearer {state['token']}",
-                             "Origin": args.origin or origin_of(args.url)},
+                         additional_headers={"Authorization": f"Bearer {state['token']}"},
                          open_timeout=15, close_timeout=5) as socket:
                 emit(type="open")
                 attempt = 0
@@ -240,15 +236,20 @@ def main():
         except KeyboardInterrupt:
             return 0
         except websockets.InvalidStatus as error:
-            # The upgrade itself was refused, which on this wire means the
-            # bearer did not resolve. Nothing about waiting changes that.
-            emit(type="error", message=f"upgrade refused: {error.response.status_code}")
-            if state["refresh"] is None:
+            status = error.response.status_code
+            code = problem_code(error.response)
+            emit(type="error", message=f"upgrade refused: {status}" + (f" {code}" if code else ""))
+            # 501: this origin serves no event stream, for any credential.
+            if status == 501:
+                return 4
+            if status not in (401, 403):
+                renew = False
+            elif state["refresh"] is None:
                 return 3
         except Exception as error:  # noqa: BLE001 — every transport fault is one retry
             emit(type="error", message=f"{type(error).__name__}: {error}")
 
-        if state["refresh"] is not None:
+        if renew and state["refresh"] is not None:
             fresh = subprocess.run(state["refresh"], shell=True, capture_output=True,
                                    text=True, check=False)
             if fresh.returncode == 0 and fresh.stdout.strip():

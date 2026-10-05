@@ -55,8 +55,8 @@ require "net/http"
 require "uri"
 
 # ── THE PIN ──────────────────────────────────────────────────────────────────
-PINNED_VERSION = "0.5.1"
-PINNED_SHA256  = "2d34ae0cc75a8143ea95f876c003a00e1ca002e6868403630f422ebb8f34c0b5"
+PINNED_VERSION = "0.5.2"
+PINNED_SHA256  = "e360af83849ad1e7b3b16dd8b5399d9f85aabe1fec2ca43a7910f6c592a882c1"
 # TWO published URLs, the same split the solver uses and for the same reason —
 # except that this one is VERSIONED rather than content-addressed, like the skill
 # cuts. A version-named file is not immutable by construction, so kiosk.tech's

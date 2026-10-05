@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-06: **`listen.py` leaves on `501 module_not_served` with exit 4** rather than reporting a dead token or re-minting for ever, and sends no `Origin` header.
+
+- 2026-10-06: **The default `skill_url` names `skill-v0.5.2.md`.**
+
 - 2026-10-05: **A subscription that names no `subject` is accepted on every topic** and carries what was addressed to the subscriber; the subject rule answers for a named one.
 
 - 2026-10-05: **Security: a revoked or expired token closes every events socket, subscribed or not**, and can no longer open a subscription on one held from before.

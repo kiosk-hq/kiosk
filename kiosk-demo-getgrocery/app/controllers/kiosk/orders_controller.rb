@@ -46,9 +46,8 @@ class Kiosk::OrdersController < ActionController::API
 
   # THE WAIT THE EVENT STREAM EXISTS FOR. `request_kyc` hands the human a link
   # and then there is nothing to do but wait for a person to finish on somebody
-  # else's page. This operator knows the instant they do; before this topic an
-  # assistant found out by polling, at a cadence nobody specified and a proof of
-  # work per ask — measured live at thirty polls in 2m19s.
+  # else's page. This operator knows the instant they do — the broker posts to
+  # /kyc/callback — and the event hands the assistant the signed attestation.
   topic :kyc_verification do
     description "An identity check you opened with request_kyc was approved. The event " \
                 "carries the broker's signed attestation: submit `kyc_jws` to " \

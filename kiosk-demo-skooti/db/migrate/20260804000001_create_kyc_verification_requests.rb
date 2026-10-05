@@ -8,11 +8,10 @@
 # relays the broker's verification_url to a human; on approve the broker POSTs
 # its signed anonymized {age_over_18, licence_a} claim to POST /kyc/callback,
 # which verifies it (trusted ProveKey + nonce + operator + sub) and parks the
-# jws in `kyc_jws`. The agent polls `kyc_status` and submits the jws to POST
-# /kiosk/agents/kyc (agent contract unchanged), then retries rent_motorcycle.
+# jws in `kyc_jws`.
 #
-#   request_token — the BROKER's request_id (PK); the request_id kyc_status
-#                   polls and the callback correlates on.
+#   request_token — the BROKER's request_id (PK); the request_id the callback
+#                   correlates on.
 #   user_id       — the authenticated agent's user_id the request is bound to;
 #                   the broker signs the claim's `sub` to this so KycVerifier
 #                   binds it to the SAME identity (cross-subject theft defense).

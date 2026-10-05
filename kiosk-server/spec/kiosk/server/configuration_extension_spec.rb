@@ -92,8 +92,8 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
 
     it "lets min_client be bumped (provider requires newer CLI feature)" do
-      Kiosk.configure { |c| c.min_client = "0.5.0" }
-      expect(Kiosk.configuration.min_client).to eq("0.5.0")
+      Kiosk.configure { |c| c.min_client = "0.9.0" }
+      expect(Kiosk.configuration.min_client).to eq("0.9.0")
     end
   end
 

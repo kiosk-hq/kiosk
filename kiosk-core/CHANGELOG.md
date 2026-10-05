@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-06: **`Kiosk::Protocol::MIN_CLIENT` is `0.5.2`**, so `Kiosk-Min-Client` and `kiosk.min_client` tell a 0.5.0 or 0.5.1 assistant it is behind a 0.5.2 origin.
+
 - 2026-10-05: `c.additional_origins` lists further origins one deployment serves; `Kiosk.current_issuer` answers the origin of the request being served (ADR-0040).
 
 ## [0.5.0] — 2026-09-26

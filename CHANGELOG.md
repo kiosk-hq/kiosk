@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-06: **`Kiosk::Protocol::MIN_CLIENT` is `0.5.2`**, so `Kiosk-Min-Client` and `kiosk.min_client` tell a 0.5.0 or 0.5.1 assistant it is behind a 0.5.2 origin.
+
 - 2026-10-06: **`/auth.md` names the event stream among the modules `501 module_not_served` can mean**, beside binding, payment and KYC.
 
 - 2026-10-06: **Every demo and the engine default pin `skill-v0.5.2.md`**, the cut that waits on the `kyc_verification` event for the attestation and says how an event wakes an idle assistant.

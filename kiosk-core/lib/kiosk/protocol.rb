@@ -14,10 +14,11 @@ module Kiosk
     # constraint and every pinned skill_url to this constant's MAJOR.MINOR.
     API_VERSION = "0.5.0"
 
-    # Minimum client version that can speak this API version. Advertised in
-    # the Kiosk::Protocol::HEADER_MIN_CLIENT response header on every
-    # /kiosk/* response; older clients are expected to upgrade.
-    MIN_CLIENT = "0.5.0"
+    # The oldest skill cut that can transact with this engine (spec §14.2,
+    # §14.4: a 0.5.2 operator no longer serves the 0.5.0 and 0.5.1 cuts).
+    # Advisory, in the Kiosk::Protocol::HEADER_MIN_CLIENT response header and
+    # `kiosk.min_client`; older clients are expected to upgrade.
+    MIN_CLIENT = "0.5.2"
 
     # HTTP response header names (sent on every /kiosk/* response).
     HEADER_SERVER_VERSION = "Kiosk-Server-Version"

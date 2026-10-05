@@ -171,11 +171,10 @@ class KioskEvents < ActionCable::Channel::Base
 
     !!callable.call(@subject, identity)
   rescue StandardError => e
-    # The refusal is right — the safe reading of a broken authorisation rule is
-    # NO — but it is the operator's own code that raised, and a refusal alone
-    # is indistinguishable from the rule saying no.
+    # Spec Section 8.5.7 leaves `reject_subscription` as the only answer, so
+    # the log is the one place that tells a broken rule from a rule saying no.
     logger&.error("[kiosk] events subject rule raised for topic #{@topic.inspect}: " \
-                  "#{e.class}: #{e.message}")
+                  "#{e.class}: #{e.message} at #{e.backtrace&.first}")
     false
   end
 

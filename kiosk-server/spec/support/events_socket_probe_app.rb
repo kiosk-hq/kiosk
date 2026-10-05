@@ -520,7 +520,7 @@ begin
   REPORT[:raising_rule_rejected] =
     sock.frames.any? { |f| f["type"] == "reject_subscription" && f["identifier"].include?("boom") }
   REPORT[:raising_rule_logged] =
-    LOG.string.include?(%([kiosk] events subject rule raised for topic "boom": RuntimeError: operator rule blew up))
+    LOG.string.include?(%([kiosk] events subject rule raised for topic "boom": RuntimeError: operator rule blew up at #{__FILE__}:))
   sock.close
 
   # 15b — a frame the origin cannot act on (spec Section 8.5.4). Each on its

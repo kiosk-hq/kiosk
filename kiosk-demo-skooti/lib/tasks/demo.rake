@@ -1615,15 +1615,22 @@ namespace :check do
       require "json_schemer"
       schemer = JSONSchemer.schema(JSON.parse(ARGV[0]),
                                    meta_schema: "https://json-schema.org/draft/2020-12/schema")
-      data = Kiosk.configuration.event_store.since(ARGV[1], 0)
-                  .select { |e| e["topic"] == "kyc_verification" }.map { |e| e["data"] }
+      events = Kiosk.configuration.event_store.since(ARGV[1], 0)
+                    .select { |e| e["topic"] == "kyc_verification" }
+      data = events.map { |e| e["data"] }
+      rule = Kiosk::Server::Events.fetch("kyc_verification")[:subject_reachable]
+      owner, stranger = [ARGV[1], SecureRandom.uuid].map do |user_id|
+        Kiosk::Identity.new(user_id: user_id, role: "customer", actor: "agent", agent_id: user_id)
+      end
       puts JSON.generate(events: data.size,
-                         errors: data.flat_map { |d| schemer.validate(d).to_a.map { |v| v["error"] } })
+                         errors: data.flat_map { |d| schemer.validate(d).to_a.map { |v| v["error"] } },
+                         owner_reads: events.count { |e| rule.call(e["subject"], owner) },
+                         stranger_reads: events.count { |e| rule.call(e["subject"], stranger) })
     RUBY
     raw, st = Open3.capture2e("bundle", "exec", "rails", "runner", compare,
                               JSON.generate(result["kyc_payload_schema"]),
                               result["kyc_identity_key"].to_s)
-    abort "E1 could not read the event tail (exit #{st.exitstatus}):\n#{raw}" unless st.success?
+    abort "E1/E2 could not read the event tail or run its subject rule (exit #{st.exitstatus}):\n#{raw}" unless st.success?
     emitted = JSON.parse(raw.lines.grep(/^\{/).last.to_s)
     if emitted["events"].to_i.positive? && emitted["errors"].empty?
       puts "  OK  E1 every emitted kyc_verification `data` satisfies the payload_schema this origin serves"
@@ -1632,6 +1639,16 @@ namespace :check do
                   "#{emitted["errors"].size} violating the payload_schema this origin serves " \
                   "for the topic — #{emitted["errors"].first(3).join("; ")}"
       puts "  FAIL  E1 emitted kyc_verification `data` against the served payload_schema"
+    end
+    # The subject an event names is the one an assistant narrows a subscription
+    # to, so the topic's own subject rule must say yes to its owner, no to others.
+    if emitted["owner_reads"] == emitted["events"] && emitted["stranger_reads"].zero?
+      puts "  OK  E2 the topic's subject rule admits the owner to every emitted subject, and no stranger"
+    else
+      failures << "E2: the kyc_verification subject rule admitted the owner to " \
+                  "#{emitted["owner_reads"]} of #{emitted["events"]} emitted subjects and a " \
+                  "stranger to #{emitted["stranger_reads"]}"
+      puts "  FAIL  E2 the topic's subject rule against the emitted subjects"
     end
 
     if failures.empty?

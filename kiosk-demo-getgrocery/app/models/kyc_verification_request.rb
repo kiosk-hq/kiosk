@@ -67,7 +67,7 @@ class KycVerificationRequest < ApplicationRecord
   def self.readable_by?(request_id, user_id)
     return false if request_id.to_s.empty? || user_id.to_s.empty?
 
-    where(id: request_id, user_id: user_id).exists?
+    where(request_token: request_id, user_id: user_id).exists?
   end
 
 end

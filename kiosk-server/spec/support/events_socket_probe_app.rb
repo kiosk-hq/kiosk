@@ -410,6 +410,21 @@ begin
   REPORT[:reachable_subject_subscribed] =
     sock.messages.count { |m| m["type"] == "subscribed" } >= 2
 
+  # 7b — a consented topic with NO subject takes everything on it addressed to
+  #      this identity, whatever the subject.
+  whole = connect(port)
+  whole.pump_until { whole.frames.any? }
+  whole.subscribe(identifier("todo"))
+  whole.pump_until { whole.frames.any? { |f| f["type"] =~ /confirm_subscription|reject_subscription/ } }
+  REPORT[:subjectless_consented_answer] =
+    whole.frames.find { |f| f["type"] =~ /confirm_subscription|reject_subscription/ }&.dig("type")
+  whole_ids = %w[list_ok list_other].map do |subject|
+    Kiosk::Server::Events.emit(topic: :todo, subject: subject, identity_scope: %w[u1], data: {})
+  end
+  whole.pump_until { whole_ids.all? { |id| whole.messages.any? { |m| m["id"] == id } } }
+  REPORT[:subjectless_consented_delivered] = whole_ids.all? { |id| whole.messages.any? { |m| m["id"] == id } }
+  whole.close
+
   # 8 — LIVE delivery: emit, and the socket sees it with the five closed members.
   first_id = Kiosk::Server::Events.emit(
     topic: :order_payment, subject: "ord_1", identity_scope: %w[u1],

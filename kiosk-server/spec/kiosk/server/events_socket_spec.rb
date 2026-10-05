@@ -129,6 +129,12 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["reachable_subject_subscribed"]).to be(true)
     end
 
+    # Spec Section 8.5.4: a subject is optional on every topic. Delivery is
+    # already per identity, so leaving it off takes what was addressed to you.
+    it "accepts a consented topic with no subject, and delivers every subject addressed to you" do
+      expect(report["subjectless_consented_answer"]).to eq("confirm_subscription")
+      expect(report["subjectless_consented_delivered"]).to be(true)
+    end
 
     # The refusal is right — the safe reading of a broken authorisation rule is
     # NO. What the wire cannot carry is WHOSE code broke, so the engine says it

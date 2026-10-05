@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **A subscription that names no `subject` is accepted on every topic** and carries what was addressed to the subscriber; the subject rule answers for a named one.
+
 - 2026-10-05: **Security: a revoked or expired token closes every events socket, subscribed or not**, and can no longer open a subscription on one held from before.
 
 - 2026-10-05: **The package ships `requirements.txt` beside `listen.py`**, declaring the event-stream listener's `websockets>=12` in a manifest.

@@ -49,10 +49,7 @@ class KioskEvents < ActionCable::Channel::Base
     # IN list there — and opens a subscription no event can match.
     return reject unless params[:subject].nil? || params[:subject].is_a?(String)
 
-    # ORDER MATTERS: `reachable?` reads `@subject`, so the assignment has to
-    # precede it. After it, every `consented` subscription authorises against a
-    # nil subject and is refused — including the ones that should be allowed,
-    # which reads from the outside like a working deny rule.
+    # `reachable?` reads `@subject`, so the assignment has to precede it.
     @topic = topic
     @subject = params[:subject]
     @declaration = declaration
@@ -152,17 +149,16 @@ class KioskEvents < ActionCable::Channel::Base
     event["subject"].to_s == @subject.to_s
   end
 
-  # Spec Section 8.5.6. `reach` authorises the SUBSCRIPTION, exactly as it
-  # authorises a call to the verb beside it; `subject_reachable` answers the
-  # operator's own question about THIS subject, and takes the subject and the
-  # identity rather than reading CurrentRequest — which is fiber-local and
-  # does not reach here.
+  # Spec Sections 8.5.4 and 8.5.6. A subject is optional on every topic: the
+  # stream is per identity, so a subscription naming none takes only what the
+  # operator addressed to this identity. A named subject is the operator's own
+  # rule to answer, except on a `published` topic. The rule takes the subject
+  # and the identity rather than reading CurrentRequest, which is fiber-local
+  # and does not reach here.
   def reachable?(declaration)
-    case declaration[:reach]
-    when :published then true
-    when :principal then @subject.nil? || subject_reachable?(declaration)
-    else subject_reachable?(declaration)
-    end
+    return true if @subject.nil? || declaration[:reach] == :published
+
+    subject_reachable?(declaration)
   end
 
   def subject_reachable?(declaration)

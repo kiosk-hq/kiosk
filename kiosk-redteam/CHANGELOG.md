@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **`EventStream`**: the assistant's side of `<endpoint>/events`, to subscribe and wait for an event or assert none arrived.
+
 ## [0.5.0] — 2026-09-26
 
 ### Added

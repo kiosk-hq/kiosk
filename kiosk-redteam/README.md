@@ -146,9 +146,10 @@ file per row:
 Beside them the gem ships `Client` (register + PoW payment, kyc, query / run /
 pay with RS256 mandate signing, and the OAuth device-authorization request),
 `Profile`, `Scenario`, `Verdict`, `Response`, `Principal`, `Runner`, `Wire`,
-`Battery` and `LeakScan` — the shared oracle that decides whether a refusal
+`Battery`, `LeakScan` — the shared oracle that decides whether a refusal
 leaked the runtime's own vocabulary, discounting needles the probe itself
-supplied.
+supplied — and `EventStream`, the assistant's side of `<endpoint>/events`:
+subscribe to a topic, then wait for the event or assert that none arrived.
 
 ## Your own beats, in the same battery
 

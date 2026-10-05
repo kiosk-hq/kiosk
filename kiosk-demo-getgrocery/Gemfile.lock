@@ -29,6 +29,7 @@ PATH
       base64
       jwt (>= 2.0, < 4.0)
       kiosk-pow-equihash (~> 0.5.0)
+      websocket-driver (~> 0.7)
 
 PATH
   remote: ../kiosk-reputation

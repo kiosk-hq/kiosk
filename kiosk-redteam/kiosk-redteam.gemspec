@@ -14,7 +14,8 @@ Gem::Specification.new do |spec|
     finds a real breach fails loudly.
 
     Ships: an HTTP Client (register + Equihash PoW, kyc, query/run/pay with
-    RS256 mandate signing), a Scenario/Verdict/Runner framework, and a library
+    RS256 mandate signing), an EventStream client for <endpoint>/events,
+    a Scenario/Verdict/Runner framework, and a library
     of generic attack scenarios parameterised by a per-provider Profile.
     Intended to back a `check:redteam` rake task in each demo gem.
 
@@ -43,6 +44,7 @@ Gem::Specification.new do |spec|
   # scenarios/privilege_self_selection.rb; until now it arrived only by
   # accident, as a transitive dependency of jwt.
   spec.add_dependency "base64"
+  spec.add_dependency "websocket-driver", "~> 0.7"
 
   spec.add_development_dependency "rspec",   "~> 3.13"
   spec.add_development_dependency "webmock", "~> 3.0"

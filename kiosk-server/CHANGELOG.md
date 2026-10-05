@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-05: **Security: a revoked or expired token closes every events socket, subscribed or not**, and can no longer open a subscription on one held from before.
+
 - 2026-10-05: **The package ships `requirements.txt` beside `listen.py`**, declaring the event-stream listener's `websockets>=12` in a manifest.
 
 - 2026-10-05: **The boot warning reads every served origin**, `c.additional_origins` included, and names the loopback one it found.

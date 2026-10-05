@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-05: **Security: a revoked or expired token closes every events socket, subscribed or not**, and can no longer open a subscription on one held from before.
+
 - 2026-10-05: **The Stripe return url follows the origin being served**: `kiosk-pay-stripe` joins a `return_url:` path to it, and getgrocery passes a path.
 
 - 2026-10-05: **`kiosk-server` ships a `requirements.txt` for `listen.py`**, so every shipped python file with a third-party import has a manifest beside it.

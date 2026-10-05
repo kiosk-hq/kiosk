@@ -117,6 +117,7 @@ end
 # itself — `periodically :reauthorise!` — is the shipped one, untouched.
 KioskEvents.periodic_timers =
   KioskEvents.periodic_timers.map { |callback, options| [callback, options.merge(every: 1)] }
+Kiosk::Server::EventsConnection.reauthorise_every = 1
 
 ProbeApp.initialize!
 ProbeApp.routes.draw do
@@ -601,6 +602,12 @@ begin
   held.pump_until { held.messages.any? { |m| m["type"] == "subscribed" } }
   plain = connect(port, path: "/kiosk/events?topic=order_payment")
   plain.pump_until { plain.messages.any? { |m| m["type"] == "subscribed" } }
+  # Two sockets holding NO subscription: one stays idle, one subscribes only
+  # after the credential is revoked.
+  idle = connect(port)
+  idle.pump_until { idle.frames.any? { |f| f["type"] == "welcome" } }
+  dormant = connect(port)
+  dormant.pump_until { dormant.frames.any? { |f| f["type"] == "welcome" } }
 
   # 16 — nothing has changed, so several periods later neither socket has been
   #      told anything. A timer that tore a valid subscription down would be as
@@ -622,6 +629,7 @@ begin
   #      whole connection goes, and the client is told that coming back with
   #      this token will not help.
   REVOKED[:value] = true
+  dormant.send_raw(frame("subscribe", identifier("todo", subject: "list_ok", since: 0)))
   plain.pump_until(seconds: 5) { plain.frames.any? { |f| f["type"] == "disconnect" } }
   plain.pump_until(seconds: 3) { plain.closed? }
   REPORT[:revoked_socket_closed] = plain.closed?
@@ -629,8 +637,10 @@ begin
   # `reconnect` is what a client acts on, so a second frame carrying the
   # opposite flag is the defect, and reading only the first cannot see it.
   REPORT[:revoked_frames] = plain.frames.select { |f| f["type"] == "disconnect" }
-  held.close
-  plain.close
+  [idle, dormant].each { |sock| sock.pump_until(seconds: 5) { sock.closed? } }
+  REPORT[:revoked_idle_frames] = idle.frames.select { |f| f["type"] == "disconnect" }
+  REPORT[:revoked_dormant_frames] = dormant.frames.reject { |f| f["type"] == "welcome" }
+  [held, plain, idle, dormant].each(&:close)
 
   # 19 — the access token AGES OUT under a held socket. The two sockets differ
   #      in nothing but their credential's `exp`, and that is what separates
@@ -639,10 +649,14 @@ begin
   EXPIRES_AT[:value] = Time.now.to_i + 3
   expiring = connect(port, path: "/kiosk/events?topic=order_payment")
   expiring.pump_until { expiring.messages.any? { |m| m["type"] == "subscribed" } }
+  expiring_idle = connect(port)
+  expiring_idle.pump_until { expiring_idle.frames.any? { |f| f["type"] == "welcome" } }
   expiring.pump_until(seconds: 8) { expiring.frames.any? { |f| f["type"] == "disconnect" } }
   expiring.pump_until(seconds: 3) { expiring.closed? }
+  expiring_idle.pump_until(seconds: 5) { expiring_idle.closed? }
   REPORT[:expired_frames] = expiring.frames.select { |f| f["type"] == "disconnect" }
-  expiring.close
+  REPORT[:expired_idle_frames] = expiring_idle.frames.select { |f| f["type"] == "disconnect" }
+  [expiring, expiring_idle].each(&:close)
 
   REPORT[:ok] = true
 rescue StandardError => e

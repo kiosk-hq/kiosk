@@ -129,6 +129,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["reachable_subject_subscribed"]).to be(true)
     end
 
+
     # The refusal is right — the safe reading of a broken authorisation rule is
     # NO. What the wire cannot carry is WHOSE code broke, so the engine says it
     # in its own log; without that line the operator sees a refusal
@@ -363,7 +364,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
   # least every 60 seconds. The three examples are the three answers the timer
   # can reach, and the first is the one that makes the other two mean
   # something: a socket nothing has changed under is left alone.
-  describe "re-authorisation while the subscription stands" do
+  describe "re-authorisation while the socket stands" do
     it "leaves a subscription whose reach and credential still hold alone" do
       expect(report["steady_unsubscribed"]).to be(false)
       expect(report["steady_disconnected"]).to be(false)
@@ -385,12 +386,24 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["revoked_socket_closed"]).to be(true)
     end
 
+    it "closes a socket holding NO subscription when its credential is revoked" do
+      expect(report["revoked_idle_frames"])
+        .to eq([{ "type" => "disconnect", "reason" => "revoked", "reconnect" => false }])
+    end
+
+    it "opens no subscription on a revoked credential, and closes instead" do
+      expect(report["revoked_dormant_frames"])
+        .to eq([{ "type" => "disconnect", "reason" => "revoked", "reconnect" => false }])
+    end
+
     # The one case where coming back WOULD have worked: an access token is
     # short-lived and a held socket outlives it, so the assistant mints another
     # by challenge-response and resumes from its cursor. The two sockets differ
     # in nothing but their credential's `exp`.
     it "tells a client whose access token merely aged out to come back" do
       expect(report["expired_frames"])
+        .to eq([{ "type" => "disconnect", "reason" => "token_expired", "reconnect" => true }])
+      expect(report["expired_idle_frames"])
         .to eq([{ "type" => "disconnect", "reason" => "token_expired", "reconnect" => true }])
     end
   end

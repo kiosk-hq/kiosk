@@ -20,12 +20,9 @@ require "action_cable"
 #    "identifier":"{\"channel\":\"KioskEvents\",\"topic\":\"todo\",\"subject\":\"list_4f1e…\"}"}
 #
 class KioskEvents < ActionCable::Channel::Base
-  # Spec Section 8.5.6 requires re-authorisation at least every 60 seconds, and
-  # this is why. The revocation watermark is checked inside `JwtIssuer.verify`, i.e.
-  # once per token verification, i.e. once per HTTP request — so a socket
-  # verified only at connect would never observe a later `revoke_all`, and an
-  # unlinked assistant would keep receiving its human's data for the rest of
-  # the token's hour. Re-verifying on a timer bounds that to this many seconds.
+  # Spec Section 8.5.6: the subject's reach is re-checked while the
+  # subscription stands. The credential is the connection's to re-check
+  # ({Kiosk::Server::EventsConnection#kiosk_credential_holds?}).
   REAUTHORISE_EVERY_SECONDS = 30
 
   periodically :reauthorise!, every: REAUTHORISE_EVERY_SECONDS
@@ -37,6 +34,8 @@ class KioskEvents < ActionCable::Channel::Base
   MAX_CURSOR = 2**53 - 1
 
   def subscribed
+    return reject unless connection.kiosk_credential_holds?
+
     topic = params[:topic].to_s
     declaration = Kiosk::Server::Events.fetch(topic)
 
@@ -184,52 +183,16 @@ class KioskEvents < ActionCable::Channel::Base
     false
   end
 
-  # Runs every REAUTHORISE_EVERY_SECONDS. A reach that was withdrawn is about
-  # THIS subscription; a credential the identity chain no longer resolves is
-  # about the whole connection, so the connection goes with it.
-  #
-  # Either answer is FINAL for this subscription, so the declaration is
-  # dropped with it: the timer goes on firing until the client closes, and
-  # without that the same frame would be repeated every period.
+  # Runs every REAUTHORISE_EVERY_SECONDS. A withdrawn reach is final for this
+  # subscription, so the declaration is dropped and the frame sent once.
   def reauthorise!
-    return if @declaration.nil?
-
-    unless connection.kiosk_identity_resolves?
-      @declaration = nil
-      disconnect!
-      return
-    end
-
-    return if reachable?(@declaration)
+    return if @declaration.nil? || reachable?(@declaration)
 
     @declaration = nil
-    # BRACES REQUIRED: `transmit` takes `via:`, so bare pairs at the call site
-    # are read as keyword arguments and never reach it as the frame.
+    # Braces required: bare pairs would be read as `transmit`'s keywords.
     transmit({ "type" => "unsubscribed", "topic" => @topic, "reason" => "reach_revoked" })
     stop_all_streams
   rescue StandardError => e
-    # Action Cable's worker pool swallows this into the HOST application's
-    # logger, where nothing of ours reads it. Say it here instead.
     logger&.error("[kiosk] events re-authorisation failed: #{e.class}: #{e.message}")
-  end
-
-  # Spec Section 8.5.6. `reconnect` rather than the reason is what a client
-  # acts on, so the two cases must not be conflated: an access token that
-  # merely aged out is renewable by challenge-response, while anything else
-  # the identity chain refuses — a revoked watermark above all — answers the
-  # same to a fresh socket, and a client that retries into it is a reconnect
-  # storm against an origin whose answer is fixed.
-  #
-  # `Connection::Base#close` TRANSMITS THE TYPED DISCONNECT ITSELF, so the
-  # reason and the flag are its arguments. Transmitting a frame and then
-  # closing publishes the flag twice, the second time with that method's
-  # `reconnect: true` default — and the flag is the whole of what a client
-  # acts on.
-  def disconnect!
-    if connection.kiosk_credential_expired?
-      connection.close(reason: "token_expired", reconnect: true)
-    else
-      connection.close(reason: "revoked", reconnect: false)
-    end
   end
 end

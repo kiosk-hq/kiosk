@@ -56,6 +56,10 @@ module Kiosk
       # Action Cable's `message` command is not part of the contract.
       COMMANDS = %w[subscribe unsubscribe].freeze
 
+      # Spec Section 8.5.6: the credential is re-checked at least every 60
+      # seconds, on every socket — including one that holds no subscription.
+      class_attribute :reauthorise_every, default: 30
+
       def connect
         identity = resolve_identity || reject_unauthorized_connection
         @kiosk_identity = identity
@@ -76,7 +80,15 @@ module Kiosk
       # replay and the subscribed frame are the channel's, unchanged.
       def handle_open
         super
-        auto_subscribe! if @kiosk_identity
+        return unless @kiosk_identity
+
+        @reauthorisation = server.event_loop.timer(reauthorise_every) { send_async(:reauthorise!) }
+        auto_subscribe!
+      end
+
+      def handle_close
+        @reauthorisation&.shutdown
+        super
       end
 
       def beat
@@ -122,24 +134,33 @@ module Kiosk
         super
       end
 
-      # Whether the credential this socket was opened with still resolves —
-      # the question the channel's re-authorisation timer asks every
-      # `KioskEvents::REAUTHORISE_EVERY_SECONDS` (spec Section 8.5.6). The
-      # connection answers it because the upgrade request is the connection's
-      # own: `request` is private on `ActionCable::Connection::Base`, and what
-      # the timer needs from it is this one answer.
-      def kiosk_identity_resolves? = !resolve_identity.nil?
+      # Whether the credential this socket was opened with still resolves. When
+      # it does not, the connection is closed with the reason spec Section
+      # 8.5.6 gives: `token_expired` (come back with a fresh token) for one that
+      # merely aged out, `revoked` (do not) for anything else.
+      def kiosk_credential_holds?
+        return true if resolve_identity
 
-      # Whether the credential this socket was opened with has merely run out.
-      # Spec Section 8.5.6 answers an expired token differently from a revoked
-      # one — the assistant holding it can mint another and resume — and the
-      # `exp` of the identity resolved at connect is what tells them apart.
-      def kiosk_credential_expired?
-        exp = kiosk_identity&.claims&.dig(:exp)
-        !exp.nil? && Time.now.to_i >= exp.to_i
+        if kiosk_credential_expired?
+          close(reason: "token_expired", reconnect: true)
+        else
+          close(reason: "revoked", reconnect: false)
+        end
+        false
       end
 
       private
+
+      def reauthorise!
+        kiosk_credential_holds?
+      rescue StandardError => e
+        logger.error("[kiosk] events re-authorisation failed: #{e.class}: #{e.message}")
+      end
+
+      def kiosk_credential_expired?
+        exp = kiosk_identity.claims&.dig(:exp)
+        !exp.nil? && Time.now.to_i >= exp.to_i
+      end
 
       # Nil for anything that is not a JSON object, which includes a frame that
       # is not JSON at all.

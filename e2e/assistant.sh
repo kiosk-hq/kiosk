@@ -1099,6 +1099,11 @@ assert "two origins: second's token on first → 401" "$(echo "$reg_out" | jq -r
 # ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
+# `payment_setup` is the engine's, served against the provider port: this
+# origin writes no handler for it, and StubPsp never needs a setup.
+assert "payment_setup: served by the engine → ready" \
+  "$(action_call "$ALICE_AGENT_TOKEN" "payment_setup" '{}' | jq -r '.status')" "ready"
+
 pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
              PAY_CAPTURE="${PAY_CAPTURE:-}" \
              bundle exec ruby "$FIXTURES/pay_flow.rb" )
@@ -1139,7 +1144,7 @@ event_count() { events "[.[] | select($1)] | length"; }
 assert "audit: the two bookings emitted ok events" \
   "$(event_count '.action == "book_appointment" and .status == "ok"')" "2"
 assert "audit: the event names the acting assistant, its role and its actor" \
-  "$(event_count ".agent_id == \"$ALICE_AGENT\" and .actor == \"agent\" and .role == \"customer\"")" "1"
+  "$(event_count ".action == \"book_appointment\" and .agent_id == \"$ALICE_AGENT\" and .actor == \"agent\" and .role == \"customer\"")" "1"
 
 # 2. The invocation's own timestamp travels with it — not the sink's clock.
 assert "audit: the event carries the invocation timestamp" \

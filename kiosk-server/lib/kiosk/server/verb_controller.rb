@@ -4,6 +4,7 @@ require "action_controller"
 require "kiosk/server/actions"
 require "kiosk/server/argument_decoder"
 require "kiosk/server/errors"
+require "kiosk/server/kyc"
 require "kiosk/server/payment_setup"
 require "kiosk/server/queries"
 require "kiosk/server/request_validation"
@@ -105,6 +106,7 @@ module Kiosk
         name       = params[:kiosk_verb].to_s
         identity   = resolve_identity!
         PaymentSetup.served! if name == PaymentSetup::NAME
+        Kyc.served! if name == Kyc::NAME
         descriptor = descriptor_for!(command, name)
         args       = arguments_for(command, name, descriptor)
 

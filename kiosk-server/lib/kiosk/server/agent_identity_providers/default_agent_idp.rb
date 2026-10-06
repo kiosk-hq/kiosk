@@ -48,69 +48,6 @@ module Kiosk
           OpenSSL::PKey::RSA.new(pem)
         end
 
-        # Returns true iff the agent has a non-NULL `kyc_verified_at` timestamp.
-        # The BINARY KYC gate — «this agent completed some verification», with
-        # no statement about what was verified. {#kyc_has_attributes?} below is
-        # the reader for a gate that needs specific named booleans.
-        #
-        # NO CALLER IN THIS REPOSITORY, and the reason is worth knowing before
-        # you build on it: it is reachable from an operator's verb as
-        # `Kiosk.configuration.agent_idp.kyc_verified?(agent_id)`, and the one
-        # KYC-gated verb in the shipped fleet does not want it — skooti's
-        # `rent_motorcycle` needs NAMED attributes rather than the flag, and
-        # reads them through an ActiveRecord model of its own (see
-        # {#kyc_has_attributes?}).
-        def kyc_verified?(agent_id)
-          row = agents_column("kyc_verified_at", agent_id)
-          return false if row.nil?
-
-          !row.fetch("kyc_verified_at", nil).nil?
-        end
-
-        # Returns the NAMED ANONYMIZED boolean attributes a valid attestation
-        # granted this agent — a String-keyed hash like
-        # `{"age_over_18" => true, "licence_a" => true}`. Empty `{}` when the
-        # agent verified with a bare binary attestation, or when no attestation
-        # is on file / the agent is unknown or revoked. Only the NAMES were ever
-        # stored — never the DOB, licence number, or any document (the
-        # anonymized point).
-        #
-        # The grants live in `<schema>.kyc_attributes`, one ROW per granted
-        # name — so there is no stored value to parse and no spelling of `true`
-        # for this method to adjudicate. Every returned value is the Ruby
-        # `true` this method synthesises from the row's EXISTENCE, which is
-        # what makes a caller's `== true` (see {#kyc_has_attributes?}) safe
-        # rather than lucky.
-        #
-        # The join to `agents` is what keeps a REVOKED agent answering `{}`: the
-        # rows survive revocation (the agent row does), and a gate must not.
-        def kyc_attributes(agent_id)
-          rows = ::ActiveRecord::Base.lease_connection.exec_query(
-            "SELECT k.name FROM #{schema}.kyc_attributes k " \
-            "JOIN #{schema}.agents a ON a.id = k.agent_id " \
-            "WHERE k.agent_id = $1 AND a.revoked_at IS NULL",
-            "Kiosk agent kyc attributes",
-            [agent_id],
-          )
-          rows.to_a.each_with_object({}) { |row, acc| acc[row["name"]] = true }
-        end
-
-        # Returns true iff EVERY name in `required` is present-and-true in the
-        # agent's stored KYC attributes. `required` is a list of attribute
-        # names (Strings/Symbols) — the reader for an attribute-gated Action,
-        # one that needs, say, both `age_over_18` and `licence_a`.
-        #
-        # NO CALLER IN THIS REPOSITORY EITHER, and the shipped demo that gates
-        # on exactly that pair goes the other way deliberately: skooti's
-        # `rent_motorcycle` reads the engine-owned `kyc_attributes` rows
-        # through `Agent.kyc_granted?`, an ActiveRecord scope in the demo, so
-        # the gate is written in the app's own idiom. Both routes read the same
-        # rows; this one is the one that needs no model.
-        def kyc_has_attributes?(agent_id, required)
-          attrs = kyc_attributes(agent_id)
-          Array(required).all? { |name| attrs[name.to_s] == true }
-        end
-
         private
 
         # THE MINT INSTANT — never earlier than the agent's revocation
@@ -167,12 +104,11 @@ module Kiosk
           row.fetch("user_id")
         end
 
-        # ONE live-agent lookup for all three single-column callers. Separate
-        # copies of the same statement would be that many more places to get
-        # the identifier/value split below wrong. ({#kyc_attributes} is not one
-        # of them: it reads a TABLE, not a column on this row.)
+        # ONE live-agent lookup for both single-column callers. Separate
+        # copies of the same statement would be more places to get the
+        # identifier/value split below wrong.
         #
-        # `column` is an IDENTIFIER chosen from the three literals above — never
+        # `column` is an IDENTIFIER chosen from the literals above — never
         # an argument, never caller-reachable — and Postgres cannot bind an
         # identifier anyway. `agent_id` is a VALUE and travels as `$1`. It comes
         # off a verified JWT claim or a row this engine wrote, so it is not

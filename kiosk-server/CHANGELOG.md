@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **kiosk-server serves `request_kyc`, the provider callback and `kyc_verification` against a `kyc_provider`**, and records verified attributes against the person, not the assistant account (T-220).
+
 - 2026-10-07: **The engine serves `payment_setup` and the provider's return page** wherever a `payment_provider` is configured, so an operator no longer writes either (T-219).
 
 - 2026-10-06: **The production boot refusal for an in-process event store now says why: a restart loses events inside the 24-hour retention window.**

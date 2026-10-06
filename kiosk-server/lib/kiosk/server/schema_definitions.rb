@@ -99,16 +99,8 @@ module Kiosk
       # issued tokens for revocation; `agent_mappings` — external IdP
       # subject ↔ local `agent_id` mapping.
       #
-      # `agents` carries three OPTIONAL columns, created here rather than in a
-      # migration of their own. They are nullable and cost an operator who
-      # never uses them nothing, and a provider who DOES enable the surface
-      # reading them should not have to discover that the column is in a
-      # migration they were told was optional:
+      # `agents` carries two OPTIONAL, nullable columns:
       #
-      #   kyc_verified_at    — non-NULL once the agent has submitted a valid
-      #                        KYC attestation; the binary KYC gate
-      #                        ({DefaultAgentIdp#kyc_verified?}). The NAMED
-      #                        attributes live in their own table (006).
       #   spending_cap_cents — per-assistant spend cap; NULL = unlimited (the
       #                        default), 0 = disabled. Enforced by the pay path
       #                        via the `config.spending_cap` seam
@@ -116,16 +108,9 @@ module Kiosk
       #   human_label        — a human-friendly name for the manage-assistants
       #                        page.
       #
-      # THE THREE `ADD COLUMN IF NOT EXISTS` LINES BELOW ARE THE OTHER HALF OF
-      # THE GUARD, AND THEY ARE NOT DECORATION. Creating these three columns
-      # here is only lossless for a database built FROM ZERO. A database
-      # provisioned from an earlier vintage of this set already has an `agents`
-      # table, carrying whichever subset of the three that vintage created, and
-      # a guarded `CREATE` alone would step over it and record itself as
-      # applied — leaving a column permanently missing, `kyc_verified_at`
-      # included, which is the one the binary KYC gate SELECTs. So 002 does not
-      # merely skip a table it finds; it brings it up to the shape this file
-      # states.
+      # The `ADD COLUMN IF NOT EXISTS` lines below bring an `agents` table built
+      # by an earlier vintage of this set up to that shape; a guarded `CREATE`
+      # alone would step over it.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -139,19 +124,15 @@ module Kiosk
             public_key          text,
             human_label         text,
             spending_cap_cents  bigint,
-            kyc_verified_at     timestamptz,
             created_at          timestamptz NOT NULL DEFAULT now(),
             revoked_at          timestamptz,
             issuer              text NOT NULL
           );
-          -- Brings an older `agents` table up to the shape above: these three
+          -- Brings an older `agents` table up to the shape above: these two
           -- columns are optional, so a database provisioned from an earlier
-          -- vintage of this migration set may have some, all or none of them.
-          -- No-ops on the FROM-ZERO path — the CREATE above already made them,
-          -- so `db/structure.sql` is unchanged either way.
+          -- vintage of this migration set may lack them. No-ops from zero.
           ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS human_label        text;
           ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS spending_cap_cents bigint;
-          ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS kyc_verified_at    timestamptz;
 
           CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
           -- Dedupe at the DB, not via SELECT-then-INSERT (TOCTOU): two LIVE
@@ -415,41 +396,52 @@ module Kiosk
 
       # ─── 006 create_kiosk_kyc_attributes ───────────────────────────────
 
-      # `kyc_attributes` — ONE ROW per NAMED ANONYMIZED boolean a valid KYC
-      # attestation granted an agent (`age_over_18`, `licence_a`, ...). Only
-      # the NAMES are stored — never the DOB, licence number, or any underlying
-      # document, which is the anonymizing property the KYC surface is built on.
+      # The KYC tables, both keyed on the PERSON (the principal), never on an
+      # assistant account: what was attested is a fact about the human.
       #
-      # A TABLE, not a `kyc_attributes jsonb` column on `agents`.
+      # `kyc_attributes` — one row per anonymized boolean a verified attestation
+      # granted. The grant IS the row, so every gate is an EXISTS and no reader
+      # judges a spelling of `true`; only the names are stored.
       #
-      # THERE IS NO VALUE COLUMN, AND THAT IS THE POINT. The grant IS the row:
-      # an attribute is granted iff `(agent_id, name)` exists. A jsonb map had
-      # to carry a value, and a value has spellings — JSON `true`, the STRING
-      # `"true"`, `1` — so every reader had to decide which spellings count and
-      # each reader could decide differently (getgrocery and skooti both pushed
-      # that test into Postgres, as `COALESCE(kyc_attributes ->> 'name',
-      # 'false')`, precisely because a Ruby `== true` would accept one spelling
-      # and silently refuse the other inside a KYC gate). With presence as the
-      # grant there is nothing to spell: every gate is an EXISTS, which cannot
-      # return NULL and cannot be fooled by a truthy-but-not-`true` value. The
-      # one place a spelling is still judged is the WRITE — see
-      # {KycAttestationController#mark_kyc_verified!}, which selects the names
-      # to insert with `WHERE value = 'true'::jsonb`, in Postgres, once, for
-      # every operator.
-      #
-      # `ON DELETE CASCADE` from `agents`: a deleted agent takes its grants with
-      # it. Additive: providers that only need the binary `kyc_verified_at` gate
-      # can skip this migration.
-      def kyc_attributes_sql(schema: nil)
-        schema ||= Kiosk.configuration.schema
+      # `kyc_requests` — one row per verification `request_kyc` opened at the
+      # KYC provider: the provider's request id, the principal it is for, the
+      # one-time value the provider's callback must echo, and when it was
+      # approved.
+      def kyc_attributes_sql(schema: nil, user_id_type: nil)
+        schema       ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
 
         <<~SQL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".kyc_attributes (
-            agent_id   uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
+            user_id    #{col_type} NOT NULL,
             name       text NOT NULL,
             granted_at timestamptz NOT NULL DEFAULT now(),
-            PRIMARY KEY (agent_id, name)
+            PRIMARY KEY (user_id, name)
           );
+
+          CREATE TABLE IF NOT EXISTS "#{schema}".kyc_requests (
+            id          text PRIMARY KEY,
+            user_id     #{col_type} NOT NULL,
+            nonce       text NOT NULL,
+            approved_at timestamptz,
+            created_at  timestamptz NOT NULL DEFAULT now()
+          );
+          CREATE INDEX IF NOT EXISTS idx_kyc_requests_user_id ON "#{schema}".kyc_requests (user_id, created_at);
+        SQL
+      end
+
+      # Moves a database whose grants were keyed on the assistant account onto
+      # the person. The old grants are dropped, not converted: a grant made
+      # while an assistant acted for a placeholder principal must not become a
+      # statement about the human it was later linked to, so people verify again.
+      def kyc_on_person_sql(schema: nil, user_id_type: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          DROP TABLE IF EXISTS "#{schema}".kyc_attributes;
+          ALTER TABLE "#{schema}".agents DROP COLUMN IF EXISTS kyc_verified_at;
+          #{kyc_attributes_sql(schema: schema, user_id_type: user_id_type)}
         SQL
       end
 

@@ -98,7 +98,7 @@ class SpecOrdersController < ApplicationController
   description "Raises the wire error whose code no HTTP status can carry."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
-  def request_kyc
+  def rent_motorcycle
     raise Kiosk::Server::Errors::KycRequired, "attestation missing: over_18"
   end
 
@@ -352,7 +352,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     end
 
     it "lets a handler raise a wire error no HTTP status can carry" do
-      expect { execute(:run, { name: "request_kyc" }) }
+      expect { execute(:run, { name: "rent_motorcycle" }) }
         .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
           expect(e.code).to eq("kyc_required")
           expect(e.http_status).to eq(403)
@@ -960,7 +960,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     # way, and this pins the names the mixin refuses today so a silent shrink is visible.
     it "reserves every first path segment the engine draws under the mount" do
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
-        .to contain_exactly("agents", "auth", "events", "oauth", "pay", "payment_setup", "schema")
+        .to contain_exactly("agents", "auth", "events", "kyc", "oauth", "pay", "payment_setup", "request_kyc", "schema")
     end
 
     it "404s a verb whose method stopped being a public action" do

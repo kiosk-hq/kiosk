@@ -4,6 +4,7 @@
 
 require "action_controller"
 require "json"
+require "kiosk/server/kyc"
 require "kiosk/server/kyc_verifier"
 require "kiosk/server/request_validation"
 require "kiosk/server/errors"
@@ -14,8 +15,8 @@ module Kiosk
     # POST /kiosk/agents/kyc
     #
     # Authenticates the agent (via Bearer token), verifies the submitted KYC
-    # attestation JWS, and records `kyc_verified_at = now()` on the agents
-    # row.
+    # attestation JWS, and replaces its principal's grants with the attributes
+    # it carries ({Kyc.grant!}).
     #
     # Request body: { "kyc_jws": "<compact JWS>" }
     # Success (200): { "kyc_verified": true }
@@ -30,8 +31,8 @@ module Kiosk
         body     = parse_body!("POST <endpoint>/agents/kyc")
         raw_jws  = body[:kyc_jws] or raise Errors.missing_field("kyc_jws")
 
-        claims = KycVerifier.verify(raw_jws: raw_jws, identity: identity)
-        mark_kyc_verified!(identity.agent_id, attributes: claims[:attributes] || {})
+        claims = KycVerifier.verify(raw_jws: raw_jws, subject: identity.user_id)
+        Kyc.grant!(identity.user_id, claims[:attributes])
 
         Kiosk::Server::Headers.add_to(response.headers)
         render json: { kyc_verified: true, attributes: claims[:attributes] || {} }, status: :ok
@@ -66,8 +67,8 @@ module Kiosk
       # KYC attestation is an AGENT-only surface: the effective agent IdP
       # (configured override or the bundled default; without this,
       # providers with a custom idp were locked out by a hardcoded
-      # DefaultAgentIdp). No user_idp fallback — a web session must not
-      # stamp an agent's kyc_verified_at.
+      # DefaultAgentIdp). No user_idp fallback: only an AI assistant
+      # submits an attestation.
       def authenticate!
         identity = IdentityResolution.agent_idp.verify(request)
         raise Errors::Unauthenticated.new("missing or invalid agent token") if identity.nil?
@@ -75,71 +76,6 @@ module Kiosk
         identity
       end
 
-      # Records verification: stamps `kyc_verified_at` and persists the NAMED
-      # ANONYMIZED attributes the attestation granted, as ROWS in
-      # `<schema>.kyc_attributes`. Only the NAMES are stored — the underlying
-      # documents never reach this layer.
-      #
-      # ONE TRANSACTION, and the stamp gates the grants: the UPDATE is filtered
-      # on `revoked_at IS NULL` and RETURNS the id, so a revoked agent stamps
-      # nothing and is granted nothing. Without the gate the FK alone would
-      # happily accept grant rows for an agent this endpoint just refused to
-      # stamp.
-      #
-      # THE GRANT SET IS REPLACED, NOT MERGED: an attestation states the whole
-      # set of facts it grants, so a later attestation granting fewer of them
-      # must take the others away. That is why the DELETE is unconditional.
-      #
-      # THE SPELLING OF `true` IS JUDGED HERE, IN POSTGRES, ONCE FOR EVERY
-      # OPERATOR. `jsonb_each` + `WHERE value = 'true'::jsonb` inserts a name
-      # only for a value that is the JSON boolean `true`: the STRING `"true"`,
-      # `1`, `"yes"` and `null` are all different jsonb values and none of them
-      # match, so none of them grant. With the grant stored as a row's
-      # EXISTENCE there is nothing left for a reader to adjudicate, so this is
-      # the one place that has to. It is deliberately belt-and-braces with
-      # {KycVerifier.verified_attributes}, which drops non-`true` values in Ruby
-      # first: a KYC gate should fail closed twice rather than once.
-      #
-      # `$1::jsonb` carries the SAME hand-written cast, for the same reason, as
-      # `executor.rb#persist_cart_mandate`'s line_items: the argument is JSON
-      # *text* and the cast is what says "parse this, do not store it as a json
-      # string". `$1` is the attesting broker's payload and `$2` is the agent id
-      # off the verified token — the payload is caller-supplied, so it never
-      # reaches the statement text.
-      def mark_kyc_verified!(agent_id, attributes: {})
-        # `lease_connection`, not `connection` (following
-        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
-        # soft-deprecated in Rails 8.1 and RAISES under
-        # `permanent_connection_checkout = :disallowed`.
-        conn   = ::ActiveRecord::Base.lease_connection
-        agents = conn.quote_table_name("#{Kiosk.configuration.schema}.agents")
-        attrs  = conn.quote_table_name("#{Kiosk.configuration.schema}.kyc_attributes")
-
-        conn.transaction do
-          stamped = conn.exec_query(
-            "UPDATE #{agents} SET kyc_verified_at = now() " \
-            "WHERE id = $1 AND revoked_at IS NULL RETURNING id",
-            "Kiosk KYC attestation",
-            [agent_id],
-          )
-          unless stamped.to_a.empty?
-            conn.exec_query(
-              "DELETE FROM #{attrs} WHERE agent_id = $1",
-              "Kiosk KYC attributes reset",
-              [agent_id],
-            )
-            conn.exec_query(
-              "INSERT INTO #{attrs} (agent_id, name) " \
-              "SELECT $2, key FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb",
-              "Kiosk KYC attributes grant",
-              [JSON.generate(attributes), agent_id],
-            )
-          end
-        end
-      end
-
-      # RFC 9457 problem document, like every other error on this wire
-      # (spec §9).
       def render_error(err)
         Kiosk::Server::Headers.add_to(response.headers)
         Kiosk::Server::Headers.add_cache_policy(

@@ -105,6 +105,7 @@ require "kiosk/server/device_verify_controller"
 require "kiosk/server/assistants_controller"
 require "kiosk/server/auth_controller"
 require "kiosk/server/kyc_attestation_controller"
+require "kiosk/server/kyc_callback_controller"
 
 module Kiosk
   module Server
@@ -119,6 +120,8 @@ module Kiosk
     #   - {Kiosk::Server::PaymentSetup}     — `payment_setup` and its topic, against the provider port
     #   - {Kiosk::Server::PaymentSetupController} — GET <endpoint>/payment_setup/return,
     #                                         the page the provider returns the human to
+    #   - {Kiosk::Server::Kyc}              — `request_kyc`, its topic and the grants, against the KYC provider port
+    #   - {Kiosk::Server::KycCallbackController} — POST <endpoint>/kyc/callback, the provider's report
     #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,
     #                                         per the normative encoding rule
     #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)

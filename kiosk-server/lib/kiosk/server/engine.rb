@@ -665,6 +665,12 @@ module Kiosk
         # lose nothing.
         post "agents/kyc", to: "kyc_attestation#create"
 
+        # `request_kyc` and the KYC provider's callback. Drawn unconditionally
+        # like `agents/kyc`, and answered `module_not_served` without a
+        # kyc_provider.
+        post "request_kyc",  to: "verb#create", defaults: { kiosk_verb: "request_kyc" }
+        post "kyc/callback", to: "kyc_callback#create"
+
         # Claim flow (agent-initiated; auth.md "User Claimed") — the
         # RFC 8628 wire.
         post "oauth/device_authorization", to: "oauth_device_authorization#create"

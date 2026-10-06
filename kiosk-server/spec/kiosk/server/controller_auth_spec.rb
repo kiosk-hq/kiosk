@@ -257,7 +257,7 @@ RSpec.describe "wire-surface controller auth" do
         conn.define_singleton_method(:transaction) { |&blk| blk.call }
         conn.define_singleton_method(:exec_query) do |sql, _name = nil, binds = []|
           log << [sql, binds]
-          sql.start_with?("UPDATE") ? [{ "id" => binds.first }] : []
+          []
         end
         conn.define_singleton_method(:quote_table_name) { |n| n }
       end
@@ -294,18 +294,14 @@ RSpec.describe "wire-surface controller auth" do
       # A bare binary attestation (no `attributes`) verifies and returns the
       # empty attribute set — the anonymized named-attributes surface.
       expect(body).to eq(kyc_verified: true, attributes: {})
-      # The row stamped is the one for the CUSTOM idp's identity, and the empty
+      # The grants written are the custom idp's PRINCIPAL's, and the empty
       # grant set is still WRITTEN — the reset runs even when nothing is
-      # granted, which is what makes a later bare attestation take earlier
-      # grants away.
-      stamp, reset, grant = executed_sql
-      expect(stamp.first).to include("SET kyc_verified_at = now()")
-      expect(stamp.first).to include("WHERE id = $1 AND revoked_at IS NULL RETURNING id")
-      expect(stamp.last).to eq(["a-custom"])
-      expect(reset.first).to include("DELETE FROM kiosk.kyc_attributes WHERE agent_id = $1")
-      expect(reset.last).to eq(["a-custom"])
+      # granted, so a later bare attestation takes earlier grants away.
+      reset, grant = executed_sql
+      expect(reset.first).to include("DELETE FROM kiosk.kyc_attributes WHERE user_id = $1")
+      expect(reset.last).to eq(["u-kyc"])
       expect(grant.first).to include("INSERT INTO kiosk.kyc_attributes")
-      expect(grant.last).to eq(["{}", "a-custom"])
+      expect(grant.last).to eq(["{}", "u-kyc"])
     end
 
     it "records the named anonymized attributes an attestation carries" do
@@ -332,7 +328,7 @@ RSpec.describe "wire-surface controller auth" do
       # The payload arrives as a BIND (K-782), so it is in the binds and NOT in
       # the statement text.
       sql, binds = executed_sql.last
-      expect(sql).to include("INSERT INTO kiosk.kyc_attributes (agent_id, name)")
+      expect(sql).to include("INSERT INTO kiosk.kyc_attributes (user_id, name)")
       expect(sql).to include("FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb")
       expect(sql).not_to include("age_over_18")
       expect(binds.first).to eq(JSON.generate("age_over_18" => true, "licence_a" => true))

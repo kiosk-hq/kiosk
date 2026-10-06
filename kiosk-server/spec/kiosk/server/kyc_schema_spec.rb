@@ -1,47 +1,51 @@
 # frozen_string_literal: true
 
 RSpec.describe Kiosk::Server::SchemaDefinitions do
-  # `kyc_verified_at` is no longer a generator of its own: K-646 folded it into
-  # `identity_tables_sql`'s agents CREATE, where schema_definitions_spec asserts
-  # it. What is asserted here is that the fold left nothing behind to call.
-  it "no longer ships a kyc_verified_at generator — the column is in 002" do
-    expect(described_class).not_to respond_to(:kyc_verified_at_sql)
-    expect(described_class.identity_tables_sql).to include("kyc_verified_at     timestamptz")
+  it "puts no KYC column on agents — the grants are the person's" do
+    expect(described_class.identity_tables_sql).not_to include("kyc")
   end
 
   describe ".kyc_attributes_sql" do
-    subject(:sql) { described_class.kyc_attributes_sql }
+    subject(:sql) { described_class.kyc_attributes_sql(schema: "kiosk", user_id_type: :bigint) }
 
-    it "creates the kyc_attributes table keyed on (agent_id, name)" do
-      expect(sql).to include("CREATE TABLE")
-      expect(sql).to include('"kiosk".kyc_attributes')
-      expect(sql).to include("PRIMARY KEY (agent_id, name)")
+    it "keys the grants on the person, in the host's user id type" do
+      grants = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.kyc_attributes.*?\);/m]
+      expect(grants).to include("user_id    bigint NOT NULL,")
+      expect(grants).to include("PRIMARY KEY (user_id, name)")
+      expect(grants).not_to include("agent_id")
     end
 
-    it "cascades from the agents row so a deleted agent takes its grants with it" do
-      expect(sql).to include('REFERENCES "kiosk".agents(id) ON DELETE CASCADE')
+    # A jsonb map had to carry a VALUE, and a value has spellings. There is no
+    # value column, so no reader decides which spelling of true counts.
+    it "declares no value column — presence of the row IS the grant" do
+      grants = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.kyc_attributes.*?\);/m]
+      expect(grants).not_to include("boolean")
+      expect(grants).not_to include("jsonb")
+      expect(grants).not_to match(/\bvalue\b/)
     end
 
-    # The property the move exists to buy (K-656): a jsonb map had to carry a
-    # VALUE, and a value has spellings. There is no value column, so no reader
-    # has to decide which spelling of true counts.
-    it "declares no value column at all — presence of the row IS the grant" do
-      expect(sql).not_to include("boolean")
-      expect(sql).not_to include("jsonb")
-      expect(sql).not_to match(/\bvalue\b/)
-      expect(sql).not_to include("granted ")
+    it "lays down the verification requests beside them" do
+      requests = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.kyc_requests.*?\);/m]
+      expect(requests).to include("id          text PRIMARY KEY")
+      expect(requests).to include("user_id     bigint NOT NULL,")
+      expect(requests).to include("nonce       text NOT NULL")
+      expect(requests).to include("approved_at timestamptz")
     end
 
     it "uses the configured schema name" do
       Kiosk.configure { |c| c.schema = "myschema" }
-      out = described_class.kyc_attributes_sql
-      expect(out).to include('"myschema".kyc_attributes')
-      expect(out).to include('REFERENCES "myschema".agents(id)')
+      expect(described_class.kyc_attributes_sql).to include('"myschema".kyc_requests')
     end
+  end
 
-    it "accepts explicit schema override" do
-      out = described_class.kyc_attributes_sql(schema: "custom")
-      expect(out).to include('"custom".kyc_attributes')
+  describe ".kyc_on_person_sql" do
+    let(:sql) { described_class.kyc_on_person_sql(schema: "kiosk", user_id_type: :uuid) }
+
+    it "drops the assistant-keyed grants and the agents column, then lays down the person-keyed tables" do
+      expect(sql).to include(%(DROP TABLE IF EXISTS "kiosk".kyc_attributes;))
+      expect(sql).to include(%(ALTER TABLE "kiosk".agents DROP COLUMN IF EXISTS kyc_verified_at;))
+      expect(sql.index("DROP TABLE")).to be < sql.index(%(CREATE TABLE IF NOT EXISTS "kiosk".kyc_attributes))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".kyc_requests))
     end
   end
 end

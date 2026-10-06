@@ -51,6 +51,13 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       .to include(controller: "kiosk/server/payment_setup", action: "show")
   end
 
+  it "draws request_kyc and the KYC provider's callback" do
+    expect(recognize(:post, "/request_kyc"))
+      .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "request_kyc")
+    expect(recognize(:post, "/kyc/callback"))
+      .to include(controller: "kiosk/server/kyc_callback", action: "create")
+  end
+
   it "draws the kiosk-pop auth plane" do
     expect(recognize(:get, "/auth/challenge"))
       .to include(controller: "kiosk/server/auth", action: "challenge")
@@ -149,7 +156,7 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       # `events` joined when the stream was mounted (T-169), which is the same
       # rule running the other way.
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
-        .to eq(%w[agents auth events oauth pay payment_setup schema])
+        .to eq(%w[agents auth events kyc oauth pay payment_setup request_kyc schema])
     end
 
     it "does not swallow the multi-segment reserved routes" do

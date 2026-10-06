@@ -150,9 +150,9 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # this table (K-646): nullable, free to an operator who never uses them,
     # and a provider enabling the surface that reads one should not have to
     # discover it lives in a migration they were told was optional.
-    it "declares kyc_verified_at, spending_cap_cents and human_label on agents" do
+    it "declares spending_cap_cents and human_label on agents, and no KYC column" do
       agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\);/m]
-      expect(agents).to include("kyc_verified_at     timestamptz")
+      expect(agents).not_to include("kyc")
       expect(agents).to include("spending_cap_cents  bigint")
       expect(agents).to include("human_label         text")
     end
@@ -168,7 +168,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     it "repairs a pre-fold agents table rather than stepping over it" do
       expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS human_label))
       expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS spending_cap_cents))
-      expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS kyc_verified_at))
     end
 
     it "keeps every repair idempotent, so the from-zero path is untouched" do

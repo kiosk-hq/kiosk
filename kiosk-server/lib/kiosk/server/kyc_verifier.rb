@@ -16,7 +16,7 @@ module Kiosk
     # attestation is rejected), correct issuer, `aud` matches this operator's
     # configured `kyc_audience` (OPERATOR-BINDING — a claim the KYC provider
     # minted for another operator is rejected at the WIRE, not merely by a
-    # demo's own callback), `sub` matches the authenticated identity (compared
+    # demo's own callback), `sub` matches the principal (compared
     # as String on both sides so a bigint-PK host works), and not expired.
     # Raises `Errors::Forbidden` on any verification failure, and
     # `Errors::ModuleNotServed` when this origin serves no KYC at all.
@@ -40,13 +40,13 @@ module Kiosk
 
       module_function
 
-      # @param raw_jws  [String]          compact JWS string
-      # @param identity [Kiosk::Identity] the authenticated principal
+      # @param raw_jws [String] compact JWS string
+      # @param subject [String] the principal the attestation must name
       # @return [Hash] symbol-keyed payload claims on success
       # @raise [Errors::Forbidden]       on any verification failure
       # @raise [Errors::ModuleNotServed] when no `kyc_public_key` is configured,
       #   i.e. this origin does not serve the KYC module at all
-      def verify(raw_jws:, identity:)
+      def verify(raw_jws:, subject:)
         config = Kiosk.configuration
         key    = config.kyc_public_key
 
@@ -99,7 +99,7 @@ module Kiosk
         # KYC provider signs `sub` with whatever id it was handed (a String). A
         # strict `==` ("42" == 42) is always false, so every KYC attestation on
         # a bigint host was wrongly Forbidden. Normalising keeps uuid hosts as-is.
-        unless payload[:sub].to_s == identity.user_id.to_s
+        unless payload[:sub].to_s == subject.to_s
           raise Errors::Forbidden.new(
             "KYC attestation subject mismatch",
             hint: "sub must equal the authenticated user_id",

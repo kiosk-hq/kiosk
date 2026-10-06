@@ -2,6 +2,7 @@
 
 require "kiosk/server/actions"
 require "kiosk/server/errors"
+require "kiosk/server/kyc"
 require "kiosk/server/payment_setup"
 require "kiosk/server/queries"
 
@@ -60,6 +61,7 @@ module Kiosk
           clear!
           registered = Array(handlers).map { |handler| resolve(handler).kiosk_register! }
           PaymentSetup.register! if Kiosk.configuration.payment_provider
+          Kyc.register! if Kiosk.configuration.kyc_provider
           refuse_cross_kind_collisions!
           registered
         end

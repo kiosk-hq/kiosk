@@ -274,6 +274,14 @@ module Kiosk
       #   end
       attr_accessor :assistant_creation
 
+      # The anonymized attributes this origin's gated actions need, e.g.
+      # %w[age_over_18]. `request_kyc` asks the `kyc_provider` for them and
+      # {Kyc.require!} gates on them.
+      attr_writer :kyc_claims
+      def kyc_claims
+        @kyc_claims || []
+      end
+
       # Issuer string of the trusted KYC attestation provider.
       # Must match the `iss` claim of submitted KYC JWS tokens.
       attr_writer :kyc_issuer

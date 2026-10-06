@@ -14,6 +14,14 @@ RSpec.describe Kiosk::PaymentProviders::Base do
     end
   end
 
+  describe "#setup_url" do
+    it "raises NotImplementedError — an adapter whose setup_required? can answer true must implement it" do
+      expect {
+        adapter.setup_url(user_id: "user-1", return_url: "https://shop.example/kiosk/payment_setup/return")
+      }.to raise_error(NotImplementedError, /setup_url must be implemented/)
+    end
+  end
+
   describe "#capture" do
     it "raises NotImplementedError — subclasses must implement the charge" do
       expect {

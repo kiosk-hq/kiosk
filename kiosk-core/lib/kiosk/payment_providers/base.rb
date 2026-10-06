@@ -40,10 +40,13 @@ module Kiosk
     # Abstract base for AP2 PSP (Payment Service Provider) adapters.
     # See the Payment (AP2 mandate chain) section of the spec.
     #
-    # Subclasses ship as `kiosk-pay-*` gems, and `kiosk-pay-stripe` is the only
-    # one there is: `git ls-files 'kiosk-pay-*/*.gemspec'` names it and nothing
-    # else. A second PSP is written against the two methods below — the port is
-    # `setup_required?` and `capture`, and that is the whole of it.
+    # Subclasses ship as `kiosk-pay-*` gems. The port is `setup_required?`,
+    # `setup_url` and `capture`.
+    #
+    # One method is optional: an adapter that can tell whose setup a browser
+    # return request reports defines `setup_return_user_id(params)`, returning
+    # that principal's id or nil. kiosk-server then serves the `payment_setup`
+    # event topic and pushes it when the human comes back from `setup_url`.
     class Base
       # Returns true when the principal MUST complete a payment setup flow
       # (e.g. Stripe SetupIntent — card-on-file) before a charge can proceed.
@@ -58,6 +61,18 @@ module Kiosk
       # @return [Boolean]
       def setup_required?(user_id:) # rubocop:disable Lint/UnusedMethodArgument
         false
+      end
+
+      # The page the human opens to make payment possible, e.g. a hosted
+      # card-entry form. Asked only when {#setup_required?} answers true. The
+      # PSP sends the human's browser to `return_url` when they are done.
+      #
+      # @param user_id [String] principal identifier
+      # @param return_url [String] absolute url of the engine's return page
+      # @return [String]
+      def setup_url(user_id:, return_url:) # rubocop:disable Lint/UnusedMethodArgument
+        raise NotImplementedError, "#{self.class}#setup_url must be implemented by an adapter " \
+                                   "whose setup_required? can answer true"
       end
 
       # Capture a cart mandate into a settlement.

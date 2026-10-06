@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`PaymentProviders::Base` declares `setup_url(user_id:, return_url:)`**, so an adapter written against the port serves `payment_setup` (T-219).
+
 ## [0.5.3] — 2026-10-06
 
 - 2026-10-06: **`Kiosk::Protocol::API_VERSION` and `MIN_CLIENT` are `0.5.3`**, matching skill 0.5.3; a 0.5.2 assistant is told it is behind.

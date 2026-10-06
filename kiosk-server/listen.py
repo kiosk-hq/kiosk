@@ -10,19 +10,16 @@ cadence to invent.
                       --token "$KIOSK_TOKEN" \
                       --topic order_delivery --topic order_payment:<order-id>
 
-EXIT ON THE EVENT: add `--until-event` and it prints the first event and exits
-0 the moment it arrives, or exits 5 at `--max-seconds` with nothing. Run it in
-the foreground inside one tool call, or as a background process your runtime
-TRACKS and wakes you on when it exits; on waking, act on the event and start it
-again with `--since <its id>`. Keep `--max-seconds` below the longest your
-runtime lets a background process live. A process the runtime does not track --
-nohup, `&`, setsid -- wakes nobody, and neither does a line landing in a file.
+WAKE ON THE EVENT: run it as a background process your runtime TRACKS and wakes
+you on when it exits. With `--until-event` it prints the first event and exits 0
+the moment it arrives, or exits 5 at `--max-seconds` with nothing. On waking, act
+on the event, tell your human, and start it again with `--since <its id>`. Keep
+`--max-seconds` below the longest your runtime lets a background process live. A
+process the runtime does not track -- nohup, `&`, setsid -- wakes nobody, and
+neither does a line landing in a file.
 
     python3 listen.py --url … --token … --topic kyc_verification \
                       --until-event --max-seconds 300
-
-When nothing is running, the CURSOR is the delivery mechanism: record the
-highest `id` you saw and start again with `--since <id>`.
 
 Each line is a JSON object with a `type`:
 

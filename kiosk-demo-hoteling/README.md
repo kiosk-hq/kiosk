@@ -31,6 +31,7 @@ RFC 9457 problem document.
   stamped with a 15-minute pay-by deadline — recorded for an operator to act
   on, not enforced by `confirm_booking`, which gates on ownership + payment)
 - `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
+  (served by kiosk-server)
 - `POST /kiosk/confirm_booking` — confirm a reserved booking; requires a
   settled payment whose cart mandate references this booking
 - `POST /kiosk/pay` — settle the AP2 mandate chain (intent → cart → payment)

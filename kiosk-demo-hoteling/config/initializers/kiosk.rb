@@ -2,7 +2,7 @@
 
 # hoteling — hotel booking with a payment gate. No KYC, no hardware unlock.
 # Queries: properties, availability, my_bookings, search_hotels, hotel_detail
-# Actions: reserve_room, confirm_booking, payment_setup
+# Actions: reserve_room, confirm_booking; kiosk-server serves payment_setup
 #
 # TWO PoW gates run here and their default postures are OPPOSITE: the BROWSE
 # toll is OFF unless KIOSK_POW_BROWSE_DEMO=1, the REGISTRATION gate is ALWAYS

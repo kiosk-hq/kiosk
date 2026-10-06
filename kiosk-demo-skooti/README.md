@@ -29,7 +29,7 @@ is decided before any credential is read.
 | `GET /kiosk/scooters_available` | `scooters_available` | Browse the fleet (scooters + motorcycles); `needs_licence` flags the KYC-gated combustion vehicles |
 | `GET /kiosk/my_reservations` | `my_reservations` | This principal's reservations (owner-scoped) |
 | `POST /kiosk/reserve` | `reserve(scooter_code)` | Reserve a vehicle by its code (inserts a `status='reserved'` row; the hold has no expiry/TTL — it stays until `start_rental` flips it to `active`) |
-| `POST /kiosk/payment_setup` | `payment_setup` | Check whether the principal has a saved payment method |
+| `POST /kiosk/payment_setup` | `payment_setup` | Check whether the principal has a saved payment method (served by kiosk-server) |
 | `POST /kiosk/start_rental` | `start_rental(reservation_id)` | Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation) and issue an offline Ed25519 rental token (licence-free scooters need no KYC; a `needs_licence` vehicle is refused here and sent to `rent_motorcycle`) |
 | `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The combustion motorcycle; KYC-gated on `age_over_18` AND `licence_a` (category-A licence) before it issues a token |
 | `POST /kiosk/request_kyc` | `request_kyc` | Hand back the broker link the human completes; the `kyc_verification` event then carries the signed attestation |

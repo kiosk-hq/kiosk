@@ -49,6 +49,5 @@ get  "/kiosk/my_orders",           to: "kiosk/server/verb#show",   defaults: { k
 #
 # Actions — POST, a JSON body.
 post "/kiosk/create_order",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "create_order" }
-post "/kiosk/payment_setup",       to: "kiosk/server/verb#create", defaults: { kiosk_verb: "payment_setup" }
 post "/kiosk/request_kyc",         to: "kiosk/server/verb#create", defaults: { kiosk_verb: "request_kyc" }
 post "/kiosk/reschedule_delivery", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "reschedule_delivery" }

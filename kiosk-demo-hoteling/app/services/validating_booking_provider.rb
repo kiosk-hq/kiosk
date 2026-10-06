@@ -56,18 +56,14 @@ class ValidatingBookingProvider
 
   # ── THE PORT, ENUMERATED ────────────────────────────────────────────────────
   #
-  # The two methods below are the whole of what this decorator forwards, and
-  # they are the whole of the PSP port an operator's app calls:
+  # The setup half of the PSP port, forwarded for kiosk-server to call:
   #
-  #   * `setup_required?(user_id:)` — {Kiosk::PaymentProviders::Base} defines it
-  #     and the engine's executor asks it before it burns any mandate ids.
-  #   * `setup_url(user_id:)` — NOT on `Base`, and deliberately forwarded anyway:
-  #     it is the optional half of the same question, and hoteling's own
-  #     `payment_setup` verb calls it whenever `setup_required?` answers yes.
-  #     With the shipped {StubPsp} that branch is never taken; with
-  #     `kiosk-pay-stripe` swapped in it is the card-on-file flow, and a wrapper
-  #     that could not forward it would break the swap this demo advertises.
-  #     A provider that defines neither raises NoMethodError naming ITSELF.
+  #   * `setup_required?(user_id:)` — the engine's executor asks it before it
+  #     burns any mandate ids, and kiosk-server's `payment_setup` asks it too.
+  #   * `setup_url(user_id:, return_url:)` — `payment_setup` calls it whenever
+  #     `setup_required?` answers yes. With the shipped {StubPsp} that branch is
+  #     never taken; with `kiosk-pay-stripe` swapped in it is the card-on-file
+  #     flow.
   #
   # `capture` is above, overridden rather than forwarded — it is the cashier.
   # DO NOT make this a `method_missing` delegator: on the MONEY path that
@@ -80,8 +76,8 @@ class ValidatingBookingProvider
     @provider.setup_required?(user_id: user_id)
   end
 
-  def setup_url(user_id:)
-    @provider.setup_url(user_id: user_id)
+  def setup_url(user_id:, return_url:)
+    @provider.setup_url(user_id: user_id, return_url: return_url)
   end
 
   # THE REVERSAL, forwarded explicitly for the reason the paragraph above gives:

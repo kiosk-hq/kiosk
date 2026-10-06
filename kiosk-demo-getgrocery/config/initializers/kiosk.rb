@@ -6,7 +6,7 @@
 # Queries:  catalog, delivery_slots (delivery ADDRESS/zone REQUIRED — validated
 #           against served Dublin districts), my_orders
 # Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery,
-#           payment_setup, request_kyc
+#           request_kyc; kiosk-server serves payment_setup
 # Pay:      capture is wrapped by ValidatingPaymentProvider — the cart must be
 #           EUR, reference the payer's unsettled order, mirror its items at
 #           catalog prices, and sum correctly (the cashier check).
@@ -203,11 +203,6 @@ Kiosk.configure do |c|
       customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
       customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
       test_autocard:     Rails.configuration.x.kiosk.test_autocard,
-      # A path: the adapter joins it to the origin being served.
-      # `{CHECKOUT_SESSION_ID}` is Stripe's own placeholder, substituted on the
-      # redirect. WITHOUT IT THE RETURN PAGE IS ANONYMOUS: the page cannot tell
-      # whose human just saved a card, and so cannot push `payment_setup` to them.
-      return_url:        "/payment/return?session_id={CHECKOUT_SESSION_ID}",
     ),
     currency: "eur",
   )

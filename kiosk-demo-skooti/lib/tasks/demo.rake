@@ -1030,7 +1030,6 @@ namespace :check do
       • capabilities is the MODULE set schema/queries/actions/pay and events
       • schema.actions includes reserve, start_rental, rent_motorcycle,
         payment_setup with descriptions
-      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon
 
       • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
         a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
@@ -1278,52 +1277,6 @@ namespace :check do
       else
         failures << "schema.actions missing #{aname}"
         puts "  ✗  schema.actions missing #{aname}"
-      end
-    end
-
-    # ── THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ────────────
-    # An assistant at an origin it holds no stream to learns of card setup by
-    # RE-POLLING `payment_setup`, so its descriptor carries
-    # a cadence and a give-up horizon, QUOTING kiosk.tech/skill.md's tiered
-    # schedule rather than a rival flat one. NOTHING ELSE THAT RUNS READS EITHER
-    # VALUE BACK — they live only in the source they are written into — so
-    # without this beat an edit could drop the horizon and every gate would stay
-    # green. It is asserted on the SERVED descriptor, because that is the
-    # document an assistant reads.
-    #
-    # STRUCTURE, NOT THE MINUTES. Both tiers must be present, the second must be
-    # SLOWER than the first (a tiering that is not one is not a schedule), and a
-    # horizon must be named in minutes. The exact numbers are deliberately NOT
-    # pinned: writing "5" and "15" here would make this file a third place the
-    # schedule lives, and a derived copy of a schedule is one copy too many.
-    poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
-    poll_horizon = /GIVE UP after about (\d+) minutes?/
-    { actions => ["payment_setup"] }.each do |list, names|
-      names.each do |vname|
-        entry = list.find { |e| e["name"] == vname }
-        if entry.nil?
-          failures << "schema is missing #{vname} — the poll-budget assertion cannot run"
-          puts "  FAIL  schema is missing #{vname}"
-          next
-        end
-        desc = entry["description"].to_s
-        tiers   = desc.match(poll_tiers)
-        horizon = desc.match(poll_horizon)
-        if tiers.nil?
-          failures << "#{vname} description publishes no poll cadence: #{desc.inspect}"
-          puts "  FAIL  #{vname} publishes no poll cadence"
-        elsif tiers[2].to_i <= tiers[1].to_i
-          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s"
-          puts "  FAIL  #{vname} cadence does not back off (~#{tiers[1]}s then ~#{tiers[2]}s)"
-        else
-          puts "  OK    #{vname} publishes a backing-off cadence (~#{tiers[1]}s, then ~#{tiers[2]}s)"
-        end
-        if horizon.nil? || horizon[1].to_i <= 0
-          failures << "#{vname} description publishes no GIVE UP horizon: #{desc.inspect}"
-          puts "  FAIL  #{vname} publishes no GIVE UP horizon"
-        else
-          puts "  OK    #{vname} publishes a give-up horizon (~#{horizon[1]} minutes)"
-        end
       end
     end
 

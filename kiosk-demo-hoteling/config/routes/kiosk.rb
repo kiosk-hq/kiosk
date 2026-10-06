@@ -51,5 +51,4 @@ get  "/kiosk/search_hotels",   to: "kiosk/server/verb#show",   defaults: { kiosk
 #
 # Actions — POST, a JSON body.
 post "/kiosk/confirm_booking", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "confirm_booking" }
-post "/kiosk/payment_setup",   to: "kiosk/server/verb#create", defaults: { kiosk_verb: "payment_setup" }
 post "/kiosk/reserve_room",    to: "kiosk/server/verb#create", defaults: { kiosk_verb: "reserve_room" }

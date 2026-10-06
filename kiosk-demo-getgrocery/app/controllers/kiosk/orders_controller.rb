@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# getgrocery's WRITE surface: the four verbs an assistant reaches with
+# getgrocery's WRITE surface: the three verbs an assistant reaches with
 # `POST /kiosk/<action-name>`, arguments as the JSON body. Same shape as
 # Kiosk::StorefrontController — `ActionController::API` plus
 # `include Kiosk::Handler` — with `kind :action` above each declaration, which is
@@ -10,7 +10,7 @@
 # request, hand them to an Operation, render what it answers. Keeping the gates
 # in app/operations/ keeps them callable from a console, a rake task, and (for
 # the paid-state read they share) the operator's own back office at
-# GET /admin/orders. `payment_setup` stays HERE because it writes nothing.
+# GET /admin/orders.
 #
 # The wire's error-code vocabulary is a closed table, not a class hierarchy, so
 # no Kiosk error classes appear below: an Operation answers with an
@@ -27,21 +27,6 @@ class Kiosk::OrdersController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals
 
-  # payment_setup — the card-on-file readiness probe; canonical skill Step 5 runs
-  # it before `pay`.
-  #
-  # POLL CADENCE + STOP CONDITION: the wire has no server→assistant push,
-  # so an assistant learns the human finished the hosted card entry ONLY by
-  # re-calling this — and without a stated cadence AND terminal stop condition it
-  # invents its own and can poll forever. The cadence is the skill's, verbatim
-  # (skill.md Step 5), since anything else here is a second, losing instruction.
-  # No CHECK COUNT: a count derives from the cadence and the horizon, so it goes
-  # silently wrong the moment either moves.
-  #
-  # SAFE TO RE-CALL: when setup is required the Stripe adapter reuses the
-  # session already outstanding for this principal, so every poll returns the
-  # SAME setup_url and a relayed link cannot bounce the human off the page they
-  # are filling in.
   # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
 
   # THE WAIT THE EVENT STREAM EXISTS FOR. `request_kyc` hands the human a link
@@ -66,24 +51,6 @@ class Kiosk::OrdersController < ActionController::API
     subject_reachable lambda { |request_id, identity|
       KycVerificationRequest.readable_by?(request_id, identity.user_id)
     }
-  end
-
-  # The card-setup wait, and the one topic whose state lives at the PSP rather
-  # than here. `payment_setup` re-derives readiness from Stripe on every call,
-  # so an assistant polling it costs a round trip to a third party per ask —
-  # the skill's cadence prescribes roughly 28 of them over five minutes, for
-  # one bit this operator holds the moment the human's browser comes back.
-  #
-  # The subject is the PRINCIPAL rather than any row: card setup is a property
-  # of the account, and there is no order, no request and no reservation it
-  # belongs to.
-  topic :payment_setup do
-    description "The human finished saving a card. `pay` will now be accepted — no further " \
-                "payment_setup call is needed."
-    payload_schema type: "object", additionalProperties: false,
-                   properties: { status: { enum: %w[ready] } },
-                   required: %w[status]
-    subject_reachable ->(subject, identity) { subject.to_s == identity.user_id.to_s }
   end
 
   # An order reaches `paid` on the OPERATOR's clock, not the caller's: the
@@ -125,57 +92,6 @@ class Kiosk::OrdersController < ActionController::API
                                                            "one `eta_label` is written on." } },
                    required: %w[order_id status]
     subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
-  end
-
-  kind :action
-  description "Check whether the authenticated principal has a saved card on file. " \
-              "Returns {status: \"ready\"} if a card is already saved and the assistant can proceed to `pay`. " \
-              "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
-              "the assistant must hand the setup_url to the human, wait for them to complete the " \
-              "Stripe-hosted card entry, then call payment_setup again before paying. " \
-              "The assistant should call this before every `pay` invocation on a new device or session. " \
-              "POLLING: while your human is at the hosted page, re-check every ~5 seconds for the first " \
-              "minute, then every ~15 seconds, and GIVE UP after about 5 minutes — tell your human the " \
-              "card setup is still not finished rather than polling indefinitely; they can finish later " \
-              "and you re-check then. " \
-              "Re-checking is safe and repeatable: while one setup is outstanding this normally returns " \
-              "the SAME setup_url, so relay that one link and do NOT send your human a new one per check " \
-              "— and if a check ever does come back with a different url, still leave your human on the " \
-              "page they already have open unless they tell you it stopped working."
-  # A verb that takes nothing still declares the empty closed object, so "takes
-  # no arguments" is a published fact rather than an absence to interpret.
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # TWO shapes, branching on `status`, and a `oneOf` rather than one open object
-  # with an optional `setup_url` because the pairing is the contract:
-  # `setup_required` without a url is unactionable, and `ready` with one invites
-  # the assistant to open a page there is no reason to open.
-  output_schema oneOf: [
-    { type: "object", additionalProperties: false,
-      description: "A card is on file — proceed to `pay`.",
-      properties: { status: { const: "ready", description: "ready." } },
-      required: ["status"] },
-    { type: "object", additionalProperties: false,
-      description: "No card on file — the human must complete the hosted card entry first.",
-      properties: {
-        status:    { const: "setup_required", description: "setup_required." },
-        setup_url: { type: "string", description: "The Stripe-hosted card-entry page to hand to your human. Stable across polls while one setup is outstanding — relay this one link rather than a new one per check." },
-      },
-      required: %w[status setup_url] },
-  ]
-  def payment_setup
-    # No nil check: the wire resolves an identity before dispatch and answers 401
-    # itself when it cannot, so an anonymous probe never reaches a handler.
-    user_id  = kiosk_identity.user_id
-    provider = Kiosk.configuration.payment_provider
-
-    # Key off setup_required? (not saved_method?) so it honours the adapter's
-    # policy — incl. KIOSK_TEST_AUTOCARD, where setup is auto-completed at capture
-    # and this returns "ready" without a hosted-page round-trip.
-    if provider.setup_required?(user_id: user_id)
-      render json: { status: "setup_required", setup_url: provider.setup_url(user_id: user_id) }
-    else
-      render json: { status: "ready" }
-    end
   end
 
   # create_order — the flagship verb; see {CreateOrderOperation} for the gates it

@@ -601,8 +601,8 @@ if ARGV.include?("--self-test")
       what: "a clause is pasted flush left into a description — the K-1538 wave's exact shape, " \
             "which re-indented two whole `rake -D` texts and left every gate green",
       ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
-              "      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon\n",
-              "      • `payment_setup` publishes BOTH a backing-off poll cadence and a GIVE UP horizon\n" \
+              "      • schema.actions includes reserve_room, confirm_booking, payment_setup with descriptions\n",
+              "      • schema.actions includes reserve_room, confirm_booking, payment_setup with descriptions\n" \
               "• and that the cadence is READ rather than merely present\n"]],
       expect: /a `desc <<~` body may not dedent to column 0.+hoteling\/lib\/tasks\/demo\.rake:\d+/m },
     { id: "vacuity-desc-heredoc-opener", kind: :vacuity,

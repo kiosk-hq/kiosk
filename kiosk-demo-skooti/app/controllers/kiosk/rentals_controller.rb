@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# skooti's WRITE surface: the five verbs an assistant reaches with
+# skooti's WRITE surface: the four verbs an assistant reaches with
 # `POST /kiosk/<action-name>`, one endpoint per verb, arguments as the JSON body.
 # Same shape as Kiosk::FleetController, with `kind :action` above each
 # declaration, which is what puts it on `POST`.
@@ -9,8 +9,7 @@
 # them to an Operation, render what it answers. The gate chains, the Ed25519
 # signature and the server-to-server KYC call live in app/operations/, which
 # keeps a `render` out of the middle of one and makes them callable from a
-# console or a rake task. `payment_setup` stays HERE because it writes nothing:
-# it asks the configured payment provider one question and renders the answer.
+# console or a rake task.
 #
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a closed
 # table, not a class hierarchy, so a refusal is an ordinary `render json:,
@@ -24,22 +23,6 @@ class Kiosk::RentalsController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals
 
-  # payment_setup — canonical skill Step 5 runs this unconditionally before
-  # `pay`. With StubPsp (no SetupIntent model) `setup_required?` is always false,
-  # so this is an immediate no-op success: {status: "ready"}.
-  #
-  # POLL CADENCE + STOP CONDITION: the wire has no server→assistant
-  # push, so an assistant that ever DOES get a `setup_required` learns the human
-  # finished the hosted card entry ONLY by re-calling this. The descriptor must
-  # state a cadence AND a terminal stop condition, or an agent invents its own
-  # and can poll forever. The cadence is the skill's, verbatim (skill.md Step 5),
-  # because the skill is what assistants actually follow; no CHECK COUNT is
-  # stated, since a count derived from the cadence and the horizon goes wrong the
-  # moment either moves.
-  #
-  # The descriptor promises nothing about the setup_url being stable across
-  # polls: StubPsp mints no setup session, so that would be a claim about code
-  # this never runs.
   # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
   #
   # A rental can be settled BY SOMEBODY ELSE — the cashier deliberately lets
@@ -56,49 +39,6 @@ class Kiosk::RentalsController < ActionController::API
     subject_reachable lambda { |reservation_id, identity|
       Reservation.readable_by?(reservation_id, identity.user_id)
     }
-  end
-
-  kind :action
-  description "Check whether the authenticated principal has a saved payment method. " \
-              "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
-              "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
-              "must be completed by the human first — hand the setup_url to the human, wait for " \
-              "them to finish, then call payment_setup again before paying. " \
-              "This demo's stub PSP needs no setup, so it always returns ready. " \
-              "The assistant should call this before `pay`. " \
-              "POLLING: if you ever do get setup_required, re-check every ~5 seconds for the first " \
-              "minute, then every ~15 seconds, while your human is at the hosted page, and GIVE UP " \
-              "after about 5 minutes — tell your human the card setup is still not finished rather " \
-              "than polling indefinitely; they can finish later and you re-check then."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # TWO shapes, and the branch is `status`. A `oneOf` rather than one open object
-  # with an optional `setup_url`, because the pairing is the contract. The stub
-  # PSP only ever produces the first branch; the second is declared anyway.
-  output_schema oneOf: [
-    { type: "object", additionalProperties: false,
-      description: "A payment method is on file — proceed to `pay`.",
-      properties: { status: { const: "ready", description: "ready." } },
-      required: ["status"] },
-    { type: "object", additionalProperties: false,
-      description: "A hosted setup flow must be completed by the human first.",
-      properties: {
-        status:    { const: "setup_required", description: "setup_required." },
-        setup_url: { type: "string", description: "The hosted setup page to hand to your human." },
-      },
-      required: %w[status setup_url] },
-  ]
-  def payment_setup
-    # The principal, from the identity the WIRE resolved — no nil check, because
-    # the wire resolves an identity before dispatch and answers 401 itself when
-    # it cannot ("no identity resolved from request").
-    user_id  = kiosk_identity.user_id
-    provider = Kiosk.configuration.payment_provider
-
-    if provider.setup_required?(user_id: user_id)
-      render json: { status: "setup_required", setup_url: provider.setup_url(user_id: user_id) }
-    else
-      render json: { status: "ready" }
-    end
   end
 
   # reserve — the hold, and the quote a cart must be signed against. See

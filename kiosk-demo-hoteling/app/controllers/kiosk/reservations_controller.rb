@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# hoteling's WRITE surface: the three verbs an assistant reaches with
+# hoteling's WRITE surface: the two verbs an assistant reaches with
 # `POST /kiosk/<action-name>`, arguments as the JSON BODY. Same shape as
 # Kiosk::HotelsController — `ActionController::API` plus `include
 # Kiosk::Handler` — with `kind :action` above each declaration, which is what
@@ -9,7 +9,7 @@
 # `reserve_room` hands straight to an Operation: a transaction with a three-part
 # inventory guard, which does not want a `render` in the middle. `confirm_booking`
 # hands to one too, for the gates rather than for a write — it reads the
-# property's answer. `payment_setup` stays HERE because it writes nothing.
+# property's answer.
 #
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
@@ -23,17 +23,6 @@ class Kiosk::ReservationsController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals
 
-  # payment_setup — canonical skill Step 5 runs this unconditionally before
-  # `pay`. With StubPsp (no SetupIntent model) `setup_required?` is always
-  # false, so this is an immediate no-op success: {status: "ready"}.
-  #
-  # POLL CADENCE + STOP CONDITION: the wire has no server→assistant
-  # push, so an assistant that ever DOES get a `setup_required` learns the human
-  # finished only by re-calling this — the descriptor must state a cadence AND a
-  # terminal stop condition, or an agent invents its own and polls forever. The
-  # cadence below is the skill's verbatim (skill.md Step 5), because the skill is
-  # what assistants actually follow. No CHECK COUNT is stated: a count is derived
-  # from cadence and horizon, so it goes silently wrong when either moves.
   # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
   #
   # A booking can be paid BY SOMEBODY ELSE. The cashier deliberately lets
@@ -83,52 +72,6 @@ class Kiosk::ReservationsController < ActionController::API
                                  payment_state: { enum: %w[paid] } },
                    required: %w[booking_id payment_state]
     subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
-  end
-
-  kind :action
-  description "Check whether the authenticated principal has a saved payment method. " \
-              "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
-              "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
-              "must be completed by the human first — hand the setup_url to the human, wait for " \
-              "them to finish, then call payment_setup again before paying. " \
-              "This demo's stub PSP needs no setup, so it always returns ready. " \
-              "The assistant should call this before `pay`. " \
-              "POLLING: if you ever do get setup_required, re-check every ~5 seconds for the first " \
-              "minute, then every ~15 seconds, while your human is at the hosted page, and GIVE UP " \
-              "after about 5 minutes — tell your human the card setup is still not finished rather " \
-              "than polling indefinitely; they can finish later and you re-check then."
-  # A verb that takes nothing still declares the empty closed object, so "takes
-  # no arguments" is a published fact rather than an absence to interpret.
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # TWO shapes, branching on `status`. A `oneOf` rather than one open object
-  # with an optional `setup_url`, because the pairing IS the contract:
-  # `setup_required` without a url cannot be acted on. The stub PSP only ever
-  # produces the first branch; the second is declared anyway so the published
-  # contract matches the other two payment demos.
-  output_schema oneOf: [
-    { type: "object", additionalProperties: false,
-      description: "A payment method is on file — proceed to `pay`.",
-      properties: { status: { const: "ready", description: "ready." } },
-      required: ["status"] },
-    { type: "object", additionalProperties: false,
-      description: "A hosted setup flow must be completed by the human first.",
-      properties: {
-        status:    { const: "setup_required", description: "setup_required." },
-        setup_url: { type: "string", description: "The hosted setup page to hand to your human." },
-      },
-      required: %w[status setup_url] },
-  ]
-  def payment_setup
-    # From the identity the WIRE resolved; no nil check, because the wire answers
-    # 401 itself before dispatch when it cannot resolve one.
-    user_id  = kiosk_identity.user_id
-    provider = Kiosk.configuration.payment_provider
-
-    if provider.setup_required?(user_id: user_id)
-      render json: { status: "setup_required", setup_url: provider.setup_url(user_id: user_id) }
-    else
-      render json: { status: "ready" }
-    end
   end
 
   # reserve_room — the hold. See {ReserveRoomOperation} for the inventory guard;

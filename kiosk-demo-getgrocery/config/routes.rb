@@ -29,9 +29,4 @@ Rails.application.routes.draw do
   # ─── Provider admin (read-only demo back-office) ──────────────────────────
   # No auth required — demo provider only. Production would authenticate.
   get "/admin/orders" => "admin/orders#index", as: :admin_orders
-
-  # ─── Stripe Checkout return page ──────────────────────────────────────────
-  # The SetupIntent success_url (return_url in the initializer) lands the human
-  # here after they save a card.
-  get "/payment/return", to: "payment_return#show"
 end

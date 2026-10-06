@@ -110,12 +110,11 @@
 #     none of them ours.
 #   * `e2e/schemas/*.schema.json` are VENDORED MIRRORS and are read for one
 #     thing only: the TOP-LEVEL `$comment`, the provenance marker upstream
-#     does not carry. `bin/check-spec-schemas` removes exactly that member
-#     from each side and holds every other byte equal to the schema
-#     kiosk.tech publishes, so it is the one part of a mirror this repository
+#     does not carry. Every other byte is the schema kiosk.tech publishes,
+#     so that member is the one part of a mirror this repository
 #     may change; everything else, a NESTED `$comment` included, is the site
 #     repository's. A citation cannot enter the body from here without
-#     turning THAT guard red, and scrubbing one out here would make the
+#     breaking the mirror, and scrubbing one out here would make the
 #     mirror stop mirroring. WHICH member is exempt is READ OUT of that
 #     script rather than restated here — see `exempt_mirror_members`.
 #
@@ -441,9 +440,9 @@
 # — which is a sentence R8 makes somebody write. MEASURED at head before the rule
 # existed, over every tracked file in this repository (not just the scopes): the
 # residue is TWO distinct tokens — `e2e/mise.toml`, cited only by the CHANGELOG
-# entry recording this very fix, and `kiosk-server/Gemfile.lock` inside
-# `bin/check-gem-packaging`. Neither is in a scope this guard reads (the
-# changelog is `ROOT_NOT_READ`, `bin/` is Phil's standing exemption), so the rule
+# entry recording this very fix, and `kiosk-server/Gemfile.lock` in a `bin/`
+# script. Neither is in a scope this guard reads (the changelog is
+# `ROOT_NOT_READ`, `bin/` is Phil's standing exemption), so the rule
 # lands on a clean tree with no exemption of its own and nothing excused.
 #
 # AND THE RECOGNISER MISSED A THIRD SHAPE, WHICH IS WHY IT NOW HAS A THIRD LEG
@@ -566,8 +565,8 @@
 #
 # WHAT A CENSUS ROW DOES NOT MEAN. It is not a finding. Most rows are the
 # passive and want nothing done. And a row inside a VENDORED SCHEMA MIRROR is
-# not repairable from this side at all — the mask above leaves only the member
-# `bin/check-spec-schemas` exempts, so anything a census row can still name in
+# not repairable from this side at all — the mask above leaves only the
+# top-level `$comment`, so anything a census row can still name in
 # such a file is the provenance marker this repository itself wrote. Such rows
 # are labelled where they are printed rather than silently dropped, because a
 # reader who cannot see them cannot know the sentence exists at all.
@@ -583,11 +582,10 @@
 #     the standing example (upheld deliberately on K-1459) and are outside the
 #     demo scope, which reads `app lib script config db` and four root files;
 #     an arm asserts no `public/` path reaches it.
-#   * a schema this repository VENDORS from kiosk.tech. `bin/check-spec-schemas`
-#     holds eight files byte-equal to what that repository publishes, so a
-#     sentence in one is not repairable from this side — scrubbing it here
-#     would make the mirror stop mirroring. Everything but the member THAT
-#     guard exempts is masked, in BOTH homes, and two vacuity arms re-read it:
+#   * a schema this repository VENDORS from kiosk.tech. The mirror is
+#     byte-equal to what that repository publishes, so a sentence in one is
+#     not repairable from this side — scrubbing it here would make the mirror
+#     stop mirroring. Everything but the top-level `$comment` is masked, in BOTH homes, and two vacuity arms re-read it:
 #     one fails if it ever mirrors a path this mask does not cover, the other
 #     if it stops naming a member at all, which would leave this file guessing
 #     which bytes are ours.
@@ -1201,9 +1199,8 @@ GEM_NOT_READ = %w[CHANGELOG.md LICENSE.txt].freeze
 # direction: the glob named no packaged file the gemspec does not (0 at head).
 #
 # The gemspecs call `Dir.glob`, which resolves against CWD, so the load has to
-# happen from inside the gem directory — the same reason `bin/check-gem-packaging`
-# builds each gem from its own dir. That script remains the authority on whether
-# `spec.files` is COMPLETE; this one only reads what it names.
+# happen from inside the gem directory. This only reads what `spec.files` names;
+# whether it is COMPLETE is not its question.
 def gem_spec_for(gem_dir)
   @gem_specs ||= {}
   @gem_specs[gem_dir] ||= begin
@@ -1956,7 +1953,7 @@ EXEMPT_BANNER = [
   "any line carrying a live TODO/FIXME (the constitution requires that marker to cite a row);",
   "e2e/.gems (the installed bundle) and e2e/tmp (the generated app);",
   "the BODY of a vendored schema mirror in EITHER home (everything but the TOP-LEVEL",
-  "$comment bin/check-spec-schemas exempts);",
+  "$comment, the mirror's own provenance marker);",
   "`spec.authors`, the one line RubyGems reads, for the maintainer-named rule only;",
   "for the retired-wire rule only, a version token that is CODE rather than prose (a float",
   "literal, a dependency constraint), and a bare number under a table column that names its unit;",
@@ -2409,8 +2406,8 @@ def self_test
 
     # THE VENDORED-MIRROR MASK, both ways. The `$comment` is the harness's own
     # provenance marker and is IN scope; every other byte is the schema
-    # kiosk.tech publishes and is NOT, because bin/check-spec-schemas holds it
-    # equal and scrubbing it here would make the mirror stop mirroring.
+    # kiosk.tech publishes and is NOT, because scrubbing it here would make the
+    # mirror stop mirroring.
     mirror_dir = File.join(dir, "e2e", "schemas")
     FileUtils.mkdir_p(mirror_dir)
     mirror = File.join(mirror_dir, "x.schema.json")
@@ -2432,9 +2429,8 @@ def self_test
                mirror_hits.any? { |h| h.line == 2 })
     check.call("…and one in the mirror's BODY is NOT — it is kiosk.tech's to remove",
                mirror_hits.none? { |h| h.line == 3 })
-    check.call("…and one in a NESTED `$comment` is NOT either — bin/check-spec-schemas holds " \
-               "that byte equal, so a rule firing on it would demand the one edit that guard " \
-               "fails on",
+    check.call("…and one in a NESTED `$comment` is NOT either — that byte is the published " \
+               "schema's, so a rule firing on it would demand an edit that breaks the mirror",
                mirror_hits.none? { |h| h.line == 6 })
 
     # ── R5 IS PROSE-ONLY: a version token inside CODE is a number ───────────

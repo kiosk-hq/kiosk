@@ -2053,8 +2053,7 @@ SKELETON_NOT_COMPARED = {
   "config/routes/kiosk.rb" =>
     "Per-demo: the mount is identical in all eight and the verb lines are that storefront's "\
     "own, so the file as a whole is not comparable. Its FRAMEWORK PROSE is compared across "\
-    "demos by the K-1069 block below, and bin/check-verb-routes holds every route line in it "\
-    "to the verbs that demo's own handler controllers declare (T-183).",
+    "demos by the K-1069 block below.",
   "config/initializers/kiosk.rb" =>
     "Per-demo: capabilities, verbs, PoW policy and adapters differ per storefront. The " \
     "response-validation posture and the app/services autoload-once declaration ARE asserted below.",
@@ -2070,12 +2069,10 @@ SKELETON_NOT_COMPARED = {
   "Gemfile.lock" =>
     "Resolver output, tracked on purpose; follows the Gemfile. Its PLATFORMS set IS asserted "\
     "below - that half is not per-demo (K-962).",
-  "README.md" => "Per-demo prose. The task list inside it is asserted by bin/check-ci-tasks.",
+  "README.md" => "Per-demo prose.",
   "CHANGELOG.md" => "Per-demo history.",
   "before-after.md" =>
-    "Per-demo narrative: that storefront's before/after contrast. Its fenced blocks are held " \
-    "to the producers they declare by bin/check-demo-derivations; its prose is each " \
-    "storefront's own and nothing here compares it.",
+    "Per-demo narrative: that storefront's before/after contrast; nothing here compares it.",
   "db/seeds.rb" => "Per-demo catalog — the whole point of each demo.",
   "db/structure.sql" =>
     "Generated from the migrations, which this check DOES compare byte-for-byte; comparing the " \
@@ -2145,8 +2142,7 @@ GENERATOR_TEMPLATES = {
   "routes_kiosk.rb.tt" => {
     not_compared: "emits config/routes/kiosk.rb — the mount line is identical everywhere, but the " \
                   "verb routes under it are each storefront's own, so the file as a whole is " \
-                  "per-demo by design, recorded in SKELETON_NOT_COMPARED; bin/check-verb-routes " \
-                  "holds every demo's route lines to the verbs its handler controllers declare.",
+                  "per-demo by design, recorded in SKELETON_NOT_COMPARED.",
   },
   "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
   "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
@@ -3567,9 +3563,7 @@ end
 # per-demo, task by task — and this construct is not. Reading the child's exit
 # status before parsing its JSON is the same fifty lines of comment and `def` in
 # every demo, so the fleet carries one construct that every operator demo's ability
-# to FAIL rests on, in the one directory nothing compares. bin/check-ci-tasks is
-# not cover: it compares the task INVENTORY, never one demo's rake file against
-# another's.
+# to FAIL rests on, in the one directory nothing compares.
 #
 # The FRAGMENT is declared rather than the file, because the rest of the rake
 # file genuinely is per-demo. Each demo names its helper after itself
@@ -6220,10 +6214,8 @@ E2E_FIXTURES = {
     why:  "The harness's WIRE, copied by run.sh to config/routes/kiosk.rb — the same split every " \
           "demo ships since T-183: `mount Kiosk::Server::Engine` for the protocol plane, then one " \
           "explicit route per registered verb with the method following the kind. `:per_demo` " \
-          "because the verb lines are this origin's own, and the mount line is one line. Held on " \
-          "two axes anyway: its framework prose is in the K-1069 corpus below, and " \
-          "bin/check-verb-routes derives every route line in it from the fixture handler " \
-          "controllers this same directory ships.",
+          "because the verb lines are this origin's own, and the mount line is one line. Its framework " \
+          "prose is held anyway, in the K-1069 corpus below.",
   },
   "seeds.rb" => {
     rule: :per_demo,
@@ -6704,8 +6696,7 @@ FRAMEWORK_CLAIMS = {
            "others. The e2e fixture is deliberately out: it draws a two-verb fixture wire, not a " \
            "storefront's, and says so in its own header. The source binding moved at T-183: it " \
            "used to name the engine's `/:kiosk_verb` pair, which no longer exists — the claim is " \
-           "now bound to the controller that still states the one-endpoint-per-verb shape, and " \
-           "`bin/check-verb-routes` is what holds the demos' actual lines to it.",
+           "now bound to the controller that still states the one-endpoint-per-verb shape.",
   },
   "mount-draws-the-protocol-plane" => {
     doc:   "config/routes/kiosk.rb",
@@ -6728,8 +6719,7 @@ FRAMEWORK_CLAIMS = {
     why:   "The ORDERING PROPERTY the deleted catch-all used to give for free: the reserved plane " \
            "wins by first-match because the mount is above the operator's verbs. It is a property " \
            "of a file somebody writes now, so it is stated in all eight of them, held here for " \
-           "agreement, held by `bin/check-verb-routes`' MOUNT-FIRST rule on the routes themselves, " \
-           "and bound to the boot-time refusal that makes the collision unwritable in the first " \
+           "agreement, and bound to the boot-time refusal that makes the collision unwritable in the first " \
            "place.",
   },
   "routes-drawer-is-not-future-work" => {

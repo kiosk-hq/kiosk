@@ -27,8 +27,8 @@
 #
 # WHY A SPEC AND NOT A `bin/check-*`. It has to reach CI to be worth anything,
 # and `kiosk-test-support` is in the gems matrix, so a spec here gates every push
-# without a workflow of its own — the same reason `kiosk_names_check_spec.rb`,
-# `no_dated_literals_spec.rb` and `skill_pin_spec.rb` live beside it.
+# without a workflow of its own — the same reason `no_dated_literals_spec.rb`
+# and `skill_pin_spec.rb` live beside it.
 #
 # THE CONTRACT IS TWO-TIER, deliberately, and it is NOT the same split
 # `check-script-warnings.rb` makes:

@@ -3,10 +3,9 @@
 
 # check-conformance-drift — which cited tests have MOVED since the last sweep.
 #
-# WHY THIS EXISTS (K-1123). `bin/check-conformance-anchors` proves every anchor
-# the conformance matrix cites still RESOLVES — the named `it`/`describe`/
-# `context` label exists, exactly once, in the file beside it. That is a check on
-# the CITATION. It says nothing about the code the citation points at: a cited
+# WHY THIS EXISTS. An anchor the conformance matrix cites RESOLVES when the
+# named `it`/`describe`/`context` label exists, exactly once, in the file beside
+# it. That is a check on the CITATION. It says nothing about the code the citation points at: a cited
 # example can be rewritten line by line, keep its label, and go on resolving
 # while no longer asserting the statement the matrix claims it covers.
 #
@@ -28,8 +27,8 @@
 #   * NOT the file's blob sha. One line moved in a 500-line spec would flag every
 #     anchor in it; `well_known_spec.rb` alone carries 33.
 #   * NOT the anchor line alone. That changes only when the label changes, which
-#     is precisely the event `check-conformance-anchors` already fails on — the
-#     fingerprint would duplicate an existing gate and detect nothing new.
+#     is precisely the event an unresolvable anchor already reports — the
+#     fingerprint would detect nothing new.
 #   * THE ANCHORED REGION: the line the anchor sits on, plus every following line
 #     indented MORE deeply than it (blank lines are carried but do not end the
 #     region; trailing blanks are trimmed). That is the block the label opens,
@@ -776,7 +775,7 @@ if check || reheader
   if count && count != rows.length
     parse << "the header says #{count} anchors and #{rows.length} row(s) follow. --record writes the " \
              "MANIFEST's count in the header and one row per MEASURABLE anchor, and it exits 1 when " \
-             "those differ — a baseline in this state was recorded over a red bin/check-conformance-anchors"
+             "those differ — a baseline in this state was recorded while an anchor did not resolve"
   end
 
   # ── --reheader: re-render the header, keep every fingerprint ───────────────
@@ -958,7 +957,7 @@ unless File.file?(MANIFEST)
   exit 1
 end
 
-# ── the manifest: the same path/anchor pairs bin/check-conformance-anchors gates
+# ── the manifest: the path/anchor pairs the conformance matrix cites
 pairs = File.readlines(MANIFEST, chomp: true).filter_map do |line|
   next if line.start_with?("#") || line.strip.empty?
 
@@ -1070,7 +1069,7 @@ if record
   unless missing.empty?
     warn ""
     warn "check-conformance-drift: #{missing.length} anchor(s) could not be measured and are NOT in the baseline."
-    warn "bin/check-conformance-anchors is the gate for this; it should be red too."
+    warn "Each cited text must occur exactly once in its file: fix the file or re-anchor the matrix row, then re-record."
     missing.each { |m| warn "  x #{m}" }
     exit 1
   end
@@ -1213,7 +1212,7 @@ report("MOVED — the anchored region changed since the baseline; re-judge these
        }, rows_for)
 report("NEW — cited since the baseline was recorded, never judged against it:",
        fresh.map { |rel, anchor, fp, why| [rel, anchor, fp, why] }, rows_for)
-report("UNMEASURABLE — bin/check-conformance-anchors is the gate for these:",
+report("UNMEASURABLE — the cited text does not occur exactly once in its file; fix the file or re-anchor the matrix row:",
        broken.map { |rel, anchor, why| [rel, anchor, why, nil] }, rows_for)
 
 unless retired.empty?

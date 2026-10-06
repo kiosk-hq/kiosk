@@ -62,18 +62,10 @@
 # spot survives:
 #   * NOT the tree-side agreement of the pins. That `skill_sha256` equals the
 #     sha256 of the file `skill_url` names is `kiosk-test-support/spec/
-#     skill_pin_spec.rb`; that every demo and the engine default pin the
-#     protocol's version is `bin/check-version-parity`. Neither is repeated
-#     here — the offline half below only resolves the expectation, cross-checks
-#     it against the newest cut on disk, and refuses to proceed on an ambiguous
-#     one. Both of those ARE CI gates today; the first was not, in the half that
-#     matters, until K-1361 gave it the sibling it needs (its nine byte-level
-#     examples were PENDING in every public-CI run, which is where the umbrella
-#     constitution's claim that THIS script holds `skill_sha256` came from — it
-#     does not, and never did).
-#   * NOT whether kiosk.tech actually SERVES the cut the fleet points at. That
-#     is `bin/check-solver-pin --network`'s side of the world (it fetches the
-#     published skill and the solver it pins).
+#     skill_pin_spec.rb`, run with the sibling in the same CI job. The offline
+#     half below only resolves the expectation, cross-checks it against the
+#     newest cut on disk, and refuses to proceed on an ambiguous one.
+#   * NOT whether kiosk.tech actually SERVES the cut the fleet points at.
 #   * NOT the human pages. Discovery is a separate surface and answers 200 on
 #     origins whose HTML is 500 — measured on this fleet, 2026-08-27, while
 #     K-1074's outage was live. That is why this reads ONLY
@@ -259,8 +251,7 @@ def resolve_expectation
           "the default a demo inherits when it pins nothing cannot be read"
   elsif pins.length == 1 && default != pins[0][0]
     pass "kiosk-server default is #{File.basename(default)}; the demos override it with " \
-         "#{File.basename(pins[0][0])} (an override is normal — `check-version-parity` owns " \
-         "whether the two may differ)"
+         "#{File.basename(pins[0][0])} (an override is normal)"
   else
     pass "kiosk-server default skill_url is #{File.basename(default.to_s)}"
   end

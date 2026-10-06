@@ -16,20 +16,10 @@
 # repairs was a hand-kept list corrected by hand, and every gate stayed green
 # throughout, because nothing in this repository reads a beat name in prose.
 #
-# THE COMPARISON INPUT IS A FOURTH PAIR, WHICH IS WHY THIS IS A SIBLING SCRIPT.
-# bin/check-demo-derivations states the boundary the guards in this directory are
-# divided on -- «the boundary is the comparison INPUT» -- and names the three that
-# existed: bin/check-ci-tasks compares ci.yml against each demo's rake tasks,
-# bin/check-demo-copies compares demo files against EACH OTHER, and it itself
-# compares a demo's before-after.md against that demo's own producers. This one
-# compares a demo's redteam PROSE -- the suite header, the `check:redteam` rake
-# `desc`, the README battery section -- against that demo's own suite
-# REGISTRATIONS. It was not folded into check-demo-derivations because that file
-# is bound to one document (`DOC = "before-after.md"`) and to one carrier (a
-# fenced block with an HTML `<!-- derived: ... -->` comment above it); a Ruby
-# comment header and a heredoc `desc` can carry neither, so folding it in would
-# mean a second parser and a second corpus inside a file whose name and header
-# are about narrative derivation.
+# THE COMPARISON INPUT. bin/check-demo-copies compares demo files against EACH
+# OTHER; this one compares a demo's redteam PROSE -- the suite header, the
+# `check:redteam` rake `desc`, the README battery section -- against that demo's
+# own suite REGISTRATIONS.
 #
 # ── WHAT IS DERIVED AND WHAT IS DECLARED ─────────────────────────────────────
 #
@@ -189,9 +179,7 @@
 #     status -- R7 is covering nothing THERE (R7-vacuity). The set of demos is
 #     the suite glob, never a list in this file, so an eighth demo is held to
 #     this without an edit here and a demo that stops naming statuses says so
-#     instead of going quiet. That polarity is the K-1213 lesson, paid for again
-#     when bin/check-demo-prereqs' hand-listed arm stopped draining its corpus
-#     the moment two demos grew a task.
+#     instead of going quiet (the K-1213 lesson).
 #   * a registered beat whose implementation this guard cannot find at all
 #     (R7-locate), and a `BLOCKED_STATUSES` it can no longer read out of the gem
 #
@@ -995,9 +983,7 @@ def self_test # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
 
   # R7 — ONE ARM PER DEMO, and the demo list is the SUITE GLOB rather than a
   # list written here: an eighth demo is planted into with no edit to this file.
-  # That polarity is the K-1213 lesson and it has now been paid for twice — most
-  # recently when bin/check-demo-prereqs' hand-listed arm stopped draining its
-  # own corpus the moment two demos grew a task.
+  # That polarity is the K-1213 lesson.
   #
   # Each arm rewrites the first status R7 actually checks in that demo's
   # `check:redteam` desc into one no beat asserts, which is the K-1418 shape

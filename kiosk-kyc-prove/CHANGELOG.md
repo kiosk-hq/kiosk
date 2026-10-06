@@ -1,0 +1,13 @@
+# Changelog
+
+How to write an entry, and what a release section means: `CHANGELOG-RULE.md` at
+the root of this repository —
+<https://github.com/kiosk-hq/kiosk/blob/main/CHANGELOG-RULE.md>. In short: under
+200 characters, one or two sentences, the essence rather than the content; write it
+under `## [Unreleased]`; a cut renames that heading to
+`## [MAJOR.MINOR.PATCH] — <date>` and opens a fresh empty one above it; nothing
+already written is edited.
+
+## [Unreleased]
+
+- 2026-10-07: **New gem: the Prove KYC broker behind `Kiosk::KycProviders::Base`**, moved out of the getgrocery and skooti demos (T-220).

@@ -24,6 +24,7 @@ jobs:
         gem:
           - kiosk-all
           - kiosk-core
+          - kiosk-kyc-prove
           - kiosk-pay-stripe
           - kiosk-pow
           - kiosk-pow-cuckoo

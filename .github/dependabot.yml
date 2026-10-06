@@ -20,6 +20,7 @@ updates:
     - "/kiosk-demo-skooti"
     - "/kiosk-demo-stylish"
     - "/kiosk-demo-tudu"
+    - "/kiosk-kyc-prove"
     - "/kiosk-pay-stripe"
     - "/kiosk-pow"
     - "/kiosk-pow-cuckoo"

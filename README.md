@@ -95,6 +95,7 @@ settled the `alpha` engine underneath it is.
 | `kiosk-rls-minitest` | Minitest journey-test helpers for RLS policies | alpha |
 | `kiosk-user-idp-devise` | User-IdP adapter (Devise) | alpha |
 | `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
+| `kiosk-kyc-prove` | KYC provider adapter — the Prove anonymizing broker | alpha |
 
 ### Proof-of-work
 

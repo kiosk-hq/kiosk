@@ -78,7 +78,8 @@ module Kiosk
             "human. Subscribe to the `#{TOPIC}` topic BEFORE calling this, then relay verification_url " \
             "to your human: a KYC provider confirms those facts without passing on any document. Once " \
             "they approve, the event arrives and the facts are recorded; retry the gated action. At " \
-            "most #{MAX_OPEN} checks may be open at once."
+            "most #{MAX_OPEN} checks may be open at once; one stops counting when approved, or " \
+            "#{OPEN_WINDOW / 60} minutes after it was opened. A check your human refuses sends no event."
         end
 
         # `request_kyc`.

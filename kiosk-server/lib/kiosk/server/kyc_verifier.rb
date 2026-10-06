@@ -4,7 +4,7 @@ require "jwt"
 
 module Kiosk
   module Server
-    # Verifies a KYC attestation JWS submitted by an agent.
+    # Verifies a KYC attestation JWS, submitted by an agent or by the provider's callback.
     #
     # Expected JWS payload:
     #   { sub: <user_id>, level: "verified", iss: <kyc_issuer>, aud: <kyc_audience>,
@@ -93,16 +93,13 @@ module Kiosk
           )
         end
 
-        # Compare the principal as STRING on BOTH sides (mirroring
-        # MandateVerifier). On a bigint-PK host the authenticated Identity
-        # carries the raw Integer that the token `sub` round-trips as, while the
-        # KYC provider signs `sub` with whatever id it was handed (a String). A
-        # strict `==` ("42" == 42) is always false, so every KYC attestation on
-        # a bigint host was wrongly Forbidden. Normalising keeps uuid hosts as-is.
+        # Compared as strings: a bigint-PK host's subject is an Integer, the
+        # provider's `sub` a String.
         unless payload[:sub].to_s == subject.to_s
           raise Errors::Forbidden.new(
             "KYC attestation subject mismatch",
-            hint: "sub must equal the authenticated user_id",
+            hint: "sub must name the principal: the caller's at POST <endpoint>/agents/kyc, " \
+                  "the open verification's at the callback",
           )
         end
 

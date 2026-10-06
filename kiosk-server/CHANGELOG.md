@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The `kyc_required` hint names `request_kyc` only where a `kyc_provider` serves it**, and a wrong-subject refusal names the principal each KYC path compares.
+
 ## [0.5.4] — 2026-10-07
 
 - 2026-10-07: **The default `skill_url` names `skill-v0.5.4.md`**, the cut that says the KYC cap and attributes are the human's and `payment_setup` is a fixed path.

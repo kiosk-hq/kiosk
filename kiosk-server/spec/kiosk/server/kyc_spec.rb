@@ -151,6 +151,12 @@ RSpec.describe Kiosk::Server::Kyc do
       status, problem = callback(request_id: "r", nonce: "n", kyc_jws: "x")
       expect([status, problem["code"]]).to eq([501, "module_not_served"])
     end
+
+    it "gates without naming request_kyc" do
+      identity = build_identity(user_id: "u-1", agent_id: "a-1")
+      expect { Kiosk::Server::CurrentRequest.with(identity: identity) { described_class.require! } }
+        .to raise_error(Kiosk::Server::Errors::KycRequired) { |e| expect(e.hint).not_to include("request_kyc") }
+    end
   end
 
   describe "request_kyc" do
@@ -226,6 +232,11 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(store.head).to eq(0)
     end
 
+    it "names the open verification's principal when the subject is wrong" do
+      _status, problem = callback(request_id: request_id, nonce: nonce, kyc_jws: attestation(sub: "u-2"))
+      expect(problem["hint"]).to include("the open verification's at the callback")
+    end
+
     it "answers 404 for a request_id it never opened" do
       expect(callback(request_id: "nope", nonce: nonce, kyc_jws: attestation).first).to eq(404)
     end
@@ -252,7 +263,9 @@ RSpec.describe Kiosk::Server::Kyc do
     it "refuses with kyc_required until the person holds every declared claim" do
       described_class.grant!("u-1", "age_over_18" => true)
       expect { as("u-1", "a-1") { described_class.require! } }
-        .to raise_error(Kiosk::Server::Errors::KycRequired, /age_over_18, licence_a/)
+        .to raise_error(Kiosk::Server::Errors::KycRequired, /age_over_18, licence_a/) { |e|
+          expect(e.hint).to include("request_kyc")
+        }
     end
 
     it "lets every assistant of that person through, and nobody else" do

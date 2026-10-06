@@ -827,6 +827,15 @@ assert "…and is itself an RFC 9457 document" \
       -H "Content-Type: application/json" -d '{"kyc_jws":"not.a.jws"}' \
     | grep -ic '^Content-Type: application/problem+json')" "1"
 
+# The rest of the KYC module: request_kyc and the provider's callback are the
+# engine's own paths, unserved here for want of a kyc_provider.
+assert "request_kyc at an origin that serves no KYC → 501" \
+  "$(curl -sS -X POST "$SERVER_URL/kiosk/request_kyc" -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+      -H "Content-Type: application/json" -d '{}' | jq -r '"\(.status) \(.code)"')" "501 module_not_served"
+assert "the KYC callback at an origin that serves no KYC → 501" \
+  "$(curl -sS -X POST "$SERVER_URL/kiosk/kyc/callback" \
+      -H "Content-Type: application/json" -d '{}' | jq -r '"\(.status) \(.code)"')" "501 module_not_served"
+
 # ONE HALF HERE: the unserved MODULE. Its partner -- the addressed-thing-absent
 # `not_found` -- joins it at the binding block below, where the two samples are
 # compared against each other.

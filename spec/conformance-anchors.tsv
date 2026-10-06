@@ -1192,7 +1192,7 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	.current_user_id() RETURNS
 kiosk-server/lib/kiosk/server/schema_definitions.rb	CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
 kiosk-server/lib/kiosk/server/schema_definitions.rb	agent_mappings (
 kiosk-server/lib/kiosk/server/schema_definitions.rb	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil, user_id_type: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.

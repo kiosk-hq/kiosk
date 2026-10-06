@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1766 anchors.
+# 1774 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -186,6 +186,7 @@ e2e/assistant.sh	register-pow: role pinned customer
 e2e/assistant.sh	register-pow: served (n,k) IS the configured pair
 e2e/assistant.sh	register-pow: solve+proof → registered
 e2e/assistant.sh	register-pow: the expected (n,k) was READ from the initializer
+e2e/assistant.sh	request_kyc at an origin that serves no KYC → 501
 e2e/assistant.sh	reserved limit/cursor accepted → 200
 e2e/assistant.sh	salon name is Combette
 e2e/assistant.sh	schema publishes {queries, actions, events} and nothing else
@@ -370,8 +371,7 @@ kiosk-demo-getgrocery/app/models/delivery_slots.rb	# district getgrocery serves 
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	# so IST (UTC+1, summer) and GMT (UTC+0, winter) are both handled automatically
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	THE CLOCK OF EACH DISTRICT THIS SHOP DELIVERS TO
 kiosk-demo-getgrocery/app/models/product.rb	def self.age_restricted?(value)
-kiosk-demo-getgrocery/app/operations/create_order_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
-kiosk-demo-getgrocery/app/operations/create_order_operation.rb	if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
+kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if restricted
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	Gate 4: a settlement of THIS principal for THIS order
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID
 kiosk-demo-getgrocery/app/operations/wire_arguments.rb	AND IT IS READ AS PUBLISHED, NOT IN THE CALLER'S CALENDAR.
@@ -393,15 +393,15 @@ kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.test_a
 kiosk-demo-getgrocery/config/environments/production.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
 kiosk-demo-getgrocery/config/environments/test.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
 kiosk-demo-getgrocery/config/environments/test.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	  # item unless the agent carries age_over_18) reads the engine-verified
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = ProveTrust.issuer
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18]
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  raise "getgrocery requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.blank?
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = ValidatingPaymentProvider.new(
-kiosk-demo-getgrocery/config/routes.rb	  post "/kyc/callback",                            to: "kyc_callback#create"
 kiosk-demo-getgrocery/config/routes/kiosk.rb	# 1. THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way. `schema`, `pay`, the
 kiosk-demo-getgrocery/config/routes/kiosk.rb	get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
 kiosk-demo-getgrocery/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
@@ -582,13 +582,10 @@ kiosk-demo-skooti/README.md	Scooter rental demo operator for Kiosk.
 kiosk-demo-skooti/README.md	Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation)
 kiosk-demo-skooti/README.md	attestation proves the assistant is *eligible* — that a valid category-A licence
 kiosk-demo-skooti/README.md	bin/rails check:rideflow    # the headline: register → scooters_available → reserve → payment_setup → pay → start_rental → offline unlock (no KYC leg — see check:kyc; plus the negative gates)
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	  REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	Kiosk::Server::Kyc.require!
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	def self
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	unless Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
 kiosk-demo-skooti/app/operations/rental_gates.rb	def payment_refusal
-kiosk-demo-skooti/app/operations/request_kyc_operation.rb	REQUESTED_CLAIMS = %w[age_over_18 licence_category:A].freeze
 kiosk-demo-skooti/app/operations/reserve_operation.rb	        status:     Reservation::RESERVED,
 kiosk-demo-skooti/app/operations/start_rental_operation.rb	#   1b. the reserved vehicle is licence-FREE — a needs_licence motorcycle is
 kiosk-demo-skooti/app/operations/start_rental_operation.rb	#   2.  the principal has a settled payment for THIS reservation
@@ -598,12 +595,14 @@ kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/m
 kiosk-demo-skooti/before-after.md	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	`rake check:rideflow` runs the errand with no human account and no sign-in:
 kiosk-demo-skooti/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer    = ProveTrust.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience  = ProveTrust.operator_id
-kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer    = ProveTrust.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience   = prove_operator
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count  = 1
 kiosk-demo-skooti/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
@@ -751,6 +750,7 @@ kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("ChosenNameNeverTheAddres
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("NoLoginAddressOnTheRoster",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("PreLinkTokenAfterLink", rc == 401,
 kiosk-demo-tudu/spec/reader_clock_spec.rb	THE TWO `due_at` REFUSALS, DRIVEN
+kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { "licence_a" => "licence_category:A" }.freeze
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 kiosk-pay-stripe/README.md	that, the `test_payment_method` (default `pm_card_visa`) — no SetupIntent,
@@ -1105,6 +1105,7 @@ kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/api-catalog",
 kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/kiosk.json",          to: "kiosk/server/discovery#kiosk_json"
 kiosk-server/lib/kiosk/server/engine.rb	get "/agents.txt",  to: "kiosk/server/discovery#agents_txt"
 kiosk-server/lib/kiosk/server/engine.rb	get "openapi.json", to: "open_api#show"
+kiosk-server/lib/kiosk/server/engine.rb	post "kyc/callback", to: "kyc_callback#create"
 kiosk-server/lib/kiosk/server/errors.rb	      class ModuleNotServed < Base
 kiosk-server/lib/kiosk/server/errors.rb	"pow_required"           => 402,
 kiosk-server/lib/kiosk/server/errors.rb	"spending_cap_exceeded"  => 403,
@@ -1126,12 +1127,12 @@ kiosk-server/lib/kiosk/server/executor.rb	WHERE agent_id = $1 AND lower(btrim(cu
 kiosk-server/lib/kiosk/server/executor.rb	`schema` is NOT one of them and is not tolled: `GET <endpoint>/schema`
 kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	resolves an identity — an {Executor} cannot be built without one.
-kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events oauth pay payment_setup schema].freeze
+kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this line — render the envelope, or raise
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
-kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	      def mark_kyc_verified!(agent_id, attributes: {})
+kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        if payload[:aud].to_s != config.kyc_audience.to_s
@@ -1140,7 +1141,7 @@ kiosk-server/lib/kiosk/server/kyc_verifier.rb	    #     iat: <unix>, exp: <unix>
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	    # NAMED ANONYMIZED ATTRIBUTES: the attestation MAY carry an `attributes`
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	    # configured `kyc_audience` (OPERATOR-BINDING — a claim the KYC provider
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verified_attributes(raw)
-kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, identity:)
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, subject:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/link_code.rb	        # `requested_role:` carries what was stamped at MINT, from the human's
 kiosk-server/lib/kiosk/server/link_code.rb	`requested_role:` IS A MISNOMER HERE AND EVERYWHERE: nothing
@@ -1191,7 +1192,7 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	.current_user_id() RETURNS
 kiosk-server/lib/kiosk/server/schema_definitions.rb	CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
 kiosk-server/lib/kiosk/server/schema_definitions.rb	agent_mappings (
 kiosk-server/lib/kiosk/server/schema_definitions.rb	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil, user_id_type: nil)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
@@ -1472,12 +1473,19 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a wrong audience
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects an expired token
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	round-trips an issued token and returns symbol-keyed claims
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
-kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	#kyc_attributes
-kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	maps one row per granted name onto true
-kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	reads the kyc_attributes table, joined to a LIVE agents row
-kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	returns true when kyc_verified_at is not null
-kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	verifies a valid attestation and returns claims
-kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	declares no value column at all — presence of the row IS the grant
+kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	declares no value column — presence of the row IS the grant
+kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	keys the grants on the person, in the host's user id type
+kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 404 for a request_id it never opened
+kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 500 action_failed when the provider does not open one
+kiosk-server/spec/kiosk/server/kyc_spec.rb	answers request_kyc and the callback with 501 module_not_served
+kiosk-server/spec/kiosk/server/kyc_spec.rb	grants only the JSON boolean true, in Postgres
+kiosk-server/spec/kiosk/server/kyc_spec.rb	is good once: the same callback again finds no open verification
+kiosk-server/spec/kiosk/server/kyc_spec.rb	lets every assistant of that person through, and nobody else
+kiosk-server/spec/kiosk/server/kyc_spec.rb	records the grant on the person and pushes the attestation to them
+kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a fourth open verification with 429 quota_exceeded
+kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a wrong nonce, another subject, and an attestation the provider does not accept
+kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses with kyc_required until the person holds every declared claim
+kiosk-server/spec/kiosk/server/kyc_spec.rb	replaces the grant set
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I2: raises Errors::Forbidden when exp claim is absent

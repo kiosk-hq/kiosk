@@ -182,6 +182,15 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
       expect(decode(delivered[:kyc_jws])["aud"]).to eq("skooti")
     end
 
+    it "mints an attestation valid for one year" do
+      rid = open_request
+      delivered = {}
+      allow(CallbackPoster).to receive(:deliver) { |args| delivered = args; 200 }
+      post "/verify", params: { request: rid, decision: "approve" }
+      payload = decode(delivered[:kyc_jws])
+      expect(payload["exp"] - payload["iat"]).to eq(365 * 24 * 3600)
+    end
+
     it "grants ONLY the attributes the operator asked for (age_over_18 alone)" do
       rid = open_request(requested_claims: ["age_over_18"])
       delivered = {}

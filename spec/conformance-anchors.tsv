@@ -574,7 +574,7 @@ kiosk-demo-prove/app/models/operator_registry.rb	  def callback_allowed?(operato
 kiosk-demo-prove/app/models/operator_registry.rb	# OperatorRegistry — the broker's intake trust model. The broker only
 kiosk-demo-prove/app/models/operator_registry.rb	# broker NEVER POSTs a callback to a URL a caller supplied free-form — it POSTs
 kiosk-demo-prove/app/models/operator_registry.rb	# serves operators it has been configured with. This is what refuses arbitrary
-kiosk-demo-prove/app/services/prove_key.rb	def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil, ttl: 3600)
+kiosk-demo-prove/app/services/prove_key.rb	def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil)
 kiosk-demo-prove/lib/tasks/demo.rake	  task :test do
 kiosk-demo-prove/lib/tasks/demo.rake	task :test do
 kiosk-demo-skooti/README.md	**What this KYC proves, and what it deliberately does not (honest scope).** The

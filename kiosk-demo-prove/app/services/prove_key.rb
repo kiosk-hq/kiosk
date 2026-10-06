@@ -24,6 +24,9 @@ require "jwt"
 module ProveKey
   module_function
 
+  # How long an attestation stays valid.
+  LIFETIME = 365 * 24 * 3600
+
   # The broker's own prove config, or a signpost. Rails being loaded is NOT
   # enough: a sibling demo's Rails answers `configuration.x.prove` with an empty
   # OrderedOptions and every read comes back nil — hence the key_pem probe.
@@ -80,10 +83,10 @@ module ProveKey
   #                not merely by a demo's own callback. Defaults to `operator`.
   #   request_id — the broker request this claim answers (callback correlation).
   #   nonce      — echoes the request nonce (callback anti-replay).
-  #   iat/exp    — short-lived (default 1h).
+  #   iat/exp    — valid for one year (LIFETIME).
   #
   # @return [String] compact RS256 JWS
-  def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil, ttl: 3600)
+  def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil)
     now = Time.now.to_i
     JWT.encode(
       {
@@ -96,7 +99,7 @@ module ProveKey
         nonce:      nonce.to_s,
         attributes: attributes,
         iat:        now,
-        exp:        now + ttl.to_i,
+        exp:        now + LIFETIME,
       },
       keypair, "RS256",
     )

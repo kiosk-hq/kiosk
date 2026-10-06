@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-06: **The KYC broker mints attestations valid for one year** instead of one hour, so one recovered from the event tail can still be submitted.
+
 ## Before release sections
 
 Entries written before this file grouped them by release. They are not a cut, and

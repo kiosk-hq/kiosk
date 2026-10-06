@@ -47,6 +47,8 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
   "attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
 ```
 
+`exp` is one year after `iat`.
+
 ## Security model
 
 - **Operator-driven initiation.** A request row can only be created by an

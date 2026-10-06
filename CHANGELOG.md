@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-06: **The KYC broker mints attestations valid for one year** instead of one hour, so one recovered from the event tail can still be submitted.
+
 ## [0.5.2] — 2026-10-06
 
 - 2026-10-06: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.2, matching skill 0.5.2**: before 1.0 they all carry one version, and `bin/check-version-parity` holds the full number.

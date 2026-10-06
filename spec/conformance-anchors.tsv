@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1765 anchors.
+# 1766 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -756,7 +756,7 @@ kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIn
 kiosk-pay-stripe/README.md	that, the `test_payment_method` (default `pm_card_visa`) — no SetupIntent,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	                confirm:        true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	                off_session:    true,
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            mode:                    "setup",
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            mode:                 "setup",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            usage:                "off_session",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	          if @test_autocard && (cus_id.nil? || saved_payment_method_for(cus_id).nil?)
@@ -771,12 +771,13 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def capture(cart_ma
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key: nil, test_payment_method: "pm_card_visa",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_required?(user_id:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_url(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_return_user_id(params)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_url(user_id:, return_url:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ENV.fetch("STRIPE_SECRET_KEY", nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key: nil, test_payment_method: "pm_card_visa",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	idempotency_key:
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	off_session:    true,
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#capture
@@ -1125,7 +1126,7 @@ kiosk-server/lib/kiosk/server/executor.rb	WHERE agent_id = $1 AND lower(btrim(cu
 kiosk-server/lib/kiosk/server/executor.rb	`schema` is NOT one of them and is not tolled: `GET <endpoint>/schema`
 kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	resolves an identity — an {Executor} cannot be built without one.
-kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events oauth pay schema].freeze
+kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events oauth pay payment_setup schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this line — render the envelope, or raise
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps

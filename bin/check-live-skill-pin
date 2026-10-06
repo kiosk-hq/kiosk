@@ -62,8 +62,8 @@
 # spot survives:
 #   * NOT the tree-side agreement of the pins. That `skill_sha256` equals the
 #     sha256 of the file `skill_url` names is `kiosk-test-support/spec/
-#     skill_pin_spec.rb`; that every demo and the engine default share the
-#     protocol's MAJOR.MINOR is `bin/check-version-parity`. Neither is repeated
+#     skill_pin_spec.rb`; that every demo and the engine default pin the
+#     protocol's version is `bin/check-version-parity`. Neither is repeated
 #     here — the offline half below only resolves the expectation, cross-checks
 #     it against the newest cut on disk, and refuses to proceed on an ambiguous
 #     one. Both of those ARE CI gates today; the first was not, in the half that

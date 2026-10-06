@@ -25,8 +25,8 @@ require "digest"
 #     * PATCH AGREEMENT — the engine default and the demos name the SAME cut.
 #
 #   NOT HERE — bin/check-version-parity owns it (rule C): that every pinned
-#   `skill_url`, the engine default included, shares MAJOR.MINOR with
-#   `Kiosk::Protocol::API_VERSION`. That check needs no sibling checkout at all,
+#   `skill_url`, the engine default included, names the version parity
+#   with `Kiosk::Protocol::API_VERSION` requires. That check needs no sibling checkout at all,
 #   so it runs in every job in this repo's CI; this file's byte group needs one
 #   and runs in the single job that provides it. Do not restate it here.
 #   The division is by what each can honestly see: it reads version STRINGS
@@ -98,14 +98,8 @@ RSpec.describe "the skill pin" do
 
   # ── String level: no sibling checkout, so this runs everywhere ─────────────
   #
-  # bin/check-version-parity binds each of these URLs to the protocol's
-  # MAJOR.MINOR and deliberately ignores PATCH (protocol.md §14.4 makes the
-  # skill's PATCH an independent line). That leaves one thing unguarded and
-  # this is it: the engine default may name a cut that is not the cut the demos
-  # pin, and ANY TWO CUTS OF THE SAME SERIES pass version parity perfectly,
-  # however far apart their PATCH. A third party inheriting the default would
-  # then advertise a superseded skill while every demo in the same repo
-  # advertises the current one.
+  # The engine default and every demo name the same cut, so a third party
+  # inheriting the default advertises the skill the demos do.
   #
   # No version numeral is written into this comment or into the failure message
   # below, and that is a rule rather than an oversight: the message PRINTS
@@ -121,9 +115,7 @@ RSpec.describe "the skill pin" do
                                       "the skill_url consumers disagree on which cut is current:\n" \
                                       "#{named.map { |who, url| "  #{who}: #{url}" }.join("\n")}\n" \
                                       "All nine consumers re-pin together when a new skill is cut " \
-                                      "(ADR-0012). bin/check-version-parity compares MAJOR.MINOR " \
-                                      "only, so it sees this disagreement ONLY if the series above " \
-                                      "differ — and they are #{series.join(" / ")}."
+                                      "(ADR-0012). Series named: #{series.join(" / ")}."
   end
 
   # ── Byte level: needs the published files, so umbrella checkouts only ──────

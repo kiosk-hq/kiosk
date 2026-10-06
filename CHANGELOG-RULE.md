@@ -62,11 +62,12 @@ Four shapes, and the check holds them:
    versioned line; this one publishes a single line — the tree — so every
    heading here is the bare form.
 
-**Where the number comes from, so a changelog never invents one.** MAJOR.MINOR
-is fixed by version parity: the protocol, this implementation and the published
-skill share it, and `bin/check-version-parity` holds that. PATCH is the cut's
-own. A changelog heading only ever REPORTS a version that the tree already
-carries.
+**Where the number comes from, so a changelog never invents one.** Version
+parity fixes it: before 1.0 the protocol, this implementation and the published
+skill carry the same MAJOR.MINOR.PATCH, so a new skill cut is a tree cut here
+too, even with nothing else to say; from 1.0 they share MAJOR.MINOR.
+`bin/check-version-parity` holds that. A changelog heading only ever REPORTS a
+version that the tree already carries.
 
 **A cut here is a tree event.** The gems move together: a release sets every
 gem's version to the same MAJOR.MINOR.PATCH, and the root record AND EVERY GEM
@@ -74,9 +75,7 @@ RECORD get that heading and date. Every gem record, not only the ones with
 something to say: the version moved in all of them, and a package record is the
 only thing a reader who installed the gem has, so a gem with no surface change
 carries the one entry that is true — the tree moved and this gem's surface did
-not. A single gem MAY take a patch of its own — version parity binds MAJOR.MINOR
-only — and then only that gem's record gets the section, while the root record's
-entry waits in `[Unreleased]` for the next tree cut.
+not. Before 1.0 no gem takes a version of its own.
 
 **Which is why 0.5.0 sweeps in everything.** Nothing in this repository has ever
 been tagged or pushed to RubyGems (`SECURITY.md` says so), so 0.5.0 is the FIRST
@@ -91,8 +90,9 @@ over it would name a number nothing publishes.
 
 The order of one cut, and it is the order that keeps the heading true:
 
-1. Bump the version in each `lib/**/version.rb` the cut covers, then run
-   `bin/check-version-parity`.
+1. Bump `API_VERSION` (before 1.0 `MIN_CLIENT` too), every
+   `lib/**/version.rb` and every tracked `Gemfile.lock` (`bundle lock --local`),
+   then run `bin/check-version-parity`.
 2. Rename `## [Unreleased]` to `## [X.Y.Z] — <the date it was cut>` in the root
    record and in every gem record, and open a fresh empty `## [Unreleased]`
    above each.

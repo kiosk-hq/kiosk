@@ -203,14 +203,13 @@ gate is; and what this repository expects of a changelog entry and a comment.
 [SECURITY.md](SECURITY.md) first**, for which repository takes it and for the
 fact that filing one is public disclosure.
 
-Every gem shares the protocol's MAJOR.MINOR — the version parity the spec
-promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the protocol,
-this reference implementation and the published skill all read `0.5` today, so
-`Kiosk-Server-Version` and `Kiosk-API-Version` agree on the line they speak.
-PATCH stays per-gem, so one gem can ship `0.5.4` while its sibling sits at
-`0.5.0`. `bin/check-version-parity` — its own CI job — enforces exactly that
-against `Kiosk::Protocol::API_VERSION`, including the `~> 0.5.0` inter-gem
-constraints in the gemspecs and the pinned `skill_url`. Releases are cut as
+Before 1.0 every gem carries the protocol's full version — the version parity
+the spec promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the
+protocol, every gem here and the published skill read the same MAJOR.MINOR.PATCH,
+and a new cut of any one of them moves all of them. From 1.0 they share
+MAJOR.MINOR. `bin/check-version-parity` — its own CI job — enforces that against
+`Kiosk::Protocol::API_VERSION`, together with the `~> MAJOR.MINOR.0` inter-gem
+constraints, the lockfiles and the pinned `skill_url`. Releases are cut as
 path-scoped git tags — the gem's directory name, then `/v` and the version —
 off each subdir's authoritative `*.gemspec`.
 

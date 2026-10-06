@@ -155,7 +155,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     # the mutable `skill.md` alias, whose bytes change under a pin.
     #
     # Which version that is belongs to the two guards that can see it:
-    # bin/check-version-parity holds it against the protocol's MAJOR.MINOR,
+    # bin/check-version-parity holds it against the protocol version,
     # and kiosk-test-support's skill_pin_spec holds it against the bytes
     # kiosk.tech actually publishes.
     it "advertises the skill descriptor when skill_sha256 is set" do

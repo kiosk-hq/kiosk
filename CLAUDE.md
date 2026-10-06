@@ -194,12 +194,11 @@ universal agent skill is `skill.md` on the same site.
   a mention that is prose about the resolver rather than an instruction is
   declared in `INSTALL_MENTION_ONLY` with its reason, and goes stale loudly.
 - Version parity is a build gate, not prose. The spec (§14.1) binds the
-  protocol, this implementation and the skill to one MAJOR.MINOR — read it from
-  `kiosk-core/lib/kiosk/protocol.rb`'s `API_VERSION`, or from the guard's own
-  first line of output, never from this sentence (it was a MINOR stale for the
-  whole of 0.4, K-932) — so `bin/check-version-parity` (its own CI job) asserts every gemspec
-  version, every `kiosk-*` inter-gem constraint (`~> <series>.0`) and every
-  pinned `skill_url`'s version share that series with
-  `Kiosk::Protocol::API_VERSION`. PATCH stays free per gem and per skill cut.
-  Bumping the protocol series means bumping the gems in the same change.
+  protocol, this implementation and the skill: before 1.0 to one
+  MAJOR.MINOR.PATCH, from 1.0 to one MAJOR.MINOR. Read the number from
+  `kiosk-core/lib/kiosk/protocol.rb`'s `API_VERSION`, never from this sentence.
+  `bin/check-version-parity` (its own CI job) holds every gemspec, `MIN_CLIENT`,
+  every tracked lockfile and every pinned `skill_url` to it, and every `kiosk-*`
+  inter-gem constraint to `~> MAJOR.MINOR.0`. A skill cut moves the gems, and a
+  gem release moves the skill, in the same change.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

@@ -2145,7 +2145,7 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      - name: Gems, constraints and the skill pin share the protocol's MAJOR.MINOR
+      - name: Gems, lockfiles and skill pins carry the protocol version (pre-1.0 full parity)
         run: ./bin/check-version-parity
 
   # Verb names and the reserved plane (spec §8.1 / §8.3). On the wire a verb

@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-10-06
+
+- 2026-10-06: Version 0.5.3, the tree cut that matches skill 0.5.3; this gem's surface is unchanged.
+
 ## [0.5.2] — 2026-10-06
 
 - 2026-10-05: **The package ships `requirements.txt` beside `solve.py`**, declaring the solver's `numpy` the way `kiosk-pow` declares `argon2-cffi`.

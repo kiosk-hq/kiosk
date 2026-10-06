@@ -12,6 +12,12 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-10-06
+
+- 2026-10-06: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.3, matching skill 0.5.3.**
+
+- 2026-10-06: **Every demo and the engine default pin `skill-v0.5.3.md` and `listen-v0.5.3.py`**: waking is mandatory and the event cursor lives in the conversation.
+
 - 2026-10-06: **The KYC broker mints attestations valid for one year** instead of one hour, so one recovered from the event tail can still be submitted.
 
 ## [0.5.2] — 2026-10-06

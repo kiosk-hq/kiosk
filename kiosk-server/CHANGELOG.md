@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-10-06
+
+- 2026-10-06: **The default `skill_url` names `skill-v0.5.3.md`**, and `listen.py` tells an assistant to run it tracked in the background and tell its human.
+
 ## [0.5.2] — 2026-10-06
 
 - 2026-10-06: **`/auth.md` names the event stream among the modules `501 module_not_served` can mean**, beside binding, payment and KYC.

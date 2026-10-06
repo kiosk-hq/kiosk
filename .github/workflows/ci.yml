@@ -1285,8 +1285,8 @@ jobs:
       - name: Hand-copied demo files agree, or the divergence is declared
         run: ./bin/check-demo-copies
 
-      # Its own step, for the reason the publication-paths, prose-counts and
-      # demo-derivations self-tests each have one — and here the argument is the
+      # Its own step, for the reason the publication-paths and
+      # descriptor-prose self-tests each have one — and here the argument is the
       # COUNT. This one script holds many independent invariants behind the one
       # exit code above — how many is derived by `--self-test --list` and
       # deliberately not typed here or in the script, because a typed cardinal of

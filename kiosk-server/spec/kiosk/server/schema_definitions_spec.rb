@@ -183,10 +183,8 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
   # that already carries the kiosk schema all six re-emitted files read as
   # PENDING and replay onto tables that exist. Measured: an unguarded CREATE
   # aborts `db:migrate` one step in with PG::DuplicateTable, stranding every
-  # later migration on that box — including any corrective one. bin/check-
-  # migration-replay is the gate that measures it end to end; this example is
-  # the unit-level tripwire, so a new emitter cannot reintroduce the class
-  # without a red spec.
+  # later migration on that box — including any corrective one. This example
+  # keeps a new emitter from reintroducing the class without a red spec.
   describe "replay safety (K-1083)" do
     # Found rather than listed: the emitters are this module's own `*_sql`
     # singleton methods, so an eleventh is covered the day it is defined.

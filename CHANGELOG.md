@@ -7,8 +7,7 @@ gets its release note in that gem's own `<gem>/CHANGELOG.md` as well.
 **How to write an entry, where the line goes, and what a release section means:
 [`CHANGELOG-RULE.md`](CHANGELOG-RULE.md).** In short: under 200 characters, one or
 two sentences, the essence rather than the content; open with the ISO date; write
-it under `## [Unreleased]`; nothing already written is edited. Both halves are
-held by `bin/check-changelog`.
+it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
@@ -18,7 +17,7 @@ held by `bin/check-changelog`.
 
 - 2026-10-07: **Every demo and the engine default pin `skill-v0.5.4.md`**: the KYC cap and attributes are the human's, and `payment_setup` is a fixed path. The listener stays `listen-v0.5.3.py`.
 
-- 2026-10-07: **kiosk-server serves `request_kyc` and the KYC broker callback, and records attributes against the person**; getgrocery and skooti drop their copies, and the broker client becomes kiosk-kyc-prove.
+- 2026-10-07: **kiosk-server serves `request_kyc` and the KYC callback, recording attributes against the person**; getgrocery and skooti drop their copies; the broker client is kiosk-kyc-prove.
 
 - 2026-10-07: **kiosk-server serves `payment_setup` and the provider's return page**; three demos drop their copies, and the Stripe-specific return logic moves into kiosk-pay-stripe.
 

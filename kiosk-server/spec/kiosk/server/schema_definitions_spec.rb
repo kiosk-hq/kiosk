@@ -189,7 +189,13 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # singleton methods, so an eleventh is covered the day it is defined.
     let(:emitter_names) { described_class.singleton_methods(false).grep(/_sql\z/).sort }
 
-    before { Kiosk.configure { |c| c.issuer = "https://a.example" } }
+    before do
+      stub_const("User", Class.new { def self.table_name = "users" })
+      Kiosk.configure do |c|
+        c.issuer     = "https://a.example"
+        c.user_model = "User"
+      end
+    end
 
     it "guards every CREATE it emits, so a second run against the same database is a no-op" do
       expect(emitter_names).not_to be_empty

@@ -8,7 +8,7 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 The full host-side surface is shipped and covered by the gem's own suite
 (`bundle exec rspec` in this directory runs it and prints how many examples that is):
 
-- **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
+- **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `PaymentSetupController` serves `POST <mount>/payment_setup` against the payment provider port, and the page the provider returns the human to; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
@@ -324,7 +324,9 @@ post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_ver
 ```
 
 **The mount draws the PROTOCOL PLANE** — the paths whose shape is the spec's and
-not yours. Under the mount: the reserved `schema`, `openapi.json` and `pay`, the
+not yours. Under the mount: the reserved `schema`, `openapi.json` and `pay`,
+`payment_setup` and the `payment_setup/return` page a payment provider sends the
+human back to (both answer `501 module_not_served` without a `payment_provider`), the
 kiosk-pop auth plane (`auth/challenge`, `auth/register`, `auth/login`,
 `auth/revoke`), JWKS (`.well-known/jwks.json`), KYC attestation (`agents/kyc`)
 and the whole account-binding ceremony (the RFC 8628 claim wire,

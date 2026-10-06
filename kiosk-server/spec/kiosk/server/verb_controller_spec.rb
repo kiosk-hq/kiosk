@@ -669,7 +669,7 @@ RSpec.describe Kiosk::Server::VerbController do
       # `RESERVED_NAMES` is the engine's drawn first segments, and `query`/`run`
       # are no longer among them. So an operator may now declare a verb called `query`, and it is
       # served at `<endpoint>/query` like any other.
-      expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES).to eq(%w[agents auth events oauth pay schema])
+      expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES).to eq(%w[agents auth events oauth pay payment_setup schema])
 
       declare_action("query") { render json: { queued: 1 } }
       status, body = call_verb(:post, "query", body: "{}")

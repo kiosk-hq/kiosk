@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The engine serves `payment_setup` and the provider's return page** wherever a `payment_provider` is configured, so an operator no longer writes either (T-219).
+
 - 2026-10-06: **The production boot refusal for an in-process event store now says why: a restart loses events inside the 24-hour retention window.**
 
 ## [0.5.3] — 2026-10-06

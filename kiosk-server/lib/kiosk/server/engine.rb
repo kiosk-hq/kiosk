@@ -582,7 +582,7 @@ module Kiosk
       # the kiosk/server controller namespace, so "wire#schema" resolves to
       # Kiosk::Server::WireController#schema.
       routes do
-        # The two RESERVED wire endpoints. They are drawn here for one reason:
+        # The RESERVED wire endpoints. They are drawn here for one reason:
         # they are the wire's OWN, not the operator's — their paths and their
         # answers are the spec's — and this table is where the protocol plane
         # lives. The operator's verbs are not here at all (see the end of this
@@ -604,6 +604,12 @@ module Kiosk
         # URL derives from the discovery document's `endpoint`.
         get  "schema", to: "wire#schema"
         post "pay",    to: "wire#pay"
+
+        # `payment_setup` and the page a payment provider returns the human's
+        # browser to. Drawn unconditionally like `pay`, and answered
+        # `module_not_served` without a payment_provider.
+        post "payment_setup",        to: "payment_setup#create", defaults: { kiosk_verb: "payment_setup" }
+        get  "payment_setup/return", to: "payment_setup#show"
 
         # THE EVENT STREAM — drawn here for the reason `schema` and `pay` are:
         # its path and its answers are the spec's, not the operator's.

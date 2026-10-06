@@ -93,6 +93,7 @@ require "kiosk/server/engine"
 # DeviceVerifyController, AssistantsController).
 require "kiosk/server/wire_controller"
 require "kiosk/server/verb_controller"
+require "kiosk/server/payment_setup_controller"
 require "kiosk/server/open_api_controller"
 require "kiosk/server/discovery_controller"
 require "kiosk/server/jwks_controller"
@@ -115,6 +116,9 @@ module Kiosk
     #   - {Kiosk::Server::VerbController}   — the per-verb wire:
     #                                         GET <endpoint>/<query-name>,
     #                                         POST <endpoint>/<action-name>
+    #   - {Kiosk::Server::PaymentSetup}     — `payment_setup` and its topic, against the provider port
+    #   - {Kiosk::Server::PaymentSetupController} — POST <endpoint>/payment_setup and the
+    #                                         provider's return page
     #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,
     #                                         per the normative encoding rule
     #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)

@@ -44,6 +44,13 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     expect { recognize(:post, "/run") }.to   raise_error(ActionController::RoutingError)
   end
 
+  it "draws payment_setup and the page the human returns to from the provider's setup" do
+    expect(recognize(:post, "/payment_setup"))
+      .to include(controller: "kiosk/server/payment_setup", action: "create", kiosk_verb: "payment_setup")
+    expect(recognize(:get, "/payment_setup/return"))
+      .to include(controller: "kiosk/server/payment_setup", action: "show")
+  end
+
   it "draws the kiosk-pop auth plane" do
     expect(recognize(:get, "/auth/challenge"))
       .to include(controller: "kiosk/server/auth", action: "challenge")
@@ -142,7 +149,7 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       # `events` joined when the stream was mounted (T-169), which is the same
       # rule running the other way.
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
-        .to eq(%w[agents auth events oauth pay schema])
+        .to eq(%w[agents auth events oauth pay payment_setup schema])
     end
 
     it "does not swallow the multi-segment reserved routes" do

@@ -12,6 +12,12 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-10-07
+
+- 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.4, matching skill 0.5.4.**
+
+- 2026-10-07: **Every demo and the engine default pin `skill-v0.5.4.md`**: the KYC cap and attributes are the human's, and `payment_setup` is a fixed path. The listener stays `listen-v0.5.3.py`.
+
 - 2026-10-07: **kiosk-server serves `request_kyc` and the KYC broker callback, and records attributes against the person**; getgrocery and skooti drop their copies, and the broker client becomes kiosk-kyc-prove.
 
 - 2026-10-07: **kiosk-server serves `payment_setup` and the provider's return page**; three demos drop their copies, and the Stripe-specific return logic moves into kiosk-pay-stripe.

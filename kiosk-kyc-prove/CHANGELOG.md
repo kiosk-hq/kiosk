@@ -10,4 +10,6 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-10-07
+
 - 2026-10-07: **New gem: the Prove KYC broker behind `Kiosk::KycProviders::Base`**, moved out of the getgrocery and skooti demos (T-220).

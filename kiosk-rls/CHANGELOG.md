@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-10-07
+
+- 2026-10-07: Version 0.5.4, the tree cut that matches skill 0.5.4; this gem's surface is unchanged.
+
 ## [0.5.3] — 2026-10-06
 
 - 2026-10-06: Version 0.5.3, the tree cut that matches skill 0.5.3; this gem's surface is unchanged.

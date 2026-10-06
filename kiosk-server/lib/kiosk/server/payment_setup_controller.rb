@@ -9,17 +9,25 @@ module Kiosk
     # the human's browser back to. `POST <endpoint>/payment_setup` itself is an
     # ordinary verb, served by {VerbController}.
     class PaymentSetupController < WireController
-      PAGE = <<~HTML
-        <!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment set up</title></head>
-        <body style="font-family:system-ui,sans-serif;text-align:center;padding:64px">
-        <h1>Payment set up</h1><p>Your assistant can now pay on your behalf. You can close this tab.</p>
-        </body></html>
-      HTML
+      READY = ["Payment set up", "Your assistant can now pay on your behalf. You can close this tab."].freeze
+      UNCONFIRMED = ["Back from payment setup",
+                     "Your assistant will check whether the setup is complete. You can close this tab."].freeze
 
       def show
         PaymentSetup.served!
-        PaymentSetup.returned(request.query_parameters)
-        render body: PAGE, content_type: "text/html"
+        title, text = PaymentSetup.returned(request.query_parameters) ? READY : UNCONFIRMED
+        render body: page(title, text), content_type: "text/html"
+      end
+
+      private
+
+      def page(title, text)
+        <<~HTML
+          <!DOCTYPE html><html><head><meta charset="utf-8"><title>#{title}</title></head>
+          <body style="font-family:system-ui,sans-serif;text-align:center;padding:64px">
+          <h1>#{title}</h1><p>#{text}</p>
+          </body></html>
+        HTML
       end
     end
   end

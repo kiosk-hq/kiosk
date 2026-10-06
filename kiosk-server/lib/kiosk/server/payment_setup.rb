@@ -90,18 +90,21 @@ module Kiosk
 
         # The human's browser is back from the setup page. The request is
         # unauthenticated, so it is only a hint: the provider says whose setup
-        # it reports, and readiness is asked again before anything is pushed.
+        # it reports, and readiness is asked again. True, with the topic
+        # pushed, only when the provider confirms that principal is ready.
         # Never raises — the human is owed the page whatever the PSP does.
         def returned(params)
-          return unless Events.fetch(NAME)
+          return false unless Events.fetch(NAME)
 
           user_id = provider.setup_return_user_id(params).to_s
-          return if user_id.empty? || provider.setup_required?(user_id: user_id)
+          return false if user_id.empty? || provider.setup_required?(user_id: user_id)
 
           Events.emit(topic: NAME, subject: user_id, identity_scope: [user_id],
                       data: { "status" => "ready" })
+          true
         rescue StandardError => e
           FailureLog.report("#{RETURN_PATH} could not push #{NAME}", e)
+          false
         end
       end
     end

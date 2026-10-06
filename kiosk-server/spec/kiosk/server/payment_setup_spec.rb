@@ -125,6 +125,14 @@ RSpec.describe Kiosk::Server::PaymentSetup do
     it "declares no payment_setup topic when the provider cannot say who came back" do
       expect(Kiosk::Server::Events.known).not_to include("payment_setup")
     end
+
+    it "claims nothing on the return page when the provider cannot say who came back" do
+      provider.required = false
+      status, _headers, body = get_return("ref=u-7")
+      expect(status).to eq(200)
+      expect(body).not_to include("can now pay")
+      expect(body).to include("Your assistant will check")
+    end
   end
 
   describe "the return page, with a provider that can say who came back" do
@@ -148,10 +156,11 @@ RSpec.describe Kiosk::Server::PaymentSetup do
                                "data" => { "status" => "ready" })
     end
 
-    it "pushes nothing while the provider still says setup is required" do
+    it "pushes nothing and claims nothing while the provider still says setup is required" do
       provider.required = true
-      status, = get_return("ref=u-7")
+      status, _headers, body = get_return("ref=u-7")
       expect(status).to eq(200)
+      expect(body).not_to include("can now pay")
       expect(store.head).to eq(0)
     end
 
@@ -166,7 +175,7 @@ RSpec.describe Kiosk::Server::PaymentSetup do
       expect(Kiosk::Server::FailureLog).to receive(:report).with(/could not push payment_setup/, RuntimeError)
       status, _headers, body = get_return("ref=u-7")
       expect(status).to eq(200)
-      expect(body).to include("Your assistant can now pay")
+      expect(body).not_to include("can now pay")
       expect(store.head).to eq(0)
     end
   end

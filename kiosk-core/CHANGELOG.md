@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`KycProviders::Base` is the KYC provider port and `kyc_provider` its setting**, so kiosk-server opens verifications through any `kiosk-kyc-*` adapter (T-220).
+
 - 2026-10-07: **`PaymentProviders::Base` declares `setup_url(user_id:, return_url:)`**, so an adapter written against the port serves `payment_setup` (T-219).
 
 ## [0.5.3] — 2026-10-06

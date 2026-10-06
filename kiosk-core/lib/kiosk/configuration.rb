@@ -48,6 +48,11 @@ module Kiosk
     # 'kiosk-pay-*/*.gemspec'` names it and nothing else.
     attr_accessor :payment_provider
 
+    # KYC provider adapter instance (see {Kiosk::KycProviders::Base}). Default
+    # nil: no verification is opened and `request_kyc` answers
+    # `module_not_served`.
+    attr_accessor :kyc_provider
+
     # Postgres GUC namespace (see {Kiosk::GUC}). Default "app".
     attr_accessor :guc_namespace
 
@@ -95,6 +100,7 @@ module Kiosk
       @user_idp         = nil
       @agent_idp        = nil
       @payment_provider = nil
+      @kyc_provider     = nil
       @guc_namespace    = GUC::DEFAULT_NAMESPACE
       @schema           = "kiosk"
       @app_role         = "app_role"

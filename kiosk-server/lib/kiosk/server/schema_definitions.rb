@@ -397,7 +397,8 @@ module Kiosk
       # ─── 006 create_kiosk_kyc_attributes ───────────────────────────────
 
       # The KYC tables, both keyed on the PERSON (the principal), never on an
-      # assistant account: what was attested is a fact about the human.
+      # assistant account: what was attested is a fact about the human, and it
+      # goes when their row in the host's user table does.
       #
       # `kyc_attributes` — one row per anonymized boolean a verified attestation
       # granted. The grant IS the row, so every gate is an EXISTS and no reader
@@ -407,14 +408,16 @@ module Kiosk
       # KYC provider: the provider's request id, the principal it is for, the
       # one-time value the provider's callback must echo, and when it was
       # approved.
-      def kyc_attributes_sql(schema: nil, user_id_type: nil)
+      def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
         schema       ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
+        user_table   ||= configured_user_table
         col_type = user_id_cast(user_id_type)
+        person   = %(#{col_type} NOT NULL REFERENCES "#{user_table}"(id) ON DELETE CASCADE)
 
         <<~SQL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".kyc_attributes (
-            user_id    #{col_type} NOT NULL,
+            user_id    #{person},
             name       text NOT NULL,
             granted_at timestamptz NOT NULL DEFAULT now(),
             PRIMARY KEY (user_id, name)
@@ -422,7 +425,7 @@ module Kiosk
 
           CREATE TABLE IF NOT EXISTS "#{schema}".kyc_requests (
             id          text PRIMARY KEY,
-            user_id     #{col_type} NOT NULL,
+            user_id     #{person},
             nonce       text NOT NULL,
             approved_at timestamptz,
             created_at  timestamptz NOT NULL DEFAULT now()
@@ -431,17 +434,33 @@ module Kiosk
         SQL
       end
 
+      # Brings KYC tables laid down without the user key up to
+      # {.kyc_attributes_sql}'s shape. Rows whose person is already gone are
+      # deleted first.
+      def kyc_user_fk_sql(schema: nil, user_table: nil)
+        schema     ||= Kiosk.configuration.schema
+        user_table ||= configured_user_table
+
+        %w[kyc_attributes kyc_requests].map { |table|
+          <<~SQL
+            DELETE FROM "#{schema}".#{table} k WHERE NOT EXISTS (SELECT 1 FROM "#{user_table}" u WHERE u.id = k.user_id);
+            ALTER TABLE "#{schema}".#{table} DROP CONSTRAINT IF EXISTS #{table}_user_id_fkey,
+              ADD CONSTRAINT #{table}_user_id_fkey FOREIGN KEY (user_id) REFERENCES "#{user_table}"(id) ON DELETE CASCADE;
+          SQL
+        }.join.strip
+      end
+
       # Moves a database whose grants were keyed on the assistant account onto
       # the person. The old grants are dropped, not converted: a grant made
       # while an assistant acted for a placeholder principal must not become a
       # statement about the human it was later linked to, so people verify again.
-      def kyc_on_person_sql(schema: nil, user_id_type: nil)
+      def kyc_on_person_sql(schema: nil, user_id_type: nil, user_table: nil)
         schema ||= Kiosk.configuration.schema
 
         <<~SQL.strip
           DROP TABLE IF EXISTS "#{schema}".kyc_attributes;
           ALTER TABLE "#{schema}".agents DROP COLUMN IF EXISTS kyc_verified_at;
-          #{kyc_attributes_sql(schema: schema, user_id_type: user_id_type)}
+          #{kyc_attributes_sql(schema: schema, user_id_type: user_id_type, user_table: user_table)}
         SQL
       end
 
@@ -564,6 +583,9 @@ module Kiosk
       end
 
       # ─── helpers ───────────────────────────────────────────────────────
+
+      # The host's user table, read off `config.user_model` when a migration runs.
+      def configured_user_table = Kiosk.configuration.user_model.to_s.constantize.table_name
 
       def user_id_cast(user_id_type)
         case user_id_type.to_sym

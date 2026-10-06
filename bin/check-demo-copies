@@ -1746,6 +1746,12 @@ COPIES = {
     why:   "The KYC grants move from the assistant account to the person and kiosk.kyc_requests " \
            "is laid down, on databases built before migration 006 carried that shape.",
   },
+  "db/migrate/20261007000003_tie_kiosk_kyc_to_the_user.rb" => {
+    rule:  :identical,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:   "The KYC grants and verifications gain the key to the user row, on databases built " \
+           "before migration 006 carried it.",
+  },
   "db/migrate/20261007000002_drop_kyc_verification_requests.rb" => {
     rule:  :identical,
     ships: KYC_DEMOS,

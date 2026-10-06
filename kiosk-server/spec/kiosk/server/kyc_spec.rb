@@ -33,11 +33,17 @@ RSpec.describe Kiosk::Server::Kyc do
     conn = ::ActiveRecord::Base.connection
     conn.execute(%(DROP SCHEMA IF EXISTS "#{KYC_SPEC_SCHEMA}" CASCADE))
     conn.execute(%(CREATE SCHEMA "#{KYC_SPEC_SCHEMA}"))
-    conn.execute(Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: KYC_SPEC_SCHEMA, user_id_type: :text))
+    conn.execute(%(CREATE TABLE "#{KYC_SPEC_SCHEMA}".people (id text PRIMARY KEY)))
+    conn.execute(%(INSERT INTO "#{KYC_SPEC_SCHEMA}".people VALUES ('u-1'), ('u-2')))
+    conn.execute(%(SET search_path TO "#{KYC_SPEC_SCHEMA}", public))
+    conn.execute(Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: KYC_SPEC_SCHEMA, user_id_type: :text,
+                                                                     user_table: "people"))
   end
 
   after(:context) do
-    ::ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{KYC_SPEC_SCHEMA}" CASCADE)) unless self.class.postgres_error
+    next if self.class.postgres_error
+
+    ::ActiveRecord::Base.connection.execute(%(RESET search_path; DROP SCHEMA IF EXISTS "#{KYC_SPEC_SCHEMA}" CASCADE))
   end
 
   let(:store)    { Kiosk::Server::EventStore.new }

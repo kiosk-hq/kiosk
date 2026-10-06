@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **A person's KYC grants and open verifications are deleted with their user row**; the seven demos add the key with a new migration.
+
 - 2026-10-07: **The `payment_setup` return page says the assistant can pay only when the provider confirms it**; otherwise it says the assistant will check.
 
 - 2026-10-07: **The `kyc_required` hint names `request_kyc` only where a `kyc_provider` serves it**, and a wrong-subject refusal names the principal each KYC path compares.

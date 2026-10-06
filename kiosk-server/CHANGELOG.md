@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`kiosk.kyc_attributes` and `kiosk.kyc_requests` reference the host's user table `ON DELETE CASCADE`**; `kyc_user_fk_sql` adds the key to existing tables.
+
 - 2026-10-07: **The `payment_setup` return page says the assistant can pay only when the provider confirms it**; otherwise it says the assistant will check.
 
 - 2026-10-07: **The `kyc_required` hint names `request_kyc` only where a `kyc_provider` serves it**, and a wrong-subject refusal names the principal each KYC path compares.

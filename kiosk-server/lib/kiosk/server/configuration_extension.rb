@@ -335,11 +335,9 @@ module Kiosk
       #
       # The default below is IN-PROCESS and is correct for the suite and for a
       # single-process development boot and for nothing that is deployed: it is
-      # gone on restart. That matters more than it does for the two stores
-      # above, because `delivery` and `todo` are read back ACROSS an assistant's
-      # sessions through the cursor — nothing holds a socket that long, in any
-      # harness — so a lost tail makes those topics unanswerable rather than
-      # merely degraded, and `truncated: true` stops being the rare case.
+      # gone on restart. The operator keeps every event for 24 hours so a
+      # subscriber that reconnects with `since` misses nothing, and a restart
+      # would lose the events inside that window.
       #
       # A deployed operator sets
       #

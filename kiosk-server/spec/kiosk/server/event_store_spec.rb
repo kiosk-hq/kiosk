@@ -7,10 +7,9 @@
 # nothing, and it is never what a DEPLOYED origin may run on:
 # {Kiosk::Server::EventStores::ActiveRecord} is what the generator writes, and
 # a production origin that declares a topic and leaves this default in place
-# does not boot ({Kiosk::Server::Engine.ephemeral_event_store_error}). Two of the eight topics
-# (`delivery`, `todo`) are read back ACROSS sessions through the cursor rather
-# than over a held socket, so a tail that dies on restart makes those
-# unanswerable rather than degraded. What is asserted here is the contract both
+# does not boot ({Kiosk::Server::Engine.ephemeral_event_store_error}), because a
+# tail that dies on restart loses events a reconnecting subscriber is owed for
+# 24 hours. What is asserted here is the contract both
 # implementations answer; the ActiveRecord suite asserts the same properties
 # against a real table.
 

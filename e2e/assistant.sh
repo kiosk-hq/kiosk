@@ -1279,8 +1279,8 @@ if await_line "$EV_LOG" '"type":"subscribed"'; then
 else
   assert "the pinned listener opened the stream and subscribed" "$(cat "$EV_LOG")" "true"
 fi
-# `head` is the operator's tail cursor at subscribe time — what an assistant
-# records so a later session can ask for everything after it.
+# `head` is the origin's newest event id at subscribe time — the assistant's
+# cursor until an event arrives.
 assert "…the subscription confirmation carries a tail cursor" \
   "$(grep '"type":"subscribed"' "$EV_LOG" | head -1 | jq -r 'has("head") and (.truncated == false)')" "true"
 
@@ -1317,11 +1317,9 @@ assert "…and nothing of Bob's reaches Alice's stream" \
 
 wait "$listener_pid" 2>/dev/null || true
 
-# RESUME. A turn-based assistant has no process that outlives its session, so
-# the cursor IS the delivery mechanism for anything it was not holding a socket
-# for. A SECOND listener, started cold with `--since` one below the id it last
-# saw, must be handed that event again — from the DATABASE, because the process
-# that broadcast it is gone.
+# RESUME. The operator keeps every event for 24 hours, so a SECOND listener,
+# started cold with `--since` one below the id it last saw, is handed that event
+# again — from the DATABASE, because the process that broadcast it is gone.
 EV_REPLAY="$TMP_DIR/listener-replay.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
   --topic appointment_confirmed --since "$((alice_event_id - 1))" --max-seconds 6 \
@@ -1332,12 +1330,9 @@ assert "a cold listener resuming with since is handed the event again" \
 assert "…and says the tail was not truncated under it" \
   "$(grep '"type":"subscribed"' "$EV_REPLAY" | head -1 | jq -r '.truncated')" "false"
 
-# THE ONE-SHOT FOREGROUND WAIT. A WAIT-kind topic — a human finishing something
-# the assistant asked for — is waited on INSIDE one tool call: the listener
-# blocks, and `--until-event` returns the moment the thing arrives. What this
-# asserts is the difference between the two: the run must cost what the human
-# took, not what the deadline was, because a wait that always costs its timeout
-# is what sends an assistant back to backgrounding a log file.
+# THE WAKE. With `--until-event` the listener exits 0 the moment the event
+# arrives, and that exit is what wakes the assistant. It must exit on the event,
+# not on the deadline.
 r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-17T11:00:00Z\"}")
 wait_appt_id=$(echo "$r" | jq -r '.appointment_id')
 EV_ONESHOT="$TMP_DIR/listener-oneshot.jsonl"
@@ -1351,7 +1346,7 @@ oneshot_rc=$?
 set -e
 oneshot_elapsed=$((SECONDS - oneshot_started))
 printf "  (the one-shot wait returned after %ss of a 60s deadline)\n" "$oneshot_elapsed"
-assert "a foreground --until-event wait exits 0 when the event arrives" "$oneshot_rc" "0"
+assert "an --until-event wait exits 0 when the event arrives" "$oneshot_rc" "0"
 assert "…on the EVENT and not on the deadline" \
   "$([ "$oneshot_elapsed" -lt 30 ] && echo yes || echo "no(${oneshot_elapsed}s)")" "yes"
 assert "…having printed the event it was waiting for" \
@@ -1359,10 +1354,10 @@ assert "…having printed the event it was waiting for" \
 assert "…and stopped there, because the wait is over" \
   "$(grep -c '"type":"event"' "$EV_ONESHOT")" "1"
 
-# THE OTHER HALF: a deadline with nothing on it is a distinct exit, so the
-# assistant waits AGAIN rather than reading silence as an answer. Alice's first
-# appointment was confirmed long ago and no cursor is presented, so this
-# subscription is live-only and nothing can arrive on it.
+# A deadline with nothing on it is a distinct exit, so the assistant starts the
+# listener again rather than reading silence as an answer. Alice's first
+# appointment was confirmed long ago and no `since` is presented, so nothing can
+# arrive on this subscription.
 EV_TIMEOUT="$TMP_DIR/listener-timeout.jsonl"
 set +e
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
@@ -1374,8 +1369,7 @@ assert "…and a deadline that arrives first is 5, not 0" "$timeout_rc" "5"
 assert "…with the subscription having been live all along" \
   "$(grep -c '"type":"subscribed"' "$EV_TIMEOUT")" "1"
 
-# A FOREGROUND WAIT WITH NO DEADLINE IS A TOOL CALL THAT NEVER RETURNS, so it is
-# refused at the argument tier rather than entered.
+# A wait with no deadline is refused at the argument tier.
 set +e
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
   --topic appointment_confirmed --until-event >/dev/null 2>&1
@@ -1383,10 +1377,9 @@ unbounded_rc=$?
 set -e
 assert "…and --until-event without a deadline is refused" "$unbounded_rc" "2"
 
-# THE OTHER KIND OF TOPIC. A SUBSCRIPTION lands when the assistant is not there
-# — no socket, no process, nothing to signal — and the CURSOR is what delivers
-# it. Here NOTHING is connected when the salon confirms: the socket is opened
-# afterwards, with the id of the last event the assistant stored.
+# NOTHING CONNECTED. The salon confirms while no socket is open; the next
+# connect, with `since` set to the last id the assistant saw, is handed the
+# event from the 24-hour tail.
 oneshot_event_id=$(grep '"type":"event"' "$EV_ONESHOT" | head -1 | jq -r '.id')
 r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-18T09:00:00Z\"}")
 gap_appt_id=$(echo "$r" | jq -r '.appointment_id')

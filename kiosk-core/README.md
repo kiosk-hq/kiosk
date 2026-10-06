@@ -15,6 +15,7 @@ The foundation. Defines:
   - `Kiosk::AgentIdentityProviders::Base`
   - `Kiosk::UserIdentityProviders::Base`
   - `Kiosk::PaymentProviders::Base`
+  - `Kiosk::KycProviders::Base`
 
   An agent-IdP adapter's `agent_id` **must be a UUID string**: `Identity`
   checks only that it is present, but every `agent_id` column in the canonical

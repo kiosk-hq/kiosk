@@ -127,23 +127,13 @@ nights = (Date.parse(check_out) - Date.parse(check_in)).to_i
 
 # ── Step 4b: payment_setup — the card check that MUST precede pay ───────────
 #
-# This origin publishes `payment_setup` and its own descriptor says «The
-# assistant should call this before `pay`», which is also the canonical skill's
-# Step 5. It is DRIVEN here rather than merely declared: a presence assertion in
-# /kiosk/schema is not a behaviour assertion, and only a real call exercises the
-# poll cadence, the stop condition and the ready payload.
-#
-# UNCONDITIONAL, outside the SKIP_PAY branch below, and that is the point: the
-# question this verb answers is «does THIS PRINCIPAL have a card on file», which
-# is a property of the principal rather than of the payment about to happen. So
-# the payment-gate negative run exercises it too, and a `setup_required` that
-# only appeared when a pay followed would have nowhere to hide.
+# The engine serves `payment_setup` on every origin with a payment provider,
+# and its descriptor says «Call it before `pay`». Driven unconditionally,
+# outside the SKIP_PAY branch: whether this principal can pay is a property of
+# the principal, not of the payment about to happen.
 #
 # Under this demo's StubPsp `setup_required?` is always false, so it is one
-# request and an immediate {status: "ready"} — the branch an assistant needs in
-# order to proceed. The `setup_required` + `setup_url` branch is declared in the
-# output schema for parity with the other two payment demos and is unreachable
-# here; nothing below pretends otherwise.
+# request and an immediate {status: "ready"}.
 rc_setup, setup_resp = post_json(
   "#{SERVER}/kiosk/payment_setup",
   {},

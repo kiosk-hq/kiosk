@@ -675,8 +675,8 @@ if ARGV.include?("--self-test")
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a legitimate divergence inside a `:coincidence` — the OTHER diagnosis, not drift",
       ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
-              "    \"quota_exceeded\"    => :too_many_requests,\n", ""]],
-      expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,skooti\] as a `:coincidence` and the coincidence has ended/ },
+              "\"forbidden\" => :forbidden }", "\"forbidden\" => :forbidden, \"conflict\" => :conflict }"]],
+      expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,philslist,skooti,tudu\] as a `:coincidence` and the coincidence has ended/ },
     # The agreed SIZE is matched as `\d+` rather than restated: it moves whenever one
     # of the three drivers is edited, and what this arm is for is the refusal and the cap.
     { id: "coincidence-over-the-cap", kind: :break,
@@ -1363,36 +1363,15 @@ KYC_SHIPS =
   "KYC provider, so only they carry the broker harness and the migrations that retired their own " \
   "KYC table. A third demo growing a copy must be declared here."
 
-# The two pairs of `app/operations/operation_result.rb` copies that AGREE, and
-# the reason each pair does (K-1262). Written once because the same two groups
-# are declared twice — on the file entry, whose copies agree whole, and on the
-# `#STATUSES` unit entry inside it — and two copies of a reason drift.
+# The `app/operations/operation_result.rb` copies that AGREE, and why (K-1262).
+# Declared on the file entry and on its `#STATUSES` unit, so written once.
 OPERATION_RESULT_AGREE = {
-  %w[getgrocery skooti] => {
+  %w[getgrocery philslist skooti tudu] => {
     rule: :coincidence,
-    why:  "THE COINCIDENCE THIS ENTRY HAS ARGUED SINCE K-792, NOW DECLARED INSTEAD OF ONLY " \
-          "DESCRIBED. Both maps carry the same codes — through `kyc_required` and " \
-          "`quota_exceeded` and, since the broker-absence refusals, `action_failed` and " \
-          "`module_not_served` — and they carry them for unrelated reasons: getgrocery gates " \
-          "alcohol, skooti gates a motorcycle licence, and each arrived at its own set by asking " \
-          "which refusals ITS verbs can make. The last two are the closest thing to a shared " \
-          "cause the pair has ever had, and they are still not one: both demos call the SAME " \
-          "hand-copied broker client, which is itself held `:code`, so the maps agreeing is a " \
-          "consequence of that copy rather than of a decision taken twice. `:coincidence` rather " \
-          "than `:lockstep` precisely because «even the one match today would be a coincidence to " \
-          "enshrine»: holding these two in lockstep would make a legitimate divergence — one " \
-          "origin adding a refusal the other cannot make — read as drift. What IS held is the " \
-          "membership: a THIRD demo landing on the same set is not an accident twice over, and " \
-          "the pair ceasing to agree drops this group in the same commit.",
-  },
-  %w[philslist tudu] => {
-    rule: :coincidence,
-    why:  "THE SHORTEST MAPS IN THE FLEET, AT THE SAME TWO CODES, FOR DIFFERENT REASONS. philslist " \
-          "lists `bad_request` and `forbidden` and deliberately has NO `not_found`, so a listing " \
-          "that does not exist and one that belongs to somebody else answer the same 403 and " \
-          "cross-owner probing cannot enumerate ids; tudu lists the same two because a to-do list " \
-          "its owner can always see has no third refusal to make. Same pair of codes, two unrelated " \
-          "arguments — the same shape as the getgrocery/skooti pair above and declared the same way.",
+    why:  "Each map lists only `bad_request` and `forbidden` because those are the only refusals " \
+          "its own writes make: philslist answers a missing listing 403 so ids cannot be " \
+          "enumerated, tudu has no third refusal, and getgrocery's and skooti's KYC refusals " \
+          "are raised by the engine. A demo adding a refusal of its own is not drift.",
   },
 }.freeze
 
@@ -1730,41 +1709,11 @@ COPIES = {
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
-    why:  "THIS FILE IS A SUBCLASS LINE AND A CONSTANT, AND NOTHING ELSE. The shared half — " \
-          "the constructor and the ok/refused/status trio — ships once in kiosk-server as " \
-          "{Kiosk::OperationResult}, because a thing that exists in all seven demos belongs " \
-          "in a gem; each demo declares `class OperationResult < Kiosk::OperationResult` and " \
-          "supplies its own STATUSES. " \
-          "What is left is genuinely per-demo, and the reason is unchanged and unrefuted: a code " \
-          "an app never produces has no business having a mapping, so the seven maps are five " \
-          "different sets. stylish lists ONE (nothing on that origin ever fills up and its write " \
-          "is caller-scoped by construction, so `bad_request` is the only refusal it can make); " \
-          "tudu and philslist two; atablefor three, ending in `conflict`; skooti and getgrocery " \
-          "SEVEN — through `kyc_required` and `quota_exceeded` (K-586's per-principal cap on " \
-          "outstanding broker intakes, the only 429 in the fleet) to the KYC broker's two " \
-          "absences, `module_not_served` when this deployment opens no verifications at all and " \
-          "`action_failed` when the broker simply did not complete one; hoteling four, ending in " \
-          "`not_found` — the one map " \
-          "whose contents have moved TWICE (K-794 removed `not_found` when `hotel_detail` started " \
-          "answering an unknown id with an empty array; T-090's three-way rule, spec §9.1, put it " \
-          "back). The skooti/getgrocery pair is the sharpest case twice over: `kyc_required` and " \
-          "`forbidden` are BOTH 403, so the code is not derivable from the status at all — and the " \
-          "two demos' four codes coincide for entirely unrelated reasons, a gate on alcohol " \
-          "against a gate on a motorcycle, so even the one match today would be a coincidence to " \
-          "enshrine. " \
-          ":per_demo STILL MEANS NOT COMPARED, AND THAT IS NOW HONEST RATHER THAN A HOLE. The gap " \
-          "this entry used to record — ~40 shared lines nothing held together — is closed because " \
-          "the lines are GONE, not because a rule was added; kiosk-server's own suite guards the " \
-          "one surviving copy. What stops the duplication growing back is the OPERATION_RESULT " \
-          "block at the bottom of this file: every copy must subclass the gem's class, must " \
-          "declare its own STATUSES (the base ships an empty map on purpose), and must define NO " \
-          "methods at all — a file that may hold only a subclass line and a constant has nowhere " \
-          "for uncompared behaviour to hide. Option B as filed on K-792 (teach this check a " \
-          "partial-compare rule) was NOT taken and must not be reinstated as the answer — and the " \
-          "`agree:` map below is not it. B carved a REGION out of each file and held the rest; this " \
-          "names the two SUBSETS whose whole copies happen to agree, holds neither, and leaves the " \
-          "sentence above («even the one match today would be a coincidence to enshrine») true " \
-          "rather than quietly reversed (K-1262).",
+    why:  "A subclass line and a STATUSES constant, nothing else: the shared half ships once " \
+          "in kiosk-server as {Kiosk::OperationResult}. Each map lists only the codes that " \
+          "demo's own operations refuse with, so the maps differ; the OPERATION_RESULT block at " \
+          "the bottom of this file holds that every copy subclasses the gem's class, declares " \
+          "its own STATUSES and defines no methods (K-792).",
     agree: OPERATION_RESULT_AGREE,
   },
 
@@ -4863,8 +4812,8 @@ FRAGMENTS = {
     agree: OPERATION_RESULT_AGREE,
     rule:  :per_demo,
     ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:   "The five DIFFERENT status maps the file-level entry above enumerates and argues for — " \
-           "a code an app never produces has no business having a mapping. Declared here for the " \
+    why:   "The status maps the file-level entry above argues for — a code an app never " \
+           "produces has no business having a mapping. Declared here for the " \
            "same reason as home_controller's `index`: it puts a file whose shared half was already " \
            "PROMOTED into kiosk-server (K-792) under the discovery rule, so the next method that " \
            "grows in all seven copies is a failure rather than a discovery.",

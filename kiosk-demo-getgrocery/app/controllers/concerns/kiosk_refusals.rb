@@ -39,12 +39,9 @@ module KioskRefusals
 
   # A plain `render json:, status:` naming a code from the wire's closed
   # vocabulary. Naming it is what lets an assistant branch; the status alone
-  # would already imply `bad_request`/`forbidden`/`not_found`, but `kyc_required`
-  # SHARES 403 with `forbidden` and a bare status cannot tell them apart — so
-  # for getgrocery writing the code is not merely explicit, it is the only way
-  # the age gate's refusal survives the trip. A nil hint is dropped, so a refusal
-  # with nothing to add carries no empty field — which is what keeps these
-  # byte-identical to the `Errors::` envelopes they replace.
+  # would already imply each of these, but writing it keeps the answer explicit.
+  # A nil hint is dropped, so a refusal that has nothing to add carries no empty
+  # field.
   def render_refusal(result)
     render json: { error: { code: result.code, message: result.message, hint: result.hint }.compact },
            status: result.status

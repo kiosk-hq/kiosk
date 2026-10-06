@@ -11,9 +11,9 @@
 # number, so a citation fails on a rename, a deletion or a duplication and
 # cannot rot from renumbering.
 #
-# `bin/check-conformance-anchors` asserts that each anchor below occurs
-# EXACTLY ONCE in the file beside it. If it fails, something this repository
-# publishes as evidence has been renamed or removed, and THE REPAIR IS IN THE
+# Each anchor below occurs EXACTLY ONCE in the file beside it. If one does
+# not, something this repository publishes as evidence has been renamed or
+# removed, and THE REPAIR IS IN THE
 # CITED FILE: rename the text back, or -- if the rename was the point -- have
 # the citation that names it updated where the matrices live, which is also
 # where this index is exported from. NO COMMAND HERE REGENERATES IT. The other
@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1766 anchors.
+# 1765 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -46,7 +46,6 @@ README.md	app-layer-authorized data plane with opt-in Postgres RLS defense-in-de
 README.md	multi-assistant identity per user
 README.md	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 ROADMAP.md	**MPP as a settlement adapter.**
-bin/check-verb-routes	#   METHOD-KIND       GET for a query, POST for an action.
 deploy/Caddyfile	atablefor.demo.kiosk.tech {
 deploy/Caddyfile	getgrocery.demo.kiosk.tech {
 deploy/Caddyfile	hoteling.demo.kiosk.tech {

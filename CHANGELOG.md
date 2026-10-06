@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-06: **The repository keeps only the check scripts that have caught defects; the rest and their CI jobs are removed.**
+
 - 2026-10-06: **The production boot refusal for an in-process event store now says why: a restart loses events inside the 24-hour retention window.**
 
 ## [0.5.3] — 2026-10-06

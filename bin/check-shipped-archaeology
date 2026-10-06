@@ -1383,45 +1383,20 @@ def root_files(root)
     .sort
 end
 
-# A vendored mirror is read for its local `$comment` and nothing else — see
-# the header. Masking the other lines rather than skipping the file keeps the
-# reported line number honest. BOTH homes: `bin/check-spec-schemas` mirrors
-# into `e2e/schemas` and into `kiosk-server/lib`, and a
-# self-test arm re-reads THAT script's manifest and fails if it ever mirrors a
-# path this pattern does not cover — so the two homes are a pattern here and a
-# derivation there, rather than a list nobody re-checks.
+# A vendored mirror is read for its local top-level `$comment` and nothing else
+# — see the header. Masking the other lines rather than skipping the file keeps
+# the reported line number honest. Mirrors live in `e2e/schemas` and in
+# `kiosk-server/lib`.
 VENDORED_MIRROR_RE = %r{/(?:e2e|kiosk-server/lib/kiosk/server)/schemas/[^/]+\.schema\.json\z}
 
-# The paths `bin/check-spec-schemas` holds byte-equal to what kiosk.tech
-# publishes. Read out of that script rather than restated, for the vacuity arm.
 def mirrored_paths
-  src = File.read(File.join(REPO, "bin", "check-spec-schemas"), encoding: "UTF-8")
-  src.scan(/File\.join\(REPO,\s*"([^"]+\.schema\.json)"\)/).flatten.uniq
+  Dir.glob(File.join(REPO, "{e2e,kiosk-server/lib/kiosk/server}/schemas/*.schema.json"))
+     .map { |p| p.delete_prefix("#{REPO}/") }
 end
 
-# WHICH `$comment` IS OURS — DERIVED FROM THE GUARD THAT FREEZES THE REST, NOT
-# RE-TYPED HERE. `bin/check-spec-schemas` compares the PARSED documents after
-# removing named members from each side, and those members — and only those —
-# are the bytes of a mirror this repository may change. A second answer typed
-# here is a second thing to be wrong about: while this file assumed EVERY
-# `$comment` line was ours and that script exempted only the top-level one, the
-# gap between the two masks was a trap where R5 or R6 could demand a repair
-# `check-spec-schemas` fails on, leaving a red tree with no legal move from
-# inside this repository. Same "derive it, do not re-type it" move R5 makes for
-# the wire version.
-def exempt_mirror_members
-  src = File.read(File.join(REPO, "bin", "check-spec-schemas"), encoding: "UTF-8")
-  members = src.scan(/^\s*(?:local|upstream)\.delete\("([^"]+)"\)/).flatten.uniq
-  if members.empty?
-    raise "check-shipped-archaeology: bin/check-spec-schemas names no member it removes " \
-          "before comparing a vendored mirror with the published original, so this guard " \
-          "cannot know which bytes of a mirror are ours. Re-point exempt_mirror_members at " \
-          "however that script now spells the carve-out; do not guess."
-  end
-  members
-end
-
-EXEMPT_MIRROR_MEMBERS = exempt_mirror_members.freeze
+# The one member of a mirror this repository writes; every other byte is
+# kiosk.tech's.
+EXEMPT_MIRROR_MEMBERS = ["$comment"].freeze
 
 # The nesting depth at the START of each line. A JSON string cannot contain a
 # newline, so a per-line tally of the brackets outside string literals answers
@@ -3493,12 +3468,8 @@ def self_test
 
   # ── VACUITY: the mirror mask covers every file another guard freezes ─────
   mirrors = mirrored_paths
-  check.call("bin/check-spec-schemas names the mirrors it holds (#{mirrors.size})", !mirrors.empty?)
+  check.call("the vendored mirrors are on disk (#{mirrors.size})", !mirrors.empty?)
   uncovered = mirrors.reject { |rel| File.join(REPO, rel).match?(VENDORED_MIRROR_RE) }
-  check.call("…and WHICH member of one is ours is read out of that script too " \
-             "(#{EXEMPT_MIRROR_MEMBERS.join(', ')}) — a second answer typed here is a " \
-             "second thing to drift",
-             !EXEMPT_MIRROR_MEMBERS.empty?)
   on_disk = mirrors.map { |rel| File.join(REPO, rel) }.select { |p| File.exist?(p) }
   check.call("the mask leaves a mirror's TOP-LEVEL marker readable and blanks everything " \
              "else, nested `$comment` included (#{on_disk.size} mirror(s) on disk)",

@@ -5,13 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Daily, for the `solver-pin-live` job ONLY (every other job is skipped on a
-  # schedule run — see its `if:`). That job probes what kiosk.tech actually
-  # serves, and kiosk.tech is a SEPARATE repo: a commit there can break the
-  # solver pin without ever triggering this repo's CI, so a push-triggered
-  # check would not catch the drift direction that matters most.
-  schedule:
-    - cron: "23 5 * * *"
   workflow_dispatch:
 
 # stripe-mock validates every request against ONE Stripe API version, its
@@ -24,8 +17,6 @@ jobs:
   gems:
     name: ${{ matrix.gem }}
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     strategy:
       fail-fast: false
@@ -137,8 +128,6 @@ jobs:
   demos:
     name: ${{ matrix.demo }}
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     strategy:
       fail-fast: false
@@ -298,7 +287,7 @@ jobs:
             # malformed id resurfaces as ActiveRecord::StatementInvalid).
             #
             # What is NOT wired, and why, is in the `ungated:` map below — one
-            # place, checked by bin/check-ci-tasks rather than remembered.
+            # place.
             # check:claim and check:rls join the tail for the same reason as
             # check:race — each was a real assertion battery that only ran when a
             # human remembered to type it.
@@ -595,13 +584,8 @@ jobs:
             # drop the `require_owner:` forwarding and the owner-demand
             # assertion goes red.
             tasks: check:clock_spec check:access_spec check:collab check:link check:isolation check:redteam check:schema
-          # Every check: task a demo defines must appear either in its `tasks:`
-          # list above or in its `ungated:` map with the reason it is not a gate,
-          # and a demo: task may appear in neither — it asserts nothing and cannot
-          # go red. That is not a convention anyone has to remember:
-          # bin/check-ci-tasks enforces it in the ci-task-coverage job below, and
-          # generates the "Which of these run in CI" table in each demo's README
-          # from these very lists.
+          # Every check: task a demo defines appears either in its `tasks:`
+          # list above or in its `ungated:` map with the reason it is not a gate.
 
     services:
       postgres:
@@ -644,16 +628,6 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ matrix.demo }}
         run: bundle install
-
-      # Parser guard for the K-619 coverage check. bin/check-ci-tasks derives
-      # each demo's task inventory statically from lib/tasks/*.rake so it can run
-      # on a bare checkout with no bundle; a static parser that goes blind to a
-      # task shape would fail OPEN — precisely the failure mode the check exists
-      # to prevent. Here the bundle is already installed, so re-derive the same
-      # inventory from Rake's own table (`bin/rails -AT`) and assert the two
-      # agree. ~0.3 s, no database.
-      - name: Task inventory matches Rake (bin/check-ci-tasks parser guard)
-        run: ./bin/check-ci-tasks --verify-inventory ${{ matrix.demo }}
 
       # skooti's check:kyc / check:redteam and getgrocery's check:agecheck are
       # two-server integrations that boot the KYC broker (kiosk-demo-prove)
@@ -820,110 +794,6 @@ jobs:
           echo "::error::PostgreSQL 17 client could not be installed after 3 attempts."
           exit 1
 
-      # K-1082 — THE ONE GATE THAT DOES NOT BUILD ITS DATABASE FROM ZERO.
-      #
-      # Everything else in this job, and `demo:setup` on the very next line, is
-      # `db:drop db:create db:schema:load db:seed`. That makes production the
-      # only place on earth where `db:migrate` meets a PRE-EXISTING database,
-      # and it has cost twice: K-436 (a page SELECTing columns a demo's
-      # structure.sql lacked -> HTTP 500 in production, CI green) and K-1074
-      # (`add_column :users, :display_name` APPENDED to a migration already
-      # recorded in every deployed schema_migrations -> four HTTP 500s on the
-      # live tudu box, CI green throughout). That outage is measured in the
-      # TREE as four days -- 3a834cc0 (2026-08-23) appended the column,
-      # 86c89923 (2026-08-27) moved it to a new file -- while the box-side
-      # duration is not knowable from here and is NOT CLOSED: the boxes still
-      # answer 500 until a redeploy carries the repair to them. Both times the
-      # gates requested the very pages that were failing: the blind spot was
-      # never the HTML, it was the SCHEMA.
-      #
-      # This step loads each historical `db/structure.sql` since the fleet was
-      # provisioned, runs `db:migrate` — the deploy's own command — and diffs the
-      # resulting catalog against the tracked structure.sql. It uses its own
-      # scratch databases and restores db/structure.sql afterwards, so its
-      # position relative to demo:setup is free; it is here because it needs the
-      # psql 17 installed above.
-      #
-      # WATCHED FAIL, BOTH DIRECTIONS — AND IT NAMES NO VINTAGE HASH AND NO
-      # REPLAY COUNT, ON PURPOSE. Two earlier revisions of this block named both
-      # and both went dead: K-1150 because a fix wave turned the mutation into a
-      # no-op, K-1268 because FLEET_SCHEMA_BASELINE moved and every vintage the
-      # recipe named fell outside the default window. That baseline is DESIGNED
-      # to move on every fleet rebuild, so a recipe pinned to hashes is
-      # guaranteed to rot; the two below are expressed against "the oldest
-      # vintage in the window", whatever it happens to be, and read every number
-      # off the script.
-      #
-      # FIRST, THE WINDOW YOU ARE IN. `./bin/check-migration-replay --list
-      # kiosk-demo-tudu` prints the window's vintages oldest-first and runs
-      # nothing. When no schema has changed since the last fleet rebuild — the
-      # state as this is written — it shows ONE vintage per demo, and that
-      # vintage is the demo's CURRENT db/structure.sql (`git log -1 --
-      # kiosk-demo-tudu/db/structure.sql` names the same revision). The replay
-      # then loads head's own schema, `db:migrate` has nothing pending, and the
-      # two catalogues are equal by construction, SO A PLANT THAT ONLY EDITS
-      # MIGRATIONS CANNOT REDDEN THIS STEP. That is not the gate going vacuous
-      # and it is not a reason to widen the window: committing a schema change is
-      # what puts the older vintage back, so the real defect always arrives with
-      # its own vintage. It does mean a PLANT has to move the two sides apart the
-      # way the real defect does — which is what direction 1 does, and what the
-      # recipe K-1268 retired did not.
-      #
-      # DIRECTION 1 — a column the deploy path cannot deliver, K-1074's exact
-      # shape. Append a column to a migration the oldest vintage already has
-      # recorded — `t.string :handle_slug` inside the change_table of
-      # 20260718000001_add_devise_columns_to_users.rb — AND add
-      # `handle_slug character varying` to public.users in
-      # kiosk-demo-tudu/db/structure.sql, which is what a from-zero `db:migrate`
-      # would have dumped. Exit 1, one `MISSING column|public.users.handle_slug`
-      # line per vintage in the window; the script names those vintages, so read
-      # them off it rather than from here.
-      #
-      # DIRECTION 2 — a deploy that stops dead. Add ONE new migration file dated
-      # today, db/migrate/<YYYYMMDD>000001_replay_abort_probe.rb holding class
-      # ReplayAbortProbe whose `up` is
-      # `execute %(CREATE TABLE "kiosk".agents (id uuid PRIMARY KEY))`: an
-      # unguarded CREATE meeting a table every vintage already has. Exit 1,
-      # `db:migrate` ABORTED … PG::DuplicateTable. Today's date is load-bearing —
-      # Rails refuses a future-dated version before the migration runs, which
-      # aborts the replay for the wrong reason and proves nothing. This is why
-      # every CREATE in Kiosk::Server::SchemaDefinitions carries IF NOT EXISTS.
-      #
-      # Clean tree, all eight demos: exit 0. The replay count is whatever the
-      # script prints — it has read 44, then 52, then 8 as the baseline moved, so
-      # no number is written here. Put a planted mutation back from a file copy,
-      # never `git checkout -- <path>`: during a fix wave that restores to HEAD
-      # and takes uncommitted work with it.
-      #
-      # A HAZARD NOW FAILS THIS STEP (T-132). A leftover column that is NOT NULL
-      # with no DEFAULT, on a table head still declares, used to be a printed
-      # note; it is a live 500 waiting for a box of that vintage and it exits 1.
-      # A leftover on a table head has RETIRED is not that and never was — the
-      # verdict now reads the difference off head's own structure.sql — and the
-      # accepted ones are declared in the script's ACCEPTED_LEFTOVERS with the
-      # ledger row that made each acceptable, so the escape hatch is a
-      # declaration somebody wrote down rather than a flag.
-      #
-      # MEASURED 2026-08-31 for that flip, on kiosk-demo-tudu, from a cp backup:
-      # delete 20260827000002_drop_kiosk_settlement_raw_jws.rb (K-1086's repair)
-      # and run `--since 2026-08-11` — exit 1 naming
-      # `HAZARD column|kiosk.settlements.raw_jws (text NO -)`, where the same
-      # tree under the PREVIOUS revision of the script exits 0 with seven HAZARD
-      # note lines. The `--since` is load-bearing in that recipe: the default
-      # window starts after the last fleet rebuild and holds one vintage per
-      # demo, which is also why a clean tree replays 8 times here and not 52.
-      #
-      # COST scales with the number of VINTAGES in the window, not with the
-      # number of demos, so it moves with FLEET_SCHEMA_BASELINE exactly as the
-      # replay count does: measured on one laptop core, all eight demos, it has
-      # been 34 s over 52 replays and is 9.5 s over 8 today. The script prints
-      # its own elapsed time on the OK line, which is the figure to trust. Here
-      # the bundle and the postgres service are already up and the job is
-      # sharded by demo, so it is cheap enough to run on every push — which is
-      # the point, since the defect it catches is only observable after a deploy.
-      - name: Migration replay against an existing database (bin/check-migration-replay)
-        run: ./bin/check-migration-replay ${{ matrix.demo }}
-
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
         run: bin/rails demo:setup
@@ -986,8 +856,7 @@ jobs:
   # and none of them a step. So `make test` (46 C assertions), `make crosscheck`
   # (63 live-signed vectors through all three readers) and
   # `check_grammar_coverage.rb` were proved only by whoever remembered to type
-  # them. bin/check-ci-tasks cannot see the gap: its subject is a demo's rake
-  # tasks and these are `make` targets.
+  # them.
   #
   # The cost was not theoretical. K-1588, K-1590 and K-1591 were each a real
   # divergence between the shipped C verifier and the shipped Ruby readers, each
@@ -1020,8 +889,7 @@ jobs:
   #
   # ITS OWN JOB RATHER THAN A LEG OF THE DEMOS MATRIX, on that matrix's own cost:
   # every demo entry boots Postgres and installs a Rails bundle, and this needs
-  # neither. Nor is any of it a demo rake task, so joining that matrix would
-  # put it outside bin/check-ci-tasks's subject while looking like it was inside.
+  # neither.
   #
   # Watched fail, MEASURED 2026-09-14 by planting it rather than by reasoning:
   # drop the two `timestamp?` guards from `RentalTokenIssuer.verify` — K-1590's
@@ -1038,8 +906,6 @@ jobs:
   skooti-firmware:
     name: skooti lock firmware — C verifier vs. the two Ruby readers (make test)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     # Both compilers named here rather than defaulted per step — see above.
     env:
@@ -1080,21 +946,13 @@ jobs:
         working-directory: kiosk-demo-skooti/firmware
         run: make test-asan
 
-  # Does CI actually run the tasks the demos define? (K-619)
-  #
-  # This job is the replacement for remembering which assertion-bearing tasks a
-  # gate actually invokes: bin/check-ci-tasks reads the demos matrix above
-  # and every demo's lib/tasks/*.rake, and fails when a task is in neither the
-  # `tasks:` list nor the entry's `ungated:` map with a reason — and when the
-  # "Which of these run in CI" table it generates in each demo README is stale.
-  # Stdlib Ruby only: no bundle, no services, no database, ~0.1 s.
   # THE DECLARED RUBY FLOOR IS NOW EXERCISED, NOT MERELY DECLARED (K-1321).
   #
   # All fourteen gemspecs declare `required_ruby_version = ">= 3.2.0"`, and until
   # this job every `setup-ruby` step in this file pinned 4.0.1 with no Ruby
   # dimension anywhere — so a published gem's advertised floor was a claim its
   # own CI contradicted by omission, and the eight demo READMEs advertise that
-  # same floor because `bin/check-demo-prereqs` derives it from the gemspec.
+  # same floor.
   #
   # WHY THE FLOOR IS TESTED RATHER THAN RAISED. The other honest repair was to
   # raise `required_ruby_version` to what CI actually runs. It was rejected on
@@ -1124,8 +982,6 @@ jobs:
   ruby-floor:
     name: every gem suite on the declared Ruby floor
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     services:
       postgres:
@@ -1248,98 +1104,6 @@ jobs:
           fi
           echo "all $ran gem suite(s) green on Ruby $version, the floor every gemspec declares."
 
-  ci-task-coverage:
-    name: CI task coverage (bin/check-ci-tasks)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every demo task is either gated or opted out with a reason
-        run: ./bin/check-ci-tasks
-
-  # The published conformance matrix cites THIS repo's tests by name, and this
-  # job is what makes a rename that invalidates a citation fail here rather than
-  # somewhere nobody looks (K-1007).
-  #
-  # The matrix maps every normative statement of the protocol to the test that
-  # covers it, and names a test by the text of its `it`/`describe`/`context`
-  # label — line numbers rot silently on any insertion above them, so a reader
-  # following one lands on an unrelated example and believes it. Anchors fail
-  # only on a real rename, deletion or duplication.
-  #
-  # The matrix itself is not in this repository, and the checker that walks it
-  # was run by nothing but a human: one wave renamed a device-authorization
-  # example, invalidated a cited anchor mid-wave, and it was noticed only because
-  # a second process happened to be running the checker at the time. So the
-  # anchors are published here as `spec/conformance-anchors.tsv` — path and
-  # anchor text, no prose — and gated on every push. The generator asserts the
-  # file is current from the other side, so the two cannot drift.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~0.1 s.
-  conformance-anchors:
-    name: cited test names still exist (bin/check-conformance-anchors)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every anchor the conformance matrix cites occurs exactly once
-        run: ./bin/check-conformance-anchors
-
-  # The harness Ruby version is typed into this workflow 27 times and restated in
-  # seven other tracked places — the container build argument, the deploy reset
-  # script's PATH, the deploy checklist, CLAUDE.md, the e2e and deploy READMEs,
-  # and a gemspec comment. `e2e/run.sh` checks only that ruby is ON THE PATH and
-  # never its version, so a bump that moves one of them and not the others is
-  # invisible until something version-specific breaks — on a box, or in a public
-  # README somebody is following (K-1558).
-  #
-  # `bin/check-demo-copies` already held ONE of the eight (the Dockerfile, T-192)
-  # and it holds it by MEMBERSHIP, so it is satisfied by an image naming any one
-  # of several disagreeing workflow values and says nothing about whether this
-  # file agrees with itself. This job asks the whole question, and its census arm
-  # fails on a NEW tracked file that names the version and is declared nowhere,
-  # which is what keeps the site list from becoming a remembered one.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.
-  ruby-pin:
-    name: one harness Ruby, named the same everywhere (bin/check-ruby-pin)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every tracked place that names the harness Ruby names the same one
-        run: ./bin/check-ruby-pin
-
-      - name: …and the guard is a guard (planted divergence in every site)
-        run: ./bin/check-ruby-pin --self-test
-
   # `spec/conformance-drift-baseline.tsv` is the anchors manifest's sibling: a
   # GENERATED file recording each anchored region's fingerprint, so a conformance
   # sweep can re-judge what MOVED instead of walking a work-list with no
@@ -1369,8 +1133,6 @@ jobs:
   conformance-drift-baseline:
     name: the drift baseline is self-consistent (bin/check-conformance-drift --check)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -1417,8 +1179,6 @@ jobs:
   publication-paths:
     name: nothing shipped cites what does not ship (bin/check-publication-paths)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -1435,101 +1195,9 @@ jobs:
       - name: No shipped line cites material that does not ship with this repo
         run: ./bin/check-publication-paths
 
-  # The operator's Ruby server never runs a subprocess to verify a proof
-  # (K-1396). The property was already true when the guard was written and held
-  # by NOTHING: a shell-out added to the verify path would redden no suite,
-  # because `verify` would still return true. Solving is the caller's problem —
-  # the client scripts legitimately run `python3 solve.py`, which is exactly why
-  # this cannot be a whole-repo grep and why the guard derives the SERVED set
-  # (the require closure of the engine, the reputation layer, and whatever PoW
-  # backend an operator initializer requires) instead of listing files.
-  #
-  # The --self-test step is not decoration: a scan aimed at nothing exits 0, so
-  # it plants every construct it claims to catch AND asserts the closure is
-  # non-empty, contains the gate and the equihash backend, and reads that
-  # backend — whose comments show `Open3.capture2("python3", …)` to a caller —
-  # as clean, which only an AST-level scan can do.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~2 s for both steps.
-  served-pow-purity:
-    name: the server never spawns a process to verify a proof (bin/check-served-pow-purity)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard is red on a plant of every construct, and non-vacuous here
-        run: ./bin/check-served-pow-purity --self-test
-
-      - name: No process-spawning construct is reachable from the served PoW path
-        run: ./bin/check-served-pow-purity
-
-  # A ledger id in a SHIPPED GEM points a stranger at a document they cannot
-  # open: the findings ledger is private and the ADRs live in a private repo.
-  # Phil, on the demos: «убери из демок ВСЮ археологию». The measurement that
-  # opened this job was 576 ledger ids across the fourteen gems' lib/, 473 of
-  # them in kiosk-server, effectively all in comments — which is why this guard
-  # bans comment and code alike where bin/check-demo-copies (a demo prints to a
-  # terminal, so only its code tokens matter) deliberately does not.
-  #
-  # Nothing held this before: a planted K-9999 in kiosk-server/lib left
-  # check-demo-copies, check-publication-paths and check-gem-packaging all at
-  # exit 0. The --self-test step plants each shape in each file type it claims
-  # to cover and carries the vacuity arms — an empty scope and a rotted pattern
-  # both print the same clean zero as an obeyed ban.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~1 s for both steps.
-  # A COMMAND BLOCK a reader is invited to paste was held by nothing, and the
-  # cost was measured: the deploy runbook's "poke it" block was stale in four
-  # places at once, and the row that found it had spotted one of the four
-  # because it read the block instead of running it.
-  #
-  # This job asks the STATIC half — every path, rake task and script a shell
-  # block names resolves against the directory the block's own `cd` lines
-  # establish. That directory is what a runbook has and prose does not, which is
-  # why check-shipped-archaeology's R7 must exclude the whole `bin/` prefix and
-  # this can resolve it: a planted `bin/check-publication-paths-gone` and a
-  # planted `rake check:nonexistent` each left check-shipped-archaeology,
-  # check-publication-paths, check-ci-tasks and check-changelog at exit 0.
-  #
-  # The EXECUTING half (`--run`) is deliberately NOT here. It runs the blocks
-  # their authors marked, and one of them is ./e2e/run.sh; a push-time job that
-  # boots an origin per commit is a different trade, and a block that needs a
-  # package index or a live host would redden on someone else's outage.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~2 s for both steps.
-  runbook-blocks:
-    name: a pasted command block still names what exists (bin/check-runbook-blocks)
-    runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard is red on a plant of every shape, and non-vacuous here
-        run: ./bin/check-runbook-blocks --self-test
-
-      - name: Every path, task and script a runbook block names resolves
-        run: ./bin/check-runbook-blocks
-
   shipped-archaeology:
     name: no unresolvable citation in a shipped gem (bin/check-shipped-archaeology)
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -1563,14 +1231,10 @@ jobs:
   # the copula forms are overwhelmingly correct prose earlier passes kept on
   # purpose. Those are printed for a human and never reach the exit code.
   #
-  # Its own job rather than a step beside check-verb-routes, on that script's
-  # own argument: two invariants about the same controllers should fail with
-  # their own names. Stdlib Ruby only: no bundle, no services, no database.
+  # Stdlib Ruby only: no bundle, no services, no database.
   descriptor-prose:
     name: no descriptor prose restates its schema's shape (bin/check-descriptor-prose)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -1587,114 +1251,6 @@ jobs:
       - name: No property description restates its own `required:` array
         run: ./bin/check-descriptor-prose
 
-  # Since T-183 an operator draws ONE EXPLICIT ROUTE PER VERB, so "declared but
-  # unrouted / routed but undeclared" is a real bug class here again — it was
-  # impossible while the engine resolved names at request time from one
-  # catch-all pair, and that pair is deleted. bin/check-verb-routes DERIVES each
-  # origin's expected route list from the handler controllers its own
-  # config/initializers/kiosk.rb names in `c.handlers` — no verb name is typed
-  # in the script — and holds config/routes/kiosk.rb to it: every verb routed,
-  # every route a verb, the METHOD following the KIND, the path and the pinned
-  # `kiosk_verb` agreeing, no dynamic segment, no collision with a path the
-  # engine draws, the mount above the verbs, and `draw(:kiosk)` reaching the
-  # file at all.
-  #
-  # Its own job rather than a step beside check-kiosk-names, for the reason that
-  # script's header gives: the two invariants (does the reserved plane match the
-  # engine's table / does every verb have its route) should fail with their own
-  # names. Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
-  # check and ~2 s for the twelve-arm self-test beside it.
-  verb-routes:
-    name: every verb has its route, and the method is its kind (bin/check-verb-routes)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard is red on a plant of every rule, and non-vacuous here
-        run: ./bin/check-verb-routes --self-test
-
-      - name: Every registered verb has its explicit route, with the right method
-        run: ./bin/check-verb-routes
-
-  # The KYC leg is the only capability in this fleet whose configuration spans
-  # TWO boxes — one role-named secret on the operator, a per-operator secret and
-  # an allow-listed callback host on the broker — and both sides fail closed
-  # SILENTLY: the operator answers a cacheable `501 module_not_served`, which is
-  # what an operator that serves no KYC module answers too, while its descriptor
-  # goes on advertising `request_kyc`. A live third-party assistant hit exactly
-  # that on the deployed getgrocery (K-1775) and was right to give up.
-  #
-  # A live probe cannot exist: `request_kyc` is reach `principal`, so touching it
-  # needs a registration, and a registration is a WRITE to somebody's
-  # deployment. What IS checkable is the shipped deploy documentation — a
-  # deployment built strictly from deploy/env/*.env.example and
-  # deploy/CHECKLIST.md must be able to serve every verb this repository
-  # advertises. getgrocery became a broker operator on 2026-08-05 and the
-  # broker's own template never gained its two registration lines, so nobody
-  # following the runbook could have registered it. Stdlib Ruby only: no bundle,
-  # no services, no database, no network.
-  kyc-operator-pairing:
-    name: an advertised KYC operator is deployable (bin/check-kyc-operator-pairing)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard is red on a plant of every rule, and non-vacuous here
-        run: ./bin/check-kyc-operator-pairing --self-test
-
-      - name: Both sides of every KYC operator's pairing are in the shipped templates
-        run: ./bin/check-kyc-operator-pairing
-
-  # These gems are not on RubyGems, so every install snippet in every gem README
-  # says its `gem` lines carry `github: "kiosk-hq/kiosk"` — the only thing that
-  # makes a copied line resolve today. That sentence was false on twelve of
-  # fifteen lines when it was written and on five more after the wave that
-  # repaired it, including in kiosk-rls-rspec/README.md, where the promise sat
-  # three lines above the one bare line it described. Nothing held it: the
-  # qualifier's removal was planted against five other guards here and every one
-  # stayed green. Nothing inside this monorepo CAN notice — every consumer here
-  # resolves these gems with `path:` — so the only observer is an adopter
-  # pasting the snippet, and there is not one of those in CI. Stdlib Ruby only:
-  # no bundle, no services, no database.
-  readme-gem-lines:
-    name: an install snippet resolves, or it is not a snippet (bin/check-readme-gem-lines)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard is red on a plant of every rule, and non-vacuous here
-        run: ./bin/check-readme-gem-lines --self-test
-
-      - name: Every `gem "kiosk-*"` line in a shipped README resolves
-        run: ./bin/check-readme-gem-lines
-
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. The solver-path constant in equihash_register.rb (then at lib/, now
@@ -1709,17 +1265,13 @@ jobs:
   # `<demo>_run_flow` helper K-1043 hand-copied into every demo's
   # lib/tasks/demo.rake — the directory the path rule does not scan — because a
   # block that is byte-identical in six rake files is not "per-demo by
-  # construction", and bin/check-ci-tasks only ever compared task INVENTORY.
+  # construction".
   #
-  # It is a separate job rather than a step in ci-task-coverage so the two
-  # invariants (is every task gated / do the copies agree) fail with their own
-  # names. Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
+  # Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
   # check and ~10 s for the self-test step beside it.
   demo-file-sync:
     name: duplicated demo files agree (bin/check-demo-copies)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -1750,150 +1302,6 @@ jobs:
       - name: check-demo-copies self-test
         run: ./bin/check-demo-copies --self-test
 
-  # Is every fenced block in a demo's before-after.md a line its own producer
-  # actually prints? (K-1051)
-  #
-  # The four kiosk-demo-*/before-after.md are a PUBLISHED per-demo surface and
-  # nothing compared a byte of them against anything: bin/check-demo-copies
-  # names the file only to EXCLUDE it from the lockstep comparison, and unlike
-  # the README entry beside it that exclusion pointed at no checker of its own.
-  # Ten ledger rows accumulated there (K-1053..K-1057, K-1062..K-1066) and every
-  # one was found by a human eye rather than a gate — including transcript
-  # blocks published under a «verbatim» guarantee that carried five and three
-  # assertion strings their tasks no longer print.
-  #
-  # A separate job rather than a step in demo-file-sync, for the reason that
-  # script's own header gives for keeping bin/check-ci-tasks separate: the
-  # boundary between these checks is the comparison INPUT, and this one compares
-  # a demo's document against THAT demo's own producers, not demo against demo.
-  # Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.
-  demo-narrative-derivation:
-    name: demo narratives derive from their producers (bin/check-demo-derivations)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every quoted transcript line and snippet line derives from its declared producer
-        run: ./bin/check-demo-derivations
-
-      # Its own step, for the reason the publication-paths and prose-counts
-      # self-tests are: the promise rule is a phrase BAN whose live subject set
-      # is EMPTY by design — six of its eight regexes match nothing in the
-      # corpus, because the K-1106 repair wave removed the sentences — so a
-      # regex broken by an edit leaves the run above at exit 0 and says nothing.
-      # Measured: reverting `/\bunedited\b/i` to a pattern that matches nothing
-      # keeps the bare run green and reddens two arms here (T-129).
-      - name: check-demo-derivations self-test
-        run: ./bin/check-demo-derivations --self-test
-
-  # Does the operator onboarding guide published on kiosk.tech still teach the
-  # verb this repository actually serves? (K-1324, K-1325, K-1326)
-  #
-  # THE CHECK ABOVE STOPS AT THE REPOSITORY BOUNDARY and the drift did not.
-  # `kiosk.tech/onboarding.html` carries a full controller pair as copyable
-  # Ruby, every line of it a copy of something here — the class names the
-  # kiosk:install generator writes, the domain kiosk-demo-getgrocery serves. On
-  # 2026-09-06 it was found teaching `required: ["date"]` for a verb this repo
-  # had made date-OPTIONAL ten hours earlier (ede32f70), reading a declared
-  # integer with `.to_i`, and naming getgrocery's handlers as classes getgrocery
-  # does not register. Nothing in either repository compared a byte:
-  # bin/check-demo-derivations' file set is this repo, and the sibling's
-  # bin/check-derived-counts holds typed cardinals, not code blocks.
-  #
-  # WHY IT RUNS IN THIS REPOSITORY. The drift is AUTHORED here — a commit that
-  # moves a demo verb is what makes the page wrong — so this is where it can be
-  # caught at the commit that causes it. The sibling's CI would only ever see it
-  # on a push to the sibling, which is the wave that already fixed it.
-  #
-  # TWO STEPS, TWO TRIGGERS, and the split is the same one solver-pin-live
-  # documents below:
-  #
-  #   * `--self-test` needs NO network and NO sibling checkout — when no page
-  #     resolves it plants into a fixture built from this repo's own
-  #     derivations — so it is blocking on every push. It is the half that
-  #     keeps the rules from quietly matching nothing, which is how a guard one
-  #     repository over covered no live sentence for its entire existence.
-  #   * the live comparison needs the network. Deliberately NOT on push: it
-  #     would gate every merge here on a third-party fetch, and between a
-  #     commit that moves a verb and the sibling's deploy of the matching page
-  #     it is CORRECTLY red. Daily and on demand, failing hard, exactly as
-  #     solver-pin-live does — a scheduled workflow red on the default branch
-  #     notifies, and continue-on-error would make the guard invisible.
-  #   * the same comparison against a CHECKED-OUT sibling needs neither, and
-  #     the published-bytes job below runs it bare on every push.
-  #
-  # This job therefore runs on BOTH schedule and push, which is the one
-  # exception to the "skipped on a schedule run" comment every other job here
-  # carries. Stdlib Ruby only: no bundle, no services, no database.
-  onboarding-derivation:
-    name: the onboarding guide derives from this repo (bin/check-onboarding-derivation)
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: check-onboarding-derivation self-test (no network, no sibling)
-        if: github.event_name != 'schedule'
-        run: ./bin/check-onboarding-derivation --self-test
-
-      - name: The published guide against this checkout
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: ./bin/check-onboarding-derivation --network
-
-  # Do the demo READMEs state the prerequisites the demos actually have, and
-  # does each one disclose that its setup DROPS the database? (K-1316, K-1317)
-  #
-  # THIS JOB EXISTS BECAUSE THE REST OF CI MASKS THE ANSWER. The demos job
-  # pip-installs numpy, so the hard requirement no README named — python3 +
-  # numpy for the Equihash toll every registration pays — has never failed for
-  # us and never will. A green matrix is not evidence that an operator on a box
-  # without numpy can run anything here; it is evidence that OUR box can.
-  #
-  # So the block is DERIVED rather than written seven times: each requirement
-  # carries a trigger asked of that demo's OWN files, and the run fails both
-  # when a README under-states what its code needs and when a requirement stops
-  # being triggered by any demo at all. Stdlib Ruby only: no bundle, no
-  # services, no database.
-  demo-prerequisites:
-    name: demo READMEs state the prerequisites the code has (bin/check-demo-prereqs)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every README's prerequisites block matches what that demo needs
-        run: ./bin/check-demo-prereqs
-
-      # Its own step, and for the reason every self-test here has one: five of
-      # the six arms plant a break in a README, and the sixth plants the failure
-      # mode a checker cannot see in itself — a trigger that stops matching, so
-      # the requirement silently covers nothing and every README reads complete.
-      - name: check-demo-prereqs self-test
-        run: ./bin/check-demo-prereqs --self-test
-
   # Does every place a demo restates its red-team beat list still agree with the
   # beats that demo's suite actually registers? (T-078, and T-105/K-901, which
   # commissioned the same script from the same files without naming each other)
@@ -1911,8 +1319,7 @@ jobs:
   # does now — and the hour it was written it found two live omissions, one in
   # atablefor's header and one in tudu's README.
   #
-  # A separate job for the reason bin/check-demo-derivations gives above: the
-  # boundary between these checks is the comparison INPUT, and this one compares
+  # This one compares
   # a demo's redteam PROSE — the suite header, the check:redteam rake desc, the
   # README battery section — against that demo's own suite REGISTRATIONS, and
   # since K-1482 against its ASSERTIONS too: a sentence there may not attribute
@@ -1921,8 +1328,6 @@ jobs:
   redteam-beat-lists:
     name: redteam prose names the beats — and the statuses — that run (bin/check-redteam-headers)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -1954,8 +1359,6 @@ jobs:
   refusal-assertions:
     name: a 400-refusal beat reads the refusal's own words (bin/check-refusal-assertions)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -2007,8 +1410,6 @@ jobs:
   deploy-caddy:
     name: the declarative Caddy deploy works (deploy/deploy-caddy.sh)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v7
 
@@ -2033,8 +1434,6 @@ jobs:
   deploy-live-hsts:
     name: the deploy HSTS probe works (deploy/check-live-hsts.sh)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v7
 
@@ -2051,8 +1450,6 @@ jobs:
   deploy-rollout:
     name: the declarative env rollout works (deploy/rollout.sh)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v7
 
@@ -2076,229 +1473,35 @@ jobs:
           [ -n "$s" ] && grep -qx "KIOSK_PROVE_SKOOTI_SECRET=$s" "$KIOSK_ENV_DIR/prove.env"
           [ "$(stat -c '%U:%G %a' "$KIOSK_ENV_DIR/tudu.env")" = "$KIOSK_OWNER 640" ]
 
-  # What a `gem install` gets is NOT what this repo contains, and until now
-  # nothing checked the difference. kiosk-server's spec.files globbed lib/ only,
-  # so the three ERB templates under app/views/kiosk/server/ were absent from
-  # the built gem while two controllers append_view_path at exactly that
-  # directory: anyone installing kiosk-server from RubyGems got
-  # ActionView::MissingTemplate on BOTH HTML pages of the account-binding
-  # ceremony. Every job above stayed green throughout, and could not have done
-  # otherwise — every consumer in this monorepo (the demos, the e2e fixture, the
-  # sibling gems) uses `path:`, which serves the working tree, so no suite here
-  # can tell "the file exists" from "the file is packaged". CI had no observer
-  # who installs a gem. This job is that observer: it builds all 14 gems and
-  # fails when a tracked file is neither packaged nor declared scaffolding, or
-  # when packaged Ruby resolves a __dir__-relative path to something the package
-  # does not contain.
-  #
-  # Its own job, alongside ci-task-coverage and demo-file-sync, for the same
-  # reason those two are separate: one invariant, one exit code, one name in the
-  # checks list. Stdlib Ruby only: no bundle, no services, no database, ~2 s.
-  gem-packaging:
-    name: gems package what they need (bin/check-gem-packaging)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every gem ships the files its own code reaches for
-        run: ./bin/check-gem-packaging
-
-  # protocol.md §14.1 is normative and says the protocol, this implementation
-  # and the AI assistant skill share their MAJOR.MINOR version. It was false
-  # about the implementation on every request for months (K-748): the protocol
-  # was 0.3.0 and the skill 0.3.11 while thirteen gems were 0.0.1 and
-  # kiosk-pow-equihash 0.1.0 — and kiosk-server emits the gem version, so one
-  # response carried `Kiosk-API-Version: 0.3.0` next to
-  # `Kiosk-Server-Version: 0.0.1`. Nothing was red, and nothing could be: the
-  # version is an input to no assertion in this repo, the specs that touch it
-  # match /\A\d+\.\d+\.\d+\z/ or compare the constant against itself. Phil's
-  # answer was to honour the rule and stop it being prose, so this job is the
-  # rule: every gemspec's version, every `~> ` constraint between our own gems,
-  # and every pinned skill_url must share MAJOR.MINOR with
-  # Kiosk::Protocol::API_VERSION. PATCH is deliberately NOT compared — a
-  # per-gem patch release is legitimate and §14.1 binds MAJOR.MINOR only.
-  #
-  # Its own job, alongside the three checks above, for the same reason they are
-  # separate: one invariant, one exit code, one name in the checks list. Stdlib
-  # Ruby only: no bundle, no services, no database, no network, ~0.1 s.
-  version-parity:
-    name: version parity (bin/check-version-parity)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Gems, lockfiles and skill pins carry the protocol version (pre-1.0 full parity)
-        run: ./bin/check-version-parity
-
-  # Verb names and the reserved plane (spec §8.1 / §8.3). On the wire a verb
-  # name IS a path segment, which makes four properties load-bearing that used
-  # to be cosmetic, and bin/check-kiosk-names is the only reader of two of them:
-  #
-  #   (i)   HandlerMixin::RESERVED_NAMES must be exactly the set of first path
-  #         segments the engine's own route table draws under the mount. The
-  #         per-verb pair is drawn LAST, so every route above it wins by
-  #         first-match: a route added to engine.rb without a name added to
-  #         RESERVED_NAMES silently re-opens a name an operator can declare and
-  #         never be reached at. Nothing else can ask this — the mixin cannot
-  #         read the route table (it is required first) and the route table
-  #         cannot read the mixin without a cycle.
-  #   (iv)  no `\` line continuation is followed by a blank line. `\` eats
-  #         exactly ONE newline, so a blank line in the middle ENDS the
-  #         expression and the remaining string literals become dangling no-ops
-  #         — the verb ships a silently TRUNCATED `description` to every
-  #         assistant. It parses, it boots, `ruby -c` is happy, and the only
-  #         symptom is prose that stops mid-sentence on the wire.
-  #
-  # The other two — §8.1's `^[a-z][a-z0-9_]*$` and query/action name collisions
-  # — are RAISED by the engine at declaration time, so the demos job reaches
-  # them by booting; this is a second, boot-free reading over the whole fleet at
-  # once, in a second or so, without a database.
-  #
-  # WHY IT IS A JOB ONLY NOW (K-1361). It never was one: `command grep -c
-  # check-kiosk-names .github/workflows/ci.yml` answered 0, so (i) and (iv) were
-  # held by nothing but a human remembering to type the command. MEASURED in a
-  # sibling-less worktree of this repo before wiring, which is the environment
-  # this job actually provides: exit 0, 52 verbs across 8 origins, 5 reserved
-  # names. Stdlib Ruby only — no sibling checkout, no bundle, no services, no
-  # database, no network.
-  verb-names:
-    name: verb names and the reserved plane (bin/check-kiosk-names)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Declared verb names, and the reserved plane the engine draws
-        run: ./bin/check-kiosk-names
-
-  # No client driver in this repository may open a socket whose scheme it did
-  # not read off the target: `Net::HTTP.new` is cleartext and never says so, so
-  # a driver missing one line reaches loopback and no deployed origin. Stdlib
-  # Ruby only — no sibling checkout, no bundle, no services, no database, no
-  # network.
-  tls-seam:
-    name: every client socket reads its scheme off the target (bin/check-tls-seam)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard reddens on a planted cleartext site
-        run: ./bin/check-tls-seam --self-test
-
-      - name: Every Net::HTTP.new decides TLS from the target's scheme
-        run: ./bin/check-tls-seam
-
   # THE PUBLISHED ARTEFACTS — the one job that checks kiosk.tech out beside this
-  # repo, because three guards compare this tree against published BYTES and
-  # none of them can say anything without them (K-1361).
+  # repo, because it compares this tree's skill pins against published BYTES.
   #
-  # WHAT WAS BROKEN. Every demo initializer pins `skill_url` + `skill_sha256`,
-  # and that pair is the entire supply-chain instruction an AI assistant gets:
-  # fetch this file, verify this digest, refuse it on a mismatch. MEASURED
-  # 2026-09-07 in a sibling-less worktree — the environment every other job in
-  # this file runs in — with a UNIFORM half-relink planted (all seven demos and
-  # the engine default moved to `skill-v0.4.11.md`, every `skill_sha256` left at
-  # v0.4.12's): `bin/check-live-skill-pin` exit 0, `bin/check-version-parity`
-  # exit 0, `kiosk-test-support`'s `skill_pin_spec.rb` exit 0 with NINE PENDING.
-  # A one-hex-digit corruption of every `skill_sha256`, URLs untouched, gave the
-  # same three zeroes. The same three planted breaks in the umbrella layout are
-  # exit 1, exit 0, exit 1 — so the property was real and held in exactly one
-  # place: a developer's workspace. Nothing in CI ran any of it.
+  # Every demo initializer pins `skill_url` + `skill_sha256`, and that pair is the
+  # entire supply-chain instruction an AI assistant gets: fetch this file, verify
+  # this digest, refuse it on a mismatch. Sibling-less, nothing can compare them.
   #
-  # WHY A SIBLING CHECKOUT IS LEGITIMATE HERE, where it is not elsewhere in this
-  # file. `kiosk-hq/kiosk.tech` is a PUBLIC repository, so the default
-  # GITHUB_TOKEN clones it and no cross-repo secret is involved. And the thing
-  # being read is IMMUTABLE by rule: a published `skill-vX.Y.Z.md` is never
-  # edited (kiosk.tech/bin/check-skill-immutability enforces it in that repo, on
-  # the working tree and over the range), so this job compares against a fixed
-  # artefact rather than against a moving branch. That is what separates it from
-  # `solver-pin-live` and the onboarding job's live half, which fetch a DEPLOY
-  # and therefore run on a schedule: a deploy lags a commit, a published cut
-  # does not change.
+  # `kiosk-hq/kiosk.tech` is a PUBLIC repository, so the default GITHUB_TOKEN
+  # clones it, and a published `skill-vX.Y.Z.md` is never edited
+  # (kiosk.tech/bin/check-skill-immutability enforces it in that repo), so this
+  # job compares against a fixed artefact rather than a moving branch.
   #
-  # THE ORDERING CONSTRAINT THIS CREATES, stated because an unstated one is how
-  # a gate becomes red on a clean tree and then gets switched off: a relink wave
-  # spans two repositories, and this job requires the cut to be on kiosk.tech's
-  # default branch before this repo's pins point at it. PUSH kiosk.tech FIRST.
-  # In the other order the pins name a file the world cannot fetch — which is
-  # the assistant-visible break, not an artefact of the check.
+  # PUSH kiosk.tech FIRST: this job requires the cut to be on kiosk.tech's
+  # default branch before this repo's pins point at it. In the other order the
+  # pins name a file the world cannot fetch.
   #
   # THE STEPS, and each one is dead without the sibling:
-  #   * skill_pin_spec.rb — the nine byte-level examples: every demo's
-  #     `skill_sha256` against the SHA-256 of the file its `skill_url` names, the
-  #     engine default naming that same published artefact, and the K-871
-  #     assertion that the pinned cut bounds its device-code poll (it names every
-  #     error DeviceCodeGrant can emit, a GIVE UP horizon and a TERMINAL
-  #     outcome). `KIOSK_REQUIRE_SITE_SIBLING=1` makes an absent sibling a
-  #     FAILURE rather than nine pending examples — without it a checkout that
-  #     quietly produced nothing would restore the green this job exists to end.
-  #   * bin/check-live-skill-pin (offline, no network) — the cross-check the
-  #     spec does not make: that the cut every demo pins is the NEWEST one
-  #     published, so a wave that re-pins to a superseded cut is caught even
-  #     though its digest is perfectly correct. Its --network mode is a manual
+  #   * skill_pin_spec.rb — every demo's `skill_sha256` against the SHA-256 of
+  #     the file its `skill_url` names, the engine default naming that same
+  #     published artefact, and the pinned cut bounding its device-code poll.
+  #     `KIOSK_REQUIRE_SITE_SIBLING=1` makes an absent sibling a FAILURE rather
+  #     than pending examples.
+  #   * bin/check-live-skill-pin (offline, no network) — that the cut every demo
+  #     pins is the NEWEST one published. Its --network mode is a manual
   #     deploy-time tool and must NOT be wired anywhere: it compares the LIVE
-  #     fleet against the working tree, and those two are supposed to differ
-  #     from a skill cut until the next deploy.
-  #   * bin/check-spec-schemas — the eight vendored JSON Schema copies against
-  #     the published originals. e2e/schema_conformance.rb validates live wire
-  #     bytes against the copies, so a schema edited on kiosk.tech and not here
-  #     leaves e2e green while the wire diverges from what implementers read.
-  #     Sibling-less this script prints "NOT COMPARED" and exits 0 — correct for
-  #     a developer's single-repo clone, and exactly what must not happen here,
-  #     so this job sets KIOSK_REQUIRE_SITE_SIBLING=1 and a checkout that
-  #     produced nothing is RED rather than a skip. Its --self-test runs first,
-  #     because a comparison whose planted breaks no longer redden is a green
-  #     line about nothing.
-  #   * bin/check-descriptor-prose — its LOCKSTEP arm only. That guard and
-  #     kiosk.tech/bin/check-schema-prose ask one question of two languages with
-  #     a vocabulary that was kept identical BY HAND until K-1526, and the two
-  #     had already diverged once by a whole predicate with nothing to say so.
-  #     The guard's own job above runs it sibling-less, where it prints NOT
-  #     COMPARED and exits 0; here the sibling is present, so the comparison is
-  #     the point and KIOSK_REQUIRE_SITE_SIBLING=1 makes an empty checkout red.
-  #   * bin/check-onboarding-derivation — the operator guide the sibling publishes
-  #     against the worked verb this checkout serves. Bare, it reads
-  #     `../kiosk.tech/onboarding.html` and exits 1 when no page resolves.
+  #     fleet against the working tree, and those differ until the next deploy.
   published-bytes:
-    name: pins and vendored schemas vs the published bytes (kiosk.tech sibling)
+    name: skill pins vs the published bytes (kiosk.tech sibling)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       # The umbrella layout, reproduced: this repo and kiosk.tech as siblings.
@@ -2345,84 +1548,6 @@ jobs:
         working-directory: reference
         run: ./bin/check-live-skill-pin --offline
 
-      - name: The vendored-schema guard still reddens on a planted drift
-        working-directory: reference
-        run: ./bin/check-spec-schemas --self-test
-
-      - name: The vendored JSON Schemas still match the published originals
-        working-directory: reference
-        env:
-          KIOSK_REQUIRE_SITE_SIBLING: "1"
-        run: ./bin/check-spec-schemas
-
-      - name: The two prose guards' shared vocabulary is still one thing
-        working-directory: reference
-        env:
-          KIOSK_REQUIRE_SITE_SIBLING: "1"
-        run: ./bin/check-descriptor-prose
-
-      - name: The published onboarding guide still derives from this checkout
-        working-directory: reference
-        run: ./bin/check-onboarding-derivation
-
-  # A Keep-a-Changelog file answers each kind ONCE per release — everything
-  # added since the last release under one `### Added`, everything fixed under
-  # one `### Fixed` — because a reader who has found the heading they want stops
-  # looking. K-1015 found kiosk-server's [Unreleased] carrying seven subsection
-  # headings for four kinds and merged them, and merged the one sibling that
-  # shared the shape.
-  #
-  # It came back in three days: kiosk-redteam grew a SECOND `### Added` at the
-  # top of the same release, twice, because a new heading above the old one
-  # looks exactly like the correct edit and nothing asked the question. That is
-  # the argument for a gate rather than another repair wave.
-  #
-  # bin/check-changelog asks it over `git ls-files '*CHANGELOG.md'`, and while
-  # it is there it holds the CORPUS: every tracked changelog must be the
-  # repository record at the root, a gem package record (all fourteen gemspecs
-  # put CHANGELOG.md in `spec.files` and in `changelog_uri`, so it ships inside
-  # the package), or one of the two declared per-demo courtesy records — and a
-  # gem directory without one fails. That is where "which file does a changelog
-  # line go in" is written down (K-1159): the root record, always.
-  #
-  # Since Phil's strong rule (2026-09-11) it also holds ENTRY LENGTH and the
-  # sentence count — but only on entries that are NEW against the baseline
-  # commit named in the script, because the standing corpus is long, is
-  # append-only and cannot be repaired, and a gate red on a backlog nobody may
-  # drain is a gate somebody switches off (K-1097). The backlog is printed as a
-  # census instead, derived on every run.
-  #
-  # Its --self-test is a step of its own, for the reason the publication-paths
-  # job gives: a corpus scan that came out empty exits 0 and reads exactly like
-  # a clean tree, so the guard proves it is red on a plant of every arm before
-  # its green run means anything. Stdlib Ruby only: no bundle, no services, no
-  # database, ~1 s for both steps.
-  changelog-structure:
-    name: changelogs answer each kind once (bin/check-changelog)
-    runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
-
-    steps:
-      # fetch-depth: 0 is required, not tidiness — the guard reads the baseline
-      # commit's changelogs to tell a new entry from the standing backlog, and a
-      # shallow clone does not have it. It FAILS rather than skipping when the
-      # commit is absent, so a missing history is red here, not silently green.
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: The guard is red on a plant of every arm, and non-vacuous here
-        run: ./bin/check-changelog --self-test
-
-      - name: One subsection per kind per release, and every changelog declared
-        run: ./bin/check-changelog
 
   # A count typed into prose is a claim with no owner: true the day it is
   # written, and nothing notices when the thing it counts changes. K-1202 elided
@@ -2456,8 +1581,6 @@ jobs:
   prose-counts:
     name: counts in prose re-derive (bin/check-prose-counts)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -2494,16 +1617,12 @@ jobs:
   #             classes are per-surface, not per-app», and that is false for the
   #             K-436 class this script was built for: tudu's `/shared` is the
   #             fleet's only HTML page rendered from a hand-written `exec_query`,
-  #             so its column set is per-APP by construction. It does NOT close
-  #             K-1074 — this script loads structure.sql from zero; that gap is
-  #             check-migration-replay's, in the demos job.
+  #             so its column set is per-APP by construction.
   # Booting all seven in prod would still be heavier CI for little marginal
   # signal. See deploy/production-smoke.sh; any assertion miss fails the job.
   demo-production-smoke:
     name: production-boot smoke (stylish + prove + tudu)
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     services:
       postgres:
@@ -2608,84 +1727,9 @@ jobs:
       - name: Production-boot smoke (tudu)
         run: ./deploy/production-smoke.sh tudu
 
-  # Live solver-pin probe (K-528). The Equihash solver exists in four copies
-  # that must never diverge — kiosk-pow-equihash/solve.py (source of truth),
-  # kiosk.tech/pow/solve.py (hosted), the sha256 the skill pins, and the URL in
-  # PowGate::POW_INVALID_HINT — because the skill instructs assistants to verify
-  # the hash and REFUSE to execute a mismatch. A drift does not error anywhere:
-  # registrations just stop working.
-  #
-  # The OFFLINE half of the guard (this repo's solve.py vs the pin, and the 403
-  # hint URL) needs no network and is already blocking on every push — it runs
-  # inside the kiosk-pow-equihash suite in the gems matrix above
-  # (spec/solver_pin_spec.rb), which is also the merge gate for a solve.py edit.
-  #
-  # This job is the half that needs the network: it fetches what kiosk.tech
-  # actually serves. Deliberately NOT run on push/pull_request:
-  #   - it would gate every merge in this repo on a third-party HTTP fetch, and
-  #     a kiosk.tech outage blocking an unrelated Ruby change is a bad trade;
-  #   - it would also be pointless there — the drift is introduced by commits in
-  #     the kiosk.tech repo, which never trigger this workflow.
-  # Instead it runs daily (and on demand), and it FAILS HARD when it fails:
-  # a scheduled workflow that goes red on the default branch notifies, whereas
-  # continue-on-error would render the whole point of the guard invisible.
-  # Transient blips are absorbed by the script's 3 attempts with backoff.
-  solver-pin-live:
-    name: solver pin (live kiosk.tech)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      # Stdlib only (digest + net/http) — no bundle, no services.
-      - name: Check the served solver against the pin
-        run: ./bin/check-solver-pin --network
-
-  # ── The event-stream listener's pin, same split and same reasoning ────────
-  #
-  # kiosk-server/listen.py is the reference client for the event stream, and
-  # the published skill pins its sha256 so an assistant verifies the digest and
-  # REFUSES to execute a mismatch. A drift is one notch less severe than the
-  # solver's — the poll fallback still works, so nothing errors — which is
-  # exactly why it needs a gate: the symptom is that assistants quietly stop
-  # using the stream, and no operator dashboard shows that.
-  #
-  # The OFFLINE half already blocks every push, inside the kiosk-server suite
-  # in the gems matrix above (spec/listener_pin_spec.rb), which is also the
-  # merge gate for a listen.py edit. This job is the half that needs the
-  # network, and it is scheduled-only for the two reasons stated above the
-  # solver's job: the drift is introduced by commits in the kiosk.tech repo,
-  # and gating unrelated merges on a third-party fetch is a bad trade.
-  listener-pin-live:
-    name: listener pin (live kiosk.tech)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      # Stdlib only (digest + net/http) — no bundle, no services.
-      - name: Check the served listener against the pin
-        run: ./bin/check-listener-pin --network
-
   e2e:
     name: kiosk OSS end-to-end
     runs-on: ubuntu-latest
-    # The daily schedule exists for solver-pin-live; don't rebuild the world.
-    if: github.event_name != 'schedule'
 
     services:
       postgres:

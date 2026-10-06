@@ -10,9 +10,9 @@
 #     register → GET /kiosk/catalog (find the age_restricted wine) → POST
 #     /kiosk/create_order WITH the wine, NO KYC → 403 kyc_required (the problem
 #     document's `hint` points to `request_kyc`) → POST /kiosk/request_kyc
-#     (getgrocery calls the KYC broker; get a broker verification_url) →
+#     (kiosk-server calls the KYC broker; get a broker verification_url) →
 #     SIMULATE the human approving on the BROKER page → the broker POSTs its
-#     signed {age_over_18} claim to getgrocery's /kyc/callback → the
+#     signed {age_over_18} claim to getgrocery's /kiosk/kyc/callback → the
 #     `kyc_verification` event arrives on the socket the assistant subscribed
 #     BEFORE it acted, carrying the broker's kyc_jws → submit it to POST
 #     /kiosk/agents/kyc → retry create_order WITH the wine → 200 →
@@ -52,7 +52,10 @@ require "securerandom"
 require "uri"
 require "jwt"
 
-require_relative "../app/services/prove_trust"
+require "kiosk/kyc_providers/prove"
+
+PROVE_ISSUER   = Kiosk::KycProviders::Prove.issuer
+PROVE_AUDIENCE = "getgrocery"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -264,7 +267,7 @@ _rt_key, _rt_agent, rt_user, rt_token = register_agent
 forged_signing_key = OpenSSL::PKey::RSA.generate(2048)
 now = Time.now.to_i
 forged_jws = JWT.encode(
-  { sub: rt_user, level: "verified", iss: ProveTrust.issuer, aud: ProveTrust.operator_id,
+  { sub: rt_user, level: "verified", iss: PROVE_ISSUER, aud: PROVE_AUDIENCE,
     attributes: { age_over_18: true }, iat: now, exp: now + 3600 },
   forged_signing_key, "RS256",
 )
@@ -285,7 +288,7 @@ spelling_key_pem = ENV["KIOSK_PROVE_TEST_SIGNING_KEY_PEM"].to_s
 abort "R3 needs KIOSK_PROVE_TEST_SIGNING_KEY_PEM (ProveBrokerBoot wiring)" if spelling_key_pem.empty?
 now = Time.now.to_i
 spelling_jws = JWT.encode(
-  { sub: a_user, level: "verified", iss: ProveTrust.issuer, aud: ProveTrust.operator_id,
+  { sub: a_user, level: "verified", iss: PROVE_ISSUER, aud: PROVE_AUDIENCE,
     attributes: { age_over_18: "true" }, iat: now, exp: now + 3600 },
   OpenSSL::PKey::RSA.new(spelling_key_pem), "RS256",
 )

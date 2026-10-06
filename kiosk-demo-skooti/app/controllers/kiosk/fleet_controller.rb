@@ -17,35 +17,6 @@ class Kiosk::FleetController < ActionController::API
 
   # ── scooters_available — the public fleet catalogue. No per-principal
   # scoping: every authenticated agent may browse what is available.
-  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
-  #
-  # THE WAIT THE EVENT STREAM EXISTS FOR. `request_kyc` hands the human a link
-  # and then there is nothing to do but wait for a person to finish on somebody
-  # else's page. This operator knows the instant they do — the broker posts to
-  # /kyc/callback — and the event hands the assistant the signed attestation.
-  #
-  # The subject is the verification REQUEST, and the audience is the one
-  # principal that opened it.
-  topic :kyc_verification do
-    description "An identity check you opened with request_kyc was approved. The event " \
-                "carries the broker's signed attestation: submit `kyc_jws` to " \
-                "/kiosk/agents/kyc and retry what you were doing."
-    payload_schema type: "object", additionalProperties: false,
-                   properties: { request_id: { type: "string",
-                                               description: "The BROKER's own request id, echoed " \
-                                                            "back opaquely — not a UUID, and not " \
-                                                            "this operator's to shape." },
-                                 status:     { enum: %w[approved] },
-                                 kyc_jws:    { type: "string",
-                                               description: "The broker's signed attestation, a " \
-                                                            "full compact JWS. Submit the ENTIRE " \
-                                                            "value to POST /kiosk/agents/kyc." } },
-                   required: %w[request_id status kyc_jws]
-    subject_reachable lambda { |request_id, identity|
-      KycVerificationRequest.readable_by?(request_id, identity.user_id)
-    }
-  end
-
   kind :query
   # The unit lives on `price_per_min_cents`, the currency on `currency`, and
   # «takes no parameters» is the empty closed `input_schema` below — so none of

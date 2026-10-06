@@ -163,8 +163,8 @@ Rails.application.configure do
   config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
                                      (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
 
-  # KYC broker trust — read by whichever demos ship a broker client
-  # (app/services/prove_broker_client.rb); inert in the others, which never
+  # KYC broker trust — read by whichever demos bundle a KYC provider
+  # (kiosk-kyc-prove); inert in the others, which never
   # look at it.
   # NO pinned fallback key in production: the operator trusts ONLY an
   # explicitly supplied broker public key, and with none set the engine's

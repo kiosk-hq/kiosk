@@ -874,8 +874,8 @@ namespace :check do
                                        cannot be replayed by attacker A; A's
                                        rent_motorcycle stays 403
       BLOCKED  CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
-                                       operator is rejected at skooti's /kyc/callback
-      BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
+                                       operator is rejected at skooti's /kiosk/kyc/callback
+      BLOCKED  ForgedCallbackNoSig   — a /kiosk/kyc/callback whose jws is wrong-key (or
                                        absent) is rejected; no event is sent
       BLOCKED  UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and POST /kiosk/run
                                        name no registered verb and no route draws them: the
@@ -985,8 +985,8 @@ namespace :check do
       puts "\n── Running script/redteam_suite.rb (skooti + KYC broker) ──"
 
       # The driver mints valid/expired attestations via ProveTestIssuer and
-      # forged ones via ProveTrust.issuer — both read the same ProveTrust.issuer,
-      # i.e. KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
+      # forged ones with the same issuer — both read
+      # Kiosk::KycProviders::Prove.issuer, i.e. KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
       # stamps and skooti's server verifies against, or the valid-KYC control
       # mismatches iss.
 
@@ -999,7 +999,6 @@ namespace :check do
       env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                 "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                 "KIOSK_PROVE_ISSUER=#{broker[:wiring]['KIOSK_PROVE_ISSUER']} " \
-                "KIOSK_PROVE_OPERATOR_ID=#{broker[:wiring]['KIOSK_PROVE_OPERATOR_ID']} " \
                 "RIDER_EMAIL=#{rider_email} DEMO_PASSWORD=#{demo_password}"
 
       system("#{env_str} bundle exec ruby #{suite_rb}")
@@ -1220,10 +1219,12 @@ namespace :check do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    if (result["schema_event_topics"] || []) == ["booking_payment", "kyc_verification"]
+    # kyc_verification is kiosk-server's, declared only with a KYC broker, which
+    # this task does not boot.
+    if (result["schema_event_topics"] || []) == ["booking_payment"]
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment kyc_verification].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment].inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 
@@ -1261,10 +1262,10 @@ namespace :check do
       end
     end
 
-    # start_rental, rent_motorcycle (the KYC-gated action), request_kyc (the
-    # external stub-issuer trigger), payment_setup (skill Step 5) present with
-    # descriptions
-    %w[start_rental rent_motorcycle request_kyc payment_setup].each do |aname|
+    # start_rental, rent_motorcycle (the KYC-gated action), payment_setup (skill
+    # Step 5) present with descriptions. request_kyc is kiosk-server's, served
+    # only with a KYC broker, which this task does not boot.
+    %w[start_rental rent_motorcycle payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
         puts "  ✓  schema.actions includes #{aname}"
@@ -1430,7 +1431,7 @@ namespace :check do
       puts "\n── Running script/kyc_flow.rb (skooti + KYC broker) ──"
       # KIOSK_PROVE_ISSUER must reach the DRIVER too, not only the server: PART C
       # mints its own attestation through ProveTestIssuer, whose `iss` is
-      # ProveTrust.issuer — and without this the driver falls back to the
+      # Kiosk::KycProviders::Prove.issuer — and without this the driver falls back to the
       # DEPLOYED broker origin while the booted broker stamps the harness's
       # local one, so a perfectly-signed attestation comes back 403 «issuer
       # mismatch».
@@ -1548,7 +1549,7 @@ namespace :check do
     #
     # The schema is the SERVED one, carried out of the flow because only a
     # running origin can be asked what it publishes; the events are the rows
-    # `POST /kyc/callback` wrote. `:setup` shells out and this task holds no
+    # `POST /kiosk/kyc/callback` wrote. `:setup` shells out and this task holds no
     # Rails environment of its own, so the comparison runs in its own `rails
     # runner`. json_schemer ASSERTS `format` rather than annotating it, which
     # is what makes the declaration a claim and not a decoration.
@@ -1568,7 +1569,9 @@ namespace :check do
                          owner_reads: events.count { |e| rule.call(e["subject"], owner) },
                          stranger_reads: events.count { |e| rule.call(e["subject"], stranger) })
     RUBY
-    raw, st = Open3.capture2e("bundle", "exec", "rails", "runner", compare,
+    # The topic is declared only with a KYC provider, which needs an intake secret.
+    raw, st = Open3.capture2e({ "KIOSK_PROVE_INTAKE_SECRET" => "runner" },
+                              "bundle", "exec", "rails", "runner", compare,
                               JSON.generate(result["kyc_payload_schema"]),
                               result["kyc_identity_key"].to_s)
     abort "E1/E2 could not read the event tail or run its subject rule (exit #{st.exitstatus}):\n#{raw}" unless st.success?

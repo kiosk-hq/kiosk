@@ -105,7 +105,6 @@ module ProveBrokerBoot
       # VALUE on both sides is what pairs them — the broker looks the operator
       # up by the operator_id in the intake body, not by a variable name.
       "KIOSK_PROVE_INTAKE_SECRET" => SHARED_SECRET,
-      "KIOSK_PROVE_OPERATOR_ID"   => "skooti",
       # The running broker's OWN public key, fetched in {with_broker}.
       "KIOSK_PROVE_PUBLIC_KEY_PEM" => prove_public_pem,
     }

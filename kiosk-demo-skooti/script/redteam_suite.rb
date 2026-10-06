@@ -38,7 +38,7 @@
 #
 # Two broker beats attack the cross-operator KYC callback:
 #   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
-#                        operator is rejected at skooti's /kyc/callback
+#                        operator is rejected at skooti's /kiosk/kyc/callback
 #   ForgedCallbackNoSig — a callback whose jws is wrong-key (or absent) is
 #                        rejected, so no kyc_verification event is sent and
 #                        the gate never opens
@@ -94,11 +94,11 @@ require "json"
 # verification is exercised in isolation (an alg:none/weakened-sig regression is
 # caught). None of this weakens the real verification path.
 require_relative "prove_test_issuer"
-require_relative "../app/services/prove_trust"
+require "kiosk/kyc_providers/prove"
 # The Equihash params printed in the run header below are READ from the same
 # module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`, in
 # config/initializers/kiosk.rb), never typed. It ships in kiosk-pow-equihash
-# and is ENV-only, so it loads outside a Rails boot exactly as ProveTrust does.
+# and is ENV-only, so it loads outside a Rails boot.
 require "kiosk/pow/equihash"
 
 BASE_URL   = ENV.fetch("SERVER_URL")
@@ -111,7 +111,7 @@ BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL")
 # through; a password literal in a driver is a second place for it to be true.
 RIDER_EMAIL   = ENV.fetch("RIDER_EMAIL")
 DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
-TRUSTED_ISSUER = ProveTrust.issuer
+TRUSTED_ISSUER = Kiosk::KycProviders::Prove.issuer
 
 # Wrong signing key with the TRUSTED issuer — the only adversarial property is
 # the bad signature. Using the correct issuer ensures a weakened-sig regression
@@ -125,7 +125,7 @@ def attest_forged(user_id)
       sub:   user_id,
       level: "verified",
       iss:   TRUSTED_ISSUER,  # trusted issuer; ONLY the signature is wrong
-      aud:   ProveTrust.operator_id,  # correct audience — isolates the signature defect
+      aud:   ProveTestIssuer.audience,  # correct audience — isolates the signature defect
       iat:   now,
       exp:   now + 3600,
     },
@@ -149,7 +149,7 @@ def broker_approve(request_id)
 end
 
 def post_kyc_callback(body)
-  uri = URI("#{BASE_URL}/kyc/callback")
+  uri = URI("#{BASE_URL}/kiosk/kyc/callback")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
   req.body = JSON.generate(body)
   res = Kiosk::Redteam::Wire.http_for(uri).request(req)
@@ -660,7 +660,7 @@ puts "  base_url:              #{BASE_URL}"
 #     SAY WHERE IT COMES FROM: this is the DRIVER's environment, not a fact observed
 #     on the wire — the harness hands one environment to both processes (demo.rake
 #     spawns the server and then this script from it), which is precisely the
-#     arrangement ProveTrust already documents for the issuer.
+#     arrangement the issuer is read under too.
 #   • pow_difficulty / requires_kyc — the `profile` object itself, i.e. the values
 #     every generic scenario reads to decide whether it is applicable
 #     (RegistrationWithoutPow skips on 0; the KYC trio skips on false).
@@ -737,7 +737,7 @@ motorcycle_forged_kyc = lambda do
   # the WRONG key (trusted issuer, bad signature) — mirrors attest_forged.
   forged = JWT.encode(
     { sub: a.user_id, level: "verified", iss: TRUSTED_ISSUER,
-      aud: ProveTrust.operator_id, iat: now, exp: now + 3600,
+      aud: ProveTestIssuer.audience, iat: now, exp: now + 3600,
       attributes: { age_over_18: true, licence_a: true } },
     FORGED_KYC_KEY, "RS256",
   )
@@ -940,10 +940,10 @@ theft_beat = kyc_jws_theft.call
 
 # ── broker beat: a claim minted for a DIFFERENT operator is rejected ──────────
 #
-# Cross-operator replay defence, enforced at the DEMO LAYER in skooti's
-# callback. A claim the
+# Cross-operator replay defence, enforced in the engine's KYC callback by
+# the provider adapter's operator check. A claim the
 # broker minted addressed to operator "other-operator" (aud/operator) must be
-# rejected when POSTed to skooti's /kyc/callback — skooti only accepts claims
+# rejected when POSTed to skooti's /kiosk/kyc/callback — skooti only accepts claims
 # addressed to ITSELF. We open a real skooti request (so the request_id/nonce are
 # valid and pending) but mint the claim for a DIFFERENT operator with the broker
 # ProveKey, then deliver it to skooti's callback. skooti must reject (operator
@@ -1009,7 +1009,7 @@ xop_beat = cross_operator_replay.call
 
 # ── broker beat: an unsigned / wrong-key callback is rejected ─────────────────
 #
-# Callback authenticity: skooti's /kyc/callback verifies the
+# Callback authenticity: skooti's /kiosk/kyc/callback verifies the
 # jws against the trusted ProveKey. A callback whose jws is signed by the WRONG
 # key (trusted issuer, bad signature) — or is missing entirely — must be
 # rejected, so a forged callback cannot stamp a claim. We open a real skooti
@@ -1028,7 +1028,7 @@ forged_callback_no_sig = lambda do
   # Wrong key, trusted issuer, addressed to skooti — ONLY the signature is bad.
   wrong_key_jws = JWT.encode(
     { sub: a.user_id, level: "verified", iss: ProveTestIssuer.issuer,
-      operator: ProveTrust.operator_id, aud: ProveTrust.operator_id,
+      operator: ProveTestIssuer.audience, aud: ProveTestIssuer.audience,
       request_id:, nonce: "any", iat: now, exp: now + 3600,
       attributes: { age_over_18: true, licence_a: true } },
     FORGED_KYC_KEY, "RS256",

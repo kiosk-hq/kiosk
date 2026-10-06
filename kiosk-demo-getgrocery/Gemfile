@@ -31,6 +31,7 @@ gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",   path: "../kiosk-reputation"
 gem "kiosk-redteam",      path: "../kiosk-redteam"
 gem "kiosk-pay-stripe",   path: "../kiosk-pay-stripe"
+gem "kiosk-kyc-prove",    path: "../kiosk-kyc-prove"
 gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"
 
 group :development, :test do

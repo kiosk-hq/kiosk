@@ -126,7 +126,6 @@ CREATE TABLE kiosk.agents (
     public_key text,
     human_label text,
     spending_cap_cents bigint,
-    kyc_verified_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     revoked_at timestamp with time zone,
     issuer text NOT NULL
@@ -233,9 +232,22 @@ CREATE TABLE kiosk.intent_mandates (
 --
 
 CREATE TABLE kiosk.kyc_attributes (
-    agent_id uuid NOT NULL,
+    user_id uuid NOT NULL,
     name text NOT NULL,
     granted_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: kyc_requests; Type: TABLE; Schema: kiosk; Owner: -
+--
+
+CREATE TABLE kiosk.kyc_requests (
+    id text NOT NULL,
+    user_id uuid NOT NULL,
+    nonce text NOT NULL,
+    approved_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -300,20 +312,6 @@ CREATE TABLE kiosk.settlements (
 CREATE TABLE public.ar_internal_metadata (
     key character varying NOT NULL,
     value character varying,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: kyc_verification_requests; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.kyc_verification_requests (
-    request_token character varying NOT NULL,
-    user_id uuid NOT NULL,
-    status character varying DEFAULT 'pending'::character varying NOT NULL,
-    broker_nonce character varying,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
@@ -603,7 +601,15 @@ ALTER TABLE ONLY kiosk.intent_mandates
 --
 
 ALTER TABLE ONLY kiosk.kyc_attributes
-    ADD CONSTRAINT kyc_attributes_pkey PRIMARY KEY (agent_id, name);
+    ADD CONSTRAINT kyc_attributes_pkey PRIMARY KEY (user_id, name);
+
+
+--
+-- Name: kyc_requests kyc_requests_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.kyc_requests
+    ADD CONSTRAINT kyc_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -660,14 +666,6 @@ ALTER TABLE ONLY kiosk.settlements
 
 ALTER TABLE ONLY public.ar_internal_metadata
     ADD CONSTRAINT ar_internal_metadata_pkey PRIMARY KEY (key);
-
-
---
--- Name: kyc_verification_requests kyc_verification_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.kyc_verification_requests
-    ADD CONSTRAINT kyc_verification_requests_pkey PRIMARY KEY (request_token);
 
 
 --
@@ -818,6 +816,13 @@ CREATE INDEX idx_intent_mandates_user_id ON kiosk.intent_mandates USING btree (u
 
 
 --
+-- Name: idx_kyc_requests_user_id; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE INDEX idx_kyc_requests_user_id ON kiosk.kyc_requests USING btree (user_id, created_at);
+
+
+--
 -- Name: idx_payment_mandates_cart; Type: INDEX; Schema: kiosk; Owner: -
 --
 
@@ -955,14 +960,6 @@ ALTER TABLE ONLY kiosk.cart_mandates
 
 
 --
--- Name: kyc_attributes kyc_attributes_agent_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
---
-
-ALTER TABLE ONLY kiosk.kyc_attributes
-    ADD CONSTRAINT kyc_attributes_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES kiosk.agents(id) ON DELETE CASCADE;
-
-
---
 -- Name: payment_mandates payment_mandates_cart_mandate_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -1009,6 +1006,8 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261007000002'),
+('20261007000001'),
 ('20261005000002'),
 ('20261005000001'),
 ('20260929000001'),

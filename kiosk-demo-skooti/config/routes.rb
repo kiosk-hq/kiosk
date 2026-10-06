@@ -21,13 +21,4 @@ Rails.application.routes.draw do
   # config/routes/kiosk.rb so the wire reads as one file and this one stays
   # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
   draw(:kiosk)
-
-  # KYC broker callback — the broker → operator leg. `request_kyc` calls the
-  # broker's intake with THIS callback; on the human's
-  # approve, the broker POSTs the signed anonymized {age_over_18, licence_a}
-  # claim here. skooti verifies it against the trusted ProveKey, checks the
-  # nonce/operator/request_id it stored, and pushes the jws to the agent on the
-  # kyc_verification event for it to submit to /kiosk/agents/kyc. The broker owns
-  # issuance; this origin never mints an attestation of its own.
-  post "/kyc/callback",                            to: "kyc_callback#create"
 end

@@ -2,6 +2,7 @@
 
 require "openssl"
 require "jwt"
+require "kiosk/kyc_providers/prove"
 
 # ProveTestIssuer — a TEST-ONLY signer that mints attestations with the broker's
 # ProveKey PRIVATE key, for skooti's flow/redteam/isolation scaffolding that
@@ -24,8 +25,8 @@ require "jwt"
 #   * the bare-Ruby drivers (script/redteam_suite.rb, script/isolation_flow.rb):
 #     no Rails at all → NameError: uninitialized constant ProveKey::Rails.
 # So the test issuer resolves its own key and issuer and does not touch the
-# broker's app load path at all — the same principle as ProveTrust below
-# (flow-only helpers stay off a Rails app's load path).
+# broker's app load path at all (flow-only helpers stay off a Rails app's
+# load path).
 #
 # HOW THE TWO STAY IN LOCKSTEP. They must sign with the SAME key and stamp the
 # SAME `iss`, or every valid-attestation control in the drivers is rejected:
@@ -33,7 +34,7 @@ require "jwt"
 #         the dev/test key, which the broker's development and test env files
 #         read by that exact path. PROVE_KEY_PEM overrides on
 #         both sides, in the same precedence order.
-#   iss — ProveTrust.issuer is literally the same expression the broker's env
+#   iss — Kiosk::KycProviders::Prove.issuer reads the same variable the broker's env
 #         files use (KIOSK_PROVE_ISSUER, defaulting to the deploy origin), and
 #         the two-server harness pins KIOSK_PROVE_ISSUER on BOTH sides.
 #   And the lockstep is CHECKED, not merely documented: the two-server
@@ -99,12 +100,11 @@ module ProveTestIssuer
     @keypair ||= OpenSSL::PKey::RSA.new(key_pem)
   end
 
-  # The `iss` the minted claims carry — ProveTrust.issuer, the same
-  # KIOSK_PROVE_ISSUER value (and the same default) the broker stamps and
-  # skooti's KycVerifier compares against, pinned on both sides by the
-  # two-server harness.
+  # The `iss` the minted claims carry — the KIOSK_PROVE_ISSUER value (and the
+  # same default) the broker stamps and skooti's c.kyc_issuer names, pinned on
+  # both sides by the two-server harness.
   def issuer
-    prove_trust.issuer
+    Kiosk::KycProviders::Prove.issuer
   end
 
   # The ProveKey PUBLIC half, PEM-encoded. The single-server KYC rake tasks
@@ -137,23 +137,9 @@ module ProveTestIssuer
     MSG
   end
 
-  # The operator-binding audience the minted claims carry as `aud`. Sourced from
-  # ProveTrust.operator_id — the SAME value skooti sets as c.kyc_audience — so the
-  # engine's operator-binding check passes on the test-issuer path exactly as on
-  # the real broker path. Read from ProveTrust (not Kiosk.configuration) because
-  # the flow/redteam drivers run as STANDALONE scripts (no Kiosk config booted),
-  # while ProveTrust is a plain module both the drivers and the server load.
-  def audience
-    prove_trust.operator_id
-  end
-
-  # ProveTrust, loaded by absolute path: this file is required from drivers, from
-  # rake tasks and from the app, so a bare `require "prove_trust"` would depend
-  # on whose $LOAD_PATH is in play.
-  def prove_trust
-    require File.expand_path("../app/services/prove_trust", __dir__) unless defined?(::ProveTrust)
-    ::ProveTrust
-  end
+  # The operator-binding audience the minted claims carry as `aud` — skooti's
+  # c.kyc_audience.
+  def audience = "skooti"
 
   # Mint a valid attestation bound to user_id, optionally carrying anonymized
   # boolean attributes. Signed with the ProveKey — the key skooti trusts. Carries

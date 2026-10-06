@@ -34,6 +34,7 @@ Kiosk::Configuration.include(SkootiUnlockSigningKey)
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 require "kiosk/user_identity_providers/devise"
+require "kiosk/kyc_providers/prove"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 SKOOTI_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 
@@ -190,24 +191,17 @@ Kiosk.configure do |c|
   # plus the one table it needs; see the kiosk-server README, "Multi-process
   # deployments".
 
-  # KYC attestation verifier — trusts the KYC broker (the shared anonymizing
-  # KYC issuer). skooti hosts no issuer of its own: it configures the broker as
-  # its kyc_issuer + kyc_public_key ONCE and asks the broker for exactly the
-  # claims it needs (age_over_18 + licence_a). The issuer identity comes from
-  # ProveTrust; the broker PUBLIC KEY comes from Rails.configuration.x.kiosk
-  # (config/environments): the harness/rake tasks and the deploy pin it
-  # explicitly, there is NO shipped fallback key, and with none set the
-  # engine's KycVerifier fails closed at the wire.
-  c.kyc_issuer    = ProveTrust.issuer
+  # ── KYC — the shared Prove broker ────────────────────────────────────
+  # rent_motorcycle refuses until the person holds age_over_18 and licence_a.
+  # The broker public key and intake secret come from config/environments with
+  # no shipped fallback; without the secret this origin serves no KYC.
+  prove_operator   = "skooti"
+  prove_secret     = Rails.configuration.x.kiosk.prove_intake_secret
+  c.kyc_provider   = Kiosk::KycProviders::Prove.new(operator_id: prove_operator, intake_secret: prove_secret) if prove_secret.present?
+  c.kyc_claims     = %w[age_over_18 licence_a]
+  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
   c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
-  # OPERATOR-BINDING (aud): the engine KycVerifier REJECTS at the wire any
-  # attestation whose `aud` != this operator's kyc_audience — so a claim the
-  # broker minted for another operator cannot unlock skooti even before skooti's
-  # callback-layer operator check runs. skooti declares its stable broker handle
-  # ("skooti") as the audience (the broker mints `aud` = the audience skooti sends
-  # at intake), not its per-deploy origin URL, so the value is stable across the
-  # 127.0.0.1 / skooti.demo.kiosk.tech harness ports.
-  c.kyc_audience  = ProveTrust.operator_id
+  c.kyc_audience   = prove_operator
 
   # ── Ed25519 rental-token signing key ──────────────────────────────────────
   # The key every offline rental token is signed with, and whose public half is

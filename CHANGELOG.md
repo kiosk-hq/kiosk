@@ -12,6 +12,8 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+- 2026-10-07: **kiosk-server serves `request_kyc` and the KYC broker callback, and records attributes against the person**; getgrocery and skooti drop their copies, and the broker client becomes kiosk-kyc-prove.
+
 - 2026-10-07: **kiosk-server serves `payment_setup` and the provider's return page**; three demos drop their copies, and the Stripe-specific return logic moves into kiosk-pay-stripe.
 
 - 2026-10-06: **The repository keeps only the check scripts that have caught defects; the rest and their CI jobs are removed.**

@@ -159,36 +159,6 @@ class Kiosk::RentalsController < ActionController::API
     render_operation RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
   end
 
-  # request_kyc — open a verification at the broker. See {RequestKycOperation}.
-  kind :action
-  description "Start the age-18-or-over and category-A driving-licence verification for the " \
-              "authenticated principal — needed only to ride a licence-required motorcycle, never for " \
-              "a licence-free scooter. The answer carries a broker page to relay to your human: an " \
-              "anonymizing KYC broker confirms both facts and signs an attestation for them, and " \
-              "never hands this operator the documents behind them. Subscribe to the " \
-              "`kyc_verification` topic BEFORE calling this: once the human has approved, its event " \
-              "carries the signed attestation; submit it to `POST <endpoint>/agents/kyc`, then ask " \
-              "for the motorcycle again. No pre-shared issuer key is needed. At most three " \
-              "verifications may be open for one account at a time — a fourth is refused until one " \
-              "of them is approved, or until it has been open long enough that nobody is still on " \
-              "the page, so wait on a page you were already given rather than opening another. A " \
-              "human's REFUSAL never reaches this operator — the broker reports an approval and " \
-              "nothing else — so a check your human turned down sends no event, and ages out of " \
-              "that count instead of closing the account down."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  output_schema type: "object",
-                description: "The opened verification.",
-                additionalProperties: false,
-                properties: {
-                  request_id:       { type: "string", description: "The `request_id` the kyc_verification event for this check carries." },
-                  verification_url: { type: "string", description: "The broker page to relay to your human to approve." },
-                  status:           { const: "pending", description: "pending — a freshly opened request is always this." },
-                },
-                required: %w[request_id verification_url status]
-  def request_kyc
-    render_operation RequestKycOperation.call(principal_id: kiosk_identity.user_id)
-  end
-
   private
 
   # Was the argument SUPPLIED AT ALL — a different question from "is it usable",

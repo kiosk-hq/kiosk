@@ -5,7 +5,7 @@
 # for ONE thing: "does a settled cart reference THIS order", which is what makes
 # "already paid" answerable at all.
 #
-# An engine-owned table with no engine-owned reader, the {Settlement} / {Agent}
+# An engine-owned table with no engine-owned reader, the {Settlement}
 # shape: kiosk-server writes the row, and this demo's order verbs, pay-path
 # decorator and back office read it. Promoting it into the engine is a
 # public-API decision, not a handler conversion.

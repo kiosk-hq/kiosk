@@ -12,7 +12,7 @@
 #     POST /kiosk/request_kyc (skooti
 #     calls the KYC broker; get a broker verification_url) → SIMULATE the
 #     human approving on the BROKER page (POST <broker>/verify with the request
-#     token) → the broker POSTs its signed claim to skooti's /kyc/callback → the
+#     token) → the broker POSTs its signed claim to skooti's /kiosk/kyc/callback → the
 #     `kyc_verification` event arrives on the socket the assistant subscribed
 #     BEFORE it acted, carrying the broker kyc_jws → submit it to POST
 #     /kiosk/agents/kyc → rent_motorcycle → 200 (offline rental token unlocks).
@@ -203,7 +203,7 @@ STDERR.puts "  request_kyc past the cap: http=#{rc_capped} code=#{request_kyc_ca
 # verification_url points at the broker; we POST the approve there (the request
 # token is the only credential — no signing key). The broker signs the
 # anonymized {age_over_18, licence_a} claim and POSTs it to skooti's
-# /kyc/callback, which pushes it to the agent. Derive the broker origin
+# /kiosk/kyc/callback, which pushes it to the agent. Derive the broker origin
 # from the verification_url so the driver need not know the broker port itself.
 approve_uri  = URI(verification_url)
 approve_base = "#{approve_uri.scheme}://#{approve_uri.host}:#{approve_uri.port}"

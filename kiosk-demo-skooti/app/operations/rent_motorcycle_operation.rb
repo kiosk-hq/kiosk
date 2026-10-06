@@ -2,7 +2,7 @@
 
 # rent_motorcycle — start a rental of a COMBUSTION-ENGINE motorcycle, the
 # KYC-ATTRIBUTE-GATED verb. Unlike the licence-free scooter (start_rental) it
-# requires the calling agent to hold a KYC attestation carrying BOTH anonymized
+# requires the person to hold a KYC attestation carrying BOTH anonymized
 # booleans — `age_over_18` and `licence_a`. The provider learns only those two,
 # never the DOB or the licence number.
 #
@@ -17,24 +17,9 @@
 #   2. the reserved vehicle IS a needs_licence motorcycle
 #   3. a settled payment references THIS reservation
 class RentMotorcycleOperation
-  # Named once, so the gate, the refusal and the hint cannot disagree.
-  REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
-
   def self.call(reservation_id:)
-    # ── Gate 0: the KYC named-attribute gate ───────────────────────────────
-    # What the ENGINE recorded for the acting agent, before the argument guards.
-    unless Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
-      return OperationResult.refused(
-        code:    "kyc_required",
-        message: "motorcycle rental requires KYC attributes age_over_18 and licence_a",
-        # The completable path: no pre-shared issuer key needed.
-        hint:    "POST <endpoint>/request_kyc to start age≥18 + category-A licence verification: " \
-                 "subscribe to the kyc_verification topic first; it returns a " \
-                 "verification_url for the human to approve, and the kyc_verification " \
-                 "event carries the signed attestation (kyc_jws): submit it to " \
-                 "POST <endpoint>/agents/kyc, then retry rent_motorcycle",
-      )
-    end
+    # ── Gate 0: the person holds this origin's declared KYC attributes ────
+    Kiosk::Server::Kyc.require!
 
     reservation_id, refusal = WireArguments.reservation_id(reservation_id)
     return refusal if refusal

@@ -545,7 +545,7 @@ smoke_prove() {
     r = ProveRequest.create!(
       request_id:       "smoke-request-token-0001",
       operator_id:      "skooti",
-      callback_url:     "https://127.0.0.1/kyc/callback",
+      callback_url:     "https://127.0.0.1/kiosk/kyc/callback",
       requested_claims: ["age_over_18", "licence_category:A"],
       subject_handle:   "smoke-agent-subject",
       nonce:            "smoke-nonce",

@@ -628,10 +628,11 @@ if ARGV.include?("--self-test")
     { id: "fragment-path-shares-nothing", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "a rename leaves a declared FRAGMENT_PATHS entry contributing nothing (T-146)",
-      ops:  [[:edit, "kiosk-demo-skooti/app/services/prove_trust.rb", "def issuer", "def kyc_issuer"],
-             [:edit, "kiosk-demo-skooti/app/services/prove_trust.rb", "def broker_url", "def kyc_broker_url"],
-             [:edit, "kiosk-demo-skooti/app/services/prove_trust.rb", "def operator_id", "def kyc_operator_id"]],
-      expect: /app\/services\/prove_trust\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared/ },
+      ops:  [[:edit, "kiosk-demo-atablefor/app/models/booking.rb", "CONFIRMED", "KONFIRMED"],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "CANCELLED", "KANCELLED"],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "belongs_to ", "belongs_to_x "],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "scope ", "scope_x "]],
+      expect: /app\/models\/booking\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared/ },
     { id: "per-demo-path-in-neither-list", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS (T-146)",
@@ -1358,11 +1359,9 @@ OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu]
 
 KYC_DEMOS = %w[getgrocery skooti].freeze
 KYC_SHIPS =
-  "`ships:` pins the set to getgrocery and skooti deliberately (K-657): they are the two " \
-  "operators that gate a verb on an anonymized KYC attribute, and the attestation reaches the " \
-  "assistant on their `kyc_verification` event (T-062). A THIRD demo growing a copy spreads a " \
-  "surface T-220 is due to move into the framework, and a copy DISAPPEARING is that move, which " \
-  "must carry this declaration with it."
+  "`ships:` pins the set to getgrocery and skooti: they are the two operators that configure a " \
+  "KYC provider, so only they carry the broker harness and the migrations that retired their own " \
+  "KYC table. A third demo growing a copy must be declared here."
 
 # The two pairs of `app/operations/operation_result.rb` copies that AGREE, and
 # the reason each pair does (K-1262). Written once because the same two groups
@@ -1608,20 +1607,6 @@ COPIES = {
     rule: :code,
     why:  "Controllable payment-provider stub for the pay-path flows. Per-demo prose only.",
   },
-  "app/services/prove_broker_client.rb" => {
-    rule: :code,
-    ships: KYC_DEMOS,
-    why:  "The operator -> KYC broker intake leg. Per-demo prose only: the operator id and " \
-          "the requested claims arrive as arguments, not as literals." \
-          " " + KYC_SHIPS,
-  },
-  "app/services/prove_trust.rb" => {
-    rule: :per_demo,
-    why:  "Per-operator by construction: each copy bakes in its own operator id (getgrocery vs " \
-          "skooti) — the cross-operator binding the demo exists to show (K-547). The intake secret " \
-          "and broker public key moved to Rails custom config set in config/environments/*.rb " \
-          "(K-650), so only the env-independent identity values remain here.",
-  },
   "script/prove_broker_boot.rb" => {
     rule: :per_demo,
     why:  "Boots the broker app for that operator's flow: the operator's callback-host and secret " \
@@ -1646,14 +1631,6 @@ COPIES = {
           "error envelope» used to claim it was (K-1092). " \
           "The four Devise demos must give an agent the SAME answer.",
   },
-  "app/controllers/kyc_callback_controller.rb" => {
-    rule: :code,
-    ships: KYC_DEMOS,
-    why:  "POST /kyc/callback — the broker -> operator leg: JWS verify, request correlation, nonce " \
-          "echo, and the cross-operator `operator` binding. Per-demo prose only; the operator id " \
-          "is read from configuration." \
-          " " + KYC_SHIPS,
-  },
   "app/controllers/home_controller.rb" => {
     rule: :per_demo,
     why:  "Each demo's own landing page — a different storefront with different instance " \
@@ -1674,41 +1651,6 @@ COPIES = {
     rule: :per_demo,
     why:  "Same word, different domain: atablefor books a restaurant_table, hoteling books a " \
           "room_type.",
-  },
-  "app/models/kyc_verification_request.rb" => {
-    rule: :code,
-    ships: KYC_DEMOS,
-    why:  "The pending age/licence verification a demo started at the broker — same class, " \
-          "per-demo prose (skooti's row carries a licence claim, getgrocery's an age gate). Both " \
-          "copies carry the query scoping their `request_kyc` intake cap needs: an " \
-          "`owned_by_current_principal` scope over a frozen `Arel.sql(\"kiosk.current_user_id()\")` " \
-          "literal, plus the status constants that scope's readers name. It was briefly :per_demo " \
-          "while T-057 had migrated skooti and not getgrocery and the two genuinely disagreed; the " \
-          "last slice converged them, which is what this entry is now guarding." \
-          " " + KYC_SHIPS,
-  },
-  "app/models/agent.rb" => {
-    rule: :code,
-    why:  "kiosk.agents — the ENGINE's own table, read by the two demos that gate a verb on an " \
-          "anonymized KYC attribute, and shipped with no engine-side reader. The code is one scope " \
-          "(the acting, non-revoked agent, via the `kiosk.current_agent_id()` GUC) plus the " \
-          "existence test over kiosk.kyc_attributes, and it MUST stay identical: a copy that " \
-          "drifted would be one KYC gate answering a granted attribute differently from the " \
-          "other. Only the attributes asked for differ — skooti wants age_over_18 AND licence_a, " \
-          "getgrocery age_over_18 — and those live at the CALL sites, not here, which is why this " \
-          "file can be held identical at all. Until K-656 the shared code was a `->>` extraction " \
-          "expressed as Arel, kept in Postgres so no Ruby comparison had to pick a spelling of " \
-          "true (K-724); the grants are rows now, so there is no value to extract and the shared " \
-          "argument is smaller, not gone.",
-  },
-  "app/models/kyc_attribute.rb" => {
-    rule: :code,
-    why:  "kiosk.kyc_attributes — the engine's own table (canonical migration 006), one row per " \
-          "named anonymized boolean an attestation granted, and again with no engine-side reader. " \
-          "The class is two lines on purpose: the table has no value column, so the model has " \
-          "nothing to interpret and every gate is an existence test in {Agent.kyc_granted?}. " \
-          "Per-demo prose names that demo's own claim (skooti age_over_18 + licence_a for the " \
-          "motorcycle, getgrocery age_over_18 for alcohol).",
   },
   "app/controllers/concerns/kiosk_refusals.rb" => {
     rule: :code,
@@ -1786,19 +1728,6 @@ COPIES = {
           "IS checked in both, so «an ACCESS answer rather than a shape one» was the wrong reason " \
           "for the right arrangement.",
   },
-  "app/operations/request_kyc_operation.rb" => {
-    rule: :per_demo,
-    ships: KYC_DEMOS,
-    why:  "The two demos that open a verification at the shared broker. The surrounding call is " \
-          "the same shape — intake, store the broker's request_id, hand back its verification_url " \
-          "— but the one thing an operator must decide is WHICH CLAIMS to ask for, and that is " \
-          "exactly what differs: skooti asks for age_over_18 AND licence_category:A because it is " \
-          "unlocking a motorcycle, getgrocery for age_over_18 alone because it is selling a " \
-          "bottle of wine. Holding these to :code would compare everything except the decision, " \
-          "and asking a grocery for a driving licence is the anti-pattern the KYC demo exists to " \
-          "argue against." \
-          " " + KYC_SHIPS,
-  },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
     why:  "THIS FILE IS A SUBCLASS LINE AND A CONSTANT, AND NOTHING ELSE. The shared half — " \
@@ -1861,6 +1790,19 @@ COPIES = {
           "never re-runs. NOT generator output, for the same reason the raw_jws DROP above is " \
           "not. `ships:` is declared because prove adopts no engine schema and must not acquire " \
           "a copy by accident.",
+  },
+  "db/migrate/20261007000001_move_kiosk_kyc_to_the_person.rb" => {
+    rule:  :identical,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:   "The KYC grants move from the assistant account to the person and kiosk.kyc_requests " \
+           "is laid down, on databases built before migration 006 carried that shape.",
+  },
+  "db/migrate/20261007000002_drop_kyc_verification_requests.rb" => {
+    rule:  :identical,
+    ships: KYC_DEMOS,
+    why:   "kiosk-server keeps the verifications request_kyc opens, so both KYC demos drop their " \
+           "own table." \
+           " " + KYC_SHIPS,
   },
   "db/migrate/20261005000001_add_kiosk_agents_issuer.rb" => {
     rule:  :identical,
@@ -2172,10 +2114,9 @@ GENERATOR_TEMPLATES = {
 MIGRATION_PAIRS = {
   "create_kyc_verification_requests.rb" => {
     rule: :code,
-    why:   "the pending age/licence verification a demo starts at the KYC broker — the table " \
-           "behind app/models/kyc_verification_request.rb, whose model copies ARE held in :code " \
-           "lockstep above. Both copies declare `broker_nonce` inline. Prose " \
-           "still differs per demo (skooti's row carries a licence claim, getgrocery's an age " \
+    why:   "the pending age/licence verification a demo started at the KYC broker, before " \
+           "kiosk-server kept them; dropped by 20261007000002. Both copies declare `broker_nonce` " \
+           "inline. Prose still differs per demo (skooti's row carries a licence claim, getgrocery's an age " \
            "gate), which is why the rule is :code.",
   },
   "add_devise_columns_to_users.rb" => {
@@ -4134,9 +4075,7 @@ FRAGMENT_PATHS = %w[
   app/models/cart_mandate.rb
   app/models/user.rb
   app/operations/operation_result.rb
-  app/operations/request_kyc_operation.rb
   app/operations/wire_arguments.rb
-  app/services/prove_trust.rb
   spec/wire_arguments_spec.rb
   script/binding_flow.rb
   script/pay_window.rb
@@ -4786,89 +4725,6 @@ FRAGMENTS = {
   # file-level `why:` above already carries the argument, these entries point at
   # it instead of restating it — a second copy of a reason is a second thing to
   # keep true.
-  "app/services/prove_trust.rb#issuer" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "The issuer both operators verify the broker's attestations against, defaulted to the " \
-           "same hosted URL. A one-sided edit does not fail the demo it lands in — it fails the " \
-           "OTHER one, at signature verification, which reads like a crypto problem and is a " \
-           "wiring problem.",
-  },
-  "app/services/prove_trust.rb#broker_url" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "Where both operators send an intake, same default and same env override. There is one " \
-           "broker (`kiosk-demo-prove`), so two operators addressing two URLs is a demo that " \
-           "cannot be run end to end.",
-  },
-  "app/services/prove_trust.rb#operator_id" => {
-    rule:  :per_demo,
-    ships: KYC_DEMOS,
-    why:   "SAME NAME, EACH OPERATOR NAMING ITSELF to the shared broker — which is the whole point " \
-           "of the field. If these two ever agree, one demo is intaking as the other.",
-  },
-  "app/operations/request_kyc_operation.rb#MAX_OUTSTANDING_REQUESTS" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "K-586's per-principal cap on OPEN broker intakes — three, the same number for the same " \
-           "reason in both, and the only 429 in the fleet. It is quoted in the refusal hint below " \
-           "it, so the two copies agreeing is what stops one demo promising a limit it does not " \
-           "apply.",
-  },
-  "app/operations/request_kyc_operation.rb#outstanding_for_current_principal" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "The count that cap is applied to: PENDING rows scoped by `owned_by_current_principal`, " \
-           "i.e. by the transaction GUC rather than by an argument. The scoping is the load-bearing " \
-           "half — a copy that counted globally would refuse one principal for another's queue. " \
-           "The WINDOW beside it is the other load-bearing half: a copy that dropped it would " \
-           "count conversations the broker will never report the end of, which walls an account " \
-           "out of its own KYC gate for good.",
-  },
-  "app/operations/request_kyc_operation.rb#OUTSTANDING_WINDOW" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "How long one unfinished intake holds a slot, and it is the same number for the same " \
-           "reason in both: neither operator is ever told that a human REFUSED a check — the " \
-           "broker reports an approval and nothing else — so a cap counting `pending` rows with " \
-           "no horizon is a permanent lockout in both apps. Held with the count above because the " \
-           "two are one rule split over a constant and a scope; the refusal hint quotes this " \
-           "value, so a copy that moved it would have one demo promising a limit it does not " \
-           "apply.",
-  },
-  "app/operations/request_kyc_operation.rb#REQUESTED_CLAIMS" => {
-    rule:  :per_demo,
-    ships: KYC_DEMOS,
-    why:   "The one thing an operator must decide for itself, and the file-level entry above states " \
-           "the argument in full: `age_over_18` for a bottle of wine, `age_over_18` plus " \
-           "`licence_category:A` for a motorcycle. Declared here so the unit rule records it as a " \
-           "decision rather than reporting it as drift.",
-  },
-  "app/operations/request_kyc_operation.rb#broker_refusal" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "THE WIRE'S ANSWER WHEN THE BROKER IS NOT THERE, and it is held in lockstep because " \
-           "the two demos must not disagree about WHICH refusal an absent broker is. Both map " \
-           "`NotConfigured` to `501 module_not_served` — the code the ENGINE already answers for " \
-           "the submit half of the same module, so the two halves agree — and every other broker " \
-           "failure to a DELIBERATE `500 action_failed` with a sentence and a hint, because a " \
-           "transient outage must not be told to an assistant in a status that is cacheable by " \
-           "default. Before this method both demos let three raises escape and answered a Ruby " \
-           "class name in `detail`, one of them carrying the operator's own broker host and port. " \
-           "A one-sided edit here would make one origin permanently unavailable and the other " \
-           "temporarily so for the same fact, which is precisely the thing an assistant branches " \
-           "on.",
-  },
-  "app/operations/request_kyc_operation.rb#call" => {
-    rule:  :per_demo,
-    ships: KYC_DEMOS,
-    why:   "SAME NAME, AND THE COPIES DIFFER BY ONE WORD — measured: getgrocery refuses «too many " \
-           "AGE verifications are already open», skooti «too many verifications», because skooti " \
-           "asks for a licence category as well and «age» would be wrong there. Everything else in " \
-           "these ~35 lines is line-for-line identical, so this is declared `:per_demo` for a real " \
-           "reason and is a convergence candidate at the same time: if the two sentences ever " \
-           "agree, this entry fails and asks whether the whole method should be shared.",
-  },
   # ── the DSL units the T-146 handle made visible ───────────────────────────
   #
   # Every one of these is a class-body macro, which `FRAGMENT_START` could not
@@ -4976,17 +4832,6 @@ FRAGMENTS = {
            "than sitting inside the application layout. A copy that loses the line does not fail: " \
            "it renders a page nested inside a second `<html>`, which is the kind of break that " \
            "reaches a viewer and no assertion.",
-  },
-  "app/operations/request_kyc_operation.rb#private_class_method" => {
-    rule:  :code,
-    ships: KYC_DEMOS,
-    why:   "`private_class_method :outstanding_for_current_principal, :broker_refusal` — the " \
-           "visibility half of the K-586 intake cap AND of the broker-absence refusal, identical " \
-           "in both. ONE macro line naming both methods rather than two: a class-body macro is " \
-           "reached by its NAME here, so a second `private_class_method` line would be a second " \
-           "unit of the same name in the same file. Both methods are declared above it; this line " \
-           "is what keeps them off the class's public surface, and losing it in one copy makes " \
-           "the two demos' operations answer different APIs while every test still passes.",
   },
 
   "app/models/booking.rb#CONFIRMED" => {

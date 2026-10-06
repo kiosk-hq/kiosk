@@ -5,8 +5,8 @@
 #
 # Queries:  catalog, delivery_slots (delivery ADDRESS/zone REQUIRED — validated
 #           against served Dublin districts), my_orders
-# Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery,
-#           request_kyc; kiosk-server serves payment_setup
+# Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery;
+#           kiosk-server serves payment_setup and request_kyc
 # Pay:      capture is wrapped by ValidatingPaymentProvider — the cart must be
 #           EUR, reference the payer's unsettled order, mirror its items at
 #           catalog prices, and sum correctly (the cashier check).
@@ -23,6 +23,7 @@
 # Rails.configuration.x.kiosk.* and never ENV.
 
 require "kiosk/payment_providers/stripe"
+require "kiosk/kyc_providers/prove"
 require "kiosk/user_identity_providers/devise"
 
 # ── Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1) ─────────────────────
@@ -207,21 +208,18 @@ Kiosk.configure do |c|
     currency: "eur",
   )
 
-  # ── KYC attestation verifier — trusts the KYC broker ────────────────
-  # The alcohol age-gate (create_order rejecting a cart with an age_restricted
-  # item unless the agent carries age_over_18) reads the engine-verified
-  # kyc_attributes. getgrocery does NOT host its own issuer: it configures the
-  # SHARED KYC broker once and asks it for exactly the ONE claim it needs
-  # (age_over_18 — NOT a driving licence). The broker PUBLIC KEY comes from
-  # config/environments; there is NO shipped fallback key, and with none set the
-  # engine's KycVerifier fails closed at the wire.
-  c.kyc_issuer     = ProveTrust.issuer
+  # ── KYC — the shared Prove broker ────────────────────────────────────
+  # create_order refuses a cart with an age_restricted item until the person
+  # holds age_over_18. The broker public key and intake secret come from
+  # config/environments with no shipped fallback; without the secret this
+  # origin serves no KYC.
+  prove_operator   = "getgrocery"
+  prove_secret     = Rails.configuration.x.kiosk.prove_intake_secret
+  c.kyc_provider   = Kiosk::KycProviders::Prove.new(operator_id: prove_operator, intake_secret: prove_secret) if prove_secret.present?
+  c.kyc_claims     = %w[age_over_18]
+  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
   c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
-  # OPERATOR-BINDING (aud): the engine KycVerifier REJECTS at the wire any
-  # attestation whose `aud` != this operator's kyc_audience, so a claim minted
-  # for another operator cannot unlock this one. The audience is this
-  # operator's stable broker handle, not its per-deploy origin URL.
-  c.kyc_audience   = ProveTrust.operator_id
+  c.kyc_audience   = prove_operator
 
   # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────
   if ENV["KIOSK_POW_DEMO"] == "1"

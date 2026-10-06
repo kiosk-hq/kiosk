@@ -96,7 +96,7 @@ What each unit must carry. For EACH of the 7 apps:
 - [ ] **Operator allow-list — ONE PAIR PER KYC OPERATOR, and an operator with no pair is silently not registered:**
       `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`;
       `KIOSK_PROVE_GETGROCERY_SECRET=<a DIFFERENT shared intake secret>`, `KIOSK_PROVE_GETGROCERY_CALLBACK_HOST=getgrocery.demo.kiosk.tech`.
-      The KYC operators are the demos that ship `app/services/prove_broker_client.rb`.
+      The KYC operators are the demos whose Gemfile bundles `kiosk-kyc-prove`.
 - [ ] **Wire each operator to it:** in THAT operator's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_<OP>_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
       The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET` — their
       `config/environments/production.rb` is byte-identical across the operator demos and so must not name a demo — while

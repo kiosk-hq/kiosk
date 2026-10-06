@@ -143,8 +143,8 @@ Rails.application.configure do
     end
   end
 
-  # KYC broker trust — read by whichever demos ship a broker client
-  # (app/services/prove_broker_client.rb); inert in the others. No pinned dev
+  # KYC broker trust — read by whichever demos bundle a KYC provider
+  # (kiosk-kyc-prove); inert in the others. No pinned dev
   # broker key and no default intake secret: the two-server harnesses
   # and the KYC rake tasks pin both sides explicitly (ProveBrokerBoot wiring /
   # the ProveKey public half), so nothing here needs to line up "out of the

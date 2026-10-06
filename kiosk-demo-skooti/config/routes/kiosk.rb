@@ -48,6 +48,5 @@ get  "/kiosk/scooters_available", to: "kiosk/server/verb#show",   defaults: { ki
 #
 # Actions — POST, a JSON body.
 post "/kiosk/rent_motorcycle",    to: "kiosk/server/verb#create", defaults: { kiosk_verb: "rent_motorcycle" }
-post "/kiosk/request_kyc",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "request_kyc" }
 post "/kiosk/reserve",            to: "kiosk/server/verb#create", defaults: { kiosk_verb: "reserve" }
 post "/kiosk/start_rental",       to: "kiosk/server/verb#create", defaults: { kiosk_verb: "start_rental" }

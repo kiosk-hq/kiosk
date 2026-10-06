@@ -5,9 +5,7 @@
 # for ONE thing: "is there a settled cart that references THIS reservation",
 # which is what stops paying for reservation A and starting rental B.
 #
-# An engine-owned table with no engine-owned reader, like {Settlement} and
-# {Agent} — see {Agent} for why a demo models it rather than keeping the last
-# SELECT string.
+# An engine-owned table with no engine-owned reader, like {Settlement}.
 class CartMandate < ApplicationRecord
   self.table_name = "kiosk.cart_mandates"
 

@@ -1188,7 +1188,9 @@ namespace :check do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    declared_topics = %w[kyc_verification order_delivery order_payment payment_setup]
+    # kyc_verification is kiosk-server's, declared only with a KYC broker, which
+    # this task does not boot.
+    declared_topics = %w[order_delivery order_payment payment_setup]
     if (result["schema_event_topics"] || []) == declared_topics
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
@@ -1900,7 +1902,7 @@ namespace :check do
           whose `hint` points the agent at `request_kyc`.
       A2  run request_kyc → 200 with a broker verification_url; human approves the
           broker page; the broker POSTs its signed {age_over_18} claim to
-          /kyc/callback; the kyc_verification event, subscribed before the
+          /kiosk/kyc/callback; the kyc_verification event, subscribed before the
           check was opened, carries the broker jws.
       A3  submit the jws to /agents/kyc → 200 (attribute age_over_18 recorded).
       A4  retry create_order WITH the alcohol item → 200; payment_setup + pay
@@ -2069,7 +2071,7 @@ namespace :check do
     #
     # The schema is the SERVED one, carried out of the flow because only a
     # running origin can be asked what it publishes; the events are the rows
-    # `POST /kyc/callback` wrote. `:setup` shells out and this task holds no
+    # `POST /kiosk/kyc/callback` wrote. `:setup` shells out and this task holds no
     # Rails environment of its own, so the comparison runs in its own `rails
     # runner`. json_schemer ASSERTS `format` rather than annotating it, which
     # is what makes the declaration a claim and not a decoration.
@@ -2089,7 +2091,9 @@ namespace :check do
                          owner_reads: events.count { |e| rule.call(e["subject"], owner) },
                          stranger_reads: events.count { |e| rule.call(e["subject"], stranger) })
     RUBY
-    raw, st = Open3.capture2e("bundle", "exec", "rails", "runner", compare,
+    # The topic is declared only with a KYC provider, which needs an intake secret.
+    raw, st = Open3.capture2e({ "KIOSK_PROVE_INTAKE_SECRET" => "runner" },
+                              "bundle", "exec", "rails", "runner", compare,
                               JSON.generate(result["kyc_payload_schema"]),
                               result["kyc_identity_key"].to_s)
     abort "E1/E2 could not read the event tail or run its subject rule (exit #{st.exitstatus}):\n#{raw}" unless st.success?

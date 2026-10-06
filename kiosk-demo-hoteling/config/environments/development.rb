@@ -124,8 +124,8 @@ Rails.application.configure do
   config.x.kiosk.bad_proof_db            = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
   config.x.kiosk.reputation_bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
 
-  # KYC broker trust — read by whichever demos ship a broker client
-  # (app/services/prove_broker_client.rb); inert in the others. No pinned dev
+  # KYC broker trust — read by whichever demos bundle a KYC provider
+  # (kiosk-kyc-prove); inert in the others. No pinned dev
   # broker key and no default intake secret: the two-server harnesses
   # and the KYC rake tasks pin both sides explicitly (ProveBrokerBoot wiring /
   # the ProveKey public half), so nothing here needs to line up "out of the

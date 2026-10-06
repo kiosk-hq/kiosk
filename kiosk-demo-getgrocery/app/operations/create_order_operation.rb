@@ -17,10 +17,6 @@
 # products. Gate 6 can only be asked once gate 4 has resolved the prices — it
 # bounds their SUM — and it is asked before anything is written.
 class CreateOrderOperation
-  # The anonymized booleans an age-restricted cart demands. Named once, so the
-  # gate, its refusal sentence and its hint cannot come to disagree.
-  REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
-
   # @param principal_id [String] the account the wire resolved, NEVER an argument
   #   off the request — which is why a forged `user_id` in the body is ignored.
   #   An INSERT is the one place the principal must be spelled in Ruby: every
@@ -93,24 +89,10 @@ class CreateOrderOperation
       end
 
       # ── Gate 5: the alcohol age gate ─────────────────────────────────────
-      # Any age_restricted product in the cart, and the agent must carry an
-      # engine-verified age_over_18 attestation. Only booleans a valid
-      # broker-signed attestation granted ever reach `kyc_attributes` (POST
-      # /kiosk/agents/kyc rejects a bad signature), so nothing self-asserted
-      # passes here. {Product.age_restricted?} reads the flag fail-closed.
+      # Any age_restricted product in the cart, and the person must hold the
+      # verified attributes this origin declares (`c.kyc_claims`).
       restricted = items.any? { |item| Product.age_restricted?(by_sku[item[:sku]][:age_restricted]) }
-      if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
-        next OperationResult.refused(
-          code:    "kyc_required",
-          message: "this cart contains an age-restricted (alcohol) item — an 18+ verification " \
-                   "is required to order it",
-          hint:    "POST <endpoint>/request_kyc to start an 18+ (age_over_18) verification: " \
-                   "subscribe to the kyc_verification topic first; it returns a " \
-                   "verification_url for the human to approve, and the kyc_verification " \
-                   "event carries the signed attestation (kyc_jws): submit it to " \
-                   "POST <endpoint>/agents/kyc, then retry create_order",
-        )
-      end
+      Kiosk::Server::Kyc.require! if restricted
 
       total_cents = items.sum { |item| by_sku[item[:sku]][:price_cents].to_i * item[:qty] }
 

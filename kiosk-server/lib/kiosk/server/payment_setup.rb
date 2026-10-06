@@ -2,6 +2,7 @@
 
 require "kiosk/server/actions"
 require "kiosk/server/current_request"
+require "kiosk/server/errors"
 require "kiosk/server/events"
 require "kiosk/server/failure_log"
 
@@ -58,6 +59,15 @@ module Kiosk
 
       class << self
         def provider = Kiosk.configuration.payment_provider
+
+        def served!
+          return if provider
+
+          raise Errors::ModuleNotServed.new(
+            "this operator does not serve the payment module",
+            hint: "`pay` is absent from this origin's capabilities; hand the transaction to your human",
+          )
+        end
 
         # Publishes the action, and the topic when the provider can say whose
         # human came back from the setup page.

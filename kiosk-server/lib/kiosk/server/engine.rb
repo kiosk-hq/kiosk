@@ -608,7 +608,7 @@ module Kiosk
         # `payment_setup` and the page a payment provider returns the human's
         # browser to. Drawn unconditionally like `pay`, and answered
         # `module_not_served` without a payment_provider.
-        post "payment_setup",        to: "payment_setup#create", defaults: { kiosk_verb: "payment_setup" }
+        post "payment_setup",        to: "verb#create", defaults: { kiosk_verb: "payment_setup" }
         get  "payment_setup/return", to: "payment_setup#show"
 
         # THE EVENT STREAM — drawn here for the reason `schema` and `pay` are:

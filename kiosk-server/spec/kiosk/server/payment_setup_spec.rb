@@ -42,7 +42,7 @@ RSpec.describe Kiosk::Server::PaymentSetup do
   end
 
   before do
-    allow_any_instance_of(Kiosk::Server::PaymentSetupController)
+    allow_any_instance_of(Kiosk::Server::VerbController)
       .to receive(:connection_for).and_return(connection)
   end
 
@@ -53,8 +53,8 @@ RSpec.describe Kiosk::Server::PaymentSetup do
     )
   end
 
-  def dispatch(action, env)
-    status, headers, body = Kiosk::Server::PaymentSetupController.action(action).call(env)
+  def dispatch(controller, action, env)
+    status, headers, body = controller.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
     [status, headers, raw]
@@ -66,8 +66,8 @@ RSpec.describe Kiosk::Server::PaymentSetup do
       "CONTENT_TYPE" => "application/json", "HTTP_AUTHORIZATION" => "Bearer #{token}",
     )
     env["action_dispatch.request.path_parameters"] =
-      { controller: "kiosk/server/payment_setup", action: "create", kiosk_verb: "payment_setup" }
-    status, _headers, raw = dispatch(:create, env)
+      { controller: "kiosk/server/verb", action: "create", kiosk_verb: "payment_setup" }
+    status, _headers, raw = dispatch(Kiosk::Server::VerbController, :create, env)
     [status, JSON.parse(raw)]
   end
 
@@ -75,7 +75,7 @@ RSpec.describe Kiosk::Server::PaymentSetup do
     env = Rack::MockRequest.env_for("/kiosk/payment_setup/return?#{query}")
     env["action_dispatch.request.path_parameters"] =
       { controller: "kiosk/server/payment_setup", action: "show" }
-    dispatch(:show, env)
+    dispatch(Kiosk::Server::PaymentSetupController, :show, env)
   end
 
   describe "an origin with no payment provider" do
@@ -89,6 +89,11 @@ RSpec.describe Kiosk::Server::PaymentSetup do
       status, problem = post_payment_setup
       expect(status).to eq(501)
       expect(problem["code"]).to eq("module_not_served")
+    end
+
+    it "answers the return page with 501 module_not_served" do
+      status, = get_return
+      expect(status).to eq(501)
     end
   end
 

@@ -46,7 +46,7 @@ RSpec.describe "Kiosk::Server::Engine routes" do
 
   it "draws payment_setup and the page the human returns to from the provider's setup" do
     expect(recognize(:post, "/payment_setup"))
-      .to include(controller: "kiosk/server/payment_setup", action: "create", kiosk_verb: "payment_setup")
+      .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "payment_setup")
     expect(recognize(:get, "/payment_setup/return"))
       .to include(controller: "kiosk/server/payment_setup", action: "show")
   end

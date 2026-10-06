@@ -117,8 +117,8 @@ module Kiosk
     #                                         GET <endpoint>/<query-name>,
     #                                         POST <endpoint>/<action-name>
     #   - {Kiosk::Server::PaymentSetup}     — `payment_setup` and its topic, against the provider port
-    #   - {Kiosk::Server::PaymentSetupController} — POST <endpoint>/payment_setup and the
-    #                                         provider's return page
+    #   - {Kiosk::Server::PaymentSetupController} — GET <endpoint>/payment_setup/return,
+    #                                         the page the provider returns the human to
     #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,
     #                                         per the normative encoding rule
     #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)

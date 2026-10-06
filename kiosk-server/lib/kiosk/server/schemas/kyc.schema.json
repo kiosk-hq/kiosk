@@ -38,7 +38,7 @@
         },
         "exp": {
           "type": "integer",
-          "description": "An expired attestation is rejected."
+          "description": "One year after iat. An expired attestation is rejected."
         },
         "attributes": {
           "$ref": "#/$defs/attributes"

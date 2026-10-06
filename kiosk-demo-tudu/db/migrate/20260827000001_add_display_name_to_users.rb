@@ -26,9 +26,7 @@
 # housemate board SELECTs `owner_u.display_name`; the one page that survived was
 # the sign-in form, which Devise renders from its own gem template and never
 # names the column. A shipped migration is never edited — a change arrives as a
-# new file — and the guard is `bin/check-migration-replay`, which replays the
-# migrations onto a pre-existing database and diffs the result against
-# `db/structure.sql`.
+# new file.
 #
 # GUARDED, AND THE GUARD IS NOT DEFENSIVENESS. For a window the column was in
 # `db/structure.sql` while no migration created it, so a database provisioned by

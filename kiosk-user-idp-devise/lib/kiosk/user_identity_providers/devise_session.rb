@@ -131,9 +131,6 @@ module Kiosk
       # {Kiosk::Redteam::Wire.http_for}, which is where the rest of this
       # repository's client drivers get it: this gem is a Devise IdP adapter
       # and may not depend on an adversarial test harness to open a socket.
-      # `bin/check-tls-seam` holds BOTH spellings, so the duplicate is declared
-      # rather than loose.
-      #
       # The scheme is read off the REQUEST rather than off `@uri`, because
       # {#uri_for} lets a caller pass a fully-qualified URL and that target is
       # the one being dialled.

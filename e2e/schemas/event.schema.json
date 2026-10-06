@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/event.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/event.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed; bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech beside this repository.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/event.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.tech beside this repository.",
   "title": "Kiosk event",
   "description": "One message the operator pushes on the event stream at <endpoint>/events. The root is CLOSED: an event carries the five members declared here and no others. `data` is typed by the topic's own `payload_schema`, published in the catalog's `events` array, and this schema deliberately does not constrain it -- the shape is the operator's to declare, per topic.",
   "type": "object",

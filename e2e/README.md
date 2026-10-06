@@ -106,7 +106,7 @@ e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
 ├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes, §5/§6 included
-├── schemas/                                # vendored copies of the published normative schemas this harness alone reads (the five kiosk-server ENFORCES are vendored in the gem instead; `bin/check-spec-schemas` holds every copy against its original and prints how many it matched)
+├── schemas/                                # vendored copies of the published normative schemas this harness alone reads (the five kiosk-server ENFORCES are vendored in the gem instead)
 ├── README.md                               # this file
 ├── requirements.txt                        # the harness's python dependencies: numpy for the Equihash register-PoW solver, websockets for the event-stream listener
 └── fixtures/                               # files copied into the generated app

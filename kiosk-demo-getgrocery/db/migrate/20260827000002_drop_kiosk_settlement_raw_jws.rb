@@ -15,9 +15,7 @@
 # NOT NULL` with NO DEFAULT. So a database provisioned while that vintage was
 # head still carries the column, head's INSERT does not name it, and Postgres
 # refuses the statement — EVERY settlement INSERT, permanently, on a box that
-# has no way to lose the column. `bin/check-migration-replay` reports it as
-# HAZARD on 20 schema vintages across the seven demos that have a
-# `kiosk.settlements` at all.
+# has no way to lose the column.
 #
 # THE GENERAL RULE, which is what this file is really for: **a column REMOVED
 # from the canonical DDL needs a shipped `DROP` for exactly the same reason a

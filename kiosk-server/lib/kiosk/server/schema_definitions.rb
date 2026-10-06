@@ -28,12 +28,9 @@ module Kiosk
     # what this file states passes silently. Two things pay for it, and neither
     # is optional. First, guarded creates are paired with idempotent repairs for
     # every column an older table may lack (see {.identity_tables_sql}) — the
-    # guard skips, but the repair still runs. Second, `bin/check-migration-replay`
-    # runs the whole replay in CI on every push and diffs the resulting catalog
-    # against the tracked `db/structure.sql`, so drift is not silent: it is a
-    # red build naming the missing object, BEFORE a deploy, rather than an
-    # HTTP 500 on a box afterwards. The loud failure did not go away; it moved
-    # earlier. Do not remove one of those two halves without the other.
+    # guard skips, but the repair still runs. Second, a change to a shipped table
+    # arrives as a new migration in every demo, never as an edit to this file
+    # alone.
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -264,8 +261,8 @@ module Kiosk
       #     from the minting human's own — never by a client, which is refused
       #     outright for naming a role. Read it as `approved_role`.
       #     The spelling stays because renaming a shipped column means a new
-      #     migration in each of the seven demo `db/structure.sql` files plus a
-      #     `bin/check-migration-replay` pass — a migration wave for a word.
+      #     migration in each of the seven demo `db/structure.sql` files — a
+      #     migration wave for a word.
       def device_authorizations_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -331,8 +328,7 @@ module Kiosk
       # `db/migrate/20260827000002_drop_kiosk_settlement_raw_jws.rb`, in each of
       # the seven demos that hold this table. THE RULE IS SYMMETRICAL: a column
       # REMOVED from this file needs a shipped `DROP` for exactly the reason a
-      # column ADDED needs a shipped `ADD`. `bin/check-migration-replay` is what
-      # says it out loud.
+      # column ADDED needs a shipped `ADD`.
       #
       # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
       # supplied by the caller, so one principal cannot pre-occupy or block

@@ -25,8 +25,8 @@ FileUtils.chdir APP_ROOT do
   # IT IS DESTRUCTIVE, and says so where the operator reads rather than only
   # here: `demo:setup` runs `db:drop db:create db:schema:load db:seed`
   # unconditionally, so nothing left in this demo's development database
-  # survives. The README's generated Prerequisites block carries the same
-  # sentence, and bin/check-demo-prereqs keeps the two in step.
+  # survives. The README's Prerequisites block carries the same
+  # sentence.
 
   puts "== Installing dependencies =="
   system("bundle check") || system!("bundle install")

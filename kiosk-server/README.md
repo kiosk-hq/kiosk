@@ -354,8 +354,8 @@ unrouted path: no `code`, no `hint`. The mount-path middleware still stamps the
 version headers on it. If you want the wire's own `404 verb_not_found` there,
 draw a catch-all action of your own at the end of your file; the engine does not
 draw one, because an assistant reads `GET <mount>/schema` before it dials.
-Declared-but-unrouted is the bug class this trade opens, and
-`bin/check-verb-routes` is what holds your routes to your declarations.
+Declared-but-unrouted is the bug class this trade opens: every verb you declare
+needs its route.
 
 **The protocol plane comes from the mount and from nowhere else.** Copying those
 paths into your routes file by hand is not a supported second way to draw them:

@@ -365,8 +365,7 @@ module Kiosk
       # NOT the content-addressed URL the skill pins: a server naming a solver
       # does not know which skill cut its caller read, so it names the copy
       # that is allowed to move and lets the skill supply the digest.
-      # `bin/check-solver-pin` holds this value; it is the ONE place in this
-      # gem the URL is written, because {WellKnown} renders it into `/auth.md`
+      # It is the ONE place in this gem the URL is written, because {WellKnown} renders it into `/auth.md`
       # too and a second literal is a second thing to keep in step.
       POW_SOLVER_URL = "https://kiosk.tech/pow/solve.py"
 

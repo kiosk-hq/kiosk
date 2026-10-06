@@ -28,9 +28,7 @@
 # copy or a fetch. A copy, for the same reason kiosk-server already vendors
 # `pow.schema.json` — a network fetch makes a merge gate depend on a live site,
 # which is the one thing a gate must not do — and the copy's honesty is a
-# separate check, `bin/check-spec-schemas`, which compares it against the real
-# thing whenever the umbrella layout puts kiosk.tech next to this repo and says
-# so rather than pretending when it does not. `pow.schema.json` is NOT copied a
+# copy of the published original. `pow.schema.json` is NOT copied a
 # second time: this file reads the one kiosk-server already ships.
 #
 # NON-VACUITY IS PART OF THE CHECK, not an assumption. Every validation here is
@@ -80,8 +78,6 @@ SCHEMA_DIR = File.join(E2E_DIR, "schemas")
 # vendors them already, for its own request-shape validation, and one repo
 # holding two copies of one file is the drift this whole exercise is about.
 # This directory keeps the rest: the documents only this harness reads.
-# `bin/check-spec-schemas` prints how many vendored copies it matched, across
-# both directories.
 ENGINE_SCHEMA_DIR = File.expand_path(
   "../kiosk-server/lib/kiosk/server/schemas", E2E_DIR
 )
@@ -484,8 +480,7 @@ end
 #
 # This origin serves no KYC: the attestation flow is a TWO-SERVER integration
 # and lives in the skooti/getgrocery demos against kiosk-demo-prove. The schema
-# is vendored anyway so `bin/check-spec-schemas` mirrors the published set
-# COMPLETELY — a partial mirror is the trap where the one file nobody copied is
+# is vendored anyway so the mirror of the published set is COMPLETE — a partial mirror is the trap where the one file nobody copied is
 # the one that drifts. What can be checked here is that it still COMPILES, which
 # is what validate.sh checks for every schema before it validates anything.
 begin

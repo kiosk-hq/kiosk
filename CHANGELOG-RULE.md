@@ -1,9 +1,7 @@
 # How to write a CHANGELOG entry here
 
 This repository keeps a changelog at the root and one inside every gem, and they
-share one set of rules. Read this before adding a line. `bin/check-changelog`
-holds the parts a script can hold and names the arm that failed; its header says
-what it cannot see.
+share one set of rules. Read this before adding a line.
 
 ## The entry
 
@@ -28,8 +26,8 @@ Every top-level entry opens with its ISO date, `- YYYY-MM-DD: ` (arm CL-7).
   each gemspec publishes that file inside the package, so it is what a reader
   who installed the gem and never saw this repository has. A change to a gem's
   published surface gets its release note there as well.
-- **A demo record** is optional and declared, in the `COURTESY` manifest of
-  `bin/check-changelog`, with the reason it exists. It is never the target of
+- **A demo record** (`kiosk-demo-atablefor`, `kiosk-demo-prove`) is a
+  courtesy kept as history. It is never the target of
   the one-line rule.
 
 ## The version is in the heading, and a PATCH is a release
@@ -66,7 +64,7 @@ Four shapes, and the check holds them:
 parity fixes it: before 1.0 the protocol, this implementation and the published
 skill carry the same MAJOR.MINOR.PATCH, so a new skill cut is a tree cut here
 too, even with nothing else to say; from 1.0 they share MAJOR.MINOR.
-`bin/check-version-parity` holds that. A changelog heading only ever REPORTS a
+A changelog heading only ever REPORTS a
 version that the tree already carries.
 
 **A cut here is a tree event.** The gems move together: a release sets every
@@ -84,20 +82,18 @@ is in it — «Initial skeleton» included, because there was no earlier release
 it to be in. The root record's `## Before release sections` corpus is the one
 exception and stays where it is: those entries deliberately name no version.
 
-The two demo records named in `bin/check-changelog`'s COURTESY manifest take no
-section. A demo ships in no package and carries no version, so a release heading
+The two demo records take no section. A demo ships in no package and carries no version, so a release heading
 over it would name a number nothing publishes.
 
 The order of one cut, and it is the order that keeps the heading true:
 
 1. Bump `API_VERSION` (before 1.0 `MIN_CLIENT` too), every
    `lib/**/version.rb` and every tracked `Gemfile.lock` (`bundle lock --local`),
-   then run `bin/check-version-parity`.
+   all to the same number.
 2. Rename `## [Unreleased]` to `## [X.Y.Z] — <the date it was cut>` in the root
    record and in every gem record, and open a fresh empty `## [Unreleased]`
    above each.
-3. `bin/check-changelog` green, plus the touched gems' own suites and
-   `e2e/run.sh`, before the merge.
+3. The touched gems' own suites and `e2e/run.sh` green before the merge.
 
 ## Nothing already written is edited
 

@@ -63,13 +63,8 @@ module Kiosk
     #
     # THE VENDORED SCHEMAS ARE HELD AGAINST THEIR NORMATIVE SOURCES, and this
     # is the file that has to say so, because {SCHEMA_DIR} below holds the
-    # copies. `bin/check-spec-schemas` parses each copy and the published
-    # original side by side — every published schema must have a copy and every
-    # copy a published original — and the `$comment` provenance marker is the
-    # one permitted difference. It compares only where the two repositories are
-    # checked out beside each other, and says so and skips where they are not,
-    # so the comparison is wired into the one CI job that guarantees the
-    # sibling rather than into a job that would never compare anything.
+    # copies. Each copy equals its published original except for the
+    # `$comment` provenance marker.
     #
     # == Lazy require, real dependency
     #
@@ -99,7 +94,7 @@ module Kiosk
       # that is what the 400 has to name. The value is `<file>#<pointer>` into
       # the vendored copy of the schema §17 lists for that object — never a
       # restatement of the members, so an object whose shape moves upstream
-      # moves here with the copy `bin/check-spec-schemas` holds.
+      # moves here with the copy.
       #
       # This table IS the list. `POST /oauth/device_authorization` and
       # `POST /oauth/token` are absent because they are form-encoded and §17

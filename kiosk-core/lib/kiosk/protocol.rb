@@ -10,7 +10,7 @@ module Kiosk
     # 0.5 is a BREAKING minor: the catalogue root is closed and `events` is
     # REQUIRED in it, so a client built for an earlier minor cannot read it.
     # Before 1.0 every gem, MIN_CLIENT and every pinned skill cut carry this
-    # exact version (spec §14.1); `bin/check-version-parity` holds it.
+    # exact version (spec §14.1).
     API_VERSION = "0.5.3"
 
     # The oldest skill cut that can transact with this engine (spec §14.2,

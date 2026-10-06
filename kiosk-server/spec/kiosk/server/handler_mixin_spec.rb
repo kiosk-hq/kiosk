@@ -852,9 +852,8 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     # The EQUALITY case the kind check above skipped (K-1659). Before this the
     # second declaration was stored, silently replacing the first: the earlier
     # method went off the wire with nothing — not the cross-class check, which
-    # intersects the two registries and so cannot see a same-kind pair, and not
-    # bin/check-verb-routes, which derives its expected routes from the
-    # declarations that survived — saying so.
+    # intersects the two registries and so cannot see a same-kind pair —
+    # saying so.
     it "refuses one name declared twice at the same kind on the same class" do
       expect {
         Class.new(ApplicationController) do
@@ -958,8 +957,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     end
 
     # The reserved list is the engine's own route table, and it must stay that
-    # way: `bin/check-kiosk-names` holds the two against each other, and this
-    # pins the names the mixin refuses today so a silent shrink is visible.
+    # way, and this pins the names the mixin refuses today so a silent shrink is visible.
     it "reserves every first path segment the engine draws under the mount" do
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
         .to contain_exactly("agents", "auth", "events", "oauth", "pay", "schema")

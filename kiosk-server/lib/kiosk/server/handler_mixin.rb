@@ -186,9 +186,8 @@ module Kiosk
       # deliberately absent: it cannot match NAME_PATTERN, so no declaration can
       # collide with it.
       #
-      # `bin/check-kiosk-names` holds this list against the engine's own route
-      # table, so a route added there without a name added here fails the build
-      # instead of quietly re-opening a shadowed name.
+      # This list mirrors the engine's own route table: a route added there
+      # needs its name added here, or a shadowed name quietly re-opens.
       #
       # `query` and `run` are NOT on this list, and that is the check earning
       # its keep in the other direction: the engine draws no such segments, so

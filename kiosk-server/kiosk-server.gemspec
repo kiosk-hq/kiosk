@@ -52,7 +52,7 @@ Gem::Specification.new do |spec|
   # ceremony with ActionView::MissingTemplate. It shipped that way because
   # every consumer in this monorepo uses `path:`, which serves the working
   # tree: no test here could have noticed, and only someone installing from
-  # RubyGems would have. bin/check-gem-packaging is the standing guard.
+  # RubyGems would have.
   # `listen.py` is the pinned reference client for the event stream, resolved
   # inside the installed gem by {Kiosk::Server.listener_path};
   # `requirements.txt` beside it declares its python dependency.

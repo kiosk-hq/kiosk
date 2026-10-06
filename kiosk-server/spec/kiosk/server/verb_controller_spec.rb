@@ -667,8 +667,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
     it "leaves both names REGISTRABLE — they stopped being reserved with the routes that named them" do
       # `RESERVED_NAMES` is the engine's drawn first segments, and `query`/`run`
-      # are no longer among them (`bin/check-kiosk-names` holds the two sides
-      # equal). So an operator may now declare a verb called `query`, and it is
+      # are no longer among them. So an operator may now declare a verb called `query`, and it is
       # served at `<endpoint>/query` like any other.
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES).to eq(%w[agents auth events oauth pay schema])
 

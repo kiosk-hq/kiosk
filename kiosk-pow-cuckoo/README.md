@@ -148,7 +148,6 @@ a native solver (C/C++ like Tromp's `lean`/`mean` miner).
 
 ### Cross-impl parity gate
 
-<!-- runbook-runnable: bin/check-runbook-blocks --run executes this block verbatim -->
 ```bash
 cd kiosk-pow-cuckoo
 bundle exec rake solve_parity
@@ -189,7 +188,6 @@ No demo app wires Cuckatoo. The solve → verify loop at the
 toy params is exercised by this gem's cross-impl parity gate (see the Solver
 section above):
 
-<!-- runbook-runnable: bin/check-runbook-blocks --run executes this block verbatim -->
 ```bash
 cd kiosk-pow-cuckoo
 bundle exec rake solve_parity

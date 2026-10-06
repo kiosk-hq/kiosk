@@ -5,9 +5,7 @@ require "spec_helper"
 # THE ONE THING EVERY DRIVER IN THIS REPOSITORY NEEDS, AND THE SEAM MOST OF
 # THEM TAKE TO GET IT: a socket whose TLS is decided by the target's own
 # scheme. A driver that may not depend on this gem — `kiosk-user-idp-devise`'s
-# `DeviseSession` is the case — spells the same line out, and every such copy
-# is declared by name in `bin/check-tls-seam`, which is what keeps the next one
-# an argument rather than a diff.
+# `DeviseSession` is the case — spells the same line out.
 #
 # These examples are behavioural on purpose. A unit assertion that
 # `http.use_ssl?` is true proves the attribute was set; it does not prove the

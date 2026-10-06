@@ -37,8 +37,7 @@
 # THE MOUNT IS THE ONLY WAY A HOST DRAWS THIS PLANE. Copying these paths into
 # the host's own routes file is not a second supported spelling: it is a table
 # the operator then owns, of paths that are the spec's, which this gem can no
-# longer keep in step. `bin/check-verb-routes` refuses such a line
-# (PLANE-MOUNTED). Rails' first-match still decides between two lines that do
+# longer keep in step. Rails' first-match still decides between two lines that do
 # reach the same path — a route drawn ABOVE the mount wins — and that is the
 # fact the mount-goes-first ordering rests on, not a route an operator writes.
 #
@@ -619,9 +618,8 @@ module Kiosk
         # route is not part of the operator's named surface, and the upgrade
         # must match at exactly this path rather than as a prefix.
         #
-        # `events` is in {HandlerMixin::RESERVED_NAMES} in the same commit —
-        # `bin/check-kiosk-names` holds that list against THIS table in both
-        # directions, so either half alone is a build failure.
+        # `events` is in {HandlerMixin::RESERVED_NAMES} too: that list and THIS
+        # table move together.
         #
         # Drawn unconditionally, like `pay` and `agents/kyc`: an origin that
         # declares no topic answers it `module_not_served` (501, "this operator
@@ -695,10 +693,7 @@ module Kiosk
         # `config/routes/kiosk.rb`, with the METHOD FOLLOWING THE KIND — GET
         # for a query, POST for an action — pinning the name with
         # `defaults: { kiosk_verb: "<name>" }`. {VerbController} reads the name
-        # from that parameter. `bin/check-verb-routes` derives the expected
-        # list from each origin's own handler controllers and fails on a verb
-        # with no route, a route with no verb, or a method that disagrees with
-        # the kind.
+        # from that parameter.
         #
         # WHAT THIS COSTS, stated rather than implied: a verb added in
         # development is not served until the routes file gains a line — which

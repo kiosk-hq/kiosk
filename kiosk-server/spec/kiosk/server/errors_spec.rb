@@ -18,10 +18,8 @@ RSpec.describe Kiosk::Server::Errors do
   #
   # So the expected value comes out of `e2e/schemas/problem.schema.json`, the
   # VENDORED copy of the published normative schema, whose `allOf` carries one
-  # `if code == X then status == N` branch per vocabulary entry. `bin/check-spec-schemas`
-  # holds that copy equal to what kiosk.tech publishes whenever the umbrella
-  # layout puts the two repositories side by side; this file closes the other
-  # half, and needs no sibling checkout, so it runs in public CI exactly as it
+  # `if code == X then status == N` branch per vocabulary entry. That copy
+  # equals what kiosk.tech publishes; this file needs no sibling checkout, so it runs in public CI exactly as it
   # runs locally.
   #
   # WHAT THIS DOES NOT CLOSE, stated rather than implied: vendored-equals-published

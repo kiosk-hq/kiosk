@@ -135,7 +135,7 @@ module ProveBrokerBoot
     # It says DROPS out loud because it does: this is a `db:drop` in ANOTHER
     # demo, run by a task of this one, and the operator who typed that task
     # name never asked for it. That demo README carries the same
-    # warning, derived by bin/check-demo-prereqs from this very command.
+    # warning.
     puts "\n── Setting up KYC broker DB (#{BROKER_APP}) — this DROPS and recreates it ──"
     system(
       { "RAILS_ENV" => "development" },

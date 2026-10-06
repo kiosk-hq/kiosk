@@ -72,12 +72,7 @@ module Kiosk
       # {Client}, and `kiosk-user-idp-devise`'s `DeviseSession`. Most take this
       # seam; each site that spells the line out instead — an IdP adapter that
       # may not depend on this gem to open a socket, a guard, a server-side
-      # outbound client — is DECLARED by name in `bin/check-tls-seam` with its
-      # reason. No count is written here on purpose: that guard prints the
-      # whole census on every run — seam sites, declared hand-written copies,
-      # declared cleartext sites, and the size of the Ruby corpus it walked —
-      # so run it for today's numbers instead of reading yesterday's out of a
-      # comment.
+      # outbound client — says why where it does.
       # A decision that must come out the same way at every one of those sites
       # is a decision that belongs in one: while each site carried it, a single
       # omission was the whole client side of the tree unable to dial anything

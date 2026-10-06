@@ -154,10 +154,8 @@ RSpec.describe Kiosk::Server::WellKnown do
     # verifiable at all: the default names an IMMUTABLE versioned cut, never
     # the mutable `skill.md` alias, whose bytes change under a pin.
     #
-    # Which version that is belongs to the two guards that can see it:
-    # bin/check-version-parity holds it against the protocol version,
-    # and kiosk-test-support's skill_pin_spec holds it against the bytes
-    # kiosk.tech actually publishes.
+    # Which version that is belongs to kiosk-test-support's skill_pin_spec,
+    # which holds it against the bytes kiosk.tech actually publishes.
     it "advertises the skill descriptor when skill_sha256 is set" do
       Kiosk.configure { |c| c.skill_sha256 = "abc123" }
       d = described_class.build(base_url: "https://api.acme.example")
@@ -512,8 +510,7 @@ RSpec.describe Kiosk::Server::WellKnown do
 
       # ONE literal, in PowGate — the 403 hint and this document render the
       # same constant, so the document cannot come to point somewhere the
-      # error message does not. `bin/check-solver-pin` holds that literal
-      # against the URL the published skill names.
+      # error message does not.
       it "points at the published reference solver, the URL the 403 hint names" do
         expect(register).to include(Kiosk::Server::PowGate::POW_SOLVER_URL)
         expect(Kiosk::Server::PowGate::POW_INVALID_HINT)

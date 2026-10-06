@@ -54,9 +54,7 @@ universal agent skill is `skill.md` on the same site.
 
    The details belong in the git commit message and in the ledger row. Nothing
    already written is edited — a changelog is append-only history — so the long
-   standing corpus stays as it is, and `bin/check-changelog` (arms CL-8 length,
-   CL-9 sentences) holds the rule on entries that are NEW against its declared
-   baseline commit, printing the backlog as a census that never reddens.
+   standing corpus stays as it is.
 
    **AND THE ENTRY SAYS WHICH VERSION CARRIES IT, NOT ONLY WHEN IT LANDED (Phil,
    2026-09-24).** An entry is grouped by the release that carries it:
@@ -71,8 +69,7 @@ universal agent skill is `skill.md` on the same site.
    `## Before release sections` heading, unedited and naming no version.
    **`CHANGELOG-RULE.md` at the root is the authority for how** — where a line
    goes, the shape of a section, the order of a cut — and every changelog here
-   points at it instead of repeating it. `bin/check-changelog` holds the shape
-   (CL-11 heading grammar, CL-12 an open section, CL-13 no ungrouped entry).
+   points at it instead of repeating it.
 
 ## Repo specifics
 
@@ -88,11 +85,9 @@ universal agent skill is `skill.md` on the same site.
   (gems matrix + demos matrix + e2e). A demo task's namespace says what it is:
   `check:` ASSERTS and goes red, `demo:` is one a person runs and reads. Which
   `check:` tasks CI runs — and the recorded reason for each one it does not — is
-  enforced by `bin/check-ci-tasks` and published in every demo README's "Which of
-  these run in CI" table; adding a `check:` task means adding it to the matrix
-  `tasks:` list or to that entry's `ungated:` map, naming it in that README's own
-  hand-written task list (the same check asserts presence, never the prose), then
-  `bin/check-ci-tasks --write`.
+  published in every demo README's "Which of these run in CI" table; adding a
+  `check:` task means adding it to the matrix `tasks:` list or to that entry's
+  `ungated:` map, and to that README's task list and table.
 - The demos are separate Rails apps, so shared code is HAND-COPIED.
   `bin/check-demo-copies` (its own CI job) declares every hand-written Ruby file
   that exists in two or more demos — plus `.gitignore` — as `:identical`,
@@ -140,13 +135,8 @@ universal agent skill is `skill.md` on the same site.
   scripts or its README NAME must resolve to an existing, executable file.
 - The four `kiosk-demo-*/before-after.md` are a PUBLISHED narrative and every
   fenced block in them DERIVES from something in the same demo, declared in a
-  comment above the fence: `<!-- derived: generator | from: … -->`.
-  `bin/check-demo-derivations` (its own CI job) then holds every line of the
-  block to an invocation of the generator that `from:` names, whose namespace it
-  derives both from the path and from the class nesting. `generator` is the only
-  kind it checks, so a block declaring another kind fails until that kind has a
-  checker — and a fenced block with no declaration fails too. Editing one of
-  those documents means running it.
+  comment above the fence: `<!-- derived: generator | from: … -->`. Editing one of those
+  documents means running it.
 - **A migration that has shipped is never edited — a change arrives as a NEW
   file.** `db/migrate/` is not source you can refactor: every file in it is
   already recorded in the `schema_migrations` of every deployed database, and
@@ -166,39 +156,19 @@ universal agent skill is `skill.md` on the same site.
   timestamps and every deploy since has ABORTED its migrate step one step in
   (K-1083). Pre-1.0 the set may still be collapsed, and that was the last time
   (T-103, MIGRATION-AND-CONFIG-UPGRADE-POLICY); at 1.0 `db/migrate/` freezes
-  and becomes append-only. The gate is `bin/check-migration-replay` (its own
-  step in the demos job): it loads each historical `db/structure.sql` since the
-  fleet was provisioned, runs `db:migrate` against it, and diffs the catalog
-  against the tracked one — the only place in this repo where `db:migrate`
-  meets a database that already exists. When it fails, the repair is a new
-  migration file, and on the boxes it is `deploy/demo-reset.sh`.
+  and becomes append-only. A
+  broken migration is repaired by a new migration file, and on the boxes by
+  `deploy/demo-reset.sh`.
 - The gems are meant to be installable, but every consumer here uses `path:`,
   which reads the working tree — so a file missing from `spec.files` is
-  invisible locally and fatal from RubyGems. `bin/check-gem-packaging` (its own
-  CI job) builds all 14 gems and asserts every tracked file is packaged or
-  declared in its `NOT_PACKAGED` manifest with a reason, and that every
-  `__dir__`-relative path resolves inside the package. Adding an asset a gem
-  reads at runtime means adding it to `spec.files`. Its third rule is about the
-  same reader rather than the same bytes: a PACKAGED file that teaches
-  installing a Kiosk gem — a `gem "kiosk-…"` line, a `bundle add`, a `gem
-  install` — must point at the monorepo README's Install section, which is
-  where publication status is stated CANONICALLY, because someone holding the
-  built gem has that file and nothing else. Canonically and not solely: the
-  kiosk.tech onboarding guide carries a DERIVED copy of that README's claim,
-  held to it word for word by `bin/check-onboarding-derivation`'s
-  `PUBLICATION_STATUS` rule — a «one place» that a second live page contradicts
-  is how a maintainer changes one file on publication day and leaves the other
-  saying no gem is published (K-1381). The pointer is DERIVED from that README (the
-  canonical line's `github:` slug plus its own heading), so the day the gems are
-  published the rule fails and asks to be restated rather than passing quietly;
-  a mention that is prose about the resolver rather than an instruction is
-  declared in `INSTALL_MENTION_ONLY` with its reason, and goes stale loudly.
-- Version parity is a build gate, not prose. The spec (§14.1) binds the
+  invisible locally and fatal from RubyGems. Adding an asset a gem reads at
+  runtime means adding it to `spec.files`.
+- Version parity: the spec (§14.1) binds the
   protocol, this implementation and the skill: before 1.0 to one
   MAJOR.MINOR.PATCH, from 1.0 to one MAJOR.MINOR. Read the number from
   `kiosk-core/lib/kiosk/protocol.rb`'s `API_VERSION`, never from this sentence.
-  `bin/check-version-parity` (its own CI job) holds every gemspec, `MIN_CLIENT`,
-  every tracked lockfile and every pinned `skill_url` to it, and every `kiosk-*`
-  inter-gem constraint to `~> MAJOR.MINOR.0`. A skill cut moves the gems, and a
+  Every gemspec, `MIN_CLIENT`, every tracked lockfile and every pinned
+  `skill_url` follow it, and every `kiosk-*` inter-gem constraint is
+  `~> MAJOR.MINOR.0`. A skill cut moves the gems, and a
   gem release moves the skill, in the same change.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

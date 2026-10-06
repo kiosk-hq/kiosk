@@ -64,11 +64,9 @@ bundle exec rspec
 `bundle exec rake test`.
 
 **One demo.** Each demo is a standalone Rails app with its own bundle and its
-own README. Read that README first: its prerequisites block is *generated* from
-the demo's own files, and its "Which of these run in CI" table is *generated*
-from the workflow, so both are true rather than remembered. Then:
+own README. Read that README first: its prerequisites block and its "Which of these
+run in CI" table. Then:
 
-<!-- runbook-runnable: bin/check-runbook-blocks --run executes this block verbatim -->
 ```bash
 cd kiosk-demo-hoteling
 bundle exec rake -T          # what this demo can do
@@ -84,19 +82,16 @@ gems by path, runs the generator and the migrations, boots a server, drives a
 mock assistant against it over HTTP, validates the live bytes against the
 published JSON Schemas, and tears down.
 
-<!-- runbook-runnable: bin/check-runbook-blocks --run executes this block verbatim -->
 ```bash
 ./e2e/run.sh
 ```
 
-**The guards.** `bin/check-*` holds the properties a test suite cannot: that a
-shipped README's install snippet resolves, that nothing shipped cites material
-that does not ship with it, that no process-spawning construct is reachable from
-the code that verifies a proof, that every demo task is either gated in CI or
-opted out with a written reason, and about twenty more. They are plain scripts —
+**The guards.** `bin/check-*` holds properties a test suite cannot: that nothing
+shipped cites material that does not ship with it, that copies shared between
+demos agree, that the skill every demo pins is the newest published cut, and a
+few more. They are plain scripts —
 run one directly:
 
-<!-- runbook-runnable: bin/check-runbook-blocks --run executes this block verbatim -->
 ```bash
 bin/check-publication-paths
 ```
@@ -105,7 +100,6 @@ Most of them also take `--self-test`, which plants a break of every rule it
 holds and fails unless the script goes red on each one. If you change a guard,
 run its self-test; if you add a rule to one, add an arm for it.
 
-<!-- runbook-runnable: bin/check-runbook-blocks --run executes this block verbatim -->
 ```bash
 bin/check-publication-paths --self-test
 ```
@@ -126,10 +120,7 @@ Two things CI does *not* do, and they are yours:
   root `CHANGELOG.md` for a repository-wide change, `<gem>/CHANGELOG.md` for a
   change to that package. **Keep the entries short, always under 200 characters
   and one-two sentences; only keep the essence of the change.** The commit
-  message keeps the details. That rule binds every `CHANGELOG.md` here, and
-  `bin/check-changelog` holds it on entries that are new against its declared
-  baseline commit — the standing backlog is printed as a census and never
-  reddens. Tests-only changes, refactors and typos do not qualify. Nothing
+  message keeps the details. That rule binds every `CHANGELOG.md` here. Tests-only changes, refactors and typos do not qualify. Nothing
   already written is edited: history is append-only, and an entry that turns out
   to be wrong is superseded by a new one that names it.
 - **Shared code across demos.** The demos are separate applications, so shared

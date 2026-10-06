@@ -96,8 +96,7 @@ What each unit must carry. For EACH of the 7 apps:
 - [ ] **Operator allow-list — ONE PAIR PER KYC OPERATOR, and an operator with no pair is silently not registered:**
       `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`;
       `KIOSK_PROVE_GETGROCERY_SECRET=<a DIFFERENT shared intake secret>`, `KIOSK_PROVE_GETGROCERY_CALLBACK_HOST=getgrocery.demo.kiosk.tech`.
-      The KYC operators are the demos that ship `app/services/prove_broker_client.rb`; `bin/check-kyc-operator-pairing`
-      derives that roster and fails when either template stops carrying a pair for one of them.
+      The KYC operators are the demos that ship `app/services/prove_broker_client.rb`.
 - [ ] **Wire each operator to it:** in THAT operator's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_<OP>_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
       The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET` — their
       `config/environments/production.rb` is byte-identical across the operator demos and so must not name a demo — while
@@ -122,8 +121,7 @@ What each unit must carry. For EACH of the 7 apps:
       `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. That is not
       hypothetical: it is what BOTH deployed KYC operators did from 2026-08-13 to 2026-09-17, with a correct secret
       stored under the dead name on each box, until a live third-party assistant reported the alcohol in its getgrocery
-      basket as unbuyable by any route. The audit above is the box-side control; `bin/check-kyc-operator-pairing` is the
-      tree-side one and says in its own header that it cannot see a box.
+      basket as unbuyable by any route. The audit above is the box-side control.
       **What a missed pair looks like from outside, so it is not mistaken for a design choice:** the origin still
       ADVERTISES `request_kyc` in `/kiosk/schema` — the descriptor is static — and answers the verb
       `501 module_not_served`. No unauthenticated probe can tell that apart from an operator that genuinely serves no
@@ -249,9 +247,6 @@ What each unit must carry. For EACH of the 7 apps:
       real third-party orders it holds survive (pass `--all` only if you mean to destroy them). Verify with
       `deploy/production-smoke.sh` plus a plain `curl -sI https://<app>.demo.kiosk.tech/` → 200, and name any
       missing object from the box (`\d users`) rather than inferring it.
-      **Then move `FLEET_SCHEMA_BASELINE` in `bin/check-migration-replay` to the reset's date in the same
-      change** — that constant is the one fact the gate cannot measure for itself, a reset is exactly the
-      event that moves it, and its current value is when the reference fleet was last rebuilt.
 - [ ] ~~Prune cron~~ — **SKIPPED**, and there is nothing to install: this repo ships no
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog

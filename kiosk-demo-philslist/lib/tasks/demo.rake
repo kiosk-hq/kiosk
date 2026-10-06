@@ -830,9 +830,9 @@ namespace :check do
     # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because what §4.5
     # constrains is a SERVED BYTE: the tag is rendered by a view and the
     # header is set by a controller, so only a real response says what an
-    # assistant scanning this page is actually handed. bin/check-version-parity
-    # holds the SOURCE half (no literal url in app/, read the accessor); this
-    # holds the wire half. The expected url is read from the origin's own
+    # assistant scanning this page is actually handed.
+    # This holds the wire half; the source half is that app/ carries no
+    # literal url and reads the accessor. The expected url is read from the origin's own
     # `/.well-known/kiosk.json`, never from a constant here — a second copy of
     # the pin is the thing both halves exist to prevent.
     require "net/http"

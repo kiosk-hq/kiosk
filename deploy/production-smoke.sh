@@ -100,8 +100,7 @@
 # `structure.sql` (see the prepare step below) — from zero, where every tracked
 # column is present — so a box whose schema has drifted from the tree is
 # invisible to it, in tudu exactly as in every other demo. That escape is closed
-# before the deploy by `bin/check-migration-replay` and after it by the
-# post-deploy live-page check in `deploy/CHECKLIST.md` §8 — `curl -sI
+# after the deploy by the post-deploy live-page check in `deploy/CHECKLIST.md` §8 — `curl -sI
 # https://<app>.demo.kiosk.tech/` → 200 against the deployed box, which is the
 # only one of the three that reads the box's real schema. Three gates, three
 # different halves: none of them is a substitute for another.

@@ -40,11 +40,8 @@ module Kiosk
     # routes file — `rails routes` lists the verbs themselves — and they cost
     # three things, each answered where it lands:
     #
-    #   * declared-but-unrouted is a REAL bug class, and `bin/check-verb-routes`
-    #     is the check — it derives the expected list from each origin's own
-    #     handler controllers and fails on a missing route, an extra route, or a
-    #     method that disagrees with the kind. At runtime an unrouted verb is a
-    #     404 like any other path.
+    #   * declared-but-unrouted is a REAL bug class: every declared verb needs
+    #     its route. At runtime an unrouted verb is a 404 like any other path.
     #   * the reserved plane wins by first-match, because the operator
     #     draws `mount Kiosk::Server::Engine` FIRST and their verbs after it —
     #     and, more strongly, {HandlerMixin::RESERVED_NAMES} refuses such a
@@ -132,8 +129,7 @@ module Kiosk
       # — re-read the catalogue, versus tell the human it is not there.
       #
       # A route drawn with the method of the OTHER KIND — `GET` at an action,
-      # `POST` at a query, both of which `bin/check-verb-routes` refuses in
-      # this repository — is `405 method_not_allowed` with `Allow:` naming the
+      # `POST` at a query — is `405 method_not_allowed` with `Allow:` naming the
       # method the verb does accept. The verb EXISTS, and answering a 404 of
       # either kind would be a lie about it; RFC 9110 §15.5.6 already has the
       # status for exactly this. It discloses nothing: `GET <endpoint>/schema`

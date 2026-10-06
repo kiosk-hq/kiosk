@@ -35,9 +35,8 @@
 # A path under the mount that no line here draws — a name nobody registered, or
 # a verb dialed with the other method — matches nothing, so it is the ordinary
 # 404 Rails answers at any unrouted path. Nothing stands in for a line missing
-# here, which is why `bin/check-verb-routes` derives the list below from this
-# app's own handler controllers and fails on a verb with no route, a route with
-# no verb, or a method that disagrees with the kind.
+# here: every verb this app's handler controllers declare needs its line below,
+# with the method its kind takes.
 
 mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 

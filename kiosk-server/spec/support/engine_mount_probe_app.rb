@@ -126,8 +126,7 @@ SURFACE = [
 #
 # `GET /kiosk/ping` is the sharpest of the three. `ping` IS a registered query
 # here — published in the catalogue two examples up — and it still has no
-# route, so a declaration alone reaches nothing. That is why
-# `bin/check-verb-routes` is a build-time gate and not a nicety.
+# route, so a declaration alone reaches nothing.
 AUTHENTICATED = [
   ["POST", "/kiosk/query"],
   ["POST", "/kiosk/run"],
@@ -229,8 +228,7 @@ end
 #     `schema` answers and this line is dead — the ordering property is given by
 #     the mount being drawn first.
 #     (An operator cannot get this far in practice: {HandlerMixin::RESERVED_NAMES}
-#     raises at declaration, and `bin/check-verb-routes` refuses the route. This
-#     is the routing layer's own answer, measured rather than assumed.)
+#     raises at declaration. This is the routing layer's own answer, measured rather than assumed.)
 Rails.application.routes.draw do
   mount Kiosk::Server::Engine => "/kiosk"
   get "/kiosk/ping",   to: "kiosk/server/verb#show", defaults: { kiosk_verb: "ping" }

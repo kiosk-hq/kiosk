@@ -3,8 +3,8 @@
 # RESERVED-PLANE BODY VALIDATION (T-045).
 #
 # Every JSON request body the reserved plane accepts is held to the object
-# Section 17 of the spec publishes for it, from the vendored copy
-# `bin/check-spec-schemas` keeps equal to the published original. The refusal
+# Section 17 of the spec publishes for it, from the vendored copy of the
+# published original. The refusal
 # is `400 bad_request` naming the member that failed, which is what an
 # assistant needs to correct a call it has not been able to authenticate yet.
 #

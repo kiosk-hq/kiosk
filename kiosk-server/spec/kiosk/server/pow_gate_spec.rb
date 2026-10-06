@@ -384,8 +384,7 @@ RSpec.describe Kiosk::Server::PowGate do
         # read, so the 403 names the copy that is allowed to move and the
         # published skill supplies the digest beside its own content-addressed
         # pin. The two URLs are therefore NOT the same string and must not be
-        # made so; `bin/check-solver-pin` holds this one against the hosted
-        # file, and the skill's against its digest.
+        # made so.
         expect(error.hint).to eq(
           "solve with the reference solver at https://kiosk.tech/pow/solve.py — " \
           "a hand-written Equihash solver will not match this verifier",

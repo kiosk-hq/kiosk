@@ -24,13 +24,9 @@ require "digest"
 #       degrade, it stops the operator being transactable.
 #     * PATCH AGREEMENT — the engine default and the demos name the SAME cut.
 #
-#   NOT HERE — bin/check-version-parity owns it (rule C): that every pinned
-#   `skill_url`, the engine default included, names the version parity
-#   with `Kiosk::Protocol::API_VERSION` requires. That check needs no sibling checkout at all,
-#   so it runs in every job in this repo's CI; this file's byte group needs one
-#   and runs in the single job that provides it. Do not restate it here.
-#   The division is by what each can honestly see: it reads version STRINGS
-#   against the protocol, this reads published BYTES.
+#   NOT HERE: that every pinned `skill_url`, the engine default included,
+#   names the version parity with `Kiosk::Protocol::API_VERSION` requires.
+#   This file reads published BYTES, not version strings.
 #
 # WHERE THE BYTE GROUP CAN RUN, AND WHY THE SKIP IS NOT ITS OWN AUTHORITY
 # (K-1361). The byte group needs the published cuts, which live in the kiosk.tech
@@ -42,7 +38,7 @@ require "digest"
 # A UNIFORM half-relink was then planted (all seven demos AND the engine default
 # moved to `skill-v0.4.11.md`, every `skill_sha256` left at v0.4.12's) and,
 # sibling-less, this spec exited 0 with 9 pending while `bin/check-live-skill-pin`
-# and `bin/check-version-parity` both exited 0 as well. So did a one-hex-digit
+# exited 0 as well. So did a one-hex-digit
 # corruption of every `skill_sha256` with the URLs untouched. Nothing held the
 # supply-chain property anywhere except a human's workspace.
 #

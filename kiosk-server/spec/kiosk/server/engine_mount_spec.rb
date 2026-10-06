@@ -18,8 +18,8 @@
 #                       routes.append; Rails dispatches the first match). That
 #                       is the mechanism the mount-goes-first rule rests on —
 #                       an operator's verb line written above the mount really
-#                       would shadow the protocol, which is why
-#                       `bin/check-verb-routes`' MOUNT-FIRST refuses it.
+#                       would shadow the protocol, which is why the mount
+#                       goes first.
 #
 # The probe app is a real, booted Rails::Application run ONCE as a SUBPROCESS
 # (spec/support/engine_mount_probe_app.rb — see its header for why a
@@ -140,8 +140,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       # register, published in the catalogue two examples up — has no route.
       # Declaring a verb publishes it in the catalogue; it does not put it on
       # the network. Nothing matches the path, so the answer is the host
-      # framework's ordinary 404, and `bin/check-verb-routes` is what stops an
-      # origin shipping in this state.
+      # framework's ordinary 404.
       res = probe("mounted", "GET /kiosk/ping (bearer)")
 
       expect(res["status"]).to eq(404)
@@ -217,8 +216,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
   # The first-match property MOUNT-FIRST rests on, measured rather than assumed:
   # a host line drawn ABOVE the mount really does take the path. That is why the
   # mount is the first line of an operator's wire file and why a verb written
-  # above it is refused at build time — not an invitation to draw the plane by
-  # hand, which `bin/check-verb-routes`' PLANE-MOUNTED rule refuses outright.
+  # above it is a defect — not an invitation to draw the plane by hand.
   context "when a host route is drawn ABOVE the mount at a path the engine draws" do
     it "the host's ROOT route wins: config/routes.rb precedes routes.append" do
       res = probe("double_draw", "GET /agents.txt")
@@ -297,9 +295,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
     #
     #   1. {HandlerMixin::RESERVED_NAMES} raises an ArgumentError as the class
     #      body loads, so the verb cannot be DECLARED (handler_mixin_spec).
-    #   2. `bin/check-verb-routes`' NOT-RESERVED rule refuses the ROUTE at build
-    #      time, so it cannot be written either (that script's own self-test).
-    #   3. And if both were bypassed, the mount is drawn FIRST and Rails
+    #   2. And if that were bypassed, the mount is drawn FIRST and Rails
     #      dispatches the first matching route — which is what this example
     #      measures. The scenario draws `get "/kiosk/schema"` into the verb wire
     #      BELOW the mount; the engine's `schema` answers and that line is dead.

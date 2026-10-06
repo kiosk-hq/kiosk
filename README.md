@@ -16,11 +16,8 @@ every install snippet elsewhere points here instead of restating it.
 One sentence is copied rather than pointed at, deliberately: the onboarding
 guide on kiosk.tech carries the bolded claim above and a link back to this
 section, because a reader deciding whether to start an integration should not
-have to leave the page to find out the gems are not published. That copy is
-DERIVED and not remembered — `bin/check-onboarding-derivation`'s
-`PUBLICATION_STATUS` rule reads the claim out of this file and fails until the
-page carries it word for word, so rewording it here reddens the page instead of
-leaving a live page saying something this repository no longer says.
+have to leave the page to find out the gems are not published. Rewording it
+here means rewording that page too.
 
 The canonical install is one line — the meta-gem, from git:
 
@@ -64,8 +61,7 @@ Every Gemfile here consumes its siblings by `path:` — `gem "kiosk-server",
 path: "../kiosk-server"` — which serves the working tree rather than a built
 package. That is deliberate: it is how a change across gems is tested end to
 end. It is also a blind spot, because nothing resolving by `path:` can tell a
-file that EXISTS from a file that is PACKAGED, which is why
-`bin/check-gem-packaging` exists (below). Do not copy the `path:` form into an
+file that EXISTS from a file that is PACKAGED. Do not copy the `path:` form into an
 app outside this repository.
 
 The step-by-step operator walkthrough — install through a served wire, with a
@@ -152,20 +148,13 @@ task is one a person runs and reads — `demo:setup` prepares the database,
 getgrocery's `demo:reconcile` reports on stuck orders — and neither can go red.
 Not every `check:` task runs in CI; a few are too heavy or too timing-sensitive
 for a shared runner. Which is which is stated in every demo README's **"Which of
-these run in CI"** table, generated from `.github/workflows/ci.yml` by
-`bin/check-ci-tasks`; that script also runs as its own CI job and fails the build
-when a `check:` task is neither gated nor recorded with the reason it is not,
-when a `demo:` task is listed as a gate, or when a task the demo defines is not
-named in that README's own hand-written list of what each task proves.
+these run in CI"** table, read off `.github/workflows/ci.yml`.
 
 **Four of the demos — `atablefor`, `getgrocery`, `hoteling`, `skooti` — also
 carry a `before-after.md`**: a contrast between what an AI assistant can do at
 that provider today and what the same errand looks like once Kiosk is
 installed, followed by the operator-side adoption recipe. Four rather than all
-eight is deliberate, and neither the documents nor the number is kept by hand.
-Every fenced block in one must declare what produced it, and
-`bin/check-demo-derivations` (its own CI job) then holds each line of it to an
-invocation of the generator that declaration names. The number in the sentence
+eight is deliberate. Every fenced block in one declares what produced it. The number in the sentence
 above is DERIVED, not typed: `bin/check-prose-counts` re-runs the command
 `bin/prose-counts-allow.txt` records beside it — `git ls-files
 'kiosk-demo-*/before-after.md' | wc -l` — and fails when the answer and the prose
@@ -187,11 +176,7 @@ file by file, with its reason, in the same script.
 Everything in this repo consumes the gems by `path:`, which serves the working
 tree — so nothing here can tell a file that EXISTS from a file that is
 PACKAGED, and kiosk-server shipped without its view templates for exactly that
-reason. `bin/check-gem-packaging` — its own CI job as well — builds every `*.gemspec` in
-this repo and reads the file list back out of the built `.gem`. It fails when a tracked
-file is neither in the package nor declared development scaffolding with the
-reason, and when packaged Ruby resolves a `__dir__`-relative path to something
-the package does not contain. Adding a non-`lib/` file a gem needs at runtime
+reason. Adding a non-`lib/` file a gem needs at runtime
 means adding it to that gem's `spec.files`.
 
 ## Contributing
@@ -207,9 +192,8 @@ Before 1.0 every gem carries the protocol's full version — the version parity
 the spec promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the
 protocol, every gem here and the published skill read the same MAJOR.MINOR.PATCH,
 and a new cut of any one of them moves all of them. From 1.0 they share
-MAJOR.MINOR. `bin/check-version-parity` — its own CI job — enforces that against
-`Kiosk::Protocol::API_VERSION`, together with the `~> MAJOR.MINOR.0` inter-gem
-constraints, the lockfiles and the pinned `skill_url`. Releases are cut as
+MAJOR.MINOR. The number is `Kiosk::Protocol::API_VERSION`, and the `~> MAJOR.MINOR.0`
+inter-gem constraints, the lockfiles and the pinned `skill_url` follow it. Releases are cut as
 path-scoped git tags — the gem's directory name, then `/v` and the version —
 off each subdir's authoritative `*.gemspec`.
 

@@ -156,10 +156,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     # CHANGELOG.md is held one directory up instead. A changelog is append-only
     # -- a wrong entry is superseded by a new one naming it, never rewritten --
     # so a sweep of THIS shape over it would redden on frozen history for ever.
-    # `bin/check-changelog` arm CL-10 is the shape that does not: it reads only
-    # entries that are NEW against its declared baseline commit and prints the
-    # rest as a census, and its RETIRED table carries this claim by name. The
-    # 0.2.0 entry stands, an Unreleased entry corrects it, and a fresh entry
+    # The 0.2.0 entry stands, an Unreleased entry corrects it, and a fresh entry
     # asserting it again is red (K-1671).
     it "is described as neither Crockford nor 32^8 anywhere in lib or app" do
       root = File.expand_path("../../..", __dir__)

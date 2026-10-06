@@ -130,17 +130,15 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       # table's own ordering (the per-verb pair drawn last); it is now enforced
       # by the OPERATOR's file drawing `mount Kiosk::Server::Engine` above their
       # verbs, so every path here still wins by Rails' first-match.
-      # `bin/check-verb-routes`' MOUNT-FIRST rule is what holds that ordering,
-      # and {HandlerMixin::RESERVED_NAMES} refuses the declaration at boot so
+      # {HandlerMixin::RESERVED_NAMES} refuses the declaration at boot so
       # the collision cannot be written in the first place.
       expect(recognize(:get,  "/schema")).to include(controller: "kiosk/server/wire")
       expect(recognize(:post, "/pay")).to    include(controller: "kiosk/server/wire")
     end
 
     it "reserves exactly the first segments it draws — and `query`/`run` left both" do
-      # `RESERVED_NAMES` is the declaration-time half of the same rule, and
-      # `bin/check-kiosk-names` holds it equal to the engine's drawn first
-      # segments. The cutover deleted two routes, so it shed the two names;
+      # `RESERVED_NAMES` is the declaration-time half of the same rule, equal
+      # to the engine's drawn first segments. The cutover deleted two routes, so it shed the two names;
       # `events` joined when the stream was mounted (T-169), which is the same
       # rule running the other way.
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)

@@ -5,10 +5,8 @@
 #   ssh <deploy-user>@<box> 'sudo bash -s' -- --fix-retired-names \
 #       < deploy/kyc-pairing-audit.sh
 #
-# WHY IT EXISTS. `bin/check-kyc-operator-pairing` holds the shipped templates
-# and the checklist, and its header says in as many words what it cannot see:
-# the VALUES on the boxes. Nothing in this repository reads
-# /etc/kiosk-demo/*.env, so a deployment can satisfy every rule that guard has
+# WHY IT EXISTS. Nothing in this repository reads the VALUES on the boxes in
+# /etc/kiosk-demo/*.env, so a deployment can match every shipped template
 # and still answer `501 module_not_served` on `request_kyc` — which is exactly
 # what both KYC operators did for thirty-five days, and what a live third-party
 # assistant hit on 2026-09-17.
@@ -40,8 +38,7 @@ fail=0
 bad() { echo "FAIL  $*"; fail=1; }
 ok()  { echo "ok    $*"; }
 
-# A demo is a KYC operator iff it ships app/services/prove_broker_client.rb —
-# the same derivation bin/check-kyc-operator-pairing's KP-1 makes from the tree.
+# A demo is a KYC operator iff it ships app/services/prove_broker_client.rb.
 roster=$(cd "$REPO" 2>/dev/null && ls -d kiosk-demo-*/app/services/prove_broker_client.rb 2>/dev/null |
          sed -e 's|^kiosk-demo-||' -e 's|/app/.*$||' | sort)
 if [ -z "$roster" ]; then

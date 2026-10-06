@@ -26,6 +26,7 @@ module Kiosk
       REQUEST_HINT = "call `#{NAME}` to verify them: subscribe to the #{TOPIC} topic first, relay the " \
                      "verification_url it returns to your human, and retry once the event arrives".freeze
       ATTEST_HINT  = "submit a KYC attestation carrying them to POST <endpoint>/agents/kyc, then retry".freeze
+      CLOSED_HINT  = "verification is not available at this origin and retrying will not help".freeze
 
       INPUT_SCHEMA = { type: "object", additionalProperties: false, properties: {}, required: [] }.freeze
 
@@ -164,8 +165,16 @@ module Kiosk
 
           raise Errors::KycRequired.new(
             "this action requires the verified attributes #{Array(names).join(", ")}",
-            hint: provider ? REQUEST_HINT : ATTEST_HINT,
+            hint: gate_hint,
           )
+        end
+
+        # Names only a path this origin serves.
+        def gate_hint
+          return REQUEST_HINT if provider
+          return ATTEST_HINT if Kiosk.configuration.kyc_public_key
+
+          CLOSED_HINT
         end
 
         private

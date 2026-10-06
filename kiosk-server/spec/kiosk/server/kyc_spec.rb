@@ -138,6 +138,10 @@ RSpec.describe Kiosk::Server::Kyc do
     id
   end
 
+  def as(user_id, agent_id)
+    Kiosk::Server::CurrentRequest.with(identity: build_identity(user_id: user_id, agent_id: agent_id)) { yield }
+  end
+
   def granted(user_id = "u-1")
     ::ActiveRecord::Base.connection.exec_query(
       %(SELECT name FROM "#{KYC_SPEC_SCHEMA}".kyc_attributes WHERE user_id = $1 ORDER BY name), "spec", [user_id],
@@ -158,10 +162,22 @@ RSpec.describe Kiosk::Server::Kyc do
       expect([status, problem["code"]]).to eq([501, "module_not_served"])
     end
 
-    it "gates without naming request_kyc" do
-      identity = build_identity(user_id: "u-1", agent_id: "a-1")
-      expect { Kiosk::Server::CurrentRequest.with(identity: identity) { described_class.require! } }
-        .to raise_error(Kiosk::Server::Errors::KycRequired) { |e| expect(e.hint).not_to include("request_kyc") }
+    it "gates naming agents/kyc and not request_kyc" do
+      expect { as("u-1", "a-1") { described_class.require! } }
+        .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
+          expect(e.hint).to include("agents/kyc")
+          expect(e.hint).not_to include("request_kyc")
+        }
+    end
+
+    it "gates naming no KYC path when no kyc_public_key is configured either" do
+      Kiosk.configuration.kyc_public_key = nil
+      expect { as("u-1", "a-1") { described_class.require! } }
+        .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
+          expect(e.hint).not_to include("agents/kyc")
+          expect(e.hint).not_to include("request_kyc")
+          expect(e.hint).to include("not available at this origin")
+        }
     end
   end
 
@@ -250,10 +266,6 @@ RSpec.describe Kiosk::Server::Kyc do
 
   describe ".grant! and .require!" do
     before { configure(provider) }
-
-    def as(user_id, agent_id)
-      Kiosk::Server::CurrentRequest.with(identity: build_identity(user_id: user_id, agent_id: agent_id)) { yield }
-    end
 
     it "grants only the JSON boolean true, in Postgres" do
       described_class.grant!("u-1", "age_over_18" => true, "licence_a" => "true", "adult" => 1, "x" => false)

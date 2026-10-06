@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **With neither a `kyc_provider` nor a `kyc_public_key`, the `kyc_required` hint names no KYC path** and says verification is not available at this origin.
 - 2026-10-07: **`kiosk.kyc_attributes` and `kiosk.kyc_requests` reference the host's user table `ON DELETE CASCADE`**; `kyc_user_fk_sql` adds the key to existing tables.
 
 - 2026-10-07: **The `payment_setup` return page says the assistant can pay only when the provider confirms it**; otherwise it says the assistant will check.

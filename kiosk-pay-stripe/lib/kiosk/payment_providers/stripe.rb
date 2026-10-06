@@ -34,7 +34,9 @@ module Kiosk
       # #outstanding_setup_session.
       SETUP_SESSION_LIST_LIMIT = 10
 
-      DEFAULT_RETURN_PATH = "/payment/return"
+      # Stripe substitutes the session id on the redirect, which is how
+      # {#setup_return_user_id} learns whose human came back.
+      RETURN_QUERY = "session_id={CHECKOUT_SESSION_ID}"
 
       # @param api_key [String] Stripe secret key (sk_test_… for the PoC)
       # @param test_payment_method [String, nil] Stripe test PaymentMethod id
@@ -54,20 +56,14 @@ module Kiosk
       #   environment (e.g. getgrocery when KIOSK_TEST_AUTOCARD=1); it is
       #   never enabled in production or the live demo, where the real hosted
       #   SetupIntent flow runs.
-      # @param return_url [String, nil] where Stripe redirects the human's
-      #   browser after they enter a card on the hosted page. A path (leading
-      #   `/`) is joined to the origin being served; an absolute url is used
-      #   as is. Default `/payment/return`. See #resolved_return_url.
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",
-                     customer_resolver: nil, customer_saver: nil, test_autocard: false,
-                     return_url: nil)
+                     customer_resolver: nil, customer_saver: nil, test_autocard: false)
         super()
         @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
         @test_payment_method = test_payment_method
         @customer_resolver   = customer_resolver
         @customer_saver      = customer_saver
         @test_autocard       = test_autocard
-        @return_url          = return_url
         require "stripe"
         # PoC scope: this sets a PROCESS-GLOBAL Stripe key. Multiple adapter
         # instances with different keys would clobber each other; a future fix
@@ -82,7 +78,7 @@ module Kiosk
       # card data.
       #
       # ## STABLE ACROSS POLLS
-      # Hosts document `payment_setup` as the readiness probe an assistant POLLS
+      # `payment_setup` is the readiness probe an assistant POLLS
       # while its human is still at the hosted page, so this call must not mint a
       # session per poll. It reuses the `mode:setup` Checkout Session already
       # OUTSTANDING for this customer when there is one, and only creates a new
@@ -95,22 +91,33 @@ module Kiosk
       # the url's stability.
       #
       # @param user_id [String] synthetic principal identifier
+      # @param return_url [String] the engine's return page
       # @return [String] hosted Stripe Checkout URL
-      def setup_url(user_id:)
-        # Resolve the return URL FIRST: it fails LOUD when nothing is
-        # configured, and that must happen before ANY Stripe call — the reuse
-        # lookup included — so a misconfigured deploy still crashes loudly
-        # instead of listing sessions it could never match.
-        success_url = resolved_return_url
+      def setup_url(user_id:, return_url:)
+        success_url = "#{return_url}?#{RETURN_QUERY}"
         cus_id      = ensure_customer(user_id)
 
         outstanding_setup_session(cus_id, success_url: success_url)&.url ||
           ::Stripe::Checkout::Session.create(
-            mode:                    "setup",
-            customer:                cus_id,
-            payment_method_types:    ["card"],
-            success_url:             success_url,
+            mode:                 "setup",
+            customer:             cus_id,
+            client_reference_id:  user_id,
+            payment_method_types: ["card"],
+            success_url:          success_url,
           ).url
+      end
+
+      # The principal whose card setup the returning browser reports. The
+      # session id in the query is only a claim; Stripe, asked with this
+      # operator's key, answers the principal the session was minted for.
+      #
+      # @param params [Hash] the return request's query parameters
+      # @return [String, nil]
+      def setup_return_user_id(params)
+        session_id = params["session_id"].to_s
+        return nil if session_id.empty?
+
+        ::Stripe::Checkout::Session.retrieve(session_id).client_reference_id
       end
 
       # Returns true when the principal MUST complete a Stripe SetupIntent
@@ -343,47 +350,6 @@ module Kiosk
         when "authentication_required" then "the payment method needs authentication an off-session charge cannot complete"
         else "the payment method was declined"
         end
-      end
-
-      # The `success_url` Stripe redirects the human's BROWSER to after they
-      # enter a card on the hosted page. A path is joined to the origin being
-      # served ({Kiosk.current_issuer}), so a deployment serving several
-      # origins returns each human to the one they came from; an absolute url
-      # is used as is. With no origin to join, it raises rather than fall back
-      # to a localhost address a paying human's browser would follow.
-      #
-      # IF THE RETURN PAGE HAS TO KNOW WHO CAME BACK, the operator puts Stripe's
-      # own placeholder in the path:
-      #
-      #   return_url: "/payment/return?session_id={CHECKOUT_SESSION_ID}"
-      #
-      # Stripe substitutes the id on the redirect, and the page retrieves the
-      # session to learn the customer. The adapter does not add it: the return
-      # page is the operator's own. The literal is the same for every caller on
-      # one origin, so {#outstanding_setup_session}'s `success_url` equality
-      # still matches.
-      def resolved_return_url
-        url = @return_url.to_s.strip
-        url = DEFAULT_RETURN_PATH if url.empty?
-        return url unless url.start_with?("/")
-
-        issuer = configured_issuer.to_s.strip
-        return "#{issuer.chomp("/")}#{url}" unless issuer.empty?
-
-        raise "Stripe SetupIntent needs a return URL (success_url) but no origin is being served " \
-              "to join #{url.inspect} to. Configure Kiosk's issuer, or pass an absolute " \
-              "return_url: to Kiosk::PaymentProviders::Stripe.new. A localhost fallback is " \
-              "refused because it would send the paying human's browser to their own machine."
-      end
-
-      # The issuer of the origin being served, or nil if Kiosk is not configured
-      # (e.g. this adapter used in isolation). Never raises.
-      def configured_issuer
-        return nil unless defined?(Kiosk) && Kiosk.respond_to?(:current_issuer)
-
-        Kiosk.current_issuer
-      rescue StandardError
-        nil
       end
 
       # Resolve existing Customer or create a new one and persist the mapping

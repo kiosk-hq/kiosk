@@ -41,18 +41,11 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
   # In-memory principal→customer store (replaces the app's stripe_customers table).
   let(:customer_store) { {} }
 
-  # `return_url:` is not optional here. A hosted SetupIntent with no resolvable
-  # success_url fails LOUD before any Stripe call, and this adapter is built
-  # outside a configured Kiosk host, so `Kiosk.configuration.issuer` is nil and
-  # there is nothing to derive one from. Without it both `#setup_url` examples
-  # below raise instead of running — and a raise inside a file that skips
-  # without a key is invisible, which is how they went unrun.
   subject(:adapter) do
     described_class.new(
       api_key:           ENV["STRIPE_SECRET_KEY"],
       customer_resolver: ->(uid) { customer_store[uid] },
       customer_saver:    ->(uid, cid) { customer_store[uid] = cid },
-      return_url:        "https://shop.example/payment/return",
     )
   end
 
@@ -72,8 +65,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
   # subject that raises before any network call is indistinguishable from a
   # skip, and a skip is the same colour as a pass. It touches no network.
   describe "the subject itself" do
-    it "resolves a success_url without reaching Stripe", :no_key_needed do
-      expect(adapter.send(:resolved_return_url)).to eq("https://shop.example/payment/return")
+    it "builds without reaching Stripe", :no_key_needed do
+      expect(adapter).to be_a(described_class)
     end
   end
 
@@ -96,7 +89,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
 
   describe "#setup_url" do
     it "returns a hosted Stripe Checkout URL for the setup flow" do
-      url = adapter.setup_url(user_id: user_id)
+      url = adapter.setup_url(user_id: user_id, return_url: "https://shop.example/kiosk/payment_setup/return")
       expect(url).to start_with("https://checkout.stripe.com/")
     end
 
@@ -108,8 +101,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
     # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
     # none, so in CI this is skipped, not passed.
     it "returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)" do
-      first  = adapter.setup_url(user_id: user_id)
-      second = adapter.setup_url(user_id: user_id)
+      first  = adapter.setup_url(user_id: user_id, return_url: "https://shop.example/kiosk/payment_setup/return")
+      second = adapter.setup_url(user_id: user_id, return_url: "https://shop.example/kiosk/payment_setup/return")
 
       expect(second).to eq(first)
 

@@ -44,7 +44,6 @@ Kiosk.configure do |c|
     api_key:           ENV["STRIPE_SECRET_KEY"], # sk_test_… for the PoC
     customer_resolver: ->(user_id) { store.customer_id_for(user_id) },
     customer_saver:    ->(user_id, cus_id) { store.save(user_id, cus_id) },
-    return_url:        "/payment/return", # joined to the origin being served
   )
 end
 ```
@@ -53,9 +52,10 @@ Card-setup handshake (see the Payment section of the spec):
 
 - `setup_required?(user_id:)` — true when the principal must set up a card
   before a charge can proceed.
-- `setup_url(user_id:)` — hosted Stripe Checkout URL (`mode: "setup"`). The
+- `setup_url(user_id:, return_url:)` — hosted Stripe Checkout URL (`mode: "setup"`). The
   human opens it in a browser (NOT the chat) to enter their card on Stripe's
-  hosted page; the human is redirected to `return_url` afterward. The gem
+  hosted page; Stripe then redirects them to kiosk-server's
+  `<mount>/payment_setup/return` page, which kiosk-server passes as `return_url`. The gem
   never sees card data. **Stable across polls:** an already-outstanding
   (`status: open`, same `return_url`) setup session is reused, so an assistant
   polling readiness keeps handing its human the SAME link instead of a fresh
@@ -63,6 +63,9 @@ Card-setup handshake (see the Payment section of the spec):
   lookup itself errors, the adapter cannot tell "no outstanding session" from
   "did not find out", so it mints a fresh session (the probe keeps answering)
   and warns that the url is not stable until that clears.
+- `setup_return_user_id(params)` — the principal whose Checkout Session the
+  return page's `session_id` names, asked of Stripe; kiosk-server then pushes the
+  `payment_setup` event once `setup_required?` answers false.
 - `saved_method?(user_id:)` — true once the resolved Customer has a usable
   saved card.
 

@@ -339,13 +339,6 @@ The demo bakes in shortcuts production operators replace:
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials, and every driver here signs in through the
   real form like a person would).
-- **Contact is unrelayed.** A seller reaches a buyer only by publishing a
-  contact detail in their own listing text — which works, and is how classifieds
-  worked before relays, but it means a seller who wants replies must publish
-  something in the clear. A production board adds an operator-relayed message
-  verb so neither side hands the other an address; that is designed and
-  deliberately not built here, because a half-built inbox would be a worse demo
-  than an honestly-stated absence.
 - **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here: this
   demo sets nothing, so the engine's own `DefaultAgentIdp` verifies the
   kiosk-pop JWTs it minted, in every environment, and nothing accepts a
@@ -355,6 +348,12 @@ The demo bakes in shortcuts production operators replace:
   constraint is that the `agent_id` you return must be a **UUID**.
 - **The human session channel** (`c.user_idp`) already runs the real
   `kiosk-user-idp-devise` adapter.
+
+## Known limitations
+
+- **Contact is unrelayed.** A buyer reaches a seller only through a contact
+  detail the seller typed into the listing text, and that text is public to
+  everyone reading the board. The operator relays no messages between them.
 
 ## License
 

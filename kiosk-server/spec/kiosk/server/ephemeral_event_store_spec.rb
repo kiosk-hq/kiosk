@@ -48,10 +48,10 @@ RSpec.describe Kiosk::Server::Engine, ".ephemeral_event_store_error" do
 
     # The whole reason this is a refusal and not a log line: the operator
     # cannot discover it by watching their own system.
-    it "says WHY it matters — the loss is silent, and it is total for a subscription" do
+    it "says WHY it matters — a restart loses events inside the retention window, silently" do
       expect(error).to include("no error, no metric and no log line")
-      expect(error).to include("DELIVERED BY the cursor and has no other")
-      expect(error).to include("24 hours of events per identity")
+      expect(error).to include("keeps every event for 24 hours")
+      expect(error).to include("a restart or deploy loses every event inside that window")
     end
 
     it "names the shipped durable store so the fix needs no search" do

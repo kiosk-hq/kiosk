@@ -478,18 +478,14 @@ module Kiosk
         return nil unless config.event_store.is_a?(Kiosk::Server::EventStore)
 
         "[kiosk-server] this origin declares event topic(s) (#{declared.sort.join(', ')}) and its " \
-          "`event_store` is the IN-PROCESS default. That store is a Hash in one process: the tail " \
-          "is empty after every restart and deploy, and it is not shared between Puma workers, " \
-          "dynos or pods, so a subscriber resuming from the cursor it recorded is told " \
-          "`truncated: true` every time. A topic that is a WAIT is merely degraded by that. A " \
-          "topic that is a SUBSCRIPTION — an event that arrives hours later, when the assistant " \
-          "is not running and no socket is held — is DELIVERED BY the cursor and has no other " \
-          "mechanism, so it is not delivered at all. Nothing reports it: a lost tail produces no " \
-          "error, no metric and no log line, and the operator learns from a customer. Set the " \
+          "`event_store` is the IN-PROCESS default. The operator keeps every event for 24 hours, " \
+          "so a subscriber that reconnects with `since` misses nothing; this store is a Hash in " \
+          "one process, not shared between Puma workers, dynos or pods, and a restart or deploy " \
+          "loses every event inside that window, so the subscriber is told `truncated: true`. " \
+          "Nothing reports it: a lost tail produces no error, no metric and no log line. Set the " \
           "durable store: c.event_store = Kiosk::Server::EventStores::ActiveRecord.new — which " \
           "`rails generate kiosk:install` writes into the initializer, beside the " \
-          "`#{Kiosk.configuration.schema}.events` migration it writes for it. The published " \
-          "contract is at least 24 hours of events per identity."
+          "`#{Kiosk.configuration.schema}.events` migration it writes for it."
       end
 
       config.after_initialize do

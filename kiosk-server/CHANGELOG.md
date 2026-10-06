@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-06: **The production boot refusal for an in-process event store now says why: a restart loses events inside the 24-hour retention window.**
+
 ## [0.5.3] — 2026-10-06
 
 - 2026-10-06: **The default `skill_url` names `skill-v0.5.3.md`**, and `listen.py` tells an assistant to run it tracked in the background and tell its human.

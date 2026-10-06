@@ -5,14 +5,13 @@ module Kiosk
   module Protocol
     # Semver of the wire protocol: one endpoint per verb under the mount
     # (`GET <endpoint>/<query-name>`, `POST <endpoint>/<action-name>`) plus the
-    # reserved `GET <endpoint>/schema` and `POST <endpoint>/pay`. Changes more
-    # slowly than the server version itself.
+    # reserved `GET <endpoint>/schema` and `POST <endpoint>/pay`.
     #
     # 0.5 is a BREAKING minor: the catalogue root is closed and `events` is
     # REQUIRED in it, so a client built for an earlier minor cannot read it.
-    # `bin/check-version-parity` binds every gemspec version, every inter-gem
-    # constraint and every pinned skill_url to this constant's MAJOR.MINOR.
-    API_VERSION = "0.5.0"
+    # Before 1.0 every gem, MIN_CLIENT and every pinned skill cut carry this
+    # exact version (spec §14.1); `bin/check-version-parity` holds it.
+    API_VERSION = "0.5.2"
 
     # The oldest skill cut that can transact with this engine (spec §14.2,
     # §14.4: a 0.5.2 operator no longer serves the 0.5.0 and 0.5.1 cuts).

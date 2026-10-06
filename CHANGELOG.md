@@ -12,6 +12,10 @@ held by `bin/check-changelog`.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-06
+
+- 2026-10-06: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.2, matching skill 0.5.2**: before 1.0 they all carry one version, and `bin/check-version-parity` holds the full number.
+
 - 2026-10-06: **`Kiosk::Protocol::MIN_CLIENT` is `0.5.2`**, so `Kiosk-Min-Client` and `kiosk.min_client` tell a 0.5.0 or 0.5.1 assistant it is behind a 0.5.2 origin.
 
 - 2026-10-06: **`/auth.md` names the event stream among the modules `501 module_not_served` can mean**, beside binding, payment and KYC.

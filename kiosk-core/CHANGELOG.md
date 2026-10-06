@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-06
+
+- 2026-10-06: **`Kiosk::Protocol::API_VERSION` is `0.5.2`**: before 1.0 `Kiosk-API-Version` carries the full version every gem and the skill share.
+
 - 2026-10-06: **`Kiosk::Protocol::MIN_CLIENT` is `0.5.2`**, so `Kiosk-Min-Client` and `kiosk.min_client` tell a 0.5.0 or 0.5.1 assistant it is behind a 0.5.2 origin.
 
 - 2026-10-05: `c.additional_origins` lists further origins one deployment serves; `Kiosk.current_issuer` answers the origin of the request being served (ADR-0040).

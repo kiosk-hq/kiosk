@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-06
+
 - 2026-10-05: **The package ships `requirements.txt` beside `solve.py`**, declaring the solver's `numpy` the way `kiosk-pow` declares `argon2-cffi`.
 
 ## [0.5.0] — 2026-09-26

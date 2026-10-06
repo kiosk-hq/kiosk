@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-06
+
 - 2026-10-05: **A `return_url:` path is joined to the origin being served**, so on a deployment serving several origins the human returns to the one they came from.
 
 - 2026-10-05: **The derived return URL names the origin being served** (`Kiosk.current_issuer`), not only the default issuer.

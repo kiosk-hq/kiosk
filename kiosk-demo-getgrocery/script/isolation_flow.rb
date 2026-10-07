@@ -20,7 +20,7 @@
 # Positive controls that must simply succeed (A reschedules own paid order;
 # B creates, pays and reschedules own order) abort this flow directly on
 # failure. Carts mirror their orders at catalog prices (EUR) — the
-# ValidatingPaymentProvider cashier check runs on every capture here.
+# PaymentClaim cashier check runs on every capture here.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3001 \

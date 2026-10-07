@@ -4,7 +4,7 @@
 # reconciliation, and a typed 4xx on a malformed order_id.
 #
 # Runs IN-PROCESS against the real getgrocery Postgres schema (via
-# `bin/rails runner`), driving the REAL ValidatingPaymentProvider cashier check
+# `bin/rails runner`), driving the REAL PaymentClaim cashier check
 # and the REAL create_order action across multiple threads (each on its own
 # pooled connection, so Postgres row locks actually bite). The PSP is a
 # controllable stub — a blocking latch (to hold a /pay mid-capture) or a
@@ -210,7 +210,7 @@ order_id = o["order_id"]
 puts "  order O=#{order_id} total=#{o["total_cents"]}c (cheap)"
 
 blocking = BlockingPsp.new
-vpp      = ValidatingPaymentProvider.new(blocking, currency: "eur")
+vpp      = Kiosk.configuration.payment_provider.over(blocking)
 
 pay_thread = Thread.new do
   ActiveRecord::Base.connection_pool.with_connection do
@@ -285,7 +285,7 @@ order2 = o2["order_id"]
 puts "  order O2=#{order2}; firing #{n} concurrent /pay"
 
 counting = CountingPsp.new
-vpp2     = ValidatingPaymentProvider.new(counting, currency: "eur")
+vpp2     = Kiosk.configuration.payment_provider.over(counting)
 results  = Queue.new
 
 mutex = Mutex.new
@@ -346,7 +346,7 @@ puts "\n== a malformed order_id is a typed 4xx, never a 500 =="
 # a rejected input from "the charge may have gone through". So it is a typed
 # 4xx here.
 bad_psp = CountingPsp.new
-vpp3    = ValidatingPaymentProvider.new(bad_psp, currency: "eur")
+vpp3    = Kiosk.configuration.payment_provider.over(bad_psp)
 
 bad_error = begin
   vpp3.capture(cart_for("not-a-uuid", id: "cart-BAD"))
@@ -462,7 +462,7 @@ check(order_row(charged_order)["status"] == "paying", "order is stranded in `pay
 # (a) The next /pay tells the truth and heals the row on the spot.
 heal_psp = CountingPsp.new
 heal_err = begin
-  ValidatingPaymentProvider.new(heal_psp, currency: "eur").capture(cart_for(charged_order, id: "cart-RETRY"))
+  Kiosk.configuration.payment_provider.over(heal_psp).capture(cart_for(charged_order, id: "cart-RETRY"))
   nil
 rescue StandardError => e
   e
@@ -493,7 +493,7 @@ strand_as_paying!(young_order, age: "1 second") # a pay legitimately in flight
 #     nothing — so what is asserted is the local-evidence half and the refusal
 #     to guess without it.
 knows_nothing = Class.new { def outcome(**_kwargs) = :unknown }.new
-sweep = vpp.reconcile_stuck_paying!(lookup: knows_nothing, older_than_seconds: 600)
+sweep = StuckPaying.reconcile!(claim: vpp, lookup: knows_nothing, older_than_seconds: 600)
 unresolved_ids = sweep[:unresolved].map { |r| r[:order_id] }
 
 sweep_healed_charged = sweep[:healed].include?(charged_order)

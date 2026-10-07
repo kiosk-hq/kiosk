@@ -14,7 +14,7 @@
 # and skooti included — the only other two that build a Profile at all — and
 # they are read from the constructor exactly as this one is.
 #
-# Every capture runs the ValidatingPaymentProvider cashier check: the cart
+# Every capture runs the PaymentClaim cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
 # catalog prices, and sum correctly. Three scenarios attack exactly that — the
 # library's WrongCurrencyCart for the unit of account, and TamperedPriceCart and
@@ -153,7 +153,7 @@ profile = Kiosk::Redteam::Profile.new(
   # (delivery slot + address are REQUIRED — delivery is part of the order).
   # Returns { id:, total_cents:, items: [{sku, qty, price_cents}] } — the items
   # are kept so pay_for can build a cart that MIRRORS the order at catalog
-  # prices (the ValidatingPaymentProvider cashier check requires it).
+  # prices (the PaymentClaim cashier check requires it).
   create_owned: ->(client, principal) {
     catalog_resp = client.query(principal, name: "catalog")
     # A non-paginating query answers a BARE ARRAY — there is no `rows` to unwrap.
@@ -264,7 +264,7 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  nil,
 )
 
-# ── Local scenarios: the cashier check (ValidatingPaymentProvider) ────────────
+# ── Local scenarios: the cashier check (PaymentClaim) ────────────
 # The generic battery proves ownership/payment gates, and its
 # WrongCurrencyCart covers the unit of account; these two prove the operator
 # counts what lands on the counter — the line prices and the total.

@@ -13,7 +13,7 @@
 # it twice is the intended behaviour, so there is no consumed resource to
 # re-activate and the beat would score correct behaviour a breach.
 #
-# Three cashier-check beats attack ValidatingBookingProvider (the monetary
+# Three cashier-check beats attack PaymentClaim (the monetary
 # check run at capture, before StubPsp settles) — the first from the shared
 # kiosk-redteam library, the other two local to this file:
 #   WrongCurrencyCart  — pay own booking in usd → 403
@@ -235,7 +235,7 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  nil,
 )
 
-# ── Local scenarios: the cashier check (ValidatingBookingProvider) ────────────
+# ── Local scenarios: the cashier check (PaymentClaim) ────────────
 # The generic battery proves ownership/payment gates, and its
 # WrongCurrencyCart covers the unit of account; these two prove the operator
 # counts what lands on the counter — a single booking, and the total.

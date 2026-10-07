@@ -136,7 +136,7 @@ namespace :demo do
   DESC
   task reconcile: :environment do
     minutes = Integer(ENV.fetch("MINUTES", "15"))
-    result  = Kiosk.configuration.payment_provider.reconcile_stuck_paying!(
+    result  = StuckPaying.reconcile!(
       lookup: Kiosk::PaymentProviders::Stripe::ChargeLookup.new, older_than_seconds: minutes * 60,
     )
 
@@ -469,7 +469,7 @@ namespace :check do
     # for every charge, so demanding the order's total here would fail on a
     # correct system for a reason that has nothing to do with getgrocery. The
     # mock path keeps the presence checks above; the cashier check
-    # (ValidatingPaymentProvider) is what pins the amount BEFORE capture, and
+    # (PaymentClaim) is what pins the amount BEFORE capture, and
     # check:redteam's TamperedPriceCart / InflatedTotalCart run it under the mock.
     if use_mock
       puts "  OK  (settled amount not asserted under stripe-mock — its fixture always reports amount_received=0)"

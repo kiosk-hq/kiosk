@@ -115,23 +115,24 @@ Set a PSP adapter (a `kiosk-pay-*` gem) and the engine serves `pay`. Wrap it in
 `Kiosk::Server::PaymentClaim` and the engine keeps §11.6's operator half for you:
 it claims your payable row (`unpaid → paying`) before the capture, so a second
 `pay` for that row is refused before the processor is reached, and marks it
-`paid` when the capture returns. You write the cashier — the check of the signed
-cart against your own price.
+`paid` when the capture returns. Under the claim it checks the signed cart:
+your currency, priced lines that sum to the total, and a total equal to your
+own price for the row. That price is the one thing you write — a checker that
+answers it from your catalog, given the row and the cart's item lines as
+signed, or returns a String saying why the cart is refused.
 
 ```ruby
-class ValidatingPaymentProvider < Kiosk::Server::PaymentClaim
-  def initialize(psp, currency:)
-    super(psp, currency: currency, table: "orders", reference: "order_id", query: "my_orders")
-  end
-
-  private
-
-  def check_cart!(cart, order_id)
-    deny "cart total does not match the order" unless cart.total_amount_cents == Order.find(order_id).total_cents
-  end
+module PriceChecker
+  def self.call(order_id, _lines) = Order.where(id: order_id).pick(:total_cents)
 end
 
-Kiosk.configure { |c| c.payment_provider = ValidatingPaymentProvider.new(psp, currency: "eur") }
+Kiosk.configure do |c|
+  c.payment_provider = Kiosk::Server::PaymentClaim.new(
+    psp, currency: "eur", table: "orders", reference: "order_id", query: "my_orders",
+  )
+  c.cart_price_checker = PriceChecker
+  c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) } # optional
+end
 ```
 
 Your per-user query publishes the row's `payment_status` — `paying` as

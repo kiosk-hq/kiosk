@@ -88,7 +88,7 @@ class RescheduleDeliveryOperation
         # An order with a capture OUTSTANDING is neither paid nor unpaid, and
         # "this order is not paid yet" is the sentence protocol.md §11.6
         # forbids about one — it sends the assistant back to sign a fresh chain.
-        # The claim is owner-scoped (see ValidatingPaymentProvider).
+        # The claim is owner-scoped (see PaymentClaim).
         if Order.owned_by_current_principal.where(id: order_id, status: Order::PAYING).exists?
           next OperationResult.refused(
             code:    "forbidden",

@@ -12,7 +12,7 @@
 # suite behind it is SPEC-186; this is the part that BOOTS.
 #
 # WHAT IT PROVES, in one chain, against a real origin with a real Equihash
-# registration and the shipped ValidatingBookingProvider:
+# registration and the shipped PaymentClaim:
 #
 #   1. a spend UNDER the cap settles;
 #   2. a spend that would CROSS it is refused `403 spending_cap_exceeded`,
@@ -222,7 +222,7 @@ STDERR.puts "  Over the cap, spelled \"EUR\": HTTP #{rc} #{resp["code"].inspect}
 #
 # The control for step 6. Without it, "EUR was refused" is consistent with an
 # operator that simply rejects the upper-case spelling — which this one does
-# NOT (ValidatingBookingProvider downcases before it compares), but a beat that
+# NOT (PaymentClaim downcases before it compares), but a beat that
 # cannot tell the two apart is not evidence. Nothing was persisted by the
 # refusal (the cap is checked before phase 1 writes anything and before the
 # capture), so the booking is still `unpaid` and payable.

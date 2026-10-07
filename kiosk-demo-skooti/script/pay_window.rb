@@ -4,7 +4,7 @@
 #
 # Runs IN-PROCESS against the real skooti Postgres schema (via
 # `bin/rails runner`), driving the REAL `reserve` / `my_reservations` /
-# `start_rental` verbs and the REAL ValidatingRentalProvider cashier, with a
+# `start_rental` verbs and the REAL PaymentClaim cashier, with a
 # CONTROLLABLE PSP stub so the two halves of the window can actually be stood in:
 #
 #   · a BLOCKING capture holds a reservation mid-charge — the capture has STARTED
@@ -217,7 +217,7 @@ puts "\n== (b) IN FLIGHT: capture started, outcome unknown =="
 inflight    = reserve!
 inflight_id = inflight["reservation_id"]
 blocking    = BlockingPsp.new
-provider    = ValidatingRentalProvider.new(blocking, currency: "eur")
+provider    = Kiosk.configuration.payment_provider.over(blocking)
 
 pay_thread = Thread.new do
   ActiveRecord::Base.connection_pool.with_connection do
@@ -270,7 +270,7 @@ puts "\n== (d) AT MOST ONCE: N racing /pay for one reservation =="
 raced    = reserve!
 raced_id = raced["reservation_id"]
 counting = CountingPsp.new
-racer    = ValidatingRentalProvider.new(counting, currency: "eur")
+racer    = Kiosk.configuration.payment_provider.over(counting)
 
 # One racer per SPARE pooled connection (the main thread holds one), capped at
 # five. Sized from the pool rather than hardcoded so the script is honest when

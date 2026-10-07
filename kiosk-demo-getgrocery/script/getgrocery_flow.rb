@@ -255,7 +255,7 @@ STDERR.puts "  payment_setup: #{setup_status}"
 # -- Step 6: pay --
 # The cart MIRRORS the order per create_order's pay_hint: one {order_id}
 # entry plus one {sku, qty, price_cents} entry per item at catalog prices.
-# The operator (ValidatingPaymentProvider) verifies currency, prices, and
+# The operator (PaymentClaim) verifies currency, prices, and
 # total against its catalog before capturing.
 now        = Time.now.to_i
 intent_id  = SecureRandom.uuid

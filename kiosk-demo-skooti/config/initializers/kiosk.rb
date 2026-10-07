@@ -141,13 +141,15 @@ Kiosk.configure do |c|
   c.sign_in_path = "/users/sign_in"
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
-  # The cashier check: ValidatingRentalProvider verifies the agent-signed cart
-  # against OUR quote — currency (EUR), single reservation reference, and the
-  # per-minute price the operator quoted for that reservation — before the
-  # wrapped StubPsp captures anything. Monetary only: reservation→payer
-  # ownership and KYC are enforced at USE time (start_rental / rent_motorcycle),
-  # not here.
-  c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
+  # One capture per reservation, and the cart checked against the price we
+  # quoted before the StubPsp captures. Monetary only: ownership and KYC are
+  # enforced at USE time (start_rental / rent_motorcycle).
+  c.payment_provider = Kiosk::Server::PaymentClaim.new(
+    StubPsp.new, currency: "eur", table: "reservations", reference: "reservation_id",
+                 query: "my_reservations", payer_column: "paid_by_user_id",
+  )
+  c.cart_price_checker = PriceChecker
+  c.after_payment      = ->(reservation_id) { Reservation.paid!(reservation_id) }
 
   # Registration PoW gate: 1 Equihash proof to register. Prices bot registration
   # for a physical-service provider (each fresh identity pays compute up front).

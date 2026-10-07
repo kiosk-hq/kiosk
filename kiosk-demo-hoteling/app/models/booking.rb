@@ -162,4 +162,22 @@ class Booking < ApplicationRecord
 
     STATE_UNPAID
   end
+
+  # The capture returned. The owner hears about it — another account may pay
+  # this booking, and its owner has nothing to poll — and the property starts
+  # deciding. A zero wait decides inline, so a flow can assert on it.
+  def self.paid!(booking_id)
+    owner_id = where(id: booking_id).pick(:user_id)
+    if owner_id
+      Kiosk::Server::Events.emit(
+        topic: :booking_payment, subject: booking_id, identity_scope: [owner_id],
+        data: { "booking_id" => booking_id, "payment_state" => "paid" },
+      )
+    end
+    wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
+    where(id: booking_id).update_all(decision_due_at: Time.current + wait)
+    return PropertyDecisionJob.new.perform(booking_id) if wait.zero?
+
+    PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
+  end
 end

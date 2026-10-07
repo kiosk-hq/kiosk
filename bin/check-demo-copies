@@ -1578,6 +1578,12 @@ COPIES = {
   },
 
   # ── app/ ───────────────────────────────────────────────────────────────────
+  "app/services/price_checker.rb" => {
+    rule:  :per_demo,
+    ships: %w[getgrocery hoteling skooti],
+    why:   "Each operator's `c.cart_price_checker`: its price for the row a cart pays, read from " \
+           "its own catalog — an order's items, a booking's quote, a scooter's per-minute price.",
+  },
   "app/controllers/application_controller.rb" => {
     rule: :code,
     why:  "ActionController::Base (not API) so the human-facing Devise pages get cookies, flash " \
@@ -3969,6 +3975,9 @@ FRAGMENT_EXCLUDED = {
     "comparison. Discovery is all-or-nothing per path, so taking this one would mean " \
     "declaring twenty settled `:per_demo` variants to hold a handful of units — a manifest " \
     "nobody reads, for a guarantee the gem already gives.",
+  "app/services/price_checker.rb" =>
+    "The one shared unit is `self.call`, the interface `c.cart_price_checker` fixes; its body is " \
+    "each operator's own catalog and differs by design.",
 }.freeze
 
 # The demo sets and the reasons several fragment entries share, stated once so N

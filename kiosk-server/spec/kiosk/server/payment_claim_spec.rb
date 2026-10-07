@@ -57,19 +57,15 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     end
   end
 
-  # The operator's half: a cashier that wants 500 cents, and a record of
-  # every row it was told is paid.
-  let(:claim_class) do
-    Class.new(described_class) do
-      attr_reader :paid
-
-      private
-
-      def check_cart!(cart, _id)
-        deny "cart total #{cart.total_amount_cents} is not the quoted 500" unless cart.total_amount_cents == 500
-      end
-
-      def paid!(id) = (@paid ||= []) << id
+  # The operator's half: a catalog that prices every row at 500 cents, and a
+  # record of every row it was told is paid.
+  let(:paid)  { [] }
+  let(:price) { 500 }
+  let(:seen)  { [] }
+  before do
+    Kiosk.configure do |c|
+      c.cart_price_checker = ->(id, lines) { (seen << [id, lines]) && price }
+      c.after_payment      = ->(id) { paid << id }
     end
   end
 
@@ -81,8 +77,8 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   let(:psp)    { ClaimSpecPsp.new }
   let(:options) { { payer_column: "paid_by_user_id" } }
   subject(:claim) do
-    claim_class.new(psp, currency: "eur", table: "#{schema}.payables", reference: "booking_id",
-                         query: "my_bookings", **options)
+    described_class.new(psp, currency: "eur", table: "#{schema}.payables", reference: "booking_id",
+                             query: "my_bookings", **options)
   end
 
   # Every capture it was asked for, and what it was told to do on the next.
@@ -101,9 +97,9 @@ RSpec.describe Kiosk::Server::PaymentClaim do
 
   ClaimSpecCart = Struct.new(:id, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
 
-  def cart_for(id, total: 500, user_id: payer, currency: "EUR")
+  def cart_for(id, total: 500, user_id: payer, currency: "EUR", items: [])
     ClaimSpecCart.new(id: SecureRandom.uuid, user_id: user_id, currency: currency, total_amount_cents: total,
-             line_items: [{ "booking_id" => id }])
+             line_items: [{ "booking_id" => id }, *items])
   end
 
   def status(id = row) = conn.select_value(%(SELECT payment_status FROM "#{schema}".payables WHERE id = '#{id}'))
@@ -137,7 +133,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(psp.captures.size).to eq(1)
     expect(status).to eq("paid")
     expect(payer_of).to eq(payer)
-    expect(claim.paid).to eq([row])
+    expect(paid).to eq([row])
   end
 
   it "publishes the row as paying while its capture is outstanding" do
@@ -177,9 +173,35 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(psp.captures).to be_empty
   end
 
-  it "releases the claim when the cashier rejects the cart, and charges nothing" do
-    expect { claim.capture(cart_for(row, total: 1)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /quoted 500/)
+  it "hands the operator's catalog the row and the item lines, and charges its price" do
+    item = { "sku" => "room", "qty" => 1, "price_cents" => 500 }
+    claim.capture(cart_for(row, items: [item]))
+
+    expect(seen).to eq([[row, [item]]])
+    expect(psp.captures.size).to eq(1)
+  end
+
+  it "releases the claim when the cart total is not the operator's price, and charges nothing" do
+    expect { claim.capture(cart_for(row, total: 1)) }
+      .to raise_error(Kiosk::Server::Errors::Forbidden, /cart total 1 does not equal .*500/)
     expect([status, payer_of, psp.captures]).to eq(["unpaid", nil, []])
+  end
+
+  it "refuses with the reason the operator's catalog gives" do
+    Kiosk.configuration.cart_price_checker = ->(*) { "cart items do not mirror the booking" }
+
+    expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, "cart items do not mirror the booking")
+    expect([status, psp.captures]).to eq(["unpaid", []])
+  end
+
+  it "refuses priced lines that do not sum to the cart total, before asking the catalog" do
+    lines = [{ "sku" => "a", "qty" => 2, "price_cents" => 200 }]
+    expect { claim.capture(cart_for(row, items: lines)) }
+      .to raise_error(Kiosk::Server::Errors::Forbidden, /does not equal the sum of its line items 400/)
+    zero = [{ "sku" => "a", "qty" => 0, "price_cents" => 500 }]
+    expect { claim.capture(cart_for(row, items: zero)) }
+      .to raise_error(Kiosk::Server::Errors::Forbidden, /positive qty and price_cents/)
+    expect([seen, psp.captures]).to eq([[], []])
   end
 
   it "releases on a definitive decline and keeps the claim on an unknown outcome" do
@@ -220,7 +242,14 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(claim).not_to respond_to(:saved_method?)
 
     def psp.setup_return_user_id(params) = params[:uid]
-    expect(claim_class.new(psp, currency: "eur", table: "t", reference: "r", query: "q")
-                      .setup_return_user_id({ uid: "u-1" })).to eq("u-1")
+    expect(described_class.new(psp, currency: "eur", table: "t", reference: "r", query: "q")
+                          .setup_return_user_id({ uid: "u-1" })).to eq("u-1")
+  end
+
+  it "builds the same claim over another PSP" do
+    other = ClaimSpecPsp.new
+    claim.over(other).capture(cart_for(row))
+
+    expect([other.captures.size, psp.captures.size, payer_of]).to eq([1, 0, payer])
   end
 end

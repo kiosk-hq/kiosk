@@ -7,9 +7,9 @@
 #           against served Dublin districts), my_orders
 # Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery;
 #           kiosk-server serves payment_setup and request_kyc
-# Pay:      capture is wrapped by ValidatingPaymentProvider — the cart must be
+# Pay:      capture is wrapped by Kiosk::Server::PaymentClaim — the cart must be
 #           EUR, reference the payer's unsettled order, mirror its items at
-#           catalog prices, and sum correctly (the cashier check).
+#           catalog prices (app/services/price_checker.rb), and sum correctly.
 #
 # ADDRESS-UPFRONT: the delivery address is a deliberate, EARLY input.
 # `delivery_slots` returns no slots without an in-zone Dublin address, so the
@@ -174,18 +174,21 @@ Kiosk.configure do |c|
   # automated suites need no card-setup step and no server-side test route.
   # config/environments/production.rb pins it FALSE, so the live demo
   # always runs the real hosted SetupIntent flow (human enters the card once).
-  # The cashier check: ValidatingPaymentProvider verifies the agent-signed
-  # cart against OUR catalog — currency (EUR), per-line prices, and total —
-  # before the wrapped Stripe adapter captures anything.
-  c.payment_provider = ValidatingPaymentProvider.new(
+  # One capture per order, owner-scoped, and the cart checked against OUR
+  # catalog (app/services/price_checker.rb) before Stripe captures anything.
+  c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(
       api_key:           key,
       customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
       customer_saver:    ->(uid, cid) { StripeCustomer.find_or_initialize_by(user_id: uid).update!(customer_id: cid) },
       test_autocard:     Rails.configuration.x.kiosk.test_autocard,
     ),
-    currency: "eur",
+    currency: "eur", table: "orders", reference: "order_id", query: "my_orders",
+    status_column: "status", unpaid: "created", owner_column: "user_id",
   )
+  c.cart_price_checker = PriceChecker
+  # The basket is bought; from here the shop acts on its own clock.
+  c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) }
 
   # ── KYC — the shared Prove broker ────────────────────────────────────
   # create_order refuses a cart with an age_restricted item until the person

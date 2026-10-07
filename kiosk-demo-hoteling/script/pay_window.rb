@@ -4,7 +4,7 @@
 #
 # Runs IN-PROCESS against the real hoteling Postgres schema (via
 # `bin/rails runner`), driving the REAL `reserve_room` / `my_bookings` /
-# `confirm_booking` verbs and the REAL ValidatingBookingProvider cashier, with a
+# `confirm_booking` verbs and the REAL PaymentClaim cashier, with a
 # CONTROLLABLE PSP stub so the two halves of the window can actually be stood in:
 #
 #   · a BLOCKING capture holds a booking mid-charge — the capture has STARTED and
@@ -257,7 +257,7 @@ puts "\n== (b) IN FLIGHT: capture started, outcome unknown =="
 inflight    = reserve!
 inflight_id = inflight["booking_id"]
 blocking    = BlockingPsp.new
-provider    = ValidatingBookingProvider.new(blocking, currency: "eur")
+provider    = Kiosk.configuration.payment_provider.over(blocking)
 
 pay_thread = Thread.new do
   ActiveRecord::Base.connection_pool.with_connection do
@@ -307,7 +307,7 @@ puts "\n== (d) AT MOST ONCE: N racing /pay for one booking =="
 raced    = reserve!
 raced_id = raced["booking_id"]
 counting = CountingPsp.new
-racer    = ValidatingBookingProvider.new(counting, currency: "eur")
+racer    = Kiosk.configuration.payment_provider.over(counting)
 
 # One racer per SPARE pooled connection (the main thread holds one), capped at
 # five. Sized from the pool rather than hardcoded so the script is honest when

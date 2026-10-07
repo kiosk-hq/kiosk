@@ -437,6 +437,17 @@ module Kiosk
       # cap. Default nil = all-time cumulative. E.g. 7 for a weekly allowance.
       attr_accessor :spending_cap_window_days
 
+      # ── The operator's price, for {PaymentClaim} ─────────────────────────
+
+      # The operator's catalog: `call(id, lines) → Integer | String`. Given the
+      # payable row the cart names and the cart's item lines as signed, it
+      # answers that row's price in cents, or a String saying why the cart is
+      # refused. {PaymentClaim} does the rest.
+      attr_accessor :cart_price_checker
+
+      # Optional `call(id)`, run once the capture for row `id` has returned.
+      attr_accessor :after_payment
+
       # ── Request-shape validation ──────────────────────────────────────────
 
       # When true, {WireController} validates a PRESENT `pow` field on a wire

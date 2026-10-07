@@ -17,22 +17,16 @@ module Kiosk
     # the claim; an unknown outcome keeps it, so the row reads *pending* until
     # it is resolved.
     #
-    # The operator subclasses it, names its row, and writes the cashier — the
-    # check of the signed cart against its own price:
+    # Under the claim it checks the signed cart: the operator's currency, priced
+    # lines that sum to the total, and a total equal to the operator's own price
+    # for the row, which `c.cart_price_checker` answers from its catalog:
     #
-    #   class ValidatingBookingProvider < Kiosk::Server::PaymentClaim
-    #     def initialize(psp, currency:)
-    #       super(psp, currency: currency, table: "bookings", reference: "booking_id",
-    #                  query: "my_bookings", payer_column: "paid_by_user_id")
-    #     end
-    #
-    #     private
-    #
-    #     def check_cart!(cart, booking_id) # deny(...) unless the cart matches the quote
-    #     def paid!(booking_id)             # optional: what follows a payment
-    #   end
-    #
-    #   c.payment_provider = ValidatingBookingProvider.new(psp, currency: "eur")
+    #   c.payment_provider = Kiosk::Server::PaymentClaim.new(
+    #     psp, currency: "eur", table: "bookings", reference: "booking_id",
+    #          query: "my_bookings", payer_column: "paid_by_user_id",
+    #   )
+    #   c.cart_price_checker = PriceChecker            # call(booking_id, lines) → cents | refusal
+    #   c.after_payment      = ->(id) { Booking.paid!(id) }   # optional
     class PaymentClaim
       PAYING = "paying"
       PAID   = "paid"
@@ -58,10 +52,15 @@ module Kiosk
         @unpaid        = unpaid
         @payer_column  = payer_column
         @owner_column  = owner_column
+        @options       = { currency:, table:, reference:, query:, status_column:, unpaid:, payer_column:,
+                           owner_column: }
         return unless psp.respond_to?(:setup_return_user_id)
 
         define_singleton_method(:setup_return_user_id) { |params| @psp.setup_return_user_id(params) }
       end
+
+      # The same claim over another PSP adapter.
+      def over(psp) = self.class.new(psp, **@options)
 
       def capture(cart_mandate, payment_method: nil)
         id = claim!(cart_mandate)
@@ -89,11 +88,11 @@ module Kiosk
         Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id)).exists?
       end
 
-      # `paying → paid`, then {#paid!}. A failure here never surfaces: the
-      # charge has happened and the settlement row records it.
+      # `paying → paid`, then `c.after_payment`. A failure here never surfaces:
+      # the charge has happened and the settlement row records it.
       def mark_paid!(id)
         flip(id, to: PAID)
-        paid!(id)
+        Kiosk.configuration.after_payment&.call(id)
       rescue StandardError => e
         FailureLog.report("#{self.class} could not mark #{id} paid", e)
         nil
@@ -103,14 +102,6 @@ module Kiosk
       def release!(id) = flip(id, to: @unpaid)
 
       private
-
-      # The cashier: raise {#deny} unless the cart matches the operator's own
-      # price for row `id`. Runs under the claim.
-      def check_cart!(_cart, _id)
-        raise NotImplementedError, "#{self.class}#check_cart! compares the cart with the operator's price"
-      end
-
-      def paid!(_id) = nil
 
       def claim!(cart)
         unless cart.currency.to_s.downcase == @currency
@@ -126,12 +117,39 @@ module Kiosk
 
         refuse_unclaimable!(id, cart.user_id.to_s) unless take(id, cart.user_id.to_s)
         begin
-          check_cart!(cart, id)
+          check_price!(cart, id)
         rescue StandardError
           release!(id)
           raise
         end
         id
+      end
+
+      def check_price!(cart, id)
+        total = cart.total_amount_cents.to_i
+        lines = Array(cart.line_items).reject { |li| li[@reference] }
+        priced = lines.select { |li| li["price_cents"] }
+        unless priced.empty?
+          sum = priced.sum do |li|
+            qty = li["qty"].to_i
+            price = li["price_cents"].to_i
+            deny "each priced line needs a positive qty and price_cents" if qty <= 0 || price <= 0
+            qty * price
+          end
+          deny "cart total #{total} does not equal the sum of its line items #{sum}" unless total == sum
+        end
+
+        price = checker.call(id, lines)
+        deny price if price.is_a?(String)
+        return if total == price
+
+        deny "cart total #{total} does not equal this operator's price #{price} for #{noun} #{id} — " \
+             "re-read the pay_hint of the action that created it"
+      end
+
+      def checker
+        Kiosk.configuration.cart_price_checker or
+          raise Errors::ConfigurationError, "PaymentClaim needs c.cart_price_checker, the operator's price"
       end
 
       def take(id, payer)

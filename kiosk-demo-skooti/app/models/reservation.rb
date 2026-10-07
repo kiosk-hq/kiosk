@@ -131,4 +131,14 @@ class Reservation < ApplicationRecord
     where(id: reservation_id, user_id: user_id).exists?
   end
 
+  # The capture returned. The owner hears about it: the payer may be somebody else.
+  def self.paid!(reservation_id)
+    owner_id = where(id: reservation_id).pick(:user_id)
+    return unless owner_id
+
+    Kiosk::Server::Events.emit(
+      topic: :booking_payment, subject: reservation_id, identity_scope: [owner_id],
+      data: { "reservation_id" => reservation_id, "payment_state" => "paid" },
+    )
+  end
 end

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: **`PaymentClaim` checks the cart itself**; the operator configures only `c.cart_price_checker`, its price from its own catalog, and an optional `c.after_payment`.
+
 ## [0.5.9] — 2026-10-08
 
 - 2026-10-08: Version 0.5.9, the tree cut that matches skill 0.5.9 and carries the entries below.

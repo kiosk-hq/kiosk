@@ -157,12 +157,15 @@ Kiosk.configure do |c|
   # supplied here; without it those pages render a bare 401.
   c.sign_in_path = "/users/sign_in"
 
-  # The cashier check: ValidatingBookingProvider verifies the agent-signed
-  # cart against OUR quote — currency (EUR), single booking reference, and the
-  # total the operator quoted for that booking — before the wrapped StubPsp
-  # captures anything. Monetary only: booking→payer ownership is enforced at
-  # USE time (confirm_booking Gate-1), not here.
-  c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
+  # One capture per booking, and the cart checked against the price we quoted
+  # before the StubPsp captures. Monetary only: who may USE the booking is
+  # confirm_booking's Gate 1.
+  c.payment_provider = Kiosk::Server::PaymentClaim.new(
+    StubPsp.new, currency: "eur", table: "bookings", reference: "booking_id",
+                 query: "my_bookings", payer_column: "paid_by_user_id",
+  )
+  c.cart_price_checker = PriceChecker
+  c.after_payment      = ->(booking_id) { Booking.paid!(booking_id) }
 
   # ── Per-assistant spending cap ───────────────────────────────────────────
   # Reads the cap from `kiosk.agents.spending_cap_cents`, the nullable column

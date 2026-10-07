@@ -21,7 +21,7 @@
 #                              attacker A (KycVerifier binds sub to the caller),
 #                              so A's rent_motorcycle stays 403.
 #
-# Three cashier-check beats attack ValidatingRentalProvider (the monetary check
+# Three cashier-check beats attack PaymentClaim (the monetary check
 # run at capture, before StubPsp settles) — the first from the shared
 # kiosk-redteam library, the other two local to this file:
 #   WrongCurrencyCart  — pay own reservation in usd → 403
@@ -282,7 +282,7 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  method(:attest_forged),
 )
 
-# ── Local scenarios: the cashier check (ValidatingRentalProvider) ─────────────
+# ── Local scenarios: the cashier check (PaymentClaim) ─────────────
 # The generic battery proves ownership/KYC/payment gates, and its
 # WrongCurrencyCart covers the unit of account; these two prove the operator
 # counts what lands on the counter — a single reservation, and the

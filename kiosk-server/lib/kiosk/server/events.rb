@@ -2,27 +2,11 @@
 
 module Kiosk
   module Server
-    # The topic registry — the events half of what {Queries} and {Actions} are
-    # for verbs, and deliberately the same shape.
-    #
-    # THE REUSE IS THE POINT. A topic declares `reach` from the same four values
-    # a verb does, so an operator who has already decided who may READ a verb's
-    # rows has answered the same question for the topic beside it. What a topic
-    # adds is `subject_reachable`: a verb authorises A CALL, and a subscription
-    # authorises A STANDING FEED, so the check has to be re-runnable without a
-    # request — it takes the subject and the identity rather than reading
-    # {CurrentRequest}, which is fiber-local and never reaches a socket callback.
-    #
-    # Process-global, like the two verb registries, and reset the same way in
-    # tests. A topic is declared ONCE per origin: a second declaration of one
-    # name is a bug rather than an override, because a name is one wire name and
-    # one payload shape.
+    # The topic registry, shaped like {Queries} and {Actions}. A topic takes
+    # `reach` from the verbs' four values; `subject_reachable` takes the
+    # subject and identity, because it is re-run on a socket with no request.
     module Events
-      # Declared per topic and not defaultable. `description` carries semantics
-      # as prose and `payload_schema` carries shape, for the reason the wire
-      # already requires `output_schema` on every verb: with neither, a
-      # subscriber cannot learn what a message contains without receiving one
-      # and observing what arrived.
+      # Declared on every topic, as `output_schema` is on every verb.
       REQUIRED = %i[description payload_schema].freeze
 
       class << self
@@ -40,15 +24,8 @@ module Kiosk
             subject_reachable: subject_reachable,
           }.freeze
 
-          # RE-REGISTERING THE SAME DECLARATION IS A NO-OP, and that is not a
-          # softening of the rule below. A class holds its topic declarations
-          # and hands the SAME frozen hashes over on every `kiosk_register!`,
-          # which the engine may run more than once per reload cycle — so
-          # identity here means «this is the same declaration arriving again»,
-          # not «two declarations that happen to look alike». Two controllers
-          # declaring one name still differ in at least their
-          # `subject_reachable` object, and a second declaration of a name with
-          # a different shape is the bug this refusal is for.
+          # The same declaration arriving again (a reload) is a no-op; a
+          # different one under a declared name is refused.
           return if registry[name] == declaration
 
           if registry.key?(name)
@@ -61,11 +38,6 @@ module Kiosk
           registry[name] = declaration
         end
 
-        # Drops one topic. The engine's `to_prepare` clears all three registries
-        # and rebuilds them from `c.handlers`, so a topic REMOVED from a
-        # controller leaves the catalogue on the next reload instead of
-        # outliving the declaration that put it there.
-        #
         # @return [void]
         def unregister(name) = registry.delete(name.to_s)
 
@@ -75,19 +47,9 @@ module Kiosk
         # @return [Array<String>] declared topic names, sorted
         def known = registry.keys.sort
 
-        # What `GET <endpoint>/schema` publishes beside `queries` and `actions`.
-        #
-        # SYMBOL keys with STRING values, which is not a style choice: it is
-        # exactly what {Queries.describe} and {Actions.describe} return, and all
-        # three end up in one JSON document. Two key conventions inside one
-        # document read identically on the wire and diverge the moment anything
-        # in the suite compares them.
-        #
-        # `subject_reachable` is deliberately ABSENT. It is the operator's
-        # authorisation rule rather than a fact about the wire; publishing the
-        # predicate would describe to a caller where to look for a gap in it,
-        # and a subscriber could not act on it either way — the operator runs
-        # it, at subscribe time and again on the re-authorisation timer.
+        # What `GET <endpoint>/schema` publishes beside `queries` and
+        # `actions`, keyed like them. `subject_reachable` is the operator's
+        # rule, not wire, so it is not published.
         def catalog
           known.map do |name|
             declaration = registry[name]
@@ -108,14 +70,8 @@ module Kiosk
         #     data: { "todo_id" => todo.id, "done" => true, "action" => "completed" },
         #   )
         #
-        # THE SCOPE IS NOT DERIVED FROM `reach`, and the separation is
-        # deliberate. `reach` authorises a SUBSCRIPTION — may this identity hold
-        # a feed of this topic at all — and is answered at the socket, where the
-        # topic's `subject_reachable` can be re-run on a timer. This decides a
-        # DELIVERY: who, concretely, is to be told about THIS transition, which
-        # only the operation that made it knows. Conflating them would mean
-        # recomputing a membership set inside a socket callback that has no
-        # request to read it from.
+        # `reach` authorises a subscription; `identity_scope` names who is told
+        # about this transition, which only the operation that made it knows.
         #
         # @param identity_scope [Array<String>] user_ids; empty writes nothing
         # @param occurred_at [Time, nil] defaults to now, rendered ISO 8601 UTC
@@ -140,10 +96,7 @@ module Kiosk
           store = Kiosk.configuration.event_store
           Array(identity_scope).map do |identity_key|
             id = store.append(identity_key, event)
-            # The append is what makes the event RESUMABLE; the broadcast is
-            # what makes it PROMPT. Both, in that order: a socket woken before
-            # the row exists would hand out an id a reconnecting client could
-            # not then ask for.
+            # Append before broadcast, so every pushed id can be resumed from.
             EventsCable.broadcast(identity_key, event.merge("id" => id))
             id
           end.last

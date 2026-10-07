@@ -8,39 +8,17 @@ require "rack"
 
 module Kiosk
   module Server
-    # THE ENGINE'S OWN Action Cable server, and everything about where a stream
-    # is named and how an event reaches it.
+    # The engine's own Action Cable server — not `ActionCable.server`, so the
+    # host's connection class and forgery setting stay the host's.
     #
-    # == Why this is not `ActionCable.server`
-    #
-    # `ActionCable.server` is the host application's singleton: one connection
-    # class, one forgery-protection setting for every channel the operator will
-    # ever add. Taking it over would mean the engine deciding those for the host.
-    #
-    # `ActionCable::Server::Base.new(config:)` takes its OWN
-    # {ActionCable::Server::Configuration}, carrying `connection_class`,
-    # `cable` and the rest. So the engine mounts a server of its own, the
-    # operator's stays untouched, and the request-forgery setting below reaches
-    # the Kiosk stream and nothing else.
-    #
-    # == Stream naming
-    #
-    # One stream per (identity, topic): `kiosk:events:<user_id>:<topic>`.
-    #
-    # Per IDENTITY because delivery is per identity — the tail is, and a
-    # subscriber must never be reachable through another principal's stream
-    # name. Per TOPIC because a socket carries many subscriptions and each one
-    # should only wake for its own. A SUBJECT is NOT in the name: subjects are
-    # unbounded and operator-defined, so putting one in a stream name would let
-    # a caller mint pubsub channels; the channel filters by subject after the
-    # message arrives.
+    # One stream per (identity, topic): `kiosk:events:<user_id>:<topic>`. A
+    # subject is not in the name, so a caller cannot mint pubsub channels; the
+    # channel filters by subject.
     module EventsCable
       STREAM_PREFIX = "kiosk:events"
 
-      # Mounted in the engine's route table. A lambda rather than the server
-      # object so the server is built on FIRST REQUEST rather than at
-      # route-draw time, by which point the host application is fully loaded
-      # and `cable_config` below can read its `config/cable.yml`.
+      # A lambda, so the server is built on first request, once the host's
+      # `config/cable.yml` can be read.
       RACK_APP = ->(env) { Kiosk::Server::EventsCable.serve(env) }
 
       UNSERVED_DETAIL = "this operator does not serve the events module"
@@ -48,15 +26,8 @@ module Kiosk
                         "events_url; there is nothing to subscribe to here"
 
       class << self
-        # Everything the mount answers, and the module check comes first: an
-        # origin that declares no topic serves no events module, so this path
-        # answers `501 module_not_served` — spec Section 8.5.3 and Section 16.1
-        # item 9, the answer `pay` and KYC give at their own published paths.
-        #
-        # It answers BEFORE the credential is read, because whether this origin
-        # publishes events at all is a fact about the ORIGIN and true of every
-        # caller — the ordering {BindingModuleGate} gives for binding. So an
-        # upgrade gets an ordinary HTTP response and never a handshake.
+        # An origin that declares no topic answers `501 module_not_served`
+        # (spec Sections 8.5.3, 16.1 item 9), before any credential is read.
         def serve(env)
           return unserved_module if Kiosk::Server::Events.known.empty?
 
@@ -71,9 +42,7 @@ module Kiosk
           "#{STREAM_PREFIX}:#{identity_key}:#{topic}"
         end
 
-        # Wake every socket subscribed to this identity's view of this topic.
-        # Called by {Events.emit} AFTER the append, so the event already carries
-        # the id a resuming client will compare against.
+        # Called by {Events.emit} after the append, so the event carries its id.
         def broadcast(identity_key, event)
           server.broadcast(stream_name(identity_key, event["topic"]), event)
         end
@@ -83,15 +52,10 @@ module Kiosk
             config.connection_class = -> { Kiosk::Server::EventsConnection }
             config.cable = cable_config
             config.logger = resolved_logger
-            # `Origin` decides nothing on this stream, and Action Cable's
-            # check of it is left off deliberately. That check defends a
-            # BROWSER's ambient credentials; this upgrade is authorised by the
-            # `Authorization` header (spec Section 8.5.3), which a page cannot
-            # attach cross-origin, so the request has no ambient credential to
-            # defend. Armed, it refuses every client that sends no `Origin` —
-            # every non-browser stack there is — with a bare 404 on the URL
-            # discovery advertises. This server is the engine's own, so the
-            # setting reaches the Kiosk stream and no channel of the host's.
+            # The upgrade is authorised by the `Authorization` header, which a
+            # page cannot attach cross-origin, so there is no ambient
+            # credential to defend; the `Origin` check would refuse every
+            # non-browser client.
             config.disable_request_forgery_protection = true
           end
         end
@@ -107,18 +71,8 @@ module Kiosk
           [error.http_status, headers, [::JSON.generate(error.to_problem)]]
         end
 
-        # The host's own `config/cable.yml` if it has one, so an operator
-        # configures pubsub in the one place Rails already taught them and the
-        # engine adds no second setting.
-        #
-        # THE FALLBACK IS `async` AND IT IS NOT A DEFAULT WE CHOSE — it is the
-        # one that is safe. Action Cable's own default when `cable.yml` is
-        # absent is REDIS (`Server::Configuration#pubsub_adapter`,
-        # `cable.fetch("adapter") { "redis" }`), which would raise a LoadError
-        # at the first upgrade on every host in this fleet. `async` is correct
-        # in one process and wrong in several, so a deployed operator writes a
-        # `cable.yml` on a shared adapter; that is what `solid_cable` is for
-        # and why the demos ship one.
+        # The host's `config/cable.yml`, else `async` (one process only):
+        # Action Cable's own fallback is Redis, which no host here bundles.
         def cable_config
           return { "adapter" => "async" } unless rails_app_with_cable_yml?
 

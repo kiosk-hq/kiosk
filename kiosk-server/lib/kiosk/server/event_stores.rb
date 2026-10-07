@@ -2,48 +2,21 @@
 
 module Kiosk
   module Server
-    # Durable adapters for the per-identity event tail.
-    #
-    # The DEFAULT store is {Kiosk::Server::EventStore} — a Hash + Mutex living
-    # in ONE process. That is the TEST implementation and a development
-    # convenience, and it is the wrong thing to deploy. A deployed origin sets:
-    #
-    #   Kiosk.configure do |c|
-    #     c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
-    #   end
-    #
-    # which `rails generate kiosk:install` writes into the initializer. An origin
-    # that declares a topic and leaves the default in place is refused at boot by
-    # {Kiosk::Server::Engine.ephemeral_event_store_error}, and that message is
-    # where the reason lives.
-    #
-    # Naming follows {PowSpentStores}: the in-process store is the top-level
-    # {EventStore} rather than an `EventStores::InMemory`, because the constant
-    # is named in operator initializers and in the suite.
     module EventStores
-      # Event tail backed by the `<schema>.events` table
-      # ({SchemaDefinitions.events_sql}), shared by every process pointed at the
-      # same database. SQL with BIND PARAMETERS through the host's
-      # `::ActiveRecord::Base.lease_connection` — the same access idiom as
-      # {PowSpentStores::ActiveRecord}, so no model class is defined and
-      # satellite neutrality holds.
+      # The deployed event store: the `<schema>.events` table
+      # ({SchemaDefinitions.events_sql}), shared by every process on the
+      # database, through the host's connection with no model class.
+      #
+      #   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
       class ActiveRecord
-        # The published retention FLOOR: an origin serves at least this much
-        # history per identity. Long enough for a subscription topic — a delivery
-        # window, or a shared list somebody adds to tomorrow — and not for a
-        # reconnect alone.
+        # The published retention floor: at least this much history per identity.
         DEFAULT_RETENTION_HOURS = 24
 
-        # Seconds between opportunistic retention sweeps. Bounds table growth
-        # only; nothing about correctness depends on a row being gone on time,
-        # so it is throttled hard rather than run on every append.
+        # Seconds between opportunistic retention sweeps.
         DEFAULT_PRUNE_INTERVAL = 300
 
-        # There is deliberately NO row-count ceiling. On a busy subject a count
-        # binds long before the time does, so it would silently become the real
-        # retention and the published floor would be a number no operator meets.
-        # A ceiling added as a defence against one identity filling the table has
-        # to be large enough that the TIME is what binds in ordinary use.
+        # Retention is by time only; a row-count ceiling would become the real
+        # retention on a busy subject.
         def initialize(retention_hours: DEFAULT_RETENTION_HOURS,
                        prune_interval: DEFAULT_PRUNE_INTERVAL)
           @retention_hours = retention_hours
@@ -91,28 +64,20 @@ module Kiosk
           row["head"].to_i
         end
 
-        # "I cannot prove you saw everything." True when rows between the
-        # caller's cursor and what is still retained have been swept.
-        #
-        # TWO clauses, and the second is what keeps a cursor at head honest: if
-        # the origin holds nothing newer than the caller's id, there is nothing
-        # they could have missed, whatever the floor says. Without it a caller
-        # fully caught up on a swept origin would be told to re-read.
+        # True when rows after the caller's cursor were swept; a cursor at or
+        # past the newest row missed nothing.
         def truncated?(_identity_key, id)
           row = connection.exec_query(
             %(SELECT COALESCE(MIN(id), 0) AS floor, COALESCE(MAX(id), 0) AS head FROM #{table}),
             "Kiosk events floor",
           ).to_a.first
-          floor = row["floor"].to_i
           return false if row["head"].to_i <= id.to_i
-          return false if floor.zero?
 
-          floor > id.to_i + 1
+          row["floor"].to_i > id.to_i + 1
         end
 
-        # Delete everything older than the retention window. Called
-        # opportunistically by {#append} at most once per +prune_interval+ per
-        # process; also safe to schedule as a periodic job instead.
+        # Deletes everything older than the retention window; {#append} calls
+        # it at most once per +prune_interval+ per process.
         def prune!
           connection.exec_query(
             %(DELETE FROM #{table} WHERE created_at < now() - ($1 || ' hours')::interval),
@@ -123,9 +88,7 @@ module Kiosk
 
         private
 
-        # The five closed members of the wire's event, string-keyed, exactly as
-        # {EventStore} hands them back — so the channel above cannot tell which
-        # store it is talking to.
+        # The wire's five event members, string-keyed, as {EventStore} gives them.
         def to_event(row)
           {
             "id" => row["id"].to_i,
@@ -136,9 +99,7 @@ module Kiosk
           }
         end
 
-        # The adapter may hand back a Time or the raw string depending on how
-        # the connection is configured; both render to the one form the wire
-        # publishes.
+        # The adapter may return a Time or a String.
         def as_iso8601(value)
           return value.utc.strftime("%Y-%m-%dT%H:%M:%SZ") if value.respond_to?(:utc)
 
@@ -160,10 +121,7 @@ module Kiosk
 
         def table = %("#{Kiosk.configuration.schema}".events)
 
-        # `lease_connection`, not `connection`, for the reason
-        # {PowSpentStores::ActiveRecord} gives: `ActiveRecord::Base.connection`
-        # is soft-deprecated in Rails 8.1 and RAISES under
-        # `permanent_connection_checkout = :disallowed`.
+        # `connection` raises under `permanent_connection_checkout = :disallowed`.
         def connection = ::ActiveRecord::Base.lease_connection
       end
     end

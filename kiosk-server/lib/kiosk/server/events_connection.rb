@@ -6,54 +6,26 @@ require "rack"
 
 module Kiosk
   module Server
-    # The Action Cable connection behind `<endpoint>/events`.
-    #
-    # == It reuses the HTTP chain byte for byte
-    #
-    # {IdentityResolution.resolve} is the same call every verb makes, and
-    # `ActionCable::Connection::Request` answers `#headers` — which is all
-    # `DefaultAgentIdp#authorization_for` is duck-typed on. So the upgrade gets
-    # the RS256 signature check against the JWKS by `kid`, `aud` and `iss`
-    # against the issuer, `exp`/`nbf`/`iat` with leeway, and the revocation
-    # watermark, with NO new verification code and no second auth story.
-    #
-    # The token travels in the `Authorization` header of the upgrade request —
-    # never the query string, which would put a bearer token in every access log
-    # on the path.
+    # The Action Cable connection behind `<endpoint>/events`. The upgrade is
+    # authenticated by {IdentityResolution.resolve}, the call every verb makes,
+    # from the `Authorization` header — never the query string, which access
+    # logs record.
     class EventsConnection < ::ActionCable::Connection::Base
-      # The identifier is the user_id STRING and not the {Kiosk::Identity}
-      # object. Action Cable renders every `identified_by` value into a
-      # connection identifier (`to_gid_param` or `to_s`) and keys its remote
-      # registry on it, so a rich object there is a serialisation problem
-      # waiting for the first `disconnect`. The full identity hangs off the
-      # connection as an ordinary reader for the channel to read.
+      # A String, because Action Cable serialises every `identified_by` value;
+      # the full identity is the plain reader below.
       identified_by :kiosk_identity_key
 
       attr_reader :kiosk_identity
 
-      # Action Cable beats every 3 seconds — `Server::Connections::BEAT_INTERVAL`,
-      # a bare constant with no configuration accessor anywhere in 8.1.
-      #
-      # That cadence is invisible to a client that filters the envelope and
-      # FATAL to one that does not: a client that surfaces every frame to an
-      # agent spends its whole notification budget on beats, and real messages
-      # are suppressed behind them.
-      #
-      # Ten beats to one ping is 30 seconds — ten times any useful signal on
-      # this stream, and well inside every idle timeout on the path. Throttling
-      # HERE rather than patching the constant keeps it to this connection: a
-      # host's own channels keep Rails' cadence.
+      # Action Cable beats every 3 seconds (a constant in 8.1); a client that
+      # surfaces every frame to an agent drowns in them. One ping in ten is
+      # 30 seconds, inside every idle timeout on the path, and only here.
       BEATS_PER_PING = 10
 
-      # The channel name on the WIRE, which is also the Ruby class name Action
-      # Cable constantizes out of a subscribe frame's `identifier` — see
-      # {KioskEvents}. This connection serves the Kiosk stream and no channel
-      # of the host's, so it is the one channel a frame here may name.
+      # The one channel a frame here may name; see {KioskEvents}.
       CHANNEL = "KioskEvents"
 
-      # The commands this wire has. A subscriber names a topic (spec Section
-      # 8.5.4) and may drop it again; it never publishes (Section 8.5.5), so
-      # Action Cable's `message` command is not part of the contract.
+      # A subscriber never publishes (spec Section 8.5.5), so no `message`.
       COMMANDS = %w[subscribe unsubscribe].freeze
 
       # Spec Section 8.5.6: the credential is re-checked at least every 60
@@ -66,18 +38,10 @@ module Kiosk
         self.kiosk_identity_key = identity.user_id.to_s
       end
 
-      # Subscriptions declared in the URL (spec Section 8.5.4). A receive-only
-      # client cannot SEND, so it can
-      # never issue Action Cable's `subscribe` command and would sit on an open
-      # socket receiving nothing, forever. Everything such a client needs to
-      # say, it therefore says in the URL:
+      # Subscriptions declared in the URL (spec Section 8.5.4), for a client
+      # that cannot send, become the `subscribe` commands it would have sent:
       #
       #   wss://<origin>/kiosk/events?topic=todo:list_4f1e&topic=delivery&since=880
-      #
-      # These are SYNTHESISED into exactly the commands the client would have
-      # sent, through Action Cable's own `subscriptions`, so there is ONE code
-      # path underneath and not a second set of semantics: authorisation,
-      # replay and the subscribed frame are the channel's, unchanged.
       def handle_open
         super
         return unless @kiosk_identity
@@ -96,27 +60,10 @@ module Kiosk
         super if (@beats % BEATS_PER_PING).zero?
       end
 
-      # Spec Section 8.5.4: EVERY frame this socket receives is answered, and
-      # Section 8.5.7 leaves two forms to refuse with. Which one applies turns
-      # on whether the frame names a subscription.
-      #
-      # A frame naming none — not a JSON object, no `identifier` STRING, a
-      # `command` outside the two — has nothing to echo, so the only form left
-      # is the typed `disconnect`, with `reconnect: false`: a client whose
-      # frames are malformed does not fix them by coming back. `close`
-      # transmits that frame itself, so it is the whole call.
-      #
-      # Otherwise it names one, because the wire compares the identifier and
-      # never parses it — so `reject_subscription` echoing that string
-      # correlates the refusal and leaves the socket's other subscriptions
-      # working.
-      #
-      # A `subscribe` for a subscription already live is the one frame here the
-      # origin CAN act on, and the action is nothing: it gets the confirmation
-      # again. Not `reject_subscription`, which would tell a client correlating
-      # by identifier alone to tear down a subscription that works; and not a
-      # second `subscribed`, which would replay the tail to a subscriber that
-      # asked for it once.
+      # Every frame is answered (spec Sections 8.5.4, 8.5.7). One that names
+      # no subscription closes the socket with `reconnect: false`; one that
+      # names a subscription it cannot act on is rejected by that identifier;
+      # a repeated `subscribe` for a live one is confirmed again, not replayed.
       def dispatch_websocket_message(websocket_message)
         frame = parse_object(websocket_message) || {}
         command = frame["command"]
@@ -134,10 +81,8 @@ module Kiosk
         super
       end
 
-      # Whether the credential this socket was opened with still resolves. When
-      # it does not, the connection is closed with the reason spec Section
-      # 8.5.6 gives: `token_expired` (come back with a fresh token) for one that
-      # merely aged out, `revoked` (do not) for anything else.
+      # Whether the socket's credential still resolves; when not, closes with
+      # `token_expired` or `revoked` (spec Section 8.5.6).
       def kiosk_credential_holds?
         return true if resolve_identity
 
@@ -162,8 +107,7 @@ module Kiosk
         !exp.nil? && Time.now.to_i >= exp.to_i
       end
 
-      # Nil for anything that is not a JSON object, which includes a frame that
-      # is not JSON at all.
+      # Nil for anything that is not a JSON object.
       def parse_object(document)
         parsed = ::JSON.parse(document)
         parsed if parsed.is_a?(::Hash)
@@ -175,15 +119,8 @@ module Kiosk
         transmit(identifier: identifier, type: ::ActionCable::INTERNAL[:message_types][type])
       end
 
-      # Whether this origin can act on the frame at all.
-      #
-      # An `unsubscribe` names a subscription this socket holds, or it names
-      # one that was never opened — including one re-serialised rather than
-      # echoed, whose members are the same in another order, which is a
-      # different string and so a different subscription.
-      #
-      # A `subscribe` names this channel; what it asks of the channel —
-      # topic, subject, cursor — is {KioskEvents}' to refuse.
+      # An `unsubscribe` must name a live subscription by its exact string; a
+      # `subscribe` must name this channel, and {KioskEvents} judges the rest.
       def actionable?(command, identifier, live)
         return live if command == "unsubscribe"
 
@@ -191,27 +128,20 @@ module Kiosk
       end
 
       def auto_subscribe!
+        since = requested_since
         requested_topics.each do |topic, subject|
           identifier = { "channel" => CHANNEL, "topic" => topic }
           identifier["subject"] = subject if subject
-          identifier["since"] = requested_since if requested_since
+          identifier["since"] = since if since
           subscriptions.execute_command(
             "command" => "subscribe", "identifier" => ::JSON.generate(identifier)
           )
         end
       end
 
-      # `Rack::Utils.parse_query` rather than `request.query_parameters`
-      # because a repeated key is the natural spelling for a repeated
-      # subscription and Rack returns an ARRAY for one, where Rails' own
-      # parsing keeps only the last. Both spellings work:
-      #
-      #   ?topic=todo&topic=delivery          — repeated
-      #   ?topic=todo,delivery                — comma-separated
-      #
-      # A subject is appended after a colon (`todo:list_4f1e`), which is
-      # unambiguous because spec Section 8.5.1 draws a topic name from the same
-      # vocabulary as a verb name, which forbids a colon.
+      # `?topic=todo&topic=delivery` or `?topic=todo,delivery`, a subject after
+      # a colon (a topic name cannot hold one). `Rack::Utils.parse_query`
+      # because Rails keeps only the last of a repeated key.
       def requested_topics
         raw = ::Rack::Utils.parse_query(request.query_string)["topic"]
         Array(raw).flat_map { |value| value.to_s.split(",") }
@@ -220,8 +150,8 @@ module Kiosk
                   .map { |topic, subject| [topic, (subject unless subject.to_s.empty?)] }
       end
 
-      # Decimal digits are a cursor's URL spelling; anything else travels on
-      # unchanged, so {KioskEvents} refuses it rather than reading it as 0.
+      # Digits become an Integer; anything else passes through for
+      # {KioskEvents} to refuse.
       def requested_since
         value = ::Rack::Utils.parse_query(request.query_string)["since"]
         value = value.last if value.is_a?(Array)
@@ -230,13 +160,8 @@ module Kiosk
         value.match?(/\A\d+\z/) ? value.to_i : value
       end
 
-      # Under the issuer of the origin the upgrade arrived on: `connect` runs
-      # after the upgrade request has returned, outside {IssuerMiddleware}.
-      #
-      # An adapter returns nil for a credential it does not recognise; it does
-      # not raise. A raise here would be a bug in an operator's own IdP, and the
-      # right answer to it is still a refused upgrade rather than a 500 on a
-      # socket nobody can read.
+      # Under the upgrade's own issuer: this runs outside {IssuerMiddleware}.
+      # A raising IdP refuses the upgrade rather than failing the socket.
       def resolve_identity
         issuer = Kiosk.configuration.issuer_for(request.base_url)
         Kiosk.with_issuer(issuer) { Kiosk::Server::IdentityResolution.resolve(request) }

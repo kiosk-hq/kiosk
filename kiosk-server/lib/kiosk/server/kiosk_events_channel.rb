@@ -2,35 +2,21 @@
 
 require "action_cable"
 
-# THE ONE TOP-LEVEL CONSTANT THIS GEM DEFINES, and it is not a style slip.
-#
-# Action Cable resolves the channel a client asks for by constantizing the
-# string in the subscribe frame's `identifier`
-# (`Connection::Subscriptions#add`: `id_options[:channel].safe_constantize`).
-# So the name on the WIRE and the name of a Ruby class are the same string.
-# `Kiosk::Server::KioskEventsChannel` would therefore put a Ruby module path
-# into the protocol, which every porter would then have to reproduce to speak
-# it — a Rails implementation detail promoted to a wire constant.
-#
-# `KioskEvents` is the wire's name for the channel, and this class exists at
-# top level so that name resolves. It is deliberately NOT suffixed `Channel`:
-# the suffix is a Rails naming convention, and this identifier is published.
+# Top level, unsuffixed, because Action Cable constantizes the channel named
+# in a subscribe frame: this class name IS the wire's channel name.
 #
 #   {"command":"subscribe",
 #    "identifier":"{\"channel\":\"KioskEvents\",\"topic\":\"todo\",\"subject\":\"list_4f1e…\"}"}
 #
 class KioskEvents < ActionCable::Channel::Base
-  # Spec Section 8.5.6: the subject's reach is re-checked while the
-  # subscription stands. The credential is the connection's to re-check
-  # ({Kiosk::Server::EventsConnection#kiosk_credential_holds?}).
+  # The subject's reach is re-checked while the subscription stands (spec
+  # Section 8.5.6); the credential is the connection's to re-check.
   REAUTHORISE_EVERY_SECONDS = 30
 
   periodically :reauthorise!, every: REAUTHORISE_EVERY_SECONDS
 
-  # A cursor is an event `id` or a `head` this origin sent (spec Section
-  # 8.5.4): a non-negative integer no larger than JSON carries exactly
-  # (RFC 7493 Section 2.2). Anything else is refused rather than read as some
-  # other cursor, because the replay it asked for cannot be served.
+  # A cursor is a non-negative integer JSON carries exactly (spec Section
+  # 8.5.4, RFC 7493 Section 2.2).
   MAX_CURSOR = 2**53 - 1
 
   def subscribed
@@ -39,33 +25,20 @@ class KioskEvents < ActionCable::Channel::Base
     topic = params[:topic].to_s
     declaration = Kiosk::Server::Events.fetch(topic)
 
-    # A topic this origin does not declare is refused rather than streamed
-    # empty: a silent subscription to nothing is indistinguishable from a quiet
-    # topic, and the client would wait forever on a name it got wrong.
     return reject unless declaration
     return reject unless since.nil? || cursor?(since)
-    # A subject is a string, as an event carries it. Anything else reaches the
-    # operator's own rule as a value it was never written for — an array is an
-    # IN list there — and opens a subscription no event can match.
     return reject unless params[:subject].nil? || params[:subject].is_a?(String)
 
-    # `reachable?` reads `@subject`, so the assignment has to precede it.
     @topic = topic
     @subject = params[:subject]
     @declaration = declaration
 
     return reject unless reachable?(declaration)
 
-    # HEAD IS READ BEFORE THE STREAM IS OPENED, and that ordering is the whole
-    # of the race fix below. Read it after and there is a window in which an
-    # event is newer than the head we published and older than the stream we
-    # opened — belonging to neither, and therefore lost.
+    # Before the stream opens, so no event falls between head and stream.
     @head = store.head
 
-    # `coder:` is REQUIRED with a block. Without it the handler is handed the
-    # raw broadcast STRING rather than the decoded event, so every filter below
-    # reads a String as a Hash — `event["subject"]` becomes a substring search —
-    # and the client receives a JSON document nested inside a JSON frame.
+    # Without `coder:` the block receives the raw broadcast String.
     stream_from Kiosk::Server::EventsCable.stream_name(identity_key, topic),
                 coder: ActiveSupport::JSON do |event|
       transmit(event) if for_this_subscription?(event)
@@ -74,15 +47,8 @@ class KioskEvents < ActionCable::Channel::Base
     transmit(subscribed_frame)
   end
 
-  # THE POINT AT WHICH THE STREAM IS ACTUALLY LIVE, and therefore the only
-  # correct place to replay from.
-  #
-  # `stream_from` POSTS the pubsub subscribe to Action Cable's event loop and
-  # defers this confirmation until it succeeds — so between the end of
-  # `subscribed` and this call there is a window in which the client holds our
-  # `subscribed` frame and no stream — and an event emitted in that window
-  # reaches nobody. Replaying HERE closes it, because everything after the head
-  # captured before the stream was opened is sent once the stream exists.
+  # Action Cable confirms once the pubsub subscription is live, so replay
+  # starts here: an event emitted before that reaches the client this way.
   def transmit_subscription_confirmation
     super
     replay!
@@ -96,10 +62,8 @@ class KioskEvents < ActionCable::Channel::Base
 
   def store = Kiosk.configuration.event_store
 
-  # `head` is the operator's current event id — what the client records as its
-  # cursor. `truncated` is the whole of the degraded case: "I cannot prove you
-  # saw everything", answered by ONE ordinary tolled read of the verb that owns
-  # this state, after which the client continues on the stream.
+  # `head` is the cursor the client records; `truncated` says events after
+  # its `since` were pruned, so it re-reads state once through the verb.
   def subscribed_frame
     {
       "type" => "subscribed",
@@ -110,22 +74,11 @@ class KioskEvents < ActionCable::Channel::Base
     }
   end
 
-  # REPLAY ALWAYS RUNS, and not only when the caller sent a `since`. The floor
-  # is `since` when the caller gave one and the head captured before the stream
-  # was opened when it did not: either way, everything after the cursor the
-  # client is about to hold.
-  #
-  # An event may therefore arrive twice — once from here and once from the
-  # stream. That costs nothing and is not a defect: delivery is at-least-once
-  # by construction, and the wire already requires a client to ignore an `id`
-  # it has seen. A LOST event has no such remedy, which is why the floor is
-  # unconditional.
+  # Everything after `since`, or after the head read before the stream
+  # opened. An event may arrive twice; delivery is at-least-once and the
+  # client ignores an `id` it has seen.
   def replay!
-    return if @head.nil?
-
-    floor = since || @head
-
-    store.since(identity_key, floor).each do |event|
+    store.since(identity_key, since || @head).each do |event|
       transmit(event) if for_this_subscription?(event)
     end
   end
@@ -134,14 +87,8 @@ class KioskEvents < ActionCable::Channel::Base
 
   def cursor?(value) = value.is_a?(Integer) && value.between?(0, MAX_CURSOR)
 
-  # A subscription sees its own topic, and its own subject when it named one.
-  #
-  # THE TOPIC COMPARISON IS FOR THE REPLAY. The live stream is per (identity,
-  # topic), so a pushed event is already this topic's; `replay!` reads the
-  # identity's WHOLE tail, every topic in it, and an event handed to the wrong
-  # subscription arrives inside that subscription's `identifier` carrying
-  # `data` the subscriber validates against the other topic's `payload_schema`.
-  # See {Kiosk::Server::EventsCable} for why a subject is not in a stream name.
+  # Its own topic (the replayed tail holds every topic) and, when named, its
+  # own subject (a stream name carries none).
   def for_this_subscription?(event)
     return false unless event["topic"] == @topic
     return true if @subject.nil?
@@ -149,30 +96,18 @@ class KioskEvents < ActionCable::Channel::Base
     event["subject"].to_s == @subject.to_s
   end
 
-  # Spec Sections 8.5.4 and 8.5.6. A subject is optional on every topic: the
-  # stream is per identity, so a subscription naming none takes only what the
-  # operator addressed to this identity. A named subject is the operator's own
-  # rule to answer, except on a `published` topic. The rule takes the subject
-  # and the identity rather than reading CurrentRequest, which is fiber-local
-  # and does not reach here.
+  # Spec Sections 8.5.4 and 8.5.6. No subject, or a `published` topic, is
+  # reachable; otherwise the topic's `subject_reachable` rule answers, and a
+  # topic without one admits a named subject only under `principal` reach.
   def reachable?(declaration)
     return true if @subject.nil? || declaration[:reach] == :published
 
-    subject_reachable?(declaration)
-  end
-
-  def subject_reachable?(declaration)
     callable = declaration[:subject_reachable]
-    # A topic that declares no predicate authorises by `reach` alone. For
-    # `principal` that is the whole answer; for `consented` and `role` it is an
-    # operator who has not yet said who may read it, and the safe reading of
-    # silence on an authorisation question is NO.
     return declaration[:reach] == :principal if callable.nil?
 
     !!callable.call(@subject, identity)
   rescue StandardError => e
-    # Spec Section 8.5.7 leaves `reject_subscription` as the only answer, so
-    # the log is the one place that tells a broken rule from a rule saying no.
+    # Logged, because the refusal alone cannot tell a broken rule from a no.
     logger&.error("[kiosk] events subject rule raised for topic #{@topic.inspect}: " \
                   "#{e.class}: #{e.message} at #{e.backtrace&.first}")
     false

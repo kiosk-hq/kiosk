@@ -274,11 +274,9 @@ module Kiosk
       #       protocol.md §11.6 forbids an operator from answering a
       #       reconciling query with `not paid` while a capture may be
       #       outstanding, and forbids an assistant from re-signing on
-      #       anything short of a positive `not paid`. The pay-hook is where
-      #       an operator closes it: getgrocery claims the order before the
-      #       capture and flips it to `paid` the instant the capture returns,
-      #       so its `my_orders` paid flag never reads false inside this
-      #       window.
+      #       anything short of a positive `not paid`. {PaymentClaim} closes
+      #       it: it claims the operator's row before the capture and flips
+      #       it to `paid` the instant the capture returns.
       def verb_pay(args)
         args = symbolize(args)
 

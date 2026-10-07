@@ -12,6 +12,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
+- **`Kiosk::Server::PaymentClaim`** — the PSP decorator that keeps §11.6's operator half: one capture per payable row, and a paid state anchored to the capture (see [Payments](#payments)).
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
@@ -107,6 +108,34 @@ Kiosk.configure do |c|
   c.kyc_audience   = "acme"                  # the `aud` it mints for you
 end
 ```
+
+### Payments
+
+Set a PSP adapter (a `kiosk-pay-*` gem) and the engine serves `pay`. Wrap it in
+`Kiosk::Server::PaymentClaim` and the engine keeps §11.6's operator half for you:
+it claims your payable row (`unpaid → paying`) before the capture, so a second
+`pay` for that row is refused before the processor is reached, and marks it
+`paid` when the capture returns. You write the cashier — the check of the signed
+cart against your own price.
+
+```ruby
+class ValidatingPaymentProvider < Kiosk::Server::PaymentClaim
+  def initialize(psp, currency:)
+    super(psp, currency: currency, table: "orders", reference: "order_id", query: "my_orders")
+  end
+
+  private
+
+  def check_cart!(cart, order_id)
+    deny "cart total does not match the order" unless cart.total_amount_cents == Order.find(order_id).total_cents
+  end
+end
+
+Kiosk.configure { |c| c.payment_provider = ValidatingPaymentProvider.new(psp, currency: "eur") }
+```
+
+Your per-user query publishes the row's `payment_status` — `paying` as
+*pending* — so a capture in flight never reads as *not paid*.
 
 
 ## Upgrading

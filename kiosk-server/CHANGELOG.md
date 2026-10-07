@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`Kiosk::Server::PaymentClaim` keeps the operator half of §11.6**: one capture per payable row, and a paid state that rests on the capture (T-176).
+
 - 2026-10-07: **`Kiosk::Settlement` and `Kiosk::CartMandate` read the receipts `pay` records**, so an operator answers "is this paid" without modelling the engine's tables (K-1788).
 
 - 2026-10-07: **`render_kiosk_result` renders a `Kiosk::OperationResult` inside a handler**: the value on success, the coded refusal otherwise (K-1788).

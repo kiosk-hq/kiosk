@@ -350,7 +350,7 @@ smoke_stylish() {
     | grep -o 'name="authenticity_token" value="[^"]*"' \
     | head -1 | sed 's/.*value="//; s/"$//')"
   if [ -z "$token" ] || [ -z "$cookie" ]; then
-    fail "sign-in form: CSRF token ${token:+found}${token:-missing}, Secure session cookie ${cookie:+found}${cookie:-missing}"
+    fail "sign-in form: CSRF token $([ -n "$token" ] && echo found || echo missing), Secure session cookie $([ -n "$cookie" ] && echo found || echo missing)"
   else
     pass "got CSRF token + Secure session cookie"
     # (b) POST credentials WITH the Origin header a browser sends but WITHOUT
@@ -762,7 +762,7 @@ smoke_tudu() {
     | grep -o 'name="authenticity_token" value="[^"]*"' \
     | head -1 | sed 's/.*value="//; s/"$//')"
   if [ -z "$token" ] || [ -z "$cookie" ]; then
-    fail "sign-in form: CSRF token ${token:+found}${token:-missing}, Secure session cookie ${cookie:+found}${cookie:-missing}"
+    fail "sign-in form: CSRF token $([ -n "$token" ] && echo found || echo missing), Secure session cookie $([ -n "$cookie" ] && echo found || echo missing)"
   else
     pass "got CSRF token + Secure session cookie"
     signin_code="$(curl -s -o /dev/null -w '%{http_code}' \

@@ -150,6 +150,9 @@ esac
 FAILURES=0
 fail() { echo "  FAIL: $*"; FAILURES=$((FAILURES + 1)); }
 pass() { echo "  ok:   $*"; }
+# The session cookie is Secure and curl will not keep one from this plain-http hop
+# to the app, so it is read off the response headers and sent back by hand.
+secure_session_cookie() { tr -d '\r' <"$1" | sed -n 's/^set-cookie: \([^;]*_session=[^;]*\);.*; secure;.*/\1/p' | tail -1; }
 
 # ── Safety controls ─────────────────────────────────────────────────────────
 # Control 3: refuse to run anywhere the dropped database might not be throwaway.
@@ -254,7 +257,7 @@ smoke_stylish() {
   SIGNIN_HEADERS=(-H "Host: ${HOST}")
 
   DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../kiosk-demo-stylish" && pwd)"
-  COOKIES="$(mktemp -t kiosk-smoke-cookies.XXXXXX)"
+  RESPONSE_HEADERS="$(mktemp -t kiosk-smoke-headers.XXXXXX)"
   SERVER_LOG="$(mktemp -t kiosk-smoke-server.XXXXXX)"
   cd "$DEMO_DIR"
 
@@ -284,7 +287,7 @@ smoke_stylish() {
   cleanup() {
     [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
     [ -n "$SERVER_PID" ] && wait "$SERVER_PID" 2>/dev/null || true
-    rm -f "$COOKIES" "$SERVER_LOG"
+    rm -f "$RESPONSE_HEADERS" "$SERVER_LOG"
   }
   trap cleanup EXIT
 
@@ -341,26 +344,28 @@ smoke_stylish() {
 
   echo "── Assertion 4: real Devise sign-in behind the proxy (catches assume_ssl/CSRF-Origin) ──"
   # (a) GET the sign-in form: grab the CSRF token + session cookie.
-  form="$(curl -s -c "$COOKIES" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/users/sign_in")"
+  form="$(curl -s -D "$RESPONSE_HEADERS" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/users/sign_in")"
+  cookie="$(secure_session_cookie "$RESPONSE_HEADERS")"
   token="$(printf '%s' "$form" \
     | grep -o 'name="authenticity_token" value="[^"]*"' \
     | head -1 | sed 's/.*value="//; s/"$//')"
-  if [ -z "$token" ]; then
-    fail "could not extract CSRF token from sign-in form"
+  if [ -z "$token" ] || [ -z "$cookie" ]; then
+    fail "sign-in form: CSRF token ${token:+found}${token:-missing}, Secure session cookie ${cookie:+found}${cookie:-missing}"
   else
-    pass "got CSRF token + session cookie"
+    pass "got CSRF token + Secure session cookie"
     # (b) POST credentials WITH the Origin header a browser sends but WITHOUT
     # X-Forwarded-Proto (see SIGNIN_HEADERS above). With
     # (assume_ssl off) Rails computes base_url=http:// and rejects this https
     # Origin as forgery → 422 + silent sign-in failure. With assume_ssl=true it
     # authenticates → 3xx redirect.
     signin_code="$(curl -s -o /dev/null -w '%{http_code}' \
-      -c "$COOKIES" -b "$COOKIES" \
+      -D "$RESPONSE_HEADERS" -H "Cookie: ${cookie}" \
       "${SIGNIN_HEADERS[@]}" -H "Origin: ${ORIGIN}" \
       --data-urlencode "authenticity_token=${token}" \
       --data-urlencode "user[email]=owner@combette.example" \
       --data-urlencode "user[password]=combette-demo-password" \
       "${BASE}/users/sign_in")"
+    cookie="$(secure_session_cookie "$RESPONSE_HEADERS")"
     if [ "$signin_code" = "302" ] || [ "$signin_code" = "303" ]; then
       pass "sign-in POST → $signin_code (redirect, not 422 forgery)"
     else
@@ -368,7 +373,7 @@ smoke_stylish() {
     fi
     # (c) With the authenticated session cookie, the manage page now renders 200.
     authed_code="$(curl -s -o /dev/null -w '%{http_code}' \
-      -b "$COOKIES" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" \
+      -H "Cookie: ${cookie}" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" \
       "${BASE}/kiosk/auth/assistants")"
     [ "$authed_code" = "200" ] \
       && pass "signed-in manage page → 200" \
@@ -669,7 +674,7 @@ smoke_tudu() {
   SIGNIN_HEADERS=(-H "Host: ${HOST}")
 
   DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../kiosk-demo-tudu" && pwd)"
-  COOKIES="$(mktemp -t kiosk-smoke-tudu-cookies.XXXXXX)"
+  RESPONSE_HEADERS="$(mktemp -t kiosk-smoke-tudu-headers.XXXXXX)"
   SERVER_LOG="$(mktemp -t kiosk-smoke-tudu.XXXXXX)"
   cd "$DEMO_DIR"
 
@@ -691,7 +696,7 @@ smoke_tudu() {
   cleanup() {
     [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
     [ -n "$SERVER_PID" ] && wait "$SERVER_PID" 2>/dev/null || true
-    rm -f "$COOKIES" "$SERVER_LOG"
+    rm -f "$RESPONSE_HEADERS" "$SERVER_LOG"
   }
   trap cleanup EXIT
 
@@ -751,21 +756,23 @@ smoke_tudu() {
     || fail "GET /users/sign_up expected 200, got $code (tudu's Users::RegistrationsController is eager-loaded only in production)"
 
   echo "── Assertion 4: real Devise sign-in behind the proxy (catches assume_ssl/CSRF-Origin) ──"
-  form="$(curl -s -c "$COOKIES" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/users/sign_in")"
+  form="$(curl -s -D "$RESPONSE_HEADERS" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/users/sign_in")"
+  cookie="$(secure_session_cookie "$RESPONSE_HEADERS")"
   token="$(printf '%s' "$form" \
     | grep -o 'name="authenticity_token" value="[^"]*"' \
     | head -1 | sed 's/.*value="//; s/"$//')"
-  if [ -z "$token" ]; then
-    fail "could not extract CSRF token from sign-in form"
+  if [ -z "$token" ] || [ -z "$cookie" ]; then
+    fail "sign-in form: CSRF token ${token:+found}${token:-missing}, Secure session cookie ${cookie:+found}${cookie:-missing}"
   else
-    pass "got CSRF token + session cookie"
+    pass "got CSRF token + Secure session cookie"
     signin_code="$(curl -s -o /dev/null -w '%{http_code}' \
-      -c "$COOKIES" -b "$COOKIES" \
+      -D "$RESPONSE_HEADERS" -H "Cookie: ${cookie}" \
       "${SIGNIN_HEADERS[@]}" -H "Origin: ${ORIGIN}" \
       --data-urlencode "authenticity_token=${token}" \
       --data-urlencode "user[email]=alice@example.com" \
       --data-urlencode "user[password]=tudu-demo-password" \
       "${BASE}/users/sign_in")"
+    cookie="$(secure_session_cookie "$RESPONSE_HEADERS")"
     if [ "$signin_code" = "302" ] || [ "$signin_code" = "303" ]; then
       pass "sign-in POST → $signin_code (redirect, not 422 forgery)"
     else
@@ -774,7 +781,7 @@ smoke_tudu() {
     # Signed in, the root switches to the caller's own lists — a DIFFERENT
     # render path from the signed-out board, and the one a human actually uses.
     authed_code="$(curl -s -o /dev/null -w '%{http_code}' \
-      -b "$COOKIES" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/lists")"
+      -H "Cookie: ${cookie}" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/lists")"
     [ "$authed_code" = "200" ] \
       && pass "signed-in /lists → 200" \
       || fail "signed-in /lists expected 200, got $authed_code"

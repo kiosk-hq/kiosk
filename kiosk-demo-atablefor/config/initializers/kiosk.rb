@@ -10,7 +10,7 @@
 
 require "kiosk/user_identity_providers/devise"
 
-# ── PoW / Reputation — the verb toll, selected by ATABLEFOR_POW_MODE ────────
+# ── PoW / Reputation — the verb toll, selected by KIOSK_POW_MODE ────────────
 #
 # The engine offers EVERY wire command to the gate, whatever its kind, and the
 # SELECTED policy decides which verbs actually draw a challenge. Only the
@@ -20,8 +20,8 @@ require "kiosk/user_identity_providers/devise"
 # challenge and is the thing to read. Registration PoW is a separate,
 # always-on gate (own section below).
 #
-#   rake check:book — no PoW flag set  → :off in dev → nothing is tolled
-#   rake check:pow  — KIOSK_POW_DEMO=1 → :demo → :query tolled, :run free
+#   rake check:book — KIOSK_POW_MODE unset → :off in dev → nothing is tolled
+#   rake check:pow  — KIOSK_POW_MODE=demo  → :query tolled, :run free
 #
 # Reservation-scalping is the abuse a table-booking provider fears: scripts
 # that mass-claim prime-time 2-tops to resell. PoW prices that at the door —
@@ -53,54 +53,33 @@ ATABLEFOR_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-# ── PoW verb-toll MODE — exactly one, explicitly selected ──────────────────
+# ── PoW verb-toll MODE — exactly one ────────────────────────────────────────
 #
 #   KIOSK_POW_MODE = reputation | demo | backoff | off
 #
-#   reputation — the FLAGSHIP: the shipped RateAndReputation policy with a REAL
+#   reputation — the shipped RateAndReputation policy with a REAL
 #                confirmed-bookings DB factor. A fresh agent pays escalating PoW
 #                to browse prime-time availability; the cost DROPS as it builds
 #                a genuine booking record.
 #   demo       — flat AtableforDemoPowPolicy: always toll :query (rake check:pow).
-#   backoff    — "solve once, next N calls free" (N = KIOSK_POW_BACKOFF_DEMO, else 10).
+#   backoff    — "solve once, next ATABLEFOR_BACKOFF_FREE_CALLS calls free"
+#                (rake check:backoff).
 #   off        — no verb toll at all. Registration PoW (below) stays on regardless.
 #
-# ONE selector, because independent `if ENV[…]` blocks each assigning
-# `reputation_policy` would leave only the LAST in effect, and a co-active
-# branch's empty factors would reset the reputation DB lookup with it.
-#
-# The legacy per-policy flags (KIOSK_POW_DEMO / KIOSK_POW_REPUTATION_DEMO /
-# KIOSK_POW_BACKOFF_DEMO) are honoured as single-mode aliases, but setting MORE
-# THAN ONE RAISES at boot. Unset → REPUTATION in production, OFF in dev/test, so
-# the demo flows and CI stay toll-free.
+# Unset → REPUTATION in production, OFF in dev/test, so the booking flows and
+# CI stay toll-free; the walkthrough tasks name the mode they demonstrate.
 ATABLEFOR_POW_MODE = begin
-  legacy = []
-  legacy << :demo       if ENV["KIOSK_POW_DEMO"] == "1"
-  legacy << :reputation if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
-  legacy << :backoff    if ENV["KIOSK_POW_BACKOFF_DEMO"].to_i > 0
-
-  explicit = ENV["KIOSK_POW_MODE"].to_s.strip.downcase
-  valid    = %w[off demo reputation backoff]
-
-  if !explicit.empty?
-    raise "KIOSK_POW_MODE=#{explicit.inspect} is invalid — use one of: #{valid.join(", ")}." unless valid.include?(explicit)
-    stray = legacy.reject { |m| m.to_s == explicit }
-    warn "[atablefor] KIOSK_POW_MODE=#{explicit} overrides legacy PoW flag(s): #{stray.join(", ")} — remove them." unless stray.empty?
-    explicit.to_sym
-  elsif legacy.length > 1
-    raise <<~MSG
-      More than one legacy PoW flag is set: #{legacy.join(", ")}.
-      They each select a DIFFERENT :query PoW policy and are mutually exclusive.
-      Select exactly
-      one policy with KIOSK_POW_MODE=reputation|demo|backoff|off and remove the
-      legacy KIOSK_POW_DEMO / KIOSK_POW_REPUTATION_DEMO / KIOSK_POW_BACKOFF_DEMO flags.
-    MSG
-  elsif legacy.length == 1
-    legacy.first
-  else
+  mode  = ENV["KIOSK_POW_MODE"].to_s.strip.downcase
+  valid = %w[off demo reputation backoff]
+  if mode.empty?
     Rails.env.local? ? :off : :reputation
+  else
+    raise "KIOSK_POW_MODE=#{mode.inspect} is invalid — use one of: #{valid.join(", ")}." unless valid.include?(mode)
+
+    mode.to_sym
   end
 end
+ATABLEFOR_BACKOFF_FREE_CALLS = 3
 
 # Per-mode setup that must run BEFORE Kiosk.configure: the demo policy class and
 # the bad-proof counter stores.
@@ -223,7 +202,7 @@ Kiosk.configure do |c|
   # A reservation takes no money, so capabilities are [schema, queries, actions].
 
   # ── PoW verb-toll gate — exactly one mode ───────────────────────────────
-  # ATABLEFOR_POW_MODE (top of this file) selects exactly one :query policy, so
+  # ATABLEFOR_POW_MODE (top of this file) selects exactly one policy, so
   # the branches cannot clobber each other's reputation_policy / factors.
   case ATABLEFOR_POW_MODE
   when :demo
@@ -285,14 +264,12 @@ Kiosk.configure do |c|
       BadProofCounter.increment(ATABLEFOR_REPUTATION_BAD_PROOF_DB, identity.agent_id)
     }
   when :backoff
-    # "Solve once, next N calls free": one proof grants `count` ungated
-    # follow-up calls, then the assistant is re-challenged. The env value IS the
-    # count (check:backoff sets 3); default 10. The in-process BackoffStore is
-    # per worker — a multi-worker deploy needs a shared store.
-    backoff_count = ENV["KIOSK_POW_BACKOFF_DEMO"].to_i
-    backoff_count = 10 if backoff_count < 1
+    # "Solve once, next N calls free": one proof grants
+    # ATABLEFOR_BACKOFF_FREE_CALLS ungated follow-up calls, then the assistant
+    # is re-challenged. The in-process BackoffStore is per worker — a
+    # multi-worker deploy needs a shared store.
     c.reputation_policy = Kiosk::Reputation::Policies::Backoff.new(
-      count: backoff_count,
+      count: ATABLEFOR_BACKOFF_FREE_CALLS,
       base:  {
         alg:    Kiosk::Pow::Equihash::NAME,
         params: Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS),

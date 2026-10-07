@@ -59,18 +59,13 @@ What each unit must carry. For EACH of the 7 apps:
       "beware" banner) — the production-grade showcase;
       `low` (or unset) for the other six
       (fast, poke-friendly; each still knob-adjustable to `high`).
-- [ ] **PoW mode (atablefor):** the flagship advertises the **reputation** anti-scalping policy — its env ships
-      `KIOSK_POW_MODE=reputation` (RateAndReputation with the real confirmed-bookings factor). That ONE selector is what to
-      set; the `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` / `KIOSK_POW_BACKOFF_DEMO` flags are honoured only as
-      single-mode aliases — drop them (setting more than one RAISES at boot). At `high` a fresh visitor pays its reputation
-      count of ~2 proofs (~20 s) at first contact, dropping to 1 then a free pass as its bookings confirm. Other modes:
-      `demo` / `backoff` / `off`.
-- [ ] ⚠ **UPGRADING AN EXISTING BOX — `deploy/rollout.sh` is the whole of it.** An env written before the
-      single `KIOSK_POW_MODE` selector can still set two or more of `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` /
-      `KIOSK_POW_BACKOFF_DEMO`, which **atablefor's initializer refuses at boot** — deploying first takes that app
-      down — and can still carry the dead `KIOSK_POW_REGISTER_DEMO` (nothing reads it; register PoW is unconditional
-      via `c.registration_pow_count = 1`). The rollout renders each file from its template on every run, so a name
-      no template declares does not come across and this is no longer a thing to remember. It edits only
+- [ ] **PoW toll:** atablefor runs the **reputation** anti-scalping policy in production (RateAndReputation with the
+      real confirmed-bookings factor) — its initializer's production default, so its env sets nothing for it. At `high`
+      a fresh visitor pays ~2 proofs (~20 s) at first contact, dropping to 1 then a free pass as its bookings confirm.
+      getgrocery tolls every query and hoteling prices browse depth and holds; both are configured in their
+      initializers, with no env flag.
+- [ ] ⚠ **UPGRADING AN EXISTING BOX — `deploy/rollout.sh` is the whole of it.** The rollout renders each file from
+      its template on every run, so a name no template declares does not come across. It edits only
       `/etc/kiosk-demo/*.env`; it does
       NOT touch Caddy or any throttle (there is deliberately none; see `deploy/README.md` §"Edge rate-limit").
 - [ ] **PoW secret (all 7 demos):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot

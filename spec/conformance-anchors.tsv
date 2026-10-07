@@ -487,7 +487,7 @@ kiosk-demo-hoteling/app/views/home/index.html.erb	      <div class="sec-k">🤖 
 kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
 kiosk-demo-hoteling/before-after.md	`rake check:book` runs the errand with no human present:
 kiosk-demo-hoteling/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-hoteling/config/initializers/kiosk.rb	        account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
+kiosk-demo-hoteling/config/initializers/kiosk.rb	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail

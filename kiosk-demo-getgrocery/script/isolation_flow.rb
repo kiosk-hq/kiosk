@@ -144,11 +144,11 @@ user_id_b  = reg_b.fetch("user_id")
 token_b    = reg_b.fetch("access_token")
 
 # ── Step 3: Query catalog (shared) ───────────────────────────────────────────
-rc, catalog_resp = WIRE.get_json(
+rc, catalog_resp = through_toll { |toll| WIRE.get_json(
   "/kiosk/catalog",
   {},
-  WIRE.bearer(token_a),
-)
+  WIRE.bearer(token_a).merge(toll),
+) }
 abort "catalog failed (#{rc}): #{JSON.generate(catalog_resp)}" unless rc == 200
 catalog = Array(catalog_resp)
 abort "catalog empty" if catalog.empty?
@@ -173,11 +173,11 @@ rc, _pay_a = pay_for_order(ISSUER, token_a, key_a, user_id_a, agent_id_a, order_
 abort "A pay failed (#{rc})" unless rc == 200
 
 # ── Step 6: B queries my_orders (before having any orders) ───────────────────
-rc, b_before_resp = WIRE.get_json(
+rc, b_before_resp = through_toll { |toll| WIRE.get_json(
   "/kiosk/my_orders",
   {},
-  WIRE.bearer(token_b),
-)
+  WIRE.bearer(token_b).merge(toll),
+) }
 abort "B my_orders (before) failed (#{rc})" unless rc == 200
 b_my_orders_before = Array(b_before_resp).map { |r| r["order_id"] }
 
@@ -288,20 +288,20 @@ rc, resched_b = WIRE.post_json(
 abort "B reschedule_delivery failed (#{rc}): #{JSON.generate(resched_b)}" unless rc == 200
 
 # ── Step 11: B queries my_orders after creating own order ─────────────────────
-rc, b_after_resp = WIRE.get_json(
+rc, b_after_resp = through_toll { |toll| WIRE.get_json(
   "/kiosk/my_orders",
   {},
-  WIRE.bearer(token_b),
-)
+  WIRE.bearer(token_b).merge(toll),
+) }
 abort "B my_orders (after) failed (#{rc})" unless rc == 200
 b_my_orders_after = Array(b_after_resp).map { |r| r["order_id"] }
 
 # ── Step 12: A queries my_orders after B's positive control ───────────────────
-rc, a_after_resp = WIRE.get_json(
+rc, a_after_resp = through_toll { |toll| WIRE.get_json(
   "/kiosk/my_orders",
   {},
-  WIRE.bearer(token_a),
-)
+  WIRE.bearer(token_a).merge(toll),
+) }
 abort "A my_orders (after) failed (#{rc})" unless rc == 200
 a_my_orders_after = Array(a_after_resp).map { |r| r["order_id"] }
 

@@ -29,6 +29,21 @@ rescue Kiosk::Pow::Equihash::SolverError => e
   abort e.message
 end
 
+# Send one request through the toll: on a 402, solve every challenge the
+# problem document carries and send the request once more with the proofs in
+# the Kiosk-PoW header. The block takes the extra headers and answers
+# [code, body, …]; the answer comes back whole.
+def through_toll
+  answer = yield({})
+  rc, body = answer
+  return answer unless rc == 402
+
+  challenges = body["challenges"]
+  abort "402 without challenges[]: #{JSON.generate(body)}" unless challenges.is_a?(Array) && challenges.any?
+  proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
+  yield({ "Kiosk-PoW" => JSON.generate(proofs) })
+end
+
 # Register a fresh agent through the Equihash-gated /auth/register.
 #
 # @param server [String] base URL (e.g. http://localhost:3004)
@@ -54,20 +69,9 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
   )
 
   body = { public_key: pem, signed: pop }
-  rc, reg = post_json.call("#{server}/kiosk/auth/register", body)
-
-  if rc == 402
-    # The PoP nonce is NOT consumed on a 402 (the gate runs before the
-    # challenge is spent), so we resubmit the SAME signed proof + the PoW.
-    # The 402 is an RFC 9457 problem document: `challenges` is a
-    # TOP-LEVEL extension member, not nested under an `error` object.
-    challenges = reg["challenges"]
-    abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
-    proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-    rc, reg = post_json.call(
-      "#{server}/kiosk/auth/register", body, { "Kiosk-PoW" => JSON.generate(proofs) }
-    )
-  end
+  # The PoP nonce is NOT consumed on a 402 (the gate runs before the challenge
+  # is spent), so the retry resubmits the SAME signed proof with the PoW.
+  rc, reg = through_toll { |toll| post_json.call("#{server}/kiosk/auth/register", body, toll) }
 
   abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
   [key, reg, rc]

@@ -79,8 +79,10 @@ end
 def get_json(url, headers = {}, params = {})
   uri = URI(url)
   uri.query = URI.encode_www_form(params) unless params.empty?
-  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  through_toll do |toll|
+    res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers.merge(toll)))
+    [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  end
 end
 
 # POST a form to the broker's verify page (models the human clicking [Approve]).

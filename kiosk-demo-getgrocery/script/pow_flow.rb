@@ -21,7 +21,7 @@
 # `rake check:pow`, which asserts them against the level it asked for, so the
 # toll a run pays is a fact off the wire rather than a banner.
 #
-# Usage (invoked by rake check:pow — needs the server with KIOSK_POW_DEMO=1):
+# Usage (invoked by rake check:pow, which boots the server):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/pow_flow.rb
 # Requires: python3 with numpy.
 

@@ -38,7 +38,7 @@
 #   bundle exec ruby script/reputation_flow.rb
 #
 # Requirements:
-#   - The server must be running with KIOSK_POW_REPUTATION_DEMO=1.
+#   - The server must be running with KIOSK_POW_MODE=reputation.
 #   - python3 with numpy: pip install numpy
 
 require "date"

@@ -271,7 +271,7 @@ namespace :check do
   end
 
   desc <<~DESC
-    Query-toll PoW demo (KIOSK_POW_DEMO=1): 402 → solve.py → 200, wrong nonce → 403.
+    Query-toll PoW demo (KIOSK_POW_MODE=demo): 402 → solve.py → 200, wrong nonce → 403.
 
     RUNS AT TOY PARAMETERS BY DEFAULT — Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s
     `low`. That is a sub-second solve, which is what keeps this task runnable in
@@ -373,7 +373,7 @@ namespace :check do
 
     env_vars = {
       "KIOSK_ISSUER"           => kiosk_issuer,
-      "KIOSK_POW_DEMO"         => "1",
+      "KIOSK_POW_MODE"         => "demo",
       "KIOSK_BAD_PROOF_DB"     => bad_proof_db,
       # Forwarded, not defaulted: `spawn` with an env Hash still inherits the
       # parent's environment, but naming it here is what makes the server's
@@ -520,7 +520,7 @@ namespace :check do
   desc <<~DESC
     Anti-scalping reputation PoW demo (trust earned by booking).
 
-    Boots the server with KIOSK_POW_REPUTATION_DEMO=1, runs script/reputation_flow.rb:
+    Boots the server with KIOSK_POW_MODE=reputation, runs script/reputation_flow.rb:
       0 confirmed bookings → 402 with 2 equihash challenges (unproven)
       1 confirmed booking  → 402 with 1 challenge (a booking earns relief)
       2 confirmed bookings → 200 served directly, NO challenge (proven — free pass)
@@ -584,7 +584,7 @@ namespace :check do
 
     env_vars = {
       "KIOSK_ISSUER"               => kiosk_issuer,
-      "KIOSK_POW_REPUTATION_DEMO"  => "1",
+      "KIOSK_POW_MODE"             => "reputation",
     }
     server_pid = spawn(
       env_vars,
@@ -665,8 +665,8 @@ namespace :check do
   desc <<~DESC
     COUNT-BASED PoW backoff demo — "solve once, next N calls free" (POW-RECENCY-GRACE).
 
-    Boots the server with KIOSK_POW_BACKOFF_DEMO=3 (the value is the free-call
-    count, not a boolean), runs script/backoff_flow.rb:
+    Boots the server with KIOSK_POW_MODE=backoff (ATABLEFOR_BACKOFF_FREE_CALLS = 3
+    in the initializer), runs script/backoff_flow.rb:
       fresh identity queries → 402 (pow_required, no grant yet)
       solves via the bundled solver, resubmits → 200 (proof verified → grant set to 3)
       the NEXT 3 requests are served WITHOUT a challenge (200 — the grant consumed)
@@ -729,7 +729,7 @@ namespace :check do
 
     env_vars = {
       "KIOSK_ISSUER"            => kiosk_issuer,
-      "KIOSK_POW_BACKOFF_DEMO"  => "3", # the value is the free-call count; the flow asserts exactly 3
+      "KIOSK_POW_MODE"          => "backoff",
     }
     server_pid = spawn(
       env_vars,

@@ -5520,8 +5520,8 @@ FRAMEWORK_PATCH = /
 # which run.sh patches the same way it patches config/application.rb.
 #
 # Bare `ENV["FLAG"]` reads are NOT caught, and must not be: K-650 carved them
-# out explicitly, because a mode flag (KIOSK_POW_DEMO, KIOSK_RLS_ENFORCE)
-# selects a demo MODE rather than a per-environment posture,
+# out explicitly, because a mode flag (atablefor's KIOSK_POW_MODE) selects a
+# demo MODE rather than a per-environment posture,
 # and there is no default for an environment file to hold.
 #
 # ALLOWED names are declared one at a time, each with the row that owns the

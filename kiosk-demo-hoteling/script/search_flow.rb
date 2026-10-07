@@ -68,8 +68,10 @@ def get_url(url, bearer: nil)
   uri = URI(url)
   headers = {}
   headers["Authorization"] = "Bearer #{bearer}" if bearer
-  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {}), res]
+  through_toll do |toll|
+    res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers.merge(toll)))
+    [res.code.to_i, (JSON.parse(res.body) rescue {}), res]
+  end
 end
 
 # ONE page shape: the body is the array, always — there is no `Hash`-vs-`Array`

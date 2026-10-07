@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- The PoW mode is chosen by `KIOSK_POW_MODE` alone; the three per-mode alias flags are gone.
+
 - `book_table` takes one spelling of a date. Its `date` argument is
   `YYYY-MM-DD` and nothing else; every other spelling is a typed 400 naming
   what is accepted, so the handler is no longer looser than the

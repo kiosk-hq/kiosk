@@ -2,13 +2,10 @@
 
 # RLS isolation proof for getgrocery check:rls.
 #
-# Run with: KIOSK_RLS_ENFORCE=1 bundle exec rails runner script/rls_proof.rb
+# Run with: bundle exec rails runner script/rls_proof.rb
 #
-# The initializer gate (config/initializers/kiosk.rb) reads KIOSK_RLS_ENFORCE:
-#   c.enforce_db_role = true
-#   c.app_role        = "kiosk_getgrocery_app"
-#
-# Kiosk::Server::SessionContext.open then appends
+# This process turns the role-drop on below, so
+# Kiosk::Server::SessionContext.open appends
 #   SET LOCAL ROLE "kiosk_getgrocery_app"
 # after the GUC statements, dropping the session to the non-owner app role
 # for the duration of the transaction.
@@ -33,6 +30,9 @@
 # NOBYPASSRLS role).
 
 require "json"
+
+Kiosk.configuration.enforce_db_role = true
+Kiosk.configuration.app_role        = "kiosk_getgrocery_app"
 
 conn = ActiveRecord::Base.connection
 

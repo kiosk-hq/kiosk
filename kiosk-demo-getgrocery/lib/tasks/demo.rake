@@ -1583,9 +1583,9 @@ end
 
 namespace :check do
   desc <<~DESC
-    Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1).
+    Commerce query-toll PoW demo.
 
-    Boots the server with the catalog gate active and runs script/pow_flow.rb:
+    Boots the server and runs script/pow_flow.rb:
     catalog query → 402 equihash → solve.py → 200; wrong nonce → 403 + penalty.
 
     RUNS AT TOY PARAMETERS BY DEFAULT — Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s
@@ -1676,7 +1676,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => server_url, "KIOSK_POW_DEMO" => "1",
+      { "KIOSK_ISSUER" => server_url,
         "KIOSK_TEST_AUTOCARD" => "1", "STRIPE_SECRET_KEY" => stripe_key,
         "KIOSK_BAD_PROOF_DB" => bad_proof_db,
         # Forwarded, not defaulted: naming it here is what makes the server's
@@ -1789,9 +1789,9 @@ namespace :check do
       kiosk_getgrocery_app  NOLOGIN NOSUPERUSER NOBYPASSRLS   ← non-owner, subject to RLS
       GRANT kiosk_getgrocery_app TO CURRENT_USER              ← allows SET LOCAL ROLE
 
-    Initializer gate (KIOSK_RLS_ENFORCE=1):
-      c.enforce_db_role = true
-      c.app_role        = "kiosk_getgrocery_app"
+    The proof script turns the role-drop on for its own process:
+      Kiosk.configuration.enforce_db_role = true
+      Kiosk.configuration.app_role        = "kiosk_getgrocery_app"
     SessionContext.open appends SET LOCAL ROLE "kiosk_getgrocery_app" after GUCs.
 
     Three-way proof (script/rls_proof.rb):
@@ -1828,16 +1828,16 @@ namespace :check do
     puts "  GRANT kiosk_getgrocery_app TO CURRENT_USER — SET LOCAL ROLE now available."
 
     # ── Step 4: Apply RLS overlay via kiosk-rls Emitter (dogfooded) ─────────
-    # Run WITHOUT KIOSK_RLS_ENFORCE — overlay setup is privileged (owner connection).
+    # Overlay setup is privileged (owner connection).
     overlay_rb = File.expand_path("../../script/rls_overlay.rb", __dir__)
     puts "\n── Applying RLS overlay ──"
     sh "bundle exec rails runner #{overlay_rb}"
 
-    # ── Step 5: Run the three-way isolation proof (KIOSK_RLS_ENFORCE=1) ─────
+    # ── Step 5: Run the three-way isolation proof (role-drop on) ────────────
     proof_rb = File.expand_path("../../script/rls_proof.rb", __dir__)
-    puts "\n── Running RLS isolation proof (KIOSK_RLS_ENFORCE=1) ──"
+    puts "\n── Running RLS isolation proof ──"
     require "json"
-    result = getgrocery_run_flow(proof_rb, "KIOSK_RLS_ENFORCE=1", runner: "rails runner")
+    result = getgrocery_run_flow(proof_rb, runner: "rails runner")
 
     puts "\n── RLS proof assertions ──"
     failures = []

@@ -69,7 +69,7 @@ WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
 # One query call: the verb NAME is the path segment, its arguments are the
 # query string.
 def query_json(name, params = {}, headers = {})
-  WIRE.get_json("/kiosk/#{name}", params, headers)
+  through_toll { |toll| WIRE.get_json("/kiosk/#{name}", params, headers.merge(toll)) }
 end
 
 require_relative "equihash_register"
@@ -140,12 +140,12 @@ room_type_name_a = room_a["name"]
 STDERR.puts "  A will reserve #{room_type_name_a} at property #{prop_id_a}"
 
 # ── Step 4: A reserves room → booking_id rA ──────────────────────────────────
-rc_rsv_a, rsv_a_resp = WIRE.post_json(
+rc_rsv_a, rsv_a_resp = through_toll { |toll| WIRE.post_json(
   "/kiosk/reserve_room",
   { property_id: prop_id_a, room_type_id: room_type_id_a,
     check_in: CHECK_IN_A, check_out: CHECK_OUT_A },
-  WIRE.bearer(token_a),
-)
+  WIRE.bearer(token_a).merge(toll),
+) }
 abort "A reserve_room failed (#{rc_rsv_a}): #{JSON.generate(rsv_a_resp)}" unless rc_rsv_a == 200
 
 # An action's success body IS its own object — the `{value: …}` wrapper is gone.
@@ -260,7 +260,7 @@ end
 abort "B: no room available for #{CHECK_IN_B}..#{CHECK_OUT_B}" unless prop_b
 
 # 3a — the forged principal is REFUSED by the published input contract.
-rc_forge, forged_resp = WIRE.post_json(
+rc_forge, forged_resp = through_toll { |toll| WIRE.post_json(
   "/kiosk/reserve_room",
   {
     property_id:  prop_b["property_id"],
@@ -269,13 +269,13 @@ rc_forge, forged_resp = WIRE.post_json(
     check_out:    CHECK_OUT_B,
     user_id:      user_id_a,  # adversarial: B supplies A's user_id
   },
-  WIRE.bearer(token_b),
-)
+  WIRE.bearer(token_b).merge(toll),
+) }
 STDERR.puts "  B reserve_room with a forged user_id → #{rc_forge} #{forged_resp["code"].inspect}"
 
 # 3b — and B's LEGITIMATE booking is owned by B. Same room, same nights: the
 # refusal above created nothing, so the inventory is untouched.
-rc_rsv_b, rsv_b_resp = WIRE.post_json(
+rc_rsv_b, rsv_b_resp = through_toll { |toll| WIRE.post_json(
   "/kiosk/reserve_room",
   {
     property_id:  prop_b["property_id"],
@@ -283,8 +283,8 @@ rc_rsv_b, rsv_b_resp = WIRE.post_json(
     check_in:     CHECK_IN_B,
     check_out:    CHECK_OUT_B,
   },
-  WIRE.bearer(token_b),
-)
+  WIRE.bearer(token_b).merge(toll),
+) }
 abort "B reserve_room failed (#{rc_rsv_b}): #{JSON.generate(rsv_b_resp)}" unless rc_rsv_b == 200
 
 booking_id_b = rsv_b_resp["booking_id"]
@@ -310,11 +310,11 @@ STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 # Gate-1 WHERE id=rA AND user_id=kiosk.current_user_id() AND status='reserved'
 # finds nothing because rA.user_id = A ≠ B → 403.
 # The 403 genuinely isolates Gate-1 ownership, not a payment gap.
-rc_confirm_b, _confirm_b_resp = WIRE.post_json(
+rc_confirm_b, _confirm_b_resp = through_toll { |toll| WIRE.post_json(
   "/kiosk/confirm_booking",
   { booking_id: booking_id_a },
-  WIRE.bearer(token_b),
-)
+  WIRE.bearer(token_b).merge(toll),
+) }
 STDERR.puts "  B confirm_booking on A's rA: HTTP #{rc_confirm_b} (expected 403)"
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────

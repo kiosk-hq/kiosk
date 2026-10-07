@@ -7,7 +7,7 @@
 # of the structure.sql-loaded schema. structure.sql is intentionally left with
 # NO ROW LEVEL SECURITY so the default shop path stays clean.
 #
-# Called by: rake check:rls (no KIOSK_RLS_ENFORCE — setup runs as owner)
+# Called by: rake check:rls (setup runs as owner)
 #
 # Dogfoods Kiosk::RLS::Emitter, which emits the canonical sequence:
 #   ALTER TABLE orders ENABLE ROW LEVEL SECURITY

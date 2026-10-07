@@ -321,10 +321,8 @@ jobs:
             # since T-110 and asserts the served (n, k) off the wire, which is
             # what makes the opt-in path real without moving this cost.
             # MEASURED at head: 3.7 s end to end INCLUDING
-            # its own reseed and server boot. It is the only task that boots
-            # the KIOSK_POW_DEMO=1 branch of this demo's initializer (:61,
-            # :274) as a walkthrough, and getgrocery's only valid-solve->200 /
-            # wrong-nonce->403 pair on the catalog verb.
+            # its own reseed and server boot. It is getgrocery's only
+            # valid-solve->200 / wrong-nonce->403 pair on the catalog verb.
             # It invokes demo:setup, so it RESEEDS: it sits with check:claim in
             # the reseeding group, and BEFORE check:rls, which must stay
             # immediately ahead of check:race for the reason below.
@@ -376,16 +374,12 @@ jobs:
             # stripe-mock step below) makes demo:setup/check:schema boot, and
             # check:shop/isolation/redteam/agecheck self-start the mock process.
             stripe_mock: true
-            # K-844 — see the "Redteam under the PoW toll" step at the end of
-            # this job. getgrocery's KIOSK_POW_DEMO=1 policy tolls EVERY query,
-            # so every scenario in the battery exercises the client's 402 retry.
-            tolled_redteam: KIOSK_POW_DEMO=1
           - demo: kiosk-demo-hoteling
             # check:search is the T-042/K-452 pagination + opaque-cursor proof
             # over the ~100-hotel catalogue: a full page carries `next`, echoing
             # it back as `cursor` returns a DISJOINT page, a complete (filtered)
             # result OMITS `next`, and hotel_detail resolves a summary row's id.
-            # No PoW, no RFC 8628 poll timing, no key — ~5 s. It goes LAST
+            # No RFC 8628 poll timing, no key. It goes LAST
             # because `task search: :setup` reseeds. So does check:book now: it
             # was the one task here without a `: :setup`, living off the
             # job-level demo:setup, and that is exactly why a second LOCAL
@@ -457,10 +451,6 @@ jobs:
             # It goes with check:search and check:browse at the end: `task
             # spending_cap: :setup` reseeds.
             tasks: check:wire_args_spec check:conformance check:property_decision check:book check:isolation check:redteam check:schema check:search check:browse check:spending_cap
-            # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
-            # single Kiosk-PoW header, which is the multi-proof half of the
-            # retry that getgrocery's flat one-proof toll never reaches.
-            tolled_redteam: KIOSK_POW_BROWSE_DEMO=1
           - demo: kiosk-demo-prove
             # kiosk-demo-prove — the anonymizing KYC broker (an ISSUER, not a Kiosk
             # operator; mounts none of the four verbs). check:test runs its own
@@ -811,37 +801,6 @@ jobs:
             bin/rails "$task"
             echo "::endgroup::"
           done
-
-      # K-844 — the redteam battery again, this time with the operator's PoW
-      # toll switched ON.
-      #
-      # K-760 gave the redteam client a 402-PoW retry on query/run/pay/pay_raw,
-      # and it was proved by hand on two booted origins and then pinned by
-      # NOTHING on the wire: every listed check:redteam above boots UNTOLLED, so
-      # the only gate on that retry was kiosk-redteam's own stub examples — the
-      # exact stub-green/wire-broken split that let K-760 sit latent in the
-      # first place. The heavy-PoW opt-out that used to justify the gap was
-      # about a walkthrough's solve cost at the SHIPPED params; this battery
-      # runs at CI's `low` default (n=96 k=5). MEASURED at head, same box, same
-      # seed: getgrocery 9.9 s untolled -> 12.6 s tolled (18 BLOCKED,
-      # 3 SKIPPED, 0 BREACH either way), hoteling 10.6 s -> 14.4 s (19/3/0).
-      #
-      # demo:setup runs first and in its OWN invocation: the battery expects
-      # the seeded state, and the tasks above have moved it (check:race strands
-      # orders on purpose). Batching the two into one `bin/rails demo:setup
-      # check:redteam` is the trap this job's other comment names — a task that
-      # exits the process reports success for everything after it.
-      #
-      # Watched fail: make Kiosk::Redteam::Client#query return its first
-      # response instead of routing it through #with_pow_retry (client.rb:122,
-      # :288) and every tolled scenario dies on an unhandled 402 instead of
-      # reaching its expected verdict — red here, still green above.
-      - name: Redteam under the PoW toll (K-844)
-        if: matrix.tolled_redteam
-        working-directory: ${{ matrix.demo }}
-        run: |
-          bin/rails demo:setup
-          env ${{ matrix.tolled_redteam }} bin/rails check:redteam
 
   # THE SKOOTI LOCK FIRMWARE'S TEST TARGETS RAN IN NO CI JOB AT ALL UNTIL THIS
   # ONE (K-1599).

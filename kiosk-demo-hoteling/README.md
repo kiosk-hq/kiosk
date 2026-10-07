@@ -47,11 +47,10 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-new agent key pays one solve to register. Separately, an **opt-in** browse toll
-(off by default; enable with `KIOSK_POW_BROWSE_DEMO=1`) prices the browse-heavy
-QUERY endpoints after the first few free availability queries — a metered toll, not
-a wall: an AI assistant pays a few seconds of compute to look deeper, a bulk
-scraper pays linearly and forever.
+new agent key pays one solve to register. Separately, a browse toll prices
+QUERIES after the first few free ones, and each `reserve_room` hold costs one
+proof — a metered toll, not a wall: an AI assistant pays a few seconds of compute
+to look deeper, a bulk scraper pays linearly and forever.
 
 ## The human channel
 
@@ -111,7 +110,7 @@ bin/rails check:property_decision # the property's OWN answer, minutes after the
 bin/rails check:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
 bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
-bin/rails check:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
+bin/rails check:browse      # browse-heavy priced-pagination PoW demo — depth is priced, not banned
 bin/rails check:isolation   # cross-tenant denial (a booking is only yours)
 bin/rails check:redteam     # adversarial regression battery
 bin/rails check:schema      # self-discovery over the schema verb

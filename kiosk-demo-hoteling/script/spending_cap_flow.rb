@@ -62,16 +62,20 @@ NIGHTS    = (Date.parse(CHECK_OUT) - Date.parse(CHECK_IN)).to_i
 
 def post_json(url, body, headers = {})
   uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
-  req.body = JSON.generate(body)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  through_toll do |toll|
+    req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers, toll))
+    req.body = JSON.generate(body)
+    res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+    [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  end
 end
 
 def get_json(url, headers = {})
   uri = URI(url)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  through_toll do |toll|
+    res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers.merge(toll)))
+    [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  end
 end
 
 def query_json(name, params = {}, headers = {})

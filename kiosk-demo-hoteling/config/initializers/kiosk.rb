@@ -4,16 +4,15 @@
 # Queries: properties, availability, my_bookings, search_hotels, hotel_detail
 # Actions: reserve_room, confirm_booking; kiosk-server serves payment_setup
 #
-# TWO PoW gates run here and their default postures are OPPOSITE: the BROWSE
-# toll is OFF unless KIOSK_POW_BROWSE_DEMO=1, the REGISTRATION gate is ALWAYS
-# ON with no env flag to forget. Each has its own section below.
+# TWO PoW gates run here, each in its own section below: the BROWSE toll and
+# the REGISTRATION gate.
 #
 # Env posture (signing key, PoW secret, issuer, test flags) lives in
 # config/environments/*; this file reads Rails.configuration.x.kiosk.*.
 
 require "kiosk/user_identity_providers/devise"
 
-# ── Browse-heavy PoW demo (KIOSK_POW_BROWSE_DEMO=1) ───────────────────────
+# ── Browse-heavy PoW toll ─────────────────────────────────────────────────
 #
 # Hotel search is browse-heavy: an assistant comparing options runs many
 # `availability` queries, and that is legitimate — indistinguishable from
@@ -37,53 +36,48 @@ HOTELING_WRITE_PROOFS  = 1    # flat toll on an action (`:run`) — a hold, not 
 #
 # register is a verb like any other: a hotel provider prices fresh-identity
 # minting (one Equihash proof) so a scraper renting throwaway agents pays at the
-# door. Independent of the browse-rate gate above, and there is no env flag to
-# forget. The require + Backends.register below run UNCONDITIONALLY (both
-# idempotent) so the gate works regardless of KIOSK_POW_BROWSE_DEMO — else
-# RegistrationPow.gate raises ConfigurationError at register.
+# door. Independent of the browse-rate gate above.
 HOTELING_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
-  HOTELING_BROWSE_COUNT = Hash.new(0)  # agent_id => availability queries so far
+HOTELING_BROWSE_COUNT = Hash.new(0)  # agent_id => availability queries so far
 
-  # Priced-pagination policy: free below the allowance, then proof count rises
-  # with the query rate. The policy is advertised for a POLICY KIND — one of
-  # `Kiosk::Server::Executor::VERBS`, not a wire path.
-  #
-  # ── THE NAME OF THE WRITE KIND IS `:run`, NOT `:action` ────────────────────
-  #
-  # What an operator DECLARES above a handler is `kind :query` / `kind :action`;
-  # what this hook RECEIVES is one of `Executor::VERBS` — `%i[query run pay]`.
-  # An `action` therefore arrives here as `:run`, and `pay` as its own third
-  # kind. `:query` is spelled the same in both, which hides the mismatch.
-  # A wrong branch is SILENT: `challenge_for` returning nil is the ordinary «do
-  # not toll this one» answer, so `verb == :action` never raises and never logs
-  # — the toll simply never applies to writes and the origin looks configured.
-  #
-  # Writes are priced because `reserve_room` holds real inventory: depth costs
-  # escalating proofs, a HOLD costs a flat one, because the thing being rationed
-  # is the room and not the reading. `:pay` is deliberately NOT tolled — the
-  # toll belongs before a settlement, not on it.
-  class HotelingBrowsePolicy < Kiosk::Reputation::Policy
-    def initialize(params)
-      @params = params
-    end
+# Priced-pagination policy: free below the allowance, then proof count rises
+# with the query rate. The policy is advertised for a POLICY KIND — one of
+# `Kiosk::Server::Executor::VERBS`, not a wire path.
+#
+# ── THE NAME OF THE WRITE KIND IS `:run`, NOT `:action` ────────────────────
+#
+# What an operator DECLARES above a handler is `kind :query` / `kind :action`;
+# what this hook RECEIVES is one of `Executor::VERBS` — `%i[query run pay]`.
+# An `action` therefore arrives here as `:run`, and `pay` as its own third
+# kind. `:query` is spelled the same in both, which hides the mismatch.
+# A wrong branch is SILENT: `challenge_for` returning nil is the ordinary «do
+# not toll this one» answer, so `verb == :action` never raises and never logs
+# — the toll simply never applies to writes and the origin looks configured.
+#
+# Writes are priced because `reserve_room` holds real inventory: depth costs
+# escalating proofs, a HOLD costs a flat one, because the thing being rationed
+# is the room and not the reading. `:pay` is deliberately NOT tolled — the
+# toll belongs before a settlement, not on it.
+class HotelingBrowsePolicy < Kiosk::Reputation::Policy
+  def initialize(params)
+    @params = params
+  end
 
-    def challenge_for(identity:, verb:, factors:)
-      # `:run` is the WRITE kind — see the vocabulary note above before changing
-      # this to `:action`, which this hook never receives.
-      return { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: HOTELING_WRITE_PROOFS } if verb == :run
-      return nil unless verb == :query
+  def challenge_for(identity:, verb:, factors:)
+    # `:run` is the WRITE kind — see the vocabulary note above before changing
+    # this to `:action`, which this hook never receives.
+    return { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: HOTELING_WRITE_PROOFS } if verb == :run
+    return nil unless verb == :query
 
-      rate = factors.request_rate_per_min.to_i
-      return nil if rate <= HOTELING_FREE_BROWSES
+    rate = factors.request_rate_per_min.to_i
+    return nil if rate <= HOTELING_FREE_BROWSES
 
-      over  = rate - HOTELING_FREE_BROWSES
-      count = [(over + HOTELING_RATE_STEP - 1) / HOTELING_RATE_STEP, HOTELING_MAX_PROOFS].min
-      { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: count }
-    end
+    over  = rate - HOTELING_FREE_BROWSES
+    count = [(over + HOTELING_RATE_STEP - 1) / HOTELING_RATE_STEP, HOTELING_MAX_PROOFS].min
+    { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: count }
   end
 end
 
@@ -180,29 +174,26 @@ Kiosk.configure do |c|
   # watches it bite.
   c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 
-  # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
-  if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
-    c.reputation_policy = HotelingBrowsePolicy.new(EQUIHASH_BROWSE_PARAMS)
-    c.pow_ttl           = 300
+  # ── Browse-heavy priced-pagination gate ──────────────────────────────────
+  c.reputation_policy = HotelingBrowsePolicy.new(EQUIHASH_BROWSE_PARAMS)
+  c.pow_ttl           = 300
 
-    # Factors: count availability queries per agent in-process and report the
-    # running total as the "rate". Only `query` is counted (browsing depth).
-    c.reputation_factors = ->(identity:, verb:) {
-      if verb == :query
-        HOTELING_BROWSE_COUNT[identity.agent_id] += 1
-      end
-      Kiosk::Reputation::Factors.new(
-        kyc_level: nil, settled_purchases_count: nil, settled_purchases_cents: nil,
-        request_rate_per_min: HOTELING_BROWSE_COUNT[identity.agent_id],
-        account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
-      )
-    }
-  end
+  # Factors: count availability queries per agent in-process and report the
+  # running total as the "rate". Only `query` is counted (browsing depth).
+  c.reputation_factors = ->(identity:, verb:) {
+    if verb == :query
+      HOTELING_BROWSE_COUNT[identity.agent_id] += 1
+    end
+    Kiosk::Reputation::Factors.new(
+      kyc_level: nil, settled_purchases_count: nil, settled_purchases_cents: nil,
+      request_rate_per_min: HOTELING_BROWSE_COUNT[identity.agent_id],
+      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
+    )
+  }
 
   # ── Registration PoW gate — ALWAYS ON ────────────────────────────────────
-  # Registering an agent costs ONE Equihash proof. pow_secret is assigned
-  # unconditionally so the gate still works when KIOSK_POW_BROWSE_DEMO is off —
-  # RegistrationPow.gate raises without it.
+  # Registering an agent costs ONE Equihash proof. The browse toll above signs
+  # its challenges with the same pow_secret.
   c.registration_pow_count  = 1
   c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret

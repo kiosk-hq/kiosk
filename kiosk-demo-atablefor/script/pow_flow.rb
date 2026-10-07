@@ -39,7 +39,7 @@
 # toll a run pays is a fact off the wire rather than a banner.
 #
 # Requirements:
-#   - The server must be running with KIOSK_POW_DEMO=1.
+#   - The server must be running with KIOSK_POW_MODE=demo.
 #   - python3 with numpy: pip install numpy
 
 require "json"

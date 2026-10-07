@@ -26,10 +26,10 @@ require "kiosk/payment_providers/stripe"
 require "kiosk/kyc_providers/prove"
 require "kiosk/user_identity_providers/devise"
 
-# ── Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1) ─────────────────────
+# ── Query toll ──────────────────────────────────────────────────────────────
 #
-# A grocery provider can toll the `catalog` query to price anonymous browsing —
-# a metered toll, not a wall. run/pay are never gated. Params follow
+# A grocery provider tolls every query to price anonymous browsing of its
+# catalog — a metered toll, not a wall. run/pay are never gated. Params follow
 # KIOSK_POW_DIFFICULTY (Kiosk::Pow::Equihash::Difficulty): low (default) →
 # n=96 k=5, sub-second; high → n=168 k=7, ~1.3 GiB and ~10s on the reference
 # numpy solver.
@@ -39,37 +39,32 @@ EQUIHASH_DEMO_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 # ── Registration PoW gate — ALWAYS ON ───────────────────────────────────────
 #
 # register is a verb like any other: a grocery provider prices fresh-identity
-# minting (one Equihash proof) so spam signups pay at the door. Independent of
-# the catalog-toll gate above, and there is no env flag to forget. The require +
-# Backends.register below run UNCONDITIONALLY (both idempotent) so the gate works
-# regardless of KIOSK_POW_DEMO — else RegistrationPow.gate raises at register.
+# minting (one Equihash proof) so spam signups pay at the door.
 GETGROCERY_REGISTRATION_POW_PARAMS = Kiosk::Pow::Equihash::Difficulty.params
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-if ENV["KIOSK_POW_DEMO"] == "1"
-  # ⚠ TOY COUNTER — NOT a reputation signal. Nothing reads it for policy
-  # (`reputation_factors` below is `Factors.empty`); it exists so
-  # `script/pow_flow.rb` can print "the server counted MY bad proof". Keyed per
-  # identity in sqlite (app/services/bad_proof_counter.rb), so one abuser cannot
-  # inflate anyone else's count. It has NO TTL, and a count that only grows is
-  # equally wrong: a production signal needs decay and durability first.
-  #
-  # `rake check:pow` owns the file's location — it wipes it and exports
-  # KIOSK_BAD_PROOF_DB to both the server and the driver, so the two cannot
-  # drift onto different files and report zero at each other.
-  GETGROCERY_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
+# ⚠ TOY COUNTER — NOT a reputation signal. Nothing reads it for policy
+# (`reputation_factors` below is `Factors.empty`); it exists so
+# `script/pow_flow.rb` can print "the server counted MY bad proof". Keyed per
+# identity in sqlite (app/services/bad_proof_counter.rb), so one abuser cannot
+# inflate anyone else's count. It has NO TTL, and a count that only grows is
+# equally wrong: a production signal needs decay and durability first.
+#
+# `rake check:pow` owns the file's location — it wipes it and exports
+# KIOSK_BAD_PROOF_DB to both the server and the driver, so the two cannot
+# drift onto different files and report zero at each other.
+GETGROCERY_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
 
-  class GetgroceryCatalogPowPolicy < Kiosk::Reputation::Policy
-    def initialize(params)
-      @params = params
-    end
+class GetgroceryQueryPowPolicy < Kiosk::Reputation::Policy
+  def initialize(params)
+    @params = params
+  end
 
-    def challenge_for(identity:, verb:, factors:)
-      return nil unless verb == :query
+  def challenge_for(identity:, verb:, factors:)
+    return nil unless verb == :query
 
-      { alg: Kiosk::Pow::Equihash::NAME, params: @params }
-    end
+    { alg: Kiosk::Pow::Equihash::NAME, params: @params }
   end
 end
 
@@ -90,19 +85,6 @@ Kiosk.configure do |c|
   # Resolved in config/environments/*, like every other env input; read here.
   c.app_role    = Rails.configuration.x.kiosk.app_role
   c.system_role = Rails.configuration.x.kiosk.system_role
-
-  # ── RLS enforce gate (check:rls only) ─────────────────────────────────────
-  # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends
-  #   SET LOCAL ROLE "kiosk_getgrocery_app"
-  # after the GUC statements, dropping the session to the non-owner app role
-  # for the duration of the transaction. That non-owner role is subject to the
-  # RLS policies applied by check:rls (ENABLE + FORCE + per-user SELECT/INSERT
-  # policies on the orders table). When unset (default) there is no role-drop —
-  # byte-identical to the normal shop path.
-  if ENV["KIOSK_RLS_ENFORCE"] == "1"
-    c.enforce_db_role = true
-    c.app_role        = "kiosk_getgrocery_app"
-  end
 
   # ── Issuer origin ─────────────────────────────────────────────────────────
   # Advertised in /.well-known/kiosk.json, minted as the `iss` of every Kiosk
@@ -221,27 +203,23 @@ Kiosk.configure do |c|
   c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
   c.kyc_audience   = prove_operator
 
-  # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────
-  if ENV["KIOSK_POW_DEMO"] == "1"
-    c.reputation_policy  = GetgroceryCatalogPowPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS))
-    c.pow_ttl            = 300
-    c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
-    # ⚠ TOY COUNTER — the write side of the demo counter defined above; the
-    # caveat there applies verbatim (no TTL). PER IDENTITY: keyed by the
-    # verified agent credential id the gate hands in, so one abuser's
-    # rejections never appear in anyone else's count. Its only consumer is the
-    # local driver script/pow_flow.rb; `reputation_factors` right above feeds
-    # the policy `Factors.empty`, so nothing this counts changes any toll.
-    c.on_bad_proof = ->(identity:) {
-      BadProofCounter.increment(GETGROCERY_BAD_PROOF_DB, identity.agent_id)
-    }
-  end
+  # ── Query toll ───────────────────────────────────────────────────────────
+  c.reputation_policy  = GetgroceryQueryPowPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS))
+  c.pow_ttl            = 300
+  c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
+  # ⚠ TOY COUNTER — the write side of the demo counter defined above; the
+  # caveat there applies verbatim (no TTL). PER IDENTITY: keyed by the
+  # verified agent credential id the gate hands in, so one abuser's
+  # rejections never appear in anyone else's count. Its only consumer is the
+  # local driver script/pow_flow.rb; `reputation_factors` right above feeds
+  # the policy `Factors.empty`, so nothing this counts changes any toll.
+  c.on_bad_proof = ->(identity:) {
+    BadProofCounter.increment(GETGROCERY_BAD_PROOF_DB, identity.agent_id)
+  }
 
   # ── Registration PoW gate — ALWAYS ON ────────────────────────────────────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the catalog toll above; pow_secret is set unconditionally so the
-  # gate works even when KIOSK_POW_DEMO is off (RegistrationPow.gate raises without
-  # it) — the catalog-toll branch above shares this one assignment.
+  # The query toll above signs its challenges with the same pow_secret.
   c.registration_pow_count  = 1
   c.registration_pow_params = GETGROCERY_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret

@@ -21,8 +21,8 @@
 # rendered code carries.
 #
 # Nothing here means a 402. The 402s an assistant meets on this origin come from
-# the registration PoW gate (always on) and, when KIOSK_POW_DEMO=1, the catalog
-# toll — both upstream of dispatch, never from a handler.
+# the registration PoW gate and the query toll — both upstream of dispatch,
+# never from a handler.
 class Kiosk::OrdersController < ActionController::API
   include Kiosk::Handler
   include KioskRefusals

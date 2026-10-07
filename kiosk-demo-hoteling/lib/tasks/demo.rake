@@ -1711,9 +1711,9 @@ end
 
 namespace :check do
   desc <<~DESC
-    Browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1).
+    Browse-heavy priced-pagination PoW demo.
 
-    Boots the server with the browse gate active and runs script/browse_flow.rb: a
+    Boots the server and runs script/browse_flow.rb: a
     burst of `properties` queries where the first few are free and each extra
     one costs escalating proof-of-work (price depth, don't ban it).
 
@@ -1764,7 +1764,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer, "KIOSK_POW_BROWSE_DEMO" => "1" },
+      { "KIOSK_ISSUER" => kiosk_issuer },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )

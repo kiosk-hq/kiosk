@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1902 anchors.
+# 1907 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1268,6 +1268,7 @@ kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.r
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	omits the role claim entirely when role is nil
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	revokes both at once when the agent's watermark passes them
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	stamps an `actor` claim of `agent` on every token it mints, role or no role
+kiosk-server/spec/kiosk/server/agent_login_spec.rb	maps a known key to its registered user_id on every login
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	mints a fresh token for a known key and provisions nothing
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	proves possession and burns the challenge before the lookup
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	raises NotFound for an unregistered key (no silent new account)
@@ -1322,7 +1323,7 @@ kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers one key 
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	keeps the OAuth error object for an ordinary refusal
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all six auth URLs and adds no capability for binding
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the four core kiosk-pop auth endpoints
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the kiosk-pop challenge endpoint
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	refuses a UTC offset by name
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil for an unknown or revoked key (no row)
@@ -1787,7 +1788,9 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when kiosk-server's
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when only a DESCRIPTION changes
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the mount path moves
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the skill pin is re-issued
+kiosk-server/spec/kiosk/server/schema_slots_spec.rb	answers every caller with one descriptor, resolved once
 kiosk-server/spec/kiosk/server/schema_slots_spec.rb	re-resolves after the window, with no reset, no reload and no restart
+kiosk-server/spec/kiosk/server/schema_slots_spec.rb	reuses a derived value no longer than the discovery document's freshness lifetime
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a mandate issued for the origin being served and refuses one issued for the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises each origin as its own issuer
@@ -1817,6 +1820,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	hands the handler nil whe
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	hands the handler the caller's declared timezone
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	is still private, no-store — a page is never shared-cacheable
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	keeps `private, max-age=N` the handler set
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	names YYYY-MM-DD when an action body carries a malformed date
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	no verb response is shared-cacheable (§3.7.3)
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	omits X-Total-Count on a truncated page whose handler gave no total
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	on an ACTION as well as a query
@@ -1883,6 +1887,7 @@ kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	does NOT accep
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	never tolls GET /kiosk/schema, under a policy that challenges everything
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	re-challenges a per-verb GET with a fresh 402 problem document when no header is sent
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	rejects a malformed Kiosk-PoW header with a 400 problem document + hint
+kiosk-server/spec/kiosk/server/wire_controller_validation_spec.rb	answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape
 kiosk-test-support/README.md	Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests
 kiosk-test-support/README.md	For unit-shaped tests where you only care about call ordering, use the bundled `NullExecutor`:
 kiosk-test-support/README.md	Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: `StripeMock.start` brings up a local stripe-mock for a demo suite that pays and refunds with no Stripe key.
+
 ## [0.5.9] — 2026-10-08
 
 - 2026-10-08: Version 0.5.9, the tree cut that matches skill 0.5.9; this gem's surface is unchanged.

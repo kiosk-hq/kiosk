@@ -846,11 +846,11 @@ PLANTS = [
     with: 'description: "OPTIONAL. Maximum rows in one page.',
     expect: %r{LABEL kiosk-server/lib/kiosk/server/open_api\.rb} },
   { rule: "LABEL / a CONTINUATION LINE, where the marker is nowhere near the key",
-    file: "kiosk-demo-skooti/app/controllers/kiosk/rentals_controller.rb",
-    find: /description: "The hosted setup page to hand to your human\."/,
-    with: "description: \"The hosted setup page to hand to your human. \" \\\n" \
+    file: "kiosk-server/lib/kiosk/server/payment_setup.rb",
+    find: /description: "The page to hand to your human\."/,
+    with: "description: \"The page to hand to your human. \" \\\n" \
           "                            \"Optional.\"",
-    expect: %r{LABEL kiosk-demo-skooti} },
+    expect: %r{LABEL kiosk-server/lib/kiosk/server/payment_setup\.rb} },
 ].freeze
 
 # Sentences that must NOT redden the ban. Each is a live shape somebody wrote on

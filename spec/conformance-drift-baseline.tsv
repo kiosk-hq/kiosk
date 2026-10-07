@@ -29,7 +29,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-10-07 at de7d20f9 -- K-2004/K-2009/K-2012/K-2007: new and moved anchors read against SPEC-026/041/192/274/278/281 at de7d20f9
+# recorded: 2026-10-07 at d5614500 -- K-2034: rel=kiosk anchors moved to layouts/home.html.erb, read against SPEC-160/182 at d5614500
 # 1941 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	ede32f70	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	ede32f70	run: ./e2e/run.sh
@@ -320,11 +320,11 @@ kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	4ad7e848ddb
 kiosk-demo-atablefor/app/services/pow_difficulty.rb	575a664503584557	ede32f70	"high" => { n: 168, k: 7 }.freeze,
 kiosk-demo-atablefor/app/services/pow_difficulty.rb	c3112c5ce0b58621	ede32f70	"low"  => { n: 96,  k: 5 }.freeze,
 kiosk-demo-atablefor/app/services/pow_difficulty.rb	7decd51694fd0574	ede32f70	LEVELS = {
-kiosk-demo-atablefor/app/views/home/index.html.erb	a387e01d125b1a5b	ede32f70	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
-kiosk-demo-atablefor/app/views/home/index.html.erb	970bd9f889b451ac	ede32f70	      <h1>Point your AI assistant here — it books the table.</h1>
-kiosk-demo-atablefor/app/views/home/index.html.erb	09d392ff52bf68ed	ede32f70	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
-kiosk-demo-atablefor/app/views/home/index.html.erb	202945c715920bc0	ede32f70	The href is the VERSIONED cut this operator pins, read from
-kiosk-demo-atablefor/app/views/home/index.html.erb	64320a86abc2fbf7	ede32f70	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
+kiosk-demo-atablefor/app/views/home/index.html.erb	a387e01d125b1a5b	d5614500	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
+kiosk-demo-atablefor/app/views/home/index.html.erb	970bd9f889b451ac	d5614500	      <h1>Point your AI assistant here — it books the table.</h1>
+kiosk-demo-atablefor/app/views/home/index.html.erb	64320a86abc2fbf7	d5614500	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
+kiosk-demo-atablefor/app/views/layouts/home.html.erb	09d392ff52bf68ed	d5614500	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
+kiosk-demo-atablefor/app/views/layouts/home.html.erb	383a9a350e0de6ad	d5614500	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-atablefor/before-after.md	63d63be2ca83340e	ca9df2fe	`rake check:book` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	41d0a748ba79db6d	ca9df2fe	rails g kiosk:install
 kiosk-demo-atablefor/config/environments/development.rb	152cefa7217c7c43	ede32f70	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
@@ -391,9 +391,9 @@ kiosk-demo-getgrocery/app/operations/wire_arguments.rb	125b897a6e2d7fb8	ca9df2fe
 kiosk-demo-getgrocery/app/operations/wire_arguments.rb	56326d1be2ee5f6f	ca9df2fe	caller is asking about a day that is still current or
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	82897c376ff113aa	ede32f70	#   1. the cart is denominated in the operator's currency;
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	ee9f2a0b7930b222	ede32f70	#   4. its total equals both the sum of those lines and the order's total.
-kiosk-demo-getgrocery/app/views/home/index.html.erb	9030591272c4c067	ede32f70	      <div class="sec-k">🤖 Try it with your own assistant</div>
-kiosk-demo-getgrocery/app/views/home/index.html.erb	09d392ff52bf68ed	ede32f70	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
-kiosk-demo-getgrocery/app/views/home/index.html.erb	300a96c709478fad	ede32f70	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
+kiosk-demo-getgrocery/app/views/home/index.html.erb	9030591272c4c067	d5614500	      <div class="sec-k">🤖 Try it with your own assistant</div>
+kiosk-demo-getgrocery/app/views/home/index.html.erb	300a96c709478fad	d5614500	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
+kiosk-demo-getgrocery/app/views/layouts/home.html.erb	09d392ff52bf68ed	d5614500	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-getgrocery/before-after.md	b92f43ba9152bc1a	ca9df2fe	# Before and after — grocery delivery
 kiosk-demo-getgrocery/before-after.md	4e58e7fd26217a36	ca9df2fe	## With getgrocery
 kiosk-demo-getgrocery/before-after.md	92287b02b3ac5821	ca9df2fe	**Honesty note up front.**

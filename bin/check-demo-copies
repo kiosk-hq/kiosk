@@ -6293,10 +6293,8 @@ prose_corpus.each do |(label, own_root, rel, path)|
     elsif member && homes.uniq.none? { |home| prose_members[home][member] }
       errors << "#{label}: #{rel} — a comment references `{#{const}.#{member}}`, and none of the " \
                 "#{homes.uniq.size} file(s) defining `#{last}` defines a `#{member}` — not as a " \
-                "method, a constant, or a name a class macro declares. MEASURED example of this " \
-                "exact shape: skooti's cart_mandate.rb pointed at `{WireArguments.uuid}` where " \
-                "skooti's WireArguments defines `reservation_id` and `missing` and nothing else " \
-                "(K-1264). Fix the reference or restore the member (T-117)."
+                "method, a constant, or a name a class macro declares. Fix the reference or " \
+                "restore the member."
     end
   end
 end

@@ -46,18 +46,11 @@ class User < ApplicationRecord
   # unique, and stability across boots and reseeds is what lets a driver assert
   # on it.
   #
-  # @param display_name [String, nil] the diner's chosen name, or nil/blank
-  # @param account_id [String] users.id — the uuid, NOT the address
   # @return [String] never nil, never an address
-  def self.public_name(display_name, account_id)
+  def public_name
     chosen = display_name.to_s.strip
     return chosen unless chosen.empty?
 
-    "diner-#{Digest::SHA256.hexdigest(account_id.to_s)[0, 12]}"
-  end
-
-  # Instance form, for callers that already hold the record.
-  def public_name
-    self.class.public_name(display_name, id)
+    "diner-#{Digest::SHA256.hexdigest(id.to_s)[0, 12]}"
   end
 end

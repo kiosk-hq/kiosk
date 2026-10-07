@@ -19,6 +19,16 @@ class Booking < ApplicationRecord
   # cannot drift from the index that is the real authority.
   scope :confirmed, -> { where(status: CONFIRMED) }
 
+  # The public reservations board: the next fifty confirmed seatings across
+  # every restaurant, soonest first.
+  scope :on_board, lambda {
+    confirmed.where(seating_at: Time.current..)
+             .joins(:restaurant, :restaurant_table)
+             .includes(:restaurant, :restaurant_table, :user)
+             .order(:seating_at, Restaurant.arel_table[:name], RestaurantTable.arel_table[:label])
+             .limit(50)
+  }
+
   # ── THE isolation predicate ────────────────────────────────────────────────
   # atablefor's handlers do not write SQL, yet this fragment deliberately stays
   # a SQL predicate rather than a Ruby comparison, for the reason the philslist

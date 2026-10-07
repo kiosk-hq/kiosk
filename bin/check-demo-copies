@@ -4718,20 +4718,12 @@ FRAGMENTS = {
   "app/models/booking.rb#scope" => {
     rule:  :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "SAME MACRO, DIFFERENT SETS: atablefor declares `confirmed` and " \
+    why:   "SAME MACRO, DIFFERENT SETS: atablefor declares `confirmed`, `on_board` and " \
            "`owned_by_current_principal`; hoteling declares `live`, `owned_by_current_principal` " \
            "and `overlapping`, the last being the room-night predicate its EXCLUDE constraint " \
            "mirrors. `owned_by_current_principal` is the isolation predicate every owner-scoped " \
            "read goes through and the two spellings differ only in the table they name, which is " \
            "the right thing to differ.",
-  },
-  "app/controllers/home_controller.rb#helper_method" => {
-    rule:  :per_demo,
-    ships: %w[atablefor philslist],
-    why:   "SAME MACRO, EACH ORIGIN'S OWN NOUN: `board_diner_name` against `board_poster_name` — " \
-           "the public handle a shared board prints for a row's owner. The pair it exposes is per " \
-           "demo; that the macro is CALLED at all is not, and a copy that stops exposing its " \
-           "helper renders a board with no names.",
   },
   "app/controllers/home_controller.rb#layout" => {
     rule:  :code,

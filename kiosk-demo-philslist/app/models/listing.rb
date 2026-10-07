@@ -43,4 +43,9 @@ class Listing < ApplicationRecord
     Kiosk::Server::SessionContext.require_open!
     where(arel_table[:owner_id].eq(Arel.sql("kiosk.current_user_id()")))
   }
+
+  # The public classifieds board: the fifty newest open listings, every owner's.
+  scope :on_board, lambda {
+    where(status: "open").includes(:category, :owner).order(created_at: :desc, id: :asc).limit(50)
+  }
 end

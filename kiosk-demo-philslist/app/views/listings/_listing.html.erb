@@ -1,0 +1,8 @@
+<li class="lst">
+  <span class="lst-cat" title="category"><%= listing.category.name %></span>
+  <span class="lst-title"><%= listing.title %></span>
+  <% if listing.price_text.present? %>
+    <span class="lst-price"><%= listing.price_text %></span>
+  <% end %>
+  <span class="lst-poster">by <%= listing.owner.public_handle %></span>
+</li>

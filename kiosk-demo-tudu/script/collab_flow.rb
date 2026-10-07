@@ -174,6 +174,12 @@ results[:event_replayed_since] = alice_back.await(&bobs).dig("data", "action") =
 results[:event_replay_after_cursor] = alice_back.events.all? { |e| e["id"] > cursor }
 results[:event_subjectless_live] = !alice_any.await(&bobs).nil?
 
+# Bob ticks off Alice's todo; the `completed` event reaches Alice.
+rc, = post_json("/kiosk/complete_todo", { todo_id: alice_todo_id }, bearer(bob[:token]))
+abort "complete_todo failed (#{rc})" unless rc == 200
+completed = alice_back.await { |e| e["topic"] == "todo" && e.dig("data", "action") == "completed" }
+results[:event_completed_live] = completed.dig("data", "todo_id") == alice_todo_id
+
 # ── Assert the shared world ──────────────────────────────────────────────────
 rc, a_lists = get_json("/kiosk/my_lists", {}, bearer(alice[:token]))
 results[:alice_sees_hike] = rc == 200 && Array(a_lists).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }

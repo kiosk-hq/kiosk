@@ -113,7 +113,8 @@ pick one of them silently.
 **And Alice's assistant is told, over `<endpoint>/events`, without asking.** It
 holds the list's `todo` and `list_membership` topics, plus `todo` with no
 subject: Bob joining arrives live, Bob's todo added while it was disconnected
-arrives on reconnecting with `since`, and Bob's removal arrives live while his
+arrives on reconnecting with `since`, Bob ticking off Alice's todo arrives live as
+`completed`, and Bob's removal arrives live while his
 own subscription to the list is withdrawn (`unsubscribed`, `reach_revoked`).
 Every delivered `data` is checked against the `payload_schema` the origin serves.
 

@@ -268,28 +268,36 @@ UPGRADE_HEADERS = {
 }.freeze
 
 # One request, and the whole of what came back off the socket — which is what a
-# client reads when an upgrade is answered at the HTTP layer instead.
+# client reads when an upgrade is answered at the HTTP layer instead. Reads
+# until the response is complete (its Content-Length, or the server closing),
+# bounded by one overall deadline rather than a silence window.
 def raw_get(port, path, headers)
   socket = TCPSocket.new("127.0.0.1", port)
   lines  = ["GET #{path} HTTP/1.1", "Host: 127.0.0.1:#{port}"] + headers.map { |k, v| "#{k}: #{v}" }
   socket.write("#{lines.join("\r\n")}\r\n\r\n")
   raw      = +""
-  deadline = Time.now + 3
-  while Time.now < deadline && IO.select([socket], nil, nil, 0.2)
+  deadline = Time.now + 15
+  until response_complete?(raw)
+    remaining = deadline - Time.now
+    break unless remaining.positive? && IO.select([socket], nil, nil, remaining)
     begin
       raw << socket.readpartial(4096)
     rescue EOFError
       break
     end
-    head, separator, body = raw.partition("\r\n\r\n")
-    length = head[/^content-length:[[:space:]]*([[:digit:]]+)/i, 1]
-    break if !separator.empty? && length && body.bytesize >= length.to_i
   end
   socket.close
   head, _, body = raw.partition("\r\n\r\n")
   { "status" => head.lines.first.to_s.strip,
     "content_type" => head.lines.grep(/^content-type:/i).first.to_s.strip,
     "body" => body }
+end
+
+def response_complete?(raw)
+  head, separator, body = raw.partition("\r\n\r\n")
+  return false if separator.empty?
+  length = head[/^content-length:[[:space:]]*([[:digit:]]+)/i, 1]
+  length && body.bytesize >= length.to_i
 end
 
 def connect(port, headers: nil, path: "/kiosk/events", host: "127.0.0.1")

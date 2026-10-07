@@ -128,7 +128,7 @@ def cart_for(reservation_id, id:, total_cents: MINUTE_CENTS, user_id: USER_ID)
     # line_items with String keys. This driver builds one in-process, so it is
     # the only place the shape could drift from what production hands over.
     line_items: [{ "reservation_id" => reservation_id },
-                 { "sku" => SCOOTER_CODE, "qty" => 1, "price_cents" => total_cents }],
+                 { "qty" => 1, "price_cents" => total_cents }],
     total_amount_cents: total_cents, currency: "eur", expires_at: nil, created_at: nil,
     raw_jws: "cart-#{id}",
   )

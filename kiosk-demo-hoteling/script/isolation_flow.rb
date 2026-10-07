@@ -183,7 +183,7 @@ cart_b_payload = {
   user_id:            user_id_b,
   agent_id:           agent_id_b,
   iss:                ISSUER,
-  line_items:         [{ sku: room_type_name_a, qty: NIGHTS, booking_id: booking_id_a }],
+  line_items:         [{ qty: NIGHTS, booking_id: booking_id_a }],
   total_amount_cents: total_cents_a,
   currency:           "eur",
   exp:                now_b + 600,

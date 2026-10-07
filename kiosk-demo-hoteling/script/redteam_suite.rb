@@ -189,8 +189,8 @@ profile = Kiosk::Redteam::Profile.new(
   gated_action_consumes: false,
 
   # ── pay_for — MandatePrincipalSwap, MandateReplay, C2 ───────────────────
-  # Shape mirrors script/hoteling_flow.rb: scope=lodging, line_items with
-  # sku + qty + booking_id as required by Gate-2 of confirm_booking.
+  # Shape mirrors script/hoteling_flow.rb: scope=lodging, one line item with
+  # qty + price_cents + booking_id, as reserve_room's pay_hint asks.
   pay_for: lambda { |_client, principal, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -219,7 +219,7 @@ profile = Kiosk::Redteam::Profile.new(
       user_id:            principal.user_id,
       agent_id:           principal.agent_id,
       iss:                ISSUER,
-      line_items:         [{ sku: owned_ref[:code], qty: nights, price_cents: nightly_price, booking_id: owned_ref[:id] }],
+      line_items:         [{ qty: nights, price_cents: nightly_price, booking_id: owned_ref[:id] }],
       total_amount_cents: total_cents,
       currency:           "eur",
       exp:                now + 600,
@@ -264,7 +264,7 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
     nights        = owned[:nights].to_i.nonzero? || NIGHTS
     lowered_total = owned[:total_cents].to_i - 100
     m[:cart] = m[:cart].merge(
-      line_items:         [{ sku: owned[:code], qty: nights, price_cents: (lowered_total / nights), booking_id: owned[:id] }],
+      line_items:         [{ qty: nights, price_cents: (lowered_total / nights), booking_id: owned[:id] }],
       total_amount_cents: lowered_total,
     )
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
@@ -393,7 +393,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
                exp: now + 600, iat: now }
     cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: principal.user_id,
              agent_id: principal.agent_id, iss: ISSUER,
-             line_items: [{ sku: "any-room", qty: 1, price_cents: 100, booking_id: junk }],
+             line_items: [{ qty: 1, price_cents: 100, booking_id: junk }],
              total_amount_cents: 100, currency: "eur", exp: now + 600, iat: now }
     client.pay(principal, intent:, cart:)
   end

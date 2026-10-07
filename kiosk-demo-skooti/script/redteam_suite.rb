@@ -235,8 +235,8 @@ profile = Kiosk::Redteam::Profile.new(
 
   # ── pay_for — MandatePrincipalSwap, MandateReplay, C2, C3, KYC ──────────
   # Exact shapes from the mandate `script/rental_flow.rb` builds (RS256,
-  # scope=mobility, line_items with sku + reservation_id as required by
-  # start_rental Gate 2).
+  # scope=mobility, one line item with qty + price_cents + reservation_id, as
+  # reserve's pay_hint asks).
   pay_for: lambda { |_client, principal, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -264,7 +264,7 @@ profile = Kiosk::Redteam::Profile.new(
       user_id:            principal.user_id,
       agent_id:           principal.agent_id,
       iss:                ISSUER,
-      line_items:         [{ sku: owned_ref[:code], qty: 1, price_cents: total_cents, reservation_id: owned_ref[:id] }],
+      line_items:         [{ qty: 1, price_cents: total_cents, reservation_id: owned_ref[:id] }],
       total_amount_cents: total_cents,
       currency:           "eur",
       exp:                now + 600,
@@ -312,7 +312,7 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
     quoted        = 100 if quoted <= 0
     lowered_total = quoted - 50
     m[:cart] = m[:cart].merge(
-      line_items:         [{ sku: owned[:code], qty: 1, price_cents: lowered_total, reservation_id: owned[:id] }],
+      line_items:         [{ qty: 1, price_cents: lowered_total, reservation_id: owned[:id] }],
       total_amount_cents: lowered_total,
     )
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
@@ -460,7 +460,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
                exp: now + 600, iat: now }
     cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: principal.user_id,
              agent_id: principal.agent_id, iss: ISSUER,
-             line_items: [{ sku: "any-scooter", qty: 1, price_cents: 100, reservation_id: junk }],
+             line_items: [{ qty: 1, price_cents: 100, reservation_id: junk }],
              total_amount_cents: 100, currency: "eur", exp: now + 600, iat: now }
     client.pay(principal, intent:, cart:)
   end
@@ -724,7 +724,7 @@ motorcycle_forged_kyc = lambda do
              scope: "mobility", cap_amount_cents: total + 100, currency: "eur",
              exp: now + 600, iat: now }
   cart = { id: cart_id, intent_mandate_id: intent_id, user_id: a.user_id, agent_id: a.agent_id,
-           iss: ISSUER, line_items: [{ sku: "MC-001", qty: 1, reservation_id: }],
+           iss: ISSUER, line_items: [{ qty: 1, reservation_id: }],
            total_amount_cents: total, currency: "eur", exp: now + 600, iat: now }
   pay_resp = client.pay(a, intent:, cart:)
   raise "redteam(skooti): pay MC-001 failed (#{pay_resp.status})" unless pay_resp.status == 200
@@ -802,7 +802,7 @@ motorcycle_via_start_rental = lambda do
                exp: now + 600, iat: now }
     cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: a.user_id,
              agent_id: a.agent_id, iss: ISSUER,
-             line_items: [{ sku: code, qty: 1, price_cents: total, reservation_id: }],
+             line_items: [{ qty: 1, price_cents: total, reservation_id: }],
              total_amount_cents: total, currency: "eur", exp: now + 600, iat: now }
     pay_resp = client.pay(a, intent:, cart:)
     raise "redteam(skooti): pay #{code} failed (#{pay_resp.status})" unless pay_resp.status == 200
@@ -911,7 +911,7 @@ kyc_jws_theft = lambda do
              scope: "mobility", cap_amount_cents: total + 100, currency: "eur",
              exp: now + 600, iat: now }
   cart = { id: cart_id, intent_mandate_id: intent_id, user_id: a.user_id, agent_id: a.agent_id,
-           iss: ISSUER, line_items: [{ sku: "MC-001", qty: 1, reservation_id: }],
+           iss: ISSUER, line_items: [{ qty: 1, reservation_id: }],
            total_amount_cents: total, currency: "eur", exp: now + 600, iat: now }
   pay_resp = client.pay(a, intent:, cart:)
   raise "redteam(skooti): pay MC-001(A) failed (#{pay_resp.status})" unless pay_resp.status == 200

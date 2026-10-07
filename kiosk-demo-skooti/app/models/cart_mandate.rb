@@ -12,7 +12,7 @@ class CartMandate < ApplicationRecord
   has_many :settlements, dependent: nil, inverse_of: :cart_mandate
 
   # Carts whose line_items contain an entry naming this reservation. jsonb
-  # containment, so the entry may carry sku/qty/price_cents alongside — the
+  # containment, so the entry may carry qty/price_cents alongside — the
   # reservation reference is what is asserted.
   #
   # `reservation_id` is CALLER-SUPPLIED, so it is a QUOTED node the adapter

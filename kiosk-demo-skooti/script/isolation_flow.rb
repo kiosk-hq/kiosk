@@ -167,7 +167,7 @@ cart_b_payload = {
   user_id:            user_id_b,
   agent_id:           agent_id_b,
   iss:                ISSUER,
-  line_items:         [{ sku: scooter_code_a, qty: 1, reservation_id: reservation_id_a }],
+  line_items:         [{ qty: 1, reservation_id: reservation_id_a }],
   total_amount_cents: price_per_min_a,
   currency:           "eur",
   exp:                now_b + 600,

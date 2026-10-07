@@ -110,7 +110,7 @@ def pay(booking, currency:, key:, token:, user_id:, agent_id:)
   cart = {
     id: ids[:cart], intent_mandate_id: ids[:intent], user_id: user_id, agent_id: agent_id,
     iss: ISSUER,
-    line_items: [{ sku: booking.fetch(:room_type_name), qty: NIGHTS,
+    line_items: [{ qty: NIGHTS,
                    price_cents: booking.fetch(:nightly_price_cents),
                    booking_id: booking.fetch(:booking_id) }],
     total_amount_cents: total, currency: currency, exp: now + 600, iat: now,

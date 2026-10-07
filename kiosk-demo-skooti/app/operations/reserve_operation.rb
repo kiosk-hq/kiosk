@@ -57,7 +57,7 @@ class ReserveOperation
       currency:            "eur",
       pay_hint:            "pay in EUR with a cart mandate whose total_amount_cents == " \
                            "#{price_per_min_cents} (the quoted upfront minute) and whose line_items " \
-                           "reference this reservation: one {\"sku\", \"qty\": 1, \"price_cents\": " \
+                           "reference this reservation: one {\"qty\": 1, \"price_cents\": " \
                            "#{price_per_min_cents}, \"reservation_id\": \"#{reservation_id}\"} entry — " \
                            "the operator verifies currency and total against its quote before charging",
     })

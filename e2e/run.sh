@@ -463,10 +463,12 @@ log "start rails server on port $SERVER_PORT"
 # so the holder is found by PORT, never by matching a command line.
 port_held=$(lsof -ti ":$SERVER_PORT" | tr '\n' ' ' || true)
 [ -z "$port_held" ] || fail "port $SERVER_PORT is already held by pid $port_held— this run would drive that server instead of the one it starts. Stop it and run again."
-# The pay flow charges a local stripe-mock: Stripe's own fixture server, no key.
-# One already listening on its port is reused.
+# The pay flow charges a local stripe-mock, Stripe's own fixture server, behind
+# kiosk-redteam's front that answers a confirmed charge as paid; no key. One
+# already listening on its port is reused.
 if ! curl -s -o /dev/null http://127.0.0.1:12111/v1/customers; then
-  stripe-mock -http-port 12111 > "$TMP_DIR/stripe-mock.log" 2>&1 &
+  ruby -I"$KIOSK_OSS/kiosk-redteam/lib" -rkiosk/redteam/stripe_mock \
+    -e 'Kiosk::Redteam::StripeMock.start; sleep' > "$TMP_DIR/stripe-mock.log" 2>&1 &
   STRIPE_MOCK_PID=$!
   for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:12111/v1/customers && break; sleep 0.3; done
   curl -s -o /dev/null http://127.0.0.1:12111/v1/customers || fail "stripe-mock did not start on 12111"

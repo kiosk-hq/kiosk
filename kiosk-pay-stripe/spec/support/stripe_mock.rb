@@ -9,7 +9,8 @@ require "socket"
 # remember what you created. That bounds what it can prove — see the stripe-mock
 # group in `stripe_setup_reuse_spec.rb`.
 module StripeMock
-  PORT = 12111
+  # Not 12111: kiosk-redteam's settling front listens there.
+  PORT = 12113
   URL  = "http://127.0.0.1:#{PORT}"
 
   module_function
@@ -35,7 +36,7 @@ module StripeMock
     return URL if reachable?
     return nil unless installed?
 
-    pid = spawn("stripe-mock", out: File::NULL, err: File::NULL)
+    pid = spawn("stripe-mock", "-http-port", PORT.to_s, out: File::NULL, err: File::NULL)
     at_exit do
       Process.kill("TERM", pid)
       Process.wait(pid)

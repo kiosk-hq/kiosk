@@ -744,6 +744,19 @@ if ARGV.include?("--self-test")
               "  \"KIOSK_PROVE_BROKER_URL\" => \"the KYC broker",
               "  \"KIOSK_PROVE_BROKER_URL_RENAMED\" => \"the KYC broker"]],
       expect: /driver-env rule found NO no-default fetch of KIOSK_PROVE_BROKER_URL_RENAMED/ },
+    { id: "driver-port-names-a-sibling", kind: :break,
+      rule: "A demo DRIVER's comments name only ports its OWN demo serves on",
+      what: "a usage line copied from another demo keeps that demo's port",
+      ops:  [[:edit, "kiosk-demo-getgrocery/script/schema_flow.rb",
+              "SERVER_URL=http://127.0.0.1:3001 bundle", "SERVER_URL=http://127.0.0.1:3003 bundle"]],
+      expect: /getgrocery: script\/schema_flow\.rb:\d+ names port 3003/ },
+    { id: "vacuity-driver-port", kind: :vacuity,
+      rule: "A demo DRIVER's comments name only ports its OWN demo serves on",
+      what: "the local-URL pattern stops matching, so every driver header reads as clean",
+      ops:  [[:edit, "bin/check-demo-copies",
+              "DRIVER_LOCAL_URL = %r{\\bhttps?://(?:127\\.0\\.0\\.1|localhost):(\\d+)}",
+              "DRIVER_LOCAL_URL = %r{\\Anothing-matches-this(\\d+)}"]],
+      expect: /the driver-port rule compares nothing/ },
 
     { id: "e2e-fixture-undeclared", kind: :break,
       rule: "The e2e fixture rule runs (T-118)",
@@ -5715,6 +5728,43 @@ driver_env_held.each do |var, held|
             "name. Either the drivers stopped reading it — in which case it should leave " \
             "DRIVER_NO_DEFAULT_VARS with them — or `script/*.rb` is no longer where they live. " \
             "A rule that inspects nothing passes everything."
+end
+
+# ── A demo DRIVER's comments name only ports its OWN demo serves on ──────────
+#
+# A driver's usage line is what a reader copies to run it by hand. The ports a
+# demo serves on are the `ENV.fetch("PORT", "<n>")` defaults in its own
+# `lib/tasks/*.rake`; a local URL in a driver comment naming any other port sends
+# the reader to a sibling demo, or to nothing.
+DRIVER_LOCAL_URL = %r{\bhttps?://(?:127\.0\.0\.1|localhost):(\d+)}
+driver_ports_held = 0
+
+operator_demos.each do |demo|
+  served = Dir[File.join(ROOT, demo, "lib", "tasks", "*.rake")].flat_map do |rake|
+    File.read(rake).scan(/ENV\.fetch\("PORT",\s*"(\d+)"\)/).flatten
+  end.uniq
+  next if served.empty?
+
+  Dir[File.join(ROOT, demo, "script", "*.rb")].sort.each do |path|
+    rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
+    File.read(path).each_line.with_index(1) do |line, lineno|
+      next unless line.lstrip.start_with?("#")
+
+      line.scan(DRIVER_LOCAL_URL).flatten.each do |port|
+        driver_ports_held += 1
+        next if served.include?(port)
+
+        errors << "#{short.(demo)}: #{rel}:#{lineno} names port #{port}, which #{demo} never " \
+                  "serves on — its tasks default PORT to #{served.join(', ')}. Name the demo's " \
+                  "own port."
+      end
+    end
+  end
+end
+
+if driver_ports_held.zero?
+  errors << "check-demo-copies: no demo driver comment names a local port its demo's tasks " \
+            "declare, so the driver-port rule compares nothing and reads as coverage."
 end
 
 # ── `validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332) ──

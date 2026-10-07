@@ -275,7 +275,7 @@ class Kiosk::StorefrontController < ActionController::API
     render json: Order.owned_by_current_principal
                       .order(created_at: :desc)
                       .pluck(:id, :status, :total_cents, :slot_at, :address, :timezone,
-                             Order.paid_flag(Settlement.of_current_principal))
+                             Order.paid_flag(Kiosk::Settlement.of_current_principal))
                       .map { |id, status, total_cents, slot_at, address, timezone, paid|
                         # The clock this order was quoted on, READ OFF THE ROW
                         # and never re-parsed out of `address`. The district

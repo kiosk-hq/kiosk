@@ -645,9 +645,9 @@ if ARGV.include?("--self-test")
 
     { id: "two-of-three-converge", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
-      what: "two of three copies quietly become one file — the plant that measured EXIT 0 before K-1262",
-      ops:  [[:edit, "kiosk-demo-skooti/app/models/cart_mandate.rb", "reservation_id", "booking_id"]],
-      expect: /app\/models\/cart_mandate\.rb#scope: \[hoteling,skooti\] — 2 of 3 copies — agree/ },
+      what: "two copies quietly become one unit — the plant that measured EXIT 0 before K-1262",
+      ops:  [[:edit, "kiosk-demo-skooti/app/models/user.rb", "has_many :reservations,", "has_many :appointments,"]],
+      expect: /app\/models\/user\.rb#has_many: \[skooti,stylish\] — 2 of 6 copies — agree/ },
     { id: "lockstep-group-shrinks", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a one-sided edit inside a `:lockstep` group — the Bearer token that would pass its own demo",
@@ -1625,23 +1625,6 @@ COPIES = {
           "own DOMAIN work rather than a step of the Kiosk wire, and neither half is about " \
           "either domain. A per-demo justification here was the original spelling and it made " \
           "the wrong thing look per-demo: the SETTING is per-demo, the base class is not.",
-  },
-  "app/models/settlement.rb" => {
-    rule: :code,
-    why:  "kiosk.settlements — the engine's capture receipt, which the engine ships no reader for. " \
-          "Every demo that gates a verb on \"has this principal actually paid\" needs the same two " \
-          "lines: the association to the cart mandate, and the identity predicate as a scope over " \
-          "a frozen `Arel.sql` literal. Per-demo prose only; the demo-specific half of that gate " \
-          "is in cart_mandate.rb, which is why THAT one is :per_demo and this one is not.",
-  },
-  "app/models/cart_mandate.rb" => {
-    rule: :per_demo,
-    why:  "kiosk.cart_mandates, read for one thing: does a settled cart reference THIS row. The " \
-          "jsonb containment key is the demo's own line-item vocabulary — hoteling asks for " \
-          "`booking_id`, skooti for `reservation_id`, getgrocery for `order_id` — so the scope " \
-          "cannot be shared without one of them asserting the other's field name. getgrocery's " \
-          "copy also documents a SECOND spelling of its own predicate, correlated rather than " \
-          "value-bound, which lives on Order because that is the table it correlates to.",
   },
   "app/operations/wire_arguments.rb" => {
     rule: :per_demo,
@@ -3958,7 +3941,6 @@ end
 FRAGMENT_PATHS = %w[
   app/controllers/home_controller.rb
   app/models/booking.rb
-  app/models/cart_mandate.rb
   app/models/user.rb
   app/operations/operation_result.rb
   app/operations/wire_arguments.rb
@@ -4448,10 +4430,9 @@ FRAGMENTS = {
   "script/pay_window.rb#settlements_for" => {
     rule:  :per_demo,
     ships: PAY_WINDOW,
-    why:   "The uncached settlement count for one row, through CartMandate.referencing — whose " \
-           "jsonb containment key is the demo's own line-item field, which is exactly why " \
-           "`app/models/cart_mandate.rb` is `:per_demo` above. Same shape, different key, one " \
-           "argument name apart.",
+    why:   "The uncached settlement count for one row, through Kiosk::CartMandate.referencing " \
+           "keyed on the demo's own line-item field. Same shape, different key, one argument name " \
+           "apart.",
   },
 
   # ── script/pow_flow.rb — atablefor, getgrocery (T-136) ─────────────────────
@@ -4623,32 +4604,6 @@ FRAGMENTS = {
   # see until 2026-08-31. They are declared here for the same reason every other
   # entry is: `:per_demo` means compared to nothing, and a shared `scope` or a
   # shared association is exactly as hand-copied as a shared `def`.
-  "app/models/cart_mandate.rb#self.table_name" => {
-    rule:  :code,
-    ships: %w[getgrocery hoteling skooti],
-    why:   "`kiosk.cart_mandates` — the ENGINE's table, named by three demos that only read it. " \
-           "The engine owns the write, so a copy that names a different table is a demo reading a " \
-           "table kiosk-server never fills, and its `referencing` scope below then answers «no " \
-           "settled cart» to every question. This is the T-146 example unit: three copies, " \
-           "byte-identical, and invisible to the handle until it learned to read a class body.",
-  },
-  "app/models/cart_mandate.rb#has_many" => {
-    rule:  :code,
-    ships: %w[getgrocery hoteling skooti],
-    why:   "`has_many :settlements, dependent: nil, inverse_of: :cart_mandate` — identical in all " \
-           "three. `dependent: nil` is the load-bearing half: the rows belong to the ENGINE, so a " \
-           "copy that grows a `:destroy` would have a demo delete kiosk-server's settlement " \
-           "records, and it would do it in one demo only.",
-  },
-  "app/models/cart_mandate.rb#scope" => {
-    rule:  :per_demo,
-    ships: %w[getgrocery hoteling skooti],
-    why:   "SAME NAME, EACH DEMO'S OWN KEY: `scope :referencing` keys the jsonb containment on " \
-           "`order_id`, `booking_id` and `reservation_id` respectively — the line item each " \
-           "operator's settled cart actually names. The Arel node and the `@>` operator are " \
-           "identical; only the key differs, and it must. If these three ever agree, one demo is " \
-           "asking whether a cart references another demo's row.",
-  },
   "app/models/user.rb#devise" => {
     rule:   :code,
     ships:  %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
@@ -4768,10 +4723,8 @@ FRAGMENT_MAX_LINES = 200
 
 # THE SECOND HANDLE: A CLASS-BODY MACRO.
 #
-# `FRAGMENT_START` above is a `def` or a constant, which made every unit written in
-# a DSL invisible: three copies of `app/models/cart_mandate.rb` share a `scope`, a
-# `has_many` and a `self.table_name`, and the extractor found ZERO units in all
-# three.
+# `FRAGMENT_START` above is a `def` or a constant, so a unit written in a DSL — a
+# shared `scope`, `has_many` or `self.table_name` — needs this second handle.
 #
 # THE HANDLE IS DERIVED, NOT LISTED, and that is the whole design. A vocabulary of
 # macro heads — `scope`, `validates`, `has_many` — is the hand-kept inventory this
@@ -4871,8 +4824,7 @@ per_demo_paths = COPIES.select { |_rel, e| e[:rule] == :per_demo }.keys
 (per_demo_paths - FRAGMENT_PATHS - FRAGMENT_EXCLUDED.keys).sort.each do |rel|
   errors << "#{rel}: declared `:per_demo` in COPIES — compared to NOTHING — but named neither in " \
             "FRAGMENT_PATHS nor in FRAGMENT_EXCLUDED. Take it, or say why the shared units inside " \
-            "it are not worth holding. An undeclared exclusion reads exactly like coverage, which " \
-            "is how `app/models/cart_mandate.rb` contributed nothing for as long as it did (T-146)."
+            "it are not worth holding. An undeclared exclusion reads exactly like coverage (T-146)."
 end
 FRAGMENT_EXCLUDED.each do |rel, why|
   errors << "#{rel}: FRAGMENT_EXCLUDED entry carries no reason (T-146)." if why.to_s.strip.empty?
@@ -5105,11 +5057,8 @@ end
 # silently leaves the corpus.
 if fragment_dsl_ids.empty?
   errors << "check-demo-copies: the T-146 class-macro handle found NO class-body macro in any " \
-            "copy of the #{FRAGMENT_PATHS.size} declared `:per_demo` path(s). It was added " \
-            "because `app/models/cart_mandate.rb`'s three copies share a `scope`, a `has_many` " \
-            "and a `self.table_name` and the `def`-or-constant handle saw none of them, so zero " \
-            "means the handle has stopped working rather than that the tree has changed. A rule " \
-            "whose pattern matches nothing must fail, not pass."
+            "copy of the #{FRAGMENT_PATHS.size} declared `:per_demo` path(s); zero means the " \
+            "handle has stopped working rather than that the tree has changed."
 end
 
 # ── THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536) ───

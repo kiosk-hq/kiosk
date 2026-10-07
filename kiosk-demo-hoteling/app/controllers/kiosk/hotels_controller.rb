@@ -175,7 +175,7 @@ class Kiosk::HotelsController < ActionController::API
     # The settled flag is a CORRELATED EXISTS over the CALLER's settlements — one
     # statement for the whole list, not one query per row — and it is only the
     # second of the two witnesses {Booking.payment_state} weighs.
-    settled_flag = Booking.settled_flag(Settlement.of_current_principal)
+    settled_flag = Booking.settled_flag(Kiosk::Settlement.of_current_principal)
     render json: Booking.owned_by_current_principal
                         .order(created_at: :desc)
                         .pluck(:id, :property_id, :room_type_id, :check_in, :check_out,

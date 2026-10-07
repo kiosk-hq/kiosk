@@ -108,7 +108,7 @@ class Booking < ApplicationRecord
   # ── THE settled-cart containment, correlated to the row being selected ─────
   #
   # Why there are TWO spellings of one predicate, and why this one is a frozen
-  # SQL literal where {CartMandate.referencing} is Arel. That scope binds a
+  # SQL literal where `Kiosk::CartMandate.referencing` is Arel. That scope binds a
   # SINGLE, CALLER-SUPPLIED booking id, so the value must be quoted by the
   # adapter. This one binds NO value at all: it correlates the cart's line_items
   # against `bookings.id` — the column of whichever row the enclosing SELECT is
@@ -122,7 +122,7 @@ class Booking < ApplicationRecord
 
   # The settlements — OF THE RELATION THE CALLER IS ENTITLED TO SEE — whose cart
   # references the booking row being selected. `my_bookings` passes
-  # `Settlement.of_current_principal`; the parameter is what keeps the
+  # `Kiosk::Settlement.of_current_principal`; the parameter is what keeps the
   # CONTAINMENT one expression while the AUTHORITY stays the caller's.
   #
   # @param settlements [ActiveRecord::Relation] settlements this caller may read

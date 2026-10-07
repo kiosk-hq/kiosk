@@ -68,9 +68,9 @@ module RentalGates
                            .where(id: reservation_id, payment_status: Reservation::PAID)
                            .where(Reservation.arel_table[:paid_by_user_id]
                                              .eq(Arel.sql("kiosk.current_user_id()")))
-    settled = Settlement.of_current_principal
+    settled = Kiosk::Settlement.of_current_principal
                         .joins(:cart_mandate)
-                        .merge(CartMandate.referencing(reservation_id))
+                        .merge(Kiosk::CartMandate.referencing(reservation_id: reservation_id))
     return nil if paid_here.exists? || settled.exists?
 
     # A reservation with a capture OUTSTANDING is neither paid nor unpaid, and

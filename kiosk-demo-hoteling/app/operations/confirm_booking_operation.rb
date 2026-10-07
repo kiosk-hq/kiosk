@@ -62,9 +62,9 @@ class ConfirmBookingOperation
                          .where(id: booking_id, payment_status: Booking::PAID)
                          .where(Booking.arel_table[:paid_by_user_id]
                                        .eq(Arel.sql("kiosk.current_user_id()")))
-      settled = Settlement.of_current_principal
+      settled = Kiosk::Settlement.of_current_principal
                           .joins(:cart_mandate)
-                          .merge(CartMandate.referencing(booking_id))
+                          .merge(Kiosk::CartMandate.referencing(booking_id: booking_id))
       unless paid_here.exists? || settled.exists?
         # A capture OUTSTANDING is neither paid nor unpaid, and §11.6 forbids
         # publishing it as "no settlement". Name the third state, so the

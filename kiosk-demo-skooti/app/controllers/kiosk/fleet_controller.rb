@@ -131,7 +131,7 @@ class Kiosk::FleetController < ActionController::API
     # statement for the whole list — and it is only the second of the two
     # witnesses {Reservation.payment_state} weighs.
     reservations = Reservation.arel_table
-    settled_flag = Reservation.settled_flag(Settlement.of_current_principal)
+    settled_flag = Reservation.settled_flag(Kiosk::Settlement.of_current_principal)
     render json: Reservation.owned_by_current_principal
                             .joins(:scooter)
                             .order(reservations[:created_at].desc)

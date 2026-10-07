@@ -79,8 +79,8 @@ class PropertyDecisionJob < ApplicationJob
   # The engine writes the settlement in executor phase 3, AFTER the capture
   # returns, so this is the operator's own record of the charge it made.
   def settled_reference(booking)
-    Settlement.joins(:cart_mandate)
-              .merge(CartMandate.referencing(booking.id))
+    Kiosk::Settlement.joins(:cart_mandate)
+              .merge(Kiosk::CartMandate.referencing(booking_id: booking.id))
               .order(:created_at).pick(:psp_reference)
   end
 

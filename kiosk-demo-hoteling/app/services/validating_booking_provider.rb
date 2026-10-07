@@ -100,7 +100,7 @@ class ValidatingBookingProvider
   # engine's own marker, written in executor phase 3. It lands AFTER the
   # capture, so a false here proves nothing on its own.
   def self.settled?(booking_id)
-    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(booking_id)).exists?
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(booking_id: booking_id)).exists?
   end
 
   private

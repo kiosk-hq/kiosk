@@ -13,7 +13,7 @@ module Admin
     def index
       # Every principal's settlements: this is the operator's view, not one
       # assistant's. The wire's `my_orders` passes its caller's own.
-      @orders = Order.with_settled_currency(Settlement.all)
+      @orders = Order.with_settled_currency(Kiosk::Settlement.all)
                      .includes(order_items: :product)
                      .order(created_at: :desc)
                      .limit(RECENT)

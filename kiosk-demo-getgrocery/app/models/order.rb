@@ -94,9 +94,9 @@ class Order < ApplicationRecord
   # ── THE settled-cart containment, correlated to the row being selected ─────
   #
   # WHY THERE ARE TWO SPELLINGS OF ONE PREDICATE, and why this one is a frozen
-  # SQL literal where {CartMandate.referencing} is Arel.
+  # SQL literal where `Kiosk::CartMandate.referencing` is Arel.
   #
-  # {CartMandate.referencing} binds a SINGLE, CALLER-SUPPLIED order id, so the
+  # `Kiosk::CartMandate.referencing` binds a SINGLE, CALLER-SUPPLIED order id, so the
   # value must be quoted by the adapter and the predicate is built as Arel
   # nodes. This one binds NO value at all: it correlates the cart's line_items
   # against `orders.id` — the column of whichever row the enclosing SELECT is
@@ -119,9 +119,9 @@ class Order < ApplicationRecord
   # references the order row being selected.
   #
   # The parameter is the whole point. `my_orders` passes
-  # `Settlement.of_current_principal`, so an assistant learns the paid state of
+  # `Kiosk::Settlement.of_current_principal`, so an assistant learns the paid state of
   # its OWN orders and nothing else; `Admin::OrdersController` passes
-  # `Settlement.all`, because an operator's back office that could only see one
+  # `Kiosk::Settlement.all`, because an operator's back office that could only see one
   # principal's settlements would show every order unpaid. The AUTHORITY differs
   # between the two surfaces and must; the CONTAINMENT must not, and this is the
   # one place it is written for both.
@@ -177,7 +177,7 @@ class Order < ApplicationRecord
   scope :with_settled_currency, lambda { |settlements|
     currency = settlements.joins(:cart_mandate)
                           .where(SETTLED_CART_REFERENCES_THIS_ROW)
-                          .select(Settlement.arel_table[:currency])
+                          .select(Kiosk::Settlement.arel_table[:currency])
                           .limit(1)
     select(arel_table[Arel.star], Arel::Nodes::Grouping.new(currency.arel).as("settled_currency"))
   }

@@ -94,7 +94,7 @@ class ValidatingRentalProvider
   # the SECOND witness: it lands after the capture, so a false here proves
   # nothing on its own, which is precisely why the claim above exists.
   def self.settled?(reservation_id)
-    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(reservation_id)).exists?
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(reservation_id: reservation_id)).exists?
   end
 
   private

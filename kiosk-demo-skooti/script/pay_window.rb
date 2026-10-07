@@ -146,8 +146,8 @@ def reservation_payment_status(reservation_id)
 end
 
 def settlements_for(reservation_id)
-  Settlement.uncached do
-    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(reservation_id)).count
+  Kiosk::Settlement.uncached do
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(reservation_id: reservation_id)).count
   end
 end
 

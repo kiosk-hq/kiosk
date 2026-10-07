@@ -135,7 +135,7 @@ class ValidatingPaymentProvider
   # and an order no mandate references at all was never claimed over the wire —
   # both of those fall through to `:unknown`, which keeps the claim.
   def self.processor_says(order_id, lookup)
-    answers = CartMandate.referencing(order_id)
+    answers = Kiosk::CartMandate.referencing(order_id: order_id)
                          .pluck(:mandate_id, :total_amount_cents, :currency)
                          .map do |mandate_id, amount_cents, currency|
       lookup.outcome(cart_mandate_id: mandate_id.to_s, amount_cents: amount_cents, currency: currency)
@@ -175,12 +175,12 @@ class ValidatingPaymentProvider
 
   # True iff a settlement (capture receipt) references this order — the
   # authoritative local "this was charged" marker, written by executor phase 3.
-  # {CartMandate.referencing} is ONE containment for the whole origin, shared
+  # `Kiosk::CartMandate.referencing` is ONE containment for the whole origin, shared
   # with `reschedule_delivery`'s payment gate — and it matters most here,
   # because THIS is the reader the claim consults
   # before deciding whether money has already moved.
   def self.settled?(order_id)
-    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).exists?
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: order_id)).exists?
   end
 
   # The agent-signed cart-mandate ids that referenced this order. Persisted
@@ -188,7 +188,7 @@ class ValidatingPaymentProvider
   # does not — which makes them the handle for looking the charge up at the
   # processor (`metadata.cart_mandate_id`).
   def self.cart_mandate_ids_for(order_id)
-    CartMandate.referencing(order_id).order(:created_at).pluck(:mandate_id).map(&:to_s)
+    Kiosk::CartMandate.referencing(order_id: order_id).order(:created_at).pluck(:mandate_id).map(&:to_s)
   end
 
   private

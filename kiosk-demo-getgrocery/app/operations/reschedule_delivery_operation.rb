@@ -79,11 +79,11 @@ class RescheduleDeliveryOperation
 
       # ── Gate 4: a settlement of THIS principal for THIS order ────────────
       # The payer must be the caller (`of_current_principal`, the GUC predicate)
-      # and the settled cart must name this order ({CartMandate.referencing},
+      # and the settled cart must name this order (`Kiosk::CartMandate.referencing`,
       # shared with the pay path and the back office): paying for A moves no B.
-      paid = Settlement.of_current_principal
+      paid = Kiosk::Settlement.of_current_principal
                        .joins(:cart_mandate)
-                       .merge(CartMandate.referencing(order_id))
+                       .merge(Kiosk::CartMandate.referencing(order_id: order_id))
       unless paid.exists?
         # An order with a capture OUTSTANDING is neither paid nor unpaid, and
         # "this order is not paid yet" is the sentence protocol.md §11.6

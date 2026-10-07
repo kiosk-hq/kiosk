@@ -199,8 +199,8 @@ def wait_until(seconds: 5)
 end
 
 def settlements_for(booking_id)
-  Settlement.uncached do
-    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(booking_id)).count
+  Kiosk::Settlement.uncached do
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(booking_id: booking_id)).count
   end
 end
 

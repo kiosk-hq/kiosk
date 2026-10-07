@@ -141,13 +141,13 @@ def my_order_payment_state(order_id)
   row && row["payment_state"]
 end
 
-# Settlement rows referencing this order. UNCACHED: `rails runner` wraps the
+# Kiosk::Settlement rows referencing this order. UNCACHED: `rails runner` wraps the
 # script in the executor, which turns the ActiveRecord query cache on for this
 # connection, and the writes we are watching for happen on OTHER connections —
 # a cached count would re-read its own first answer and manufacture a verdict.
 def settlements_for(order_id)
-  Settlement.uncached do
-    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).count
+  Kiosk::Settlement.uncached do
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: order_id)).count
   end
 end
 

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The device-authorization call refuses an empty `role` or `scope` with `400 invalid_request`**, as it refuses any other value (K-2005).
+
 ## [0.5.5] — 2026-10-07
 
 - 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.5, matching skill 0.5.5.**

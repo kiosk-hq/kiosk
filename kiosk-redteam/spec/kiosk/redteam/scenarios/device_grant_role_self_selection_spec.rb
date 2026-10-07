@@ -44,7 +44,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
                 "expires_in"       => 900, "interval" => 5)
   end
 
-  # The engine at head: any non-empty role/scope is refused, the role-less
+  # The engine at head: any role/scope parameter is refused, the role-less
   # request opens the ceremony.
   #
   # WebMock resolves the MOST RECENTLY DECLARED matching stub, so the general
@@ -54,7 +54,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
   def stub_fixed_engine
     stub_request(:post, device_url).to_return(opened)
     stub_request(:post, device_url)
-      .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=[^&]+/) }
+      .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=/) }
       .to_return(oauth_error)
   end
 

@@ -80,9 +80,9 @@ module Kiosk
         # this file unable to tell a deliberate drop from a bug — the same
         # reasoning protocol.md §7.1(2) applies to a verb that names its own
         # principal ("the conforming answer is 400 naming that parameter, not
-        # a silently ignored argument"). An EMPTY value is tolerated: it
-        # asserts nothing.
-        if (offending = %i[role scope].find { |name| !params[name].to_s.empty? })
+        # a silently ignored argument"). The parameter is refused whatever its
+        # value, empty included.
+        if (offending = %i[role scope].find { |name| params.key?(name) })
           return render_oauth_error(
             :invalid_request,
             "#{offending} is not accepted here — an assistant does not choose its own role. " \

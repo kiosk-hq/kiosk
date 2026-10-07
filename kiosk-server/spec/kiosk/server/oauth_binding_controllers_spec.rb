@@ -112,11 +112,13 @@ RSpec.describe "OAuth binding controllers" do
       expect(body[:error_description]).to match(/scope is not accepted here/)
     end
 
-    it "tolerates an EMPTY role/scope — an empty value asserts nothing" do
-      status, = start!(
-        "client_id" => "assistant", "public_key" => pem, "role" => "", "scope" => "",
-      )
-      expect(status).to eq(200)
+    it "refuses an EMPTY role or scope — the parameter itself is not accepted" do
+      %w[role scope].each do |name|
+        status, body = start!("client_id" => "assistant", "public_key" => pem, name => "")
+        expect(status).to eq(400)
+        expect(body[:error]).to eq("invalid_request")
+        expect(body[:error_description]).to match(/#{name} is not accepted here/)
+      end
     end
 
     it "opens the ceremony with a ROLE-LESS row — the role is stamped at approval" do

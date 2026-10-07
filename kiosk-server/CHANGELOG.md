@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The device-authorization call refuses an empty `role` or `scope` with `400 invalid_request`**, as it refuses any other value (K-2005).
+
 ## [0.5.5] — 2026-10-07
 
 - 2026-10-07: **The default `skill_url` names `skill-v0.5.5.md`, and `listen.py` reads the bearer token from `--token-file`**, never from its command line.

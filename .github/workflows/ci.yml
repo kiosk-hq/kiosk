@@ -1549,6 +1549,12 @@ jobs:
         working-directory: reference
         run: ./bin/check-live-skill-pin --offline
 
+      - name: The shipped solver is the solver the newest cut pins
+        working-directory: reference
+        env:
+          KIOSK_REQUIRE_SITE_SIBLING: "1"
+        run: ./bin/check-solver-pin
+
   # Before 1.0 every gem, lockfile entry, API_VERSION, MIN_CLIENT and skill pin
   # carries the same MAJOR.MINOR.PATCH (protocol.md §14.1).
   version-parity:

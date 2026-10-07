@@ -1,0 +1,71 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-solver-pin — the Equihash solver this repository ships is the solver the
+# published skill pins.
+#
+# The skill tells an assistant to fetch https://kiosk.tech/pow/solve-<digest>.py,
+# verify its sha256 against the pin beside the URL, and refuse it on a mismatch.
+# So three files must be byte-identical:
+#
+#   kiosk-pow-equihash/solve.py              the solver the demos and e2e run
+#   kiosk.tech/pow/solve.py                  the current solver, named by PowGate's hint
+#   kiosk.tech/pow/solve-<digest>.py         the file the newest skill cut pins
+#
+# and the newest cut's sha256 must be the digest of those bytes.
+#
+# The kiosk.tech files are read from a sibling checkout at ../kiosk.tech. Without
+# one the check prints SKIP and exits 0, unless KIOSK_REQUIRE_SITE_SIBLING=1 is
+# set, which is how ci.yml's `published-bytes` job runs it.
+#
+# Usage: bin/check-solver-pin
+
+require "digest"
+
+ROOT   = File.expand_path("..", __dir__)
+SOLVER = File.join(ROOT, "kiosk-pow-equihash", "solve.py")
+SITE   = File.expand_path("../kiosk.tech", ROOT)
+PIN    = %r{https://kiosk\.tech/pow/(solve-(\h{12})\.py)\b.*?\b(\h{64})\b}m
+
+failures = []
+flag = ->(msg) { failures << msg && puts("  FAIL: #{msg}") }
+
+unless File.directory?(SITE)
+  if ENV["KIOSK_REQUIRE_SITE_SIBLING"] == "1"
+    warn "x solver pin: KIOSK_REQUIRE_SITE_SIBLING=1 but no kiosk.tech checkout at #{SITE}"
+    exit 1
+  end
+  puts "SKIP solver pin: no kiosk.tech checkout at #{SITE}; nothing to compare"
+  exit 0
+end
+
+bytes  = File.binread(SOLVER)
+digest = Digest::SHA256.hexdigest(bytes)
+cut    = Dir[File.join(SITE, "skill-v*.md")].max_by { Gem::Version.new(_1[/skill-v(.+)\.md\z/, 1]) }
+abort "x solver pin: no skill-v*.md in #{SITE}" unless cut
+
+match = File.read(cut).match(PIN)
+if match.nil?
+  flag.("#{File.basename(cut)} pins no https://kiosk.tech/pow/solve-<digest>.py with a sha256")
+else
+  pinned_file, prefix, pinned_sha = match.captures
+  flag.("#{File.basename(cut)} pins #{pinned_sha}, but solve.py hashes to #{digest}") unless pinned_sha == digest
+  flag.("#{pinned_file} is not named by its own digest #{pinned_sha[0, 12]}") unless pinned_sha.start_with?(prefix)
+  ["solve.py", pinned_file].each do |name|
+    copy = File.join(SITE, "pow", name)
+    if !File.exist?(copy)
+      flag.("kiosk.tech/pow/#{name} is missing")
+    elsif File.binread(copy) != bytes
+      flag.("kiosk.tech/pow/#{name} (#{Digest::SHA256.file(copy).hexdigest}) differs from " \
+            "kiosk-pow-equihash/solve.py (#{digest})")
+    end
+  end
+end
+
+if failures.empty?
+  puts "OK solver pin: kiosk-pow-equihash/solve.py, kiosk.tech/pow/solve.py and the file " \
+       "#{File.basename(cut)} pins are byte-identical (#{digest[0, 12]}…)"
+  exit 0
+end
+puts "x solver pin: #{failures.size} check(s) failed"
+exit 1

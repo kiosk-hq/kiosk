@@ -575,6 +575,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
        AUTH_CAPTURE="$AUTH_CAPTURE" \
+       EVENT_CAPTURE="$TMP_DIR/listener-alice.jsonl" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
   log "schema conformance failed — last 40 lines of server log ($SERVER_LOG):"
   tail -40 "$SERVER_LOG"

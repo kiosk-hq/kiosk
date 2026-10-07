@@ -19,9 +19,9 @@
 # WHAT IT DOES. It is handed the bytes the e2e assistant has already made this
 # origin produce — the discovery document, the catalog, four problem documents
 # across four codes (one of them carrying live PoW challenges), the pay request
-# and the settlement it answered, and every wire object of Sections 5 and 6
-# — and validates each against the PUBLISHED schema for it, under draft
-# 2020-12.
+# and the settlement it answered, every wire object of Sections 5 and 6, and an
+# event the pinned listener received on the stream — and validates each
+# against the PUBLISHED schema for it, under draft 2020-12.
 #
 # THE SCHEMAS ARE VENDORED, and that was a fork in the road: they live in the
 # kiosk.tech repo and this harness lives here, so joining them needs either a
@@ -667,6 +667,27 @@ else
          "AUTH_CAPTURE (#{auth_capture.inspect}) is missing — auth_wire_capture.rb did not write " \
          "the ceremonies' bytes, so auth.schema.json and binding.schema.json checked nothing",
          "both ceremonies register, bind and unlink an agent"
+end
+
+# ── 7. an event pushed on the stream ─────────────────────────────────────────
+#
+# Read from what the pinned listener printed in assistant.sh: one line per
+# socket message, the operator's event with the listener's own `"type":"event"`
+# in front. Dropping that one key leaves the event exactly as it was framed.
+event_capture = ENV["EVENT_CAPTURE"]
+event_line = event_capture && File.exist?(event_capture) &&
+             File.foreach(event_capture).find { |line| line.include?('"type":"event"') }
+if event_line
+  event = JSON.parse(event_line).tap { |line| line.delete("type") }
+  conforms("the event pushed on the stream", "#{B}/event.schema.json", event) do |ev|
+    ev["id"] = ev["id"].to_s  # a per-origin integer, never a string
+    ev
+  end
+else
+  absent "an event pushed on the stream was validated",
+         "EVENT_CAPTURE (#{event_capture.inspect}) holds no event line — the listener in " \
+         "assistant.sh received nothing, so event.schema.json checked nothing",
+         "an event is pushed only when the operator's state changes"
 end
 
 puts "\n  pass: #{PASS.size}\n  fail: #{FAIL.size}\n  skip: #{SKIP.size}"

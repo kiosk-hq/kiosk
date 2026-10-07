@@ -1437,6 +1437,7 @@ kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts the same topic for 
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers a WebSocket upgrade the same way, at the HTTP layer
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers a plain request with the module_not_served problem document
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers an upgrade carrying no credential identically
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers each of the five literal strings the finding drove, none with silence
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	closes a socket holding NO subscription when its credential is revoked
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	closes the connection with reconnect false when the credential stops resolving
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	confirms a declared topic with head and truncated
@@ -1444,7 +1445,6 @@ kiosk-server/spec/kiosk/server/events_socket_spec.rb	confirms a live subscriptio
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	delivers an event emitted between the subscribed frame and a live stream
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	does NOT deliver another subject's event to a subject-scoped subscription
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	does NOT replay another TOPIC's event to a subscription that named one
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	drives the five literal strings the finding drove
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	drops it, answers nothing, and delivers nothing emitted after it
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	goes on serving a well-formed subscribe on the same socket
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves a real client with no socket and no frame

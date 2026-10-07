@@ -201,7 +201,8 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       end
     end
 
-    it "drives the five literal strings the finding drove" do
+    it "answers each of the five literal strings the finding drove, none with silence" do
+      expect(bad.reject { |_, v| Array(v["answer"]).any? }.keys).to eq([])
       expect(bad.transform_values { |v| v["sent"] }).to eq(
         "not_json" => "this is not json",
         "no_identifier" => '{"command":"subscribe"}',

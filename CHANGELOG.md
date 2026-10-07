@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **kiosk-pay-stripe treats a mapped Customer Stripe no longer has as no saved card**, so `payment_setup` and `pay` stop answering 500 for that principal (K-1993).
 - 2026-10-07: **An `action_failed` detail names the verb and no longer the exception class** the handler raised; the operator's log still carries both.
 - 2026-10-07: **getgrocery seeds its account holder's saved card only against stripe-mock**, so a live origin no longer answers her `payment_setup` with a 500.
 - 2026-10-07: **Every demo's seeds re-apply the seeded humans' sign-in credentials**, so an account created before it had a password can sign in after the next seed.

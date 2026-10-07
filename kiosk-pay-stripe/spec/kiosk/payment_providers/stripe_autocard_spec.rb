@@ -5,6 +5,10 @@ require "kiosk/payment_providers/stripe"
 # TEST-ONLY `test_autocard` behaviour: the adapter simulates a completed
 # SetupIntent so automated suites need no card-setup step / server-side route.
 RSpec.describe Kiosk::PaymentProviders::Stripe do
+  def customer(id, default_pm)
+    double("Customer", id: id, invoice_settings: double("InvoiceSettings", default_payment_method: default_pm))
+  end
+
   describe "#setup_required? with test_autocard" do
     it "returns false even with a resolver and no saved card (setup auto-completed at capture)" do
       adapter = described_class.new(
@@ -37,7 +41,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       # The auto-provision path: attach_test_card creates the customer + saved card.
       expect(adapter).to receive(:attach_test_card).with(user_id: "u").and_return("cus_auto")
-      allow(adapter).to receive(:saved_payment_method_for).with("cus_auto").and_return("pm_auto")
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_auto").and_return(customer("cus_auto", "pm_auto"))
 
       expect(::Stripe::PaymentIntent).to receive(:create).with(
         hash_including(customer: "cus_auto", payment_method: "pm_auto", off_session: true),
@@ -59,7 +63,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       # The customer already has a saved card, so the auto-provision short-circuit
       # is skipped: attach_test_card must NOT be called and the on-file card is charged.
       expect(adapter).not_to receive(:attach_test_card)
-      allow(adapter).to receive(:saved_payment_method_for).with("cus_existing").and_return("pm_onfile")
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer("cus_existing", "pm_onfile"))
 
       expect(::Stripe::PaymentIntent).to receive(:create).with(
         hash_including(customer: "cus_existing", payment_method: "pm_onfile", off_session: true),

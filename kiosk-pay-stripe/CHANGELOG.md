@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **A mapped Customer that Stripe no longer has counts as no saved card**; `setup_url` saves a fresh one through `customer_saver`, which now replaces the mapping (K-1993).
 ## [0.5.4] — 2026-10-07
 
 - 2026-10-07: **`setup_url` takes the engine's `return_url`, and `setup_return_user_id` names whose human came back**, so the return page is kiosk-server's; the `return_url:` option is gone (T-219).

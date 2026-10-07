@@ -145,14 +145,8 @@ module Kiosk
       # @param user_id [String]
       # @return [Boolean]
       def saved_method?(user_id:)
-        cus_id = @customer_resolver&.call(user_id)
-        return false unless cus_id
-
-        customer = ::Stripe::Customer.retrieve(cus_id)
-        return true if customer.invoice_settings&.default_payment_method
-
-        pms = ::Stripe::PaymentMethod.list(customer: cus_id, type: "card")
-        pms.data.any?
+        customer = live_customer(user_id)
+        !customer.nil? && !saved_payment_method_for(customer).nil?
       end
 
       # Capture an AP2 cart mandate via an off_session (merchant-initiated)
@@ -177,14 +171,15 @@ module Kiosk
           # customer (no customer ⇒ the principal must set up a card first) and
           # charge its saved card. The mandate's payment_method is deliberately
           # ignored — in this model the assistant authorizes, never presents a card.
-          cus_id = @customer_resolver.call(cart_mandate.user_id)
-          # TEST-ONLY: simulate the human's completed SetupIntent so automated
-          # suites need no card-setup step. Never enabled in prod/live demo.
-          if @test_autocard && (cus_id.nil? || saved_payment_method_for(cus_id).nil?)
-            cus_id = attach_test_card(user_id: cart_mandate.user_id)
+          customer = live_customer(cart_mandate.user_id)
+          pm = customer && saved_payment_method_for(customer)
+          if pm.nil? && @test_autocard
+            customer = ::Stripe::Customer.retrieve(attach_test_card(user_id: cart_mandate.user_id))
+            pm = saved_payment_method_for(customer)
           end
-          raise SetupRequired unless cus_id
-          pm = saved_payment_method_for(cus_id) || raise(SetupRequired)
+          raise SetupRequired unless pm
+
+          cus_id = customer.id
         else
           # No resolver (unit tests / pre-SetupIntent demos): use an explicitly
           # presented PM, else the configured test fallback.
@@ -355,23 +350,30 @@ module Kiosk
       # Resolve existing Customer or create a new one and persist the mapping
       # via the injected `customer_saver`.
       def ensure_customer(user_id)
-        cus_id = @customer_resolver&.call(user_id)
-        return cus_id if cus_id
+        existing = live_customer(user_id)
+        return existing.id if existing
 
         cus = ::Stripe::Customer.create({ name: "principal-#{user_id}" })
         @customer_saver&.call(user_id, cus.id)
         cus.id
       end
 
-      # Return the PM id for a customer's default or first attached card.
-      # Returns nil when no usable card is found.
-      def saved_payment_method_for(cus_id)
-        customer   = ::Stripe::Customer.retrieve(cus_id)
-        default_pm = customer.invoice_settings&.default_payment_method
-        return default_pm if default_pm
+      # The principal's Stripe Customer, or nil when none is mapped or Stripe
+      # no longer has the mapped one (deleted, or never in this account).
+      def live_customer(user_id)
+        cus_id = @customer_resolver&.call(user_id)
+        return nil unless cus_id
 
-        pms = ::Stripe::PaymentMethod.list(customer: cus_id, type: "card")
-        pms.data.first&.id
+        customer = ::Stripe::Customer.retrieve(cus_id)
+        customer unless customer.respond_to?(:deleted) && customer.deleted
+      rescue ::Stripe::InvalidRequestError => e
+        raise unless e.code == "resource_missing"
+      end
+
+      # The customer's default card, else its first attached one, else nil.
+      def saved_payment_method_for(customer)
+        customer.invoice_settings&.default_payment_method ||
+          ::Stripe::PaymentMethod.list(customer: customer.id, type: "card").data.first&.id
       end
 
       # Return the string as-is if non-empty, else nil.

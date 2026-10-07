@@ -71,6 +71,14 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, "setup-session reuse (K-492)" do
       expect(fake.requests_to("POST", "/v1/checkout/sessions").size).to eq(1)
     end
 
+    it "replaces a stored customer Stripe answers 404 for, and saves the new one (K-1993)" do
+      customer_store["user-1"] = "cus_gone"
+      url = adapter.setup_url(user_id: "user-1", return_url: return_url)
+
+      expect(url).to start_with("https://checkout.stripe.com/")
+      expect(customer_store["user-1"]).to start_with("cus_fake_")
+    end
+
     it "stays on that one session for a whole poll loop (the live bug minted five)" do
       urls = Array.new(5) { adapter.setup_url(user_id: "user-1", return_url: return_url) }
 

@@ -48,6 +48,10 @@ Kiosk.configure do |c|
 end
 ```
 
+`customer_saver` replaces any earlier mapping for the principal: when Stripe no
+longer has the mapped Customer (deleted, or from another account), the adapter
+treats the principal as having no saved card and saves a fresh Customer.
+
 Card-setup handshake (see the Payment section of the spec):
 
 - `setup_required?(user_id:)` — true when the principal must set up a card

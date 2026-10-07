@@ -14,6 +14,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     )
   end
 
+  # The mapped customer exists at Stripe unless an example says otherwise.
+  before do
+    allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing")
+      .and_return(double("Customer", id: "cus_existing"))
+  end
+
   it "is a Kiosk payment provider" do
     expect(adapter).to be_a(Kiosk::PaymentProviders::Base)
   end
@@ -254,7 +260,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     it "returns true when the Customer exists but has no saved cards" do
       invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-      customer         = double("Customer", invoice_settings: invoice_settings)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
       pm_list          = double("PMList", data: [])
 
       allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
@@ -267,7 +273,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     it "returns false when the Customer has a saved default payment method" do
       invoice_settings = double("InvoiceSettings", default_payment_method: "pm_saved_123")
-      customer         = double("Customer", invoice_settings: invoice_settings)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
 
       allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
 
@@ -292,7 +298,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     it "returns true when the customer has a default_payment_method on invoice_settings" do
       invoice_settings = double("InvoiceSettings", default_payment_method: "pm_saved_123")
-      customer         = double("Customer", invoice_settings: invoice_settings)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
 
       allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
 
@@ -301,7 +307,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     it "returns true when the customer has no default PM but has an attached card in the list" do
       invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-      customer         = double("Customer", invoice_settings: invoice_settings)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
       pm_item          = double("PM", id: "pm_attached_visa")
       pm_list          = double("PMList", data: [pm_item])
 
@@ -315,7 +321,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     it "returns false when the customer exists but has no saved cards" do
       invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-      customer         = double("Customer", invoice_settings: invoice_settings)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
       pm_list          = double("PMList", data: [])
 
       allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
@@ -371,7 +377,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     context "with a customer resolver" do
       it "charges the customer's default saved card off_session when no explicit pm is given" do
         invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
-        customer         = double("Customer", invoice_settings: invoice_settings)
+        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
 
         allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
         expect(::Stripe::PaymentIntent).to receive(:create).with(
@@ -393,7 +399,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       it "falls back to the first listed card when no default PM is set" do
         invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-        customer         = double("Customer", invoice_settings: invoice_settings)
+        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
         pm_item          = double("PM", id: "pm_listed_visa")
         pm_list          = double("PMList", data: [pm_item])
 
@@ -412,7 +418,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       it "raises SetupRequired when the customer has no saved card" do
         invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-        customer         = double("Customer", invoice_settings: invoice_settings)
+        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
         pm_list          = double("PMList", data: [])
 
         allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
@@ -437,7 +443,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       it "ignores an explicitly presented pm and charges the on-file card when a resolver is configured" do
         invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
-        customer         = double("Customer", invoice_settings: invoice_settings)
+        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
         allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
 
         # In the SetupIntent model the assistant authorizes, never presents a
@@ -493,6 +499,55 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
             expect(e.message).not_to match(/timed out/)
           }
       end
+    end
+  end
+
+  # ── a stored customer Stripe no longer knows (K-1993) ──────────────────────
+
+  describe "with a stored customer Stripe no longer knows" do
+    let(:store) { { "user-1" => "cus_gone" } }
+    let(:stale_adapter) do
+      described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(uid) { store[uid] },
+        customer_saver:    ->(uid, cid) { store[uid] = cid },
+      )
+    end
+
+    before do
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_gone")
+        .and_raise(::Stripe::InvalidRequestError.new("No such customer: 'cus_gone'", "id", code: "resource_missing"))
+    end
+
+    it "requires setup" do
+      expect(stale_adapter.setup_required?(user_id: "user-1")).to be true
+    end
+
+    it "mints a fresh customer for the setup page and saves it in place of the stale one" do
+      stub_no_outstanding_session
+      allow(::Stripe::Customer).to receive(:create).and_return(double("Customer", id: "cus_fresh"))
+      expect(::Stripe::Checkout::Session).to receive(:create).with(hash_including(customer: "cus_fresh"))
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect(stale_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
+        .to eq("https://checkout.stripe.com/setup/fresh")
+      expect(store["user-1"]).to eq("cus_fresh")
+    end
+
+    it "refuses a charge with SetupRequired" do
+      expect { stale_adapter.capture(cart_mandate) }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
+    end
+
+    it "treats a deleted customer the same way" do
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_gone")
+        .and_return(::Stripe::Customer.construct_from(id: "cus_gone", deleted: true))
+      expect(stale_adapter.setup_required?(user_id: "user-1")).to be true
+    end
+
+    it "still raises any other Stripe error" do
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_gone")
+        .and_raise(::Stripe::APIConnectionError.new("timed out"))
+      expect { stale_adapter.setup_required?(user_id: "user-1") }.to raise_error(::Stripe::APIConnectionError)
     end
   end
 

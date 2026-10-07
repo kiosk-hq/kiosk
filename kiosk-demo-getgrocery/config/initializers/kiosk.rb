@@ -202,7 +202,7 @@ Kiosk.configure do |c|
     Kiosk::PaymentProviders::Stripe.new(
       api_key:           key,
       customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
-      customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
+      customer_saver:    ->(uid, cid) { StripeCustomer.find_or_initialize_by(user_id: uid).update!(customer_id: cid) },
       test_autocard:     Rails.configuration.x.kiosk.test_autocard,
     ),
     currency: "eur",

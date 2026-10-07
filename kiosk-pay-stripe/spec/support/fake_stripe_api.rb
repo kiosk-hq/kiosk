@@ -35,6 +35,7 @@ class FakeStripeApi
     @server    = TCPServer.new("127.0.0.1", 0)
     @requests  = []
     @sessions  = []
+    @customers = []
     @counter   = 0
     @mutex     = Mutex.new
     @thread    = Thread.new { accept_loop }
@@ -117,6 +118,8 @@ class FakeStripeApi
   end
 
   def route(method, path, params)
+    return retrieve_customer(path.delete_prefix("/v1/customers/")) if method == "GET" && path.start_with?("/v1/customers/")
+
     case [method, path]
     when %w[POST /v1/customers]        then create_customer
     when %w[POST /v1/checkout/sessions] then create_session(params)
@@ -126,7 +129,15 @@ class FakeStripeApi
   end
 
   def create_customer
-    { id: "cus_fake_#{next_id}", object: "customer" }
+    id = "cus_fake_#{next_id}"
+    @mutex.synchronize { @customers << id }
+    { id: id, object: "customer" }
+  end
+
+  def retrieve_customer(id)
+    return { id: id, object: "customer", invoice_settings: { default_payment_method: nil } } if @mutex.synchronize { @customers.include?(id) }
+
+    [404, { error: { type: "invalid_request_error", code: "resource_missing", message: "No such customer: '#{id}'" } }]
   end
 
   def create_session(params)
@@ -164,9 +175,10 @@ class FakeStripeApi
   end
 
   def respond(socket, payload)
+    status, payload = payload.is_a?(Array) ? payload : [200, payload]
     json = JSON.generate(payload)
     socket.print(
-      "HTTP/1.1 200 OK\r\n" \
+      "HTTP/1.1 #{status} #{status == 200 ? "OK" : "Not Found"}\r\n" \
       "Content-Type: application/json\r\n" \
       "Content-Length: #{json.bytesize}\r\n" \
       "Connection: close\r\n\r\n#{json}",

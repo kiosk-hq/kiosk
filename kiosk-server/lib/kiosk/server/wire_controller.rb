@@ -207,6 +207,11 @@ module Kiosk
         # are both IN the digest precisely because this wire is one endpoint
         # per verb: a formula that hashed the arguments alone would let a proof
         # solved for one verb be spent on another.
+        # THE CALLER'S OWN CLOCK is input, so it is refused with the arguments,
+        # before the toll: a caller does not pay for a proof to learn its header
+        # is unreadable. Parsed once here so every handler gets the same zone
+        # (nil when none was declared) and one refusal wording.
+        timezone = CallerTimezone.from_env(request.env)
         toll!(identity: identity, command: command, name: name, body: args)
 
         # Carry the resolved identity and the wire request down to the handler
@@ -224,19 +229,7 @@ module Kiosk
         # response BEFORE {#render_result}, which is what puts it in front of
         # {Headers.add_cache_policy} — the seam that keeps an operator's own
         # policy and refuses a shared-cache one.
-        # THE CALLER'S OWN CLOCK, read once and handed down. It is parsed HERE
-        # rather than in each handler so that a value this wire cannot read is
-        # ONE refusal, worded once, rather than seven demos' worth of guesses —
-        # and so that an operator who never looks at it still cannot serve a
-        # request carrying a zone nobody validated. A caller that declared none
-        # gets `nil`, which is not an error: the operator answers on the clock
-        # of the place the service happens and says which one that was.
-        #
-        # It is read AFTER the toll on purpose: an unpaid caller learns it owes
-        # a proof before it learns its header is misspelt, so the 402 challenge
-        # is not withheld over a field that does not enter the fingerprint.
         handler_headers = {}
-        timezone = CallerTimezone.from_env(request.env)
         result = CurrentRequest.with(identity: identity, env: request.env,
                                      handler_headers: handler_headers,
                                      timezone: timezone) do

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **An unreadable `Kiosk-Timezone` is refused `400` before the proof-of-work toll**, with the arguments, rather than after a paid proof (K-2016).
+
 - 2026-10-07: **The binding pages' `401` names the operator's sign-in URL and the page's own**, so a non-browser caller can hand the human a working path (K-2015).
 
 ## [0.5.6] — 2026-10-07

@@ -60,7 +60,8 @@ module Kiosk
     #      (both are reached only when a ROUTE hands this controller a name the
     #      registry disagrees with — an origin whose routes and declarations
     #      have drifted. A name with no route at all never gets here.)
-    #   3. the arguments       400  ArgumentDecoder + the declared input_schema
+    #   3. the arguments       400  ArgumentDecoder + the declared input_schema,
+    #                               then the Kiosk-Timezone header
     #   4. the toll            402  PowGate, via WireController#execute_wire
     #
     # IDENTITY RESOLVES FIRST because it is a precondition of every gate below

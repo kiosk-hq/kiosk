@@ -17,6 +17,8 @@
 
 require "rack/mock"
 require "json"
+require "kiosk/pow"
+require "kiosk/reputation"
 
 RSpec.describe Kiosk::Server::VerbController do
   let(:connection) { FakeConnection.new }
@@ -137,6 +139,33 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:code]).to    eq("bad_request")
       expect(body[:detail]).to  include("Kiosk-Timezone")
       expect(body[:hint]).to    include("Area/Location")
+    end
+
+    # The header is input, so it is refused at the argument gate, before the
+    # toll: a caller does not pay for a proof to learn its header is unreadable.
+    context "when the verb is tolled" do
+      before do
+        Kiosk::Reputation::Backends.register("argon2id", Kiosk::Pow)
+        policy = Class.new(Kiosk::Reputation::Policy) do
+          def challenge_for(identity:, verb:, factors:)
+            { alg: "argon2id", params: Kiosk::Pow.params(d: 4, m: 8) }
+          end
+        end.new
+        Kiosk.configure do |c|
+          c.reputation_policy = policy
+          c.pow_secret        = "test-pow-secret"
+        end
+      end
+
+      after { Kiosk::Reputation::Backends.reset! }
+
+      it "refuses an unreadable Kiosk-Timezone with 400 before asking for a proof" do
+        declare_query("clock") { render json: [] }
+
+        status, body = call_verb(:get, "clock", timezone: "+03:00")
+        expect(status).to eq(400)
+        expect(body[:detail]).to include("Kiosk-Timezone")
+      end
     end
 
     it "refuses a zone name nobody has, and never falls back" do

@@ -1,0 +1,20 @@
+<div class="order-card">
+  <div class="order-header">
+    <span class="order-id">#<%= order.id.first(8) %></span>
+    <%= order_badge(order) %>
+    <div class="order-meta">
+      <span><span class="label">Total:</span> <%= order_money(order, order.total_cents) %></span>
+      <% if order.address.present? %>
+        <span><span class="label">Address:</span> <%= masked_address(order.address) %></span>
+      <% end %>
+      <% if order.slot_at %>
+        <span><span class="label">Slot:</span> <%= order_slot(order) %></span>
+      <% end %>
+      <span class="order-placed">Ordered <%= order_placed_at(order) %></span>
+    </div>
+  </div>
+
+  <div class="order-items">
+    <%= render(order.items_by_product) || tag.span("No items", class: "no-items") %>
+  </div>
+</div>

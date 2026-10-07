@@ -1,0 +1,169 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f5f6f8;
+  color: #1a1a2e;
+  min-height: 100vh;
+}
+
+header {
+  background: #1a6b3c;
+  color: #fff;
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+}
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.logo span { color: #7fe89f; }
+nav { font-size: 13px; opacity: .85; }
+
+main {
+  max-width: 900px;
+  margin: 32px auto;
+  padding: 0 24px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.page-subtitle {
+  font-size: 13px;
+  color: #777;
+  margin-bottom: 24px;
+}
+
+.order-card {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e5ea;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+.order-header {
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid #f0f2f5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.order-id {
+  font-family: "SF Mono", "Fira Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  background: #f0f2f5;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+.badge-scheduled {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+.badge-paid {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+.badge-created {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+.badge-out-for-delivery {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.badge-delivered {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #a5b4fc;
+}
+
+.order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-left: auto;
+  font-size: 13.5px;
+  color: #555;
+}
+.order-meta .label {
+  font-weight: 600;
+  color: #333;
+}
+
+.order-items {
+  padding: 10px 20px 14px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  background: #fafafa;
+  border: 1px solid #ececec;
+}
+.item:last-child { margin-bottom: 0; }
+
+.item .qty {
+  font-weight: 600;
+  color: #1a6b3c;
+  min-width: 24px;
+  font-size: 13px;
+}
+.item .name {
+  flex: 1;
+  font-weight: 500;
+}
+.item .price {
+  font-size: 13px;
+  color: #888;
+  min-width: 60px;
+  text-align: right;
+}
+
+.empty {
+  text-align: center;
+  color: #aaa;
+  font-size: 15px;
+  padding: 60px 0;
+}
+
+footer {
+  text-align: center;
+  font-size: 11px;
+  color: #bbb;
+  padding: 32px 0 24px;
+}
+
+.order-placed { color: #bbb; }
+.no-items { color: #bbb; font-size: 13px; }

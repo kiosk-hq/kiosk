@@ -1,0 +1,5 @@
+<div class="item">
+  <span class="qty">&times;<%= order_item.qty %></span>
+  <span class="name"><%= order_item.product.name %></span>
+  <span class="price"><%= order_money(order_item.order, order_item.product.price_cents) %></span>
+</div>

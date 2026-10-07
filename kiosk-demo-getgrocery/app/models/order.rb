@@ -172,17 +172,24 @@ class Order < ApplicationRecord
     STATE_UNPAID
   end
 
-  # The currency a settled cart actually paid in, as a scalar subquery, or NULL
-  # when the order is unpaid. The back office renders the glyph from it — a
-  # non-EUR settlement would show its own symbol rather than a hardcoded €.
-  def self.settled_currency(settlements)
-    Arel::Nodes::Grouping.new(
-      settlements.joins(:cart_mandate)
-                 .where(SETTLED_CART_REFERENCES_THIS_ROW)
-                 .select(Settlement.arel_table[:currency])
-                 .limit(1)
-                 .arel,
-    )
+  # Each order with the currency its settled cart paid in, read as
+  # `settled_currency`, or nil when no settlement references it.
+  scope :with_settled_currency, lambda { |settlements|
+    currency = settlements.joins(:cart_mandate)
+                          .where(SETTLED_CART_REFERENCES_THIS_ROW)
+                          .select(Settlement.arel_table[:currency])
+                          .limit(1)
+    select(arel_table[Arel.star], Arel::Nodes::Grouping.new(currency.arel).as("settled_currency"))
+  }
+
+  # The clock this order was quoted on.
+  def zone
+    Time.find_zone!(timezone)
+  end
+
+  # The basket, alphabetical by product. Reads preloaded items when there are any.
+  def items_by_product
+    order_items.sort_by { _1.product.name }
   end
 
   # ── WHAT THE EVENT SURFACE READS ───────────────────────────────────────────

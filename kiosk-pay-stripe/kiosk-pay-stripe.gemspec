@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
     kiosk-pay-stripe is the open-source Stripe payment adapter for Kiosk. It
     implements both halves of the provider-acquired, card-on-file model:
 
-      - Card acquisition. `setup_url(user_id:)` returns a hosted Stripe
+      - Card acquisition. `setup_url(user_id:, return_url:)` returns a hosted Stripe
         Checkout session in `mode: "setup"` that saves the buyer's card on the
         PROVIDER's own Stripe account (an existing open setup session is
         reused, so the url is stable across polls); `setup_required?` tells the

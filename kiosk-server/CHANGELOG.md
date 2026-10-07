@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The binding pages' `401` names the operator's sign-in URL and the page's own**, so a non-browser caller can hand the human a working path (K-2015).
+
 ## [0.5.6] — 2026-10-07
 
 - 2026-10-07: **A malformed date or timestamp in an action body is refused with a hint naming `YYYY-MM-DD` or ISO 8601**, as the query channel already did (K-2007).

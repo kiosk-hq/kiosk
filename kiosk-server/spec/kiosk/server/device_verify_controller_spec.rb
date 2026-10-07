@@ -105,14 +105,16 @@ RSpec.describe "DeviceVerifyController" do
       expect(flash_double[:alert]).to eq("Please sign in to approve the assistant link.")
     end
 
-    # Backward compat: a JSON / API caller still gets the plain 401 even with a
-    # sign_in_path configured — the redirect is HTML-only.
-    it "still 401s a non-HTML (API/JSON) request" do
+    # A non-HTML caller gets the 401, and the body names the sign-in page and
+    # that a browser opening this page is sent there and back.
+    it "401s a non-HTML request with a body naming the sign-in URL" do
       status, body = dispatch(
         :show, method: "GET", headers: { "HTTP_ACCEPT" => "application/json" },
       )
       expect(status).to eq(401)
       expect(body).to include("Sign in")
+      expect(body).to include("https://provider.example/users/sign_in")
+      expect(body).to include("https://provider.example/kiosk/oauth/device/verify")
     end
   end
 

@@ -10,9 +10,9 @@ module Kiosk
     # (`Kiosk.configuration.user_idp`) and never through an agent Bearer token,
     # and neither ships a login screen — the engine is IdP-neutral and cannot
     # know the operator's sign-in URL. An operator that sets
-    # `Kiosk.configuration.sign_in_path` sends a browser there instead of a bare
-    # 401; an API caller, and an operator that sets nothing, gets the 401 and the
-    # sentence the page passes in.
+    # `Kiosk.configuration.sign_in_path` sends a browser there and back; any
+    # other caller gets the 401, whose body then names that sign-in URL and this
+    # page's, so whoever fetched it can hand a working path to the human.
     module AccountHolderGate
       private
 
@@ -31,8 +31,14 @@ module Kiosk
           return false
         end
 
-        render plain: prompt, status: :unauthorized
+        render plain: sign_in_path ? "#{prompt} #{sign_in_directions(sign_in_path)}" : prompt,
+               status: :unauthorized
         false
+      end
+
+      def sign_in_directions(sign_in_path)
+        "Sign in at #{request.base_url}#{sign_in_path} — or open #{request.original_url} " \
+          "in a browser, which goes there and comes back here."
       end
 
       # Browser vs API: prefer the negotiated format, but also accept a raw

@@ -29,8 +29,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-09-16 at c89b87a2
-# 1664 anchors.
+# recorded: 2026-10-07 at 8010db58 -- K-1928 events/KYC/payment_setup derivation, judged 2026-10-07
+# 1763 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	ede32f70	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	ede32f70	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	ede32f70	Surfaced by a live hosted Hermes run. (K-437)
@@ -569,6 +569,8 @@ kiosk-demo-prove/app/models/operator_registry.rb	5fdf8da118caea98	ede32f70	# ser
 kiosk-demo-prove/app/services/prove_key.rb	05ee05e7f56f6df8	ede32f70	def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil, ttl: 3600)
 kiosk-demo-prove/lib/tasks/demo.rake	b3f458dd72379178	ede32f70	  task :test do
 kiosk-demo-prove/lib/tasks/demo.rake	b3f458dd72379178	ede32f70	task :test do
+kiosk-demo-prove/spec/requests/verifications_spec.rb	9dc995c90dec09d9	8010db58	mints an attestation valid for one year
+kiosk-demo-prove/spec/requests/verifications_spec.rb	16272d4a299a56ef	8010db58	records a decline without minting
 kiosk-demo-skooti/README.md	f5366b2da43ad843	ede32f70	**What this KYC proves, and what it deliberately does not (honest scope).** The
 kiosk-demo-skooti/README.md	28dc937cc5683d41	ede32f70	Reserve a vehicle by its code (inserts a `status='reserved'` row; the hold has no expiry/TTL — it stays until `start_rental` flips it to `active`)
 kiosk-demo-skooti/README.md	305294d69b904e3d	ede32f70	Scooter rental demo operator for Kiosk.
@@ -1321,6 +1323,73 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	321654d7f8414eae	ede32f70	refuses 
 kiosk-server/spec/kiosk/server/errors_spec.rb	e44cd7589b369d18	ede32f70	refuses a plausible near-miss of a T-158 member
 kiosk-server/spec/kiosk/server/errors_spec.rb	55dec33aa6fe8705	ede32f70	refuses to exist without one — a 405 with no Allow is not a 405
 kiosk-server/spec/kiosk/server/errors_spec.rb	8ab36028e3857b5d	ede32f70	still maps 404 to not_found, the only 404 a handler raise can mean
+kiosk-server/spec/kiosk/server/event_store_spec.rb	28966dc1ec21b3bf	8010db58	assigns ids that are monotonic per ORIGIN
+kiosk-server/spec/kiosk/server/event_store_spec.rb	ec28259bd32c186e	8010db58	keeps identities apart — one identity's tail is not another's
+kiosk-server/spec/kiosk/server/event_store_spec.rb	2dcb06cf0256494f	8010db58	returns only events after the cursor, for that identity only
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	a0f63d45fc3eea30	8010db58	assigns ids that are monotonic per ORIGIN, across identities and topics
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	02434fb6010e0130	8010db58	keeps rows inside the window
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	48be0e1b07f25e08	8010db58	retains for 24 hours by default, not one
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	c3f35ea2761cd0fc	8010db58	sweeps rows past the window and reports truncated to a stale cursor
+kiosk-server/spec/kiosk/server/events_connection_spec.rb	95e38e32d5440f16	8010db58	logs a re-authorisation that raises rather than losing it to the worker pool
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	536129e18dcf93e4	8010db58	CLOSES with reconnect false on
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	8669fcf442ea6990	8010db58	CONFIRMS it again, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	00ad7438a301c209	8010db58	REFUSES when the operator's own subject rule raises, and logs what raised
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	e5091dbc6f4f60c0	8010db58	REJECTS a URL subscription whose since is
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	d075b3c242659f9c	8010db58	REJECTS a consented topic whose subject the operator says is unreachable
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	efe66d27098f6657	8010db58	REJECTS a subscribe naming a channel that is not KioskEvents, echoing it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	a35279196e9fe533	8010db58	REJECTS a subscribe whose identifier is not a JSON document, echoing it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	4b52e1a5a82491af	8010db58	REJECTS a subscribe whose since is not a cursor
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	bb5098db2fa48b4f	8010db58	REJECTS a subscribe whose subject is a
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	360cdfdaf874c8ef	8010db58	REJECTS a topic this origin does not declare, rather than streaming it empty
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	303602123549c8d7	8010db58	REJECTS an unsubscribe naming a subscription this socket never opened
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	58b188553617e6a6	8010db58	REJECTS an unsubscribe whose identifier was re-serialised rather than echoed
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	c1b20265a42a0105	8010db58	accepts a caller the ordinary identity chain resolves, and welcomes it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	2786896dfe2f88f8	8010db58	accepts an upgrade that carries NO Origin header
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	8dbd6f5644253070	8010db58	accepts an upgrade whose Origin names somewhere else entirely
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	4df48618fc5b3aab	8010db58	accepts the largest cursor
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9282f9d1896737dd	8010db58	accepts the same topic for a subject the operator says IS reachable
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	33fc3569a199ad22	8010db58	answers a WebSocket upgrade the same way, at the HTTP layer
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	0bed62c55eb87b22	8010db58	answers a plain request with the module_not_served problem document
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	320abc96c976de3b	8010db58	answers an upgrade carrying no credential identically
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9224924664b6b541	8010db58	closes a socket holding NO subscription when its credential is revoked
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	5603431f490b394a	8010db58	closes the connection with reconnect false when the credential stops resolving
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	8b4176007325a09e	8010db58	confirms a declared topic with head and truncated
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	c35bf65f98e50208	8010db58	confirms a live subscription at top level, with the identifier and no message
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	ac63432d52d9135c	8010db58	delivers an event emitted between the subscribed frame and a live stream
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	122eecd9d67a4df3	8010db58	does NOT deliver another subject's event to a subject-scoped subscription
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	52b6d01aef5fe8b8	8010db58	does NOT replay another TOPIC's event to a subscription that named one
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	fb2621656fc0d8e7	8010db58	drives the five literal strings the finding drove
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	6a1b58932bacec2f	8010db58	goes on serving a well-formed subscribe on the same socket
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	4ca214c30c9f6e17	8010db58	leaves a real client with no socket and no frame
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	ec357e1ade58b521	8010db58	leaves a subscription whose reach and credential still hold alone
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	abc5819847049fb2	8010db58	leaves it delivering, with no second subscribed and no second replay
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	e33c512c64156c09	8010db58	opens no subscription on a revoked credential, and closes instead
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	f255ef9c97485271	8010db58	pushes an emitted event carrying the five closed members and no others
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	a6926ee3376be208	8010db58	refuses a VALID token presented only in the query string
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	47b5959e9d5b8c00	8010db58	refuses a caller presenting a token the IdP does not know
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	71837a98c142da47	8010db58	refuses a caller presenting no Authorization header
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	24573f9e60db5d8d	8010db58	replays only what the cursor had not seen
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9f70f7bb564d961b	8010db58	reports head on the resumed subscription
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	09142170565cc3ab	8010db58	says truncated when the cursor predates what the store still holds
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	5bdc3d1631ac865d	8010db58	stops delivering and says why when the subject's reach is withdrawn
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	1b15e64abcac4731	8010db58	subscribes to every topic in the query string without the client sending a frame
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	b102ba1f020a9050	8010db58	tells a client whose access token merely aged out to come back
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	58936bfe15f48f6d	8010db58	tells a refused upgrade so, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	b5541e99dbfaf651	8010db58	welcomes a socket whose topics arrive only in the query string
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	cb068dbf7dc29e5b	8010db58	wraps a subscription's own frames, echoing the identifier it was given
+kiosk-server/spec/kiosk/server/events_spec.rb	19a4e579616c1e38	8010db58	accepts a description declared null, and publishes it
+kiosk-server/spec/kiosk/server/events_spec.rb	4e5a91e4db942624	8010db58	accepts a nil subject — a topic with no subject says so
+kiosk-server/spec/kiosk/server/events_spec.rb	3f8dd0cfcc1d9edd	8010db58	carries events_url when a topic is registered
+kiosk-server/spec/kiosk/server/events_spec.rb	027c9b388f1a90c8	8010db58	carries the five closed members and no others
+kiosk-server/spec/kiosk/server/events_spec.rb	756274b6562d550d	8010db58	does NOT advertise events on an origin that declares no topic
+kiosk-server/spec/kiosk/server/events_spec.rb	2fcf1ab2fbfde17e	8010db58	keeps subject_reachable OUT of the published catalogue
+kiosk-server/spec/kiosk/server/events_spec.rb	5ea1808bcd566fb4	8010db58	omits events_url entirely when no topic is registered
+kiosk-server/spec/kiosk/server/events_spec.rb	60796fd63d82144b	8010db58	projects a catalogue sorted by name, keyed exactly as a verb descriptor is
+kiosk-server/spec/kiosk/server/events_spec.rb	0fb0c520cc167e39	8010db58	refuses a name that is not a legal wire name
+kiosk-server/spec/kiosk/server/events_spec.rb	d60130a07dd8df4b	8010db58	refuses a reach that is not one of the four
+kiosk-server/spec/kiosk/server/events_spec.rb	f6486e2ecf1a32f0	8010db58	requires description
+kiosk-server/spec/kiosk/server/events_spec.rb	24053f14b123fdd2	8010db58	requires payload_schema
+kiosk-server/spec/kiosk/server/events_spec.rb	2407cbe853e912fc	8010db58	stamps occurred_at as ISO 8601 UTC when the caller gives none
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	3131d0a11c82e8c4	ede32f70	hits ONE cap across both spellings
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	61a93b7bfe60bb22	ede32f70	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	187227feb9ef56d0	ede32f70	spelling is not identity (K-1251)
@@ -1396,6 +1465,23 @@ kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	ca808df2a4e683
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	87681fbbcf946331	ede32f70	returns true when kyc_verified_at is not null
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	dceab49391f2193f	ede32f70	verifies a valid attestation and returns claims
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	2ecb2ea2ec21da8d	ede32f70	declares no value column at all — presence of the row IS the grant
+kiosk-server/spec/kiosk/server/kyc_spec.rb	9627bc753bcd4ee8	8010db58	answers 404 for a request_id it never opened
+kiosk-server/spec/kiosk/server/kyc_spec.rb	e0792e5b55afd9bb	8010db58	answers 500 action_failed when the provider does not open one
+kiosk-server/spec/kiosk/server/kyc_spec.rb	494647bbc4732bee	8010db58	answers request_kyc and the callback with 501 module_not_served
+kiosk-server/spec/kiosk/server/kyc_spec.rb	64bc6ee7f17f1729	8010db58	gates naming agents/kyc and not request_kyc
+kiosk-server/spec/kiosk/server/kyc_spec.rb	bd0b6de9f0008c2b	8010db58	gates naming no KYC path when no kyc_public_key is configured either
+kiosk-server/spec/kiosk/server/kyc_spec.rb	6b6a2922df69d3a7	8010db58	grants only the JSON boolean true, in Postgres
+kiosk-server/spec/kiosk/server/kyc_spec.rb	5a60b06e1256e589	8010db58	is good once: the same callback again finds no open verification
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a023b98e587a68ef	8010db58	lets every assistant of that person through, and nobody else
+kiosk-server/spec/kiosk/server/kyc_spec.rb	fb00606957592ef7	8010db58	names the claims in its descriptor and publishes the topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	0a992ad2a3051195	8010db58	opens a verification of the declared claims for the principal
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a0c5b248cdb68e0c	8010db58	publishes neither request_kyc nor its topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	d9ac5ebaf004475c	8010db58	records the grant on the person and pushes the attestation to them
+kiosk-server/spec/kiosk/server/kyc_spec.rb	f65445ab7cfdba62	8010db58	refuses a fourth open verification with 429 quota_exceeded
+kiosk-server/spec/kiosk/server/kyc_spec.rb	ef2fc0b4dcdc30b4	8010db58	refuses a wrong nonce, another subject, and an attestation the provider does not accept
+kiosk-server/spec/kiosk/server/kyc_spec.rb	0706d54c3f030510	8010db58	refuses with kyc_required until the person holds every declared claim
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a0112c861c36a0c5	8010db58	replaces the grant set
+kiosk-server/spec/kiosk/server/kyc_spec.rb	85550da4c894b764	8010db58	stops counting a verification after the window, or once approved, or another person's
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	51f0ddfd2092d7e5	ede32f70	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1fd1234019a674a1	ede32f70	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8d17b69128a5be12	ede32f70	I2: raises Errors::Forbidden when exp claim is absent
@@ -1487,6 +1573,19 @@ kiosk-server/spec/kiosk/server/page_spec.rb	27c86314af019a92	ede32f70	decodes a 
 kiosk-server/spec/kiosk/server/page_spec.rb	e6e5865121cc34d2	ede32f70	decodes a nil/empty cursor to the default (first page)
 kiosk-server/spec/kiosk/server/page_spec.rb	e8001dcf1da0a3a6	ede32f70	defaults total to nil — the header is omitted, never guessed
 kiosk-server/spec/kiosk/server/page_spec.rb	39ff867512d9028c	ede32f70	is truncated? when a next_cursor is present
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	6f01ed6fb17b1b4e	8010db58	answers POST payment_setup with 501 module_not_served
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	58b7577f63adbeff	8010db58	answers ready when the provider needs no setup
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	2a589b7e73cdfb03	8010db58	answers setup_required with the provider's url, returning the human to the engine's page
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	0db3bf5e2163580e	8010db58	answers the return page with 501 module_not_served
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	2c6abf0e3cb7d774	8010db58	claims nothing on the return page when the provider cannot say who came back
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	fd0c8909b32a5a27	8010db58	declares no payment_setup topic when the provider cannot say who came back
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	366559550b98d527	8010db58	declares the payment_setup topic
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	6ae8c346b76a4f48	8010db58	publishes a descriptor with a backing-off poll cadence and a give-up horizon
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	ef0fbd994a1c8d1c	8010db58	publishes no payment_setup action
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	0cdd32be466c64a1	8010db58	pushes nothing and claims nothing while the provider still says setup is required
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	179e1809d4527cc6	8010db58	pushes nothing when the request names nobody
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	0e1c7898ff47133a	8010db58	pushes payment_setup ready to the principal once the provider confirms readiness
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	46559ee9f06f9367	8010db58	still renders the page when the provider raises
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	a588ce805df6be3f	ede32f70	accepts a proof that omits the optional `pub` claim
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	1697665252171c6a	ede32f70	audience-mismatch rejection (K-511)
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	cc8e409715b002b6	ede32f70	is a different origin (relay/takeover)

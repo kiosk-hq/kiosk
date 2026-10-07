@@ -174,7 +174,7 @@ module Kiosk
           raise
         rescue StandardError => e
           report_handler_failure("Query", name, e)
-          raise Errors::ActionFailed.new("Query #{name.inspect} raised #{e.class}",
+          raise Errors::ActionFailed.new("Query #{name.inspect} failed",
                                          hint: "See server logs for the backtrace.")
         end
 
@@ -203,7 +203,7 @@ module Kiosk
         rescue StandardError => e
           report_handler_failure("Action", name, e)
           raise Errors::ActionFailed.new(
-            "Action #{name.inspect} raised #{e.class}",
+            "Action #{name.inspect} failed",
             hint: "See server logs for the backtrace.",
           )
         end

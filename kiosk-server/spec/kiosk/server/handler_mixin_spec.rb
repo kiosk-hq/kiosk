@@ -369,7 +369,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       expect {
         expect { execute(:run, { name: "explode" }) }
           .to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
-            expect(e.message).to eq('Action "explode" raised RuntimeError')
+            expect(e.message).to eq('Action "explode" failed')
             expect(e.message).not_to include("boom")
             expect(e.hint).to eq("See server logs for the backtrace.")
           }

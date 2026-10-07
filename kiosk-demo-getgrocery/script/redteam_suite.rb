@@ -1128,10 +1128,8 @@ end
 # repository had ever called `request_kyc` in the configuration a plain
 # `bin/rails s` produces: the one a live demo run uses.
 #
-# WITHOUT THE TYPED REFUSAL that configuration answers HTTP 500,
-# `code: "action_failed"`, `detail: "Action \"request_kyc\" raised RuntimeError: KYC
-# broker intake secret is not configured …"` — a Ruby class name on the wire, from
-# a NO-ARGUMENT verb an assistant can call first, with no way to tell "this
+# WITHOUT THE TYPED REFUSAL that configuration answers HTTP 500 `action_failed`
+# from a NO-ARGUMENT verb an assistant can call first, with no way to tell "this
 # operator does not do KYC" from "something crashed".
 #
 # What is asserted is the SHAPE of the refusal and not merely its status: an

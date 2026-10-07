@@ -80,7 +80,7 @@ module Kiosk
     # {Executor} emits whatever reached its audit seam, and on the failure
     # branch that is usually a Kiosk wrapper rather than the handler's own
     # exception: an unhandled raise becomes `Errors::ActionFailed` reading
-    # `Action "place_order" raised RuntimeError`, because the handler's own
+    # `Action "place_order" failed`, because the handler's own
     # sentence is not the wire's to publish. That is right FOR THE
     # WIRE and wrong here — a sink is operator-side, in the operator's own
     # process, already receiving the arguments in full, and it is what an

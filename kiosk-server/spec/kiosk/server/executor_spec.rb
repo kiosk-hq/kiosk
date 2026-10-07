@@ -104,7 +104,7 @@ RSpec.describe Kiosk::Server::Executor do
           described_class.call(kind: :query, args: {}, name: "boom",
                                identity: identity, connection: connection)
         }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
-          expect(e.message).to eq('Query "boom" raised RuntimeError')
+          expect(e.message).to eq('Query "boom" failed')
           expect(e.message).not_to include("kaboom")
           expect(e.hint).to eq("See server logs for the backtrace.")
         }
@@ -216,8 +216,9 @@ RSpec.describe Kiosk::Server::Executor do
           described_class.call(kind: :run, args: {}, name: "boom",
                                identity: identity, connection: connection)
         }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
-          expect(e.message).to eq('Action "boom" raised RuntimeError')
+          expect(e.message).to eq('Action "boom" failed')
           expect(e.message).not_to include("kaboom")
+          expect(e.message).not_to include("RuntimeError")
           expect(e.hint).to eq("See server logs for the backtrace.")
         }
       }.to output(/\[kiosk-server\] Action "boom" raised RuntimeError: kaboom/).to_stderr
@@ -306,7 +307,7 @@ RSpec.describe Kiosk::Server::Executor do
       # The ACTION's failure reaches the caller unchanged; the logger's does
       # not reach it at all.
       expect { run_boom }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
-        expect(e.message).to eq('Action "boom" raised RuntimeError')
+        expect(e.message).to eq('Action "boom" failed')
       }
     end
 

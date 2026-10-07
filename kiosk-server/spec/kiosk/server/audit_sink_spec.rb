@@ -297,7 +297,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.size).to eq(1)
         expect(events.first).to be_error
         expect(events.first.error_class).to eq("Kiosk::Server::Errors::ActionFailed")
-        expect(events.first.error_message).to eq('Action "place_order" raised RuntimeError')
+        expect(events.first.error_message).to eq('Action "place_order" failed')
         expect(events.first.error_message).not_to include("inventory exploded")
         expect(events.first.args).to eq(sku: "ABC", slot: "2026-06-15T14:00:00Z")
       end
@@ -414,7 +414,7 @@ RSpec.describe Kiosk::Server::AuditSink do
 
         expect {
           expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
-            expect(e.message).to eq('Action "place_order" raised RuntimeError')
+            expect(e.message).to eq('Action "place_order" failed')
             expect(e.message).not_to include("inventory exploded")
             expect(e.message).not_to include("kafka is down")
           }

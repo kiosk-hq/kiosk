@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **An `action_failed` detail names the verb and no longer the exception class** the handler raised; the operator's log still carries both.
 - 2026-10-07: **With neither a `kyc_provider` nor a `kyc_public_key`, the `kyc_required` hint names no KYC path** and says verification is not available at this origin.
 - 2026-10-07: **`kiosk.kyc_attributes` and `kiosk.kyc_requests` reference the host's user table `ON DELETE CASCADE`**; `kyc_user_fk_sql` adds the key to existing tables.
 

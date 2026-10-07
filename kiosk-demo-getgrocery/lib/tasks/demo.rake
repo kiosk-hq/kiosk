@@ -137,7 +137,7 @@ namespace :demo do
   task reconcile: :environment do
     minutes = Integer(ENV.fetch("MINUTES", "15"))
     result  = Kiosk.configuration.payment_provider.reconcile_stuck_paying!(
-      lookup: StripeChargeLookup.new, older_than_seconds: minutes * 60,
+      lookup: Kiosk::PaymentProviders::Stripe::ChargeLookup.new, older_than_seconds: minutes * 60,
     )
 
     puts "\n── Stuck-`paying` reconciliation (older than #{minutes} min) ──"
@@ -1555,7 +1555,7 @@ namespace :check do
                         being asked at all.
 
     (a) and (b) are driven by a SCRIPTED processor — the only way to reach them
-    without moving real money. The real StripeChargeLookup then runs against a
+    without moving real money. kiosk-pay-stripe's real ChargeLookup then runs against a
     local stripe-mock, whose canned PaymentIntent is in a status that would
     release a claim on its own and does not, because it names no cart of ours.
 

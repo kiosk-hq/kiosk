@@ -19,7 +19,7 @@
 #
 # Two processors drive it. A SCRIPTED one answers each of the three ways, which
 # is the only way (a) and (b) can be reached without moving real money. The real
-# {StripeChargeLookup} then runs against a local stripe-mock, whose canned
+# {Kiosk::PaymentProviders::Stripe::ChargeLookup} then runs against a local stripe-mock, whose canned
 # PaymentIntent fixture is in a status that would RELEASE a claim — and does
 # not, because it names no cart of ours. That is the whole of what makes a
 # processor answer usable as evidence.
@@ -201,7 +201,7 @@ errors = Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::Sc
 check(errors.empty?, "every order_payment `data` satisfies the payload_schema #{errors.first(3).join("; ")}".strip)
 
 # ── The same sweep against stripe-mock, through the real lookup ─────────────
-puts "\n── The real StripeChargeLookup against stripe-mock ──"
+puts "\n── The real ChargeLookup against stripe-mock ──"
 
 mock_url = Rails.configuration.x.kiosk.stripe_mock_url
 abort "STRIPE_MOCK_URL is unset — this check must never reach Stripe" if mock_url.blank?
@@ -214,10 +214,10 @@ strand!(mock_order)
 
 canned = ::Stripe::PaymentIntent.search(query: "metadata['cart_mandate_id']:'#{mock_mandate}'").data
 check(canned.any?, "stripe-mock answers the search with a canned intent (#{canned.size})")
-check(StripeChargeLookup::NOT_CHARGED.include?(canned.first.status),
+check(Kiosk::PaymentProviders::Stripe::ChargeLookup::NOT_CHARGED.include?(canned.first.status),
       "…in a status that would RELEASE a claim on its own (#{canned.first.status})")
 
-lookup       = StripeChargeLookup.new
+lookup       = Kiosk::PaymentProviders::Stripe::ChargeLookup.new
 mock_outcome = lookup.outcome(cart_mandate_id: mock_mandate, amount_cents: CHEAP_PRICE, currency: "eur")
 check(mock_outcome == :unknown,
       "…and the evidence check refuses it: it names no cart, amount or currency of ours")

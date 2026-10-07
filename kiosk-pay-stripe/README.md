@@ -73,6 +73,15 @@ Card-setup handshake (see the Payment section of the spec):
 - `saved_method?(user_id:)` — true once the resolved Customer has a usable
   saved card.
 
+Reconciling a capture the operator cannot account for locally (a crash
+between the charge and the settlement row): every PaymentIntent the adapter
+creates carries `metadata.cart_mandate_id`, and
+`Kiosk::PaymentProviders::Stripe::ChargeLookup.new.outcome(cart_mandate_id:,
+amount_cents:, currency:)` asks Stripe by it. It answers `:paid`, `:not_charged`
+or `:unknown`, and counts only an intent that matches the cart's id, amount and
+currency — anything else is `:unknown`, so a claim is never released on an
+answer about another charge. It reads; it never replays the capture.
+
 Test mode only for the PoC (`sk_test_…`).
 
 ### Test mode

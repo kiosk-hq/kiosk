@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: kiosk-pay-stripe ships the charge lookup getgrocery kept as its own copy; the demo uses the gem's.
+
 ## [0.5.9] — 2026-10-08
 
 - 2026-10-08: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.9, matching skill 0.5.9.**

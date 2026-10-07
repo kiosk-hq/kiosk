@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: `Stripe::ChargeLookup` answers whether a cart mandate was charged, by the metadata the adapter stamps, for reconciling a capture the operator cannot account for.
+
 ## [0.5.9] — 2026-10-08
 
 - 2026-10-08: Version 0.5.9, the tree cut that matches skill 0.5.9; this gem's surface is unchanged.

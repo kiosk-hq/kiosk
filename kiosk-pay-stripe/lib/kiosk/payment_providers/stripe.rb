@@ -227,3 +227,5 @@ module Kiosk
     end
   end
 end
+
+require "kiosk/payment_providers/stripe/charge_lookup"

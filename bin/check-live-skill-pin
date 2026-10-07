@@ -356,8 +356,7 @@ if FAILURES.empty?
   puts "check-live-skill-pin: OK (#{mode}) — no drift"
   exit 0
 else
-  puts "x check-live-skill-pin (#{mode}): #{FAILURES.size} finding(s) — the fleet is not serving " \
-       "what this tree ships, or an origin could not be measured. THE FIX IS A DEPLOY, not a tree " \
-       "edit: nothing here may be changed to chase the fleet (K-1075)."
+  fix = mode == "--offline" ? "fix the pins in this tree" : "deploy this tree; do not edit it to chase the fleet"
+  puts "x check-live-skill-pin (#{mode}): #{FAILURES.size} finding(s) — #{fix}."
   exit 1
 end

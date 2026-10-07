@@ -211,7 +211,7 @@ namespace :check do
     require "uri"
     require "json"
 
-    # getgrocery uses the real Stripe adapter — no StubPsp. To run the
+    # getgrocery uses the real Stripe adapter. To run the
     # off_session charge you need EITHER a real Stripe test key (sk_test_…,
     # producing a genuine pi_ against Stripe test mode) OR — when no key is
     # present, e.g. in CI — a local stripe-mock, which returns shaped pi_
@@ -432,18 +432,9 @@ namespace :check do
       puts "  FAIL  settlement currency #{pay["currency"].inspect} (want eur)"
     end
 
-    # THE AMOUNT, on the REAL-STRIPE PATH ONLY. `settled_amount_cents` is the
-    # PSP's `amount_received`, not something this app computes — which is what
-    # makes it worth asserting, and also why it cannot be asserted against
-    # stripe-mock: the mock's PaymentIntent fixture reports `amount_received: 0`
-    # for every charge, so demanding the order's total here would fail on a
-    # correct system for a reason that has nothing to do with getgrocery. The
-    # mock path keeps the presence checks above; the cashier check
-    # (PaymentClaim) is what pins the amount BEFORE capture, and
-    # check:redteam's TamperedPriceCart / InflatedTotalCart run it under the mock.
-    if use_mock
-      puts "  OK  (settled amount not asserted under stripe-mock — its fixture always reports amount_received=0)"
-    elsif pay["settled_amount_cents"].to_i == result["total_cents"].to_i
+    # THE AMOUNT: the adapter settles the confirmed intent's amount, which must
+    # be the order's own total, on real Stripe and on stripe-mock alike.
+    if pay["settled_amount_cents"].to_i == result["total_cents"].to_i
       puts "  OK  Stripe settled the order's own total (#{pay["settled_amount_cents"]} eur)"
     else
       failures << "pay settled #{pay["settled_amount_cents"].inspect}, want the order's total #{result["total_cents"].inspect}"
@@ -1389,7 +1380,7 @@ namespace :check do
     require "net/http"
     require "uri"
 
-    # getgrocery uses the real Stripe adapter (no StubPsp).
+    # getgrocery uses the real Stripe adapter.
     # Adversarial battery → stripe-mock (no real charges, no key). The gates
     # under test are pure Kiosk logic; Stripe is only the settlement rail.
     mock_url = Kiosk::Redteam::StripeMock.start

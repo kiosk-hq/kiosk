@@ -556,6 +556,9 @@ you `render`. On top of that:
   an RFC 8288 `Link: <…?cursor=…>; rel="next"` response header and the
   matching-row count as `X-Total-Count`. `Kiosk::Server::Cursor` has an offset
   helper; pass `total:` only when you know it.
+- `render_kiosk_result(result)` — answer with a `Kiosk::OperationResult`: a
+  success renders its value, a refusal renders its code, message and hint at the
+  status your subclass's `STATUSES` maps the code to.
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 

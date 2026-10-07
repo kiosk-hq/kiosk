@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`render_kiosk_result` renders a `Kiosk::OperationResult` inside a handler**: the value on success, the coded refusal otherwise (K-1788).
+
 ## [0.5.8] — 2026-10-07
 
 - 2026-10-07: Version 0.5.8, the tree cut that matches skill 0.5.8; this gem's surface is unchanged.

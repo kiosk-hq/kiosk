@@ -77,6 +77,22 @@ RSpec.describe Kiosk::OperationResult do
     end
   end
 
+  describe "#error" do
+    it "is the refusal's code, message and hint" do
+      expect(described_class.refused(code: "conflict", message: "taken", hint: "pick another").error)
+        .to eq(code: "conflict", message: "taken", hint: "pick another")
+    end
+
+    it "drops a nil hint" do
+      expect(described_class.refused(code: "conflict", message: "taken").error)
+        .to eq(code: "conflict", message: "taken")
+    end
+
+    it "is nil on success" do
+      expect(described_class.ok({}).error).to be_nil
+    end
+  end
+
   it "ships an empty STATUSES on the base class — it refuses nothing on its own" do
     expect(described_class::STATUSES).to eq({})
     expect(described_class::STATUSES).to be_frozen

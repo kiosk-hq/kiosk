@@ -98,6 +98,12 @@ module Kiosk
     # @return [Boolean] true when this is an answer rather than a refusal.
     def ok? = @code.nil?
 
+    # The refusal as a hash: code, message and, when present, hint.
+    # @return [Hash, nil] nil on success.
+    def error
+      { code: @code, message: @message, hint: @hint }.compact unless ok?
+    end
+
     # The Rails status symbol this refusal renders as.
     #
     # @raise [KeyError] when the subclass's STATUSES has no entry for the code

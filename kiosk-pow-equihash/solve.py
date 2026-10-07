@@ -11,9 +11,6 @@ Usage:
 
 Challenge JSON: {"salt_b64": "...", "params": {"n": 168, "k": 7}, "header_nonce": 0}
 Output JSON:   {"indices": [...], "header_nonce": 0}
-
-Toy mode (for testing):
-  python3 solve.py '<json>' --toy    → uses (n=24, k=3), instant
 """
 import hashlib
 import json
@@ -34,13 +31,6 @@ except ImportError:  # pragma: no cover - guidance path
 
 def blake2b256(data: bytes) -> bytes:
     return hashlib.blake2b(data, digest_size=32).digest()
-
-
-def hash_nonce(seed: bytes, nonce: int, n: int) -> int:
-    """BLAKE2b-256(seed ‖ LE64(nonce)) → first n/8 bytes as big-endian integer."""
-    h = blake2b256(seed + struct.pack("<Q", nonce))
-    n_bytes = n // 8
-    return int.from_bytes(h[:n_bytes], "big")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,7 +94,6 @@ def block_key(words: np.ndarray, n: int, n_div: int, level: int) -> np.ndarray:
 # unbounded they blow up to C(m,2) ≈ billions of pairs and OOM. Truncating each
 # bucket to its first BUCKET_CAP entries bounds work + memory to ~CAP·N and
 # discards only that junk; the solution comes from the healthy small buckets.
-# (This is the standard production-solver collision cap.)
 BUCKET_CAP = 32
 
 
@@ -249,17 +238,16 @@ def verify_solution(seed: bytes, indices: list, n: int, k: int) -> bool:
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "usage: solve.py '<json_challenge>' [--toy]"}))
+        print(json.dumps({"error": "usage: solve.py '<json_challenge>'"}))
         sys.exit(1)
 
     challenge = json.loads(sys.argv[1])
-    toy = "--toy" in sys.argv
 
     # Accept both `salt_b64` and the gate/challenge wire key `salt`.
     salt_b64 = challenge.get("salt_b64") or challenge["salt"]
     params = challenge.get("params", {})
-    n = params.get("n", 24 if toy else 168)
-    k = params.get("k", 3 if toy else 7)
+    n = params.get("n", 168)
+    k = params.get("k", 7)
     start_nonce = challenge.get("header_nonce", 0)
 
     import base64

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The published solver drops an uncalled helper, an unsourced claim and an untested `--toy` mode**; it solves and verifies exactly as before (K-1678).
+
 - 2026-10-07: **The heavy-toll `pow_notice` points at the solver the Kiosk skill pins**, not at this gem's bundled one (K-2017).
 
 ## [0.5.6] — 2026-10-07

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1871 anchors.
+# 1878 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -424,6 +424,7 @@ kiosk-demo-getgrocery/lib/tasks/demo.rake	  task isolation: "demo:setup" do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task redteam: "demo:setup" do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	E1 every emitted kyc_verification `data` satisfies the payload_schema this 
 kiosk-demo-getgrocery/lib/tasks/demo.rake	def start_stripe_mock
+kiosk-demo-getgrocery/lib/tasks/demo.rake	every order_delivery `data` satisfies the payload_schema this origin serves
 kiosk-demo-getgrocery/lib/tasks/demo.rake	psp_reference expected /^pi_/
 kiosk-demo-getgrocery/lib/tasks/demo.rake	task :claim do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	task :shop do
@@ -445,6 +446,7 @@ kiosk-demo-getgrocery/script/getgrocery_flow.rb	no card-setup step here. This ru
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	pay: psp_reference expected 'pi_…' (real Stripe)
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	the row's label must name the same zone the row does
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	unless missing_ids.empty?
+kiosk-demo-getgrocery/script/reconcile_flow.rb	each healed order pushed one order_payment event to its owner
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Applicable — must be BLOCKED
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (no KYC)
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
@@ -500,6 +502,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	  task schema: "demo:setup" do
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task search: "demo:setup" do
 kiosk-demo-hoteling/lib/tasks/demo.rake	availability for the SAME unknown id → 404 not_found (the two verbs agree)
 kiosk-demo-hoteling/lib/tasks/demo.rake	check.call(result["empty_filter_total"] == 0
+kiosk-demo-hoteling/lib/tasks/demo.rake	every booking_confirmation `data` satisfies the payload_schema this origin serves
 kiosk-demo-hoteling/lib/tasks/demo.rake	hotel_detail for an id nobody has → 404 not_found
 kiosk-demo-hoteling/lib/tasks/demo.rake	rule 1: a value OUTSIDE its declared domain → 400 bad_request
 kiosk-demo-hoteling/lib/tasks/demo.rake	rule 3: a FILTER that matched nothing → 200 with an EMPTY array
@@ -509,6 +512,7 @@ kiosk-demo-hoteling/lib/tasks/demo.rake	…and the refusal NAMES THE VALID VALUE
 kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the impossible price returns
 kiosk-demo-hoteling/script/hoteling_flow.rb	# ── Step 4b: payment_setup — the card check that MUST precede pay
 kiosk-demo-hoteling/script/pay_window.rb	RoomHold.where(user_id: USER_ID).delete_all
+kiosk-demo-hoteling/script/pay_window.rb	each paid booking pushed one booking_payment event to its owner
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
 kiosk-demo-hoteling/script/spending_cap_flow.rb	makes it a cap rather than a suggestion
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	answers BOTH properties the same way when the zone is read off the origin
@@ -624,6 +628,7 @@ kiosk-demo-skooti/lib/tasks/demo.rake	task :rideflow do
 kiosk-demo-skooti/lib/tasks/demo.rake	task kyc: "demo:setup" do
 kiosk-demo-skooti/script/lock_sim.rb	  def unlock(token:, now:)
 kiosk-demo-skooti/script/pay_window.rb	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
+kiosk-demo-skooti/script/pay_window.rb	each paid reservation pushed one booking_payment event to its owner
 kiosk-demo-skooti/script/pay_window.rb	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
 kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows
 kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=pending while the capture is outstanding
@@ -895,6 +900,7 @@ kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 kiosk-redteam/README.md	finds a real breach fails loudly: `Runner#all_blocked?` answers false and the
 kiosk-redteam/lib/kiosk/redteam/battery.rb	#{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked.
+kiosk-redteam/lib/kiosk/redteam/event_stream.rb	def self.payload_errors(schema_document, events)
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	            name:        "WrongCurrencyCart",
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
@@ -1667,6 +1673,7 @@ kiosk-server/spec/kiosk/server/payment_setup_spec.rb	declares no payment_setup t
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	declares the payment_setup topic
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	publishes a descriptor with a backing-off poll cadence and a give-up horizon
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	publishes no payment_setup action
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes data that satisfies the payload_schema the origin serves for the topic
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes nothing and claims nothing while the provider still says setup is required
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes nothing when the request names nobody
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes payment_setup ready to the principal once the provider confirms readiness

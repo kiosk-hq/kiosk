@@ -156,6 +156,15 @@ RSpec.describe Kiosk::Server::PaymentSetup do
                                "data" => { "status" => "ready" })
     end
 
+    it "pushes data that satisfies the payload_schema the origin serves for the topic" do
+      provider.required = false
+      get_return("ref=u-7")
+      served = JSON.parse(Kiosk::Server::SchemaDocument.json).fetch("events")
+                   .find { |t| t["name"] == "payment_setup" }
+      expect(JSONSchemer.schema(served["payload_schema"]).validate(store.since("u-7", 0).first["data"]).to_a)
+        .to be_empty
+    end
+
     it "pushes nothing and claims nothing while the provider still says setup is required" do
       provider.required = true
       status, _headers, body = get_return("ref=u-7")

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1902 anchors.
+# 1906 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1361,6 +1361,7 @@ kiosk-server/spec/kiosk/server/device_authorization_spec.rb	starts in :pending s
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	omits scope when the approving human carries no role
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns authorization_pending while the account holder has not acted
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns invalid_client when the proof fails — row NOT consumed, retry allowed
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a non-HTML request with a body naming the sign-in URL
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a visitor with no provider session (sign in first)
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s when no user_idp is configured at all
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve leaves the row role-less when the session holder has no role
@@ -1368,6 +1369,7 @@ kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve stamps t
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve stamps the SESSION holder's user_id on the row
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	caps failed code attempts per session (429 after the limit)
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	names the role the approval hands over
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	says so plainly when the provider gives the approver no role
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	shows the consent panel with key fingerprint and requested-at for a live code
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	GET /agents.txt
@@ -1482,6 +1484,7 @@ kiosk-server/spec/kiosk/server/events_socket_spec.rb	welcomes a socket whose top
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	wraps a subscription's own frames, echoing the identifier it was given
 kiosk-server/spec/kiosk/server/events_spec.rb	accepts a description declared null, and publishes it
 kiosk-server/spec/kiosk/server/events_spec.rb	accepts a nil subject — a topic with no subject says so
+kiosk-server/spec/kiosk/server/events_spec.rb	appends one event per identity in scope and returns the last id
 kiosk-server/spec/kiosk/server/events_spec.rb	carries events_url when a topic is registered
 kiosk-server/spec/kiosk/server/events_spec.rb	carries the five closed members and no others
 kiosk-server/spec/kiosk/server/events_spec.rb	does NOT advertise events on an origin that declares no topic
@@ -1824,6 +1827,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a UTC offset in K
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a value outside a declared enum — K-717's schema half
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a value that will not coerce with a 400 naming the parameter
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a zone name nobody has, and never falls back
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses an unreadable Kiosk-Timezone with 400 before asking for a proof
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	replaces an incoming cursor rather than appending a second one
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends NO Link on the last page — its absence is what completeness means
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step

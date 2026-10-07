@@ -29,8 +29,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-10-07 at d5614500 -- K-2034: rel=kiosk anchors moved to layouts/home.html.erb, read against SPEC-160/182 at d5614500
-# 1941 anchors.
+# recorded: 2026-10-08 at 137a7533 -- T-138 0.5.9 walk: SPEC-060/160/164/173/182 re-judged, SPEC-289..291 new
+# 1945 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	ede32f70	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	ede32f70	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	ede32f70	Surfaced by a live hosted Hermes run. (K-437)
@@ -311,9 +311,9 @@ kiosk-core/lib/kiosk/protocol.rb	157b268e9be9f746	ca9df2fe	API_VERSION = "0.5.5"
 kiosk-core/spec/spec_helper.rb	89b6fb3eb0110a54	ede32f70	require "kiosk"
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	ca9df2fe	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	57bb1ea9b544b187	ca9df2fe	rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.
-kiosk-demo-atablefor/app/controllers/home_controller.rb	7dfe7b130b376c50	ede32f70	# Set a Link header too, so a header-only agent finds the skill.
-kiosk-demo-atablefor/app/controllers/home_controller.rb	e1c6e973207420ea	ede32f70	def index
-kiosk-demo-atablefor/app/controllers/home_controller.rb	e0c84228969a0be8	ede32f70	def reservations
+kiosk-demo-atablefor/app/controllers/home_controller.rb	7dfe7b130b376c50	137a7533	# Set a Link header too, so a header-only agent finds the skill.
+kiosk-demo-atablefor/app/controllers/home_controller.rb	4e1c28009c4a7e71	137a7533	def index
+kiosk-demo-atablefor/app/controllers/home_controller.rb	de070fb4a36b8bab	137a7533	def reservations
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	9b6d4a727c7d4701	ede32f70	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	265158f7c3a2f964	ede32f70	def cancel_booking
 kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	4ad7e848ddb62f52	ca9df2fe	ONE ROSTER PER RESTAURANT CLOCK
@@ -622,7 +622,7 @@ kiosk-demo-skooti/README.md	ac2ea06e019a5558	ca9df2fe	attestation proves the ass
 kiosk-demo-skooti/README.md	c8837d1f031cc9fa	ca9df2fe	bin/rails check:rideflow    # the headline: register → scooters_available → reserve → payment_setup → pay → start_rental → offline unlock (no KYC leg — see check:kyc; plus the negative gates)
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	495f2a20950de6b4	ca9df2fe	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	73f69f1f8576caa6	ca9df2fe	Kiosk::Server::Kyc.require!
-kiosk-demo-skooti/app/operations/rental_gates.rb	d3b269dced4fd614	ede32f70	def payment_refusal
+kiosk-demo-skooti/app/operations/rental_gates.rb	b6414d02de98a4b3	137a7533	def payment_refusal
 kiosk-demo-skooti/app/operations/request_kyc_operation.rb	9117b168c3774858	ede32f70	REQUESTED_CLAIMS = %w[age_over_18 licence_category:A].freeze
 kiosk-demo-skooti/app/operations/reserve_operation.rb	ab9dfab711df803b	ede32f70	        status:     Reservation::RESERVED,
 kiosk-demo-skooti/app/operations/start_rental_operation.rb	99b8658dc716da85	ede32f70	#   1b. the reserved vehicle is licence-FREE — a needs_licence motorcycle is
@@ -1248,8 +1248,8 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	4d1683a23b9d85eb	ca9df2fe	de
 kiosk-server/lib/kiosk/server/schema_definitions.rb	73165b38fe18c383	ca9df2fe	def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	ba55ab4292bed17f	ca9df2fe	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	79bdfd745b0d5c39	ca9df2fe	    module SchemaDocument
-kiosk-server/lib/kiosk/server/schemas/auth.schema.json	81a54b9ef4d09617	ca9df2fe	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
-kiosk-server/lib/kiosk/server/schemas/binding.schema.json	992ba04601424b90	ca9df2fe	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
+kiosk-server/lib/kiosk/server/schemas/auth.schema.json	d56a3004db70b43d	137a7533	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
+kiosk-server/lib/kiosk/server/schemas/binding.schema.json	63d7b6213371465a	137a7533	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/verb_controller.rb	8009875ad8aab383	ca9df2fe	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
 kiosk-server/lib/kiosk/server/verb_controller.rb	0c3d1a13d9864fdd	ca9df2fe	    # SUCCESS is the handler's rendered payload, VERBATIM; ERRORS are RFC 9457
 kiosk-server/lib/kiosk/server/verb_controller.rb	02ca33cf9e509c70	ca9df2fe	    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
@@ -1399,15 +1399,17 @@ kiosk-server/spec/kiosk/server/device_authorization_spec.rb	ea24834c555e6222	ede
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	a2650c9da285bca8	ca9df2fe	omits scope when the approving human carries no role
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	6511d1c72b2cbd86	ca9df2fe	returns authorization_pending while the account holder has not acted
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	080a2880874c33a8	ca9df2fe	returns invalid_client when the proof fails — row NOT consumed, retry allowed
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	0b6718e0119e422c	ede32f70	401s a visitor with no provider session (sign in first)
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	7cf9a08323589108	ede32f70	401s when no user_idp is configured at all
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3b8e8bb50321106e	ede32f70	approve leaves the row role-less when the session holder has no role
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	9baa0f4b97fc13d1	ede32f70	approve stamps the SESSION holder's ROLE on the row
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	7326a9a8ea632c5b	ede32f70	approve stamps the SESSION holder's user_id on the row
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	69a190970a2858f0	ede32f70	caps failed code attempts per session (429 after the limit)
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	a5e8dfea314ae351	ede32f70	names the role the approval hands over
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	b189eeb19c79f685	ede32f70	says so plainly when the provider gives the approver no role
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3d98a3dba2df39f1	ede32f70	shows the consent panel with key fingerprint and requested-at for a live code
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	1e4e6cb26cefa8cf	137a7533	401s a non-HTML request with a body naming the sign-in URL
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	0b6718e0119e422c	137a7533	401s a visitor with no provider session (sign in first)
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	7cf9a08323589108	137a7533	401s when no user_idp is configured at all
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3b8e8bb50321106e	137a7533	approve leaves the row role-less when the session holder has no role
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	9baa0f4b97fc13d1	137a7533	approve stamps the SESSION holder's ROLE on the row
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	7326a9a8ea632c5b	137a7533	approve stamps the SESSION holder's user_id on the row
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	69a190970a2858f0	137a7533	caps failed code attempts per session (429 after the limit)
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	a5e8dfea314ae351	137a7533	names the role the approval hands over
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	9035880e7fe33855	137a7533	redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	b189eeb19c79f685	137a7533	says so plainly when the provider gives the approver no role
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3d98a3dba2df39f1	137a7533	shows the consent panel with key fingerprint and requested-at for a live code
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	b8517b8643b01217	ede32f70	GET /agents.txt
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	b8517b8643b01217	ede32f70	describe "GET /agents.txt" do
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	263b862c5720a0b5	ede32f70	emits no Vary on any of the six, negotiated or not
@@ -1518,20 +1520,21 @@ kiosk-server/spec/kiosk/server/events_socket_spec.rb	b102ba1f020a9050	ca9df2fe	t
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	58936bfe15f48f6d	ca9df2fe	tells a refused upgrade so, and says nothing else
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	b5541e99dbfaf651	ca9df2fe	welcomes a socket whose topics arrive only in the query string
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	cb068dbf7dc29e5b	ca9df2fe	wraps a subscription's own frames, echoing the identifier it was given
-kiosk-server/spec/kiosk/server/events_spec.rb	19a4e579616c1e38	ca9df2fe	accepts a description declared null, and publishes it
-kiosk-server/spec/kiosk/server/events_spec.rb	4e5a91e4db942624	ca9df2fe	accepts a nil subject — a topic with no subject says so
-kiosk-server/spec/kiosk/server/events_spec.rb	3f8dd0cfcc1d9edd	ca9df2fe	carries events_url when a topic is registered
-kiosk-server/spec/kiosk/server/events_spec.rb	027c9b388f1a90c8	ca9df2fe	carries the five closed members and no others
-kiosk-server/spec/kiosk/server/events_spec.rb	756274b6562d550d	ca9df2fe	does NOT advertise events on an origin that declares no topic
-kiosk-server/spec/kiosk/server/events_spec.rb	6797071596c7e0ee	ca9df2fe	gains `events` when a topic is registered, last in the canonical order
-kiosk-server/spec/kiosk/server/events_spec.rb	2fcf1ab2fbfde17e	ca9df2fe	keeps subject_reachable OUT of the published catalogue
-kiosk-server/spec/kiosk/server/events_spec.rb	5ea1808bcd566fb4	ca9df2fe	omits events_url entirely when no topic is registered
-kiosk-server/spec/kiosk/server/events_spec.rb	60796fd63d82144b	ca9df2fe	projects a catalogue sorted by name, keyed exactly as a verb descriptor is
-kiosk-server/spec/kiosk/server/events_spec.rb	0fb0c520cc167e39	ca9df2fe	refuses a name that is not a legal wire name
-kiosk-server/spec/kiosk/server/events_spec.rb	d60130a07dd8df4b	ca9df2fe	refuses a reach that is not one of the four
-kiosk-server/spec/kiosk/server/events_spec.rb	f6486e2ecf1a32f0	ca9df2fe	requires description
-kiosk-server/spec/kiosk/server/events_spec.rb	24053f14b123fdd2	ca9df2fe	requires payload_schema
-kiosk-server/spec/kiosk/server/events_spec.rb	2407cbe853e912fc	ca9df2fe	stamps occurred_at as ISO 8601 UTC when the caller gives none
+kiosk-server/spec/kiosk/server/events_spec.rb	19a4e579616c1e38	137a7533	accepts a description declared null, and publishes it
+kiosk-server/spec/kiosk/server/events_spec.rb	4e5a91e4db942624	137a7533	accepts a nil subject — a topic with no subject says so
+kiosk-server/spec/kiosk/server/events_spec.rb	d581600690a1e7e6	137a7533	appends one event per identity in scope and returns the last id
+kiosk-server/spec/kiosk/server/events_spec.rb	3f8dd0cfcc1d9edd	137a7533	carries events_url when a topic is registered
+kiosk-server/spec/kiosk/server/events_spec.rb	027c9b388f1a90c8	137a7533	carries the five closed members and no others
+kiosk-server/spec/kiosk/server/events_spec.rb	756274b6562d550d	137a7533	does NOT advertise events on an origin that declares no topic
+kiosk-server/spec/kiosk/server/events_spec.rb	6797071596c7e0ee	137a7533	gains `events` when a topic is registered, last in the canonical order
+kiosk-server/spec/kiosk/server/events_spec.rb	2fcf1ab2fbfde17e	137a7533	keeps subject_reachable OUT of the published catalogue
+kiosk-server/spec/kiosk/server/events_spec.rb	5ea1808bcd566fb4	137a7533	omits events_url entirely when no topic is registered
+kiosk-server/spec/kiosk/server/events_spec.rb	60796fd63d82144b	137a7533	projects a catalogue sorted by name, keyed exactly as a verb descriptor is
+kiosk-server/spec/kiosk/server/events_spec.rb	0fb0c520cc167e39	137a7533	refuses a name that is not a legal wire name
+kiosk-server/spec/kiosk/server/events_spec.rb	d60130a07dd8df4b	137a7533	refuses a reach that is not one of the four
+kiosk-server/spec/kiosk/server/events_spec.rb	f6486e2ecf1a32f0	137a7533	requires description
+kiosk-server/spec/kiosk/server/events_spec.rb	24053f14b123fdd2	137a7533	requires payload_schema
+kiosk-server/spec/kiosk/server/events_spec.rb	2407cbe853e912fc	137a7533	stamps occurred_at as ISO 8601 UTC when the caller gives none
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	3131d0a11c82e8c4	ede32f70	hits ONE cap across both spellings
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	61a93b7bfe60bb22	ede32f70	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	187227feb9ef56d0	ede32f70	spelling is not identity (K-1251)
@@ -1835,45 +1838,46 @@ kiosk-server/spec/kiosk/server/two_origins_spec.rb	5f45524e971bfb02	ca9df2fe	adv
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	f39b83ca01eda70e	ca9df2fe	advertises the default issuer on a host the operator does not serve
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	186b74fc05deae39	ca9df2fe	answers a host it does not serve as the default origin, and rejects a proof carrying that host
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	df2cfac64cf3803b	ca9df2fe	rejects a proof for A presented on B
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	40c84227c92a410d	de7d20f9	NOT on a refusal: a 4xx keeps the wire's own policy
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	8b0e7a478ac4413e	de7d20f9	a query is a GET at its own path
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	464baa139cfe6441	de7d20f9	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	d13fc578888ff55a	de7d20f9	an action is a POST at its own path
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	45d9e0e13c518609	de7d20f9	an operator MAY relax a 200's cache policy from a handler (§3.7.4)
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	36b62c41733a1d85	de7d20f9	answers 401 before it will say whether the verb exists
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	58f5922a69108cf7	de7d20f9	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	8bfac07accd5ce96	de7d20f9	answers POST <endpoint>/run the same way — one unregistered name among others
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	682c8c14dffa700f	de7d20f9	answers a GET at an ACTION's name 405, with Allow: POST
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	304cdc5783b92f11	de7d20f9	answers a POST at a QUERY's name 405, with Allow: GET
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	264055b5b79f0c88	de7d20f9	answers an unknown name a problem document, naming what IS registered
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1d50bb92f84cc9c8	de7d20f9	answers with the handler's object VERBATIM — no `value` wrapper
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	0196fb4a8e1d9469	de7d20f9	answers with the handler's payload VERBATIM — a bare array, no envelope
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	46edad4f1c114ee1	de7d20f9	carries the cache policy every wire response must carry
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	bd0b4cbe9ce14ed9	de7d20f9	derives X-Total-Count from a COMPLETE array answer, paginating or not
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7c0f57298ac983ee	de7d20f9	does not read a query string on a POST — an action's arguments are its body
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	54b657e2750dea1f	de7d20f9	draws no /query and no /run — the route table has no such paths
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	52fdbe9599c2bd9a	de7d20f9	emits the handler's total on a truncated page
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	548ba13404744f4e	de7d20f9	hands the handler an Integer, not the query string's String
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f5ee0cbead216a29	de7d20f9	hands the handler nil when the caller declared none — silence is not an error
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	68cb5032427e9e6e	de7d20f9	hands the handler the caller's declared timezone
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3220e85c56af07bf	de7d20f9	is still private, no-store — a page is never shared-cacheable
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1a27a914a9c0e028	de7d20f9	keeps `private, max-age=N` the handler set
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6e13d4e5b2a7ba92	de7d20f9	names YYYY-MM-DD when an action body carries a malformed date
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ca453e9a3561c457	de7d20f9	no verb response is shared-cacheable (§3.7.3)
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	28766c4b202bbe45	de7d20f9	omits X-Total-Count on a truncated page whose handler gave no total
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7a7638e631d6810b	de7d20f9	on an ACTION as well as a query
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1cb0835df4bc01fd	de7d20f9	puts the next page in a Link header with rel=next, not in the body
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6e26661efb635d1d	de7d20f9	refuses a UTC offset in Kiosk-Timezone with a 400 naming the header
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ec5818249e3e8bbf	de7d20f9	refuses a value outside a declared enum — K-717's schema half
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f3d892510a43f5e4	de7d20f9	refuses a value that will not coerce with a 400 naming the parameter
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9aad20ed8d60aec2	de7d20f9	refuses a zone name nobody has, and never falls back
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	141bb352790ee7f5	de7d20f9	replaces an incoming cursor rather than appending a second one
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	cf57eb6b2e5b0d50	de7d20f9	sends NO Link on the last page — its absence is what completeness means
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	af7ea7f1ba5a6b92	de7d20f9	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	5be79f0fe125713f	de7d20f9	sends neither header for an action
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f32921efab67deeb	de7d20f9	still refuses an undeclared parameter under additionalProperties: false
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	bface02320a33b38	de7d20f9	validates with validate_requests OFF — the flag no longer gates arguments
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	13b7d063a6cc3908	de7d20f9	…while GET <endpoint>/schema, which IS public, says so — the control
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	40c84227c92a410d	137a7533	NOT on a refusal: a 4xx keeps the wire's own policy
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4fe493521afc5ff7	137a7533	a query is a GET at its own path
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	464baa139cfe6441	137a7533	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	d13fc578888ff55a	137a7533	an action is a POST at its own path
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	45d9e0e13c518609	137a7533	an operator MAY relax a 200's cache policy from a handler (§3.7.4)
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	36b62c41733a1d85	137a7533	answers 401 before it will say whether the verb exists
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	58f5922a69108cf7	137a7533	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	8bfac07accd5ce96	137a7533	answers POST <endpoint>/run the same way — one unregistered name among others
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	682c8c14dffa700f	137a7533	answers a GET at an ACTION's name 405, with Allow: POST
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	304cdc5783b92f11	137a7533	answers a POST at a QUERY's name 405, with Allow: GET
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	264055b5b79f0c88	137a7533	answers an unknown name a problem document, naming what IS registered
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1d50bb92f84cc9c8	137a7533	answers with the handler's object VERBATIM — no `value` wrapper
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	0196fb4a8e1d9469	137a7533	answers with the handler's payload VERBATIM — a bare array, no envelope
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	46edad4f1c114ee1	137a7533	carries the cache policy every wire response must carry
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	bd0b4cbe9ce14ed9	137a7533	derives X-Total-Count from a COMPLETE array answer, paginating or not
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7c0f57298ac983ee	137a7533	does not read a query string on a POST — an action's arguments are its body
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	54b657e2750dea1f	137a7533	draws no /query and no /run — the route table has no such paths
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	52fdbe9599c2bd9a	137a7533	emits the handler's total on a truncated page
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	548ba13404744f4e	137a7533	hands the handler an Integer, not the query string's String
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f5ee0cbead216a29	137a7533	hands the handler nil when the caller declared none — silence is not an error
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	68cb5032427e9e6e	137a7533	hands the handler the caller's declared timezone
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3220e85c56af07bf	137a7533	is still private, no-store — a page is never shared-cacheable
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1a27a914a9c0e028	137a7533	keeps `private, max-age=N` the handler set
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6e13d4e5b2a7ba92	137a7533	names YYYY-MM-DD when an action body carries a malformed date
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ca453e9a3561c457	137a7533	no verb response is shared-cacheable (§3.7.3)
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	28766c4b202bbe45	137a7533	omits X-Total-Count on a truncated page whose handler gave no total
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7a7638e631d6810b	137a7533	on an ACTION as well as a query
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1cb0835df4bc01fd	137a7533	puts the next page in a Link header with rel=next, not in the body
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6e26661efb635d1d	137a7533	refuses a UTC offset in Kiosk-Timezone with a 400 naming the header
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ec5818249e3e8bbf	137a7533	refuses a value outside a declared enum — K-717's schema half
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f3d892510a43f5e4	137a7533	refuses a value that will not coerce with a 400 naming the parameter
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9aad20ed8d60aec2	137a7533	refuses a zone name nobody has, and never falls back
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3ae9e0dad58de626	137a7533	refuses an unreadable Kiosk-Timezone with 400 before asking for a proof
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	141bb352790ee7f5	137a7533	replaces an incoming cursor rather than appending a second one
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	cf57eb6b2e5b0d50	137a7533	sends NO Link on the last page — its absence is what completeness means
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	af7ea7f1ba5a6b92	137a7533	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	5be79f0fe125713f	137a7533	sends neither header for an action
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f32921efab67deeb	137a7533	still refuses an undeclared parameter under additionalProperties: false
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	bface02320a33b38	137a7533	validates with validate_requests OFF — the flag no longer gates arguments
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	13b7d063a6cc3908	137a7533	…while GET <endpoint>/schema, which IS public, says so — the control
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	311702eb2da4dc4a	ca9df2fe	is refused AT CONFIGURATION TIME, not at the first tolled write
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	4e1f002f4617eccc	ca9df2fe	is that the gate vocabulary names the write kind :run, not :action
 kiosk-server/spec/kiosk/server/well_known_spec.rb	8cedc9942af5918d	ca9df2fe	advertises an empty capability set when nothing is registered

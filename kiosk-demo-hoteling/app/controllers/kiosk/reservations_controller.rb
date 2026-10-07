@@ -77,13 +77,11 @@ class Kiosk::ReservationsController < ActionController::API
   # reserve_room — the hold. See {ReserveRoomOperation} for the inventory guard;
   # the two identity values below are read from the identity the wire resolved
   # rather than from arguments, which is what makes a forged `user_id` in the
-  # body inert. The descriptor deliberately does NOT promise the hold expires on
-  # its own: the deadline is recorded and no sweep enforces it.
+  # body inert.
   kind :action
   description "Hold a room for the authenticated principal. It is a HOLD and not a booking: " \
               "nothing is charged and no stay is confirmed until you pay and call " \
-              "confirm_booking, and the hold carries a pay-by deadline the operator records " \
-              "against it. The answer carries the operator's QUOTE for the whole stay and, in words, the exact " \
+              "confirm_booking. The answer carries the operator's QUOTE for the whole stay and, in words, the exact " \
               "mandate that quote expects — sign your AP2 cart against it, in this operator's " \
               "currency, at that total, naming this hold. The cashier re-counts both against its own " \
               "quote before it charges anything, so a cart that disagrees is refused outright rather " \

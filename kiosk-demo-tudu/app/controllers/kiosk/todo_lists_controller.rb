@@ -41,8 +41,8 @@ class Kiosk::TodoListsController < ApplicationController
 
   topic :todo do
     reach :consented
-    description "A todo on a list you can reach was added or completed — by another " \
-                "member's assistant, or by a human clicking Done in the browser."
+    description "A todo on a list you can reach was added or completed — by any member, " \
+                "your own calls included, or by a human clicking Done in the browser."
     payload_schema type: "object", additionalProperties: false,
                    properties: { todo_id: { type: "string", format: "uuid" },
                                  title:   { type: "string" },

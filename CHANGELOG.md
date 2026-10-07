@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **tudu's `todo` topic says the actor's own calls are delivered too, and hoteling's `reserve_room` no longer promises a pay-by deadline its answer never carries** (K-2026, K-2027).
+
 ## [0.5.8] — 2026-10-07
 
 - 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.8, matching skill 0.5.8.**

@@ -1549,6 +1549,47 @@ jobs:
         working-directory: reference
         run: ./bin/check-live-skill-pin --offline
 
+  # Before 1.0 every gem, lockfile entry, API_VERSION, MIN_CLIENT and skill pin
+  # carries the same MAJOR.MINOR.PATCH (protocol.md §14.1).
+  version-parity:
+    name: version parity (bin/check-version-parity)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Gems, lockfiles and skill pins carry the protocol version
+        run: ./bin/check-version-parity
+
+  # Changelog structure, and every entry newer than the script's baseline commit
+  # is under 200 characters and at most two sentences. The baseline is read from
+  # history, so the checkout is full.
+  changelog-structure:
+    name: changelogs answer each kind once, new entries are short (bin/check-changelog)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The script is red on a plant of every arm
+        run: ./bin/check-changelog --self-test
+
+      - name: Every changelog is well-formed and every new entry is short
+        run: ./bin/check-changelog
 
   # A count typed into prose is a claim with no owner: true the day it is
   # written, and nothing notices when the thing it counts changes. K-1202 elided

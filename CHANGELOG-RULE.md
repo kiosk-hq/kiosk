@@ -17,6 +17,9 @@ content: the commit message and the ledger row are where the details go.
 
 Every top-level entry opens with its ISO date, `- YYYY-MM-DD: ` (arm CL-7).
 
+`bin/check-changelog` holds the arms named here. It measures an entry as its text
+after the leading `- `, date included, with wrapped lines joined by one space.
+
 ## Where the line goes
 
 - **The repository record** is `CHANGELOG.md` at the root: one entry per
@@ -93,7 +96,8 @@ The order of one cut, and it is the order that keeps the heading true:
 2. Rename `## [Unreleased]` to `## [X.Y.Z] — <the date it was cut>` in the root
    record and in every gem record, and open a fresh empty `## [Unreleased]`
    above each.
-3. The touched gems' own suites and `e2e/run.sh` green before the merge.
+3. `bin/check-version-parity` green, and the touched gems' own suites and
+   `e2e/run.sh` green before the merge.
 
 ## Nothing already written is edited
 

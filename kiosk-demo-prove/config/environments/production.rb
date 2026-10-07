@@ -5,7 +5,8 @@ Rails.application.configure do
   config.enable_reloading = false
   config.eager_load = true
   config.consider_all_requests_local = false
-  config.public_file_server.headers = { "cache-control" => "public, max-age=#{1.year.to_i}" }
+  # public/ files carry no digest, so browsers revalidate them against last-modified.
+  config.public_file_server.headers = { "cache-control" => "no-cache" }
   config.assume_ssl = true
   config.log_tags = [ :request_id ]
   config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)

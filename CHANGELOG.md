@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **Demos serve `public/` with `cache-control: no-cache`**, so browsers revalidate an undigested stylesheet instead of holding it for a year (K-2034).
+
 - 2026-10-07: **Each demo's environment files publish only the keys that demo reads**; skooti's production requires its unlock key outright (K-1900).
 
 - 2026-10-07: **The demos configure the PoW toll they run**: getgrocery and hoteling toll with no env flag, atablefor reads only `KIOSK_POW_MODE` (K-1786, K-1806).

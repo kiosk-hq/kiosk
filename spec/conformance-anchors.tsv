@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1867 anchors.
+# 1871 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -422,6 +422,7 @@ kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :rls do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :shop do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task isolation: "demo:setup" do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task redteam: "demo:setup" do
+kiosk-demo-getgrocery/lib/tasks/demo.rake	E1 every emitted kyc_verification `data` satisfies the payload_schema this 
 kiosk-demo-getgrocery/lib/tasks/demo.rake	def start_stripe_mock
 kiosk-demo-getgrocery/lib/tasks/demo.rake	psp_reference expected /^pi_/
 kiosk-demo-getgrocery/lib/tasks/demo.rake	task :claim do
@@ -747,6 +748,7 @@ kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8b: no principal-reach verb return
 kiosk-demo-tudu/lib/tasks/demo.rake	check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
 kiosk-demo-tudu/lib/tasks/demo.rake	check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
 kiosk-demo-tudu/lib/tasks/demo.rake	check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
+kiosk-demo-tudu/lib/tasks/demo.rake	every delivered `data` satisfies the served payload_schema
 kiosk-demo-tudu/lib/tasks/demo.rake	task collab: "demo:setup" do
 kiosk-demo-tudu/lib/tasks/demo.rake	task schema: "demo:setup" do
 kiosk-demo-tudu/lib/tasks/demo.rake	the two rows name DIFFERENT zones
@@ -758,28 +760,27 @@ kiosk-demo-tudu/spec/reader_clock_spec.rb	THE TWO `due_at` REFUSALS, DRIVEN
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { "licence_a" => "licence_category:A" }.freeze
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
-kiosk-pay-stripe/README.md	that, the `test_payment_method` (default `pm_card_visa`) — no SetupIntent,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	                confirm:        true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	                off_session:    true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            mode:                 "setup",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            usage:                "off_session",
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	          if pm.nil? && @test_autocard
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        ::Stripe.api_key = @api_key
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        @api_key           = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        if pm.nil? && @test_autocard
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        return false if @test_autocard
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        when "authentication_required" then "the payment method needs authentication an off-session charge cannot complete"
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def attach_test_card(user_id:, payment_method: "pm_card_visa")
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def capture(cart_mandate, payment_method: nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key: nil, test_payment_method: "pm_card_visa",
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(customer_resolver:, customer_saver:, api_key: nil, test_autocard: false)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_return_user_id(params)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_url(user_id:, return_url:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ENV.fetch("STRIPE_SECRET_KEY", nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key: nil, test_payment_method: "pm_card_visa",
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(customer_resolver:, customer_saver:, api_key: nil, test_autocard: false)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
@@ -787,9 +788,8 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	idempotency_key:
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	off_session:    true,
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#capture
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#setup_required?
-kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	charges the customer's default saved card off_session when no explicit pm is given
+kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	charges the customer's default saved card off_session, keyed by the cart mandate id
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	creates a Checkout Session in setup mode for an existing customer and returns the url
-kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	creates an off_session PaymentIntent using the explicit payment method (no customer resolver)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	describe "#setup_url"
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	maps authentication_required to a distinct human-safe message (still retryable)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	returns false when the Customer has a saved default payment method
@@ -1122,9 +1122,7 @@ kiosk-server/lib/kiosk/server/errors.rb	class Forbidden < Base
 kiosk-server/lib/kiosk/server/errors.rb	class NotFound < Base
 kiosk-server/lib/kiosk/server/errors.rb	class PowRequired < Base
 kiosk-server/lib/kiosk/server/events_cable.rb	config.disable_request_forgery_protection = true
-kiosk-server/lib/kiosk/server/events_connection.rb	BEATS_PER_PING = 10
 kiosk-server/lib/kiosk/server/events_connection.rb	Kiosk::Server::IdentityResolution.resolve(request)
-kiosk-server/lib/kiosk/server/events_connection.rb	class_attribute :reauthorise_every, default: 30
 kiosk-server/lib/kiosk/server/executor.rb	            "this operator does not serve the payment module",
 kiosk-server/lib/kiosk/server/executor.rb	            enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	      VERBS = %i[query run pay].freeze
@@ -1140,7 +1138,6 @@ kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this 
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
-kiosk-server/lib/kiosk/server/kyc.rb	if request_id.empty?
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        # Binds the attestation to this operator.
@@ -1413,6 +1410,7 @@ kiosk-server/spec/kiosk/server/event_stores_spec.rb	keeps rows inside the window
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	retains for 24 hours by default, not one
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	sweeps rows past the window and reports truncated to a stale cursor
 kiosk-server/spec/kiosk/server/events_connection_spec.rb	logs a re-authorisation that raises rather than losing it to the worker pool
+kiosk-server/spec/kiosk/server/events_connection_spec.rb	ships re-authorisation periods of at most 60 seconds
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	CLOSES with reconnect false on
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	CONFIRMS it again, and says nothing else
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	REFUSES when the operator's own subject rule raises, and logs what raised
@@ -1441,11 +1439,16 @@ kiosk-server/spec/kiosk/server/events_socket_spec.rb	delivers an event emitted b
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	does NOT deliver another subject's event to a subject-scoped subscription
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	does NOT replay another TOPIC's event to a subscription that named one
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	drives the five literal strings the finding drove
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	drops it, answers nothing, and delivers nothing emitted after it
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	goes on serving a well-formed subscribe on the same socket
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves a real client with no socket and no frame
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves a subscription whose reach and credential still hold alone
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves it delivering, with no second subscribed and no second replay
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	negotiates the actioncable-v1-json subprotocol
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	opens no subscription on a revoked credential, and closes instead
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	opens, subscribes and delivers without a proof on an origin that tolls every verb
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	pings no more often than every 30 seconds
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	pings with the unix time
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	pushes an emitted event carrying the five closed members and no others
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a VALID token presented only in the query string
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a caller presenting a token the IdP does not know
@@ -1545,6 +1548,7 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	round-trips an issued token an
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	declares no value column — presence of the row IS the grant
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	keys the grants on the person, in the host's user id type
+kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 400 bad_request when request_id or kyc_jws is missing
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 404 for a request_id it never opened
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 500 action_failed when the provider does not open one
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers request_kyc and the callback with 501 module_not_served

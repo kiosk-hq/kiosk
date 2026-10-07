@@ -18,4 +18,11 @@ RSpec.describe Kiosk::Server::EventsConnection do
       "[kiosk] events re-authorisation failed: NoMethodError: private method 'request' called",
     )
   end
+
+  # Spec Section 8.5.6: re-authorised at least every 60 seconds, both the
+  # credential (here) and each subscription's reach (the channel's timer).
+  it "ships re-authorisation periods of at most 60 seconds" do
+    periods = KioskEvents.periodic_timers.map { |_callback, options| options[:every] }
+    expect(periods + [described_class.reauthorise_every]).to all(be_between(1, 60))
+  end
 end

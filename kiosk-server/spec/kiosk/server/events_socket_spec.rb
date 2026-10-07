@@ -73,6 +73,18 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["second_origin_issuer"]).to eq(report["second_origin"])
     end
 
+    it "negotiates the actioncable-v1-json subprotocol" do
+      expect(report["negotiated_protocol"]).to eq("actioncable-v1-json")
+    end
+
+    # Spec Section 8.5.3: neither the upgrade nor an event is tolled. The probe's
+    # origin tolls every verb, and no socket here ever presents a proof.
+    it "opens, subscribes and delivers without a proof on an origin that tolls every verb" do
+      expect(report["tolled_verb_status"]).to include("402")
+      expect(report["welcome"]).to eq("type" => "welcome")
+      expect(report["live"]).to include("topic" => "order_payment", "subject" => "ord_1")
+    end
+
     it "accepts an upgrade that carries NO Origin header" do
       expect(report["no_origin_welcomed"]).to be(true)
     end
@@ -319,6 +331,25 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     # inside this identifier rejects a legitimately delivered frame.
     it "does NOT replay another TOPIC's event to a subscription that named one" do
       expect(report["replayed_topics"]).to eq(["order_payment"])
+    end
+  end
+
+  # Spec Section 8.5.4: the wire has no confirmation for an unsubscribe.
+  describe "unsubscribing from a live subscription" do
+    it "drops it, answers nothing, and delivers nothing emitted after it" do
+      expect(report["before_unsubscribe_delivered"]).to be(true)
+      expect(report["after_unsubscribe_frames"]).to eq([])
+    end
+  end
+
+  # Spec Section 8.5.6, measured as two consecutive pings on one socket.
+  describe "the heartbeat" do
+    it "pings with the unix time" do
+      expect(report["ping"]).to match("type" => "ping", "message" => kind_of(Integer))
+    end
+
+    it "pings no more often than every 30 seconds" do
+      expect(report["ping_gap_beats"] * report["shipped_beat_interval"]).to be >= 30
     end
   end
 

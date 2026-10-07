@@ -262,6 +262,14 @@ RSpec.describe Kiosk::Server::Kyc do
     it "answers 404 for a request_id it never opened" do
       expect(callback(request_id: "nope", nonce: nonce, kyc_jws: attestation).first).to eq(404)
     end
+
+    it "answers 400 bad_request when request_id or kyc_jws is missing" do
+      [{ nonce: nonce, kyc_jws: attestation }, { request_id: request_id, nonce: nonce }].each do |body|
+        status, problem = callback(body)
+        expect([status, problem["code"]]).to eq([400, "bad_request"])
+      end
+      expect(store.head).to eq(0)
+    end
   end
 
   describe ".grant! and .require!" do

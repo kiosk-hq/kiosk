@@ -20,6 +20,8 @@ require "bundler/setup"
 require "json"
 require "socket"
 require "kiosk/server"
+require "kiosk/pow"
+require "kiosk/reputation"
 require "puma"
 require "puma/configuration"
 require "puma/launcher"
@@ -94,6 +96,11 @@ class ProbeController < ActionController::Base
   end
 end
 
+Kiosk::Reputation::Backends.register("argon2id", Kiosk::Pow)
+TOLL_EVERY_VERB = Class.new(Kiosk::Reputation::Policy) do
+  def challenge_for(identity:, verb:, factors:) = { alg: "argon2id", params: Kiosk::Pow.params(d: 4, m: 8) }
+end.new
+
 class ProbeApp < Rails::Application
   config.eager_load = false
   config.hosts.clear
@@ -110,6 +117,10 @@ Kiosk.configure do |c|
   # outside development, which is the posture we want and the reason a fixture
   # booted in production has to bring its own.
   c.signing_key = Kiosk::Server::SigningKey.from_pem(OpenSSL::PKey::RSA.new(2048).to_pem)
+  # Every verb on this origin is tolled, so every scenario below also says
+  # the stream is not (spec Section 8.5.3).
+  c.reputation_policy = TOLL_EVERY_VERB
+  c.pow_secret = "probe-pow-secret"
 end
 
 # The shipped re-authorisation period is thirty seconds. Shortened to one so a
@@ -119,26 +130,39 @@ KioskEvents.periodic_timers =
   KioskEvents.periodic_timers.map { |callback, options| [callback, options.merge(every: 1)] }
 Kiosk::Server::EventsConnection.reauthorise_every = 1
 
+# Action Cable's three-second beat, shortened the same way so two pings arrive
+# inside the suite; the thinning to one ping per BEATS_PER_PING is the shipped one.
+SHIPPED_BEAT_INTERVAL = ActionCable::Server::Connections::BEAT_INTERVAL
+PROBE_BEAT_INTERVAL = 0.2
+ActionCable::Server::Connections.send(:remove_const, :BEAT_INTERVAL)
+ActionCable::Server::Connections.const_set(:BEAT_INTERVAL, PROBE_BEAT_INTERVAL)
+
 ProbeApp.initialize!
 ProbeApp.routes.draw do
   mount Kiosk::Server::Engine => "/kiosk"
-  get "/kiosk/list_nothing", to: "probe#list_nothing", defaults: { kiosk_verb: "list_nothing" }
+  get "/kiosk/list_nothing", to: "kiosk/server/verb#show", defaults: { kiosk_verb: "list_nothing" }
 end
 
 # ── the client ───────────────────────────────────────────────────────────────
 class ProbeSocket
-  attr_reader :frames
+  # Pings are kept apart, with their arrival time, so no scenario's frame list
+  # depends on when a beat happened to fall.
+  attr_reader :frames, :pings
 
   def initialize(port, path, headers, host: "127.0.0.1")
     @url = "ws://#{host}:#{port}#{path}"
     @tcp = TCPSocket.new("127.0.0.1", port)
     @frames = []
+    @pings = []
     @open = false
     @closed = false
-    @driver = WebSocket::Driver.client(self)
+    @driver = WebSocket::Driver.client(self, protocols: ["actioncable-v1-json"])
     headers.each { |k, v| @driver.set_header(k, v) }
     @driver.on(:open)    { @open = true }
-    @driver.on(:message) { |e| @frames << JSON.parse(e.data) }
+    @driver.on(:message) do |e|
+      frame = JSON.parse(e.data)
+      frame["type"] == "ping" ? @pings << [Time.now, frame] : @frames << frame
+    end
     @driver.on(:close)   { @closed = true }
     @driver.on(:error)   { @closed = true }
     @driver.start
@@ -171,6 +195,8 @@ class ProbeSocket
   end
 
   def open? = @open
+  # The subprotocol the server answered in `Sec-WebSocket-Protocol`, or nil.
+  def protocol = @driver.protocol
   def closed? = @closed
 
   # A frame exactly as typed. Several scenarios below drive strings no client
@@ -331,6 +357,12 @@ end
 store = Kiosk.configuration.event_store
 
 begin
+  # 0 — the toll is on: a verb called with a good credential and no proof is
+  #     challenged, which is what makes every accepted upgrade below free.
+  REPORT[:tolled_verb_status] =
+    raw_get(port, "/kiosk/list_nothing", "Authorization" => "Bearer #{GOOD_TOKEN}",
+                                         "Connection" => "close")["status"]
+
   # 1 — no Authorization: the upgrade is refused.
   sock = connect(port, headers: { "Origin" => Kiosk.configuration.issuer })
   # Action Cable completes the WebSocket handshake and THEN runs `connect`, so
@@ -366,6 +398,7 @@ begin
   sock.pump_until { sock.frames.any? }
   REPORT[:opened] = sock.open?
   REPORT[:welcome] = sock.frames.first
+  REPORT[:negotiated_protocol] = sock.protocol
 
   REPORT[:default_origin_issuer] = ISSUERS_SEEN.last
 
@@ -605,6 +638,35 @@ begin
   REPORT[:after_duplicate_subscribed] = dup.messages.count { |m| m["type"] == "subscribed" }
   REPORT[:after_duplicate_delivered] = dup.messages.count { |m| m["id"] == dup_id }
   dup.close
+
+  # 15g — an `unsubscribe` echoing a live subscription's identifier drops it:
+  #       an event before it arrives, nothing at all comes after it.
+  gone = connect(port)
+  gone.pump_until { gone.frames.any? }
+  gone.send_raw(SUBSCRIBE_TODO)
+  gone.pump_until { gone.frames.any? { |f| f["type"] == "confirm_subscription" } }
+  before_id = Kiosk::Server::Events.emit(topic: :todo, subject: "list_ok", identity_scope: %w[u1],
+                                         data: { "done" => false })
+  gone.pump_until { gone.messages.any? { |m| m["id"] == before_id } }
+  REPORT[:before_unsubscribe_delivered] = gone.messages.any? { |m| m["id"] == before_id }
+  sent = gone.frames.length
+  gone.send_raw(frame("unsubscribe", identifier("todo", subject: "list_ok")))
+  gone.pump_until(seconds: 1) { false }
+  Kiosk::Server::Events.emit(topic: :todo, subject: "list_ok", identity_scope: %w[u1],
+                             data: { "done" => true })
+  gone.pump_until(seconds: 2) { false }
+  REPORT[:after_unsubscribe_frames] = gone.frames[sent..]
+  gone.close
+
+  # 15h — the heartbeat: two consecutive pings on one socket, in beats.
+  beat = connect(port)
+  ping_wait = 3 * Kiosk::Server::EventsConnection::BEATS_PER_PING * PROBE_BEAT_INTERVAL
+  beat.pump_until(seconds: ping_wait) { beat.pings.length >= 2 }
+  REPORT[:ping] = beat.pings.first&.last
+  REPORT[:ping_gap_beats] =
+    beat.pings.length >= 2 ? ((beat.pings[1][0] - beat.pings[0][0]) / PROBE_BEAT_INTERVAL).round : nil
+  REPORT[:shipped_beat_interval] = SHIPPED_BEAT_INTERVAL
+  beat.close
 
   # ── re-authorisation while the subscription stands (spec Section 8.5.6) ───
   #

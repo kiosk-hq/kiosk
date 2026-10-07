@@ -11,13 +11,13 @@ module Kiosk
     # REQUIRED in it, so a client built for an earlier minor cannot read it.
     # Before 1.0 every gem, MIN_CLIENT and every pinned skill cut carry this
     # exact version (spec §14.1).
-    API_VERSION = "0.5.6"
+    API_VERSION = "0.5.7"
 
     # The oldest skill cut that can transact with this engine (spec §14.2,
-    # §14.4: a 0.5.6 operator no longer serves the 0.5.0-0.5.5 cuts).
+    # §14.4: a 0.5.7 operator no longer serves the 0.5.0-0.5.6 cuts).
     # Advisory, in the Kiosk::Protocol::HEADER_MIN_CLIENT response header and
     # `kiosk.min_client`; older clients are expected to upgrade.
-    MIN_CLIENT = "0.5.6"
+    MIN_CLIENT = "0.5.7"
 
     # HTTP response header names (sent on every /kiosk/* response).
     HEADER_SERVER_VERSION = "Kiosk-Server-Version"

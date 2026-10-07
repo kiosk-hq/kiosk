@@ -2,6 +2,6 @@
 
 module Kiosk
   module Redteam
-    VERSION = "0.5.6"
+    VERSION = "0.5.7"
   end
 end

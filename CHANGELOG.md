@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.7] — 2026-10-07
+
+- 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.7, matching skill 0.5.7.**
+
+- 2026-10-07: **Every demo and the engine default pin `skill-v0.5.7.md`.**
+
 - 2026-10-07: **The published solver drops an uncalled helper, an unsourced claim and an untested `--toy` mode**; it solves and verifies exactly as before (K-1678).
 
 - 2026-10-07: **hoteling's `pay_hint` no longer asks for a line-item `sku`**, which the operator never reads; the entry is `qty`, `price_cents` and `booking_id` (K-2018).

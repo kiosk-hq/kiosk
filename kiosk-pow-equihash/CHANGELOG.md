@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-10-07
+
+- 2026-10-07: Version 0.5.8, the tree cut that matches skill 0.5.8; this gem's surface is unchanged.
+
 ## [0.5.7] — 2026-10-07
 
 - 2026-10-07: **The published solver drops an uncalled helper, an unsourced claim and an untested `--toy` mode**; it solves and verifies exactly as before (K-1678).

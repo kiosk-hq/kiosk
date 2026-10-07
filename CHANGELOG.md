@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-10-07
+
+- 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.8, matching skill 0.5.8.**
+
 - 2026-10-07: **skooti's `pay_hint` no longer asks for a line-item `sku`** either, and neither demo's scripts send one; the entry is `qty`, `price_cents` and the reservation or booking id (K-2018).
 
 ## [0.5.7] — 2026-10-07

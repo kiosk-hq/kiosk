@@ -3,7 +3,7 @@
 module Kiosk
   module Pow
     module Cuckoo
-      VERSION = "0.5.7"
+      VERSION = "0.5.8"
     end
   end
 end

@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-10-07
+
+- 2026-10-07: Version 0.5.8, the tree cut that matches skill 0.5.8; this gem's surface is unchanged.
+
 ## [0.5.7] — 2026-10-07
 
 - 2026-10-07: **An unreadable `Kiosk-Timezone` is refused `400` before the proof-of-work toll**, with the arguments, rather than after a paid proof (K-2016).

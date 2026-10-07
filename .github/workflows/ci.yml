@@ -1421,7 +1421,7 @@ jobs:
           for u in atablefor getgrocery hoteling philslist skooti stylish tudu prove; do
             echo "KIOSK_$(echo "$u" | tr a-z A-Z)_DB_PASSWORD=pw-$u" >"$KIOSK_ENV_DIR/$u.env"
           done
-          echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/getgrocery.env"
+          for u in getgrocery hoteling skooti; do echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/$u.env"; done
           printf 'KIOSK_UNLOCK_SIGNING_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/skooti.env"
           printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/prove.env"
           ./deploy/rollout.sh

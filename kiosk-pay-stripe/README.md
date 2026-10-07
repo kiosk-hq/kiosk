@@ -32,23 +32,30 @@ account as a Customer + PaymentMethod (keyed to the synthetic principal /
 (merchant-initiated) against that saved card — the assistant authorizes,
 never presents a card.
 
-The gem stays provider-agnostic: the `principal → Stripe Customer` mapping is
-injected by the host app via `customer_resolver:` and `customer_saver:`
-callables. No app table is touched inside this gem.
+The `principal → Stripe Customer` mapping lives in the host's `stripe_customers`
+table, through `Kiosk::PaymentProviders::Stripe::CustomerRecord`. One migration
+creates it:
+
+```ruby
+class CreateStripeCustomers < ActiveRecord::Migration[8.1]
+  def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
+end
+```
 
 ```ruby
 require "kiosk/payment_providers/stripe"
 
 Kiosk.configure do |c|
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
-    api_key:           ENV["STRIPE_SECRET_KEY"], # sk_test_… for the PoC
-    customer_resolver: ->(user_id) { store.customer_id_for(user_id) },
-    customer_saver:    ->(user_id, cus_id) { store.save(user_id, cus_id) },
+    api_key: ENV["STRIPE_SECRET_KEY"], # sk_test_… for the PoC
   )
 end
 ```
 
-`customer_saver` replaces any earlier mapping for the principal: when Stripe no
+An app that already keeps the mapping elsewhere passes `customer_resolver:
+->(user_id) { … }` and `customer_saver: ->(user_id, cus_id) { … }` instead.
+
+The saver replaces any earlier mapping for the principal: when Stripe no
 longer has the mapped Customer (deleted, or from another account), the adapter
 treats the principal as having no saved card and saves a fresh Customer.
 

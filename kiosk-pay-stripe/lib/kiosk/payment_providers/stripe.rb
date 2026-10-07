@@ -7,8 +7,9 @@ module Kiosk
   module PaymentProviders
     # Stripe PSP adapter. The human saves a card once, on the operator's Stripe
     # account, as a Customer + PaymentMethod; purchases are then charged
-    # `off_session`. The principal→Customer mapping is the host's, injected as
-    # `customer_resolver:` and `customer_saver:` callables.
+    # `off_session`. The principal→Customer mapping is {CustomerRecord}, the
+    # host's `stripe_customers` table, unless `customer_resolver:` and
+    # `customer_saver:` callables are given.
     #
     # Always reference the SDK as `::Stripe` — bare `Stripe` is this class.
     class Stripe < Base
@@ -22,14 +23,20 @@ module Kiosk
       RETURN_QUERY = "session_id={CHECKOUT_SESSION_ID}"
 
       # @param api_key [String] Stripe secret key
-      # @param customer_resolver [#call] `(user_id) -> customer_id | nil`
+      # @param customer_resolver [#call] `(user_id) -> customer_id | nil`;
+      #   {CustomerRecord.resolve} when omitted
       # @param customer_saver [#call] `(user_id, customer_id)`; replaces any
-      #   earlier mapping for that user
+      #   earlier mapping for that user; {CustomerRecord.save} when omitted
       # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture
       #   instead of requiring the hosted card entry
-      def initialize(customer_resolver:, customer_saver:, api_key: nil, test_autocard: false)
+      def initialize(customer_resolver: nil, customer_saver: nil, api_key: nil, test_autocard: false)
         super()
         @api_key           = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
+        unless customer_resolver && customer_saver
+          require "kiosk/payment_providers/stripe/customer_record"
+          customer_resolver ||= CustomerRecord.method(:resolve)
+          customer_saver    ||= CustomerRecord.method(:save)
+        end
         @customer_resolver = customer_resolver
         @customer_saver    = customer_saver
         @test_autocard     = test_autocard

@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-10-07
+
+- 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.6, matching skill 0.5.6.**
+
+- 2026-10-07: **Every demo and the engine default pin `skill-v0.5.6.md`.**
+
 - 2026-10-07: **A malformed date or timestamp in an action body is refused with a hint naming `YYYY-MM-DD` or ISO 8601**, as the query channel already did (K-2007).
 - 2026-10-07: **The device-authorization call refuses an empty `role` or `scope` with `400 invalid_request`**, as it refuses any other value (K-2005).
 

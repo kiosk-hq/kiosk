@@ -40,7 +40,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
       It writes every unit's env file from the templates — every name, every order, every value this repository
       decides — keeps the `REPLACE_*` values the box already has, mints what nothing off the box holds the other
       half of, backs up what it changes, and **names anything it cannot obtain instead of writing a blank**. The
-      four it cannot mint are the DB passwords, getgrocery's Stripe test key, skooti's unlock key and the broker's
+      four it cannot mint are the DB passwords, the Stripe test key (getgrocery, hoteling, skooti), skooti's unlock key and the broker's
       signing key. It has no flags and is idempotent, so re-running it is also how you answer «is the box what the
       tree declares?» — the question no tick-box can answer. See `deploy/README.md` §"Configuration is DECLARED".
 - [ ] Copying a template by hand still works and the boxes below are what it must produce — but then nothing joins
@@ -78,7 +78,7 @@ What each unit must carry. For EACH of the 7 apps:
       ownership and KYC. Provision/flash the locks with the matching public half
       (`openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32`); any lock still carrying the old
       repo key (`8857880d…`) must be reflashed. The other six operator demos have no locks and need nothing here.
-- [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
+- [ ] **Stripe (getgrocery, hoteling, skooti):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges) in each of the three env files; the other four take no money (no `pay` capability).
 - [ ] **Card-setup Checkout render (getgrocery):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
 ### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
@@ -127,7 +127,7 @@ What each unit must carry. For EACH of the 7 apps:
       RAILS_ENV=production SECRET_KEY_BASE=throwaway \
         KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx \
         KIOSK_ISSUER=https://throwaway.example.test \
-        bin/rails zeitwerk:check                     # getgrocery: add STRIPE_SECRET_KEY=sk_test_throwaway
+        bin/rails zeitwerk:check                     # getgrocery, hoteling, skooti: add STRIPE_SECRET_KEY=sk_test_throwaway
                                                      # prove: add PROVE_KEY_PEM="$(openssl genrsa 2048)" — it must PARSE
                                                      #   as an RSA private key — a throwaway literal will not do;
                                                      #   the kiosk vars above are ignored by the broker (harmless)
@@ -140,7 +140,7 @@ What each unit must carry. For EACH of the 7 apps:
       code, it does not connect). Every value here is a throwaway: nothing is signed, served or dialed.
       The three env vars are not optional decoration — each is crash-if-absent in `production`, and a missing one aborts
       in the initializer BEFORE Zeitwerk runs, so the command exits 1 for a reason that has nothing to do with eager
-      loading (`KIOSK_POW_SECRET`, `KIOSK_ISSUER`, getgrocery's Stripe key/mock URL, the broker's
+      loading (`KIOSK_POW_SECRET`, `KIOSK_ISSUER`, the paying demos' Stripe key/mock URL, the broker's
       `PROVE_KEY_PEM`, skooti's `KIOSK_UNLOCK_SIGNING_KEY_PEM`). Verified on all 8 apps.
       CI runs the same gate for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same
       gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
@@ -250,7 +250,7 @@ What each unit must carry. For EACH of the 7 apps:
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).
 - [ ] The demo **root page** loads (what it is + the live activity counters). The copy-paste curl
       flow lives in `deploy/README.md` §"Poke it"; no landing page carries one.
-- [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
+- [ ] getgrocery, hoteling, skooti: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay.
 - [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
 - [ ] **KYC pairing — `deploy/kyc-pairing-audit.sh` exits 0 on the box.** Nothing probed from outside can stand in for
       it: `request_kyc` is reach `principal`, so an unauthenticated call answers 401 whatever the module is doing, and a

@@ -95,8 +95,8 @@ keep serving.
 |------|-----------|------|----------------|---------------|
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (sub-second, poke-friendly) | yes |
 | atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s on an M-series laptop core, "beware: intensive PoW") | — (no payment provider) |
-| hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
-| skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | — |
+| hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | yes |
+| skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | yes |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
 | philslist  | `philslist.demo.kiosk.tech` | 3006 | **low** | — |
 | tudu       | `tudu.demo.kiosk.tech` | 3007 | **low** | — |
@@ -201,8 +201,8 @@ below.) Any other demo is knob-adjustable: set
    hold the package, and do not add the rate-limit module back: there is no
    default throttle here on purpose.
 3. **Place the four secrets nobody here can mint, then run `rollout.sh`.** Put
-   each DB password you passed to `postgres-init.sql`, getgrocery's Stripe
-   **test** key, skooti's unlock key and the broker's signing key into that
+   each DB password you passed to `postgres-init.sql`, the Stripe **test** key
+   for getgrocery, hoteling and skooti, skooti's unlock key and the broker's signing key into that
    unit's own `/etc/kiosk-demo/<unit>.env` and run `deploy/rollout.sh`. It keeps
    them, mints the rest, writes every file from `env/<app>.env.example` at
    `ubuntu:ubuntu` mode `0640`, and names anything still missing instead of
@@ -469,12 +469,13 @@ cannot do it for you.
 
 ## Payments — Stripe TEST mode
 
-getgrocery (SetupIntent card-on-file) runs Stripe in **test mode** — it is the
-only demo with a payment provider. A poker completes a real `off_session`
-PaymentIntent end-to-end with **no real charge** and **no live key on the box**.
+getgrocery, hoteling and skooti (SetupIntent card-on-file) run Stripe in **test
+mode**. A poker completes a real `off_session` PaymentIntent end-to-end with
+**no real charge** and **no live key on the box**; a booking the hotel declines
+is refunded through Stripe.
 (atablefor books restaurant tables — a reservation takes no money, so it
 configures **no** payment provider and `pay` is absent from its capabilities.)
-Publish the test card on getgrocery's landing:
+Publish the test card on each paying demo's landing:
 
 > **Test card:** `4242 4242 4242 4242` — any future expiry, any CVC, any ZIP.
 > More cards: <https://docs.stripe.com/testing>

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1905 anchors.
+# 1911 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -66,6 +66,7 @@ deploy/demo-reset.sh	# Those rows are evidence of a run that happened, and seedi
 deploy/demo-reset.sh	# placed against this origin — the Hermes-verified order f8bc3efb among them.
 deploy/env/atablefor.env.example	KIOSK_POW_DIFFICULTY=high
 deploy/env/getgrocery.env.example	KIOSK_POW_DIFFICULTY=low
+deploy/env/hoteling.env.example	STRIPE_SECRET_KEY=sk_test_REPLACE_WITH_STRIPE_TEST_KEY
 e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
 e2e/README.md	    ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
 e2e/README.md	    ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
@@ -173,8 +174,8 @@ e2e/assistant.sh	kiosk.version present
 e2e/assistant.sh	limit and cursor are injected into a query
 e2e/assistant.sh	no auth → 401
 e2e/assistant.sh	one path per verb the canonical catalog publishes
+e2e/assistant.sh	pay: a Stripe PaymentIntent
 e2e/assistant.sh	pay: http 200
-e2e/assistant.sh	pay: psp_reference present
 e2e/assistant.sh	pay: settled 1599
 e2e/assistant.sh	pay: settlement_id
 e2e/assistant.sh	pay: unenveloped
@@ -227,7 +228,7 @@ e2e/assistant.sh	…not a problem document
 e2e/assistant.sh	…public, one minute at the bare path
 e2e/assistant.sh	…status restates the HTTP status
 e2e/assistant.sh	…the catalog is the body itself
-e2e/assistant.sh	…the events array carries this origin's one topic
+e2e/assistant.sh	…the events array carries this origin's topic and payment_setup
 e2e/assistant.sh	…title is the code's, not the incident's
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
@@ -408,20 +409,18 @@ kiosk-demo-getgrocery/config/routes/kiosk.rb	get  "/kiosk/catalog",             
 kiosk-demo-getgrocery/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-getgrocery/config/routes/kiosk.rb	post "/kiosk/create_order",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "create_order" }
 kiosk-demo-getgrocery/db/migrate/20260618131462_create_getgrocery_tables.rb	      t.text        :address,   null: true
-kiosk-demo-getgrocery/db/migrate/20260630000001_create_stripe_customers.rb	create_table :stripe_customers do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      boot_env["STRIPE_SECRET_KEY"] = "sk_test_mock"
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      exit exit_status
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "  OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "\n  redteam: BREACH DETECTED or error — see output above. Exit #{exit_status}."
 kiosk-demo-getgrocery/lib/tasks/demo.rake	    abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 kiosk-demo-getgrocery/lib/tasks/demo.rake	    if psp_ref.match?(/\Api_/)
-kiosk-demo-getgrocery/lib/tasks/demo.rake	    mock_url = use_mock ? start_stripe_mock : nil
+kiosk-demo-getgrocery/lib/tasks/demo.rake	    mock_url = use_mock ? Kiosk::Redteam::StripeMock.start : nil
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :rls do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :shop do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task isolation: "demo:setup" do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task redteam: "demo:setup" do
 kiosk-demo-getgrocery/lib/tasks/demo.rake	E1 every emitted kyc_verification `data` satisfies the payload_schema this 
-kiosk-demo-getgrocery/lib/tasks/demo.rake	def start_stripe_mock
 kiosk-demo-getgrocery/lib/tasks/demo.rake	every order_delivery `data` satisfies the payload_schema this origin serves
 kiosk-demo-getgrocery/lib/tasks/demo.rake	psp_reference expected /^pi_/
 kiosk-demo-getgrocery/lib/tasks/demo.rake	task :claim do
@@ -487,9 +486,10 @@ kiosk-demo-hoteling/before-after.md	`rake check:book` runs the errand with no hu
 kiosk-demo-hoteling/config/initializers/kiosk.rb	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail
+kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-hoteling/config/initializers/kiosk.rb	StubPsp.new, currency: "eur", table: "bookings", reference: "booking_id",
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
+kiosk-demo-hoteling/db/migrate/20261008000001_create_kiosk_pay_stripe_customers.rb	def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
 kiosk-demo-hoteling/lib/tasks/demo.rake	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task book: "demo:setup" do
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task isolation: "demo:setup" do
@@ -602,8 +602,8 @@ kiosk-demo-skooti/before-after.md	`rake check:rideflow` runs the errand with no 
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
+kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
 kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-skooti/config/initializers/kiosk.rb	StubPsp.new, currency: "eur", table: "reservations", reference: "reservation_id",
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience   = prove_operator
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
@@ -776,18 +776,22 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        when "authenticat
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def attach_test_card(user_id:, payment_method: "pm_card_visa")
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def capture(cart_mandate, payment_method: nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(customer_resolver:, customer_saver:, api_key: nil, test_autocard: false)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(customer_resolver: nil, customer_saver: nil, api_key: nil, test_autocard: false)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def refund(psp_reference:, amount_cents:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_return_user_id(params)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_url(user_id:, return_url:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ENV.fetch("STRIPE_SECRET_KEY", nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(customer_resolver:, customer_saver:, api_key: nil, test_autocard: false)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	customer_resolver ||= CustomerRecord.method(:resolve)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(customer_resolver: nil, customer_saver: nil, api_key: nil, test_autocard: false)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	idempotency_key:
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	idempotency_key: "#{cart_mandate.id}-capture"
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	off_session:    true,
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	def self.create_table(migration)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	t.column :user_id,     Kiosk.configuration.user_id_type, null: false
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#capture
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#setup_required?
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	charges the customer's default saved card off_session, keyed by the cart mandate id
@@ -903,6 +907,7 @@ kiosk-redteam/lib/kiosk/redteam/event_stream.rb	def self.payload_errors(schema_d
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	            name:        "WrongCurrencyCart",
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
+kiosk-redteam/lib/kiosk/redteam/stripe_mock.rb	def start
 kiosk-reputation/README.md	      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
 kiosk-reputation/README.md	  is the shipped default; `argon2id` is legacy.
 kiosk-reputation/README.md	  unproven_count_bonus:       1,    # extra proofs for principals with 0 purchases
@@ -1681,6 +1686,7 @@ kiosk-server/spec/kiosk/server/page_spec.rb	defaults total to nil — the header
 kiosk-server/spec/kiosk/server/page_spec.rb	is truncated? when a next_cursor is present
 kiosk-server/spec/kiosk/server/page_spec.rb	publishes the offset as a decimal integer and reads it back
 kiosk-server/spec/kiosk/server/page_spec.rb	refuses a cursor it did not issue with a typed 400, not a silent page one
+kiosk-server/spec/kiosk/server/payment_claim_spec.rb	class ClaimSpecPsp < Kiosk::PaymentProviders::Base
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers POST payment_setup with 501 module_not_served
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers ready when the provider needs no setup
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers setup_required with the provider's url, returning the human to the engine's page

@@ -20,6 +20,7 @@ PATH
   specs:
     kiosk-redteam (0.5.5)
       base64
+      json_schemer (>= 2.3, < 3.0)
       jwt (>= 2.0, < 4.0)
       kiosk-pow-equihash (~> 0.5.0)
       websocket-driver (~> 0.7)

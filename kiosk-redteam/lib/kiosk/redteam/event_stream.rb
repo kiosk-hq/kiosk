@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "json_schemer"
 require "openssl"
 require "socket"
 require "uri"
@@ -24,6 +25,23 @@ module Kiosk
       class Error < StandardError; end
 
       attr_reader :url
+
+      # Every violation of the `payload_schema` an origin serves for an
+      # event's topic, as "topic: error"; empty when each `data` holds.
+      #
+      # @param schema_document [Hash] the parsed `GET <endpoint>/schema` body
+      # @param events [Array<Hash>] events carrying "topic" and "data"
+      # @return [Array<String>]
+      def self.payload_errors(schema_document, events)
+        schemas = Array(schema_document["events"]).to_h { |t| [t["name"], t["payload_schema"]] }
+        events.flat_map do |event|
+          topic  = event["topic"]
+          schema = schemas[topic] or next ["#{topic}: this origin serves no such topic"]
+          JSONSchemer.schema(schema, meta_schema: "https://json-schema.org/draft/2020-12/schema")
+                     .validate(JSON.parse(JSON.generate(event["data"])))
+                     .map { |v| "#{topic}: #{v["error"]}" }
+        end
+      end
 
       # @param base_url [String] the origin, e.g. "https://getgrocery.demo.kiosk.tech"
       # @param token    [String] the bearer the HTTP calls carry

@@ -45,6 +45,7 @@ Gem::Specification.new do |spec|
   # accident, as a transitive dependency of jwt.
   spec.add_dependency "base64"
   spec.add_dependency "websocket-driver", "~> 0.7"
+  spec.add_dependency "json_schemer", ">= 2.3", "< 3.0"
 
   spec.add_development_dependency "rspec",   "~> 3.13"
   spec.add_development_dependency "webmock", "~> 3.0"

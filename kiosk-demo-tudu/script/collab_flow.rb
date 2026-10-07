@@ -31,7 +31,6 @@ require "time"
 require "net/http"
 require "kiosk/redteam/wire"
 require "kiosk/redteam/event_stream"
-require "json_schemer"
 require "uri"
 require "openssl"
 require "securerandom"
@@ -228,14 +227,9 @@ results[:event_reach_revoked] = revoked == { "type" => "unsubscribed", "topic" =
 
 # Every delivered `data` against the `payload_schema` this origin serves for its topic.
 _rc, served = get_json("/kiosk/schema")
-schemers = Array(served["events"]).to_h do |t|
-  [t["name"], JSONSchemer.schema(t["payload_schema"], meta_schema: "https://json-schema.org/draft/2020-12/schema")]
-end
 delivered = [alice_live, alice_any, alice_back, bob_stream].flat_map(&:events)
 results[:event_topics_delivered] = delivered.map { |e| e["topic"] }.uniq.sort
-results[:event_payload_errors] = delivered.flat_map do |e|
-  schemers.fetch(e["topic"]).validate(e["data"]).map { |v| "#{e["topic"]}: #{v["error"]}" }
-end
+results[:event_payload_errors] = Kiosk::Redteam::EventStream.payload_errors(served, delivered)
 [alice_any, alice_back, bob_stream].each(&:close)
 
 puts JSON.generate(results)

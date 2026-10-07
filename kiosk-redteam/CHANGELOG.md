@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`EventStream.payload_errors`** holds delivered events to the `payload_schema` an origin serves for their topic.
+
 ## [0.5.5] — 2026-10-07
 
 - 2026-10-07: Version 0.5.5, the tree cut that matches skill 0.5.5; this gem's surface is unchanged.

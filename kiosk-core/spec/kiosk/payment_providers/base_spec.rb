@@ -4,7 +4,7 @@ RSpec.describe Kiosk::PaymentProviders::Base do
   subject(:adapter) { described_class.new }
 
   describe "#setup_required?" do
-    it "returns false (default — StubPsp and SetupIntent-less adapters are never gated)" do
+    it "returns false (default — an adapter with no card setup is never gated)" do
       expect(adapter.setup_required?(user_id: "user-1")).to be(false)
     end
   end

@@ -62,9 +62,8 @@ module Kiosk
       #
       # `payment_method` is OPTIONAL: in the SetupIntent model the assistant
       # authorises the charge but never presents a card — the provider's PSP
-      # resolves the principal's on-file card.  Adapters that do require an
-      # explicit PM (StubPsp, early tests) still send one; an absent field is
-      # accepted rather than rejected.
+      # resolves the principal's on-file card. An assistant may still send one;
+      # an absent field is accepted rather than rejected.
       def verify_payment(raw_jws:, identity:, cart:)
         payload = decode_and_check(raw_jws, identity)
         # `amount_cents` is a REQUIRED payment field (spec AP2 table). ABSENT

@@ -15,7 +15,8 @@ It binds every `CHANGELOG.md` here — the root record and every per-gem package
 record alike. State the essence of the change and what it is for, never its
 content: the commit message and the ledger row are where the details go.
 
-Every top-level entry opens with its ISO date, `- YYYY-MM-DD: ` (arm CL-7).
+Every top-level entry of the repository record opens with its ISO date,
+`- YYYY-MM-DD: ` (arm CL-7); a gem record is dated by its release heading.
 
 `bin/check-changelog` holds the arms named here. It measures an entry as its text
 after the leading `- `, date included, with wrapped lines joined by one space.

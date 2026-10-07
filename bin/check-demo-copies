@@ -4299,6 +4299,12 @@ FRAGMENTS = {
            "deliberately constant rather than seeded: the window beat races its own writes, so a " \
            "generated principal would make a failure unreproducible from the log.",
   },
+  "script/pay_window.rb#EVENTS_HEAD" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The event-tail cursor taken before the run, so the booking_payment beat reads only " \
+           "the events this run pushed.",
+  },
   "script/pay_window.rb#AGENT_ID" => {
     rule:  :code,
     ships: PAY_WINDOW,

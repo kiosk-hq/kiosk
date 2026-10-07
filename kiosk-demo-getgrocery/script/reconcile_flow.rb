@@ -68,6 +68,7 @@ ADDRESS  = "42 Camden Street, Dublin 2"
 FUTURE   = (Date.today + 1).to_s
 
 User.find_or_create_by!(id: USER_ID)
+EVENTS_HEAD = Kiosk.configuration.event_store.head
 
 cheap = ActiveRecord::Base.connection.execute(
   "SELECT sku, price_cents FROM products WHERE sku = 'banana' LIMIT 1"
@@ -191,6 +192,13 @@ check(processor.asked.include?(["cart-CHARGED", CHEAP_PRICE, "eur"]),
 
 check(!sweep[:healed].include?(young) && !sweep[:released].include?(young) && !unresolved_ids.include?(young),
       "a freshly-claimed order (pay still in flight) is left alone by the sweep")
+
+paid_events = Kiosk.configuration.event_store.since(USER_ID, EVENTS_HEAD)
+                   .select { |e| e["topic"] == "order_payment" }
+check(paid_events.map { |e| e["subject"] }.sort == [charged, settled].sort,
+      "each healed order pushed one order_payment event to its owner (got #{paid_events.size})")
+errors = Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), paid_events)
+check(errors.empty?, "every order_payment `data` satisfies the payload_schema #{errors.first(3).join("; ")}".strip)
 
 # ── The same sweep against stripe-mock, through the real lookup ─────────────
 puts "\n── The real StripeChargeLookup against stripe-mock ──"

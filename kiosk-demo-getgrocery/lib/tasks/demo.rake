@@ -2197,6 +2197,10 @@ namespace :check do
     arrived = store.since(user.id, head_arrival).find { |e| e["subject"] == order.id }
     check.call("one order_delivery event, status=delivered",
                arrived && arrived["data"]["status"] == "delivered")
+    errors = Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json),
+                                                        [left, arrived].compact)
+    check.call("every order_delivery `data` satisfies the payload_schema this origin serves" \
+               "#{errors.empty? ? "" : " — #{errors.first(3).join("; ")}"}", errors.empty?)
 
     head_again = store.head
     OrderDeliveredJob.new.perform(order.id)

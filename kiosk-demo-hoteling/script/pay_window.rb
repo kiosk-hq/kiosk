@@ -88,6 +88,7 @@ User.find_or_create_by!(id: USER_ID)
 # rather than by anything under test.
 RoomHold.where(user_id: USER_ID).delete_all
 Booking.where(user_id: USER_ID).delete_all
+EVENTS_HEAD = Kiosk.configuration.event_store.head
 
 room = RoomType.order(:id).first
 abort "seed missing (run demo:setup first)" if room.nil?
@@ -341,6 +342,15 @@ OBSERVED.each do |booking_id, states|
   check(never_charged || bad.empty?,
         "booking #{booking_id} never read `unpaid` after a capture was claimed for it (saw #{states.inspect})")
 end
+
+puts "\n== (f) the booking_payment event, against the payload_schema this origin serves =="
+
+paid_events = Kiosk.configuration.event_store.since(USER_ID, EVENTS_HEAD)
+                   .select { |e| e["topic"] == "booking_payment" }
+check(paid_events.map { |e| e["subject"] }.sort == [inflight_id, raced_id].sort,
+      "each paid booking pushed one booking_payment event to its owner (got #{paid_events.size})")
+errors = Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), paid_events)
+check(errors.empty?, "every booking_payment `data` satisfies the payload_schema #{errors.first(3).join("; ")}".strip)
 
 if FAILURES.empty?
   puts "\n  All capture-window assertions PASSED."

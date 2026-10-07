@@ -218,6 +218,11 @@ namespace :check do
     check.call("the row and the event name the same reversal",
                refund && refund["psp_reference"] == paid.refund_psp_reference)
 
+    errors = Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json),
+                                                        [event, devent, pevent].compact)
+    check.call("every booking_confirmation `data` satisfies the payload_schema this origin serves" \
+               "#{errors.empty? ? "" : " — #{errors.first(3).join("; ")}"}", errors.empty?)
+
     puts "\n── the guest does NOT confirm their own booking ──"
     # PAID FOR REAL, so the payment gates are satisfied and the refusal this
     # asserts is the one about the property's silence rather than about money.

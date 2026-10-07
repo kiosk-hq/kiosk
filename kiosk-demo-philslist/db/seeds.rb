@@ -22,16 +22,18 @@
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"
 
-# Demo-only credentials (development database, reset by every demo:setup).
+# Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy).
 DEMO_PASSWORD = "philslist-demo-password"
 
-alice = User.find_or_create_by!(id: ALICE_ID) do |u|
+alice = User.find_or_initialize_by(id: ALICE_ID).tap do |u|
   u.email    = "alice@example.com"
-  u.password = DEMO_PASSWORD
+  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
-bob = User.find_or_create_by!(id: BOB_ID) do |u|
+bob = User.find_or_initialize_by(id: BOB_ID).tap do |u|
   u.email    = "bob@example.com"
-  u.password = DEMO_PASSWORD
+  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
 
 CATEGORIES = {

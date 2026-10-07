@@ -25,7 +25,7 @@
 #            licence), €0.40/min, docked at "Amstel Garage".
 
 # ── Human rider accounts (Devise credentials) ───────────────────────────────
-# Demo-only credentials (development database, reset by every demo:setup).
+# Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy).
 # STABLE UUIDs so a driver can name a rider without a lookup. Ada is the rider
 # who approves an assistant on the verify page; Ben is the SEPARATE account on
 # the far side of the isolation boundary.
@@ -33,13 +33,15 @@ ADA_ID = "00000000-0000-0000-0000-000000000001"
 BEN_ID = "00000000-0000-0000-0000-000000000002"
 DEMO_PASSWORD = "skooti-demo-password"
 
-User.find_or_create_by!(id: ADA_ID) do |u|
+User.find_or_initialize_by(id: ADA_ID).tap do |u|
   u.email    = "ada@example.com"
-  u.password = DEMO_PASSWORD
+  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
-User.find_or_create_by!(id: BEN_ID) do |u|
+User.find_or_initialize_by(id: BEN_ID).tap do |u|
   u.email    = "ben@example.com"
-  u.password = DEMO_PASSWORD
+  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
 
 # Licence-free electric scooters — €0.15/min. Jordaan Dock (3) + Prinsengracht Pier (2).

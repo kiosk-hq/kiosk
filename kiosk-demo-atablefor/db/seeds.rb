@@ -30,7 +30,7 @@
 # and asserts that neither can read or cancel the other's booking. Their UUIDs
 # are stable so a driver — or a psql ground-truth check — can name an account
 # without a lookup.
-# Demo-only credentials (development database, reset by every demo:setup).
+# Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy).
 
 DINER_A_ID = "00000000-0000-0000-0000-000000000001"
 DINER_B_ID = "00000000-0000-0000-0000-000000000002"
@@ -40,10 +40,11 @@ DEMO_PASSWORD = "atablefor-demo-password"
 # reservation the board shows by name.
 DINER_EMAIL = "diego@example.com"
 DINER_NAME  = "Diego Marlowe"
-User.find_or_create_by!(id: DINER_A_ID) do |u|
+User.find_or_initialize_by(id: DINER_A_ID).tap do |u|
   u.email        = DINER_EMAIL
-  u.password     = DEMO_PASSWORD
+  u.password     = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
   u.display_name = DINER_NAME
+  u.save!
 end
 
 # Bea — the SEPARATE account on the far side of the isolation boundary. She has
@@ -52,10 +53,11 @@ end
 # attacks.
 SECOND_DINER_EMAIL = "bea@example.com"
 SECOND_DINER_NAME  = "Bea Ferreira"
-User.find_or_create_by!(id: DINER_B_ID) do |u|
+User.find_or_initialize_by(id: DINER_B_ID).tap do |u|
   u.email        = SECOND_DINER_EMAIL
-  u.password     = DEMO_PASSWORD
+  u.password     = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
   u.display_name = SECOND_DINER_NAME
+  u.save!
 end
 
 # The public /reservations board is deliberately EMPTY at rest: it mirrors ONLY

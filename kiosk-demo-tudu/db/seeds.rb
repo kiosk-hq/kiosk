@@ -23,7 +23,7 @@
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"
 
-# Demo-only credentials (development database, reset by every demo:setup).
+# Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy).
 DEMO_PASSWORD = "tudu-demo-password"
 
 # display_name is what the ROSTER publishes. `list_members` publishes this
@@ -33,15 +33,17 @@ DEMO_PASSWORD = "tudu-demo-password"
 # `member-<hex>` {User.public_name} derives from its UUID. Seeded here so the
 # demo's own household reads the way a household should ("Alice", "Bob") rather
 # than as two hashes: a name the reader recognises is the point of the verb.
-alice = User.find_or_create_by!(id: ALICE_ID) do |u|
+alice = User.find_or_initialize_by(id: ALICE_ID).tap do |u|
   u.email        = "alice@example.com"
   u.display_name = "Alice"
-  u.password     = DEMO_PASSWORD
+  u.password     = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
-bob = User.find_or_create_by!(id: BOB_ID) do |u|
+bob = User.find_or_initialize_by(id: BOB_ID).tap do |u|
   u.email        = "bob@example.com"
   u.display_name = "Bob"
-  u.password     = DEMO_PASSWORD
+  u.password     = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
 
 # ── The seeded household: a shared list Alice owns and Bob is a member of ─────

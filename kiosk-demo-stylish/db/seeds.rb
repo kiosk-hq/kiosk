@@ -32,24 +32,27 @@ BOB_ID   = "00000000-0000-0000-0000-000000000002"
 # Salon owner — stable UUID the roles demo drives.
 OWNER_ID = "00000000-0000-0000-0000-0000000000a0"
 
-# Demo-only credentials (development database, reset by every demo:setup).
+# Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy).
 DEMO_PASSWORD = "combette-demo-password"
 
-User.find_or_create_by!(id: ALICE_ID) do |u|
+User.find_or_initialize_by(id: ALICE_ID).tap do |u|
   u.email    = "alice@example.com"
-  u.password = DEMO_PASSWORD
+  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
-User.find_or_create_by!(id: BOB_ID) do |u|
+User.find_or_initialize_by(id: BOB_ID).tap do |u|
   u.email    = "bob@example.com"
-  u.password = DEMO_PASSWORD
+  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
+  u.save!
 end
 
 # Owner carries a staff_role + Devise credentials (they sign in to the salon to
 # link their assistant, the same real session the binding surfaces use).
-User.find_or_create_by!(id: OWNER_ID) do |u|
+User.find_or_initialize_by(id: OWNER_ID).tap do |u|
   u.email      = "owner@combette.example"
-  u.password   = DEMO_PASSWORD
+  u.password   = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
   u.staff_role = "owner"
+  u.save!
 end
 
 salon = Salon.find_or_create_by!(name: "Combette on Park")

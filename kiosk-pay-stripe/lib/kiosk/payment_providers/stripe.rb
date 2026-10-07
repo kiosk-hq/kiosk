@@ -90,7 +90,8 @@ module Kiosk
       end
 
       # Charges the principal's saved card off_session; the mandate's payment
-      # method is not used.
+      # method is not used. A confirmed card intent that did not raise has
+      # captured its whole amount, which is the cart total.
       #
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
       # @raise [SetupRequired] when there is no card to charge
@@ -131,7 +132,7 @@ module Kiosk
 
         {
           psp_reference:        intent.id,
-          settled_amount_cents: intent.amount_received,
+          settled_amount_cents: intent.amount,
           settled_at:           Time.at(intent.created).utc,
         }
       end

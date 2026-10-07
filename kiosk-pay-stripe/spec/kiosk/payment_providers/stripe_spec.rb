@@ -328,7 +328,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   # ── capture ──────────────────────────────────────────────────────────────────
 
   describe "#capture" do
-    let(:pi) { double("PaymentIntent", id: "pi_123", amount_received: 1599, created: 1_700_000_000) }
+    let(:pi) { double("PaymentIntent", id: "pi_123", amount: 1599, created: 1_700_000_000) }
 
     it "charges the customer's default saved card off_session, keyed by the cart mandate id" do
       invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
@@ -350,6 +350,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       result = adapter.capture(cart_mandate, payment_method: nil)
       expect(result[:psp_reference]).to eq("pi_123")
+      expect(result[:settled_amount_cents]).to eq(1599)
     end
 
     it "falls back to the first listed card when no default PM is set" do
@@ -410,6 +411,20 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       ).and_return(pi)
 
       adapter.capture(cart_mandate, payment_method: "pm_explicit")
+    end
+
+    it "settles the cart total against stripe-mock" do
+      url = StripeMock.start
+      skip "stripe-mock not installed (brew install stripe-mock)" unless url
+
+      saved_base = ::Stripe.api_base
+      ::Stripe.api_base = url
+      allow(::Stripe::Customer).to receive(:retrieve).and_call_original
+      receipt = adapter.capture(cart_mandate)
+      expect(receipt[:psp_reference]).to start_with("pi_")
+      expect(receipt[:settled_amount_cents]).to eq(1599)
+    ensure
+      ::Stripe.api_base = saved_base if saved_base
     end
 
     # ── PSP error translation (K-545) ────────────────────────────────────────

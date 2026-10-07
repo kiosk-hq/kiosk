@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-10-07
+
+- 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.5, matching skill 0.5.5.**
+
+- 2026-10-07: **Every demo and the engine default pin `skill-v0.5.5.md`, and `listen.py` is listener 0.5.5**, which reads the bearer token from a file instead of its command line.
+
 - 2026-10-07: **kiosk-pay-stripe requires `customer_resolver:` and `customer_saver:`**; its unconfigured fallback charge mode is removed (K-1994).
 - 2026-10-07: **kiosk-pay-stripe treats a mapped Customer Stripe no longer has as no saved card**, so `payment_setup` and `pay` stop answering 500 for that principal (K-1993).
 - 2026-10-07: **An `action_failed` detail names the verb and no longer the exception class** the handler raised; the operator's log still carries both.

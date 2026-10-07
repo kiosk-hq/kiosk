@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-10-07
+
+- 2026-10-07: Version 0.5.5, the tree cut that matches skill 0.5.5; this gem's surface is unchanged.
+
 ## [0.5.4] — 2026-10-07
 
 - 2026-10-07: **`Kiosk::Protocol::API_VERSION` and `MIN_CLIENT` are `0.5.4`**, matching skill 0.5.4; a 0.5.3 assistant is told it is behind.

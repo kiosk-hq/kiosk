@@ -3,7 +3,7 @@
 module Kiosk
   module Pow
     module Equihash
-      VERSION = "0.5.4"
+      VERSION = "0.5.5"
     end
   end
 end

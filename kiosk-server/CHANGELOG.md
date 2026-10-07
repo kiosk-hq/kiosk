@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-10-07
+
+- 2026-10-07: **The default `skill_url` names `skill-v0.5.5.md`, and `listen.py` reads the bearer token from `--token-file`**, never from its command line.
+
 - 2026-10-07: **An `action_failed` detail names the verb and no longer the exception class** the handler raised; the operator's log still carries both.
 - 2026-10-07: **With neither a `kyc_provider` nor a `kyc_public_key`, the `kyc_required` hint names no KYC path** and says verification is not available at this origin.
 - 2026-10-07: **`kiosk.kyc_attributes` and `kiosk.kyc_requests` reference the host's user table `ON DELETE CASCADE`**; `kyc_user_fk_sql` adds the key to existing tables.

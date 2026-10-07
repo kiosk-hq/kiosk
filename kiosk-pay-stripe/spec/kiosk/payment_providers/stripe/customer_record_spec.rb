@@ -4,15 +4,33 @@ require "active_record"
 require "kiosk/payment_providers/stripe/customer_record"
 
 RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord do
-  before(:all) do
-    ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
+  def migrate(direction)
     migration = Class.new(ActiveRecord::Migration[8.1]) do
       def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
     end
-    ActiveRecord::Migration.suppress_messages { migration.migrate(:up) }
+    ActiveRecord::Migration.suppress_messages { migration.migrate(direction) }
+    described_class.reset_column_information
+  end
+
+  before(:all) do
+    ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
+    migrate(:up)
   end
 
   after(:all) { ActiveRecord::Base.remove_connection }
+
+  it "types user_id as the configured user id type" do
+    expect(described_class.columns_hash["user_id"].sql_type).to eq("uuid")
+
+    migrate(:down)
+    allow(Kiosk.configuration).to receive(:user_id_type).and_return(:bigint)
+    migrate(:up)
+    expect(described_class.columns_hash["user_id"].sql_type).to eq("bigint")
+  ensure
+    migrate(:down)
+    allow(Kiosk.configuration).to receive(:user_id_type).and_call_original
+    migrate(:up)
+  end
 
   it "resolves nothing for a principal it has never seen" do
     expect(described_class.resolve("user-unknown")).to be_nil

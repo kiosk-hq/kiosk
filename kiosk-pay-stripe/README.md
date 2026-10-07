@@ -34,7 +34,7 @@ never presents a card.
 
 The `principal → Stripe Customer` mapping lives in the host's `stripe_customers`
 table, through `Kiosk::PaymentProviders::Stripe::CustomerRecord`. One migration
-creates it:
+creates it, its `user_id` typed as `c.user_id_type`:
 
 ```ruby
 class CreateStripeCustomers < ActiveRecord::Migration[8.1]

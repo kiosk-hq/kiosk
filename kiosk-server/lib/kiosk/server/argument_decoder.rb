@@ -257,13 +257,13 @@ module Kiosk
         end
         return if parsed && parsed.strftime("%Y-%m-%d") == value
 
-        refuse(path, value, "a date", "a calendar date as YYYY-MM-DD, e.g. 2026-08-19")
+        refuse(path, value, "a date", FORMAT_SPELLINGS["date"])
       end
 
       def check_date_time!(value, path)
         ::Time.iso8601(value)
       rescue ::ArgumentError, ::TypeError
-        refuse(path, value, "a timestamp", "an ISO 8601 timestamp, e.g. 2026-08-19T14:00:00Z")
+        refuse(path, value, "a timestamp", FORMAT_SPELLINGS["date-time"])
       end
 
       def to_array(value, property, path)
@@ -320,6 +320,12 @@ module Kiosk
                 "GET <endpoint>/schema publishes this verb's input_schema.",
         )
       end
+
+      # What a caller has to send for each string `format` the wire reads.
+      FORMAT_SPELLINGS = {
+        "date"      => "a calendar date as YYYY-MM-DD, e.g. 2026-08-19",
+        "date-time" => "an ISO 8601 timestamp, e.g. 2026-08-19T14:00:00Z",
+      }.freeze
 
       SHAPE_HINT =
         "query arguments are scalars (`a=v`), arrays of scalars (repeated " \

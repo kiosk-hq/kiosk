@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **A malformed date or timestamp in an action body is refused with a hint naming `YYYY-MM-DD` or ISO 8601**, as the query channel already did (K-2007).
 - 2026-10-07: **The device-authorization call refuses an empty `role` or `scope` with `400 invalid_request`**, as it refuses any other value (K-2005).
 
 ## [0.5.5] — 2026-10-07

@@ -214,9 +214,15 @@ module Kiosk
         errors = JSONSchemer.schema(normalize(input_schema)).validate(payload).to_a
         return if errors.empty?
 
+        spellings = errors.filter_map do |error|
+          next unless error["type"] == "format"
+
+          spelling = ArgumentDecoder::FORMAT_SPELLINGS[error.dig("schema", "format")]
+          "#{error["data_pointer"].delete_prefix("/")}: send #{spelling}. " if spelling
+        end
         raise Errors::BadRequest.new(
           "#{verb}: #{errors.map { |error| error["error"] }.compact.join("; ")}",
-          hint: "GET <endpoint>/schema publishes this verb's input_schema; the " \
+          hint: "#{spellings.uniq.join}GET <endpoint>/schema publishes this verb's input_schema; the " \
                 "arguments must satisfy it. `limit` and `cursor` are always accepted.",
         )
       end

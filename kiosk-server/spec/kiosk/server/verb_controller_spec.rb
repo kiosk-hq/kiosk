@@ -569,6 +569,19 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:detail]).not_to include("19:00")
     end
 
+    it "names YYYY-MM-DD when an action body carries a malformed date" do
+      declare_action("book", input_schema: {
+                       type: "object",
+                       properties: { day: { type: "string", format: "date" } },
+                     }) { render json: { ok: 1 } }
+
+      status, body = call_verb(:post, "book", body: JSON.generate(day: "19/08/2026"))
+      expect(status).to eq(400)
+      expect(body[:code]).to eq("bad_request")
+      expect(body[:detail]).to include("day")
+      expect(body[:hint]).to include("YYYY-MM-DD")
+    end
+
     it "still refuses an undeclared parameter under additionalProperties: false" do
       declare_query("catalog", input_schema: { type: "object", additionalProperties: false,
                                                properties: {}, required: [] }) { render json: [] }

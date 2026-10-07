@@ -2,29 +2,14 @@
 
 module Kiosk
   module PaymentProviders
-    # Raised when a buyer has no saved payment method at the provider's PSP
-    # and must complete the SetupIntent flow before a charge can proceed.
-    # The caller (e.g. a Kiosk Action) should surface the setup URL to the
-    # assistant so the human can enter their card.
+    # The principal has nothing to charge yet; their human must finish
+    # {Base#setup_url} first.
     SetupRequired = Class.new(StandardError)
 
-    # Raised by a PSP adapter when a charge attempt FAILS at the processor
-    # (rather than escaping as a raw exception → HTTP 500). A concrete adapter
-    # (e.g. kiosk-pay-stripe) translates its PSP-specific errors into this
-    # PSP-AGNOSTIC signal, carrying only a human-safe `message` (never raw PSP
-    # internals) plus a stable `reason` symbol. The executor maps it to the
-    # `payment_failed` wire error (a clean 4xx).
-    #
-    # `retryable?` splits the two cases that matter for double-charge safety:
-    #   true  — the processor reached a DEFINITIVE no-charge decision (card
-    #           declined / expired / insufficient funds / authentication
-    #           required). Nothing was charged, so a caller may safely release
-    #           any in-progress claim and let the human retry with a corrected
-    #           method.
-    #   false — the charge outcome is UNKNOWN (timeout / connectivity). The
-    #           charge MAY have succeeded, so a caller MUST NOT blind-retry
-    #           (that would double-charge): it should leave the order claimed
-    #           and reconcile / check the settlement first.
+    # A charge failed at the processor; the executor answers `payment_failed`.
+    # `message` is human-safe and `reason` a stable symbol. `retryable?` is
+    # true only when nothing was charged; false means the outcome is unknown,
+    # so the caller reconciles rather than retrying.
     class PaymentFailed < StandardError
       attr_reader :reason
 
@@ -37,25 +22,14 @@ module Kiosk
       def retryable? = @retryable
     end
 
-    # Abstract base for AP2 PSP (Payment Service Provider) adapters.
-    # See the Payment (AP2 mandate chain) section of the spec.
-    #
-    # Subclasses ship as `kiosk-pay-*` gems. The port is `setup_required?`,
-    # `setup_url` and `capture`.
-    #
-    # One method is optional: an adapter that can tell whose setup a browser
-    # return request reports defines `setup_return_user_id(params)`, returning
-    # that principal's id or nil. kiosk-server then serves the `payment_setup`
-    # event topic and pushes it when the human comes back from `setup_url`.
+    # Port for a payment processor adapter (`kiosk-pay-*` gems):
+    # `setup_required?`, `setup_url` and `capture`. An adapter that can name
+    # whose setup a returning browser reports also defines
+    # `setup_return_user_id(params)`, and kiosk-server then serves the
+    # `payment_setup` event topic.
     class Base
-      # Returns true when the principal MUST complete a payment setup flow
-      # (e.g. Stripe SetupIntent — card-on-file) before a charge can proceed.
-      # The executor calls this BEFORE persisting the mandate trail so it can
-      # return a clean 402 without burning the mandate ids.
-      #
-      # Default: false — StubPsp and adapters without a SetupIntent model
-      # inherit this and are never gated.  Stripe overrides when a
-      # customer_resolver is configured.
+      # True when the principal's human must finish {#setup_url} before a
+      # charge. Asked before the mandate trail is persisted.
       #
       # @param user_id [String] principal identifier
       # @return [Boolean]

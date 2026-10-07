@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1774 anchors.
+# 1867 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -178,6 +178,7 @@ e2e/assistant.sh	pay: psp_reference present
 e2e/assistant.sh	pay: settled 1599
 e2e/assistant.sh	pay: settlement_id
 e2e/assistant.sh	pay: unenveloped
+e2e/assistant.sh	payment_setup: served by the engine → ready
 e2e/assistant.sh	register-pow: 1 challenge issued
 e2e/assistant.sh	register-pow: code pow_required
 e2e/assistant.sh	register-pow: minted token wire → 200
@@ -199,6 +200,8 @@ e2e/assistant.sh	the reserved parameters are form/explode:true
 e2e/assistant.sh	the two 'it is not here' answers are two DIFFERENT codes
 e2e/assistant.sh	title is the code's, not the incident's
 e2e/assistant.sh	two origins: first's token on second → 401
+e2e/assistant.sh	two origins: issuer is the first origin
+e2e/assistant.sh	two origins: issuer is the second origin
 e2e/assistant.sh	two origins: same key, second account
 e2e/assistant.sh	type names the code
 e2e/assistant.sh	unknown query → 404
@@ -576,6 +579,8 @@ kiosk-demo-prove/app/models/operator_registry.rb	# serves operators it has been 
 kiosk-demo-prove/app/services/prove_key.rb	def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil)
 kiosk-demo-prove/lib/tasks/demo.rake	  task :test do
 kiosk-demo-prove/lib/tasks/demo.rake	task :test do
+kiosk-demo-prove/spec/requests/verifications_spec.rb	mints an attestation valid for one year
+kiosk-demo-prove/spec/requests/verifications_spec.rb	records a decline without minting
 kiosk-demo-skooti/README.md	**What this KYC proves, and what it deliberately does not (honest scope).** The
 kiosk-demo-skooti/README.md	Reserve a vehicle by its code (inserts a `status='reserved'` row; the hold has no expiry/TTL — it stays until `start_rental` flips it to `active`)
 kiosk-demo-skooti/README.md	Scooter rental demo operator for Kiosk.
@@ -1117,7 +1122,9 @@ kiosk-server/lib/kiosk/server/errors.rb	class Forbidden < Base
 kiosk-server/lib/kiosk/server/errors.rb	class NotFound < Base
 kiosk-server/lib/kiosk/server/errors.rb	class PowRequired < Base
 kiosk-server/lib/kiosk/server/events_cable.rb	config.disable_request_forgery_protection = true
+kiosk-server/lib/kiosk/server/events_connection.rb	BEATS_PER_PING = 10
 kiosk-server/lib/kiosk/server/events_connection.rb	Kiosk::Server::IdentityResolution.resolve(request)
+kiosk-server/lib/kiosk/server/events_connection.rb	class_attribute :reauthorise_every, default: 30
 kiosk-server/lib/kiosk/server/executor.rb	            "this operator does not serve the payment module",
 kiosk-server/lib/kiosk/server/executor.rb	            enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	      VERBS = %i[query run pay].freeze
@@ -1133,6 +1140,7 @@ kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this 
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
+kiosk-server/lib/kiosk/server/kyc.rb	if request_id.empty?
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        if payload[:aud].to_s != config.kyc_audience.to_s
@@ -1371,6 +1379,8 @@ kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on a root-level 
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on the host's own 500, which is the same exception path
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws JWKS under the mount
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)
+kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws payment_setup and the page the human returns to from the provider's setup
+kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws request_kyc and the KYC provider's callback
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws the KYC attestation endpoint
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws the two RESERVED wire endpoints — and the wire has no others
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	reserves exactly the first segments it draws — and `query`/`run` left both
@@ -1395,15 +1405,73 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	refuses a code outside the closed 
 kiosk-server/spec/kiosk/server/errors_spec.rb	refuses a plausible near-miss of a T-158 member
 kiosk-server/spec/kiosk/server/errors_spec.rb	refuses to exist without one — a 405 with no Allow is not a 405
 kiosk-server/spec/kiosk/server/errors_spec.rb	still maps 404 to not_found, the only 404 a handler raise can mean
+kiosk-server/spec/kiosk/server/event_store_spec.rb	assigns ids that are monotonic per ORIGIN
+kiosk-server/spec/kiosk/server/event_store_spec.rb	keeps identities apart — one identity's tail is not another's
+kiosk-server/spec/kiosk/server/event_store_spec.rb	returns only events after the cursor, for that identity only
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	assigns ids that are monotonic per ORIGIN, across identities and topics
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	keeps rows inside the window
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	retains for 24 hours by default, not one
+kiosk-server/spec/kiosk/server/event_stores_spec.rb	sweeps rows past the window and reports truncated to a stale cursor
+kiosk-server/spec/kiosk/server/events_connection_spec.rb	logs a re-authorisation that raises rather than losing it to the worker pool
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	CLOSES with reconnect false on
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	CONFIRMS it again, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REFUSES when the operator's own subject rule raises, and logs what raised
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a URL subscription whose since is
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a consented topic whose subject the operator says is unreachable
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a subscribe naming a channel that is not KioskEvents, echoing it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a subscribe whose identifier is not a JSON document, echoing it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a subscribe whose since is not a cursor
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a subscribe whose subject is a
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS a topic this origin does not declare, rather than streaming it empty
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS an unsubscribe naming a subscription this socket never opened
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	REJECTS an unsubscribe whose identifier was re-serialised rather than echoed
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts a caller the ordinary identity chain resolves, and welcomes it
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts an upgrade that carries NO Origin header
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts an upgrade whose Origin names somewhere else entirely
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts the largest cursor
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	accepts the same topic for a subject the operator says IS reachable
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers a WebSocket upgrade the same way, at the HTTP layer
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers a plain request with the module_not_served problem document
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	answers an upgrade carrying no credential identically
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	closes a socket holding NO subscription when its credential is revoked
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	closes the connection with reconnect false when the credential stops resolving
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	confirms a declared topic with head and truncated
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	confirms a live subscription at top level, with the identifier and no message
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	delivers an event emitted between the subscribed frame and a live stream
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	does NOT deliver another subject's event to a subject-scoped subscription
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	does NOT replay another TOPIC's event to a subscription that named one
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	drives the five literal strings the finding drove
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	goes on serving a well-formed subscribe on the same socket
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves a real client with no socket and no frame
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves a subscription whose reach and credential still hold alone
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	leaves it delivering, with no second subscribed and no second replay
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	opens no subscription on a revoked credential, and closes instead
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	pushes an emitted event carrying the five closed members and no others
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a VALID token presented only in the query string
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a caller presenting a token the IdP does not know
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	refuses a caller presenting no Authorization header
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	replays only what the cursor had not seen
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	reports head on the resumed subscription
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	says truncated when the cursor predates what the store still holds
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	stops delivering and says why when the subject's reach is withdrawn
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	subscribes to every topic in the query string without the client sending a frame
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	tells a client whose access token merely aged out to come back
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	tells a refused upgrade so, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	welcomes a socket whose topics arrive only in the query string
 kiosk-server/spec/kiosk/server/events_socket_spec.rb	wraps a subscription's own frames, echoing the identifier it was given
+kiosk-server/spec/kiosk/server/events_spec.rb	accepts a description declared null, and publishes it
+kiosk-server/spec/kiosk/server/events_spec.rb	accepts a nil subject — a topic with no subject says so
+kiosk-server/spec/kiosk/server/events_spec.rb	carries events_url when a topic is registered
+kiosk-server/spec/kiosk/server/events_spec.rb	carries the five closed members and no others
+kiosk-server/spec/kiosk/server/events_spec.rb	does NOT advertise events on an origin that declares no topic
+kiosk-server/spec/kiosk/server/events_spec.rb	keeps subject_reachable OUT of the published catalogue
+kiosk-server/spec/kiosk/server/events_spec.rb	omits events_url entirely when no topic is registered
+kiosk-server/spec/kiosk/server/events_spec.rb	projects a catalogue sorted by name, keyed exactly as a verb descriptor is
+kiosk-server/spec/kiosk/server/events_spec.rb	refuses a name that is not a legal wire name
+kiosk-server/spec/kiosk/server/events_spec.rb	refuses a reach that is not one of the four
+kiosk-server/spec/kiosk/server/events_spec.rb	requires description
+kiosk-server/spec/kiosk/server/events_spec.rb	requires payload_schema
+kiosk-server/spec/kiosk/server/events_spec.rb	stamps occurred_at as ISO 8601 UTC when the caller gives none
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	hits ONE cap across both spellings
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spelling is not identity (K-1251)
@@ -1454,9 +1522,11 @@ kiosk-server/spec/kiosk/server/headers_spec.rb	FORCES no-store on a 402 — a si
 kiosk-server/spec/kiosk/server/headers_spec.rb	and it REFUSES a shared-cache policy (§3.7.3)
 kiosk-server/spec/kiosk/server/headers_spec.rb	defaults a 200 to private, no-store
 kiosk-server/spec/kiosk/server/headers_spec.rb	does not duplicate a token already present, whatever its case
+kiosk-server/spec/kiosk/server/headers_spec.rb	falls back to the protocol constant when the operator sets nothing
 kiosk-server/spec/kiosk/server/headers_spec.rb	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
 kiosk-server/spec/kiosk/server/headers_spec.rb	mutates a Rack headers hash with the three Kiosk headers
 kiosk-server/spec/kiosk/server/headers_spec.rb	produces a fresh headers hash with the three Kiosk headers set
+kiosk-server/spec/kiosk/server/headers_spec.rb	publishes the operator's configured min_client, not the constant
 kiosk-server/spec/kiosk/server/headers_spec.rb	varies on every request header that changes the answer
 kiosk-server/spec/kiosk/server/identity_resolution_spec.rb	returns nil when nothing resolves (caller raises 401 — fail closed)
 kiosk-server/spec/kiosk/server/jwks_spec.rb	preserves order for multi-key rotation overlap
@@ -1478,14 +1548,20 @@ kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	keys the grants on the person,
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 404 for a request_id it never opened
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 500 action_failed when the provider does not open one
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers request_kyc and the callback with 501 module_not_served
+kiosk-server/spec/kiosk/server/kyc_spec.rb	gates naming agents/kyc and not request_kyc
+kiosk-server/spec/kiosk/server/kyc_spec.rb	gates naming no KYC path when no kyc_public_key is configured either
 kiosk-server/spec/kiosk/server/kyc_spec.rb	grants only the JSON boolean true, in Postgres
 kiosk-server/spec/kiosk/server/kyc_spec.rb	is good once: the same callback again finds no open verification
 kiosk-server/spec/kiosk/server/kyc_spec.rb	lets every assistant of that person through, and nobody else
+kiosk-server/spec/kiosk/server/kyc_spec.rb	names the claims in its descriptor and publishes the topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	opens a verification of the declared claims for the principal
+kiosk-server/spec/kiosk/server/kyc_spec.rb	publishes neither request_kyc nor its topic
 kiosk-server/spec/kiosk/server/kyc_spec.rb	records the grant on the person and pushes the attestation to them
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a fourth open verification with 429 quota_exceeded
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a wrong nonce, another subject, and an attestation the provider does not accept
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses with kyc_required until the person holds every declared claim
 kiosk-server/spec/kiosk/server/kyc_spec.rb	replaces the grant set
+kiosk-server/spec/kiosk/server/kyc_spec.rb	stops counting a verification after the window, or once approved, or another person's
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I2: raises Errors::Forbidden when exp claim is absent
@@ -1578,6 +1654,19 @@ kiosk-server/spec/kiosk/server/page_spec.rb	defaults total to nil — the header
 kiosk-server/spec/kiosk/server/page_spec.rb	is truncated? when a next_cursor is present
 kiosk-server/spec/kiosk/server/page_spec.rb	publishes the offset as a decimal integer and reads it back
 kiosk-server/spec/kiosk/server/page_spec.rb	refuses a cursor it did not issue with a typed 400, not a silent page one
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers POST payment_setup with 501 module_not_served
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers ready when the provider needs no setup
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers setup_required with the provider's url, returning the human to the engine's page
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	answers the return page with 501 module_not_served
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	claims nothing on the return page when the provider cannot say who came back
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	declares no payment_setup topic when the provider cannot say who came back
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	declares the payment_setup topic
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	publishes a descriptor with a backing-off poll cadence and a give-up horizon
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	publishes no payment_setup action
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes nothing and claims nothing while the provider still says setup is required
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes nothing when the request names nobody
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes payment_setup ready to the principal once the provider confirms readiness
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	still renders the page when the provider raises
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	accepts a proof that omits the optional `pub` claim
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	audience-mismatch rejection (K-511)
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	is a different origin (relay/takeover)
@@ -1668,7 +1757,11 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the mount path
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	moves when the skill pin is re-issued
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a mandate issued for the origin being served and refuses one issued for the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises each origin as its own issuer
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises the default issuer on a host the operator does not serve
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	answers a host it does not serve as the default origin, and rejects a proof carrying that host
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	defaults the KYC attestation audience to the origin being served
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	mints a token whose iss and aud are the origin being served
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	rejects a proof for A presented on B
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	NOT on a refusal: a 4xx keeps the wire's own policy
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a query is a GET at its own path

@@ -92,33 +92,13 @@ module Kiosk
         raise Errors::Unauthenticated.new("proof signature invalid", hint: PROOF_SIGNATURE_HINT)
       end
 
-      # Operator-side diagnostic for an audience mismatch.
-      #
-      # The mismatch has two very different causes and only the OPERATOR can
-      # tell them apart:
-      #
-      #   * the caller signed the wrong value (its bug — the wire hint covers it), or
-      #   * the origin assistants reach is neither `c.issuer` nor one of
-      #     `c.additional_origins` — the operator's bug, and the expensive one: a value that is
-      #     right in development and wrong where the assistants dial rejects
-      #     every real caller. The remedy is to read it from the environment
-      #     and FAIL THE BOOT when it is absent in production rather than
-      #     falling back to a development default; every demo in this
-      #     repository that configures an issuer does exactly that, and
-      #     `git grep -l "KIOSK_ISSUER is required in production" --
-      #     "kiosk-demo-*/config/environments/production.rb"` names them.
-      #
-      # A run of these lines where the SIGNED aud is the host your users reach
-      # is the second case. This goes to the operator's log and never onto the
-      # wire — the response must not name an origin (see {AUDIENCE_HINT}).
-
+      # Operator log only, since the response must not name an origin: the
+      # caller signed a wrong value, or the origin it reached is not served.
       def log_audience_mismatch(signed_aud:, issuer:)
         message = "[kiosk] PoP audience mismatch: caller signed aud=#{signed_aud.inspect}, " \
                   "the issuer for this request is #{issuer.inspect}. If the signed value is " \
                   "an origin your assistants actually reach, list it in `c.issuer` or " \
                   "`c.additional_origins`."
-        # Rails.logger is nil until the host app boots (rake tasks, console
-        # helpers, the gem's own specs), so keep the Kernel#warn fallback.
         logger = ::Rails.logger
         logger ? logger.warn(message) : warn(message)
       end

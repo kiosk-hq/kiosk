@@ -1143,11 +1143,11 @@ kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attribute
 kiosk-server/lib/kiosk/server/kyc.rb	if request_id.empty?
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	        # Binds the attestation to this operator.
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	      def verified_attributes(raw)
-kiosk-server/lib/kiosk/server/kyc_verifier.rb	    #     iat: <unix>, exp: <unix>, attributes: { <name>: true, ... } }
-kiosk-server/lib/kiosk/server/kyc_verifier.rb	    # NAMED ANONYMIZED ATTRIBUTES: the attestation MAY carry an `attributes`
-kiosk-server/lib/kiosk/server/kyc_verifier.rb	    # configured `kyc_audience` (OPERATOR-BINDING — a claim the KYC provider
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	    #     iat:, exp:, attributes: { <name>: true, ... } }   # attributes optional
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	    # that are literally `true` are granted.
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verified_attributes(raw)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, subject:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	if payload[:aud].to_s != config.kyc_audience.to_s

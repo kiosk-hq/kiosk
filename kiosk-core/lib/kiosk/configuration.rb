@@ -77,13 +77,8 @@ module Kiosk
     # trailing slash): the `iss` of its tokens and mandates, the `aud` a
     # possession proof must carry, and the `issuer` discovery advertises — for
     # every request whose origin is not one of {#additional_origins}. Readers
-    # ask `Kiosk.current_issuer`, which answers the origin being served.
-    #
-    # CONSEQUENCE OF A WRONG VALUE: a total, silent auth outage. The app boots
-    # happily, advertises the wrong issuer in discovery, and then rejects EVERY
-    # assistant with «proof audience mismatch» — because each one correctly
-    # signed the origin it dialed and this value disagrees. Only the operator
-    # can fix it; PopVerifier writes the mismatch to the operator log.
+    # ask `Kiosk.current_issuer`, which answers the origin being served. A
+    # wrong value refuses every assistant with «proof audience mismatch».
     attr_accessor :issuer
 
     # Further origins this deployment serves, each a separate operator on the

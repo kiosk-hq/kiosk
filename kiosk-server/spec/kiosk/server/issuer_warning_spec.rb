@@ -41,11 +41,10 @@ RSpec.describe Kiosk::Server::Engine, ".issuer_warning" do
     end
 
     it "warns outside them" do
-      expect(warning).to include("No assistant can reach a loopback origin")
+      expect(warning).to include("no assistant can reach it")
     end
 
-    it "says to redirect an alias and to list a second business" do
-      expect(warning).to include("Redirect an alias")
+    it "says where a second business goes" do
       expect(warning).to include("c.additional_origins")
     end
 

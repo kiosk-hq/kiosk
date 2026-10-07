@@ -294,25 +294,13 @@ module Kiosk
 
       # ── A WRONG `issuer` IS A SILENT AUTH OUTAGE ───────────────────────────
       #
-      # `issuer` is the `aud` {PopVerifier} requires by STRICT equality and the
-      # `iss` of every token and mandate this origin mints. Wrong, the app
-      # boots, serves HTML and advertises discovery while refusing EVERY
-      # assistant with "proof audience mismatch" — nothing fails that an
-      # operator can see.
-      #
-      # WHAT COUNTS AS WRONG, and nothing wider. UNSET is wrong in every
-      # environment: no origin is the empty string, and {JwtIssuer.issue}
-      # raises on the first registration. A LOOPBACK served origin — `issuer`
-      # or one of `additional_origins` — is wrong only OUTSIDE development and
-      # test, where it is exactly what `rails server` and every demo configure;
-      # a line printed on each local boot would cost the deployed warning its
-      # only reader.
-      #
-      # IT WARNS AND DOES NOT RAISE: an operator mid-setup installs, migrates
-      # and seeds before the public origin exists.
+      # Every assistant's proof is refused with "proof audience mismatch" while
+      # the app looks healthy. Warned, not raised: an operator installs and
+      # seeds before the public origin exists. Unset is wrong everywhere; a
+      # loopback served origin only outside development and test.
       #
       # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
-      # @param local [Boolean] normally `Rails.env.local?` — development or test
+      # @param local [Boolean] normally `Rails.env.local?`
       # @return [String, nil]
       LOOPBACK_ISSUER =
         %r{\A(?:https?://)?(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?/?\z}i
@@ -321,11 +309,8 @@ module Kiosk
         issuer = config.issuer.to_s.strip
 
         if issuer.empty?
-          return "[kiosk-server] `c.issuer` is not set. It is the `aud` every assistant signs " \
-                 "its proof of possession for and the `iss` of every token and mandate this " \
-                 "origin mints, so until it is set every authenticated request is refused with " \
-                 "\"proof audience mismatch\" and no assistant can work around it. Set it to " \
-                 "the origin assistants dial — scheme, host and port, no trailing slash: " \
+          return "[kiosk-server] `c.issuer` is not set, so every authenticated request is refused " \
+                 "with \"proof audience mismatch\". Set it to the origin assistants dial: " \
                  "Kiosk.configure { |c| c.issuer = \"https://api.example.com\" }."
         end
 
@@ -335,11 +320,9 @@ module Kiosk
                                                         .find { |o| LOOPBACK_ISSUER.match?(o) }
         return nil unless loopback
 
-        "[kiosk-server] A served origin is #{loopback.inspect} outside development and test. No " \
-          "assistant can reach a loopback origin, and it is compared to the `aud` they sign by " \
-          "strict equality, so every authenticated request there is refused with \"proof " \
-          "audience mismatch\". Set `c.issuer` to this deployment's public origin — scheme, " \
-          "host and port, no trailing slash. Redirect an alias of the same business to it; " \
+        "[kiosk-server] The served origin #{loopback.inspect} is a loopback origin outside " \
+          "development and test; no assistant can reach it, so every authenticated request is " \
+          "refused with \"proof audience mismatch\". Set `c.issuer` to the public origin and " \
           "list a second business in `c.additional_origins`."
       end
 

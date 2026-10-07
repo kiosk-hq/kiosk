@@ -32,13 +32,9 @@
 #                        anyone, on the same or overlapping dates → 409
 #
 # And two beats about the shape of the wire itself:
-#   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and
-#                        POST /kiosk/run name no registered verb and no route
-#                        draws them, so both are the ordinary 404 any undrawn
-#                        path gets, bearer or not (a routing miss precedes the
-#                        credential; both are probed): no privileged endpoint
-#                        hides behind a generic-sounding word, and there is no
-#                        second conformance surface to attack.
+#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
+#                        draws no route, so it answers the ordinary 404 any
+#                        undrawn path gets, bearer or not
 #   MethodMismatch     — the wrong method at a registered verb's path draws no
 #                        route either, so it is the same plain 404 with no
 #                        `Allow`, and the verb never runs.

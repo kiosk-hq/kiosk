@@ -68,11 +68,9 @@
 #   HostileArgShapes       — boolean/array/object/junk on delivery_slot_id,
 #                            delivery_date, delivery_address and order_id is a
 #                            typed 400 too, never a 500
-#   UnregisteredVerbIsOrdinaryRefusal — POST /kiosk/query and POST /kiosk/run
-#                            name no registered verb and no route draws them,
-#                            so both answer the ordinary 404 any undrawn path
-#                            gets, bearer or not; no privileged endpoint hides
-#                            behind a generic-sounding word
+#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
+#                            draws no route, so it answers the ordinary 404
+#                            any undrawn path gets, bearer or not
 #   MethodMismatch         — a GET at an action's path draws no route either,
 #                            so it is the same plain 404 with no `Allow`, and
 #                            the write never runs

@@ -163,9 +163,8 @@ its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 `CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
 `MissingAuth` (401), `GarbageToken` (401), `SelfAssertedTokenForgery` (401),
 `UnknownQuery` (404), `UnknownAction` (404),
-`UnregisteredVerbIsOrdinaryRefusal` (`/kiosk/query` and `/kiosk/run` name no
-registered verb and no route: the ordinary 404 any undrawn path gets, bearer or
-not), `MethodMismatch` (a `GET` at an action's path draws no route either, so it
+`UnregisteredVerbIsOrdinaryRefusal` (a POST to a name no verb registers draws
+no route: the ordinary 404 any undrawn path gets, bearer or not), `MethodMismatch` (a `GET` at an action's path draws no route either, so it
 is the same plain 404 and the write never runs),
 `OutOfEnumFilterIsNotSilentlyReinterpreted` (400 naming the live categories)
 `LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,

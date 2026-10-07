@@ -19,10 +19,9 @@
 #   GarbageToken       — an unparseable bearer token → 401
 #   UnknownQuery       — an unregistered query name → 404
 #   UnknownAction      — an unregistered action name → 404
-#   UnregisteredVerbIsOrdinaryRefusal — `POST /kiosk/query` and
-#     `POST /kiosk/run` name no registered verb and no route draws them, so they
-#     answer the ordinary 404 any undrawn path gets, bearer or not: no
-#     privileged endpoint hides behind a generic-sounding word
+#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
+#     draws no route, so it answers the ordinary 404 any undrawn path gets,
+#     bearer or not
 #   MethodMismatch     — a GET at an action's path draws no route, so it is the
 #     same ordinary 404 and never serves the write
 #   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real

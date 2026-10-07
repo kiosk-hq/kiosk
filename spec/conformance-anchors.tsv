@@ -312,9 +312,9 @@ kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_boo
 kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	ONE ROSTER PER RESTAURANT CLOCK
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
-kiosk-demo-atablefor/app/views/home/index.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
-kiosk-demo-atablefor/app/views/home/index.html.erb	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
+kiosk-demo-atablefor/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
+kiosk-demo-atablefor/app/views/layouts/home.html.erb	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-atablefor/before-after.md	`rake check:book` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
 kiosk-demo-atablefor/config/initializers/kiosk.rb	        account_age_seconds:     nil,
@@ -381,8 +381,8 @@ kiosk-demo-getgrocery/app/operations/wire_arguments.rb	caller is asking about a 
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	#   1. the cart is denominated in the operator's currency;
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	#   4. its total equals both the sum of those lines and the order's total.
 kiosk-demo-getgrocery/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
-kiosk-demo-getgrocery/app/views/home/index.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-getgrocery/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
+kiosk-demo-getgrocery/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-getgrocery/before-after.md	# Before and after — grocery delivery
 kiosk-demo-getgrocery/before-after.md	## With getgrocery
 kiosk-demo-getgrocery/before-after.md	**Honesty note up front.**

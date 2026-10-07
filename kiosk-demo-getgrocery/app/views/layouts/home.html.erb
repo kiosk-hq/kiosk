@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= yield :title %></title>
+  <%# Assistants discover the Kiosk surface here. The href is the VERSIONED cut this operator pins, read from
+      Kiosk.configuration.skill_url — the url /.well-known/kiosk.json pins, never the mutable skill.md alias. %>
+  <link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
+  <%= stylesheet_link_tag "/home.css" %>
+</head>
+<body>
+<%= yield %>
+
+  <footer>GetGrocery — demo provider — powered by <a href="https://kiosk.tech">Kiosk</a></footer>
+</body>
+</html>

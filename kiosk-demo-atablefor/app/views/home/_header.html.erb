@@ -1,0 +1,12 @@
+<header>
+  <div class="logo">atable<span>for</span></div>
+  <nav>
+    <%= link_to label, path %>
+    <% if user_signed_in? %>
+      <span class="whoami">Staff: <%= current_user.display_name.presence || current_user.email %></span>
+      <%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "signout-btn" %>
+    <% else %>
+      <a class="staff-login" href="/users/sign_in">Staff login</a>
+    <% end %>
+  </nav>
+</header>

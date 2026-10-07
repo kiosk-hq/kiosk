@@ -1,76 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GetGrocery — fresh groceries, delivered in Dublin (Kiosk demo)</title>
-  <!-- Machine-readable affordance: assistants discover the Kiosk surface here.
-       The href is the VERSIONED cut this operator pins, read from
-       Kiosk.configuration.skill_url — the SAME url the `skill` block of
-       /.well-known/kiosk.json carries, never the mutable skill.md alias.
-       One immutable, hash-pinnable file behind both signals, and one
-       place to re-pin: the initializer. -->
-  <link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
-  <style>
-    :root{--accent:#1a6b3c;--accent2:#9bf0b8;--ink:#13241a;--muted:#7a8f80;--soft:#f2f8f4;--line:#e2ece4;--bg:#f6faf6}
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
-    a{color:var(--accent)}
-    header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
-    .logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
-    .logo span{color:var(--accent2)}
-    .wrap{max-width:860px;margin:0 auto;padding:0 24px}
+<% content_for :title, "GetGrocery — fresh groceries, delivered in Dublin (Kiosk demo)" %>
 
-    /* ── Agent-facing header strip: first thing an assistant/agent reads ── */
-    .agentbar{background:var(--ink);color:#fff;font-size:13.5px;padding:9px 32px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .agentbar .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--accent2);color:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
-    .agentbar a{color:var(--accent2);font-weight:700}
-    .agentbar .what{color:#c8d8ce;font-weight:600}
-
-    /* ── Section shell (Kiosk-facing content) ─────────────────────────── */
-    .sec{margin:32px auto 0}
-    .sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
-    .sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
-
-    /* 1 — Try it with your own assistant */
-    .tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
-    .tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
-    .tryit p{font-size:15px;margin-bottom:10px;color:#243}
-    .say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
-    .card{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:9px;padding:10px 14px;font-size:14px}
-    .note{font-size:13px;color:var(--muted);margin-top:8px}
-
-    /* 2 — About this demo */
-    .about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}
-    .about p{font-size:15px;margin-bottom:13px}
-    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
-    .chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
-    .links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
-    .links a:hover{text-decoration:underline}
-    .disco{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 22px;font-size:13px;color:var(--muted);text-align:center}
-    .disco a{font-weight:600}
-
-    /* 3 — Live activity (compact) */
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
-    .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center}
-    .stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
-    .stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
-
-    /* 4 — Storefront (what a human sees) — visually separated */
-    .store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
-    .store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
-    .store-body{padding:34px 24px 40px}
-    .hero{text-align:center;max-width:640px;margin:0 auto}
-    .hero h1{font-size:27px;line-height:1.15;font-weight:800;margin-bottom:12px}
-    .hero p{font-size:16px;color:var(--muted);margin-bottom:22px}
-    .cta{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:10px}
-    .cats{margin:28px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
-    .cat{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px 12px;text-align:center;font-weight:600;font-size:14px}
-    .cat .emoji{font-size:28px;display:block;margin-bottom:7px}
-    footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
-  </style>
-</head>
-<body>
   <div class="agentbar">
     <span class="tag">🤖 For agents</span>
     <span>Agents &amp; AI assistants — <a href="/.well-known/kiosk.json">learn here</a> how to work with this site.</span>
@@ -78,7 +7,7 @@
   </div>
   <header>
     <div class="logo">Get<span>Groceries</span></div>
-    <nav style="font-size:13px;opacity:.9">Dublin · same-day delivery</nav>
+    <nav class="tagline">Dublin · same-day delivery</nav>
   </header>
 
   <div class="wrap">
@@ -152,7 +81,3 @@
       </div>
     </div>
   </div>
-
-  <footer>GetGrocery — demo provider — powered by <a href="https://kiosk.tech">Kiosk</a></footer>
-</body>
-</html>

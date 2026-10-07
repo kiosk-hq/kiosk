@@ -1,0 +1,48 @@
+:root{--accent:#0e5a8a;--accent2:#8fd0ff;--ink:#12232e;--muted:#7a8b98;--soft:#e2eef7;--line:#dfe8ef;--bg:#f4f7fa}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+a{color:var(--accent)}
+header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.logo span{color:var(--accent2)}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px}
+
+/* ── Agent-facing header strip: first thing an assistant/agent reads ── */
+.agentbar{background:var(--ink);color:#fff;font-size:13.5px;padding:9px 32px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.agentbar .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--accent2);color:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.agentbar a{color:var(--accent2);font-weight:700}
+.agentbar .what{color:#b9cfdd;font-weight:600}
+
+.sec{margin:32px auto 0}
+.sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
+
+.tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
+.tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
+.tryit p{font-size:15px;margin-bottom:10px;color:#233}
+.say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+
+.about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+.about p{font-size:15px;margin-bottom:13px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
+.chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
+.links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
+.links a:hover{text-decoration:underline}
+.disco{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 22px;font-size:13px;color:var(--muted);text-align:center}
+.disco a{font-weight:600}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center}
+.stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
+.stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
+.stat .kyc{display:block;margin-top:3px;font-size:10px;color:#a0603a;font-weight:700}
+
+.store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
+.store-body{padding:38px 24px 44px}
+.hero{text-align:center;max-width:640px;margin:0 auto}
+.hero h1{font-size:27px;line-height:1.15;font-weight:800;margin-bottom:12px}
+.hero p{font-size:16px;color:var(--muted)}
+footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
+.tagline{font-size:13px;opacity:.9}

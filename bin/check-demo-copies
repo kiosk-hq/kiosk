@@ -4725,14 +4725,6 @@ FRAGMENTS = {
            "read goes through and the two spellings differ only in the table they name, which is " \
            "the right thing to differ.",
   },
-  "app/controllers/home_controller.rb#layout" => {
-    rule:  :code,
-    ships: %w[philslist stylish],
-    why:   "`layout false` in both — these two landing pages render their own complete HTML rather " \
-           "than sitting inside the application layout. A copy that loses the line does not fail: " \
-           "it renders a page nested inside a second `<html>`, which is the kind of break that " \
-           "reaches a viewer and no assertion.",
-  },
 
   "app/models/booking.rb#CONFIRMED" => {
     rule:  :code,

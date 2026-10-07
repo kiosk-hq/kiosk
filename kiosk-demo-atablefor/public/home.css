@@ -1,0 +1,86 @@
+:root{--accent:#8a3b1c;--accent2:#ffcf9b;--ink:#2a1a12;--muted:#98847a;--soft:#f7e6da;--line:#eccbb2;--bg:#faf6f2;--ok:#1a6b3c}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+a{color:var(--accent)}
+header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.logo span{color:var(--accent2)}
+header nav{display:flex;align-items:center;gap:18px;font-size:13px}
+header nav a{color:#fff;text-decoration:none;font-weight:600;opacity:.92}
+header nav a:hover{opacity:1;text-decoration:underline}
+.staff-login{background:rgba(255,255,255,.16);border-radius:8px;padding:6px 13px}
+.signout-btn{background:rgba(255,255,255,.16);border:0;color:#fff;font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:6px 13px;cursor:pointer}
+.signout-btn:hover{background:rgba(255,255,255,.28)}
+.whoami{font-size:12px;opacity:.85}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px}
+.page-head{margin:30px auto 6px}
+.page-head h1{font-size:24px;font-weight:800}
+.page-head p{font-size:14px;color:var(--muted);margin-top:4px}
+.page-head p a{font-weight:700}
+
+/* ── Agent-facing header strip: first thing an assistant/agent reads ── */
+.agentbar{background:var(--ink);color:#fff;font-size:13.5px;padding:9px 32px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.agentbar .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--accent2);color:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.agentbar a{color:var(--accent2);font-weight:700}
+.agentbar .what{color:#e0cbbb;font-weight:600}
+
+/* the loud "this is a machine endpoint" banner — first thing a visitor/agent sees */
+.proto{background:#1c130d;color:#ffe;margin-top:0;padding:26px 24px}
+.proto .wrap{max-width:860px}
+.proto-badge{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#ffcf9b;border:1px solid #6b4a33;border-radius:999px;padding:4px 12px;margin-bottom:12px}
+.proto h1{font-size:24px;line-height:1.2;font-weight:800;margin-bottom:8px}
+.proto p{font-size:15px;color:#e8d9cd;max-width:640px}
+.proto .say{background:#2a1c12;border:1px solid #6b4a33;border-radius:10px;padding:13px 16px;font-size:15.5px;font-weight:600;color:#ffcf9b;margin:14px 0 6px}
+.proto .no-signin{font-size:13px;color:#c9b4a4;margin-top:6px}
+.proto .no-signin a{color:#ffcf9b}
+
+.sec{margin:32px auto 0}
+.sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
+
+.tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
+.tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
+.tryit p{font-size:15px;margin-bottom:10px;color:#432}
+.steps{list-style:none;counter-reset:s;margin:6px 0 4px}
+.steps li{counter-increment:s;font-size:14.5px;color:#432;padding:3px 0 3px 30px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:0;top:2px;width:21px;height:21px;background:var(--soft);color:var(--accent);border-radius:50%;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.steps code{font-size:13px}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+.linkbox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);font-size:14px}
+.linkbox a{font-weight:700;text-decoration:none}
+.linkbox a:hover{text-decoration:underline}
+.cred{margin-top:9px;font-size:13px;color:var(--muted)}
+.cred code{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:6px;padding:2px 7px;color:var(--ink)}
+
+.about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+.about p{font-size:15px;margin-bottom:13px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
+.chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
+.links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
+.links a:hover{text-decoration:underline}
+.disco{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 22px;font-size:13px;color:var(--muted);text-align:center}
+.disco a{font-weight:600}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center}
+.stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
+.stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
+
+/* reservations board */
+.board{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.board-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.board-title{font-size:17px;font-weight:800}
+.board-sub{font-size:13px;color:var(--muted);margin-top:2px}
+.board-count{flex:none;font-size:12px;font-weight:700;color:var(--ok);background:#e7f5ec;border-radius:999px;padding:5px 11px;white-space:nowrap}
+.board-empty{font-size:14px;color:var(--muted);padding:8px 0}
+.res-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+.res{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px 13px;background:var(--bg);border:1px solid var(--line);border-radius:11px}
+.res-party{font-weight:800;color:var(--accent);font-size:14px;min-width:78px}
+.res-table{font-weight:700;font-size:14px}
+.res-hood{color:#98847a;font-weight:600}
+.res-when{font-size:13.5px;color:#5a4638}
+.res-name{margin-left:auto;font-size:14px;font-weight:700;color:var(--ink)}
+.res-dep{flex:none;font-size:11.5px;font-weight:700;color:#7a5a12;background:#fbefd2;border-radius:999px;padding:3px 9px}
+.board-note{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.45}
+
+footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}

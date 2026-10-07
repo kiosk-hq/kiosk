@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The provider's public root page (replaces the former inline proc root).
+# The provider's public root page.
 # philslist tells a human/agent what this demo is, shows live DOMAIN activity
 # (real listing counts) AND the PUBLIC classifieds board — classifieds are
 # public by nature, so a viewer SEES a listing an assistant posts over the wire
@@ -8,9 +8,6 @@
 # still governs who may EDIT it. Both doors are shown; Devise needs this as its
 # post-sign-in destination too.
 class HomeController < ApplicationController
-  # Self-contained full-HTML page; the app ships no application layout.
-  layout false
-
   def index
     # Cheap domain counts, rendered server-side on page load (a refresh is
     # enough — no JS polling). These read philslist's OWN tables.

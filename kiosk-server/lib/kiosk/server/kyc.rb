@@ -147,26 +147,27 @@ module Kiosk
           connection.transaction { write_grants(user_id, attributes) }
         end
 
-        # Does the person hold every one of `names`?
-        def granted?(user_id, names = claims)
-          names = Array(names).map(&:to_s).uniq
+        # The gate: raises `kyc_required` unless the calling principal holds
+        # every one of `kyc_claims`.
+        def require!
+          return if granted?(CurrentRequest.identity.user_id)
+
+          raise Errors::KycRequired.new(
+            "this action requires the verified attributes #{claims.join(", ")}",
+            hint: gate_hint,
+          )
+        end
+
+        private
+
+        def granted?(user_id)
+          names = claims.uniq
           return false if names.empty?
 
           quoted = names.map { |name| connection.quote(name) }.join(", ")
           rows = execute("SELECT count(*) AS n FROM #{table("kyc_attributes")} " \
                          "WHERE user_id = $1 AND name IN (#{quoted})", user_id.to_s)
           rows.first.fetch("n").to_i == names.size
-        end
-
-        # The gate: raises `kyc_required` unless the calling principal holds
-        # every one of `names`.
-        def require!(names = claims)
-          return if granted?(CurrentRequest.identity.user_id, names)
-
-          raise Errors::KycRequired.new(
-            "this action requires the verified attributes #{Array(names).join(", ")}",
-            hint: gate_hint,
-          )
         end
 
         # Names only a path this origin serves.
@@ -176,8 +177,6 @@ module Kiosk
 
           CLOSED_HINT
         end
-
-        private
 
         def refuse_over_cap!(user_id)
           open = execute("SELECT count(*) AS n FROM #{table("kyc_requests")} WHERE user_id = $1 " \

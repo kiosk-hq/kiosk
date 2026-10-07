@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# The KYC attestation surface, same shape as WireController and AuthController.
-
 require "action_controller"
 require "json"
 require "kiosk/server/kyc"
@@ -12,19 +10,9 @@ require "kiosk/server/headers"
 
 module Kiosk
   module Server
-    # POST /kiosk/agents/kyc
-    #
-    # Authenticates the agent (via Bearer token), verifies the submitted KYC
-    # attestation JWS, and replaces its principal's grants with the attributes
-    # it carries ({Kyc.grant!}).
-    #
-    # Request body: { "kyc_jws": "<compact JWS>" }
-    # Success (200): { "kyc_verified": true }
-    # Failure (400/401/403): an RFC 9457 problem document raised from
-    # Kiosk::Server::Errors and served as `application/problem+json` — 400
-    # for a missing/malformed/non-object JSON body or a missing kyc_jws field
-    # 401 for a missing/invalid agent token, 403 for a failed KYC
-    # verification.
+    # POST <endpoint>/agents/kyc `{kyc_jws}`: verifies an assistant-submitted
+    # attestation and replaces its principal's grants ({Kyc.grant!}). Refusals
+    # are problem documents: 400 body, 401 token, 403 attestation.
     class KycAttestationController < ::ActionController::API
       def create
         identity = authenticate!
@@ -42,15 +30,7 @@ module Kiosk
 
       private
 
-      # Parse the request body as a JSON object. Mirrors
-      # WireController/AuthController#parse_body!: an empty body, malformed
-      # JSON, or a non-object (scalar/array) body is a 400 BadRequest, never
-      # a 500. That is why this runs INSIDE the Errors::Base rescue and raises
-      # its own typed error: a bare JSON.parse outside it leaks
-      # JSON::ParserError — or TypeError, from `body[:kyc_jws]` on an Array —
-      # as an unhandled 500.
-      # See {AuthController#parse_body!}: the body is held to the object
-      # §17 publishes for `exchange` before the member below is read.
+      # A JSON object held to the shape §17 publishes for `exchange`, else 400.
       def parse_body!(exchange)
         raw = request.raw_post
         raise Errors::BadRequest, "request body must be a JSON object" if raw.nil? || raw.empty?
@@ -64,11 +44,7 @@ module Kiosk
         raise Errors.malformed_json
       end
 
-      # KYC attestation is an AGENT-only surface: the effective agent IdP
-      # (configured override or the bundled default; without this,
-      # providers with a custom idp were locked out by a hardcoded
-      # DefaultAgentIdp). No user_idp fallback: only an AI assistant
-      # submits an attestation.
+      # Only an assistant submits an attestation, so only the agent IdP answers.
       def authenticate!
         identity = IdentityResolution.agent_idp.verify(request)
         raise Errors::Unauthenticated.new("missing or invalid agent token") if identity.nil?

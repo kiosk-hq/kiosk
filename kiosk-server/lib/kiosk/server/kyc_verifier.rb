@@ -4,38 +4,16 @@ require "jwt"
 
 module Kiosk
   module Server
-    # Verifies a KYC attestation JWS, submitted by an agent or by the provider's callback.
+    # Verifies a KYC attestation JWS, submitted by an assistant or by the
+    # provider's callback, against `kyc_public_key` (RS256):
     #
-    # Expected JWS payload:
     #   { sub: <user_id>, level: "verified", iss: <kyc_issuer>, aud: <kyc_audience>,
-    #     iat: <unix>, exp: <unix>, attributes: { <name>: true, ... } }
-    #   # attributes OPTIONAL
+    #     iat:, exp:, attributes: { <name>: true, ... } }   # attributes optional
     #
-    # Verified against `Kiosk.configuration.kyc_public_key` (RS256).
-    # Checks: `level == "verified"` (case-sensitive — an unverified/other-level
-    # attestation is rejected), correct issuer, `aud` matches this operator's
-    # configured `kyc_audience` (OPERATOR-BINDING — a claim the KYC provider
-    # minted for another operator is rejected at the WIRE, not merely by a
-    # demo's own callback), `sub` matches the principal (compared
-    # as String on both sides so a bigint-PK host works), and not expired.
-    # Raises `Errors::Forbidden` on any verification failure, and
-    # `Errors::ModuleNotServed` when this origin serves no KYC at all.
-    #
-    # NAMED ANONYMIZED ATTRIBUTES: the attestation MAY carry an `attributes`
-    # object of `{name: true}` booleans (e.g. `{"age_over_18": true,
-    # "licence_a": true}`). These are the ONLY facts the provider learns and
-    # records — the underlying documents (DOB, licence number) never reach the
-    # provider and are never stored or logged here. The field is additive: a
-    # bare `level: "verified"` attestation with no `attributes` still verifies
-    # (backward-compatible binary path), yielding an empty attribute set.
-    # Only booleans that are literally `true` are honoured; any non-`true`
-    # value (false / string / number) is dropped, so a caller cannot smuggle
-    # a truthy-but-not-true grant past a downstream `== true` gate.
+    # `iss`, `aud`, `sub` (as Strings) and `level` must match; only attributes
+    # that are literally `true` are granted.
     module KycVerifier
-      # The claims an attestation MUST carry, named ONCE so the decode below
-      # and the hint the wire publishes cannot drift. The JWT gem's
-      # own wording is not published here: it is that library's sentence, not
-      # this protocol's, and it moves when the dependency is upgraded.
+      # Named once for the decode and the published hint.
       REQUIRED_CLAIMS = %w[exp iss aud sub].freeze
 
       module_function
@@ -50,13 +28,6 @@ module Kiosk
         config = Kiosk.configuration
         key    = config.kyc_public_key
 
-        # `module_not_served` (501) and not `forbidden` (403): this refusal is
-        # a fact about the ORIGIN, not about the caller's identity. `forbidden`
-        # is glossed "authenticated, but this identity may not do this", and
-        # this refusal holds for every caller including an anonymous one, so
-        # that code does not fit it. `detail` names the module because that is
-        # the only thing separating "no KYC here" from "no payments here" to a
-        # reader of the answer.
         raise Errors::ModuleNotServed.new(
           "this operator does not serve the KYC module",
           hint: "no KYC attestation is accepted at this origin; retrying will not help. " \
@@ -78,13 +49,7 @@ module Kiosk
           )
         end
 
-        # OPERATOR-BINDING (aud): the attestation MUST be minted for THIS
-        # operator. `aud` is compared as String on both sides (an operator may
-        # declare its audience as a plain handle or its origin URL). A claim the
-        # KYC provider minted for a DIFFERENT operator's audience is rejected
-        # HERE — at the wire, on every operator's `POST /kiosk/agents/kyc` —
-        # so a cross-operator claim replay cannot unlock this operator even if a
-        # demo skipped its own callback-layer check.
+        # Binds the attestation to this operator.
         if payload[:aud].to_s != config.kyc_audience.to_s
           raise Errors::Forbidden.new(
             "KYC attestation audience mismatch",
@@ -93,8 +58,7 @@ module Kiosk
           )
         end
 
-        # Compared as strings: a bigint-PK host's subject is an Integer, the
-        # provider's `sub` a String.
+        # A bigint-PK host's subject is an Integer.
         unless payload[:sub].to_s == subject.to_s
           raise Errors::Forbidden.new(
             "KYC attestation subject mismatch",
@@ -103,14 +67,10 @@ module Kiosk
           )
         end
 
-        # I1: require the KYC level to be exactly "verified" (case-sensitive).
         unless payload[:level] == "verified"
           raise Errors::Forbidden.new("kyc level not verified")
         end
 
-        # Normalise the (optional) named attributes into a String-keyed hash of
-        # only-`true` booleans. Anonymized: these booleans are the only facts
-        # kept — no DOB, licence number, or document ever appears here.
         payload[:attributes] = verified_attributes(payload[:attributes])
 
         payload
@@ -129,11 +89,8 @@ module Kiosk
         )
       end
 
-      # Reduce a raw `attributes` claim to a String-keyed hash of the names the
-      # attestation grants as boolean `true`. A missing/nil claim yields `{}`
-      # (the binary-only backward-compat path). A non-object claim is rejected
-      # as a malformed attestation. Only literal `true` counts — a `false` /
-      # string / number value is silently dropped (not granted).
+      # The names granted as literal `true`; `{}` when absent; a non-object
+      # is refused.
       def verified_attributes(raw)
         return {} if raw.nil?
 

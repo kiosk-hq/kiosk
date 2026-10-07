@@ -464,34 +464,10 @@ module Kiosk
         SQL
       end
 
-      # The per-identity EVENT TAIL backing {EventStores::ActiveRecord} — the
-      # store an operator serving any topic needs.
-      #
-      # This IS a canonical migration, and the closer precedent is
-      # {.kyc_attributes_sql} rather than {.pow_spent_sql} beside it. The PoW
-      # table is about SCALE — only an operator above `WEB_CONCURRENCY=1` needs
-      # one — so it ships as SQL an operator opts into. This one is about a
-      # FEATURE, exactly as the KYC table is, and a feature table is laid down
-      # unconditionally for the same reason that one is: the route is drawn
-      # unconditionally, an origin serving no topics carries an empty table at
-      # no cost, and a second "you must also add this migration" instruction in
-      # onboarding is a step somebody skips.
-      #
-      # `id` is `bigserial`, and that is what makes the wire's `id` a per-origin
-      # monotonic integer without a second counter anywhere — which is in turn
-      # what lets ONE cursor resume EVERY subscription on a socket with one
-      # integer comparison.
-      #
-      # `identity_key` is a **user_id**, not an agent_id: a human's second
-      # assistant must read the same tail, and a revoked assistant is stopped at
-      # the socket rather than by being handed a private history. It is `text`
-      # and not the host's user-id type on purpose — this table is written by
-      # the engine and read by the engine, never joined to the operator's own
-      # `users`, so binding it to `#{user_id_cast(...)}` would buy nothing and
-      # cost every operator whose ids are not uuids a cast at boot.
-      #
-      # The two indexes carry the two questions ever asked of it: one
-      # identity's tail after a cursor, and the retention sweep.
+      # The event tail behind {EventStores::ActiveRecord}, laid down by every
+      # install. `id` is the origin's one monotonic cursor. `identity_key` is a
+      # user_id as text: the engine alone reads it and never joins it. The two
+      # indexes serve a tail read after a cursor and the retention sweep.
       def events_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 

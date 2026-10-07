@@ -26,9 +26,6 @@
 #                of the copies that agrees once normalised must be declared in the
 #                entry's `agree:` map, as `:lockstep` (one artefact, hand-copied,
 #                and then held) or `:coincidence` (unrelated reasons, capped).
-#                The run prints a CONVERGENCE GROUPS block naming every subject's
-#                normalised sizes and the subsets that agree; no size is written
-#                down here.
 #
 # `ships:` names which demos are supposed to have the file at all: a demo that
 # ships it and is not listed FAILS, and a listed demo that does not ship it FAILS
@@ -195,7 +192,7 @@ if ARGV.include?("--self-test")
   # The floor is the number of guarded sections measured when this was written.
   # It is a MEASUREMENT, not a target: it may rise freely, and a fall means
   # either a guard was deleted or the vocabulary above stopped reading one.
-  SELF_TEST_VACUITY_FLOOR = 19
+  SELF_TEST_VACUITY_FLOOR = 18
 
   # The one rule with no `# ── … ──` banner, declared so the check below can tell
   # «an arm for an unbannered rule» from «an arm for a banner that has moved».
@@ -447,30 +444,6 @@ if ARGV.include?("--self-test")
               /^\s*# NAME WHAT THE DOCUMENT CARRIES.*?cannot check the hint\.\n/m, ""]],
       expect: /stylish: the wrong-door rationale above `hint:` in app\/controllers\/application_controller\.rb is GONE/ },
 
-    { id: "vacuity-archaeology-table-moved", kind: :vacuity,
-      rule: "WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520)",
-      what: "the neighbouring guard's RULES table moves, so the derived coverage sentence has " \
-            "nothing to read — and a sentence that quietly stops being derived is the typed " \
-            "list all over again",
-      ops:  [[:edit, "bin/check-shipped-archaeology", "RULES = [\n", "RULES = [] + [\n"]],
-      expect: /could not read the rule table of bin\/check-shipped-archaeology/ },
-    { id: "vacuity-archaeology-demo-scope", kind: :vacuity,
-      rule: "WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520)",
-      what: "the scope name this script matches on stops naming anything in that table, so the " \
-            "green line would report that NO ban reaches the demos and read as a fact",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "arch_demo_bans  = arch_rules.select { |(_id, scopes, _what)| scopes.include?(\"demo\") }",
-              "arch_demo_bans  = arch_rules.select { |(_id, scopes, _what)| scopes.include?(\"nope\") }"]],
-      expect: /reaches the demo tree with NO ban at all/ },
-    { id: "vacuity-archaeology-contrast", kind: :vacuity,
-      rule: "WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520)",
-      what: "the second half of the contrast drains, so the sentence reads «everything is " \
-            "covered» — which is verbatim the false clause K-1520 was filed for",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "arch_other_bans = arch_rules.reject { |(_id, scopes, _what)| scopes.include?(\"demo\") }",
-              "arch_other_bans = arch_rules.reject { |(_id, scopes, _what)| scopes.include?(\"gem\") }"]],
-      expect: /every ban in bin\/check-shipped-archaeology's rule table now reaches the demo tree/ },
-
     { id: "vacuity-wrong-door-anchor", kind: :vacuity,
       rule: "The wrong-door RATIONALE must stay in LOCKSTEP across the copies (K-1508)",
       what: "the anchor stops finding the block, so a lockstep rule with nothing to compare must say so",
@@ -717,10 +690,10 @@ if ARGV.include?("--self-test")
 
     { id: "vacuity-convergence-census", kind: :vacuity,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
-      what: "the derived CONVERGENCE GROUPS block records nothing, so it would print an empty tree as a clean one",
+      what: "the convergence census records nothing, so it would pass an empty tree as a clean one",
       ops:  [[:edit, "bin/check-demo-copies",
               "  AGREE_CENSUS << {\n", "  [] << {\n"]],
-      expect: /the CONVERGENCE GROUPS census recorded NO compared subject/ },
+      expect: /the convergence census recorded NO compared subject/ },
 
     { id: "driver-env-defaulted", kind: :break,
       rule: "A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546)",
@@ -2115,10 +2088,7 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 # invisible at both granularities, and it is precisely the state that means
 # somebody hand-copied something.
 #
-# EVERY `:per_demo` PATH IS GROUPED BY THE SHA256 OF ITS {code_norm} ON EVERY RUN,
-# AND THE RUN PRINTS WHAT IT FOUND — the CONVERGENCE GROUPS block, naming each
-# subject, each copy's normalised size and which subsets share a digest. No figure
-# from it is written down here.
+# EVERY `:per_demo` PATH IS GROUPED BY THE SHA256 OF ITS {code_norm} ON EVERY RUN.
 #
 # Any subset that agrees must be declared in the entry's `agree:` map, as one of
 # two kinds:
@@ -2138,9 +2108,7 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 # THE CAP IS THE ONE SUBSTANTIVE DIFFERENCE, because without it `:coincidence`
 # would be a free way to switch this rule off. A `:coincidence` group may not
 # exceed AGREE_COINCIDENCE_MAX_LINES normalised lines: above that, «they happen to
-# agree» stops being a credible reading of hand-copied code. Both populations are
-# printed with their sizes on every run, so the cap can be re-checked against the
-# tree in front of you rather than against a reading somebody took once.
+# agree» stops being a credible reading of hand-copied code.
 #
 # THIS IS NOT A PARTIAL COMPARISON — no region is carved out of any file. Whole
 # copies, normalised whole, with the SUBSETS that agree named.
@@ -2153,12 +2121,8 @@ AGREE_COINCIDENCE_MAX_LINES = 12
 
 # `bodies` is demo => normalised source; `declared` is the entry's `agree:` map,
 # keyed by a demo list. Appends to `errors` and returns the number of declared
-# groups it CONFIRMED against the tree — which the summary prints, so a rule that
-# has stopped finding anything shows up as a number rather than as silence.
-# EVERY GROUP THIS RULE SEES, RECORDED FOR THE RUN TO PRINT. Each row is one
-# compared subject — every copy's normalised size and whichever subsets agree —
-# and the CONVERGENCE GROUPS block at the end of a run is the authority. No
-# paragraph in this file quotes one of these numbers.
+# groups it CONFIRMED against the tree.
+# Every subject this rule sees, recorded so an empty census fails (K-1542).
 AGREE_CENSUS = []
 
 def agree_check(label, what, bodies, declared, errors)
@@ -2742,67 +2706,6 @@ unless comment_toks.size == 1 && comment_toks.first[1] == :on_comment &&
             "STRING on this rule's own fixtures (comment → #{comment_toks.map { _1[1] }.inspect}, " \
             "string → #{string_toks.map { _1[1] }.inspect}). The whole ban is that distinction, " \
             "so it cannot be assumed."
-end
-
-# ── WHAT THE NEIGHBOURING GUARD COVERS IS READ OFF ITS RULE TABLE (K-1520) ───
-#
-# The green line below points a reader at `bin/check-shipped-archaeology` and says
-# which of its bans reach the DEMO tree, because this script's own ban is the
-# narrower one (code tokens only) and a reader deciding whether their comment is
-# held needs to know where the wider one stops. The clause is DERIVED from that
-# script's `RULES` table — ids, `scopes:` and `what:` parsed out of the source —
-# so the day a ban gains or loses the demo scope this sentence moves with it, and
-# the day the table stops being parseable this script says so instead of printing
-# a stale summary.
-ARCHAEOLOGY_GUARD = File.join(ROOT, "bin", "check-shipped-archaeology")
-
-# [[id, scopes, what], …] read out of the neighbouring guard's own RULES table.
-# Returns [] when the table cannot be found or parsed — the caller turns that
-# into an error rather than into a quiet sentence.
-def archaeology_rules(path)
-  return [] unless File.exist?(path)
-
-  block = File.read(path)[/^RULES = \[\n(.*?)^\]\.freeze/m, 1]
-  return [] if block.nil?
-
-  block.split(/(?=\{ id: )/).filter_map do |chunk|
-    id     = chunk[/id:\s*"(R\d+)"/, 1]
-    scopes = chunk[/scopes:\s*%i\[([^\]]*)\]/, 1]
-    what   = chunk[/what:\s*"([^"]*)"/, 1]
-    next if id.nil? || scopes.nil? || what.nil?
-
-    [id, scopes.split, what]
-  end
-end
-
-arch_rules      = archaeology_rules(ARCHAEOLOGY_GUARD)
-arch_demo_bans  = arch_rules.select { |(_id, scopes, _what)| scopes.include?("demo") }
-arch_other_bans = arch_rules.reject { |(_id, scopes, _what)| scopes.include?("demo") }
-
-# VACUITY, three ways, because every one of them would leave the green line
-# saying something a reader would act on. An unparseable table, a table that
-# reaches the demos with nothing at all, and a table whose every rule reaches
-# the demos — the last one matters because the sentence's whole point is the
-# CONTRAST, and a derivation that silently lost the second half would read as
-# «everything is covered», which is what the typed version got wrong.
-if arch_rules.length < 2
-  errors << "check-demo-copies: could not read the rule table of " \
-            "bin/check-shipped-archaeology (#{arch_rules.length} rule(s) parsed). The green " \
-            "line below tells a reader which of that guard's bans reach the demo tree, and it " \
-            "is DERIVED from that table (K-1520) rather than typed. Re-point the parse at the " \
-            "table, or state the coverage there — do not let this sentence go back to being a " \
-            "remembered list."
-elsif arch_demo_bans.empty?
-  errors << "check-demo-copies: bin/check-shipped-archaeology's rule table now reaches the demo " \
-            "tree with NO ban at all (K-1520). Either that guard has stopped covering the demos " \
-            "— in which case this script's green line must stop pointing a reader at it — or the " \
-            "scope name has changed and this parse is reading the wrong column."
-elsif arch_other_bans.empty?
-  errors << "check-demo-copies: every ban in bin/check-shipped-archaeology's rule table now " \
-            "reaches the demo tree (K-1520). That may be correct, but the green line below is " \
-            "written as a CONTRAST — these reach the demos, those stop at the door — and a " \
-            "contrast with an empty second half reads as «everything is covered», which is the " \
-            "sentence this rule was filed to stop. Restate it deliberately."
 end
 
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
@@ -5015,7 +4918,6 @@ fragment_sources.each do |id, per_demo|
 end
 
 fragment_comparisons     = 0
-fragment_copies_compared = 0
 fragment_exceptions_live = 0
 FRAGMENTS.each do |id, entry|
   rel = id.split("#").first
@@ -5084,7 +4986,6 @@ FRAGMENTS.each do |id, entry|
                 "exception or make the rule `:per_demo` and say the copies are not compared (K-1263)."
       next
     end
-    fragment_copies_compared += compared.size
     fragment_exceptions_live += excused.size
     groups = compared.group_by { |_demo, src| src }
     unless groups.size == 1
@@ -5168,14 +5069,13 @@ end
 # VACUITY, TWO ARMS.
 #
 # The first: a declared path that shares NOTHING is NAMED. A path contributing
-# nothing otherwise looks exactly like a path that has been checked, and inside
-# FRAGMENT_PATHS the silence is worse, because the summary counts the path.
+# nothing otherwise looks exactly like a path that has been checked.
 FRAGMENT_PATHS.each do |rel|
   shared = fragment_sources.count { |id, per_demo| id.start_with?("#{rel}#") && per_demo.size >= 2 }
   next if shared.positive?
 
   errors << "#{rel}: named in FRAGMENT_PATHS, and the extractor finds NO unit shared by two or " \
-            "more of its copies — so this path contributes nothing and the summary counts it as a " \
+            "more of its copies — so this path contributes nothing while it reads as a " \
             "file the fragment rule holds. Either its copies stopped sharing anything, in which " \
             "case move it to FRAGMENT_EXCLUDED with that as the reason, or the handle cannot see " \
             "what they share, in which case say which construct and fix the handle (T-146)."
@@ -5184,7 +5084,7 @@ end
 # The second: a rule whose pattern matches nothing in this repository must fail
 # rather than pass. If the class-macro handle ever stops finding a class body at
 # all — a Ripper change, a walker that stops matching a node shape — every DSL unit
-# silently leaves the corpus and the summary drops by a number nobody is watching.
+# silently leaves the corpus.
 if fragment_dsl_ids.empty?
   errors << "check-demo-copies: the T-146 class-macro handle found NO class-body macro in any " \
             "copy of the #{FRAGMENT_PATHS.size} declared `:per_demo` path(s). It was added " \
@@ -5352,14 +5252,12 @@ spec_delegated_names = spec_shared.select { |name, byfile| spec_delegated.call(n
 spec_owned      = spec_shared.reject { |name, _| spec_delegated_names.include?(name) }
 spec_compared   = 0
 
-# The corpus's OWN split, derived on this run so the green line can report the
-# reach of each rule instead of asserting it (K-1536). A relative path — the
+# The corpus's OWN split (K-1536). A relative path — the
 # part after the demo directory — that two or more corpus files share is a path
 # the FRAGMENTS rule above CAN be pointed at; a path unique to its demo is
 # reachable at no granularity but the unit name.
 spec_by_relpath   = spec_corpus.group_by { |rel| rel.split("/", 2).last }
 spec_shared_paths = spec_by_relpath.select { |_sub, group| group.size >= 2 }
-spec_on_shared    = spec_shared_paths.values.sum(&:size)
 
 # DISCOVERY: a unit name in two or more files of this corpus must be declared.
 # The same property the file-level manifest has, at the granularity these copies
@@ -5689,7 +5587,6 @@ end
 # that is not a demo.
 E2E_RUN_SH           = "e2e/run.sh"
 E2E_INITIALIZER_COPY = %r{^\s*cp\s+"\$FIXTURES/(?<fixture>[^"]+)"\s+config/initializers/}
-e2e_initializers     = 0
 run_sh               = File.join(ROOT, E2E_RUN_SH)
 
 if File.exist?(run_sh)
@@ -5713,7 +5610,6 @@ if File.exist?(run_sh)
       next
     end
 
-    e2e_initializers += 1
     scan_initializer.call(label: "e2e", rel: rel, path: path, env_hint: E2E_ENV_HINT)
   end
 else
@@ -6240,7 +6136,6 @@ def e83_harness_block(src)
   lines[start, stop ? stop + 1 : lines.length - start].join
 end
 
-e83_pair_checked = 0
 e83_demo_copies = demos.map { |dir| File.join(dir, E83_DEMO_PATH) }.select { |p| File.file?(p) }.sort
 e83_harness_file = File.join(ROOT, E83_HARNESS_PATH)
 if e83_demo_copies.empty? || !File.file?(e83_harness_file)
@@ -6256,7 +6151,6 @@ else
   else
     e83_got = { demo: code_digest(e83_demo_copies.first),
                 harness: Digest::SHA256.hexdigest(code_norm(e83_block)) }
-    e83_pair_checked += 1
     e83_moved = E83_RECONCILED.reject { |half, sha| e83_got[half] == sha }
     unless e83_moved.empty?
       errors << "#{E83_DEMO_PATH} ↔ #{E83_HARNESS_PATH} §8.3: the #{e83_moved.keys.join(' and ')} " \
@@ -6594,7 +6488,6 @@ if wire_read != OPERATOR_SEVEN.length + 1 # + the e2e fixture; prove serves no K
             "lost one passes vacuously for the demo whose wire prose nobody is reading."
 end
 
-framework_claim_checks = 0
 FRAMEWORK_CLAIMS.each do |id, claim|
   # (c) THE SOURCE BINDING, checked first: a claim whose producer stopped saying
   # it is wrong in every document at once, and saying WHICH is more useful than
@@ -6606,7 +6499,6 @@ FRAMEWORK_CLAIMS.each do |id, claim|
                 "unbound — re-point it or delete it, do not leave it asserting about nothing."
     else
       body = File.read(path)
-      framework_claim_checks += 1
       if src[:must] && body !~ src[:must]
         errors << "K-1069 claim `#{id}`: #{src[:file]} no longer matches #{src[:must].inspect}. " \
                   "The demos say this about the framework and the framework stopped saying it — " \
@@ -6626,7 +6518,6 @@ FRAMEWORK_CLAIMS.each do |id, claim|
       docs.each do |rel, text|
         next unless (m = text.match(banned))
 
-        framework_claim_checks += 1
         errors << "#{label}: #{rel} says «#{m[0][0, 140]}», which K-1069 claim `#{id}` forbids. " \
                   "#{claim[:why]}"
       end
@@ -6646,7 +6537,6 @@ FRAMEWORK_CLAIMS.each do |id, claim|
                 "Either the demo stopped shipping the document or the declaration is stale."
       next
     end
-    framework_claim_checks += 1
 
     if claim[:text] && !text.include?(claim[:text])
       errors << "#{label}: #{doc} does not carry K-1069 claim `#{id}` verbatim. It must say " \
@@ -6672,7 +6562,6 @@ FRAMEWORK_CLAIMS.each do |id, claim|
     text = corpus.dig(label, doc)
     next unless text && text =~ claim[:topic]
 
-    framework_claim_checks += 1
     next if text =~ claim[:must]
 
     errors << "#{label}: #{doc} raises K-1069 claim `#{id}`'s subject without being declared in " \
@@ -6951,7 +6840,6 @@ end
 BIN_REF_RE = %r{(?<=[`"'\s(])(?:\./)?bin/([a-z0-9_][a-z0-9_-]*)}
 
 bin_ref_files = 0
-bin_refs      = 0
 bin_local     = 0
 demos.each do |dir|
   label   = short.(File.basename(dir))
@@ -6972,7 +6860,6 @@ demos.each do |dir|
   bin_corpus.each do |path, body|
     bin_ref_files += 1
     body.scan(BIN_REF_RE).flatten.uniq.each do |name|
-      bin_refs += 1
       in_demo = File.join(dir, "bin", name)
       at_root = File.join(ROOT, "bin", name)
       where   = File.file?(in_demo) ? in_demo : (File.file?(at_root) ? at_root : nil)
@@ -7093,7 +6980,6 @@ if container_tracked.length < 500
 end
 
 container_ignores  = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IGNORE_RE }
-container_recipes  = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_RECIPE_RE }
 container_composes = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_COMPOSE_RE }
 container_images   = container_tracked.select { |rel| File.basename(rel) =~ CONTAINER_IMAGE_RE }
 
@@ -7357,137 +7243,17 @@ container_ignores.each do |rel|
             "it sits in a context something actually builds from."
 end
 
-# THE CENSUS ITSELF IS SUBJECT TO THE VACUITY RULE (K-1542). A block that prints
-# nothing reads exactly like a tree with nothing in it, which is the failure the
-# derived figures replaced hand-typed ones to avoid.
+# An empty census reads exactly like a tree with nothing in it (K-1542).
 if AGREE_CENSUS.empty? && errors.empty?
-  errors << "check-demo-copies: the CONVERGENCE GROUPS census recorded NO compared subject, so the " \
-            "block below would print an empty tree as a clean one. {agree_check} runs over every " \
+  errors << "check-demo-copies: the convergence census recorded NO compared subject, so the " \
+            "rule would pass an empty tree as a clean one. {agree_check} runs over every " \
             "`:per_demo` file and every `:per_demo` fragment unit, so an empty census means neither " \
             "pass reached it (K-1542)."
 end
 
 if errors.empty?
-  guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
-  tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
-  pair_drift  = MIGRATION_PAIRS.count { |_, e| e[:drift] }
-  # ── CONVERGENCE GROUPS (derived on this run; printed, never red) ───────────
-  #
-  # What the `:per_demo` copies actually come to once comments and whitespace
-  # are normalised away, and which subsets of them agree. This is the block the
-  # header's manifest paragraphs point at instead of quoting a figure: the
-  # numbers move whenever a driver is refactored, and a sentence cannot.
-  converged = AGREE_CENSUS.select { |row| row[:groups].any? }
-  puts "\nCONVERGENCE GROUPS (derived on this run; printed, never red)"
-  puts "  #{AGREE_CENSUS.count { |r| r[:what] == 'file' }} `:per_demo` file(s) and " \
-       "#{AGREE_CENSUS.count { |r| r[:what] == 'unit' }} `:per_demo` unit(s) grouped by the SHA256 " \
-       "of their normalised body; #{converged.size} carr#{converged.size == 1 ? 'ies' : 'y'} a " \
-       "group of two or more."
-  converged.sort_by { |row| [row[:what], row[:label]] }.each do |row|
-    row[:groups].sort_by { |g| -g[:demos].size }.each do |g|
-      kind = g[:rule] ? g[:rule].inspect : "UNDECLARED"
-      puts "  #{row[:what]}  #{row[:label]}  [#{g[:demos].join(',')}] #{kind} — " \
-           "#{g[:lines]} normalised line(s)"
-    end
-    others = row[:sizes].reject { |demo, _| row[:groups].any? { |g| g[:demos].include?(demo) } }
-    next if others.empty?
-
-    puts "        the copies OUTSIDE any group: " \
-         "#{others.sort_by { |_, n| -n }.map { |demo, n| "#{demo} #{n}" }.join(', ')}"
-  end
-  puts
-
-  puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, #{guarded} kept in lockstep, " \
-       "#{tpl_checked} install-generator templates byte-matched against their copies in all " \
-       "#{operator_demos.size} operator demos (no exceptions available), " \
-       "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
-       "app/services autoload-once resolved both ways in #{autoload_once_checked} demos, " \
-       "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
-       "no env resolution and no Rails-framework patching in the initializers of " \
-       "#{initializer_demos} operator demos nor in the #{e2e_initializers} e2e harness " \
-       "initializer fixtures run.sh installs " \
-       "(#{INITIALIZER_ENV_FETCH_ALLOWED.size} declared ENV.fetch allowances), " \
-       "#{driver_env_held.map { |var, held| "#{held} #{var}" }.join(' and ')} no-default " \
-       "fetch(es) in #{driver_env_scripts} demo driver script(s) (none carries a fallback), " \
-       "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles, " \
-       "application_controller.rb's superclass sentence checked against the tree in " \
-       "#{prose_units.length} copies, " \
-       "no retired 0.3 wire or error-shape vocabulary in the served body of " \
-       "#{static_pages} static signpost pages, " \
-       "#{env_cites} source-path cite(s) in #{env_templates} deploy/env templates resolved " \
-       "against their own demo, " \
-       "#{framework_claim_checks} cross-demo framework-prose assertions over " \
-       "#{FRAMEWORK_CLAIMS.size} declared claims in #{corpus.size} demo document sets, " \
-       "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
-       "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
-       "with its exit-status tail compared in all #{flow_tails.size}, " \
-       "#{host_block_sites} host-detection block(s) in #{host_blocks.size} demo(s) held in one form " \
-       "modulo each demo's own vanity host and paired one-to-one with the " \
-       "#{host_pair_booting} rake task(s) that boot a server, each of which also asserts its port " \
-       "is free through one of #{free_port_blocks.size} identical `<demo>_require_free_port` " \
-       "helper(s), " \
-"#{desc_indent_parsed} `desc <<~` description bod#{desc_indent_parsed == 1 ? 'y' : 'ies'} " \
-"in the rake files of #{demos.length} demo(s) dedent to a column of their own — none is " \
-"flush left, so none re-indents the `rake -D` text around it, " \
-       "#{prose_path_cites} source-path and #{prose_code_refs} `{Constant}` citation(s) in the " \
-       "comments of #{prose_corpus.size} compared file(s) resolved against the tree, " \
-       "#{E2E_FIXTURES.size} e2e harness fixture(s) declared " \
-       "(#{e2e_fixture_comparisons} comparison(s) against a demo copy, " \
-       "#{E2E_FIXTURES.count { |_, e| e.key?(:pairs) && e[:pairs].nil? }} declared to have no " \
-       "counterpart and checked for one), " \
-"the §8.3 example-vs-schema loop held at #{e83_pair_checked} reconciled pair of digests " \
-"(script/descriptor_examples.rb against e2e/schema_conformance.rb's §8.3 block), " \
-       "#{fragment_comparisons} shared-unit cop#{fragment_comparisons == 1 ? 'y' : 'ies'} declared " \
-       "in #{FRAGMENTS.size} unit(s) inside #{FRAGMENT_PATHS.size} `:per_demo` file(s) " \
-       "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} unit(s) held in lockstep over " \
-       "#{fragment_copies_compared} compared copies with #{fragment_exceptions_live} declared " \
-       "exception(s), the rest declared " \
-       "same-name-different-body; #{fragment_dsl_ids.size} reached only by the class-macro handle, " \
-       "#{agree_groups} declared convergence group(s) of `:per_demo` copies confirmed against the " \
-       "tree over both granularities, " \
-       "#{FRAGMENT_EXCLUDED.size} `:per_demo` path(s) declared out of the rule with a reason), " \
-       "one spelling (#{house_spellings.first.inspect}) of the absent-field refusal read off " \
-       "#{house_sentence_sites.length} producer(s) — #{house_ships ? house_ships.length : 0} demo(s) " \
-       "plus the engine, " \
-       "one accepted shape (#{wire_date_shapes.first.inspect}) for a wire date read off " \
-       "#{wire_date_sites.length} producer(s) in two notations — " \
-       "#{wire_date_ships ? wire_date_ships.length : 0} demo(s) plus the engine, " \
-       "#{bin_refs} `bin/` reference(s) in #{bin_ref_files} demo script(s) and README(s) resolved to " \
-       "an existing executable (#{bin_local} of them to the demo's own bin/), " \
-       "`validate_responses` gated off production in #{vr_demos} operator initializer(s) against " \
-       "the engine's own hazard sentence, " \
-       "a container path in #{container_covered.length} of #{container_demo_names.length} demo(s) " \
-       "off ONE shared image (#{container_ports_derived} port(s) derived from the demos' own rake " \
-       "defaults, Ruby and Postgres majors held against ci.yml) and no orphaned container tooling " \
-       "in #{container_tracked.length} #{container_source} path(s) " \
-       "(#{container_ignores.length} ignore file(s) against #{container_contexts.length} derived " \
-       "build context(s), #{container_recipes.length} recipe(s); " \
-       "detector proved on #{container_truth.length} constructed names), " \
-       "the wrong-door rationale above `hint:` held in lockstep across " \
-       "#{wrong_door_units.length} copy(ies) " \
-       "(#{wrong_door_units.map { |u| u[:block].lines.length }.max.to_i} line(s) each; a copy " \
-       "carrying the key with NO block above it is a FAILURE, not a skip — K-1508), " \
-       "no ledger id outside a comment in #{demo_id_files} demo Ruby file(s) " \
-       "(pattern and lexer proved against #{DEMO_ID_FIXTURES.size} fixtures this rule owns; " \
-       "bin/check-shipped-archaeology reaches the demo tree with " \
-       "#{arch_demo_bans.length} of its #{arch_rules.length} bans — " \
-       "#{arch_demo_bans.map { |(id, _s, what)| "#{id} #{what}" }.join(', ')} — into comments " \
-       "and prose alike, while #{arch_other_bans.length} stop(s) at the demo door " \
-       "(#{arch_other_bans.map { |(id, _s, what)| "#{id} #{what}" }.join(', ')}); that split is " \
-       "READ OFF that script's own rule table on this run, not restated here (K-1520). THAT " \
-       "script is also the one that reads a SENTENCE rather than a token. THIS script reads " \
-       "none of them, so its green line says nothing about narration in a compared copy — ask " \
-       "that one), " \
-       "#{spec_compared} copy(ies) of #{spec_owned.size} hand-copied harness unit(s) held by NAME " \
-       "across #{spec_corpus.size} demo spec/test file(s) in " \
-       "#{spec_corpus.map { |rel| rel.split('/').first }.uniq.size} demo(s) " \
-       "(#{spec_delegated_names.size} further name(s) delegated to the path-keyed fragment rule " \
-       "above; #{spec_on_shared} of those files sit at the #{spec_shared_paths.size} relative " \
-       "path(s) that two or more of them share — which that rule CAN be pointed at, and is — " \
-       "while the other #{spec_corpus.size - spec_on_shared} are reachable at no granularity but " \
-       "the unit name — K-1536), and every one of those #{spec_shared_paths.size} shared path(s) " \
-       "is declared in the FILE-level manifest, so the whole file is compared and not merely the " \
-       "unit names inside it (K-1550)"
+  puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, " \
+       "#{COPIES.count { |_, e| e[:rule] != :per_demo }} kept in lockstep"
   exit 0
 end
 

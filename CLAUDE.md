@@ -113,9 +113,7 @@ universal agent skill is `skill.md` on the same site.
   held too: a relative path that two or more of those spec files share must be
   declared in `EXTRA_SCANNED`, which is what hands it to the file-level manifest
   and its COPIES entry — without that the unit rule compares the names it knows
-  and everything else in the copy is compared against nothing (K-1550). Which rule
-  reaches how many copies is COUNTED on every run and printed in the green line;
-  read it there rather than restating it here.
+  and everything else in the copy is compared against nothing (K-1550).
   The `db/migrate` copies are ALSO held against the engine's install-generator
   `.rb.tt` templates (rendered with the generator's defaults, byte-matched), so
   editing a template in kiosk-server without regenerating the demos — or

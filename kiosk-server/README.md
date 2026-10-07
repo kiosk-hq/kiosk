@@ -559,6 +559,10 @@ you `render`. On top of that:
 - `render_kiosk_result(result)` — answer with a `Kiosk::OperationResult`: a
   success renders its value, a refusal renders its code, message and hint at the
   status your subclass's `STATUSES` maps the code to.
+- `Kiosk::Settlement` and `Kiosk::CartMandate` — read models over the receipts
+  `pay` records. `Kiosk::Settlement.of_current_principal` is the caller's own;
+  `Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: id))`
+  is the settlement whose cart names your row by the key your line items carry.
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 

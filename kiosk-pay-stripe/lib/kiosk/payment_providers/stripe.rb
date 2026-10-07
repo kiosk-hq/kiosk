@@ -22,21 +22,17 @@ module Kiosk
       RETURN_QUERY = "session_id={CHECKOUT_SESSION_ID}"
 
       # @param api_key [String] Stripe secret key
-      # @param test_payment_method [String, nil] charged when no resolver is
-      #   configured and the mandate presents no payment method
-      # @param customer_resolver [#call, nil] `(user_id) -> customer_id | nil`
-      # @param customer_saver [#call, nil] `(user_id, customer_id)`; replaces
-      #   any earlier mapping for that user
+      # @param customer_resolver [#call] `(user_id) -> customer_id | nil`
+      # @param customer_saver [#call] `(user_id, customer_id)`; replaces any
+      #   earlier mapping for that user
       # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture
       #   instead of requiring the hosted card entry
-      def initialize(api_key: nil, test_payment_method: "pm_card_visa",
-                     customer_resolver: nil, customer_saver: nil, test_autocard: false)
+      def initialize(customer_resolver:, customer_saver:, api_key: nil, test_autocard: false)
         super()
-        @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
-        @test_payment_method = test_payment_method
-        @customer_resolver   = customer_resolver
-        @customer_saver      = customer_saver
-        @test_autocard       = test_autocard
+        @api_key           = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
+        @customer_resolver = customer_resolver
+        @customer_saver    = customer_saver
+        @test_autocard     = test_autocard
         require "stripe"
         # Process-global: one adapter per process.
         ::Stripe.api_key = @api_key
@@ -73,9 +69,8 @@ module Kiosk
       end
 
       # True when the principal must save a card before a charge. Never true
-      # without a resolver or under `test_autocard`.
+      # under `test_autocard`.
       def setup_required?(user_id:)
-        return false unless @customer_resolver
         return false if @test_autocard
 
         !saved_method?(user_id: user_id)
@@ -87,28 +82,20 @@ module Kiosk
         !customer.nil? && !saved_payment_method_for(customer).nil?
       end
 
-      # Charges the cart off_session. With a resolver, the principal's saved
-      # card is charged and the mandate's payment method is ignored; without
-      # one, the presented method or `test_payment_method` is.
+      # Charges the principal's saved card off_session; the mandate's payment
+      # method is not used.
       #
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
       # @raise [SetupRequired] when there is no card to charge
       # @raise [PaymentFailed] when Stripe declines or cannot confirm the charge
       def capture(cart_mandate, payment_method: nil)
-        if @customer_resolver
-          customer = live_customer(cart_mandate.user_id)
-          pm = customer && saved_payment_method_for(customer)
-          if pm.nil? && @test_autocard
-            customer = ::Stripe::Customer.retrieve(attach_test_card(user_id: cart_mandate.user_id))
-            pm = saved_payment_method_for(customer)
-          end
-          raise SetupRequired unless pm
-
-          cus_id = customer.id
-        else
-          cus_id = nil
-          pm = non_empty(payment_method) || non_empty(@test_payment_method) || raise(SetupRequired)
+        customer = live_customer(cart_mandate.user_id)
+        pm = customer && saved_payment_method_for(customer)
+        if pm.nil? && @test_autocard
+          customer = ::Stripe::Customer.retrieve(attach_test_card(user_id: cart_mandate.user_id))
+          pm = saved_payment_method_for(customer)
         end
+        raise SetupRequired unless pm
 
         intent =
           begin
@@ -116,12 +103,12 @@ module Kiosk
               {
                 amount:         cart_mandate.total_amount_cents,
                 currency:       cart_mandate.currency,
-                customer:       cus_id,
+                customer:       customer.id,
                 payment_method: pm,
                 off_session:    true,
                 confirm:        true,
                 metadata:       { cart_mandate_id: cart_mandate.id },
-              }.compact,
+              },
               { idempotency_key: "#{cart_mandate.id}-capture" },
             )
           rescue ::Stripe::CardError => e
@@ -216,14 +203,14 @@ module Kiosk
         return existing.id if existing
 
         cus = ::Stripe::Customer.create({ name: "principal-#{user_id}" })
-        @customer_saver&.call(user_id, cus.id)
+        @customer_saver.call(user_id, cus.id)
         cus.id
       end
 
       # The principal's Stripe Customer, or nil when none is mapped or Stripe
       # no longer has the mapped one (deleted, or never in this account).
       def live_customer(user_id)
-        cus_id = @customer_resolver&.call(user_id)
+        cus_id = @customer_resolver.call(user_id)
         return nil unless cus_id
 
         customer = ::Stripe::Customer.retrieve(cus_id)
@@ -236,10 +223,6 @@ module Kiosk
       def saved_payment_method_for(customer)
         customer.invoice_settings&.default_payment_method ||
           ::Stripe::PaymentMethod.list(customer: customer.id, type: "card").data.first&.id
-      end
-
-      def non_empty(str)
-        str && !str.empty? ? str : nil
       end
     end
   end

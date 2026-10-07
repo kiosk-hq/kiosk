@@ -14,6 +14,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       adapter = described_class.new(
         api_key:           "sk_test_x",
         customer_resolver: ->(_uid) { nil },
+        customer_saver:    ->(_uid, _cid) {},
         test_autocard:     true,
       )
       expect(adapter.setup_required?(user_id: "u")).to be(false)
@@ -23,6 +24,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       adapter = described_class.new(
         api_key:           "sk_test_x",
         customer_resolver: ->(_uid) { nil },
+        customer_saver:    ->(_uid, _cid) {},
         test_autocard:     false,
       )
       # resolver returns nil ⇒ saved_method? false ⇒ setup required
@@ -35,6 +37,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       adapter = described_class.new(
         api_key:           "sk_test_x",
         customer_resolver: ->(_uid) { nil }, # no customer yet
+        customer_saver:    ->(_uid, _cid) {},
         test_autocard:     true,
       )
       cart = double("CartMandate", user_id: "u", total_amount_cents: 500, currency: "eur", id: "cart-1")
@@ -56,6 +59,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       adapter = described_class.new(
         api_key:           "sk_test_x",
         customer_resolver: ->(_uid) { "cus_existing" }, # customer already on file
+        customer_saver:    ->(_uid, _cid) {},
         test_autocard:     true,
       )
       cart = double("CartMandate", user_id: "u", total_amount_cents: 500, currency: "eur", id: "cart-1")

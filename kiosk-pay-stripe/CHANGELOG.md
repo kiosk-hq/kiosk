@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **`customer_resolver:` and `customer_saver:` are required**; the mode that charged a presented or `test_payment_method` card without them is gone (K-1994).
 - 2026-10-07: **A mapped Customer that Stripe no longer has counts as no saved card**; `setup_url` saves a fresh one through `customer_saver`, which now replaces the mapping (K-1993).
 ## [0.5.4] — 2026-10-07
 

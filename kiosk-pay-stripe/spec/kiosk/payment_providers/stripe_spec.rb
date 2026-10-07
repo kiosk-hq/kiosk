@@ -4,9 +4,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   RETURN_URL  = "https://shop.example/kiosk/payment_setup/return"
   SUCCESS_URL = "#{RETURN_URL}?session_id={CHECKOUT_SESSION_ID}"
 
-  subject(:adapter) { described_class.new(api_key: "sk_test_dummy") }
-
-  let(:resolver_adapter) do
+  subject(:adapter) do
     described_class.new(
       api_key:           "sk_test_dummy",
       customer_resolver: ->(uid) { uid == "user-1" ? "cus_existing" : nil },
@@ -67,7 +65,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         success_url:          SUCCESS_URL,
       ).and_return(session)
 
-      url = resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL)
+      url = adapter.setup_url(user_id: "user-1", return_url: RETURN_URL)
       expect(url).to eq("https://checkout.stripe.com/setup/abc")
     end
 
@@ -89,7 +87,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         session
       end
 
-      resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL)
+      adapter.setup_url(user_id: "user-1", return_url: RETURN_URL)
     end
 
     it "creates a new Customer when none exists, persists the mapping, and returns the session url" do
@@ -141,7 +139,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       ).and_return(double("SessionList", data: [listed_session]))
       expect(::Stripe::Checkout::Session).not_to receive(:create)
 
-      expect(resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
+      expect(adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
         .to eq("https://checkout.stripe.com/setup/OUTSTANDING")
     end
 
@@ -150,7 +148,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(double("SessionList", data: [listed_session]))
       allow(::Stripe::Checkout::Session).to receive(:create)
 
-      urls = Array.new(5) { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
+      urls = Array.new(5) { adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
 
       expect(urls.uniq.size).to eq(1)
       expect(::Stripe::Checkout::Session).not_to have_received(:create)
@@ -165,7 +163,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect(resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
+      expect(adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
         .to eq("https://checkout.stripe.com/setup/fresh")
     end
 
@@ -176,7 +174,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect(resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
+      expect(adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
         .to eq("https://checkout.stripe.com/setup/fresh")
     end
 
@@ -186,7 +184,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect(resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
+      expect(adapter.setup_url(user_id: "user-1", return_url: RETURN_URL))
         .to eq("https://checkout.stripe.com/setup/fresh")
     end
 
@@ -201,7 +199,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
+      expect { adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
         .to output(%r{could not list open setup sessions.*setup_url changes between polls}m).to_stderr
     end
 
@@ -210,7 +208,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }.not_to output.to_stderr
+      expect { adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }.not_to output.to_stderr
     end
 
     # The OTHER silent route to "no outstanding session": the lookup asks for one
@@ -225,7 +223,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
+      expect { adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
         .to output(/full page of #{described_class::SETUP_SESSION_LIST_LIMIT} open.*setup_url may change/m).to_stderr
     end
 
@@ -236,7 +234,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(::Stripe::Checkout::Session).to receive(:create)
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
-      expect { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }.not_to output.to_stderr
+      expect { adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }.not_to output.to_stderr
     end
 
   end
@@ -244,16 +242,11 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   # ── setup_required? ──────────────────────────────────────────────────────────
 
   describe "#setup_required?" do
-    it "returns false when no customer resolver is configured (back-compat mode)" do
-      # Without a resolver the adapter operates in explicit-PM / test-PM mode;
-      # no SetupIntent check is performed.
-      expect(adapter.setup_required?(user_id: "user-1")).to be false
-    end
-
     it "returns true when the resolver returns nil (principal has no Customer yet)" do
       no_cus_adapter = described_class.new(
         api_key:           "sk_test_dummy",
         customer_resolver: ->(_uid) { nil },
+        customer_saver:    ->(_uid, _cid) {},
       )
       expect(no_cus_adapter.setup_required?(user_id: "user-unknown")).to be true
     end
@@ -268,7 +261,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         customer: "cus_existing", type: "card",
       ).and_return(pm_list)
 
-      expect(resolver_adapter.setup_required?(user_id: "user-1")).to be true
+      expect(adapter.setup_required?(user_id: "user-1")).to be true
     end
 
     it "returns false when the Customer has a saved default payment method" do
@@ -277,21 +270,18 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
 
-      expect(resolver_adapter.setup_required?(user_id: "user-1")).to be false
+      expect(adapter.setup_required?(user_id: "user-1")).to be false
     end
   end
 
   # ── saved_method? ─────────────────────────────────────────────────────────
 
   describe "#saved_method?" do
-    it "returns false when no customer resolver is configured" do
-      expect(adapter.saved_method?(user_id: "user-1")).to be false
-    end
-
     it "returns false when the resolver returns nil (unknown user)" do
       no_cus_adapter = described_class.new(
         api_key:           "sk_test_dummy",
         customer_resolver: ->(_uid) { nil },
+        customer_saver:    ->(_uid, _cid) {},
       )
       expect(no_cus_adapter.saved_method?(user_id: "user-unknown")).to be false
     end
@@ -302,7 +292,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
 
-      expect(resolver_adapter.saved_method?(user_id: "user-1")).to be true
+      expect(adapter.saved_method?(user_id: "user-1")).to be true
     end
 
     it "returns true when the customer has no default PM but has an attached card in the list" do
@@ -316,7 +306,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         customer: "cus_existing", type: "card",
       ).and_return(pm_list)
 
-      expect(resolver_adapter.saved_method?(user_id: "user-1")).to be true
+      expect(adapter.saved_method?(user_id: "user-1")).to be true
     end
 
     it "returns false when the customer exists but has no saved cards" do
@@ -329,7 +319,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         customer: "cus_existing", type: "card",
       ).and_return(pm_list)
 
-      expect(resolver_adapter.saved_method?(user_id: "user-1")).to be false
+      expect(adapter.saved_method?(user_id: "user-1")).to be false
     end
   end
 
@@ -338,12 +328,17 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   describe "#capture" do
     let(:pi) { double("PaymentIntent", id: "pi_123", amount_received: 1599, created: 1_700_000_000) }
 
-    it "creates an off_session PaymentIntent using the explicit payment method (no customer resolver)" do
+    it "charges the customer's default saved card off_session, keyed by the cart mandate id" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
+
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
       expect(::Stripe::PaymentIntent).to receive(:create).with(
         {
           amount:         1599,
           currency:       "eur",
-          payment_method: "pm_card_visa",
+          customer:       "cus_existing",
+          payment_method: "pm_default_visa",
           off_session:    true,
           confirm:        true,
           metadata:       { cart_mandate_id: "cart-1" },
@@ -351,110 +346,68 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         { idempotency_key: "cart-1-capture" },
       ).and_return(pi)
 
-      result = adapter.capture(cart_mandate, payment_method: "pm_card_visa")
-
+      result = adapter.capture(cart_mandate, payment_method: nil)
       expect(result[:psp_reference]).to eq("pi_123")
-      expect(result[:settled_amount_cents]).to eq(1599)
-      expect(result[:settled_at]).to eq(Time.at(1_700_000_000).utc)
     end
 
-    it "falls back to the test payment method when payment_method is nil and no resolver is set" do
+    it "falls back to the first listed card when no default PM is set" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: nil)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
+      pm_item          = double("PM", id: "pm_listed_visa")
+      pm_list          = double("PMList", data: [pm_item])
+
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
+      allow(::Stripe::PaymentMethod).to receive(:list).with(
+        customer: "cus_existing", type: "card",
+      ).and_return(pm_list)
+
       expect(::Stripe::PaymentIntent).to receive(:create).with(
-        hash_including(payment_method: "pm_card_visa", off_session: true),
+        hash_including(customer: "cus_existing", payment_method: "pm_listed_visa"),
         anything,
       ).and_return(pi)
 
       adapter.capture(cart_mandate, payment_method: nil)
     end
 
-    it "raises SetupRequired when payment_method is nil and no test_payment_method is configured" do
-      no_pm_adapter = described_class.new(api_key: "sk_test_dummy", test_payment_method: nil)
+    it "raises SetupRequired when the customer has no saved card" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: nil)
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
+      pm_list          = double("PMList", data: [])
+
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
+      allow(::Stripe::PaymentMethod).to receive(:list).with(
+        customer: "cus_existing", type: "card",
+      ).and_return(pm_list)
+
       expect {
-        no_pm_adapter.capture(cart_mandate, payment_method: nil)
+        adapter.capture(cart_mandate, payment_method: nil)
       }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
     end
 
-    context "with a customer resolver" do
-      it "charges the customer's default saved card off_session when no explicit pm is given" do
-        invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
-        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
+    it "raises SetupRequired when the resolver returns nil (unknown user)" do
+      no_cus_adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { nil },
+        customer_saver:    ->(_uid, _cid) {},
+      )
+      expect {
+        no_cus_adapter.capture(cart_mandate, payment_method: nil)
+      }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
+    end
 
-        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
-        expect(::Stripe::PaymentIntent).to receive(:create).with(
-          {
-            amount:         1599,
-            currency:       "eur",
-            customer:       "cus_existing",
-            payment_method: "pm_default_visa",
-            off_session:    true,
-            confirm:        true,
-            metadata:       { cart_mandate_id: "cart-1" },
-          },
-          { idempotency_key: "cart-1-capture" },
-        ).and_return(pi)
+    it "ignores an explicitly presented pm and charges the on-file card when a resolver is configured" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
+      customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
 
-        result = resolver_adapter.capture(cart_mandate, payment_method: nil)
-        expect(result[:psp_reference]).to eq("pi_123")
-      end
+      # In the SetupIntent model the assistant authorizes, never presents a
+      # card — so a presented pm is ignored and the saved card is charged.
+      expect(::Stripe::PaymentIntent).to receive(:create).with(
+        hash_including(customer: "cus_existing", payment_method: "pm_default_visa"),
+        anything,
+      ).and_return(pi)
 
-      it "falls back to the first listed card when no default PM is set" do
-        invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
-        pm_item          = double("PM", id: "pm_listed_visa")
-        pm_list          = double("PMList", data: [pm_item])
-
-        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
-        allow(::Stripe::PaymentMethod).to receive(:list).with(
-          customer: "cus_existing", type: "card",
-        ).and_return(pm_list)
-
-        expect(::Stripe::PaymentIntent).to receive(:create).with(
-          hash_including(customer: "cus_existing", payment_method: "pm_listed_visa"),
-          anything,
-        ).and_return(pi)
-
-        resolver_adapter.capture(cart_mandate, payment_method: nil)
-      end
-
-      it "raises SetupRequired when the customer has no saved card" do
-        invoice_settings = double("InvoiceSettings", default_payment_method: nil)
-        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
-        pm_list          = double("PMList", data: [])
-
-        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
-        allow(::Stripe::PaymentMethod).to receive(:list).with(
-          customer: "cus_existing", type: "card",
-        ).and_return(pm_list)
-
-        expect {
-          resolver_adapter.capture(cart_mandate, payment_method: nil)
-        }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
-      end
-
-      it "raises SetupRequired when the resolver returns nil (unknown user)" do
-        no_cus_adapter = described_class.new(
-          api_key:           "sk_test_dummy",
-          customer_resolver: ->(_uid) { nil },
-        )
-        expect {
-          no_cus_adapter.capture(cart_mandate, payment_method: nil)
-        }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
-      end
-
-      it "ignores an explicitly presented pm and charges the on-file card when a resolver is configured" do
-        invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
-        customer         = double("Customer", id: "cus_existing", invoice_settings: invoice_settings)
-        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
-
-        # In the SetupIntent model the assistant authorizes, never presents a
-        # card — so a presented pm is ignored and the saved card is charged.
-        expect(::Stripe::PaymentIntent).to receive(:create).with(
-          hash_including(customer: "cus_existing", payment_method: "pm_default_visa"),
-          anything,
-        ).and_return(pi)
-
-        resolver_adapter.capture(cart_mandate, payment_method: "pm_explicit")
-      end
+      adapter.capture(cart_mandate, payment_method: "pm_explicit")
     end
 
     # ── PSP error translation (K-545) ────────────────────────────────────────
@@ -462,11 +415,17 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     # human-safe message (never raw Stripe internals) — so the executor renders
     # a typed `payment_failed` 402 instead of leaking a raw 500.
     context "when the charge fails at Stripe" do
+      before do
+        invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
+        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing")
+          .and_return(double("Customer", id: "cus_existing", invoice_settings: invoice_settings))
+      end
+
       it "translates a Stripe::CardError (declined) into a RETRYABLE PaymentFailed with a safe message" do
         card_err = ::Stripe::CardError.new("Your card was declined.", nil, code: "card_declined")
         allow(::Stripe::PaymentIntent).to receive(:create).and_raise(card_err)
 
-        expect { adapter.capture(cart_mandate, payment_method: "pm_card_visa") }
+        expect { adapter.capture(cart_mandate) }
           .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
             expect(e).to be_retryable
             expect(e.reason).to eq(:card_declined)
@@ -480,7 +439,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         card_err = ::Stripe::CardError.new("auth", nil, code: "authentication_required")
         allow(::Stripe::PaymentIntent).to receive(:create).and_raise(card_err)
 
-        expect { adapter.capture(cart_mandate, payment_method: "pm_card_visa") }
+        expect { adapter.capture(cart_mandate) }
           .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
             expect(e).to be_retryable
             expect(e.message).to match(/authentication/i)
@@ -491,7 +450,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         allow(::Stripe::PaymentIntent).to receive(:create)
           .and_raise(::Stripe::APIConnectionError.new("timed out"))
 
-        expect { adapter.capture(cart_mandate, payment_method: "pm_card_visa") }
+        expect { adapter.capture(cart_mandate) }
           .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
             expect(e).not_to be_retryable
             expect(e.reason).to eq(:processor_unavailable)
@@ -566,7 +525,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         { invoice_settings: { default_payment_method: "pm_attached_1" } },
       ).and_return(double("Customer"))
 
-      result = resolver_adapter.attach_test_card(user_id: "user-1")
+      result = adapter.attach_test_card(user_id: "user-1")
       expect(result).to eq("cus_existing")
     end
 
@@ -603,7 +562,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       ).and_return(setup)
       allow(::Stripe::Customer).to receive(:update).and_return(double("Customer"))
 
-      result = resolver_adapter.attach_test_card(user_id: "user-1", payment_method: "pm_card_mastercard")
+      result = adapter.attach_test_card(user_id: "user-1", payment_method: "pm_card_mastercard")
       expect(result).to eq("cus_existing")
     end
   end

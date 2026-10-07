@@ -75,12 +75,7 @@ Card-setup handshake (see the Payment section of the spec):
 
 Test mode only for the PoC (`sk_test_…`).
 
-### Back-compat / test fallback
-
-When no `customer_resolver` is configured, the adapter runs in a back-compat
-mode: `capture` uses an explicitly presented `payment_method:` or, absent
-that, the `test_payment_method` (default `pm_card_visa`) — no SetupIntent,
-no card-on-file. Set `test_payment_method: nil` to disable the fallback.
+### Test mode
 
 For automated suites, `test_autocard: true` + `attach_test_card` simulate a
 completed SetupIntent (auto-attaching a test card at capture) so drivers need

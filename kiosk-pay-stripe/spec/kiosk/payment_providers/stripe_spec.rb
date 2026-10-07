@@ -202,7 +202,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
       expect { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
-        .to output(%r{could not check for an outstanding setup session.*setup_url is NOT stable}m).to_stderr
+        .to output(%r{could not list open setup sessions.*setup_url changes between polls}m).to_stderr
     end
 
     it "says NOTHING on the ordinary no-session path (the log line means a real fault)" do
@@ -226,7 +226,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
 
       expect { resolver_adapter.setup_url(user_id: "user-1", return_url: RETURN_URL) }
-        .to output(/FULL page of #{described_class::SETUP_SESSION_LIST_LIMIT} open.*setup_url may not be stable/m).to_stderr
+        .to output(/full page of #{described_class::SETUP_SESSION_LIST_LIMIT} open.*setup_url may change/m).to_stderr
     end
 
     it "stays quiet when a SHORT page came back with nothing reusable (nothing was truncated)" do

@@ -764,13 +764,13 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	                off_sessi
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            mode:                 "setup",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            usage:                "off_session",
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	          if @test_autocard && (cus_id.nil? || saved_payment_method_for(cus_id).nil?)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	          if pm.nil? && @test_autocard
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        ::Stripe.api_key = @api_key
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        return false if @test_autocard  # test mode: card auto-provisioned at capture
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        return false if @test_autocard
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        when "authentication_required" then "the payment method needs authentication an off-session charge cannot complete"
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # hosted Checkout Session URL in `mode: "setup"`. The human opens it in a
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def attach_test_card(user_id:, payment_method: "pm_card_visa")
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def capture(cart_mandate, payment_method: nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key: nil, test_payment_method: "pm_card_visa",

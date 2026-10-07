@@ -5,57 +5,30 @@ require "kiosk/payment_providers/stripe/version"
 
 module Kiosk
   module PaymentProviders
-    # Stripe PSP adapter (test mode for the PoC). See the Payment section
-    # of the spec.
+    # Stripe PSP adapter. The human saves a card once, on the operator's Stripe
+    # account, as a Customer + PaymentMethod; purchases are then charged
+    # `off_session`. The principal→Customer mapping is the host's, injected as
+    # `customer_resolver:` and `customer_saver:` callables.
     #
-    # NOTE: always reference the SDK as `::Stripe` — bare `Stripe` resolves
-    # to this class.
-    #
-    # ## SetupIntent / card-on-file model
-    # The buyer's card is saved ONCE on the *provider's* Stripe account as a
-    # Customer + PaymentMethod (keyed to the synthetic principal / user_id).
-    # Subsequent purchases are charged `off_session` (merchant-initiated).
-    #
-    # The gem stays provider-agnostic: the principal→customer mapping is
-    # injected by the host app (e.g. getgrocery) via `customer_resolver:`
-    # and `customer_saver:` callables. No app table is touched inside this gem.
+    # Always reference the SDK as `::Stripe` — bare `Stripe` is this class.
     class Stripe < Base
       VERSION = StripeVersion::VERSION
 
-      # How many open Checkout Sessions the reuse lookup asks Stripe for.
-      # Reuse only ever needs the ONE `mode:setup` session this adapter minted
-      # for this customer, and the adapter mints at most one per customer, so a
-      # single page is normally enough. But the page is a page: a principal
-      # holding more open sessions than this could have the reusable one fall
-      # off it, and "it was not on the page I asked for" is NOT the same fact as
-      # "there is none" — a second, quieter route to minting a fresh session on
-      # every poll. It is not raised to a number that could not truncate (no such
-      # number exists) — instead a FULL page with no match is logged, see
-      # #outstanding_setup_session.
+      # Open Checkout Sessions the reuse lookup asks for. A full page with no
+      # match is logged: the reusable session may have been truncated away.
       SETUP_SESSION_LIST_LIMIT = 10
 
-      # Stripe substitutes the session id on the redirect, which is how
-      # {#setup_return_user_id} learns whose human came back.
+      # Stripe substitutes the session id on the redirect.
       RETURN_QUERY = "session_id={CHECKOUT_SESSION_ID}"
 
-      # @param api_key [String] Stripe secret key (sk_test_… for the PoC)
-      # @param test_payment_method [String, nil] Stripe test PaymentMethod id
-      #   used as a back-compat fallback when no customer resolver is
-      #   configured (e.g. early unit tests). Set to nil to disable the
-      #   fallback and force the SetupIntent path.
-      # @param customer_resolver [#call, nil] callable `(user_id) -> customer_id | nil`
-      #   Looks up the saved Stripe Customer for a principal. Injected by the
-      #   host (e.g. getgrocery); the gem never reads app tables directly.
-      # @param customer_saver [#call, nil] callable `(user_id, customer_id) -> void`
-      #   Persists a new principal→Customer mapping. Injected by the host.
-      # @param test_autocard [Boolean] TEST-ONLY. When true, the adapter
-      #   simulates a completed SetupIntent (auto-attaches a test card at
-      #   capture) instead of requiring the human's hosted card entry — so
-      #   automated suites (demo drivers, redteam, isolation) need no card-setup
-      #   step and no server-side test route. The host sets this ONLY in a test
-      #   environment (e.g. getgrocery when KIOSK_TEST_AUTOCARD=1); it is
-      #   never enabled in production or the live demo, where the real hosted
-      #   SetupIntent flow runs.
+      # @param api_key [String] Stripe secret key
+      # @param test_payment_method [String, nil] charged when no resolver is
+      #   configured and the mandate presents no payment method
+      # @param customer_resolver [#call, nil] `(user_id) -> customer_id | nil`
+      # @param customer_saver [#call, nil] `(user_id, customer_id)`; replaces
+      #   any earlier mapping for that user
+      # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture
+      #   instead of requiring the hosted card entry
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",
                      customer_resolver: nil, customer_saver: nil, test_autocard: false)
         super()
@@ -65,33 +38,14 @@ module Kiosk
         @customer_saver      = customer_saver
         @test_autocard       = test_autocard
         require "stripe"
-        # PoC scope: this sets a PROCESS-GLOBAL Stripe key. Multiple adapter
-        # instances with different keys would clobber each other; a future fix
-        # uses per-request key options.
+        # Process-global: one adapter per process.
         ::Stripe.api_key = @api_key
       end
 
-      # Resolve or create a Stripe Customer for the principal, then return a
-      # hosted Checkout Session URL in `mode: "setup"`. The human opens it in a
-      # browser (NOT the chat) to enter their card on Stripe's hosted page. The
-      # card is saved as a PaymentMethod on the Customer; the gem never sees
-      # card data.
+      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
+      # same return target is reused, so an assistant polling `payment_setup`
+      # keeps handing its human the same link.
       #
-      # ## STABLE ACROSS POLLS
-      # `payment_setup` is the readiness probe an assistant POLLS
-      # while its human is still at the hosted page, so this call must not mint a
-      # session per poll. It reuses the `mode:setup` Checkout Session already
-      # OUTSTANDING for this customer when there is one, and only creates a new
-      # session when there is not. Minting one per poll is not a theoretical
-      # cost: at a ~4 s cadence a single card setup draws FIVE sessions, the
-      # assistant holds a different url after every poll, and relaying the
-      # newest one mid-flow drops the human off the page they are filling in.
-      #
-      # The wire shape is a hosted Checkout URL either way; what this buys is
-      # the url's stability.
-      #
-      # @param user_id [String] synthetic principal identifier
-      # @param return_url [String] the engine's return page
       # @return [String] hosted Stripe Checkout URL
       def setup_url(user_id:, return_url:)
         success_url = "#{return_url}?#{RETURN_QUERY}"
@@ -107,11 +61,9 @@ module Kiosk
           ).url
       end
 
-      # The principal whose card setup the returning browser reports. The
-      # session id in the query is only a claim; Stripe, asked with this
-      # operator's key, answers the principal the session was minted for.
+      # The principal the returning browser's Checkout Session was minted for,
+      # as Stripe answers it.
       #
-      # @param params [Hash] the return request's query parameters
       # @return [String, nil]
       def setup_return_user_id(params)
         session_id = params["session_id"].to_s
@@ -120,57 +72,30 @@ module Kiosk
         ::Stripe::Checkout::Session.retrieve(session_id).client_reference_id
       end
 
-      # Returns true when the principal MUST complete a Stripe SetupIntent
-      # before a charge can proceed (overrides Base#setup_required?).
-      #
-      # Only meaningful when a customer_resolver is configured (SetupIntent
-      # model).  When there is no resolver the adapter operates in back-compat
-      # mode (explicit PM or test_payment_method fallback) and setup is never
-      # required from the server side.
-      #
-      # @param user_id [String]
-      # @return [Boolean]
+      # True when the principal must save a card before a charge. Never true
+      # without a resolver or under `test_autocard`.
       def setup_required?(user_id:)
         return false unless @customer_resolver
-        return false if @test_autocard  # test mode: card auto-provisioned at capture
+        return false if @test_autocard
 
         !saved_method?(user_id: user_id)
       end
 
-      # Returns true iff the resolved Customer has a usable saved card.
-      # Internal predicate for `setup_required?` (its sole caller); callers
-      # gate on `setup_required?`, not this, so the adapter's policy
-      # (e.g. test_autocard) is honoured.
-      #
-      # @param user_id [String]
-      # @return [Boolean]
+      # True when the principal's Customer has a usable saved card.
       def saved_method?(user_id:)
         customer = live_customer(user_id)
         !customer.nil? && !saved_payment_method_for(customer).nil?
       end
 
-      # Capture an AP2 cart mandate via an off_session (merchant-initiated)
-      # PaymentIntent against the principal's saved card on the provider's
-      # Stripe.
+      # Charges the cart off_session. With a resolver, the principal's saved
+      # card is charged and the mandate's payment method is ignored; without
+      # one, the presented method or `test_payment_method` is.
       #
-      # Payment method resolution order:
-      #   1. Explicit `payment_method:` argument (back-compat, e.g. tests).
-      #   2. Customer's saved card (via `customer_resolver` + PM lookup).
-      #   3. `@test_payment_method` fallback — ONLY when no `customer_resolver`
-      #      is configured (pure back-compat mode without SetupIntent).
-      #
-      # If none of the above yields a PM, raises `SetupRequired`.
-      #
-      # @param cart_mandate [Kiosk::Mandate::CartMandate]
-      # @param payment_method [String, nil] explicit PM reference (optional)
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
-      # @raise [Kiosk::PaymentProviders::SetupRequired] when no PM is available
+      # @raise [SetupRequired] when there is no card to charge
+      # @raise [PaymentFailed] when Stripe declines or cannot confirm the charge
       def capture(cart_mandate, payment_method: nil)
         if @customer_resolver
-          # SetupIntent model: the principal's card is on file. Resolve the
-          # customer (no customer ⇒ the principal must set up a card first) and
-          # charge its saved card. The mandate's payment_method is deliberately
-          # ignored — in this model the assistant authorizes, never presents a card.
           customer = live_customer(cart_mandate.user_id)
           pm = customer && saved_payment_method_for(customer)
           if pm.nil? && @test_autocard
@@ -181,8 +106,6 @@ module Kiosk
 
           cus_id = customer.id
         else
-          # No resolver (unit tests / pre-SetupIntent demos): use an explicitly
-          # presented PM, else the configured test fallback.
           cus_id = nil
           pm = non_empty(payment_method) || non_empty(@test_payment_method) || raise(SetupRequired)
         end
@@ -202,17 +125,10 @@ module Kiosk
               { idempotency_key: "#{cart_mandate.id}-capture" },
             )
           rescue ::Stripe::CardError => e
-            # A card DECLINE (card_declined / expired_card / insufficient_funds /
-            # authentication_required). Stripe raises CardError only after a
-            # DEFINITIVE decision — NO money moved — so this is safe to retry.
-            # Translate to a PSP-agnostic PaymentFailed with a human-safe message
-            # (never the raw Stripe message, which can carry request ids etc.).
+            # A definitive decline: nothing was charged, so a retry is safe.
             raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
           rescue ::Stripe::StripeError
-            # Timeout / connectivity / API error: the charge outcome is UNKNOWN
-            # (Stripe may or may not have captured). NOT safe to blind-retry —
-            # the caller must reconcile before trying again. No raw PSP
-            # detail is surfaced.
+            # The outcome is unknown: a blind retry could double-charge.
             raise PaymentFailed.new(
               "the payment processor could not confirm the charge; its status is unknown",
               reason: :processor_unavailable, retryable: false,
@@ -222,32 +138,16 @@ module Kiosk
         {
           psp_reference:        intent.id,
           settled_amount_cents: intent.amount_received,
-          # NOTE: intent.created is the PaymentIntent creation time — for this
-          # synchronous off_session path it is the settlement time to within
-          # seconds. A future deferred/manual-capture flow must source the
-          # charge timestamp instead.
           settled_at:           Time.at(intent.created).utc,
         }
       end
 
-      # Programmatically attach a test card to the principal's Customer,
-      # simulating a completed SetupIntent without a human at a hosted page.
-      # Used by the demos' automated flow drivers and by integration specs.
+      # TEST-ONLY: saves a test card on the principal's Customer through a
+      # confirmed SetupIntent and makes it the default, as the hosted page would.
       #
-      # - Ensures a Customer exists (creates + saves via the saver if absent).
-      # - Attaches the PaymentMethod to the Customer.
-      # - Sets it as the Customer's default invoice payment method.
-      #
-      # @param user_id [String]
-      # @param payment_method [String] Stripe test PM id (default: pm_card_visa)
-      # @return [String] the customer_id
+      # @return [String] the customer id
       def attach_test_card(user_id:, payment_method: "pm_card_visa")
         cus_id = ensure_customer(user_id)
-        # Save the card the faithful way — a real SetupIntent (exactly what the
-        # human's hosted-page flow does), confirmed with the test PM. Stripe
-        # attaches a fresh PaymentMethod to the customer and returns its id;
-        # that returned id (NOT the shared "pm_card_visa" token) is what we set
-        # as the default and later charge off_session.
         setup = ::Stripe::SetupIntent.create(
           {
             customer:             cus_id,
@@ -266,25 +166,8 @@ module Kiosk
 
       private
 
-      # The `mode:setup` Checkout Session already outstanding for this customer,
-      # or nil when there is none to reuse.
-      #
-      # "Outstanding" means Stripe still lists it as `status: "open"` — i.e. the
-      # human has neither completed it nor let it expire (a Checkout Session
-      # expires ~24 h after creation, after which Stripe reports `expired` and
-      # this returns nil so a fresh one is minted). We additionally require the
-      # session to target the SAME `success_url` we would create now, so an
-      # operator that re-pointed its origin never hands the human a stale return
-      # target — and so a fixture-returning stub (stripe-mock) cannot be
-      # mistaken for a real outstanding session.
-      #
-      # BEST EFFORT, BUT NEVER SILENT: a Stripe error while looking up degrades
-      # to minting a fresh session — a readiness probe must not start failing
-      # because a list call did — but "the lookup broke" is NOT the same fact
-      # as "there is no outstanding session", so it is LOGGED. Without that
-      # line the two are indistinguishable from outside, and a wrong filter, a
-      # renamed field or an API change silently reverts reuse to one session
-      # per poll while every response still looks perfectly healthy.
+      # The open `mode:setup` session for this customer and return target, or
+      # nil. A failed lookup degrades to minting a fresh session, and says so.
       def outstanding_setup_session(cus_id, success_url:)
         listed = ::Stripe::Checkout::Session.list(
           customer: cus_id, status: "open", limit: SETUP_SESSION_LIST_LIMIT,
@@ -295,49 +178,30 @@ module Kiosk
             field(s, :success_url) == success_url &&
             !field(s, :url).to_s.empty?
         end
-        # Same reasoning as the rescue below, for the other silent route: no
-        # match on a FULL page may mean the reusable session was truncated away
-        # rather than absent, so it is logged instead of passing for "none".
-        log_setup_session_page_full(open_sessions.size) if match.nil? && open_sessions.size >= SETUP_SESSION_LIST_LIMIT
+        if match.nil? && open_sessions.size >= SETUP_SESSION_LIST_LIMIT
+          log_warning("no reusable setup session among a full page of #{open_sessions.size} open " \
+                      "Checkout Sessions; minting a fresh one, so setup_url may change between polls")
+        end
         match
       rescue ::Stripe::StripeError => e
-        log_setup_session_lookup_failed(e)
+        log_warning("could not list open setup sessions (#{e.class}: #{e.message}); minting a " \
+                    "fresh one, so setup_url changes between polls until this clears")
         nil
       end
 
-      # Say out loud that the reuse lookup did not answer, so degrading to
-      # a fresh session is visible in the operator's log instead of passing for
-      # the happy path. Operator-side only — nothing here reaches the wire.
-      def log_setup_session_lookup_failed(error)
-        message = "[kiosk-pay-stripe] could not check for an outstanding setup session " \
-                  "(#{error.class}: #{error.message}) — minting a FRESH Checkout Session, so " \
-                  "setup_url is NOT stable across polls until this clears."
+      def log_warning(text)
+        message = "[kiosk-pay-stripe] #{text}"
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
         logger ? logger.warn(message) : warn(message)
       end
 
-      # The lookup answered, but with a page as long as we allowed and nothing
-      # reusable in it — so the reusable session may simply not have fitted.
-      # Operator-side only; nothing here reaches the wire.
-      def log_setup_session_page_full(count)
-        message = "[kiosk-pay-stripe] no outstanding setup session among a FULL page of #{count} open " \
-                  "Checkout Sessions for this customer — the reusable one may have been truncated off " \
-                  "the page rather than absent, so a FRESH Checkout Session is being minted and " \
-                  "setup_url may not be stable across polls."
-        logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
-        logger ? logger.warn(message) : warn(message)
-      end
-
-      # Read a field off a Stripe object without assuming it is present — the
-      # SDK's StripeObject raises NoMethodError for fields the API omitted.
+      # The SDK's StripeObject raises NoMethodError for fields the API omitted.
       def field(obj, name)
         obj.respond_to?(name) ? obj.public_send(name) : nil
       end
 
-      # Map a Stripe::CardError to a short, human-safe, PSP-agnostic reason.
-      # Keyed on the stable Stripe error `code` so no raw Stripe message (which
-      # can embed request ids / internal detail) reaches the wire. Falls back to
-      # a generic decline message for any unmapped code.
+      # A human-safe reason keyed on Stripe's stable error code; Stripe's own
+      # message can carry request ids.
       def card_decline_message(error)
         case error.respond_to?(:code) ? error.code : nil
         when "expired_card"            then "the payment method has expired"
@@ -347,8 +211,6 @@ module Kiosk
         end
       end
 
-      # Resolve existing Customer or create a new one and persist the mapping
-      # via the injected `customer_saver`.
       def ensure_customer(user_id)
         existing = live_customer(user_id)
         return existing.id if existing
@@ -376,7 +238,6 @@ module Kiosk
           ::Stripe::PaymentMethod.list(customer: customer.id, type: "card").data.first&.id
       end
 
-      # Return the string as-is if non-empty, else nil.
       def non_empty(str)
         str && !str.empty? ? str : nil
       end

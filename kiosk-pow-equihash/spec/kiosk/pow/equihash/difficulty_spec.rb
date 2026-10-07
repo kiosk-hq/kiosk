@@ -76,5 +76,12 @@ RSpec.describe Kiosk::Pow::Equihash::Difficulty do
       expect(described_class.high?).to be(true)
       expect(described_class.pow_notice).to include("n=#{p[:n]} k=#{p[:k]}")
     end
+
+    # The skill pins one solver by URL and digest; the notice must not name another.
+    it "points at the solver the skill pins, not at this gem" do
+      ENV["KIOSK_POW_DIFFICULTY"] = "high"
+
+      expect(described_class.pow_notice).to end_with("Solve it with the solver the Kiosk skill pins.")
+    end
   end
 end

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The heavy-toll `pow_notice` points at the solver the Kiosk skill pins**, not at this gem's bundled one (K-2017).
+
 ## [0.5.6] — 2026-10-07
 
 - 2026-10-07: Version 0.5.6, the tree cut that matches skill 0.5.6; this gem's surface is unchanged.

@@ -76,7 +76,7 @@ module Kiosk
             "(~1.3 GiB per proof; ~10 s on a reference numpy solver, measured on " \
             "one M-series laptop core). This is " \
             "deliberate: the toll is the DoS shield, and it costs the client, not " \
-            "the provider. Use the bundled kiosk-pow-equihash solver."
+            "the provider. Solve it with the solver the Kiosk skill pins."
         end
       end
     end

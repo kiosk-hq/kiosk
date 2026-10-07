@@ -78,7 +78,7 @@ What each unit must carry. For EACH of the 7 apps:
       ownership and KYC. Provision/flash the locks with the matching public half
       (`openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32`); any lock still carrying the old
       repo key (`8857880d…`) must be reflashed. The other six operator demos have no locks and need nothing here.
-- [ ] **Stripe (getgrocery, hoteling, skooti):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges) in each of the three env files; the other four take no money (no `pay` capability).
+- [ ] **Stripe (getgrocery, hoteling, skooti):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges) in each of their env files; the other demos take no money (no `pay` capability).
 - [ ] **Card-setup Checkout render (getgrocery):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
 ### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)

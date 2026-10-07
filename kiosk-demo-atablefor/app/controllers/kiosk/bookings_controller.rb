@@ -10,14 +10,13 @@
 # The wire's error-`code` vocabulary is a closed table, not a class hierarchy,
 # so a refusal is an ordinary `render json:, status:` naming the code, which the
 # wire carries verbatim into the RFC 9457 document's top-level `code`.
-# {KioskRefusals#render_operation} is the one place a refusal becomes a status.
+# `render_kiosk_result` is the one place a refusal becomes a status.
 #
 # No `pay` verb and no payment provider here: a `deposit_eur` is a display-only
 # no-show hold settled at the restaurant, so nothing below is a 402 — the one an
 # assistant can meet on this origin comes from the PoW gate upstream of dispatch.
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
-  include KioskRefusals
 
   # book_table — reserve a specific table at a chosen restaurant for a chosen
   # upcoming seating, for the authenticated principal. The (restaurant_id,
@@ -115,7 +114,7 @@ class Kiosk::BookingsController < ApplicationController
     status: "confirmed",
   })
   def book_table
-    render_operation BookTableOperation.call(
+    render_kiosk_result BookTableOperation.call(
       principal_id:        kiosk_identity.user_id,
       restaurant_id:       params[:restaurant_id],
       restaurant_table_id: params[:restaurant_table_id],
@@ -150,6 +149,6 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id status]
   def cancel_booking
-    render_operation CancelBookingOperation.call(booking_id: params[:booking_id])
+    render_kiosk_result CancelBookingOperation.call(booking_id: params[:booking_id])
   end
 end

@@ -10,12 +10,11 @@
 # to the DECLARATION rather than the class, so one controller may
 # declare both. Splitting the halves is this demo's shape, not a rule: the
 # writes live in Kiosk::BookingsController, the refusal SENTENCES in
-# {WireArguments} and the RENDERER in {KioskRefusals}, and the rolling upcoming
+# {WireArguments}, and the rolling upcoming
 # seatings both halves need are a library module (app/models/seatings.rb), so
 # what `availability` offers is exactly what `book_table` accepts.
 class Kiosk::DiningRoomController < ApplicationController
   include Kiosk::Handler
-  include KioskRefusals
 
   # availability — open tables ACROSS the aggregator for the upcoming rolling
   # seatings that seat the party. Public: any authenticated agent may browse, no
@@ -117,17 +116,17 @@ class Kiosk::DiningRoomController < ApplicationController
     # mistakes with two different messages. Both sentences live in
     # {WireArguments} — the second because `book_table` answers with it too, and
     # the two halves must not drift.
-    return render_refusal(WireArguments.missing_party_size) unless params.key?(:party_size)
+    return render_kiosk_result(WireArguments.missing_party_size) unless params.key?(:party_size)
 
     party_size, refusal = WireArguments.party_size(params[:party_size])
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # An unserved neighbourhood is a typed 400 naming the served ones,
     # not `200 []`. `Restaurant.served_neighborhoods` is read once, so the
     # refusal and the query below can never name different sets.
     nbhd_filter, refusal = WireArguments.neighborhood(params[:neighborhood],
                                                       Restaurant.served_neighborhoods)
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # ── ONE ROSTER PER RESTAURANT CLOCK ──────────────────────────────────
     #
@@ -149,10 +148,10 @@ class Kiosk::DiningRoomController < ApplicationController
     # An invalid filter value is a typed 400 NAMING the valid values,
     # never an empty list. Both refusals live in {WireArguments}.
     time_filter, refusal = WireArguments.seating_time(params[:time])
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     date_filter, refusal = WireArguments.seating_date(params[:date], upcoming)
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # The filters apply INSIDE each restaurant's own roster, so a row survives
     # only when the seating is still open at the restaurant offering it.

@@ -13,7 +13,7 @@
 #
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a closed
 # table, not a class hierarchy, so a refusal is an ordinary `render json:,
-# status:` and {KioskRefusals#render_operation} is the one place an
+# status:` and `render_kiosk_result` is the one place an
 # {OperationResult} becomes one. `kyc_required` and `forbidden` are both 403, so
 # `rent_motorcycle`'s Gate 0 is a refusal only the rendered code can name.
 #
@@ -21,7 +21,6 @@
 # the registration PoW gate, upstream of dispatch, never from a handler.
 class Kiosk::RentalsController < ActionController::API
   include Kiosk::Handler
-  include KioskRefusals
 
   # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
   #
@@ -85,7 +84,7 @@ class Kiosk::RentalsController < ActionController::API
   def reserve
     return unless kiosk_given?(:scooter_code)
 
-    render_operation ReserveOperation.call(
+    render_kiosk_result ReserveOperation.call(
       principal_id: kiosk_identity.user_id,
       scooter_code: params[:scooter_code],
     )
@@ -123,7 +122,7 @@ class Kiosk::RentalsController < ActionController::API
                 },
                 required: %w[scooter_code rental_token exp]
   def start_rental
-    render_operation StartRentalOperation.call(reservation_id: params[:reservation_id])
+    render_kiosk_result StartRentalOperation.call(reservation_id: params[:reservation_id])
   end
 
   # rent_motorcycle — the KYC-gated path. See {RentMotorcycleOperation}; Gate 0
@@ -156,7 +155,7 @@ class Kiosk::RentalsController < ActionController::API
                 },
                 required: %w[scooter_code rental_token exp]
   def rent_motorcycle
-    render_operation RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
+    render_kiosk_result RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
   end
 
   private
@@ -174,7 +173,7 @@ class Kiosk::RentalsController < ActionController::API
   def kiosk_given?(field)
     return true if params.key?(field)
 
-    render_refusal(WireArguments.missing(field.to_s))
+    render_kiosk_result(WireArguments.missing(field.to_s))
     false
   end
 end

@@ -19,10 +19,9 @@
 # in Kiosk::OrdersController, and what the two halves share is their argument
 # vocabulary — an address is checked against the served Dublin districts here and
 # by both order verbs there, word for word — through {WireArguments} (which
-# renders nothing, so the Operations use it too) and {KioskRefusals}.
+# renders nothing, so the Operations use it too).
 class Kiosk::StorefrontController < ActionController::API
   include Kiosk::Handler
-  include KioskRefusals
 
   # ── catalog — the public shelf. No per-principal scoping: every authenticated
   # agent browses the same in-stock catalogue.
@@ -166,10 +165,10 @@ class Kiosk::StorefrontController < ActionController::API
 
     # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
     # assistant to obtain the address from its human before it can see slots.
-    return render_refusal(WireArguments.missing_address) if params[:delivery_address].blank?
+    return render_kiosk_result(WireArguments.missing_address) if params[:delivery_address].blank?
 
     district, district_refusal = WireArguments.served_district(params[:delivery_address])
-    return render_refusal(district_refusal) if district_refusal
+    return render_kiosk_result(district_refusal) if district_refusal
 
     # OMITTED means "the soonest day you can deliver", so an exhausted today is
     # not an answer -- it is the operator's job to step over it. Returning an
@@ -201,7 +200,7 @@ class Kiosk::StorefrontController < ActionController::API
     # one — so the semantic half stays {WireArguments.iso_date}'s.
     date = WireArguments.iso_date(params[:date])
     if date.nil?
-      return render_refusal(OperationResult.refused(
+      return render_kiosk_result(OperationResult.refused(
         code: "bad_request", message: "invalid date: #{params[:date]} — use YYYY-MM-DD",
       ))
     end
@@ -214,7 +213,7 @@ class Kiosk::StorefrontController < ActionController::API
     # indistinguishable from the honest empty case below.
     date, refusal = WireArguments.caller_day(date, zone: zone, caller_zone: caller_zone,
                                                    soonest: soonest)
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # PAST-SLOT FILTER: for TODAY at the address, drop any slot whose start has
     # already passed there; future dates keep all slots. An assistant should not

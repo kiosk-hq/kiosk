@@ -14,7 +14,7 @@
 #
 # The wire's error-code vocabulary is a closed table, not a class hierarchy, so
 # no Kiosk error classes appear below: an Operation answers with an
-# {OperationResult}, and {KioskRefusals#render_operation} is the one place that
+# {OperationResult}, and `render_kiosk_result` is the one place that
 # becomes a `render json:, status:` for the wire to re-render as an RFC 9457
 # problem document. That matters here: `kyc_required` and `forbidden` are both
 # 403, so the alcohol age gate is a refusal the STATUS cannot name and only the
@@ -25,7 +25,6 @@
 # never from a handler.
 class Kiosk::OrdersController < ActionController::API
   include Kiosk::Handler
-  include KioskRefusals
 
   # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
 
@@ -163,7 +162,7 @@ class Kiosk::OrdersController < ActionController::API
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
-    render_operation CreateOrderOperation.call(
+    render_kiosk_result CreateOrderOperation.call(
       principal_id:     kiosk_identity.user_id,
       items:            kiosk_plain(params[:items]),
       delivery_slot_id: params[:delivery_slot_id],
@@ -222,7 +221,7 @@ class Kiosk::OrdersController < ActionController::API
                 rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME })
   def reschedule_delivery
-    render_operation RescheduleDeliveryOperation.call(
+    render_kiosk_result RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],
       delivery_slot_id: params[:delivery_slot_id],
       delivery_date:    params[:delivery_date],

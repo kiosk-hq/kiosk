@@ -8,11 +8,10 @@
 # A refusal is an ordinary `render json:, status:` naming a code from the wire's
 # closed error-code table — no Kiosk error classes appear below. The wire
 # re-renders it as the RFC 9457 problem document whose TOP-LEVEL `code` an
-# assistant branches on; {KioskRefusals#render_operation} is the one place an
+# assistant branches on; `render_kiosk_result` is the one place an
 # {OperationResult} becomes a status.
 class Kiosk::AppointmentsController < ApplicationController
   include Kiosk::Handler
-  include KioskRefusals
 
   # No argument names and no "pass its `x`" clause — `input_schema`
   # declares those. This says what booking MEANS and where the refusals are.
@@ -86,7 +85,7 @@ class Kiosk::AppointmentsController < ApplicationController
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment
-    render_operation BookAppointmentOperation.call(
+    render_kiosk_result BookAppointmentOperation.call(
       principal_id: kiosk_identity.user_id, # forged params[:user_id] never consulted
       salon_id:     params[:salon_id],
       slot:         params[:slot],

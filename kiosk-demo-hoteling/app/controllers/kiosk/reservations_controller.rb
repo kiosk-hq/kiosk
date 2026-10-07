@@ -14,14 +14,13 @@
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
 # status:`. An Operation answers with an {OperationResult} and
-# {KioskRefusals#render_operation} is the one place that becomes a status.
+# `render_kiosk_result` is the one place that becomes a status.
 #
 # Nothing here means a 402. The wire's three payment/PoW codes share that status
 # and `Errors::STATUS_CODES` refuses to guess between them; the 402s on this
 # origin come from the PoW gates upstream of dispatch, never from a handler.
 class Kiosk::ReservationsController < ActionController::API
   include Kiosk::Handler
-  include KioskRefusals
 
   # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
   #
@@ -122,7 +121,7 @@ class Kiosk::ReservationsController < ActionController::API
                 },
                 required: %w[booking_id total_cents currency nights nightly_price_cents pay_hint]
   def reserve_room
-    render_operation ReserveRoomOperation.call(
+    render_kiosk_result ReserveRoomOperation.call(
       principal_id: kiosk_identity.user_id,
       agent_id:     kiosk_identity.agent_id,
       property_id:  params[:property_id],
@@ -166,6 +165,6 @@ class Kiosk::ReservationsController < ActionController::API
                 },
                 required: %w[booking_id status confirmation_code]
   def confirm_booking
-    render_operation ConfirmBookingOperation.call(booking_id: params[:booking_id])
+    render_kiosk_result ConfirmBookingOperation.call(booking_id: params[:booking_id])
   end
 end

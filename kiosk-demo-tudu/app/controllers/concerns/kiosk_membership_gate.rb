@@ -3,15 +3,6 @@
 # THE MEMBERSHIP GUARD tudu's QUERY controller opens with — the rendering half
 # of {ListAccess}, and the only thing in this file that is tudu's alone.
 #
-# WHY IT IS SEPARATE FROM {KioskRefusals}. This file also holds
-# `render_operation`/`render_refusal` — code the other six demos ship verbatim as
-# `KioskRefusals`, but under a name only tudu used. `bin/check-demo-copies` pairs
-# copies by relative PATH, so tudu's pair was compared to nothing and was free to
-# drift from the fleet's while every check stayed green. The renderers moved to
-# `kiosk_refusals.rb` (where the gate now finds them, as a Concern dependency),
-# and what is left here is the one guard the fleet does not share, because no
-# other demo has membership-based access.
-#
 # WHY THE GUARD IS A CONCERN AT ALL. tudu was the first demo where both halves of
 # the wire refuse the SAME WAY, and what is shared is split in two: the ANSWER
 # (shape check, membership predicate, and the sentence each refusal carries) is
@@ -24,11 +15,6 @@
 # (the operator owns the structure).
 module KioskMembershipGate
   extend ActiveSupport::Concern
-
-  # The renderer this guard needs. An ActiveSupport::Concern dependency, so a
-  # controller that includes the gate gets `render_refusal` without having to
-  # know the gate uses it.
-  include KioskRefusals
 
   private
 
@@ -49,7 +35,7 @@ module KioskMembershipGate
     refusal = ListAccess.check(list_id, require_owner: require_owner)
     return true if refusal.nil?
 
-    render_refusal(refusal)
+    render_kiosk_result(refusal)
     false
   end
 end

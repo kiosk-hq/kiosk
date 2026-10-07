@@ -1616,22 +1616,6 @@ COPIES = {
     why:  "Same word, different domain: atablefor books a restaurant_table, hoteling books a " \
           "room_type.",
   },
-  "app/controllers/concerns/kiosk_refusals.rb" => {
-    rule: :code,
-    why:  "The one place an OperationResult becomes a `render json:, status:` (T-057/K-654, " \
-          "extended fleet-wide by T-083). On hoteling, skooti, getgrocery and atablefor BOTH " \
-          "halves of the wire surface refuse with the same sentences, so both controllers " \
-          "include it; on philslist and stylish the query half refuses nothing and there is one " \
-          "includer, which is why the file is here rather than being a private renderer per " \
-          "controller — six copies of two renderers with nothing comparing them is precisely " \
-          "how script/equihash_register.rb drifted in three of five. Per-demo prose only — the " \
-          "code is two renderers, and it MUST stay identical: it is what keeps every migrated " \
-          "demo's refusal envelopes byte-identical to the `Errors::` ones they replace. tudu " \
-          "shipped this same pair under a name only it used (inside KioskMembershipGate), where " \
-          "the lockstep rule — which pairs copies by relative PATH — compared it to NOTHING; " \
-          "T-083 split the renderers out to this path so all seven are under the gate, and left " \
-          "the membership guard, which is tudu's alone, next door.",
-  },
   "app/jobs/application_job.rb" => {
     rule: :identical,
     why:  "Rails' own base class, and the file an adopter expects to find. The two demos that " \

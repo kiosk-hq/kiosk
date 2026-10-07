@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **The demos render refusals with the engine's `render_kiosk_result`** instead of seven copies of their own concern (K-1788).
+
 - 2026-10-07: **Demos serve `public/` with `cache-control: no-cache`**, so browsers revalidate an undigested stylesheet instead of holding it for a year (K-2034).
 
 - 2026-10-07: **Each demo's environment files publish only the keys that demo reads**; skooti's production requires its unlock key outright (K-1900).

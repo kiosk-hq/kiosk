@@ -11,12 +11,11 @@
 #
 # A refusal is an ordinary `render json:, status:` naming a code from the wire's
 # closed error-code table, carried verbatim into the RFC 9457 document's
-# top-level `code`; {KioskRefusals#render_operation} is where that happens. tudu
+# top-level `code`; `render_kiosk_result` is where that happens. tudu
 # advertises no `pay` verb and configures no payment provider: the only 402 on
 # this origin comes from the registration PoW gate, never from a handler.
 class Kiosk::TodoListsController < ApplicationController
   include Kiosk::Handler
-  include KioskRefusals
 
   # create_list(title) — INSERT a list owned by the AUTHENTICATED principal and,
   # in the SAME transaction, an `owner` membership for the caller. Ownership is
@@ -86,7 +85,7 @@ class Kiosk::TodoListsController < ApplicationController
   example_params({ title: "Hike" })
   example_row({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70" })
   def create_list
-    render_operation CreateListOperation.call(
+    render_kiosk_result CreateListOperation.call(
       principal_id: kiosk_identity.user_id, title: params[:title],
     )
   end
@@ -133,7 +132,7 @@ class Kiosk::TodoListsController < ApplicationController
                    due_at: -> { AddTodoOperation.example_due_at } })
   example_row({ todo_id: "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" })
   def add_todo
-    render_operation AddTodoOperation.call(
+    render_kiosk_result AddTodoOperation.call(
       agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],
       due_at: params[:due_at],
     )
@@ -163,7 +162,7 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: %w[todo_id done]
   def complete_todo
-    render_operation CompleteTodoOperation.call(todo_id: params[:todo_id])
+    render_kiosk_result CompleteTodoOperation.call(todo_id: params[:todo_id])
   end
 
   # invite(list_id) — OWNER-ONLY. Mint a single-use, TTL'd (10 min) code; store
@@ -192,7 +191,7 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: %w[code expires_in]
   def invite
-    render_operation InviteOperation.call(
+    render_kiosk_result InviteOperation.call(
       principal_id: kiosk_identity.user_id, list_id: params[:list_id],
     )
   end
@@ -224,7 +223,7 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: %w[list_id joined]
   def accept_invite
-    render_operation AcceptInviteOperation.call(
+    render_kiosk_result AcceptInviteOperation.call(
       principal_id: kiosk_identity.user_id, code: params[:code],
     )
   end
@@ -258,7 +257,7 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: ["removed"]
   def remove_member
-    render_operation RemoveMemberOperation.call(
+    render_kiosk_result RemoveMemberOperation.call(
       list_id: params[:list_id], account_id: params[:account_id],
     )
   end

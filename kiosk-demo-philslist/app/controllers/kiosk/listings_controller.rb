@@ -10,11 +10,10 @@
 #
 # Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code. {KioskRefusals#render_operation} is
+# `render json:, status:` naming the code. `render_kiosk_result` is
 # the one place an {OperationResult} becomes a status.
 class Kiosk::ListingsController < ApplicationController
   include Kiosk::Handler
-  include KioskRefusals
 
   # post_listing — create a listing under the AUTHENTICATED principal. The owner
   # is NOT an input: it is read from the identity the wire resolved, and an
@@ -66,7 +65,7 @@ class Kiosk::ListingsController < ApplicationController
   })
   example_row({ listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" })
   def post_listing
-    render_operation PostListingOperation.call(
+    render_kiosk_result PostListingOperation.call(
       principal_id:  kiosk_identity.user_id, # forged params[:owner_id] never consulted
       agent_id:      kiosk_identity.agent_id,
       category_slug: params[:category_slug],
@@ -120,7 +119,7 @@ class Kiosk::ListingsController < ApplicationController
     # instruction is the DECLARATION: `price_text` is `["string", "null"]` above,
     # so the null reaches this handler instead of being refused as an argument
     # of the wrong type, and `title`/`body` are not, so neither can be cleared.
-    render_operation EditListingOperation.call(
+    render_kiosk_result EditListingOperation.call(
       listing_id: params[:listing_id],
       changes:    params.permit(:title, :body, :price_text).to_h,
     )
@@ -148,6 +147,6 @@ class Kiosk::ListingsController < ApplicationController
                 },
                 required: %w[listing_id status]
   def close_listing
-    render_operation CloseListingOperation.call(listing_id: params[:listing_id])
+    render_kiosk_result CloseListingOperation.call(listing_id: params[:listing_id])
   end
 end

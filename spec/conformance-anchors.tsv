@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1901 anchors.
+# 1902 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1143,6 +1143,7 @@ kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	resolves an identity — an {Executor} cannot be built without one.
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
+kiosk-server/lib/kiosk/server/handler_mixin.rb	def render_kiosk_result(result)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this line — render the envelope, or raise
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)

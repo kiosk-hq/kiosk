@@ -13,7 +13,6 @@
 # both. The five write verbs live next door in Kiosk::RentalsController.
 class Kiosk::FleetController < ActionController::API
   include Kiosk::Handler
-  include KioskRefusals
 
   # ── scooters_available — the public fleet catalogue. No per-principal
   # scoping: every authenticated agent may browse what is available.

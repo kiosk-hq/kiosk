@@ -11,7 +11,6 @@
 # Kiosk::ReservationsController is this demo's shape, not a rule.
 class Kiosk::HotelsController < ActionController::API
   include Kiosk::Handler
-  include KioskRefusals
 
   # ── properties — the whole (small) catalogue of hotels, name-ordered.
   # The `description` carries semantics only; fields live in the schema.
@@ -97,10 +96,10 @@ class Kiosk::HotelsController < ActionController::API
 
     property_id, refusal = WireArguments.integer(params[:property_id], field: "property_id",
                                                                        hint: WireArguments::HINT_PROPERTY_ID)
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     dates, refusal = WireArguments.stay_dates(params[:check_in], params[:check_out])
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # A past `check_in` is outside this verb's domain (§9.1's first branch), so
     # it is a named 400 rather than the `[]` that already means SOLD OUT here —
@@ -113,14 +112,14 @@ class Kiosk::HotelsController < ActionController::API
     # the origin default for an id nobody has and the 404 arrives two lines
     # later exactly as it did.
     refusal = WireArguments.past_stay(dates.first, zone: WireArguments.zone_for(property_id))
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # Spec §9.1: `property_id` ADDRESSES a property before anything is
     # filtered, so an id nobody has is `404 not_found` and NOT an empty list —
     # empty is reserved for its one honest meaning here, that the property exists
     # and is SOLD OUT for the requested nights.
     refusal = WireArguments.existing_property(property_id)
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     check_in, check_out = dates
     # The currency is advertised on every row so an assistant knows to sign its
@@ -299,7 +298,7 @@ class Kiosk::HotelsController < ActionController::API
     if params[:limit].present?
       requested, refusal = WireArguments.integer(params[:limit], field: "limit",
                                                                  hint: HINT_SEARCH_LIMIT)
-      return render_refusal(refusal) if refusal
+      return render_kiosk_result(refusal) if refusal
 
       limit = requested
     end
@@ -326,7 +325,7 @@ class Kiosk::HotelsController < ActionController::API
       min_stars, refusal = WireArguments.integer(params[:min_stars], field: "min_stars",
                                                                      hint: HINT_SEARCH_MIN_STARS,
                                                                      max:  WireArguments::MAX_INT4)
-      return render_refusal(refusal) if refusal
+      return render_kiosk_result(refusal) if refusal
 
       scope = scope.where(Property.arel_table[:stars].gteq(min_stars))
     end
@@ -336,7 +335,7 @@ class Kiosk::HotelsController < ActionController::API
                                                        field: "max_price_cents",
                                                        hint:  HINT_SEARCH_MAX_PRICE,
                                                        max:   WireArguments::MAX_INT4)
-      return render_refusal(refusal) if refusal
+      return render_kiosk_result(refusal) if refusal
 
       scope = scope.where(Property.from_price_cents.lteq(max_price_cents))
     end
@@ -475,7 +474,7 @@ class Kiosk::HotelsController < ActionController::API
     co_raw = params[:check_out].to_s.strip
     dated  = !ci_raw.empty? && !co_raw.empty?
     if !dated && (!ci_raw.empty? || !co_raw.empty?)
-      return render_refusal(OperationResult.refused(
+      return render_kiosk_result(OperationResult.refused(
         code:    "bad_request",
         message: "check_in and check_out go together — pass both (YYYY-MM-DD) for a free-rooms " \
                  "list, or neither for the property's full catalogue",
@@ -492,11 +491,11 @@ class Kiosk::HotelsController < ActionController::API
       # completed from TODAY'S CLOCK, so the accepted set would depend on the
       # day the call is made and there is no set to name.
       dates, refusal = WireArguments.stay_dates(ci_raw, co_raw)
-      return render_refusal(refusal) if refusal
+      return render_kiosk_result(refusal) if refusal
 
       ci, co = dates
       unless co > ci
-        return render_refusal(OperationResult.refused(
+        return render_kiosk_result(OperationResult.refused(
           code: "bad_request", message: "check_out must be after check_in",
         ))
       end
@@ -505,7 +504,7 @@ class Kiosk::HotelsController < ActionController::API
 
     property_id, refusal = WireArguments.integer(params[:property_id], field: "property_id",
                                                                        hint: WireArguments::HINT_PROPERTY_ID)
-    return render_refusal(refusal) if refusal
+    return render_kiosk_result(refusal) if refusal
 
     # THE FLOOR IS THIS PROPERTY'S, so it cannot be applied before the property
     # is known — which is why the dates are parsed above and judged here.
@@ -516,7 +515,7 @@ class Kiosk::HotelsController < ActionController::API
     zone = WireArguments.zone_for(property_id)
     if dated_check_in
       refusal = WireArguments.past_stay(dated_check_in, zone: zone)
-      return render_refusal(refusal) if refusal
+      return render_kiosk_result(refusal) if refusal
     end
 
     # `pick`, not `find_by!`: the bang form's RecordNotFound would render a 404
@@ -527,7 +526,7 @@ class Kiosk::HotelsController < ActionController::API
     # NO SUCH HOTEL IS 404 (spec §9.1). Not confusable with the 404 the
     # wire answers for an UNREGISTERED VERB: that one names the verb and carries
     # the registry's hint, this one names the id.
-    return render_refusal(WireArguments.property_not_found(property_id)) if prop.nil?
+    return render_kiosk_result(WireArguments.property_not_found(property_id)) if prop.nil?
 
     rooms = RoomType.where(property_id: property_id)
     rooms = rooms.free_for(property_id, ci, co) if dated
@@ -566,7 +565,7 @@ class Kiosk::HotelsController < ActionController::API
   def kiosk_present?(value, field)
     return true if value.present?
 
-    render_refusal(WireArguments.missing(field))
+    render_kiosk_result(WireArguments.missing(field))
     false
   end
 end

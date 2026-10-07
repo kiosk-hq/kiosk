@@ -29,8 +29,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-10-08 at 137a7533 -- T-138 0.5.9 walk: SPEC-060/160/164/173/182 re-judged, SPEC-289..291 new
-# 1945 anchors.
+# recorded: 2026-10-08 at e9facaf5 -- T-245 configured price checker: re-read C-005/028/071/143/147/223
+# 1946 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	ede32f70	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	ede32f70	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	ede32f70	Surfaced by a live hosted Hermes run. (K-437)
@@ -389,6 +389,7 @@ kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	46d17b5ad7
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	c0145ef95833f0d7	ca9df2fe	this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID
 kiosk-demo-getgrocery/app/operations/wire_arguments.rb	125b897a6e2d7fb8	ca9df2fe	AND IT IS READ AS PUBLISHED, NOT IN THE CALLER'S CALENDAR.
 kiosk-demo-getgrocery/app/operations/wire_arguments.rb	56326d1be2ee5f6f	ca9df2fe	caller is asking about a day that is still current or
+kiosk-demo-getgrocery/app/services/price_checker.rb	6c9b4a9d5a49124e	e9facaf5	unless presented.sort == ordered(order_id)
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	82897c376ff113aa	ede32f70	#   1. the cart is denominated in the operator's currency;
 kiosk-demo-getgrocery/app/services/validating_payment_provider.rb	ee9f2a0b7930b222	ede32f70	#   4. its total equals both the sum of those lines and the order's total.
 kiosk-demo-getgrocery/app/views/home/index.html.erb	9030591272c4c067	d5614500	      <div class="sec-k">🤖 Try it with your own assistant</div>
@@ -406,15 +407,15 @@ kiosk-demo-getgrocery/config/environments/development.rb	152cefa7217c7c43	ede32f
 kiosk-demo-getgrocery/config/environments/production.rb	2c43cc0305ded88e	ede32f70	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
 kiosk-demo-getgrocery/config/environments/test.rb	2c43cc0305ded88e	ede32f70	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
 kiosk-demo-getgrocery/config/environments/test.rb	152cefa7217c7c43	ede32f70	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	ca9df2fe	  c.kyc_claims     = %w[age_over_18]
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	9331ff0fb33466c7	ca9df2fe	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	594fca8f2b57a520	ca9df2fe	  c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	fb3696cce43b8185	ca9df2fe	  c.registration_pow_count  = 1
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	1fce72cbea55e787	ca9df2fe	  raise "getgrocery requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.blank?
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	a19c924c48bcd0fe	ca9df2fe	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	80044787b554ec9a	ca9df2fe	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	ca9df2fe	c.kyc_claims     = %w[age_over_18]
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	bd0667f2b114a34c	ca9df2fe	c.payment_provider = ValidatingPaymentProvider.new(
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	e9facaf5	  c.kyc_claims     = %w[age_over_18]
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	9331ff0fb33466c7	e9facaf5	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	594fca8f2b57a520	e9facaf5	  c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	fb3696cce43b8185	e9facaf5	  c.registration_pow_count  = 1
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	1fce72cbea55e787	e9facaf5	  raise "getgrocery requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.blank?
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	a19c924c48bcd0fe	e9facaf5	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	80044787b554ec9a	e9facaf5	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	e9facaf5	c.kyc_claims     = %w[age_over_18]
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	64c82ccd6587015c	e9facaf5	c.payment_provider = Kiosk::Server::PaymentClaim.new(
 kiosk-demo-getgrocery/config/routes.rb	a5d9a79f8c7e38e8	ede32f70	  # POST /kiosk/<action-name>. getgrocery hand-draws its routes rather than
 kiosk-demo-getgrocery/config/routes.rb	34a22b594ad8a24d	ede32f70	  get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
 kiosk-demo-getgrocery/config/routes.rb	12be8c1d2397ef95	ede32f70	  post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
@@ -512,13 +513,12 @@ kiosk-demo-hoteling/app/views/home/index.html.erb	9030591272c4c067	ede32f70	    
 kiosk-demo-hoteling/app/views/home/index.html.erb	5584fba83783935e	ede32f70	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
 kiosk-demo-hoteling/before-after.md	38be03106aa2e693	ca9df2fe	`rake check:book` runs the errand with no human present:
 kiosk-demo-hoteling/config/environments/development.rb	152cefa7217c7c43	ede32f70	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-hoteling/config/initializers/kiosk.rb	7916ac7cb5347181	ede32f70	        account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
-kiosk-demo-hoteling/config/initializers/kiosk.rb	9c90068ad83f3ff6	ede32f70	  c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
-kiosk-demo-hoteling/config/initializers/kiosk.rb	fb3696cce43b8185	ede32f70	  c.registration_pow_count  = 1
-kiosk-demo-hoteling/config/initializers/kiosk.rb	bd9021e2c4fb13dc	ede32f70	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail
-kiosk-demo-hoteling/config/initializers/kiosk.rb	80044787b554ec9a	ede32f70	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-hoteling/config/initializers/kiosk.rb	9c90068ad83f3ff6	ede32f70	c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
-kiosk-demo-hoteling/config/initializers/kiosk.rb	21a0b3b9b427d4ea	ede32f70	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
+kiosk-demo-hoteling/config/initializers/kiosk.rb	f4ed0823f8814912	e9facaf5	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
+kiosk-demo-hoteling/config/initializers/kiosk.rb	fb3696cce43b8185	e9facaf5	  c.registration_pow_count  = 1
+kiosk-demo-hoteling/config/initializers/kiosk.rb	bd9021e2c4fb13dc	e9facaf5	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail
+kiosk-demo-hoteling/config/initializers/kiosk.rb	80044787b554ec9a	e9facaf5	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-hoteling/config/initializers/kiosk.rb	1a93900e0a2a59f8	e9facaf5	StubPsp.new, currency: "eur", table: "bookings", reference: "booking_id",
+kiosk-demo-hoteling/config/initializers/kiosk.rb	21a0b3b9b427d4ea	e9facaf5	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/lib/tasks/demo.rake	f1416eb32542a093	ca9df2fe	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
 kiosk-demo-hoteling/lib/tasks/demo.rake	b2b3c650f8f9d43e	ca9df2fe	  task book: "demo:setup" do
 kiosk-demo-hoteling/lib/tasks/demo.rake	24f7d2d0abd94a13	ca9df2fe	  task isolation: "demo:setup" do
@@ -634,16 +634,15 @@ kiosk-demo-skooti/app/views/home/index.html.erb	fd5ede94ef196613	ede32f70	github
 kiosk-demo-skooti/before-after.md	e5a7c6550352ee43	ca9df2fe	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	aa1d6c81433be65c	ca9df2fe	`rake check:rideflow` runs the errand with no human account and no sign-in:
 kiosk-demo-skooti/config/environments/development.rb	152cefa7217c7c43	ede32f70	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	ca9df2fe	  c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	9331ff0fb33466c7	ca9df2fe	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
-kiosk-demo-skooti/config/initializers/kiosk.rb	21db320bd6b1b1d2	ca9df2fe	  c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
-kiosk-demo-skooti/config/initializers/kiosk.rb	fb3696cce43b8185	ca9df2fe	  c.registration_pow_count  = 1
-kiosk-demo-skooti/config/initializers/kiosk.rb	80044787b554ec9a	ca9df2fe	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-skooti/config/initializers/kiosk.rb	71815e633dc18f80	ca9df2fe	c.kyc_audience   = prove_operator
-kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	ca9df2fe	c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	9331ff0fb33466c7	ca9df2fe	c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
-kiosk-demo-skooti/config/initializers/kiosk.rb	21db320bd6b1b1d2	ca9df2fe	c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
-kiosk-demo-skooti/config/initializers/kiosk.rb	fb3696cce43b8185	ca9df2fe	c.registration_pow_count  = 1
+kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	e9facaf5	  c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	9331ff0fb33466c7	e9facaf5	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	fb3696cce43b8185	e9facaf5	  c.registration_pow_count  = 1
+kiosk-demo-skooti/config/initializers/kiosk.rb	80044787b554ec9a	e9facaf5	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-skooti/config/initializers/kiosk.rb	7ea30927b2e4db19	e9facaf5	StubPsp.new, currency: "eur", table: "reservations", reference: "reservation_id",
+kiosk-demo-skooti/config/initializers/kiosk.rb	71815e633dc18f80	e9facaf5	c.kyc_audience   = prove_operator
+kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	e9facaf5	c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	9331ff0fb33466c7	e9facaf5	c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	fb3696cce43b8185	e9facaf5	c.registration_pow_count  = 1
 kiosk-demo-skooti/config/routes.rb	51f7235e6dda1c97	ede32f70	post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 kiosk-demo-skooti/config/routes/kiosk.rb	e57a1512f01ae2af	ca9df2fe	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-skooti/lib/tasks/demo.rake	4a494a3708465153	ca9df2fe	  task :rideflow do
@@ -1211,6 +1210,8 @@ kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	244cfedb7
 kiosk-server/lib/kiosk/server/oauth_device_authorization_controller.rb	2d38faabc6dfe524	ede32f70	public_key parameter required
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	5ca500d64e279297	ede32f70	grant_type required
 kiosk-server/lib/kiosk/server/oauth_token_controller.rb	2a0860bb31bbb41a	ede32f70	only the device_code grant is served here — 
+kiosk-server/lib/kiosk/server/payment_claim.rb	c85c9f17995d9694	e9facaf5	return if total == price
+kiosk-server/lib/kiosk/server/payment_claim.rb	cc1120725400bd81	e9facaf5	unless cart.currency.to_s.downcase == @currency
 kiosk-server/lib/kiosk/server/pop_verifier.rb	49ba504830173adc	ca9df2fe	PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
 kiosk-server/lib/kiosk/server/pop_verifier.rb	7b38dcb6424b5f76	ca9df2fe	issuer = Kiosk.current_issuer
 kiosk-server/lib/kiosk/server/pow_gate.rb	0ddc77739bcb4aa3	ca9df2fe	            expect:               { alg: spec[:alg] || spec["alg"], params: spec[:params] || spec["params"] },

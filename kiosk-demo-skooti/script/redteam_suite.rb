@@ -22,7 +22,7 @@
 #                              so A's rent_motorcycle stays 403.
 #
 # Three cashier-check beats attack PaymentClaim (the monetary check
-# run at capture, before StubPsp settles) — the first from the shared
+# run at capture, before Stripe captures) — the first from the shared
 # kiosk-redteam library, the other two local to this file:
 #   WrongCurrencyCart  — pay own reservation in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted rental price → 403

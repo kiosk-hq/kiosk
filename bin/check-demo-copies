@@ -1567,10 +1567,6 @@ COPIES = {
     why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \
           "retry). Each copy's header names its own demo and port; the handshake must not vary.",
   },
-  "app/services/stub_psp.rb" => {
-    rule: :code,
-    why:  "Controllable payment-provider stub for the pay-path flows. Per-demo prose only.",
-  },
   "script/prove_broker_boot.rb" => {
     rule: :per_demo,
     why:  "Boots the broker app for that operator's flow: the operator's callback-host and secret " \
@@ -1716,6 +1712,14 @@ COPIES = {
     why:   "kiosk-server keeps the verifications request_kyc opens, so both KYC demos drop their " \
            "own table." \
            " " + KYC_SHIPS,
+  },
+  "db/migrate/20261008000001_create_kiosk_pay_stripe_customers.rb" => {
+    rule:  :identical,
+    ships: %w[hoteling skooti],
+    why:   "The stripe_customers table kiosk-pay-stripe's CustomerRecord reads, laid down by the " \
+           "gem's own definition. getgrocery has carried the same table since before the gem " \
+           "owned it, under its own earlier create_stripe_customers migration, which inlines the " \
+           "DDL and is never edited — hence the different basename.",
   },
   "db/migrate/20261005000001_add_kiosk_agents_issuer.rb" => {
     rule:  :identical,
@@ -2851,7 +2855,7 @@ end
 # ── The app/services autoload-once declaration (K-502, re-anchored by T-189) ─
 #
 # A demo that names an `app/services` constant from
-# `config/initializers/kiosk.rb` — an adapter, a broker, a stub PSP — can only
+# `config/initializers/kiosk.rb` — an adapter, a broker, a price checker — can only
 # do so because app/services is in `config.autoload_once_paths`. Rails sets the
 # RELOADABLE autoloader up in its `finisher`, AFTER config/initializers have
 # run, so a constant in a normal autoload path is simply not resolvable from an
@@ -3629,7 +3633,10 @@ ENV_BLOCK_RELS   = %w[config/environments/development.rb config/environments/tes
                       config/environments/production.rb].freeze
 ENV_BLOCK_SAME_HEAD = %w[config/environments/test.rb config/environments/production.rb].freeze
 ENV_BLOCK_BANNER = /\A\s*# ── Kiosk env inputs /
-ENV_BLOCK_SUBSETS = { "config.x.kiosk.prove_public_key_pem" => KYC_DEMOS }.freeze
+PAYING_DEMOS = %w[getgrocery hoteling skooti].freeze
+ENV_BLOCK_SUBSETS = { "config.x.kiosk.prove_public_key_pem" => KYC_DEMOS,
+                      "config.x.kiosk.stripe_mock_url"      => PAYING_DEMOS,
+                      "config.x.kiosk.test_autocard"        => PAYING_DEMOS }.freeze
 
 # [lines above the banner, paragraphs below it] — the file's closing `end` is
 # not part of the last paragraph.
@@ -5819,14 +5826,6 @@ E2E_FIXTURES = {
           "stylish's own domain — salons and appointments — because that is the storefront the " \
           "e2e wire drives. The one file in this directory where byte equality is the honest rule.",
   },
-  "stub_psp.rb" => {
-    rule: :code,
-    why:  "The deterministic in-process PSP. Byte-identical to skooti's app/services/stub_psp.rb " \
-          "and comment-identical to hoteling's — one word of header prose apart («E2E test PSP» " \
-          "against «Demo stub PSP»), which is exactly what `:code` exists for. It returns the " \
-          "settlement shape verb_pay expects, so a one-sided edit here makes the harness assert a " \
-          "shape the demos do not produce.",
-  },
   "devise_initializer.rb" => {
     rule: :code,
     why:  "Comment-identical to all seven demos' config/initializers/devise.rb. It is the human " \
@@ -5846,6 +5845,12 @@ E2E_FIXTURES = {
     rule: :code,
     why:  "The Devise login columns on that same table, comment-identical in all seven demos. Same " \
           "argument and same handle as create_users.rb above.",
+  },
+  "create_kiosk_pay_stripe_customers.rb" => {
+    rule: :identical,
+    why:  "The stripe_customers table kiosk-pay-stripe's CustomerRecord keeps, byte-identical to " \
+          "hoteling's and skooti's migration: the harness pays through the same adapter they do. " \
+          "Paired by timestamp-stripped basename, as create_users.rb above.",
   },
   "create_salons_and_appointments.rb" => {
     rule: :per_demo,

@@ -65,4 +65,14 @@ Rails.application.configure do
   # and this file is where they would name them.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+
+  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
+
+  # Payment-provider credentials. Same relaxed posture as development: a mock
+  # base URL implies a mock key, and with neither variable set a placeholder is
+  # enough for everything that does not actually charge. Production supplies no
+  # placeholder — see production.rb.
+  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
+  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
+                                     (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : "sk_test_placeholder")
 end

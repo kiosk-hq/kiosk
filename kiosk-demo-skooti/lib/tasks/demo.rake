@@ -3,6 +3,14 @@
 # Kiosk demo orchestration for kiosk-demo-skooti (Ed25519 offline token).
 # `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
+require "kiosk/redteam/stripe_mock"
+
+# Every server a task boots charges against a local stripe-mock, with the
+# adapter saving a test card at the first capture.
+def skooti_stripe_env
+  { "STRIPE_MOCK_URL" => Kiosk::Redteam::StripeMock.start, "KIOSK_TEST_AUTOCARD" => "1" }
+end
+
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
 # Every flow-driver invocation in this file goes through here, for the one line
@@ -198,7 +206,7 @@ namespace :check do
       File.truncate(log, 0) if File.exist?(log)
       server_pid = spawn(
         { "KIOSK_ISSUER"               => kiosk_issuer,
-          "KIOSK_PROVE_PUBLIC_KEY_PEM" => ProveTestIssuer.public_key_pem },
+          "KIOSK_PROVE_PUBLIC_KEY_PEM" => ProveTestIssuer.public_key_pem }.merge(skooti_stripe_env),
         "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
         out: log, err: log,
       )
@@ -701,7 +709,7 @@ namespace :check do
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
       { "KIOSK_ISSUER"               => kiosk_issuer,
-        "KIOSK_PROVE_PUBLIC_KEY_PEM" => ProveTestIssuer.public_key_pem },
+        "KIOSK_PROVE_PUBLIC_KEY_PEM" => ProveTestIssuer.public_key_pem }.merge(skooti_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -944,7 +952,7 @@ namespace :check do
       puts "\n── Starting skooti (redteam battery) on #{server_url} ──"
 
       # ── boot the server ──────────────────────────────────────────────────
-      env_vars = { "KIOSK_ISSUER" => kiosk_issuer }.merge(broker[:wiring])
+      env_vars = { "KIOSK_ISSUER" => kiosk_issuer }.merge(broker[:wiring], skooti_stripe_env)
 
       File.truncate(log, 0) if File.exist?(log)
       server_pid = spawn(
@@ -1071,7 +1079,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer }.merge(skooti_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -1199,7 +1207,7 @@ namespace :check do
         puts "  ✗  capabilities missing #{v}"
       end
     end
-    # ── THE EVENT MODULE, PRESENT — this origin declares 2 topics
+    # ── THE EVENT MODULE, PRESENT — this origin declares topics
     #
     # The trio below is the shape the fleet uses either way — module, url,
     # topic names. An origin that declares topics asserts all three present
@@ -1220,11 +1228,13 @@ namespace :check do
       puts "  FAIL  events_url missing or malformed"
     end
     # kyc_verification is kiosk-server's, declared only with a KYC broker, which
-    # this task does not boot.
-    if (result["schema_event_topics"] || []) == ["booking_payment"]
+    # this task does not boot. payment_setup is kiosk-server's too, served
+    # because the Stripe adapter names the principal a returning card-setup
+    # browser belongs to.
+    if (result["schema_event_topics"] || []) == ["booking_payment", "payment_setup"]
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment payment_setup].inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 
@@ -1396,7 +1406,7 @@ namespace :check do
 
       File.truncate(log, 0) if File.exist?(log)
       server_pid = spawn(
-        { "KIOSK_ISSUER" => kiosk_issuer }.merge(broker[:wiring]),
+        { "KIOSK_ISSUER" => kiosk_issuer }.merge(broker[:wiring], skooti_stripe_env),
         "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
         out: log, err: log,
       )

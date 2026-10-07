@@ -112,14 +112,12 @@ Rails.application.configure do
   # cannot drift onto different files; the default is only for a bare `rails s`.
   config.x.kiosk.bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
 
-  # Payment-provider credentials. getgrocery is the one demo that wires a
-  # REAL payment adapter, and this block is the whole of its out-of-the-box
-  # posture — the initializer reads the resolved values and never ENV. With a
-  # local stripe-mock the key is irrelevant (the mock accepts any); with neither
-  # variable set the app still boots on a placeholder, so db:setup, the schema
-  # proof, isolation and redteam all run with no payment config at all. Only a
-  # real charge (check:shop) needs a live key, and it fails clearly at charge time
-  # if there is none. Production invents nothing — see production.rb.
+  # Payment-provider credentials; the initializer reads the resolved values and
+  # never ENV. With a local stripe-mock the key is irrelevant (the mock accepts
+  # any); with neither variable set the app still boots on a placeholder, so
+  # every task that does not charge runs with no payment config at all, and a
+  # charge fails clearly at charge time. Production invents nothing — see
+  # production.rb.
   config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
   config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence
   if config.x.kiosk.stripe_secret_key.nil?
@@ -127,7 +125,7 @@ Rails.application.configure do
       config.x.kiosk.stripe_secret_key = "sk_test_mock"
     else
       config.x.kiosk.stripe_secret_key = "sk_test_placeholder"
-      warn "[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; check:shop needs one to charge."
+      warn "no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; a charge needs one."
     end
   end
 

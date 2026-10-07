@@ -53,6 +53,6 @@ The Kiosk gems and `rails g kiosk:install`; `config/routes/kiosk.rb`;
 whose public half is baked into every lock; the lock firmware (`firmware/`, an
 ESP32-C3 reference) and the App Clip (`appclip/`, iOS only).
 
-This is a demo against a fake operator with a stub PSP and a software lock
+This is a demo against a fake operator paying in Stripe test mode with a software lock
 simulator; the firmware crypto is host-tested, and on-device Bluetooth is the
 remaining hardware step.

@@ -3,6 +3,14 @@
 # Kiosk demo orchestration for kiosk-demo-hoteling.
 # `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
+require "kiosk/redteam/stripe_mock"
+
+# Every server a task boots charges and refunds against a local stripe-mock,
+# with the adapter saving a test card at the first capture.
+def hoteling_stripe_env
+  { "STRIPE_MOCK_URL" => Kiosk::Redteam::StripeMock.start, "KIOSK_TEST_AUTOCARD" => "1" }
+end
+
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
 # Every flow-driver invocation in this file goes through here, for the one line
@@ -93,6 +101,8 @@ namespace :check do
 
     store = Kiosk::Server::EventStore.new
     Kiosk.configure { |c| c.event_store = store }
+    # The paid-and-declined booking below is refunded through the Stripe adapter.
+    Stripe.api_base = Kiosk::Redteam::StripeMock.start
 
     # RE-RUNNABLE, because a task that only passes the first time is a task
     # nobody trusts the second. The rows below live in a window no seed and no
@@ -168,7 +178,7 @@ namespace :check do
     # `settled_reference` and `confirm_booking`'s payment gate both read
     # exactly these rows, and a stub would prove only that a stub was called.
     settle = lambda { |booking|
-      charge = "stub_pi_#{SecureRandom.uuid}"
+      charge = "pi_#{SecureRandom.hex(12)}"
       conn   = ActiveRecord::Base.lease_connection
       intent_id = conn.exec_query(
         "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
@@ -207,7 +217,7 @@ namespace :check do
     paid.reload
     check.call("status is cancelled", paid.status == Booking::CANCELLED)
     check.call("payment_status is refunded", paid.payment_status == Booking::REFUNDED)
-    check.call("a refund reference was persisted", paid.refund_psp_reference.present?)
+    check.call("a Stripe refund reference was persisted", paid.refund_psp_reference.to_s.start_with?("re_"))
     check.call("my_bookings publishes payment_state=refunded, though the settlement row stays",
                Booking.payment_state(paid.payment_status, true) == "refunded")
     pevent = store.since(paid.user_id, head_paid).find { |e| e["subject"] == paid.id }
@@ -412,7 +422,7 @@ namespace :check do
       server_pid = spawn(
         { "KIOSK_ISSUER" => kiosk_issuer,
           "HOTELING_DECISION_DELAY_SECONDS" => "0",
-          "HOTELING_DECLINE_RATE" => "0" },
+          "HOTELING_DECLINE_RATE" => "0" }.merge(hoteling_stripe_env),
         "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
         out: log, err: log,
       )
@@ -671,7 +681,7 @@ namespace :check do
     puts "\n── Starting hoteling (spending cap) on #{server_url} ──"
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer }.merge(hoteling_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -888,7 +898,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer }.merge(hoteling_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -1091,7 +1101,7 @@ namespace :check do
 
     puts "\n── Starting hoteling (redteam battery) on #{server_url} ──"
 
-    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
+    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }.merge(hoteling_stripe_env)
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
@@ -1200,7 +1210,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer }.merge(hoteling_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -1348,10 +1358,12 @@ namespace :check do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    if (result["schema_event_topics"] || []) == ["booking_confirmation", "booking_payment"]
+    # payment_setup is kiosk-server's, served because the Stripe adapter names
+    # the principal a returning card-setup browser belongs to.
+    if (result["schema_event_topics"] || []) == ["booking_confirmation", "booking_payment", "payment_setup"]
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_confirmation booking_payment].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_confirmation booking_payment payment_setup].inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 
@@ -1501,7 +1513,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer }.merge(hoteling_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -1764,7 +1776,7 @@ namespace :check do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer }.merge(hoteling_stripe_env),
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )

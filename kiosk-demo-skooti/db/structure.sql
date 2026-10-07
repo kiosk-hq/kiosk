@@ -415,6 +415,38 @@ ALTER SEQUENCE public.solid_cable_messages_id_seq OWNED BY public.solid_cable_me
 
 
 --
+-- Name: stripe_customers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.stripe_customers (
+    id bigint NOT NULL,
+    user_id uuid NOT NULL,
+    customer_id character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: stripe_customers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.stripe_customers_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: stripe_customers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.stripe_customers_id_seq OWNED BY public.stripe_customers.id;
+
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -446,6 +478,13 @@ ALTER TABLE ONLY public.scooters ALTER COLUMN id SET DEFAULT nextval('public.sco
 --
 
 ALTER TABLE ONLY public.solid_cable_messages ALTER COLUMN id SET DEFAULT nextval('public.solid_cable_messages_id_seq'::regclass);
+
+
+--
+-- Name: stripe_customers id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_customers ALTER COLUMN id SET DEFAULT nextval('public.stripe_customers_id_seq'::regclass);
 
 
 --
@@ -622,6 +661,14 @@ ALTER TABLE ONLY public.scooters
 
 ALTER TABLE ONLY public.solid_cable_messages
     ADD CONSTRAINT solid_cable_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: stripe_customers stripe_customers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_customers
+    ADD CONSTRAINT stripe_customers_pkey PRIMARY KEY (id);
 
 
 --
@@ -808,6 +855,13 @@ CREATE INDEX index_solid_cable_messages_on_created_at ON public.solid_cable_mess
 
 
 --
+-- Name: index_stripe_customers_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_stripe_customers_on_user_id ON public.stripe_customers USING btree (user_id);
+
+
+--
 -- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -901,6 +955,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261008000001'),
 ('20261007000003'),
 ('20261007000002'),
 ('20261007000001'),

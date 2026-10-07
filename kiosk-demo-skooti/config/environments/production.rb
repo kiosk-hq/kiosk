@@ -200,4 +200,21 @@ Rails.application.configure do
         KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
     MSG
   end
+
+  # NEVER in production: the Stripe autocard test shim (a completed
+  # SetupIntent simulated without a hosted card-entry step) is pinned OFF
+  # here — the live demo runs the real hosted flow. Dev/test honour the flag.
+  config.x.kiosk.test_autocard = false
+
+  # Payment-provider credentials — REQUIRED by the initializer, which refuses
+  # to boot with neither. Deliberately NO placeholder here, unlike dev and
+  # test: a shipped `sk_test_…` placeholder boots an origin that ADVERTISES
+  # `pay` in its discovery document and then fails at the first charge, with a
+  # human waiting on it. A configured mock base URL is the one exception, and it
+  # is not a fallback — pointing a production process at a local stripe-mock is
+  # an explicit act, and it is what the eager-load gate does to boot this demo
+  # without carrying a key.
+  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
+  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
+                                     (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
 end

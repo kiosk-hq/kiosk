@@ -437,10 +437,8 @@ jobs:
             # at its first line without it — so the K-1251 fix, a cap an
             # assistant could defeat by alternating the capitalisation of its
             # currency, had a gem suite behind it and nothing that boots. hoteling
-            # hosts it because it is one of the three origins that can settle and
-            # the only one of those whose PSP is an in-process stub, so the task
-            # needs no stripe-mock: one register toll, two reserves, three /pay,
-            # ~9 s including its own reseed.
+            # hosts it: one register toll, two reserves, three /pay against
+            # stripe-mock, ~9 s including its own reseed.
             # Watched fail: plant the pre-K-1251 currency handling (the verifier
             # returns the raw string, the tally binds it byte-equal) and the
             # over-cap "EUR" charge SETTLES — http_pay_over_cap goes 403 → 200,
@@ -450,6 +448,9 @@ jobs:
             # It goes with check:search and check:browse at the end: `task
             # spending_cap: :setup` reseeds.
             tasks: check:wire_args_spec check:conformance check:property_decision check:book check:isolation check:redteam check:schema check:search check:browse check:spending_cap
+            # Stripe test mode; CI carries no key, so every charge and the
+            # declined booking's refund go to stripe-mock.
+            stripe_mock: true
           - demo: kiosk-demo-prove
             # kiosk-demo-prove — the anonymizing KYC broker (an ISSUER, not a Kiosk
             # operator; mounts none of the four verbs). check:test runs its own
@@ -465,6 +466,7 @@ jobs:
             # callback beats). So this job also bundles the sibling broker app.
             prove_broker: kiosk-demo-prove
             tasks: check:kat check:rideflow check:kyc check:isolation check:redteam check:schema
+            stripe_mock: true
           - demo: kiosk-demo-stylish
             # check:roles is the roles-from-IdP gate, and the ONLY place the
             # prod-only K-436/K-439 class is exercised against real Devise: an
@@ -633,11 +635,11 @@ jobs:
       - name: Generate ephemeral signing key
         run: echo "KIOSK_SIGNING_KEY_B64=$(ruby -e 'require %{openssl}; require %{base64}; puts Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')" >> "$GITHUB_ENV"
 
-      # getgrocery only: install stripe-mock on PATH and advertise its URL so
-      # the real-Stripe-adapter demo runs against canned pi_ fixtures with NO
-      # key. demo:setup/check:schema boot on STRIPE_MOCK_URL; the
-      # charge-running tasks self-start the mock process via `command -v`.
-      - name: Set up stripe-mock (getgrocery, no key in CI)
+      # The three demos that pay (getgrocery, hoteling, skooti): install
+      # stripe-mock on PATH and advertise its URL, so the Stripe adapter runs
+      # against canned pi_ fixtures with NO key. demo:setup/check:schema boot on
+      # STRIPE_MOCK_URL; the charge-running tasks self-start the mock process.
+      - name: Set up stripe-mock (paying demos, no key in CI)
         if: matrix.stripe_mock
         run: |
           go install github.com/stripe/stripe-mock@${{ env.STRIPE_MOCK_VERSION }}
@@ -664,9 +666,9 @@ jobs:
       #   SECRET_KEY_BASE — Rails raises "Missing `secret_key_base` for
       #     'production'" during boot; a throwaway literal is enough (nothing is
       #     signed or served here).
-      #   STRIPE_MOCK_URL — getgrocery's initializer aborts production boot
+      #   STRIPE_MOCK_URL — a paying demo's initializer aborts production boot
       #     without a Stripe key or mock URL; the stripe-mock step above already
-      #     exported it for that demo (hence this step's position after it).
+      #     exported it for those demos (hence this step's position after it).
       #   KIOSK_POW_SECRET — K-541 made the PoW HMAC key mandatory in
       #     production, so without it every kiosk demo aborts before Zeitwerk
       #     runs (since K-650 the fetch-with-raise lives in
@@ -1797,6 +1799,12 @@ jobs:
           done
           echo "::error::PostgreSQL 17 client could not be installed after 3 attempts."
           exit 1
+
+      # The pay flow charges stripe-mock through kiosk-pay-stripe; no key.
+      - name: Set up stripe-mock (e2e pay flow, no key in CI)
+        run: |
+          go install github.com/stripe/stripe-mock@${{ env.STRIPE_MOCK_VERSION }}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run e2e
         run: ./e2e/run.sh

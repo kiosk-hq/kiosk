@@ -31,8 +31,8 @@ answer.
 `rake check:book` runs the errand with no human present: the assistant
 registers itself under the toll, reads `availability`, calls `reserve_room`,
 signs the three AP2 mandates and pays, and the booking is confirmed only once
-payment settles. Settlement goes through a stub PSP, so the whole flow runs
-with no real card processor.
+payment settles. Settlement goes through Stripe in test mode, and the task
+charges a local stripe-mock, so the flow runs with no real card.
 
 Two things the incumbent flow cannot do follow from that. Payment is part of
 the wire rather than a handback, so the reservation completes in one exchange.

@@ -10,6 +10,7 @@
 # Env posture (signing key, PoW secret, issuer, test flags) lives in
 # config/environments/*; this file reads Rails.configuration.x.kiosk.*.
 
+require "kiosk/payment_providers/stripe"
 require "kiosk/user_identity_providers/devise"
 
 # ── Browse-heavy PoW toll ─────────────────────────────────────────────────
@@ -157,12 +158,24 @@ Kiosk.configure do |c|
   # supplied here; without it those pages render a bare 401.
   c.sign_in_path = "/users/sign_in"
 
+  # Payment provider: Stripe in test mode (sk_test_…), card saved once on
+  # Stripe's hosted page and charged off_session per booking; a declined booking
+  # is refunded through the same adapter. With a mock base URL configured (the
+  # demo tasks and CI, which carry no key) the SDK talks to a local stripe-mock.
+  key = Rails.configuration.x.kiosk.stripe_secret_key
+  if (mock = Rails.configuration.x.kiosk.stripe_mock_url).present?
+    require "stripe"
+    Stripe.api_base = mock
+  end
+  raise "hoteling requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.blank?
+
   # One capture per booking, and the cart checked against the price we quoted
-  # before the StubPsp captures. Monetary only: who may USE the booking is
+  # before Stripe captures. Monetary only: who may USE the booking is
   # confirm_booking's Gate 1.
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
-    StubPsp.new, currency: "eur", table: "bookings", reference: "booking_id",
-                 query: "my_bookings", payer_column: "paid_by_user_id",
+    Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
+    currency: "eur", table: "bookings", reference: "booking_id",
+    query: "my_bookings", payer_column: "paid_by_user_id",
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(booking_id) { Booking.paid!(booking_id) }

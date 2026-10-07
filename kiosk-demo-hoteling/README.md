@@ -5,8 +5,9 @@ Hotel booking demo operator for Kiosk.
 `hoteling` is a fake-but-realistic hotel operator that takes room bookings
 over the Kiosk wire — the "book me a room for those dates" story, completed
 by an AI assistant with no human present, and gated on payment (a booking is
-only confirmed once it is paid for). Payment settles through a **stub PSP**
-(`StubPsp`), so the demo runs end-to-end with no real card processor.
+only confirmed once it is paid for). Payment is kiosk-pay-stripe in Stripe test
+mode — the tasks and CI charge a local stripe-mock — and a booking the property
+declines is refunded to the card that paid.
 
 ## Wire surface
 
@@ -35,7 +36,7 @@ RFC 9457 problem document.
 - `POST /kiosk/confirm_booking` — confirm a reserved booking; requires a
   settled payment whose cart mandate references this booking
 - `POST /kiosk/pay` — settle the AP2 mandate chain (intent → cart → payment)
-  via the stub PSP
+  through Stripe
 - `GET /kiosk/schema` — self-discovery
 - `GET /kiosk/openapi.json` — the DERIVED OpenAPI description of the above, for
   tooling; the catalog at `/kiosk/schema` stays canonical
@@ -106,7 +107,7 @@ From this directory:
 
 ```
 bin/rails check:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
-bin/rails check:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting mints the confirmation code — the only thing in this demo that does — and `confirm_booking` reads it back; declining cancels the booking, sends the guest's money back to the card that paid through this demo's own StubPsp, frees the room-nights by status alone, and the event names where the money went
+bin/rails check:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting mints the confirmation code — the only thing in this demo that does — and `confirm_booking` reads it back; declining cancels the booking, refunds the guest's money to the card that paid through the Stripe adapter, frees the room-nights by status alone, and the event names where the money went
 bin/rails check:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
 bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)

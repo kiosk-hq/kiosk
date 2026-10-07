@@ -7,7 +7,7 @@
   </div>
   <header>
     <div class="logo">hotel<span>ing</span></div>
-    <nav class="tagline">room bookings · pays via stub PSP</nav>
+    <nav class="tagline">room bookings · pays via Stripe test mode</nav>
   </header>
 
   <div class="wrap">
@@ -19,8 +19,9 @@
         <h2>Book a room — confirmed only once it's paid</h2>
         <p>Tell your AI assistant:</p>
         <p class="say">“Book me a room in Istanbul at hoteling.demo.kiosk.tech for next weekend.”</p>
-        <p>It discovers the hotel, registers itself, checks availability, and books — no account, no app. The booking is only confirmed once it is paid for.</p>
-        <p class="note">Payment settles through a <strong>stub PSP</strong>, so the whole loop runs end-to-end with <strong>no real card processor</strong> — nothing to type. (<a href="https://getgrocery.demo.kiosk.tech">getgrocery</a> is the demo with a real Stripe checkout.)</p>
+        <p>It discovers the hotel, registers itself, checks availability, and books — no account, no app. The booking is only confirmed once it is paid for. When it hands you the Stripe checkout link, save the test card:</p>
+        <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
+        <p class="note">Payment is <strong>Stripe in test mode</strong> (card-on-file, <code>off_session</code>) — no real charge, no real card touched. If the hotel declines, the charge is refunded to that card.</p>
       </div>
     </section>
 
@@ -28,10 +29,10 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>hoteling</strong> is a hotel-booking demo operator. It is the <strong>payment-gated fulfilment</strong> reference: availability and rates over the wire, then a booking that only confirms once <code>pay</code> succeeds — settled through a stub PSP so it runs with no real card processor.</p>
+        <p><strong>hoteling</strong> is a hotel-booking demo operator. It is the <strong>payment-gated fulfilment</strong> reference: availability and rates over the wire, then a booking that only confirms once <code>pay</code> succeeds — paid through Stripe in test mode, and refunded if the hotel declines.</p>
         <div class="chips">
           <span class="chip">🏨 Payment-gated booking</span>
-          <span class="chip">Stub PSP (no real card)</span>
+          <span class="chip">💳 Stripe test mode</span>
           <span class="chip">Availability + rates queries</span>
         </div>
         <div class="links">

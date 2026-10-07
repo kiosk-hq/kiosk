@@ -21,6 +21,7 @@ header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:fl
 .tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
 .tryit p{font-size:15px;margin-bottom:10px;color:#233}
 .say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
+.card{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:9px;padding:10px 14px;font-size:14px}
 .note{font-size:13px;color:var(--muted);margin-top:8px}
 
 .about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}

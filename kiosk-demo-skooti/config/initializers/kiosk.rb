@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (skooti-shape) configuration. Concrete values for the
-# scooter-rental reference shape: uuid users, the engine's own agent IdP, StubPsp,
+# scooter-rental reference shape: uuid users, the engine's own agent IdP, Stripe,
 # the KYC broker as the trusted KYC issuer, and the Ed25519 rental-token
 # signing key the physical locks verify against.
 #
@@ -33,6 +33,7 @@ Kiosk::Configuration.include(SkootiUnlockSigningKey)
 # numpy solver, so a poker on the hosted deploy feels the toll first-hand.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
+require "kiosk/payment_providers/stripe"
 require "kiosk/user_identity_providers/devise"
 require "kiosk/kyc_providers/prove"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
@@ -140,13 +141,24 @@ Kiosk.configure do |c|
   # supplied here; without it those pages render a bare 401.
   c.sign_in_path = "/users/sign_in"
 
-  # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
+  # Payment provider: Stripe in test mode (sk_test_…), card saved once on
+  # Stripe's hosted page and charged off_session per reservation. With a mock
+  # base URL configured (the demo tasks and CI, which carry no key) the SDK
+  # talks to a local stripe-mock.
+  key = Rails.configuration.x.kiosk.stripe_secret_key
+  if (mock = Rails.configuration.x.kiosk.stripe_mock_url).present?
+    require "stripe"
+    Stripe.api_base = mock
+  end
+  raise "skooti requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.blank?
+
   # One capture per reservation, and the cart checked against the price we
-  # quoted before the StubPsp captures. Monetary only: ownership and KYC are
+  # quoted before Stripe captures. Monetary only: ownership and KYC are
   # enforced at USE time (start_rental / rent_motorcycle).
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
-    StubPsp.new, currency: "eur", table: "reservations", reference: "reservation_id",
-                 query: "my_reservations", payer_column: "paid_by_user_id",
+    Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
+    currency: "eur", table: "reservations", reference: "reservation_id",
+    query: "my_reservations", payer_column: "paid_by_user_id",
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(reservation_id) { Reservation.paid!(reservation_id) }

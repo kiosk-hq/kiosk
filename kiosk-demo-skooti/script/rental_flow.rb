@@ -135,8 +135,9 @@ STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{pr
 # outside the SKIP_PAY branch: whether this principal can pay is a property of
 # the principal, not of the payment about to happen.
 #
-# Under this demo's StubPsp `setup_required?` is always false, so it is one
-# request and an immediate {status: "ready"}.
+# The tasks run the Stripe adapter with its test card switched on
+# (KIOSK_TEST_AUTOCARD), so `setup_required?` is false and the answer is an
+# immediate {status: "ready"}; a live guest saves a card at `setup_url` first.
 rc_setup, setup_resp = post_json(
   "#{SERVER}/kiosk/payment_setup",
   {},

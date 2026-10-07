@@ -98,4 +98,27 @@ Rails.application.configure do
   # and this file is where they would name them.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+
+  # KIOSK_TEST_AUTOCARD=1 (set by the pay tasks) makes the
+  # Stripe adapter simulate a completed SetupIntent — no hosted card-entry
+  # step, no server-side test route. Honoured in dev/test only; production
+  # pins it OFF.
+  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
+
+  # Payment-provider credentials; the initializer reads the resolved values and
+  # never ENV. With a local stripe-mock the key is irrelevant (the mock accepts
+  # any); with neither variable set the app still boots on a placeholder, so
+  # every task that does not charge runs with no payment config at all, and a
+  # charge fails clearly at charge time. Production invents nothing — see
+  # production.rb.
+  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
+  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence
+  if config.x.kiosk.stripe_secret_key.nil?
+    if config.x.kiosk.stripe_mock_url
+      config.x.kiosk.stripe_secret_key = "sk_test_mock"
+    else
+      config.x.kiosk.stripe_secret_key = "sk_test_placeholder"
+      warn "no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; a charge needs one."
+    end
+  end
 end

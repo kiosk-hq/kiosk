@@ -14,7 +14,7 @@
 # re-activate and the beat would score correct behaviour a breach.
 #
 # Three cashier-check beats attack PaymentClaim (the monetary
-# check run at capture, before StubPsp settles) — the first from the shared
+# check run at capture, before Stripe captures) — the first from the shared
 # kiosk-redteam library, the other two local to this file:
 #   WrongCurrencyCart  — pay own booking in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted booking price → 403

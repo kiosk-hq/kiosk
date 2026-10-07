@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1907 anchors.
+# 1901 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -317,7 +317,6 @@ kiosk-demo-atablefor/app/views/home/index.html.erb	The href is the VERSIONED cut
 kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
 kiosk-demo-atablefor/before-after.md	`rake check:book` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
-kiosk-demo-atablefor/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-atablefor/config/initializers/kiosk.rb	        account_age_seconds:     nil,
 kiosk-demo-atablefor/config/initializers/kiosk.rb	        dispute_count:           nil,
 kiosk-demo-atablefor/config/initializers/kiosk.rb	      count = Booking.confirmed.where(user_id: identity.user_id).count
@@ -486,7 +485,6 @@ kiosk-demo-hoteling/app/operations/wire_arguments.rb	def property_not_found
 kiosk-demo-hoteling/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
 kiosk-demo-hoteling/before-after.md	`rake check:book` runs the errand with no human present:
-kiosk-demo-hoteling/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-hoteling/config/initializers/kiosk.rb	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
@@ -531,7 +529,6 @@ kiosk-demo-philslist/README.md	identity-binding surface with **no money on the w
 kiosk-demo-philslist/README.md	its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 kiosk-demo-philslist/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-philslist/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist
-kiosk-demo-philslist/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-philslist/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-philslist/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-philslist/config/initializers/kiosk.rb	# `payment_provider` here, so `capabilities` computes to schema/queries/actions and
@@ -604,7 +601,6 @@ kiosk-demo-skooti/app/views/home/index.html.erb	      <div class="sec-k">🤖 Tr
 kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	`rake check:rideflow` runs the errand with no human account and no sign-in:
-kiosk-demo-skooti/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
@@ -666,7 +662,6 @@ kiosk-demo-stylish/app/operations/book_appointment_operation.rb	names no time zo
 kiosk-demo-stylish/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-stylish/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
 kiosk-demo-stylish/bin/demo	run an Action
-kiosk-demo-stylish/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-stylish/config/initializers/kiosk.rb	  # before a cart exists. stylish configures no payment_provider (this salon
 kiosk-demo-stylish/config/initializers/kiosk.rb	  # role separation in this demo). This demo runs WITHOUT RLS — isolation
 kiosk-demo-stylish/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
@@ -736,7 +731,6 @@ kiosk-demo-tudu/app/operations/invite_operation.rb	OperationResult.ok({ "code" =
 kiosk-demo-tudu/app/operations/list_access.rb	return nil if Membership.reachable?(list_id, require_owner: require_owner)
 kiosk-demo-tudu/app/views/lists/index.html.erb	      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
 kiosk-demo-tudu/app/views/lists/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
-kiosk-demo-tudu/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # enforced at the app layer (the membership EXISTS-check that
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # migrates that headless account's lists and memberships to the human.
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────

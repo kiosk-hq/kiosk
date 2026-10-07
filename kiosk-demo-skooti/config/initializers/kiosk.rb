@@ -46,35 +46,18 @@ pow_secret = Rails.configuration.x.kiosk.pow_secret
 # ── Ed25519 unlock signing key ──────────────────────────────────────────────
 # The PEM is resolved per environment — dev/test read the shipped
 # config/dev_unlock_key.pem, production requires KIOSK_UNLOCK_SIGNING_KEY_PEM —
-# and this file only parses the resolved value.
-#
-# The empty case gets a SIGNPOST rather than a nil TypeError. Production keys
-# the KIOSK_UNLOCK_SIGNING_KEY_PEM requirement off the mere existence of
-# config/dev_unlock_key.pem, so stripping that file from a deploy artifact — a
-# plausible reaction to "stop shipping a dev private key" — makes production
-# stop ASKING for the variable and leave the config nil. Without the raise
-# below this line dies with `TypeError: no implicit conversion of nil into
-# String`, naming neither the file nor the fix.
+# and this file only parses the resolved value. The empty case — a deleted or
+# emptied dev key file — gets a signpost rather than a nil TypeError.
 unlock_signing_key_pem = Rails.configuration.x.kiosk.unlock_signing_key_pem
 if unlock_signing_key_pem.to_s.strip.empty?
   raise <<~MSG
     No unlock/rental-token signing key is configured, so this demo cannot
     sign the Ed25519 tokens its locks verify.
 
-    config/environments/#{Rails.env}.rb resolves it, and every path it has
-    came back empty:
-
-      * production REQUIRES KIOSK_UNLOCK_SIGNING_KEY_PEM — but only for a
-        demo that ships config/dev_unlock_key.pem, the marker it keys that
-        requirement off. If that file was stripped from the deploy artifact,
-        the variable is silently no longer demanded and you land HERE.
-        Restore the tracked file (it is a marker, not a fallback — its key is
-        never loaded in production) and set the variable.
-      * development/test fall back to reading that same file, so a deleted
-        or emptied copy lands here too. Restore it with
-        `git checkout config/dev_unlock_key.pem`.
-
-    Either way an explicit key also satisfies this line:
+    config/environments/#{Rails.env}.rb reads config/dev_unlock_key.pem when
+    KIOSK_UNLOCK_SIGNING_KEY_PEM is unset, and that file is missing or empty.
+    Restore it with `git checkout config/dev_unlock_key.pem`, or set an
+    explicit key:
 
       KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
   MSG

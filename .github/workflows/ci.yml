@@ -685,12 +685,9 @@ jobs:
       #     it). It must PARSE as an RSA private key, so a literal will not do:
       #     the `run:` below mints a throwaway keypair.
       #   KIOSK_UNLOCK_SIGNING_KEY_PEM — K-686 made the Ed25519 rental-token
-      #     signing key crash-if-absent in production for the demos that issue
-      #     unlock tokens, which is skooti alone (the shared production.rb
-      #     keys the requirement off the demo shipping a
-      #     config/dev_unlock_key.pem, not off its name, so the other six are
-      #     unaffected). It must PARSE as an Ed25519 private key, so the
-      #     `run:` below mints a throwaway keypair for skooti too.
+      #     signing key crash-if-absent in skooti's production.rb, the one demo
+      #     that issues unlock tokens. It must PARSE as an Ed25519 private key,
+      #     so the `run:` below mints a throwaway keypair for skooti too.
       # The signing key exported above is likewise already in the environment.
       #
       # THE TWO KEYPAIRS ARE MINTED INSIDE THIS STEP, NOT EXPORTED TO THE JOB

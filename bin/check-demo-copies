@@ -230,9 +230,9 @@ if ARGV.include?("--self-test")
     { id: "except-has-converged", kind: :break,
       rule: "The one comparison this whole file exists for",
       what: "the excepted copy converges on its siblings and the exception is left standing",
-      ops:  [[:copy, "kiosk-demo-tudu/config/environments/test.rb",
-              "kiosk-demo-prove/config/environments/test.rb"]],
-      expect: /config\/environments\/test\.rb: `except:` for prove is stale/ },
+      ops:  [[:copy, "kiosk-demo-tudu/config/puma.rb",
+              "kiosk-demo-prove/config/puma.rb"]],
+      expect: /config\/puma\.rb: `except:` for prove is stale/ },
 
     { id: "e83-harness-half-moves-alone", kind: :break,
   rule: "THE §8.3 LOOP EXISTS TWICE, AND ONE COPY IS NOT A DEMO (T-156)",
@@ -509,15 +509,31 @@ if ARGV.include?("--self-test")
       expect: /the K-1353 host-detection rule read 0 blocks/ },
 
 { id: "env-block-one-demo-edited", kind: :break,
-  rule: "The Kiosk env block in config/environments/development.rb (K-1752)",
+  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
   what: "one demo's copy of the role-names paragraph goes back to the sentence K-1752 removed — the exact plant that left this check at exit 0",
   ops:  [[:edit, "kiosk-demo-tudu/config/environments/development.rb",
           "privileged role a DBA grants ownership to", "owner role the engine returns to afterwards"]],
   expect: /config\/environments\/development\.rb: below the `Kiosk env inputs` banner a paragraph shared by two demos must be in all 7 .* and not in \[tudu\]/ },
+{ id: "env-block-production-head-drifts", kind: :break,
+  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
+  what: "one demo's production posture above the banner drifts from the other six",
+  ops:  [[:edit, "kiosk-demo-tudu/config/environments/production.rb",
+          "config.assume_ssl = true", "config.assume_ssl = false"]],
+  expect: /config\/environments\/production\.rb: above the `Kiosk env inputs` banner the operator seven must agree/ },
+{ id: "env-block-kyc-keys-in-a-third-demo", kind: :break,
+  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
+  what: "a demo with no KYC provider publishes the KYC broker keys again",
+  ops:  [[:edit, "kiosk-demo-tudu/config/environments/test.rb",
+          "  config.x.kiosk.system_role = ENV.fetch(\"KIOSK_SYSTEM_ROLE\", \"app_role\")\n",
+          "  config.x.kiosk.system_role = ENV.fetch(\"KIOSK_SYSTEM_ROLE\", \"app_role\")\n\n" \
+          "  # KYC broker trust — pinned explicitly by the tasks that need it.\n" \
+          "  config.x.kiosk.prove_public_key_pem = ENV[\"KIOSK_PROVE_PUBLIC_KEY_PEM\"]\n" \
+          "  config.x.kiosk.prove_intake_secret  = ENV[\"KIOSK_PROVE_INTAKE_SECRET\"]\n"]],
+  expect: /config\/environments\/test\.rb: below the `Kiosk env inputs` banner a paragraph shared by two demos must be in exactly \[getgrocery,skooti\]/ },
 { id: "vacuity-env-block", kind: :vacuity,
-  rule: "The Kiosk env block in config/environments/development.rb (K-1752)",
+  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
   what: "the owner tally stops filling, so a lockstep rule with nothing shared left to compare must say so",
-  ops:  [[:edit, "bin/check-demo-copies", "paras.each { |para| env_owners[para] << demo }", "paras.each { |para| env_owners[para] }"]],
+  ops:  [[:edit, "bin/check-demo-copies", "paras.each { |para| owners[para] << demo }", "paras.each { |para| owners[para] }"]],
   expect: /the K-1752 env-block rule read 0 paragraph/ },
 
     { id: "host-pair-one-task-loses-it", kind: :break,
@@ -1322,8 +1338,6 @@ EXTRA_SCANNED = [
   "public/500.html",
   "config/puma.rb",
   "config/cable.yml",
-  "config/environments/test.rb",
-  "config/environments/production.rb",
   "config/initializers/filter_parameter_logging.rb",
   "bin/setup",
   "bin/dev",
@@ -1448,13 +1462,6 @@ COPIES = {
           "from WEB_CONCURRENCY/RAILS_MAX_THREADS, so nothing in the file is per-demo; a copy " \
           "that grows its own settings is a deploy behaving unlike the other six (K-643).",
   },
-  "config/environments/test.rb" => {
-    rule:   :identical,
-    except: { "prove" => PROVE_SKELETON },
-    why:  "One test posture for the operator seven (eager_load in CI, null cache store, " \
-          "deprecations to stderr); a demo whose test env drifts is a demo whose green means " \
-          "something different (K-643).",
-  },
   "config/initializers/filter_parameter_logging.rb" => {
     rule:   :identical,
     except: { "getgrocery" => "a verb argument carrying a human's own data — `delivery_address`, a " \
@@ -1473,14 +1480,6 @@ COPIES = {
           "knows their names; what is here is the Rails generator's list, which covers the " \
           "operator's own forms (K-1881), plus — in each demo that declares one — that " \
           "operator's own personal field.",
-  },
-  "config/environments/production.rb" => {
-    rule:   :identical,
-    except: { "prove" => PROVE_SKELETON },
-    why:  "The deploy posture itself: assume_ssl (whose absence WAS the K-439 sign-in breakage), " \
-          "eager_load, STDOUT logging, and the public_file_server headers that serve the T-048 " \
-          "statics. Exactly the file where one demo drifting reintroduces a production-only bug " \
-          "class the dev-mode gates structurally cannot see (K-643).",
   },
   "public/404.html" => {
     rule:   :identical,
@@ -1924,8 +1923,14 @@ COPIES = {
 SKELETON_NOT_COMPARED = {
   "config/environments/development.rb" =>
     "Per-demo above its `Kiosk env inputs` banner: each demo permits its own served host. Below " \
-    "it every paragraph shared by two demos is held in all seven by the K-1752 env-block rule " \
-    "further down; getgrocery's payment-adapter paragraph is the one per-demo addition.",
+    "it each demo publishes only the keys it reads, held by the env-block rule further down.",
+  "config/environments/test.rb" =>
+    "Identical in the operator seven above its `Kiosk env inputs` banner; below it each demo " \
+    "publishes only the keys it reads, held by the env-block rule further down.",
+  "config/environments/production.rb" =>
+    "Identical in the operator seven above its `Kiosk env inputs` banner — the deploy posture " \
+    "(assume_ssl, eager_load, STDOUT logging, the static-file headers); below it each demo " \
+    "publishes only the keys it reads, held by the env-block rule further down.",
   "config/application.rb" => "Per-demo: the module name IS the demo name.",
   "config/boot.rb" => "Rails generator output, four lines, identical in all eight.",
   "config/environment.rb" => "Rails generator output, five lines, identical in all eight.",
@@ -3639,50 +3644,76 @@ if host_groups.size > 1
             "(K-1353)."
 end
 
-# ── The Kiosk env block in config/environments/development.rb (K-1752) ──────
+# ── The Kiosk env block in config/environments/*.rb (K-1752, K-1900) ────────
 #
-# development.rb is per-demo above its `Kiosk env inputs` banner — each demo
-# permits its own served host — and getgrocery alone carries a payment-adapter
-# paragraph below it. Every other paragraph below the banner is one hand-copied
-# block the operator seven keep textually identical, comments included, and the
-# block's own comment says so. A paragraph is a blank-line-separated run of
-# lines; one found in two or more of the seven must be in all seven.
-ENV_BLOCK_REL    = "config/environments/development.rb"
+# Each environment file is Rails posture above its `Kiosk env inputs` banner and
+# the demo's own env inputs below it. Above the banner, test.rb and production.rb
+# are identical in the operator seven; development.rb permits each demo's own
+# served host. Below it a demo publishes only the keys it reads. A paragraph — a
+# blank-line-separated run of lines — found in two demos must be in all seven, or
+# in exactly the demos ENV_BLOCK_SUBSETS names for the key it publishes.
+ENV_BLOCK_RELS   = %w[config/environments/development.rb config/environments/test.rb
+                      config/environments/production.rb].freeze
+ENV_BLOCK_SAME_HEAD = %w[config/environments/test.rb config/environments/production.rb].freeze
 ENV_BLOCK_BANNER = /\A\s*# ── Kiosk env inputs /
+ENV_BLOCK_SUBSETS = { "config.x.kiosk.prove_public_key_pem" => KYC_DEMOS }.freeze
 
-def env_block_paragraphs(path)
+# [lines above the banner, paragraphs below it] — the file's closing `end` is
+# not part of the last paragraph.
+def env_block_split(path)
   lines = File.readlines(path)
   start = lines.index { |l| ENV_BLOCK_BANNER.match?(l) } or return nil
-  lines[start..].chunk_while { |a, b| !a.strip.empty? && !b.strip.empty? }
-                .map(&:join).reject { |para| para.strip.empty? }
+  body  = lines[start..]
+  body  = body[0...-1] if body.last&.strip == "end"
+  paras = body.chunk_while { |a, b| !a.strip.empty? && !b.strip.empty? }
+              .map(&:join).reject { |para| para.strip.empty? }
+  [lines[0...start].join, paras]
 end
 
-env_paragraphs = {}   # demo => [paragraph, ...]
-env_no_banner  = []
-OPERATOR_SEVEN.each do |demo|
-  found = env_block_paragraphs(File.join(ROOT, "kiosk-demo-#{demo}", ENV_BLOCK_REL))
-  found.nil? ? env_no_banner << demo : env_paragraphs[demo] = found
-end
-unless env_no_banner.empty?
-  errors << "#{env_no_banner.join(', ')}: #{ENV_BLOCK_REL} has no `Kiosk env inputs` banner, so the " \
-            "env-block rule compared NOTHING for that demo (K-1752)."
-end
+env_shared = 0
+ENV_BLOCK_RELS.each do |rel|
+  split = {}
+  OPERATOR_SEVEN.each do |demo|
+    found = env_block_split(File.join(ROOT, "kiosk-demo-#{demo}", rel))
+    if found.nil?
+      errors << "#{demo}: #{rel} has no `Kiosk env inputs` banner, so the env-block rule " \
+                "compared NOTHING for that demo (K-1752)."
+    else
+      split[demo] = found
+    end
+  end
 
-env_owners = Hash.new { |h, k| h[k] = [] }
-env_paragraphs.each { |demo, paras| paras.each { |para| env_owners[para] << demo } }
-env_owners.each do |para, owners|
-  next if owners.size < 2 || owners.size == env_paragraphs.size
+  if ENV_BLOCK_SAME_HEAD.include?(rel)
+    heads = split.group_by { |_demo, (head, _paras)| head }.values.map { |g| g.map(&:first).sort }
+    if heads.size > 1
+      errors << "#{rel}: above the `Kiosk env inputs` banner the operator seven must agree " \
+                "byte-for-byte, and they do not: #{heads.map { |g| "[#{g.join(',')}]" }.join(' ')} (K-1900)."
+    end
+  end
 
-  missing = env_paragraphs.keys - owners
-  errors << "#{ENV_BLOCK_REL}: below the `Kiosk env inputs` banner a paragraph shared by two demos " \
-            "must be in all #{env_paragraphs.size} — «#{para.lines.first.strip}» is in " \
-            "[#{owners.sort.join(',')}] and not in [#{missing.sort.join(',')}] (K-1752)."
+  owners = Hash.new { |h, k| h[k] = [] }
+  split.each { |demo, (_head, paras)| paras.each { |para| owners[para] << demo } }
+  owners.each do |para, demos_with|
+    next if demos_with.size < 2
+
+    key   = ENV_BLOCK_SUBSETS.keys.find { |k| para.include?(k) }
+    must  = key ? ENV_BLOCK_SUBSETS[key] : split.keys
+    if demos_with.sort == must.sort
+      env_shared += 1 unless key
+      next
+    end
+
+    errors << "#{rel}: below the `Kiosk env inputs` banner a paragraph shared by two demos " \
+              "must be in #{key ? "exactly [#{must.sort.join(',')}]" : "all #{must.size}"} — " \
+              "«#{para.lines.first.strip}» is in [#{demos_with.sort.join(',')}]" +
+              ((missing = must - demos_with).empty? ? "" : " and not in [#{missing.sort.join(',')}]") +
+              " (K-1752)."
+  end
 end
-env_shared = env_owners.count { |_para, owners| owners.size == env_paragraphs.size }
-if env_shared < 2
+if env_shared < 2 * ENV_BLOCK_RELS.size
   errors << "check-demo-copies: the K-1752 env-block rule read #{env_shared} paragraph(s) shared by " \
-            "every operator demo — the block has moved out of #{ENV_BLOCK_REL}, and a lockstep rule " \
-            "with nothing to compare passes everything."
+            "every operator demo across #{ENV_BLOCK_RELS.size} files — the blocks have moved, and a " \
+            "lockstep rule with nothing to compare passes everything."
 end
 
 # ── Every task that boots a server detects its host (K-1413) ─────────────────

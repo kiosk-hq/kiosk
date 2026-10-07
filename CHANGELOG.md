@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **Each demo's environment files publish only the keys that demo reads**; skooti's production requires its unlock key outright (K-1900).
+
 - 2026-10-07: **The demos configure the PoW toll they run**: getgrocery and hoteling toll with no env flag, atablefor reads only `KIOSK_POW_MODE` (K-1786, K-1806).
 
 - 2026-10-07: **tudu's `todo` topic says the actor's own calls are delivered too, and hoteling's `reserve_room` no longer promises a pay-by deadline its answer never carries** (K-2026, K-2027).

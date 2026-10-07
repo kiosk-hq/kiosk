@@ -78,8 +78,6 @@ deploy/README.md ¦ seven demos ¦ from: git grep -l 'Kiosk::Pow::Equihash::Diff
 deploy/README.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything provisioned on the box, one environment template each.
 deploy/README.md ¦ three documents ¦ the always-free documents are named in full in the same sentence; they are routes of the engine rather than a file set.
 deploy/env/getgrocery.env.example ¦ eight apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ the Puma sizing paragraph's population, one template per app.
-deploy/env/getgrocery.env.example ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, every one of which reads the same role-named variable.
-deploy/env/skooti.env.example ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the same sentence and the same population as the getgrocery template.
 kiosk-all/README.md ¦ five gems ¦ a hypothetical bundle the paragraph argues against; those gems are named in the sentence and several are not in this tree at all.
 kiosk-demo-atablefor/README.md ¦ two queries ¦ from: cat kiosk-demo-atablefor/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
 kiosk-demo-atablefor/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-atablefor/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.

@@ -59,8 +59,7 @@ Rails.application.configure do
   # ENV is read HERE, per environment, and published as Rails custom config
   # (Rails.configuration.x.kiosk.*); initializers and lib code read the
   # config, never ENV. Development keeps the out-of-the-box fallbacks
-  # production refuses to invent; the block is kept textually identical
-  # across the demos, and bin/check-demo-copies holds it so.
+  # production refuses to invent. A demo publishes only the keys it reads.
 
   # Ephemeral dev signing key: the JWT/register flows need one, so when none
   # is provided self-provision an EPHEMERAL RSA key and `demo:setup`/the flow
@@ -85,7 +84,7 @@ Rails.application.configure do
   # REQUIRES the variable.
   config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") { "http://localhost:#{ENV.fetch("PORT", "3000")}" }
 
-  # KIOSK_TEST_AUTOCARD=1 (set by the pay demos' rake suites) makes the
+  # KIOSK_TEST_AUTOCARD=1 (set by the pay tasks) makes the
   # Stripe adapter simulate a completed SetupIntent — no hosted card-entry
   # step, no server-side test route. Honoured in dev/test only; production
   # pins it OFF.
@@ -107,22 +106,11 @@ Rails.application.configure do
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
   # ── The toy bad-proof counter's store ───────────────────────────────────
-  # WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
-  # is per-environment posture rather than a demo mode, so it is resolved here
-  # with every other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT). `rake check:pow` OWNS the location: it wipes the file
-  # for a clean slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it
-  # spawns and the driver that reads the counts back, so the two processes
-  # cannot drift onto different files and report zero at each other; the
-  # defaults below are only for a bare `rails s`.
-  # TWO keys because atablefor's :demo and :reputation PoW branches keep
-  # SEPARATE stores and this file cannot know which branch will run — an
-  # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
-  # check:pow relies on. Published in all seven demos like every other key in
-  # this block (only atablefor and getgrocery carry a bad-proof counter): these
-  # blocks are kept identical across the seven by bin/check-demo-copies.
-  config.x.kiosk.bad_proof_db            = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
-  config.x.kiosk.reputation_bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
+  # WHERE the PoW bad-proof counter's sqlite file lives. `rake check:pow` OWNS
+  # the location: it wipes the file and exports KIOSK_BAD_PROOF_DB to BOTH the
+  # server it spawns and the driver that reads the counts back, so the two
+  # cannot drift onto different files; the default is only for a bare `rails s`.
+  config.x.kiosk.bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
 
   # Payment-provider credentials. getgrocery is the one demo that wires a
   # REAL payment adapter, and this block is the whole of its out-of-the-box
@@ -143,23 +131,10 @@ Rails.application.configure do
     end
   end
 
-  # KYC broker trust — read by whichever demos bundle a KYC provider
-  # (kiosk-kyc-prove); inert in the others. No pinned dev
-  # broker key and no default intake secret: the two-server harnesses
-  # and the KYC rake tasks pin both sides explicitly (ProveBrokerBoot wiring /
-  # the ProveKey public half), so nothing here needs to line up "out of the
-  # box". The intake secret is ONE variable named for its role, never for an
-  # operator — see production.rb for why.
+  # KYC broker trust. No pinned dev broker key and no default intake secret:
+  # the two-server harnesses and the KYC rake tasks pin both sides explicitly
+  # (ProveBrokerBoot wiring / the ProveKey public half). The intake secret is
+  # ONE variable named for its role, never for an operator.
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
   config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
-
-  # The Ed25519 unlock/rental-token signing key: the FIXED dev keypair the demo
-  # ships at config/dev_unlock_key.pem, where it ships one. Fixed rather than
-  # ephemeral because the known-answer vector, the firmware fixtures and the
-  # lock the flow drivers provision are all pinned to it. Its private half is
-  # world-readable in this public repo, which is why production refuses to boot
-  # without an explicit KIOSK_UNLOCK_SIGNING_KEY_PEM.
-  dev_unlock_key_file = Rails.root.join("config/dev_unlock_key.pem")
-  config.x.kiosk.unlock_signing_key_pem =
-    ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") { dev_unlock_key_file.read if dev_unlock_key_file.exist? }
 end

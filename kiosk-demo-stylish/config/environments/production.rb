@@ -64,9 +64,7 @@ Rails.application.configure do
   # ENV is read HERE, per environment, and published as Rails custom config
   # (Rails.configuration.x.kiosk.*); initializers and lib code read the
   # config, never ENV, and never raise — each environment's posture lives in
-  # that environment's file. This file is byte-identical across the seven
-  # operator demos (bin/check-demo-copies), so nothing in this block may name
-  # a single demo.
+  # that environment's file. A demo publishes only the keys it reads.
 
   # The HMAC key every Kiosk PoW challenge is signed with — REQUIRED.
   # This repo is public, so a shipped fallback would be world-readable:
@@ -106,11 +104,6 @@ Rails.application.configure do
     MSG
   end
 
-  # NEVER in production: the Stripe autocard test shim (a completed
-  # SetupIntent simulated without a hosted card-entry step) is pinned OFF
-  # here — the live demo runs the real hosted flow. Dev/test honour the flag.
-  config.x.kiosk.test_autocard = false
-
   # ── Postgres role names ─────────────────────────────────────────────────
   # `app_role` is the non-owner role a request-scoped session drops into when
   # `enforce_db_role` is on; the `SET LOCAL ROLE` expires with the transaction, so
@@ -125,139 +118,4 @@ Rails.application.configure do
   # and this file is where they would name them.
   config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
-
-  # ── The toy bad-proof counter's store ───────────────────────────────────
-  # WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
-  # is per-environment posture rather than a demo mode, so it is resolved here
-  # with every other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT). `rake check:pow` OWNS the location: it wipes the file
-  # for a clean slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it
-  # spawns and the driver that reads the counts back, so the two processes
-  # cannot drift onto different files and report zero at each other; the
-  # defaults below are only for a bare `rails s`.
-  # TWO keys because atablefor's :demo and :reputation PoW branches keep
-  # SEPARATE stores and this file cannot know which branch will run — an
-  # explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
-  # check:pow relies on. Published in all seven demos like every other key in
-  # this block (only atablefor and getgrocery carry a bad-proof counter): these
-  # blocks are kept identical across the seven by bin/check-demo-copies.
-  config.x.kiosk.bad_proof_db            = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
-  config.x.kiosk.reputation_bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
-
-  # Payment-provider credentials — REQUIRED by whichever demos configure
-  # a REAL payment adapter, and never looked at by the others. Deliberately NO
-  # placeholder here, unlike dev and test: a shipped `sk_test_…` placeholder
-  # boots an origin that ADVERTISES `pay` in its discovery document and then
-  # fails at the first charge, with a human waiting on it. A configured mock
-  # base URL is the one exception, and it is not a fallback — pointing a
-  # production process at a local stripe-mock is an explicit act, and it is what
-  # the eager-load gate does to boot a payment demo without carrying a key.
-  # This file is byte-identical across the seven operator demos, so it cannot
-  # name the one demo that takes money: it publishes what the environment
-  # supplied, and the app that wires a payment provider is the one that refuses
-  # to boot with neither, by name, in its own initializer.
-  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
-  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
-                                     (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
-
-  # KYC broker trust — read by whichever demos bundle a KYC provider
-  # (kiosk-kyc-prove); inert in the others, which never
-  # look at it.
-  # NO pinned fallback key in production: the operator trusts ONLY an
-  # explicitly supplied broker public key, and with none set the engine's
-  # KycVerifier fails closed at the wire.
-  #
-  # The intake secret is ONE variable named for the ROLE it plays here, not
-  # for the operator that plays it — the same discipline the unlock key below
-  # keeps by keying off a marker file. It has no shipped default. A
-  # per-operator name would have to be picked with an `||` chain in this
-  # byte-identical file, and a process that carried two operators'
-  # secrets would then present the wrong one to the broker and be rejected
-  # (or, worse, accepted) with nothing to say why. Each deploy sets its own
-  # KIOSK_PROVE_INTAKE_SECRET to the value the broker holds for THAT
-  # operator; the broker keys its registry by the operator_id the intake body
-  # carries, so the two sides pair by value, never by variable name.
-  config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
-  config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
-
-  # The Ed25519 key offline unlock/rental tokens are signed with — REQUIRED by
-  # the demos that issue them. This file is byte-identical across the
-  # seven operator demos, so what makes the variable required here is not a
-  # demo name but the marker every issuing demo carries: a shipped dev keypair
-  # at config/dev_unlock_key.pem. A demo with no lock ships no such file,
-  # requires no variable, and reads nil.
-  #
-  # There is deliberately NO fallback to that dev keypair. Its private half is
-  # world-readable in this public repo, so signing production tokens with it
-  # would let anyone with a clone mint a token every provisioned lock accepts —
-  # past reserve, past payment, past the ownership check, past KYC. It is a
-  # physical-access credential: the blast radius is a vehicle, not a row.
-  dev_unlock_key_file = Rails.root.join("config/dev_unlock_key.pem")
-  if dev_unlock_key_file.exist?
-    config.x.kiosk.unlock_signing_key_pem = ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") do
-      raise <<~MSG
-        KIOSK_UNLOCK_SIGNING_KEY_PEM is required in production.
-
-        It is the Ed25519 key this operator signs offline unlock/rental tokens
-        with; every lock verifies against its public half. The dev keypair at
-        config/dev_unlock_key.pem ships in this public repo, so falling back to
-        it would let anyone with a clone mint a token every provisioned lock
-        accepts. Generate a fresh key — and provision the locks with ITS public
-        half:
-
-          KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
-      MSG
-    end
-    # Fail at boot, not at the first unlock: a value that does not parse — or
-    # carries only the public half — would otherwise 500 the first start_rental,
-    # which is a request some human is standing next to a scooter waiting on.
-    begin
-      unlock_key = OpenSSL::PKey.read(config.x.kiosk.unlock_signing_key_pem)
-      unless unlock_key.oid == "ED25519"
-        raise "KIOSK_UNLOCK_SIGNING_KEY_PEM must be an Ed25519 key (got #{unlock_key.oid}) — the locks verify Ed25519 signatures; generate one with `openssl genpkey -algorithm ed25519`."
-      end
-      unlock_key.private_to_pem # raises unless the PRIVATE half is there
-    rescue OpenSSL::PKey::PKeyError => e
-      raise "KIOSK_UNLOCK_SIGNING_KEY_PEM does not parse as an Ed25519 PRIVATE key PEM (#{e.message}) — generate one with `openssl genpkey -algorithm ed25519`."
-    end
-
-    # And refuse the SHIPPED DEV KEY ITSELF. The three checks above only prove
-    # the supplied value is *an* Ed25519 private key — pasting the world-
-    # readable config/dev_unlock_key.pem into the variable satisfies every one
-    # of them, and production boots signing tokens anyone with a clone can
-    # mint. Requiring the variable (above) closed the SILENT path to that key;
-    # this closes the explicit one, which is a plausible reaction to a boot
-    # that demands a PEM nobody has generated yet. Same refusal the demo's own
-    # test issuer keeps (script/prove_test_issuer.rb, where a dev-key fallback
-    # will not arm under a production env), one layer down.
-    #
-    # Compared on the PUBLIC half in DER, never on PEM text: one key
-    # re-serialised (raw vs PKCS#8, CRLF, a stray trailing newline) is a
-    # different string and the same credential.
-    dev_unlock_key_der =
-      begin
-        OpenSSL::PKey.read(dev_unlock_key_file.read).public_to_der
-      rescue OpenSSL::PKey::PKeyError
-        # A marker file that is not a parseable key is not a key anything can
-        # sign with either, so there is nothing here for the check to catch.
-        nil
-      end
-    if unlock_key.public_to_der == dev_unlock_key_der
-      raise <<~MSG
-        KIOSK_UNLOCK_SIGNING_KEY_PEM is the DEV keypair shipped at
-        config/dev_unlock_key.pem — refusing to boot production with it.
-
-        Its PRIVATE half is world-readable in this public repo, so every
-        unlock/rental token signed with it can be forged by anyone with a
-        clone — past reserve, past payment, past the ownership check, past
-        KYC. It is a physical-access credential: the blast radius is a
-        vehicle, not a row. Supplying that key explicitly re-opens exactly
-        what requiring this variable closed.
-
-        Generate a FRESH key — and provision the locks with ITS public half:
-
-          KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
-      MSG
-    end
-  end
 end

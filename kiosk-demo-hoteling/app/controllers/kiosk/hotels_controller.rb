@@ -165,8 +165,8 @@ class Kiosk::HotelsController < ActionController::API
                     check_out:         { type: "string", description: "Checkout day (exclusive), YYYY-MM-DD." },
                     total_cents:       { type: "integer", description: "EUR cents for the whole stay." },
                     status:            { type: "string", description: "The room-night's own state: reserved | confirmed | cancelled. It says nothing about money — payment_state does." },
-                    payment_state:     { type: "string", enum: %w[unpaid pending paid],
-                                         description: "Where this booking's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this booking has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct." },
+                    payment_state:     { type: "string", enum: %w[unpaid pending paid refunded],
+                                         description: "Where this booking's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this booking has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct. `refunded` = the charge was reversed to the card it came from (a booking the property declined)." },
                     confirmation_code: { type: %w[string null], description: "The reference the guest gives at the desk. Null until the booking is confirmed; durable afterwards." },
                   },
                   required: %w[booking_id property_id room_type_id check_in check_out

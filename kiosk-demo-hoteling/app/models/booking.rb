@@ -33,13 +33,15 @@ class Booking < ApplicationRecord
   # assistant telling its human about the second must not read the first.
   REFUNDED = "refunded"
 
-  # What `my_bookings` publishes, and the three answers §11.6 allows. `PENDING`
-  # is the third state the spec REQUIRES: a capture has been started and its
-  # outcome is not known, which is neither paid nor not-paid, and which an
-  # assistant must never read as a licence to sign a fresh mandate chain.
-  STATE_UNPAID  = "unpaid"
-  STATE_PENDING = "pending"
-  STATE_PAID    = "paid"
+  # What `my_bookings` publishes. `PENDING` is the third state §11.6 REQUIRES:
+  # a capture has been started and its outcome is not known, which is neither
+  # paid nor not-paid, and which an assistant must never read as a licence to
+  # sign a fresh mandate chain. `REFUNDED` outranks the settlement row, which
+  # stays after the money goes back.
+  STATE_UNPAID   = "unpaid"
+  STATE_PENDING  = "pending"
+  STATE_PAID     = "paid"
+  STATE_REFUNDED = "refunded"
 
   belongs_to :user
   belongs_to :property
@@ -148,10 +150,13 @@ class Booking < ApplicationRecord
   #   unpaid  — no capture has ever been claimed for this booking. This is the
   #             ONLY positive, unambiguous "not paid" hoteling ever publishes,
   #             and the only one that makes a fresh mandate chain correct.
+  #   refunded — the charge was reversed; checked first, because the settlement
+  #             row that witnesses `paid` is still there.
   #
   # @param payment_status [String] the row's capture-anchored marker
   # @param settled [Boolean] whether a settlement the caller may see references it
   def self.payment_state(payment_status, settled)
+    return STATE_REFUNDED if payment_status == REFUNDED
     return STATE_PAID    if payment_status == PAID || settled
     return STATE_PENDING if payment_status == PAYING
 

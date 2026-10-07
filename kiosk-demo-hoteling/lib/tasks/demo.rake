@@ -208,6 +208,8 @@ namespace :check do
     check.call("status is cancelled", paid.status == Booking::CANCELLED)
     check.call("payment_status is refunded", paid.payment_status == Booking::REFUNDED)
     check.call("a refund reference was persisted", paid.refund_psp_reference.present?)
+    check.call("my_bookings publishes payment_state=refunded, though the settlement row stays",
+               Booking.payment_state(paid.payment_status, true) == "refunded")
     pevent = store.since(paid.user_id, head_paid).find { |e| e["subject"] == paid.id }
     refund = pevent && pevent["data"]["refund"]
     check.call("the event carries the refund", !refund.nil?)

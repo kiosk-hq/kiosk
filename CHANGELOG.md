@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **hoteling's `my_bookings` publishes `payment_state: refunded` for a booking the property declined and refunded**, instead of `paid` (K-2014).
+
 ## [0.5.6] — 2026-10-07
 
 - 2026-10-07: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.6, matching skill 0.5.6.**

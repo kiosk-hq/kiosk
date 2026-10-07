@@ -144,69 +144,72 @@ def call_sites(src, receiver)
   out
 end
 
-# Index of the closer that balances the opener at `from`, reading `src` as Ruby:
-# a `#` outside a string opens a comment, and a delimiter inside either is prose,
-# so neither moves where the call ends — and that end bounds the body every rule
-# below reads. Not understood: heredocs, percent literals, regexp literals,
-# `?#`. None of them occurs inside a beat's argument list.
-def scan_to_close(src, from, opener, closer)
-  depth = 0
-  i = from
+# Yields every character of `text` from `from` that is CODE, with its index:
+# outside string literals and comments, and outside the `#{…}` of a
+# double-quoted string, whose quotes would otherwise flip which side of a
+# literal everything after it reads as. Not understood: heredocs, percent
+# literals, regexp literals, `?#`. None of them occurs inside a beat's
+# argument list.
+def each_code_char(text, from = 0)
+  interp = [] # brace depth inside each open `#{`
   in_str = nil
   in_comment = false
   esc = false
-  while i < src.length
-    c = src[i]
+  i = from
+  while i < text.length
+    c = text[i]
     if in_comment
       in_comment = false if c == "\n"
     elsif in_str
       if esc then esc = false
       elsif c == "\\" then esc = true
+      elsif in_str == '"' && c == "#" && text[i + 1] == "{"
+        interp.push(0)
+        in_str = nil
+        i += 1
       elsif c == in_str then in_str = nil
       end
-    else
-      case c
-      when "#" then in_comment = true
-      when '"', "'" then in_str = c
-      when opener then depth += 1
-      when closer
-        depth -= 1
-        break if depth.zero?
+    elsif c == '"' || c == "'" then in_str = c
+    elsif interp.any?
+      if c == "{" then interp[-1] += 1
+      elsif c == "}" && interp[-1].zero? then interp.pop && in_str = '"'
+      elsif c == "}" then interp[-1] -= 1
       end
+    elsif c == "#" then in_comment = true
+    else yield c, i
     end
     i += 1
   end
-  i
 end
 
-# Split an argument list at top-level commas, with comments and string literals
-# skipped for the reason `scan_to_close` gives.
+# Index of the closer that balances the opener at `from`, reading `src` as
+# Ruby, so a delimiter inside a string or comment does not move where the call
+# ends — and that end bounds the body every rule below reads.
+def scan_to_close(src, from, opener, closer)
+  depth = 0
+  each_code_char(src, from) do |c, i|
+    depth += 1 if c == opener
+    next unless c == closer
+
+    depth -= 1
+    return i if depth.zero?
+  end
+  src.length
+end
+
+# Split an argument list at top-level commas, read as `each_code_char` reads it.
 def top_level_args(body)
   args = []
   depth = 0
-  in_str = nil
-  in_comment = false
-  esc = false
   start = 0
-  body.each_char.with_index do |c, i|
-    if in_comment
-      in_comment = false if c == "\n"
-    elsif in_str
-      if esc then esc = false
-      elsif c == "\\" then esc = true
-      elsif c == in_str then in_str = nil
-      end
-    else
-      case c
-      when "#" then in_comment = true
-      when '"', "'" then in_str = c
-      when "(", "[", "{" then depth += 1
-      when ")", "]", "}" then depth -= 1
-      when ","
-        if depth.zero?
-          args << body[start...i]
-          start = i + 1
-        end
+  each_code_char(body) do |c, i|
+    case c
+    when "(", "[", "{" then depth += 1
+    when ")", "]", "}" then depth -= 1
+    when ","
+      if depth.zero?
+        args << body[start...i]
+        start = i + 1
       end
     end
   end

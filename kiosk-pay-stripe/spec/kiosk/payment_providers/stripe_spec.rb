@@ -328,7 +328,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   # ── capture ──────────────────────────────────────────────────────────────────
 
   describe "#capture" do
-    let(:pi) { double("PaymentIntent", id: "pi_123", amount: 1599, created: 1_700_000_000) }
+    let(:pi) do
+      double("PaymentIntent", id: "pi_123", status: "succeeded", amount: 1599, amount_received: 1599,
+                              created: 1_700_000_000)
+    end
 
     it "charges the customer's default saved card off_session, keyed by the cart mandate id" do
       invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
@@ -341,6 +344,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
           currency:       "eur",
           customer:       "cus_existing",
           payment_method: "pm_default_visa",
+          payment_method_types: ["card"],
           off_session:    true,
           confirm:        true,
           metadata:       { cart_mandate_id: "cart-1" },
@@ -413,18 +417,69 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       adapter.capture(cart_mandate, payment_method: "pm_explicit")
     end
 
-    it "settles the cart total against stripe-mock" do
+    it "settles what the intent received, not what it asked for" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing")
+        .and_return(double("Customer", id: "cus_existing", invoice_settings: invoice_settings))
+      allow(::Stripe::PaymentIntent).to receive(:create)
+        .and_return(double("PaymentIntent", id: "pi_part", status: "succeeded", amount: 1599,
+                                            amount_received: 1500, created: 0))
+
+      expect(adapter.capture(cart_mandate)[:settled_amount_cents]).to eq(1500)
+    end
+
+    # stripe-mock answers every confirmed intent `requires_payment_method` with
+    # `amount_received: 0`: Stripe's shape for a declined off_session confirm.
+    it "refuses stripe-mock's unpaid intent as a retryable decline" do
       url = StripeMock.start
       skip "stripe-mock not installed (brew install stripe-mock)" unless url
 
       saved_base = ::Stripe.api_base
       ::Stripe.api_base = url
       allow(::Stripe::Customer).to receive(:retrieve).and_call_original
-      receipt = adapter.capture(cart_mandate)
-      expect(receipt[:psp_reference]).to start_with("pi_")
-      expect(receipt[:settled_amount_cents]).to eq(1599)
+      expect { adapter.capture(cart_mandate) }
+        .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+          expect(e).to be_retryable
+          expect(e.reason).to eq(:card_declined)
+        }
     ensure
       ::Stripe.api_base = saved_base if saved_base
+    end
+
+    context "when the intent did not succeed" do
+      before do
+        invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
+        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing")
+          .and_return(double("Customer", id: "cus_existing", invoice_settings: invoice_settings))
+      end
+
+      def intent(status)
+        double("PaymentIntent", id: "pi_#{status}", status: status, amount: 1599, amount_received: 0, created: 0)
+      end
+
+      %w[requires_payment_method canceled].each do |status|
+        it "treats #{status} as a retryable decline: nothing was collected" do
+          allow(::Stripe::PaymentIntent).to receive(:create).and_return(intent(status))
+
+          expect { adapter.capture(cart_mandate) }
+            .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+              expect(e).to be_retryable
+              expect(e.reason).to eq(:card_declined)
+            }
+        end
+      end
+
+      %w[processing requires_action requires_confirmation requires_capture].each do |status|
+        it "treats #{status} as an unknown outcome that must not be retried" do
+          allow(::Stripe::PaymentIntent).to receive(:create).and_return(intent(status))
+
+          expect { adapter.capture(cart_mandate) }
+            .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+              expect(e).not_to be_retryable
+              expect(e.reason).to eq(:processor_unavailable)
+            }
+        end
+      end
     end
 
     # ── PSP error translation (K-545) ────────────────────────────────────────

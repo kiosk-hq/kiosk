@@ -90,12 +90,13 @@ module Kiosk
       end
 
       # Charges the principal's saved card off_session; the mandate's payment
-      # method is not used. A confirmed card intent that did not raise has
-      # captured its whole amount, which is the cart total.
+      # method is not used. Only a `succeeded` intent settles, at what it
+      # received.
       #
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
       # @raise [SetupRequired] when there is no card to charge
-      # @raise [PaymentFailed] when Stripe declines or cannot confirm the charge
+      # @raise [PaymentFailed] when Stripe declines, or the intent did not
+      #   succeed, or its outcome is unknown
       def capture(cart_mandate, payment_method: nil)
         customer = live_customer(cart_mandate.user_id)
         pm = customer && saved_payment_method_for(customer)
@@ -113,6 +114,7 @@ module Kiosk
                 currency:       cart_mandate.currency,
                 customer:       customer.id,
                 payment_method: pm,
+                payment_method_types: ["card"],
                 off_session:    true,
                 confirm:        true,
                 metadata:       { cart_mandate_id: cart_mandate.id },
@@ -130,9 +132,19 @@ module Kiosk
             )
           end
 
+        unless intent.status == ChargeLookup::PAID
+          raise PaymentFailed.new("the payment method was declined", reason: :card_declined, retryable: true) if
+            ChargeLookup::NOT_CHARGED.include?(intent.status)
+
+          raise PaymentFailed.new(
+            "the payment processor has not completed the charge; its status is unknown",
+            reason: :processor_unavailable, retryable: false,
+          )
+        end
+
         {
           psp_reference:        intent.id,
-          settled_amount_cents: intent.amount,
+          settled_amount_cents: intent.amount_received,
           settled_at:           Time.at(intent.created).utc,
         }
       end

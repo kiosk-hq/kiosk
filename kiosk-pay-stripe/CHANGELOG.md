@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: A capture settles only a `succeeded` card PaymentIntent, at what it received; any other status is refused as a decline or an unknown outcome.
 - 2026-10-08: A capture settles the confirmed intent's amount, the cart total the spec requires, rather than `amount_received`.
 - 2026-10-08: `CustomerRecord` keeps the principal→Customer mapping in a `stripe_customers` table and is the adapter's default, so an operator writes no mapping of its own.
 - 2026-10-08: `refund` reverses a capture by its PaymentIntent, so an operator can give the money back to the card it came from.

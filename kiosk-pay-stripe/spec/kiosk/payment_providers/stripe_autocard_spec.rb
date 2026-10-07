@@ -49,7 +49,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(::Stripe::PaymentIntent).to receive(:create).with(
         hash_including(customer: "cus_auto", payment_method: "pm_auto", off_session: true),
         anything,
-      ).and_return(double("PI", id: "pi_auto", amount: 500, created: 0))
+      ).and_return(double("PI", id: "pi_auto", status: "succeeded", amount_received: 500, created: 0))
 
       result = adapter.capture(cart)
       expect(result[:psp_reference]).to eq("pi_auto")
@@ -72,7 +72,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(::Stripe::PaymentIntent).to receive(:create).with(
         hash_including(customer: "cus_existing", payment_method: "pm_onfile", off_session: true),
         anything,
-      ).and_return(double("PI", id: "pi_existing", amount: 500, created: 0))
+      ).and_return(double("PI", id: "pi_existing", status: "succeeded", amount_received: 500, created: 0))
 
       result = adapter.capture(cart)
       expect(result[:psp_reference]).to eq("pi_existing")

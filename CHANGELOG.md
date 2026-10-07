@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: kiosk-pay-stripe settles only a `succeeded` card charge; demos and e2e reach that answer through kiosk-redteam's stripe-mock front.
 - 2026-10-08: getgrocery, hoteling and skooti configure a price checker over their own catalog; the engine checks the cart.
 - 2026-10-08: kiosk-pay-stripe ships the charge lookup getgrocery kept as its own copy; the demo uses the gem's.
 - 2026-10-08: hoteling, skooti and e2e pay through kiosk-pay-stripe in test mode (stripe-mock in CI); the stub PSPs are gone and a declined booking is refunded through Stripe.

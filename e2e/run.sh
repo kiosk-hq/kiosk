@@ -50,6 +50,7 @@ export ALICE_EMAIL="alice@example.com" BOB_EMAIL="bob@example.com" HUMAN_PASSWOR
 APP_NAME="demo_app"
 TMP_DIR="$(mktemp -d -t kiosk-e2e.XXXX)"
 SERVER_PID=""
+STRIPE_MOCK_PID=""
 # The origin's log. Named UNIQUELY PER INVOCATION and read back through this
 # variable, never through a re-typed literal: a fixed `/tmp` path is shared
 # with every process on the machine and survives between runs, so a `tail` of
@@ -72,6 +73,10 @@ cleanup() {
   if [ -n "$SERVER_PID" ]; then
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
+  fi
+  if [ -n "$STRIPE_MOCK_PID" ]; then
+    kill "$STRIPE_MOCK_PID" 2>/dev/null || true
+    wait "$STRIPE_MOCK_PID" 2>/dev/null || true
   fi
   # Both databases, not just the one this harness names: `rails db:create`
   # creates the CURRENT environment's database AND the test one, so every run
@@ -102,6 +107,7 @@ rails --version 2>/dev/null | grep -qE '^Rails [0-9]' || fail "rails still not r
 command -v psql     >/dev/null || fail "psql not on PATH"
 command -v curl     >/dev/null || fail "curl not on PATH"
 command -v jq       >/dev/null || fail "jq not on PATH"
+command -v stripe-mock >/dev/null || fail "stripe-mock not on PATH — the pay flow charges it. Install it: brew install stripe-mock"
 # Both python requirements are declared in e2e/requirements.txt, and the two
 # interpreters are separate because their callers are. The register-time
 # Equihash solver needs numpy under plain `python3` — kiosk-pow-equihash names
@@ -196,6 +202,8 @@ gem "kiosk-server",        path: "@KIOSK_OSS@/kiosk-server"
 gem "kiosk-reputation",    path: "@KIOSK_OSS@/kiosk-reputation"
 gem "kiosk-pow-equihash",  path: "@KIOSK_OSS@/kiosk-pow-equihash"
 gem "kiosk-user-idp-devise", path: "@KIOSK_OSS@/kiosk-user-idp-devise"
+# The payment provider: Stripe, against the local stripe-mock this script starts.
+gem "kiosk-pay-stripe",    path: "@KIOSK_OSS@/kiosk-pay-stripe"
 # kiosk-redteam ships Kiosk::Redteam::Wire.http_for, the one place this
 # repository decides http vs https. The fixtures and schema_conformance.rb open
 # their sockets through it, so SERVER_URL may name a deployed TLS origin and
@@ -277,6 +285,9 @@ cp "$FIXTURES/create_users.rb" "db/migrate/${ts1}_create_users.rb"
 # AFTER create_users and BEFORE the generator's (which use Time.now).
 ts1b="20260101000001"
 cp "$FIXTURES/add_devise_columns_to_users.rb" "db/migrate/${ts1b}_add_devise_columns_to_users.rb"
+# 1c) The principal → Stripe Customer mapping kiosk-pay-stripe keeps.
+ts1c="20260101000002"
+cp "$FIXTURES/create_kiosk_pay_stripe_customers.rb" "db/migrate/${ts1c}_create_kiosk_pay_stripe_customers.rb"
 
 # 2) Generator-produced migrations.
 bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null
@@ -319,7 +330,6 @@ cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.
 # DefaultAgentIdp — the adapter that verifies the tokens the engine mints — is
 # what authenticates assistants, with nothing configured.
 mkdir -p app/services
-cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
 # The operator's audit sink. Kiosk stores no audit trail — it emits one
 # event per action invocation to whatever callable `c.audit_sink` names, and
 # this is that callable, written the way an adopter would write it.
@@ -335,7 +345,7 @@ mkdir -p config/routes
 cp "$FIXTURES/routes_kiosk.rb"       config/routes/kiosk.rb
 
 # …and app/services is declared an autoload-ONCE path, which is what lets the
-# initializer name those four with no `require` at all. Rails sets the
+# initializer name them with no `require` at all. Rails sets the
 # reloadable autoloader up in its `finisher`, AFTER config/initializers run, so
 # an ordinary autoload path is not resolvable from an initializer — in lib/ or
 # in app/. The once autoloader is set up in `bootstrap`, before them. This is
@@ -453,6 +463,16 @@ log "start rails server on port $SERVER_PORT"
 # so the holder is found by PORT, never by matching a command line.
 port_held=$(lsof -ti ":$SERVER_PORT" | tr '\n' ' ' || true)
 [ -z "$port_held" ] || fail "port $SERVER_PORT is already held by pid $port_held— this run would drive that server instead of the one it starts. Stop it and run again."
+# The pay flow charges a local stripe-mock: Stripe's own fixture server, no key.
+# One already listening on its port is reused.
+if ! curl -s -o /dev/null http://127.0.0.1:12111/v1/customers; then
+  stripe-mock -http-port 12111 > "$TMP_DIR/stripe-mock.log" 2>&1 &
+  STRIPE_MOCK_PID=$!
+  for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:12111/v1/customers && break; sleep 0.3; done
+  curl -s -o /dev/null http://127.0.0.1:12111/v1/customers || fail "stripe-mock did not start on 12111"
+fi
+export STRIPE_MOCK_URL="http://127.0.0.1:12111"
+export KIOSK_TEST_AUTOCARD=1
 export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
 export KIOSK_ADDITIONAL_ORIGINS="http://localhost:$SERVER_PORT"
 # Where the operator's sink writes. Its PRESENCE is what makes the initializer

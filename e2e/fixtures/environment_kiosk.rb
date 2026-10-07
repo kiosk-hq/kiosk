@@ -67,3 +67,8 @@
   config.x.kiosk.audit_sink_file = ENV["KIOSK_AUDIT_SINK_FILE"]
   config.x.kiosk.audit_sink_redacted_file =
     config.x.kiosk.audit_sink_file && ENV.fetch("KIOSK_AUDIT_SINK_REDACTED_FILE")
+
+  # Stripe's API base and the adapter's test card. run.sh starts a local
+  # stripe-mock and exports both, so the harness charges with no key.
+  config.x.kiosk.stripe_mock_url = ENV["STRIPE_MOCK_URL"]
+  config.x.kiosk.test_autocard   = ENV["KIOSK_TEST_AUTOCARD"] == "1"

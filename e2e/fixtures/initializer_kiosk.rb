@@ -12,12 +12,12 @@
 # below, which is how the engine finds them. What is left in this file is
 # configuration, which is what an initializer is for.
 #
-# The two adapters it wires — StubPsp and DemoAuditSink — are named, not
+# The audit sink it wires, DemoAuditSink, is named, not
 # required. Both agent and human authentication are real and neither is
 # stubbed: the human's is `kiosk-user-idp-devise`, the agent's is the engine's
 # own DefaultAgentIdp with no wiring at all.
-# run.sh copies the two adapters to app/services and
-# declares that an autoload-ONCE path, which is what makes them resolvable here:
+# run.sh copies it to app/services and
+# declares that an autoload-ONCE path, which is what makes it resolvable here:
 # Rails sets the reloadable autoloader up AFTER config/initializers run, so a
 # hand-written `require Rails.root.join(...)` was the only alternative.
 
@@ -128,7 +128,16 @@ Kiosk.configure do |c|
   # stand-in, so an adopter reading this harness copies a real wiring.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  c.payment_provider = StubPsp.new
+  # Stripe in test mode, against the local stripe-mock run.sh starts — any
+  # sk_test_ key is accepted there.
+  require "stripe"
+  require "kiosk/payment_providers/stripe"
+  if (mock = Rails.configuration.x.kiosk.stripe_mock_url)
+    Stripe.api_base = mock
+  end
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
+    api_key: "sk_test_mock", test_autocard: Rails.configuration.x.kiosk.test_autocard,
+  )
 
   # The handler controllers, by NAME. This line is load-bearing and there is no
   # convention that replaces it: the wire reaches a handler through the

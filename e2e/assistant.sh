@@ -928,24 +928,26 @@ assert "…and the catalogue says it is an action" \
 # about, and a comparison between two renderings of one call can only ever pass.
 assert "schema publishes {queries, actions, events} and nothing else" \
   "$(echo "$schema_body" | jq -r 'keys_unsorted | join(",")')" "queries,actions,events"
-# AND THE THIRD ARRAY CARRIES THIS ORIGIN'S ONE TOPIC, with the module in
+# AND THE THIRD ARRAY CARRIES THIS ORIGIN'S TOPIC, beside kiosk-server's
+# `payment_setup` (served because the Stripe adapter names the principal a
+# returning card-setup browser belongs to), with the module in
 # `capabilities` beside it — the pair the spec asks for, asserted together
 # because either half drifting to the other's answer is the failure. The
 # catalogue publishes a topic's NAME, its DESCRIPTION and its PAYLOAD SCHEMA,
 # and nothing about who may read it: `reach` and `subject_reachable` are
 # authorisation, they are answered at subscribe time, and publishing them would
 # hand a prober the shape of the rule.
-assert "…the events array carries this origin's one topic" \
-  "$(echo "$schema_body" | jq -r '.events | length')" "1"
+assert "…the events array carries this origin's topic and payment_setup" \
+  "$(echo "$schema_body" | jq -r '[.events[].name] | sort | join(",")')" "appointment_confirmed,payment_setup"
 assert "…named, described, and carrying its payload schema" \
-  "$(echo "$schema_body" | jq -r '.events[0] | [.name, (.description | length > 0), (.payload_schema.required | join("+"))] | join("|")')" \
+  "$(echo "$schema_body" | jq -r '.events[] | select(.name == "appointment_confirmed") | [.name, (.description | length > 0), (.payload_schema.required | join("+"))] | join("|")')" \
   "appointment_confirmed|true|appointment_id+salon_id+slot"
 # `reach` IS published — it is the shape of the audience, and an assistant
 # reads it to know whether a subject narrows anything. The PREDICATE is not:
 # `subject_reachable` is the operator's own rule, a subscriber could not act on
 # it, and publishing it would describe where to look for a gap in it.
 assert "…publishing the reach but never the predicate behind it" \
-  "$(echo "$schema_body" | jq -r '.events[0] | [.reach, (has("subject_reachable") | tostring)] | join("|")')" \
+  "$(echo "$schema_body" | jq -r '.events[] | select(.name == "appointment_confirmed") | [.reach, (has("subject_reachable") | tostring)] | join("|")')" \
   "principal|false"
 assert "…and the module set lives in kiosk.json alone" \
   "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay,events"
@@ -1109,7 +1111,7 @@ assert "two origins: second's token on first → 401" "$(echo "$reg_out" | jq -r
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
 # `payment_setup` is the engine's, served against the provider port: this
-# origin writes no handler for it, and StubPsp never needs a setup.
+# origin writes no handler for it, and the adapter's test card makes it ready.
 assert "payment_setup: served by the engine → ready" \
   "$(action_call "$ALICE_AGENT_TOKEN" "payment_setup" '{}' | jq -r '.status')" "ready"
 
@@ -1121,7 +1123,7 @@ assert "pay: http 200"                "$(echo "$pay_out" | jq -r '.http_code')" 
 # `pay` answers the settlement object VERBATIM — no `ok`/`kind`/`value`
 # wrapper to unwrap.
 assert "pay: unenveloped"             "$(echo "$pay_out" | jq -r '.response | has("ok") or has("kind") or has("value")')" "false"
-assert "pay: psp_reference present"   "$(echo "$pay_out" | jq -r '.response.psp_reference | length > 0')" "true"
+assert "pay: a Stripe PaymentIntent"  "$(echo "$pay_out" | jq -r '.response.psp_reference | startswith("pi_")')" "true"
 assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.settled_amount_cents')" "1599"
 assert "pay: settlement_id"           "$(echo "$pay_out" | jq -r '.response.settlement_id | length > 0')" "true"
 
@@ -1130,6 +1132,7 @@ assert "db: 1 intent_mandate"         "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUN
 assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.cart_mandates')"     "1"
 assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
 assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
+assert "db: settlement is the charge" "$(psql -X -d "$DB_NAME" -tAc 'SELECT psp_reference FROM kiosk.settlements LIMIT 1')" "$(echo "$pay_out" | jq -r '.response.psp_reference')"
 
 # ─── the audit sink, read back off a booted origin ──────────────────────
 #

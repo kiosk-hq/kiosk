@@ -128,7 +128,7 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-prove` | anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |
 
 **`e2e/` is not in that table, because it is not a ninth provider.** It is the
-end-to-end test harness — fixtures, a stub PSP and the AI-assistant pay flow —
+end-to-end test harness — fixtures, a stripe-mock-backed pay flow and the AI-assistant drivers —
 so it serves no vertical and deploys nowhere. It runs as a CI gate
 (`./e2e/run.sh`) and nothing else.
 

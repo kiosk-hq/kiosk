@@ -18,13 +18,13 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - The partial UNIQUE index on `kiosk.agents (issuer, public_key)` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key on one origin at the DB level while allowing a revoked re-registration
 - Two origins on one deployment (`http://127.0.0.1:<port>` and `http://localhost:<port>`, via `c.additional_origins`) are each their own operator: each discovery document names its own issuer, one key registers on both as two accounts, and neither origin accepts the other's token
 - `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)
-- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays against a stub PSP; assertions cover the unenveloped `pay` response body and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
+- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays through `kiosk-pay-stripe` against a local stripe-mock; assertions cover the unenveloped `pay` response body and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
 - The EVENT STREAM, over a real WebSocket, driven by the PINNED listener (`kiosk-server/listen.py` — the same file an assistant fetches from kiosk.tech and verifies by SHA-256, rather than a client written for this harness). A salon marks an appointment confirmed at its own back-office page — OUTSIDE the mount and outside `c.handlers`, so nothing the assistant called produced it — and the event reaches a subscriber that was already waiting: with its subject and its published payload, never carrying another principal's row, resumable from `since` by a listener started cold afterwards, refused at subscribe time for a subject that is not the caller's, and disconnected with `reconnect: false` for a bearer that does not resolve
 
 ## What it does NOT verify (deferred)
 
 - **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in the handler controllers (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and its enforcement is not exercised in this fixture, and neither is satellite-mode role separation. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility. Note: the `kiosk-rls` gem is still installed (see `run.sh`), because it is the only source of `Configuration#system_role=`, which `initializer_kiosk.rb` assigns — the gem is a mandatory boot dependency here even though RLS itself is off.
-- **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
+- **Live PSP capture.** The pay flow charges stripe-mock, Stripe's fixture server; no real Stripe call is made.
 - **A deployed event stream.** The stream IS verified, over a real WebSocket, by the pinned listener (see below) — but against this harness's own origin on `localhost`, with Action Cable's in-process pubsub. Whether a stream survives a production edge, a second Puma worker, or a `solid_cable` round trip is not exercised here.
 - **Multi-agent revocation** flows.
 - **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a live-LLM driver would be a future companion gem (`kiosk-agent-test` does not exist yet).
@@ -42,6 +42,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **PostgreSQL** reachable (default: `localhost` with the running user as superuser; e.g. `brew services start postgresql`)
 - **`rails` gem** — the script installs it automatically if missing
 - **`curl`** and **`jq`** on the PATH
+- **`stripe-mock`** on the PATH (`brew install stripe-mock`); `run.sh` starts it, or reuses one already on port 12111
 - **python packages** — `e2e/requirements.txt` declares both: `numpy` for the
   register-time Equihash toll the golden path pays, and `websockets` for the
   event-stream leg, which runs `kiosk-server/listen.py` — the SAME file an
@@ -117,7 +118,7 @@ e2e/
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
     ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: register → the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
-    ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
+    ├── create_kiosk_pay_stripe_customers.rb # the principal → Stripe Customer table kiosk-pay-stripe keeps
     ├── demo_audit_sink.rb                  # the OPERATOR's `c.audit_sink` callable — Kiosk stores no audit trail, so the harness writes the one an adopter would
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb

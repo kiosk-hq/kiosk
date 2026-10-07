@@ -72,7 +72,7 @@ User.find_or_initialize_by(id: HUMAN_ID).tap do |u|
 end
 # The card is a stripe-mock fixture, so it is seeded only against the mock.
 if Rails.configuration.x.kiosk.stripe_mock_url.present?
-  StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
+  Kiosk::PaymentProviders::Stripe::CustomerRecord.find_or_create_by!(user_id: HUMAN_ID) do |sc|
     sc.customer_id = HUMAN_CUS_ID
   end
 end
@@ -87,7 +87,7 @@ puts "  In-stock low (stock ≤ 5): #{Product.where("stock > 0 AND stock <= 5").
 puts "  Age-restricted (18+ anonymized-KYC gate at purchase): #{Product.where(age_restricted: true).pluck(:sku).join(", ")}"
 puts "  Out-of-stock (absent from catalog): #{Product.where(stock: 0).pluck(:sku).join(", ")}"
 puts "  Delivery city context: Dublin"
-if (saved = StripeCustomer.find_by(user_id: HUMAN_ID))
+if (saved = Kiosk::PaymentProviders::Stripe::CustomerRecord.find_by(user_id: HUMAN_ID))
   puts "  Account holder with saved card: #{HUMAN_ID} (#{saved.customer_id})"
 else
   puts "  Account holder without a saved card: #{HUMAN_ID} (one is saved on the Stripe-hosted setup page)"

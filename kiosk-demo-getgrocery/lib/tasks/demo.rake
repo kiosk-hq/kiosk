@@ -3,6 +3,8 @@
 # Kiosk demo orchestration for kiosk-demo-getgrocery.
 # `bin/rails -T` lists this file's tasks; `bin/rails -D <task>` prints what one asserts.
 
+require "kiosk/redteam/stripe_mock"
+
 # ── Flow-driver runner — READ THE CHILD'S EXIT STATUS ─────────────────────────
 #
 # Every flow-driver invocation in this file goes through here, for the one line
@@ -52,38 +54,6 @@ def getgrocery_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
   rescue JSON::ParserError => e
     abort "#{label} did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
   end
-end
-
-# Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
-# suites use it so the full pay→settlement→gate flow runs with NO real Stripe
-# (fast, no key, no charges, CI-runnable). check:shop still uses real Stripe.
-def start_stripe_mock
-  require "socket"
-  port = 12111
-  url  = "http://127.0.0.1:#{port}"
-
-  reachable = lambda do
-    s = TCPSocket.new("127.0.0.1", port); s.close; true
-  rescue StandardError
-    false
-  end
-
-  return url if reachable.call # already running — reuse it
-
-  unless system("command -v stripe-mock >/dev/null 2>&1")
-    abort "stripe-mock not found. Install it: brew install stripe-mock"
-  end
-
-  pid = spawn("stripe-mock", out: "/tmp/stripe-mock.log", err: "/tmp/stripe-mock.log")
-  at_exit do
-    Process.kill("TERM", pid)
-    Process.wait(pid)
-  rescue Errno::ESRCH, Errno::ECHILD
-    nil
-  end
-
-  30.times { return url if reachable.call; sleep 0.3 }
-  abort "stripe-mock did not become ready on #{url} — see /tmp/stripe-mock.log"
 end
 
 # ── The port has to be free before we boot on it ─────────────────────────────
@@ -248,7 +218,7 @@ namespace :check do
     # fixtures so the full flow runs secret-free (never inject keys
     # into CI). A real key takes precedence when set.
     use_mock = ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
-    mock_url = use_mock ? start_stripe_mock : nil
+    mock_url = use_mock ? Kiosk::Redteam::StripeMock.start : nil
     if use_mock
       puts "  (no STRIPE_SECRET_KEY — running against stripe-mock at #{mock_url}, no real charge)"
     end
@@ -597,7 +567,7 @@ namespace :check do
     require "uri"
     require "shellwords"
 
-    mock_url = start_stripe_mock
+    mock_url = Kiosk::Redteam::StripeMock.start
     ENV["STRIPE_MOCK_URL"]   = mock_url
     ENV["STRIPE_SECRET_KEY"] = "sk_test_mock" if ENV["STRIPE_SECRET_KEY"].to_s.empty?
     puts "  (stripe-mock at #{mock_url} — seeded saved-card fixture, no real Stripe)"
@@ -800,7 +770,7 @@ namespace :check do
     # Adversarial suite → stripe-mock (no real charges, no key). The gates being
     # tested are pure Kiosk logic; Stripe is only the settlement rail, so a mock
     # exercises the full flow end-to-end.
-    mock_url = start_stripe_mock
+    mock_url = Kiosk::Redteam::StripeMock.start
     puts "  (stripe-mock at #{mock_url} — adversarial suite, no real Stripe)"
 
     port = ENV.fetch("PORT", "3001")
@@ -1422,7 +1392,7 @@ namespace :check do
     # getgrocery uses the real Stripe adapter (no StubPsp).
     # Adversarial battery → stripe-mock (no real charges, no key). The gates
     # under test are pure Kiosk logic; Stripe is only the settlement rail.
-    mock_url = start_stripe_mock
+    mock_url = Kiosk::Redteam::StripeMock.start
     puts "  (stripe-mock at #{mock_url} — adversarial battery, no real Stripe)"
 
     port = ENV.fetch("PORT", "3001")
@@ -1564,7 +1534,7 @@ namespace :check do
   task reconcile: "demo:setup" do
     require "shellwords"
     driver = File.expand_path("../../script/reconcile_flow.rb", __dir__)
-    mock_url = start_stripe_mock
+    mock_url = Kiosk::Redteam::StripeMock.start
     puts "  (stripe-mock at #{mock_url} — the evidence check runs against it, never Stripe)"
     puts "\n── Running script/reconcile_flow.rb (stuck-`paying` reconciliation) ──"
     ok = system({ "STRIPE_MOCK_URL" => mock_url }, "bundle exec rails runner #{driver.shellescape}")
@@ -1924,7 +1894,7 @@ namespace :check do
 
     # The full flow pays for the alcohol order → needs the Stripe adapter to
     # settle. Run against stripe-mock (no key, no real charge) with autocard.
-    mock_url = start_stripe_mock
+    mock_url = Kiosk::Redteam::StripeMock.start
     puts "  (stripe-mock at #{mock_url} — age-gate flow, no real Stripe)"
 
     port = ENV.fetch("PORT", "3001")

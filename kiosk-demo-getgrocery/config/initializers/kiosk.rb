@@ -146,9 +146,8 @@ Kiosk.configure do |c|
 
   # Payment provider: real Stripe in test mode (sk_test_…), SetupIntent
   # card-on-file — card saved once on Stripe's hosted page, charged off_session
-  # per purchase. The principal→Stripe Customer mapping lives in
-  # `stripe_customers` and is injected as lambdas, so kiosk-pay-stripe stays
-  # provider-agnostic.
+  # per purchase. The principal→Stripe Customer mapping is the adapter's own
+  # `stripe_customers` table (Kiosk::PaymentProviders::Stripe::CustomerRecord).
   #
   # CREDENTIALS COME FROM THE ENVIRONMENT FILE, NOT FROM ENV, so there is no
   # `Rails.env` branch here.
@@ -178,10 +177,8 @@ Kiosk.configure do |c|
   # catalog (app/services/price_checker.rb) before Stripe captures anything.
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(
-      api_key:           key,
-      customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
-      customer_saver:    ->(uid, cid) { StripeCustomer.find_or_initialize_by(user_id: uid).update!(customer_id: cid) },
-      test_autocard:     Rails.configuration.x.kiosk.test_autocard,
+      api_key:       key,
+      test_autocard: Rails.configuration.x.kiosk.test_autocard,
     ),
     currency: "eur", table: "orders", reference: "order_id", query: "my_orders",
     status_column: "status", unpaid: "created", owner_column: "user_id",

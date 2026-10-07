@@ -70,8 +70,14 @@ User.find_or_initialize_by(id: HUMAN_ID).tap do |u|
   u.password = HUMAN_PASSWORD unless u.valid_password?(HUMAN_PASSWORD)
   u.save!
 end
-StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
-  sc.customer_id = HUMAN_CUS_ID
+# The card is a stripe-mock fixture: against real Stripe the customer does not
+# exist, so the mapping is seeded only against the mock and removed otherwise.
+if Rails.configuration.x.kiosk.stripe_mock_url.present?
+  StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
+    sc.customer_id = HUMAN_CUS_ID
+  end
+else
+  StripeCustomer.where(user_id: HUMAN_ID, customer_id: HUMAN_CUS_ID).delete_all
 end
 
 puts "Seeded: #{Product.count} products (#{Product.where("stock > 0").count} in-stock, #{Product.where(stock: 0).count} out-of-stock)"

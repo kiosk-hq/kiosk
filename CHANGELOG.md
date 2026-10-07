@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **getgrocery seeds its account holder's saved card only against stripe-mock**, so a live origin no longer answers her `payment_setup` with a 500.
 - 2026-10-07: **Every demo's seeds re-apply the seeded humans' sign-in credentials**, so an account created before it had a password can sign in after the next seed.
 - 2026-10-07: **The seven operator demos send their production session cookie `Secure`.**
 - 2026-10-07: **With neither a `kyc_provider` nor a `kyc_public_key`, the `kyc_required` hint names no KYC path** and says verification is not available at this origin.

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../../support/stripe_mock"
+
 RSpec.describe Kiosk::PaymentProviders::Stripe do
   RETURN_URL  = "https://shop.example/kiosk/payment_setup/return"
   SUCCESS_URL = "#{RETURN_URL}?session_id={CHECKOUT_SESSION_ID}"
@@ -458,6 +460,47 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
             expect(e.message).not_to match(/timed out/)
           }
       end
+    end
+  end
+
+  describe "#refund" do
+    it "reverses the named PaymentIntent for the amount, keyed by the charge it undoes" do
+      refund = double("Refund", id: "re_123", amount: 1599, created: 1_700_000_100)
+      expect(::Stripe::Refund).to receive(:create).with(
+        { payment_intent: "pi_123", amount: 1599 },
+        { idempotency_key: "pi_123-refund" },
+      ).and_return(refund)
+
+      expect(adapter.refund(psp_reference: "pi_123", amount_cents: 1599)).to eq(
+        psp_reference:          "re_123",
+        refunded_psp_reference: "pi_123",
+        refunded_amount_cents:  1599,
+        refunded_at:            Time.at(1_700_000_100).utc,
+      )
+    end
+
+    it "answers PaymentFailed when Stripe cannot refund, without Stripe's text" do
+      allow(::Stripe::Refund).to receive(:create)
+        .and_raise(::Stripe::InvalidRequestError.new("Charge ch_1 has already been refunded.", nil))
+
+      expect { adapter.refund(psp_reference: "pi_123", amount_cents: 1599) }
+        .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+          expect(e.reason).to eq(:refund_failed)
+          expect(e.message).not_to match(/ch_1/)
+        }
+    end
+
+    it "refunds a charge against stripe-mock" do
+      url = StripeMock.start
+      skip "stripe-mock not installed (brew install stripe-mock)" unless url
+
+      saved_base = ::Stripe.api_base
+      ::Stripe.api_base = url
+      receipt = adapter.refund(psp_reference: "pi_123", amount_cents: 1599)
+      expect(receipt[:psp_reference]).to start_with("re_")
+      expect(receipt[:refunded_psp_reference]).to eq("pi_123")
+    ensure
+      ::Stripe.api_base = saved_base if saved_base
     end
   end
 

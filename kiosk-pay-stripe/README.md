@@ -72,6 +72,8 @@ Card-setup handshake (see the Payment section of the spec):
   `payment_setup` event once `setup_required?` answers false.
 - `saved_method?(user_id:)` — true once the resolved Customer has a usable
   saved card.
+- `refund(psp_reference:, amount_cents:)` — reverses a capture by its
+  PaymentIntent, back to the card it came from; answers the `re_…` reference.
 
 Reconciling a capture the operator cannot account for locally (a crash
 between the charge and the settlement row): every PaymentIntent the adapter

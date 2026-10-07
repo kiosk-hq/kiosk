@@ -129,6 +129,27 @@ module Kiosk
         }
       end
 
+      # Reverses a capture, back to the card it came from.
+      #
+      # @param psp_reference [String] the PaymentIntent {#capture} returned
+      # @return [Hash] { psp_reference:, refunded_psp_reference:,
+      #   refunded_amount_cents:, refunded_at: }
+      # @raise [PaymentFailed] when Stripe does not refund
+      def refund(psp_reference:, amount_cents:)
+        refund = ::Stripe::Refund.create(
+          { payment_intent: psp_reference, amount: amount_cents },
+          { idempotency_key: "#{psp_reference}-refund" },
+        )
+        {
+          psp_reference:          refund.id,
+          refunded_psp_reference: psp_reference,
+          refunded_amount_cents:  amount_cents,
+          refunded_at:            Time.at(refund.created).utc,
+        }
+      rescue ::Stripe::StripeError
+        raise PaymentFailed.new("the payment processor did not refund the charge", reason: :refund_failed)
+      end
+
       # TEST-ONLY: saves a test card on the principal's Customer through a
       # confirmed SetupIntent and makes it the default, as the hosted page would.
       #

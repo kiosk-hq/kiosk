@@ -116,7 +116,7 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
     expect(claims[:role]).to eq("customer")
   end
 
-  it "carries the caller's role through to the re-issued token" do
+  it "puts the caller's original token under the revocation watermark" do
     stub_agents_lookup(user_id: "u-1")
     token = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new.issue(
       agent_id: "a-2", role: "customer",
@@ -125,8 +125,6 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
     status, _body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env(token))
     expect(status).to eq(200)
 
-    # The watermark now covers the ORIGINAL token's iat (siblings dropped),
-    # but a re-verify of the ORIGINAL now fails as revoked.
     expect(Kiosk.configuration.revocation_store.revoked?(agent_id: "a-2", iat: 0)).to be(true)
   end
 end

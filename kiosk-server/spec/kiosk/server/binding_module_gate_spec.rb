@@ -79,7 +79,7 @@ RSpec.describe "the declined account-binding profile" do
       end
     end
 
-    it "still serves the four core kiosk-pop auth endpoints" do
+    it "still serves the kiosk-pop challenge endpoint" do
       decline_binding!
       status, = dispatch(
         Kiosk::Server::AuthController, :challenge, "GET",
@@ -93,9 +93,14 @@ RSpec.describe "the declined account-binding profile" do
     # and `capabilities` has no binding member — so an assistant cannot read
     # the discovery document as a capability check and has to dial and branch.
     it "publishes all six auth URLs and adds no capability for binding" do
+      served_capabilities = Kiosk::Server::WellKnown.build(base_url: "https://provider.example")
+                                                    .fetch(:kiosk).fetch(:capabilities)
       decline_binding!
-      auth = Kiosk::Server::WellKnown.build(base_url: "https://provider.example")
-                                     .fetch(:kiosk).fetch(:auth)
+      kiosk = Kiosk::Server::WellKnown.build(base_url: "https://provider.example").fetch(:kiosk)
+      auth  = kiosk.fetch(:auth)
+
+      expect(kiosk.fetch(:capabilities)).to eq(served_capabilities)
+      expect(served_capabilities.map(&:to_s).grep(/bind|claim|device/)).to be_empty
 
       expect(auth.keys).to include(
         :challenge_url, :register_url, :login_url, :revoke_url,

@@ -253,6 +253,15 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
       expect(problem[:code]).not_to eq("pow_required")
     end
 
+    it "answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape" do
+      proof = { challenge: valid_challenge.merge(alg: "cuckoo", params: { edge_bits: 29 }),
+                nonce: "a-shape-only-cuckoo-defines" }
+      status, _headers, body = call_with_pow(proof)
+      expect(status).to eq(402)
+      expect(body[:code]).to eq("pow_required")
+      expect(body[:challenges].map { |c| c[:alg] }).to eq(["argon2id"])
+    end
+
     it "leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)" do
       # An absent header means the initial request; the gate must still issue the
       # normal pow_required 402. Missing proof is NOT a malformed proof — it must

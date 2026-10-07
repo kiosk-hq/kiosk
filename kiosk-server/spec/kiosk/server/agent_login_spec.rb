@@ -29,6 +29,22 @@ RSpec.describe Kiosk::Server::AgentLogin do
     expect(con.all_sql).not_to match(/INSERT/i) # login never creates a row
   end
 
+  it "maps a known key to its registered user_id on every login" do
+    Kiosk.configure do |c|
+      c.signing_key = Kiosk::Server::SigningKey.generate
+      c.issuer      = "https://demo.example"
+    end
+    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+      .to receive(:issue).and_call_original
+    route_exec_query(con) { [{ "id" => "agent-1", "user_id" => 42, "allowed_roles" => "{customer}" }] }
+
+    subs = Array.new(2) do
+      token = described_class.call(public_key_pem: pem, signed: "sig").fetch(:access_token)
+      JWT.decode(token, nil, false).first.fetch("sub")
+    end
+    expect(subs).to eq([42, 42])
+  end
+
   # K-782: the presented key is the request body. It reaches the lookup as `$1`,
   # so it is never read as SQL — and the statement text cannot contain it.
   it "looks the key up through a bind parameter, never through the statement text" do

@@ -156,6 +156,30 @@ RSpec.describe Kiosk::Server::SchemaSlots do
     end
   end
 
+  describe "SPEC-278: reuse bound and caller independence" do
+    it "reuses a derived value no longer than the discovery document's freshness lifetime" do
+      described_class.refresh_seconds = nil
+      expect(described_class.refresh_seconds).to be <= Kiosk::Server::Headers::SHORT_MAX_AGE
+    end
+
+    it "answers every caller with one descriptor, resolved once" do
+      described_class.refresh_seconds = 3600
+      calls = 0
+      declare_query("board", input_schema: {
+                      type: "object", properties: { category: { enum: -> { calls += 1; %w[bikes] } } },
+                    })
+
+      seen = %w[u-1 u-2].map do |user_id|
+        Kiosk::Server::CurrentRequest.with(identity: build_identity(user_id: user_id)) do
+          Kiosk::Server::Queries.describe("board")
+        end
+      end
+
+      expect(seen.uniq.size).to eq(1)
+      expect(calls).to eq(1)
+    end
+  end
+
   # ── THE RACE ───────────────────────────────────────────────────────────────
   #
   # The shipped demos run WEB_CONCURRENCY=1, but Puma is multi-threaded, so

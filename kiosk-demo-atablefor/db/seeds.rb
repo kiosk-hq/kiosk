@@ -9,14 +9,8 @@
 # app/models/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
 # out for a given seating.
 #
-# NO AGENT IS SEEDED, and none can be. An assistant EARNS its
-# principal over the wire at /kiosk/auth/register (the proof-of-possession
-# handshake, Equihash-tolled), which mints its agent row plus a fresh headless
-# users row of its own — that is what satisfies `Booking belongs_to :user`
-# (load_defaults 8.1 requires the association) for script/book_flow.rb,
-# script/isolation_flow.rb and the bin/demo walkthrough alike. There is no
-# self-asserted `agent:u-…:a-…:r-…` bearer left for a driver to write down, and
-# therefore no stub principal to seed a users row for.
+# No assistant is seeded: one registers at /kiosk/auth/register, which mints
+# its agent row and a headless users row of its own.
 #
 # What IS seeded is the HUMAN half: real Devise account holders. A diner signs
 # in at /users/sign_in, mints a link code, and an assistant redeems it — from

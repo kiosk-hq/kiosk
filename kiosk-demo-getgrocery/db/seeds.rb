@@ -61,7 +61,7 @@ HUMAN_CUS_ID = "cus_getgrocery_saved_card"
 # Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy). The
 # shopper signs in at /users/sign_in with a real Devise session — the channel
 # the account-binding surfaces authenticate, and the one `rake check:claim`
-# drives. There is no stub user-IdP.
+# drives.
 HUMAN_EMAIL    = "hana@example.com"
 HUMAN_PASSWORD = "getgrocery-demo-password"
 
@@ -70,14 +70,11 @@ User.find_or_initialize_by(id: HUMAN_ID).tap do |u|
   u.password = HUMAN_PASSWORD unless u.valid_password?(HUMAN_PASSWORD)
   u.save!
 end
-# The card is a stripe-mock fixture: against real Stripe the customer does not
-# exist, so the mapping is seeded only against the mock and removed otherwise.
+# The card is a stripe-mock fixture, so it is seeded only against the mock.
 if Rails.configuration.x.kiosk.stripe_mock_url.present?
   StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
     sc.customer_id = HUMAN_CUS_ID
   end
-else
-  StripeCustomer.where(user_id: HUMAN_ID, customer_id: HUMAN_CUS_ID).delete_all
 end
 
 puts "Seeded: #{Product.count} products (#{Product.where("stock > 0").count} in-stock, #{Product.where(stock: 0).count} out-of-stock)"

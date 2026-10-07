@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.9] — 2026-10-08
+
+- 2026-10-08: Version 0.5.9, the tree cut that matches skill 0.5.9 and carries the entries below.
+
 - 2026-10-07: **`Kiosk::Server::PaymentClaim` keeps the operator half of §11.6**: one capture per payable row, and a paid state that rests on the capture (T-176).
 
 - 2026-10-07: **`Kiosk::Settlement` and `Kiosk::CartMandate` read the receipts `pay` records**, so an operator answers "is this paid" without modelling the engine's tables (K-1788).

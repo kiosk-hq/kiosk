@@ -90,8 +90,8 @@ Kiosk.configure do |c|
   end
   # Pin the universal skill (immutable versioned file on kiosk.tech), like the
   # sibling demos — the skill-pin guard validates this against the real file.
-  c.skill_url    = "https://kiosk.tech/skill-v0.5.4.md"
-  c.skill_sha256 = "1c20e9bd015ab8b2f4a5a9dbe9bb296c2410373ca57d66c433155d8bbaaba235"
+  c.skill_url    = "https://kiosk.tech/skill-v0.5.5.md"
+  c.skill_sha256 = "8c5775c343fd6fdf4c58205a140a748e2b2ea885ba4f0f0d9d844fce3c103e62"
 
   # ── NO payment_provider ──────────────────────────────────────────────────
   # This is deliberate and load-bearing: with no AP2 provider configured,

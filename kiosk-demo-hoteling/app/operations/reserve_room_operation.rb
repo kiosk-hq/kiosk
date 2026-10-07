@@ -114,7 +114,7 @@ class ReserveRoomOperation
         nightly_price_cents: nightly_price_cents,
         pay_hint:            "pay in EUR with a cart mandate whose total_amount_cents == #{total_cents} " \
                              "and whose line_items reference this booking: one " \
-                             "{\"sku\", \"qty\": #{nights}, \"price_cents\": #{nightly_price_cents}, " \
+                             "{\"qty\": #{nights}, \"price_cents\": #{nightly_price_cents}, " \
                              "\"booking_id\": \"#{booking_id}\"} entry — the operator verifies currency and " \
                              "total against its quote before charging",
       })

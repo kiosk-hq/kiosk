@@ -538,7 +538,7 @@ ok "all assertions passed"
 
 # ─── the §5/§6 ceremonies, driven for their BYTES ───────────────────────────
 #
-# auth.schema.json and binding.schema.json are vendored beside the other six,
+# auth.schema.json and binding.schema.json are vendored in kiosk-server/lib/kiosk/server/schemas/,
 # and this is what produces a byte for them to judge.
 # This driver runs kiosk-pop (challenge → register → login → revoke) and both
 # binding directions (link → claim → unlink, and the RFC 8628 device grant with

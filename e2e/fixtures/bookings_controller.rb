@@ -5,8 +5,8 @@
 # (`GET /kiosk/my_appointments`) and `book_appointment` is an action
 # (`POST /kiosk/book_appointment`), and the two sit here together because they
 # are the read and the write of the same thing. The kind is a property of each
-# DECLARATION — the `kind` macro below — never of the class. See
-# Kiosk::CatalogController for why neither is routed by hand.
+# DECLARATION — the `kind` macro below — never of the class. Both are routed
+# in fixtures/routes_kiosk.rb.
 #
 # The SQL is deliberately RAW: `my_appointments` is the harness's headline
 # security assertion — per-principal isolation with no RLS — and it is the

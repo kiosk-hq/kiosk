@@ -182,8 +182,8 @@ module Kiosk
         # header and on the RESERVED plane's own request bodies, both of
         # which §16.3 anchor 1 makes a SHOULD rather than a MUST.
         #
-        # Which is why `json_schemer` is a REAL runtime dependency of this gem
-        # a runtime dependency (see the gemspec): an origin that cannot load a validator
+        # Which is why `json_schemer` is a runtime dependency of this gem (see
+        # the gemspec): an origin that cannot load a validator
         # cannot serve a conformant wire. It is still required lazily, and a
         # vendored checkout without it still gets {Errors::ConfigurationError}
         # naming the gem rather than a LoadError at boot.

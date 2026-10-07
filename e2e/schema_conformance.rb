@@ -492,7 +492,7 @@ end
 
 # ── 8. §5 and §6 — the auth and binding planes ──────────────────────────────
 #
-# auth.schema.json and binding.schema.json are vendored beside the other six,
+# auth.schema.json and binding.schema.json are vendored in kiosk-server/lib/kiosk/server/schemas/,
 # and LOADING and COMPILING them is not the same as validating anything against
 # them: a pair of artefacts can sit in the same process and never meet.
 # `fixtures/auth_wire_capture.rb` runs both ceremonies against this

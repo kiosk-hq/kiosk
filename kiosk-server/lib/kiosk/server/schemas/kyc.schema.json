@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/kyc.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/kyc.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.tech next to this repo, and says so rather than pretending when it does not.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/kyc.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk KYC attestation",
   "description": "The decoded JWS payload of a KYC attestation, the POST /kiosk/agents/kyc request body, the request_kyc answer, and the data of the kyc_verification event that delivers the attestation.",
   "$defs": {

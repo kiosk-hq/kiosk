@@ -83,8 +83,8 @@ enough to be worth naming:
   caps. "A GPU solves this faster than a laptop" is the design, not a bug.
 - **Demo seed data, demo credentials and demo hosts.** The `kiosk-demo-*` apps
   seed fictional people and orders and log in without a password in development.
-- **`kiosk-pay-stripe`'s test-mode helpers** (`test_payment_method`,
-  `test_autocard`). They exist so suites need no hosted card-entry step, and the
+- **`kiosk-pay-stripe`'s test-mode helpers** (`test_autocard`,
+  `attach_test_card`). They exist so suites need no hosted card-entry step, and the
   README says never to enable them in production or a live demo.
 - **Findings your own `kiosk-redteam` battery reports against your own origin.**
   That gem is an adversarial test harness; a red beat against an application you

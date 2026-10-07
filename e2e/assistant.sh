@@ -1267,6 +1267,11 @@ LISTENER="$KIOSK_OSS/kiosk-server/listen.py"
 # does not.
 : "${KIOSK_PYTHON:=python3}"
 EVENTS_URL=$(echo "$wk" | jq -r '.kiosk.events_url')
+# The listener reads its bearer from a file, never from its command line.
+ALICE_TOKEN_FILE="$TMP_DIR/alice.token"
+BAD_TOKEN_FILE="$TMP_DIR/bad.token"
+printf %s "$ALICE_AGENT_TOKEN" >|"$ALICE_TOKEN_FILE"
+printf %s "not-a-token" >|"$BAD_TOKEN_FILE"
 
 # Wait for a line matching a pattern to appear in the listener's output, or
 # give up. A fixed sleep would either be slow or flaky; this is neither.
@@ -1284,7 +1289,7 @@ confirm_at_the_desk() {
 }
 
 EV_LOG="$TMP_DIR/listener-alice.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic appointment_confirmed --max-seconds 30 >"$EV_LOG" 2>&1 &
 listener_pid=$!
 
@@ -1335,7 +1340,7 @@ wait "$listener_pid" 2>/dev/null || true
 # started cold with `--since` one below the id it last saw, is handed that event
 # again — from the DATABASE, because the process that broadcast it is gone.
 EV_REPLAY="$TMP_DIR/listener-replay.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic appointment_confirmed --since "$((alice_event_id - 1))" --max-seconds 6 \
   >"$EV_REPLAY" 2>&1 || true
 assert "a cold listener resuming with since is handed the event again" \
@@ -1353,7 +1358,7 @@ EV_ONESHOT="$TMP_DIR/listener-oneshot.jsonl"
 ( sleep 3; confirm_at_the_desk "$wait_appt_id" >/dev/null ) &
 oneshot_started=$SECONDS
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic "appointment_confirmed:$wait_appt_id" --until-event --max-seconds 60 \
   >"$EV_ONESHOT" 2>&1
 oneshot_rc=$?
@@ -1374,7 +1379,7 @@ assert "…and stopped there, because the wait is over" \
 # arrive on this subscription.
 EV_TIMEOUT="$TMP_DIR/listener-timeout.jsonl"
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic "appointment_confirmed:$alice_appt_id" --until-event --max-seconds 6 \
   >"$EV_TIMEOUT" 2>&1
 timeout_rc=$?
@@ -1385,7 +1390,7 @@ assert "…with the subscription having been live all along" \
 
 # A wait with no deadline is refused at the argument tier.
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic appointment_confirmed --until-event >/dev/null 2>&1
 unbounded_rc=$?
 set -e
@@ -1400,7 +1405,7 @@ gap_appt_id=$(echo "$r" | jq -r '.appointment_id')
 assert "the salon confirms an appointment with NOBODY connected" \
   "$(confirm_at_the_desk "$gap_appt_id")" "200"
 EV_GAP="$TMP_DIR/listener-gap.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic appointment_confirmed --since "$oneshot_event_id" --max-seconds 6 \
   >"$EV_GAP" 2>&1 || true
 assert "…and the stored cursor hands it over on the next connect" \
@@ -1416,7 +1421,7 @@ assert "…and nothing at or below the cursor replayed with it" \
 # clock this harness does not have.
 psql -X -d "$DB_NAME" -q -c "DELETE FROM kiosk.events WHERE id <= 2" >/dev/null
 EV_TRUNC="$TMP_DIR/listener-truncated.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic appointment_confirmed --since 1 --max-seconds 5 >"$EV_TRUNC" 2>&1 || true
 assert "a cursor the operator can no longer prove continuity from answers truncated" \
   "$(grep '"type":"subscribed"' "$EV_TRUNC" | head -1 | jq -r '.truncated')" "true"
@@ -1429,7 +1434,7 @@ assert "…and it is the SUBSCRIPTION that carries it, not an error" \
 # assistant reading as "nothing happened".
 EV_DENIED="$TMP_DIR/listener-denied.jsonl"
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "$ALICE_AGENT_TOKEN" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
   --topic "appointment_confirmed:$bob_appt_id" --max-seconds 10 >"$EV_DENIED" 2>&1
 denied_rc=$?
 set -e
@@ -1442,7 +1447,7 @@ assert "…and the listener stops instead of waiting forever" "$denied_rc" "4"
 # typed disconnect, not the HTTP status, and the listener reports exactly that.
 EV_ANON="$TMP_DIR/listener-anon.jsonl"
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "not-a-token" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" \
   --topic appointment_confirmed --max-seconds 10 >"$EV_ANON" 2>&1
 anon_rc=$?
 set -e
@@ -1458,7 +1463,7 @@ assert "…and the listener says the credential is finished" "$anon_rc" "3"
 # reconnects. Driven with a DEAD bearer and a command that prints a live one,
 # so the branch under test is the recovery rather than the happy path.
 EV_REFRESH="$TMP_DIR/listener-refresh.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token "not-a-token" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" \
   --topic appointment_confirmed --token-command "printf %s $ALICE_AGENT_TOKEN" \
   --max-seconds 12 >"$EV_REFRESH" 2>&1 || true
 assert "…and with --token-command it mints a fresh one and carries on" \

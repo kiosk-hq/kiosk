@@ -7,8 +7,11 @@ operator pushes when something happens, so there is nothing to poll and no
 cadence to invent.
 
     python3 listen.py --url wss://shop.example/kiosk/events \
-                      --token "$KIOSK_TOKEN" \
+                      --token-file ~/.kiosk/shop.example/token \
                       --topic order_delivery --topic order_payment:<order-id>
+
+The bearer token is read from a file, never from the command line, where every
+process listing and shell history would show it.
 
 WAKE ON THE EVENT: run it as a background process your runtime TRACKS and wakes
 you on when it exits. With `--until-event` it prints the first event and exits 0
@@ -18,7 +21,7 @@ on the event, tell your human, and start it again with `--since <its id>`. Keep
 process the runtime does not track -- nohup, `&`, setsid -- wakes nobody, and
 neither does a line landing in a file.
 
-    python3 listen.py --url … --token … --topic kyc_verification \
+    python3 listen.py --url … --token-file … --topic kyc_verification \
                       --until-event --max-seconds 300
 
 Each line is a JSON object with a `type`:
@@ -52,6 +55,7 @@ silence as "nothing happened".
 
 import argparse
 import json
+import os
 import random
 import subprocess
 import sys
@@ -186,7 +190,8 @@ def topic_of(frame):
 def main():
     parser = argparse.ArgumentParser(description="Kiosk event-stream listener")
     parser.add_argument("--url", required=True, help="the operator's events_url")
-    parser.add_argument("--token", required=True, help="your bearer token")
+    parser.add_argument("--token-file", required=True, metavar="PATH",
+                        help="a file holding your bearer token")
     parser.add_argument("--topic", action="append", required=True, metavar="NAME[:SUBJECT]",
                         help="repeatable; NAME:SUBJECT narrows to one row")
     parser.add_argument("--since", type=int, help="resume after this event id")
@@ -203,7 +208,13 @@ def main():
     if args.until_event and not args.max_seconds:
         parser.error("--until-event needs --max-seconds: a wait with no deadline never returns")
 
-    state = {"since": args.since, "token": args.token, "refresh": args.token_command,
+    try:
+        with open(os.path.expanduser(args.token_file)) as file:
+            token = file.read().strip()
+    except OSError as error:
+        parser.error(f"--token-file: {error.strerror}")
+
+    state = {"since": args.since, "token": token, "refresh": args.token_command,
              "wanted": len(args.topic), "confirmed": 0, "rejected": 0,
              "one_shot": args.until_event}
     deadline = time.monotonic() + args.max_seconds if args.max_seconds else None

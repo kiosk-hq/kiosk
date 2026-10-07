@@ -80,7 +80,7 @@ answers — `test/create_order_inputs_test.rb` holds `create_order` to placing a
 order and nothing else, so an `order_id` argument is refused by name rather
 than silently ignored. `spec/` here is NOT an RSpec suite: those files
 are standalone Ruby assertion scripts covering this demo's pure argument
-guards, run through the `check:slots_spec` / `check:cashier_spec` /
+guards, run through the `check:slots_spec` /
 `check:wire_args_spec` tasks below, which is exactly how CI runs them. Typing
 `bundle exec rspec` will find no runner.
 
@@ -100,7 +100,6 @@ guards, run through the `check:slots_spec` / `check:cashier_spec` /
 | `rake demo:reconcile` | **operator utility, not a gate** — it reports rather than asserts, and cannot go red; resolves orders stuck in `paying`, from the settlement row where there is one and from Stripe where there is not — a charge on file flips the order to `paid`, a cancelled or declined one releases the claim, and everything Stripe cannot answer for is listed as UNRESOLVED with the cart-mandate ids to check by hand, never blind-released |
 | `rake check:rls` | the suite's only RLS *enforcement* proof: with RLS applied as an imperative overlay (the `kiosk-rls` emitter, dogfooded), a raw unscoped `SELECT * FROM orders` inside an enforced session returns only that principal's row, with the owner/superuser session that sees BOTH rows as the negative control |
 | `rake check:slots_spec` | DB-free unit check of the delivery-slot past-filter across a DST boundary — the same rule `check:shop` exercises over the wire |
-| `rake check:cashier_spec` | DB-free unit check of the same order-reference shape guard (`Kiosk::UuidCheck`, from kiosk-core): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all |
 | `rake check:clock_spec` | DB-free unit check, with `Time.now` **stubbed**, of where the caller's clock may be read from and where it may not reach: a request carrying a locale, three geolocation hints, a zone-bearing token and a foreign TCP peer declares no zone, and the day the shop answers is the one it answers a request carrying none of them; a zone the caller DOES declare moves that day — two declared zones two hours apart are on different calendar days at the pinned instant, one accepted and one a typed **400** naming the calendar it was judged on; and one future day's windows render identically at two pinned instants whose own dates differ, naming the district's zone and neither caller's |
 | `rake check:conformance` | the four properties the protocol makes normative of this origin, through `bin/rails test`: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `catalog`, `my_orders` and `delivery_slots` answer payloads their own `output_schema` accepts; and `my_orders` hands one principal nothing belonging to another — with the positive control that the first principal must actually see something, so a verb that answered everybody with nothing could not pass. It runs the rest of `test/` in the same pass: `create_order` places an order and takes no existing one to amend, so an `order_id` argument is a 400 naming it that writes nothing rather than a silently ignored second billable order, and two ordinary calls are two distinct orders; and the shop's own `out_for_delivery` and `delivered`, written by the courier jobs, reach `my_orders` in the shape it declares; and the seeded account holder's saved card is mapped only against stripe-mock. No server, no PoW, no bearer: it runs in `RAILS_ENV=test` against its own database |
 | `rake check:wire_args_spec` | DB-free unit check of `app/operations/wire_arguments.rb`, the shape guard every verb opens with — the module that decides whether a hostile wire argument becomes a typed **400 (`bad_request`)** or a booked order. It asserts the TYPE and the SHAPE of each refusal, not merely that one happened: JSON Schema `integer` semantics for `whole_number` (a `2.0` IS one, a `"1"` is not), the SHAPE sentence and the RANGE sentence held apart on `delivery_slot_id`, the cart guard and both ends of `qty`’s declared range, `order_id`, `delivery_date` read off the ORIGIN’s clock and never `Date.today`, and the §9.1 domain refusals. Nothing raises, and it runs with ActiveRecord never loaded |
@@ -133,7 +132,6 @@ and pull request; the rest are local-only, for the reason given.
 | `demo:reconcile` | no | not a gate — a person runs it and reads the output |
 | `check:slots_spec` | yes |  |
 | `check:clock_spec` | yes |  |
-| `check:cashier_spec` | yes |  |
 | `check:wire_args_spec` | yes |  |
 | `check:conformance` | yes |  |
 | `check:shop` | yes |  |

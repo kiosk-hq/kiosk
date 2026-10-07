@@ -136,7 +136,7 @@ namespace :demo do
   DESC
   task reconcile: :environment do
     minutes = Integer(ENV.fetch("MINUTES", "15"))
-    result  = ValidatingPaymentProvider.reconcile_stuck_paying!(
+    result  = Kiosk.configuration.payment_provider.reconcile_stuck_paying!(
       lookup: StripeChargeLookup.new, older_than_seconds: minutes * 60,
     )
 
@@ -186,13 +186,6 @@ namespace :check do
     # this shop's own clock.
     puts "\n── the caller's clock: declared, never inferred (no boot, no DB), under two process zones ──"
     %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
-  end
-
-  desc "DB-free unit spec for the cashier's order-reference shape check."
-  task :cashier_spec do
-    spec = File.expand_path("../../spec/cashier_order_ref_spec.rb", __dir__)
-    puts "\n── cashier order-ref shape spec (no DB) ──"
-    sh "ruby #{spec}"
   end
 
   desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."

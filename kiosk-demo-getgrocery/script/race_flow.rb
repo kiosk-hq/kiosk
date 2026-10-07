@@ -379,7 +379,7 @@ check(unknown_error.is_a?(Kiosk::Server::Errors::Forbidden),
 # The cashier is one of TWO places a wire-supplied id reaches an `::uuid` cast;
 # the same `Kiosk::UuidCheck` guard covers the other, and it is an action, so
 # drive it through the real registry here rather than trusting the shape of the
-# code. (A DB-free unit pass over the guard itself is `rake check:cashier_spec`.)
+# code.
 def action_error(name, args)
   Kiosk::Server::CurrentRequest.with(identity: identity) do
     Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
@@ -467,8 +467,8 @@ heal_err = begin
 rescue StandardError => e
   e
 end
-check(heal_err.is_a?(Kiosk::Server::Errors::Forbidden) && heal_err.message.include?("already settled"),
-      "a retry on the stranded order answers `order already settled` (got #{heal_err.class}: #{heal_err&.message})")
+check(heal_err.is_a?(Kiosk::Server::Errors::Forbidden) && heal_err.message.include?("already paid"),
+      "a retry on the stranded order answers `order … is already paid` (got #{heal_err.class}: #{heal_err&.message})")
 check(heal_psp.count.zero?, "…and the PSP was NOT charged a second time (captures=#{heal_psp.count})")
 check(order_row(charged_order)["status"] == "paid",
       "…and the stranded order self-healed `paying` → `paid`")
@@ -493,7 +493,7 @@ strand_as_paying!(young_order, age: "1 second") # a pay legitimately in flight
 #     nothing — so what is asserted is the local-evidence half and the refusal
 #     to guess without it.
 knows_nothing = Class.new { def outcome(**_kwargs) = :unknown }.new
-sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: knows_nothing, older_than_seconds: 600)
+sweep = vpp.reconcile_stuck_paying!(lookup: knows_nothing, older_than_seconds: 600)
 unresolved_ids = sweep[:unresolved].map { |r| r[:order_id] }
 
 sweep_healed_charged = sweep[:healed].include?(charged_order)

@@ -11,8 +11,8 @@
 # coverage of any of them would be `check:redteam`, which needs a booted origin,
 # a seeded database and a live Equihash toll — so proving a table about ten
 # literal values would cost all three, and would mean MUTATING a published
-# `input_schema`. The two cheaper siblings on this demo (`DeliverySlots` →
-# check:slots_spec, `Kiosk::UuidCheck` → check:cashier_spec) already have this seam; the
+# `input_schema`. The cheaper sibling on this demo (`DeliverySlots` →
+# check:slots_spec) already has this seam; the
 # module that actually stands between the wire and the order needs it most.
 #
 # WHAT IS ASSERTED. Not "something was refused" — the TYPE and the SHAPE of each

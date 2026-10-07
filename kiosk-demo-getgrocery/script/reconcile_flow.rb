@@ -162,7 +162,7 @@ strand!(young, age: "1 second") # a pay legitimately still in flight
 processor = ScriptedProcessor.new(
   "cart-CHARGED" => :paid, "cart-DECLINED" => :not_charged, "cart-SILENT" => :unknown,
 )
-sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: processor, older_than_seconds: 600)
+sweep = Kiosk.configuration.payment_provider.reconcile_stuck_paying!(lookup: processor, older_than_seconds: 600)
 unresolved_ids = sweep[:unresolved].map { |row| row[:order_id] }
 
 charged_healed = sweep[:healed].include?(charged)
@@ -222,7 +222,7 @@ mock_outcome = lookup.outcome(cart_mandate_id: mock_mandate, amount_cents: CHEAP
 check(mock_outcome == :unknown,
       "…and the evidence check refuses it: it names no cart, amount or currency of ours")
 
-mock_sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(lookup: lookup, older_than_seconds: 600)
+mock_sweep = Kiosk.configuration.payment_provider.reconcile_stuck_paying!(lookup: lookup, older_than_seconds: 600)
 check(mock_sweep[:unresolved].map { |row| row[:order_id] }.include?(mock_order),
       "so the sweep reports the order UNRESOLVED")
 check(mock_sweep[:released].empty?, "…releases nothing (released=#{mock_sweep[:released].size})")

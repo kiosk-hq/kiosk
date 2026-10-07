@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-07: **getgrocery, hoteling and skooti pay through the engine's `PaymentClaim`**, keeping only their cashier, instead of three copies of the claim (T-176).
+
 - 2026-10-07: **getgrocery, hoteling and skooti read payment receipts through the engine's `Kiosk::Settlement`** instead of their own copies of two models (K-1788).
 
 - 2026-10-07: **The demos render refusals with the engine's `render_kiosk_result`** instead of seven copies of their own concern (K-1788).

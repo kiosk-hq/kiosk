@@ -256,7 +256,7 @@ abort "B pay failed (#{rc})" unless rc == 200
 # document with a body, never an empty/bodiless response. This is a detour a
 # real assistant takes: it mistakes reschedule for
 # "pay again," posts a second /pay for a paid order, and the operator rejects
-# it (403 order already settled). Assert the REJECTION CARRIES A BODY so an
+# it (403, already paid). Assert the REJECTION CARRIES A BODY so an
 # agent can branch on its top-level `code`. It reads the BYTES that arrived
 # (`WIRE.post`, not `WIRE.post_json`) so an empty body would be caught here
 # rather than parsed away into `{}`.

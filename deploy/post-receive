@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# The hook the demo box runs as /srv/kiosk.git/hooks/post-receive, copied verbatim.
+# Installing it is a manual step: scp it there and chmod +x.
+# Isolated push-to-deploy for the Kiosk demos. NEVER touches /opt/narrathon.
+set -eu
+WORK_TREE=/srv/kiosk
+GIT_DIR=/srv/kiosk.git
+export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
+MAIN=0
+while read -r _o _n ref; do [ "$ref" = "refs/heads/main" ] && MAIN=1; done
+[ "$MAIN" -eq 1 ] || { echo "remote: no main in push; nothing to deploy."; exit 0; }
+echo "remote: ==> checkout main ($(git --git-dir=$GIT_DIR rev-parse --short HEAD))"
+git --work-tree=$WORK_TREE --git-dir=$GIT_DIR checkout -f main
+for a in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
+  d=$WORK_TREE/kiosk-demo-$a
+  [ -d "$d" ] || continue
+  echo "remote: ==> $a: bundle + migrate + restart"
+  cd "$d"
+  bundle install --jobs 2 >/dev/null 2>&1 || echo "remote:     WARN bundle install had output"
+  ( set -a; . /etc/kiosk-demo/$a.env; set +a; bundle exec rails db:migrate >/dev/null 2>&1; bundle exec rails db:seed >/dev/null 2>&1 ) || echo "remote:     WARN db:migrate (maybe none)"
+  sudo systemctl restart "kiosk-demo@$a"
+done
+sudo systemctl reload caddy >/dev/null 2>&1 || true
+echo "remote: ==> deploy complete."

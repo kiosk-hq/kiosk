@@ -77,7 +77,7 @@ half-set: the broker's copy of an operator's intake secret
 
 **Who reads an env file.** systemd hands each one to its unit through
 `EnvironmentFile=`, which it reads as root; the push-to-deploy hook at
-`/srv/kiosk.git/hooks/post-receive` **also sources every one of them**, as the
+`/srv/kiosk.git/hooks/post-receive` (`deploy/post-receive`) **also sources every one of them**, as the
 account a push arrives as. That account is the one that needs the read and
 nobody else does, so every file is written to `ubuntu:ubuntu` at mode `0640` —
 two literal lines in the script. A box whose hook runs as another account sets

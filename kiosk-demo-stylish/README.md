@@ -94,15 +94,11 @@ The role rides the token, sourced from the operator's identity system — never 
 
 **What the redteam battery proves, and where to read it.** Both binding directions are covered. The claim direction takes four beats (`DeviceGrantCannotSelfSelectRole`, `DeviceGrantRoleComesFromTheApprover`, `DeviceGrantVerifyPageNamesTheAccess`, `DeviceGrantRebindCannotEscalate`), the **rebind** among them, because a first-bind-only guard leaves the second bind open; each was watched failing against an engine without the fix before it was allowed to pass. **Read the beat list in `rake check:redteam`'s own description, never a summary sentence here:** a summary is a second statement of what the battery covers, and the battery is the one that runs.
 
-### The salon's clock (`rake check:clock_spec`)
+### The salon's clock (`test/book_appointment_test.rb`)
 
-`book_appointment` takes an INSTANT. A haircut happens at a chair, at an address, at an hour, so the clock every wall-clock answer here is written on is **that salon's** — `salons.timezone`, a recorded column, read off the salon being booked. `app/models/salon_clock.rb` is the one place that says so, the same shape atablefor and hoteling use for their own service places. `Europe/Paris` survives in that file only as the ORIGIN DEFAULT: what fills the column, and what dates the published example, which addresses no salon.
+`book_appointment` takes an INSTANT. A haircut happens at a chair, at an address, at an hour, so the clock every wall-clock answer here is written on is **that salon's** — `salons.timezone`, a recorded column. `Europe/Paris` is the ORIGIN DEFAULT: what fills the column, and what dates the published example, which addresses no salon.
 
-**A `slot` without an offset is refused, not completed.** `slot` is declared `format: "date-time"`, which is RFC 3339, and RFC 3339 requires the offset — so a value without one is not a value of the declared type. Completing it on ANY clock is a guess: at the salon it ignores a caller that told you its own, and at the caller's it needs a header this verb does not read. An appointment booked an hour off is unrecoverable; a refusal naming its remedy is not.
-
-The rule has to be STATED, because the default is not one. Stdlib `Time.iso8601` binds a zoneless string to whatever zone the **server process** happens to run in: measured, the same `2026-09-14T14:00:00` is `+11:00` under `TZ=Etc/GMT-11` and `-02:00` under `TZ=Etc/GMT+2`, thirteen hours apart, from an environment variable nobody sets deliberately. That is the value now refused by name.
-
-`rake check:clock_spec` is DB-free (no server, no Postgres, no PoW) and runs `spec/salon_clock_spec.rb` **twice**, under those two `TZ` values, because that is the only way the class is visible: inside a single run the process zone and the intended zone agree and every assertion passes. It checks a zoneless value is recognised as naming no instant while five offset spellings are; pins the three spellings of one instant to one absolute epoch and shows that epoch is unchanged when it is read on another salon's clock; shows one instant PUBLISHED on two salons' clocks reads back as two different strings, which is the whole of why the zone is a column; checks the January answer is CET rather than a summer offset frozen into the constant; checks the shape gate still refuses `"banana"`, `"12345"` and a bare `"2026-09-14"` rather than turning them into plausible appointments; reads a salon's zone off a stand-in row, which the one seeded salon — on the column default — cannot show; and drives `book_appointment`'s two `slot` refusals and its accepted control against that stand-in, since the wire's `format: "date-time"` validation answers before either branch can.
+**A `slot` without an offset is refused, not completed.** `slot` is declared `format: "date-time"`, which is RFC 3339, and RFC 3339 requires the offset — so the wire refuses a value without one before the handler runs. An appointment booked an hour off is unrecoverable; a refusal naming its remedy is not.
 
 **The clock decides on the way OUT too, and every row says which one it was.** Every verb that publishes an appointment instant — the `book_appointment` confirmation, its `slot` refusals, `my_appointments`, `salon_calendar` — renders it through `SalonClock.publish` on the booked salon's own zone and publishes that zone as `timezone`, so one booking is one string wherever you read it and an owner reading a book that spans two cities reads each row where its chair is. Underneath, `appointments.slot` is `timestamp with time zone`, the same as the instant columns in atablefor and getgrocery: an invariant about instants belongs in the schema, not in `ActiveRecord.default_timezone`, which is a framework default an operator may change in one line.
 
@@ -130,7 +126,6 @@ and pull request; the rest are local-only, for the reason given.
 | Task | Runs in CI | Why not |
 |---|---|---|
 | `demo:setup` | yes — the job's own setup step |  |
-| `check:clock_spec` | yes |  |
 | `check:walkthrough` | yes |  |
 | `check:isolation` | yes |  |
 | `check:register` | yes |  |
@@ -147,16 +142,16 @@ and pull request; the rest are local-only, for the reason given.
 | `app/models/{user,salon,service,appointment}.rb` | Trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner); `Service` is a menu item priced in EUR cents |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/front_desk_controller.rb` | The `salons` / `service_menu` / `availability` / `my_appointments` queries and the role-gated `salon_calendar` forecast — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. Refusals are plain `render json:, status:` naming a wire error code, which the wire re-renders as an RFC 9457 problem document |
+| `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. A refusal is a raised `Kiosk::Server::Errors::BadRequest`, which the wire renders as an RFC 9457 problem document |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine ships as its fallback. Nothing here parses a self-asserted bearer, in any environment |
 | `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
 | `script/binding_flow.rb` | Account-binding driver: claim ceremony over the real Devise session, link-code redeem, unlink |
 | `script/roles_flow.rb` | roles-from-IdP driver: the owner links an assistant + a customer signs in, `salon_calendar` gates on the inherited role |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |
-| `app/models/salon_clock.rb` | The origin's default IANA zone, the lookup that reads a salon's own out of `salons.timezone`, and the `slot` parse that refuses a value carrying no offset — a plain module, no AR on the paths that matter, so `spec/salon_clock_spec.rb` can exercise it with no boot and no database |
-| `spec/salon_clock_spec.rb` | The DB-free proof of that parse, run under two `TZ` values by `rake check:clock_spec` |
-| `lib/tasks/demo.rake` | `rake check:clock_spec`, `rake demo:setup`, `rake check:walkthrough`, `rake check:isolation`, `rake check:register`, `rake check:binding`, `rake check:roles`, `rake check:redteam`, `rake check:schema` |
+| `app/models/salon_clock.rb` | The origin's default IANA zone and the one writer every verb publishes an instant with |
+| `test/` | `bin/rails test`: `book_appointment`'s refusals and the salon's clock, through the registered handler with the verb's `input_schema` validated first |
+| `lib/tasks/demo.rake` | `rake demo:setup`, `rake check:walkthrough`, `rake check:isolation`, `rake check:register`, `rake check:binding`, `rake check:roles`, `rake check:redteam`, `rake check:schema` |
 
 ## Make it real
 

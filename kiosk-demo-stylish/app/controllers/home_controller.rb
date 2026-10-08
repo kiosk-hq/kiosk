@@ -1,29 +1,12 @@
 # frozen_string_literal: true
 
-# The provider's public root page.
-# Devise needs a post-sign-in destination, and a human/agent landing here
-# should learn what this demo is, see live DOMAIN activity (real appointment
-# counts), and find both doors: the human sign-in and the Kiosk wire.
+# The salon's public page. It advertises the Kiosk skill to an assistant that reads it.
 class HomeController < ApplicationController
   def index
-    # Cheap domain counts, rendered server-side on page load (a refresh is
-    # enough — no JS polling). These read stylish's OWN tables.
-    # The model is an EVERGREEN service MENU: every service is always
-    # bookable (infinite capacity, overbooking allowed — the salon never fills
-    # up), while bookings accumulate as visitors book (starts at 0).
     @services            = Service.count
     @appointments_booked = Appointment.count
+    @forecast_eur        = Service.format_eur(Appointment.sum(:price_cents))
 
-    # Forecasted revenue: the € total SUMMED from the actual bookings' captured
-    # prices (never hardcoded). What the staff view shows a salon owner — it
-    # starts at €0 and grows with each booking. Cents → EUR string.
-    @forecast_eur = Service.format_eur(Appointment.sum(:price_cents))
-
-    # Set a Link header too, so a header-only agent finds the skill.
-    # The url is `Kiosk.configuration.skill_url` — the VERSIONED cut this
-    # operator pins, identical to the one `/.well-known/kiosk.json` carries
-    # under `skill`, never the mutable skill.md alias. Derived rather than
-    # restated so a cut is re-pinned in ONE place, the initializer.
     response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

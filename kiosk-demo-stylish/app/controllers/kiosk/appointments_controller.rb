@@ -1,20 +1,9 @@
 # frozen_string_literal: true
 
-# stylish's WRITE surface: the one verb an assistant reaches with
-# `POST /kiosk/book_appointment` — arguments in the JSON body, and `kind :action`
-# above the declaration is what puts it on `POST`. The action is six lines:
-# arguments off the request, into an Operation, render what it answers.
-#
-# A refusal is an ordinary `render json:, status:` naming a code from the wire's
-# closed error-code table — no Kiosk error classes appear below. The wire
-# re-renders it as the RFC 9457 problem document whose TOP-LEVEL `code` an
-# assistant branches on; `render_kiosk_result` is the one place an
-# {OperationResult} becomes a status.
+# The write verb. The work is in app/operations.
 class Kiosk::AppointmentsController < ApplicationController
   include Kiosk::Handler
 
-  # No argument names and no "pass its `x`" clause — `input_schema`
-  # declares those. This says what booking MEANS and where the refusals are.
   kind :action
   description "Book an appointment for the authenticated visitor. Naming a service is OPTIONAL and " \
               "the two forms differ in what the appointment records: pick one from the menu and its " \
@@ -41,8 +30,6 @@ class Kiosk::AppointmentsController < ApplicationController
                                description: "Service id from availability/service_menu; its EUR price is captured." },
                },
                required: ["salon_id", "slot"]
-  # The four price fields travel together or not at all: a bare salon booking
-  # captures no price, and publishing `null`s for it would invent one.
   output_schema oneOf: [
     { type: "object", additionalProperties: false,
       description: "A booking WITH a service — its name and EUR price were captured.",
@@ -67,17 +54,7 @@ class Kiosk::AppointmentsController < ApplicationController
       },
       required: %w[appointment_id salon_id slot timezone] },
   ]
-  # The slot is RESOLVED, not written down: a past slot is refused, so a
-  # literal would age into "copy this and get a 400". `example_params` takes a
-  # resolvable slot ({Kiosk::Server::SchemaSlots}); the instant itself lives in
-  # the Operation, quoted back by the two `slot` refusals as the shape to retry.
   example_params({ salon_id: 1, service_id: 3, slot: -> { BookAppointmentOperation.example_slot } })
-  # A UUID, because that is the only thing this column can ever answer:
-  # `appointments` is created `id: :uuid`, the declaration above says
-  # `type: "string"`, and an assistant that copied the integer would build a
-  # value it will only ever be handed as a uuid and then round-trip it back.
-  # Caught on the first run of the §8.3 example-vs-schema check across the
-  # seven origins.
   example_row({
     appointment_id: "6b1f0c5a-9d3e-4f27-8a10-2c7e4b9d5f83", salon_id: 1,
     slot: -> { BookAppointmentOperation.example_slot },
@@ -85,11 +62,11 @@ class Kiosk::AppointmentsController < ApplicationController
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment
-    render_kiosk_result BookAppointmentOperation.call(
-      principal_id: kiosk_identity.user_id, # forged params[:user_id] never consulted
-      salon_id:     params[:salon_id],
+    render json: BookAppointmentOperation.call(
+      principal_id: kiosk_identity.user_id,
+      salon_id:     params[:salon_id].to_i,
       slot:         params[:slot],
-      service_id:   params[:service_id],
+      service_id:   params[:service_id]&.to_i,
     )
   end
 end

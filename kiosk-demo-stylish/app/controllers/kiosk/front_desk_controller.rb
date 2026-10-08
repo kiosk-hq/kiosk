@@ -1,23 +1,13 @@
 # frozen_string_literal: true
 
-# stylish's READ surface: the five verbs an assistant reaches with
-# `GET /kiosk/<query-name>` — one endpoint each, arguments in the query string.
-# Kiosk ships a MIXIN, not a base class: the superclass is this app's own
-# ApplicationController, `include Kiosk::Handler` is the whole contract, and a
-# macro is claimed by the NEXT `def` — a method with no macros above it is a
-# helper the wire cannot see. `kind :query` puts a declaration on `GET`, and the
-# kind belongs to the DECLARATION, not the class.
+# The read verbs.
 class Kiosk::FrontDeskController < ApplicationController
   include Kiosk::Handler
 
-  # salons — the full catalogue; no per-user scoping, any authenticated principal
-  # may browse. The description carries semantics only.
   kind :query
   description "Browse the public salon catalogue — every salon this front desk books for, each with " \
               "the IANA zone its chairs keep. Once the human picks one, `book_appointment` takes it " \
               "from there, on that salon's own clock."
-  # A verb that takes nothing still declares the empty closed object, so "this
-  # verb takes no arguments" is a published fact rather than an absence.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 description: "The whole salon catalogue.",
@@ -35,18 +25,11 @@ class Kiosk::FrontDeskController < ApplicationController
                   required: %w[salon_id name timezone],
                 }
   def salons
-    # `pluck` rather than loading models: naming the columns keeps the wire's
-    # field names and their order a decision this handler makes. The zone rides
-    # along because this is the first verb a caller reaches and `book_appointment`
-    # refuses a `slot` with no offset — without it the only route to the salon's
-    # clock is asking the human, which is not a question they can answer.
     render json: Salon.order(:id).pluck(:id, :name, :timezone).map { |id, name, zone|
       { salon_id: id, name: name, timezone: zone }
     }
   end
 
-  # service_menu — the public menu with EUR prices; any authenticated principal
-  # may read it to pick a service_id before booking.
   kind :query
   description "Browse the salon's service menu, priced. Takes no arguments and returns the WHOLE " \
               "menu, so an empty answer would mean the " \
@@ -83,8 +66,6 @@ class Kiosk::FrontDeskController < ApplicationController
                         }
   end
 
-  # availability — EVERGREEN: capacity is infinite and nothing goes
-  # stale, so availability IS the service menu with every row `open: true`.
   kind :query
   description "Browse the salon's OPEN services. Every service on the menu is always bookable — this " \
               "salon is evergreen and has no finite capacity, so it never fills up and a booking never " \
@@ -94,8 +75,6 @@ class Kiosk::FrontDeskController < ApplicationController
                additionalProperties: false,
                properties: {},
                required: []
-  # service_menu's projection under this verb's own field names, plus `open`. The
-  # two verbs stay separate because their CONTRACTS differ, not their query.
   output_schema type: "array",
                 description: "Every menu service, always bookable, cheapest first.",
                 items: {
@@ -124,13 +103,9 @@ class Kiosk::FrontDeskController < ApplicationController
                         }
   end
 
-  # my_appointments — scoped by the session GUC: the agent supplies no filter.
-  # `own` stays SQL-side — see Appointment.
   kind :query
   description "List this principal's appointments."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # `id` here for the value book_appointment calls `appointment_id` — published
-  # behaviour, named in the schema so an assistant reads it rather than meets it.
   output_schema type: "array",
                 description: "The principal's appointments, oldest id first.",
                 items: {
@@ -144,59 +119,20 @@ class Kiosk::FrontDeskController < ApplicationController
                   required: %w[id salon_id slot timezone],
                 }
   def my_appointments
-    render json: Appointment.own
-                            .joins(:salon)
-                            .order(:id)
+    render json: Appointment.own.joins(:salon).order(:id)
                             .pluck("appointments.id", "appointments.salon_id",
                                    "appointments.slot", "salons.timezone")
                             .map { |id, salon_id, slot, timezone|
-                              # On THAT SALON's clock, through the one writer
-                              # every verb of this demo publishes an instant
-                              # with — see {SalonClock.publish}. Rendered
-                              # straight off the pluck it would follow
-                              # `Time.zone` instead, and this verb and
-                              # `book_appointment` would answer the same
-                              # booking in two spellings.
                               { id: id, salon_id: salon_id,
                                 slot: SalonClock.publish(slot, Time.find_zone!(timezone)),
                                 timezone: timezone }
                             }
   end
 
-  # salon_calendar — STAFF forecast, role-gated on the token's role claim (the
-  # bound human's IdP role):
-  #
-  #   owner → the WHOLE book, every visitor's bookings, plus a FORECAST summary
-  #           SUMMED from those bookings' captured prices.
-  #   any other role → ONLY their own bookings, and no forecast.
-  #
-  # Un-bypassable: the role rides the token, not the request args, and the WHERE
-  # is provider-controlled.
-  #
-  # `reach :role` — a declared departure from spec §7.2, and the only verb in the
-  # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
-  # because a role is ASSIGNED by the operator and never client-requested.
-  #
-  # What holds that claim: five beats of `rake check:redteam` in THIS demo
-  # (script/redteam_suite.rb), against the live wire. The registration one
-  # alone does NOT cover it — the binding ceremonies (claim, link) are the
-  # other way a role can be asked for — so all five are load-bearing:
-  #   • registration  — kiosk-redteam's `PrivilegeSelfSelection`, for
-  #     `/auth/register`;
-  #   • claim         — `DeviceGrantCannotSelfSelectRole` /
-  #     `DeviceGrantRoleComesFromTheApprover` / `DeviceGrantRebindCannotEscalate`;
-  #   • link          — `CustomerLinkCannotCarryOwnerRole` /
-  #     `OwnerLinkIgnoresForgedClaimBody`;
-  #   • the token     — `SelfAssertedTokenForgery`;
-  #   • the session   — `SelfAssertedStaffSessionForgery`.
   kind :query
   reach :role
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # Two row shapes in ONE array, discriminated by the field each has that the
-  # other does not: `kind: "booking"` versus `summary: "forecast"`. The forecast
-  # is APPENDED to the bookings rather than sitting beside them in an envelope. A
-  # non-owner never sees the second shape — the role gate, not a format option.
   output_schema type: "array",
                 description: "The bookings this caller may see, slot-ordered; for an owner, a forecast row after them.",
                 items: {
@@ -228,46 +164,27 @@ class Kiosk::FrontDeskController < ApplicationController
                       required: %w[summary bookings currency forecast_cents forecast_eur] },
                   ],
                 }
+  # An owner sees the whole book and a forecast summed from its captured
+  # prices; anyone else sees their own bookings.
   def salon_calendar
-    role = Kiosk.current_role
+    owner = Kiosk.current_role == "owner"
+    bookings = (owner ? Appointment.all : Appointment.own)
+               .left_joins(:service).joins(:salon).order(:slot)
+               .pluck("appointments.id", "appointments.salon_id", "appointments.slot", "salons.timezone",
+                      "appointments.service_id", "services.name", "appointments.price_cents")
+               .map { |id, salon_id, slot, timezone, service_id, service, price_cents|
+                 { id: id, salon_id: salon_id,
+                   slot: SalonClock.publish(slot, Time.find_zone!(timezone)),
+                   timezone: timezone, service_id: service_id,
+                   service: service, price_cents: price_cents,
+                   kind: "booking", currency: "EUR",
+                   price_eur: Service.format_eur(price_cents) }
+               }
+    return render json: bookings unless owner
 
-    book = role == "owner" ? Appointment.all : Appointment.own
-
-    # `left_joins` because a bare salon booking carries no service: the row must
-    # still appear, with a null service and a null captured price.
-    appt_rows = book.left_joins(:service).joins(:salon)
-                    .order(:slot)
-                    .pluck("appointments.id", "appointments.salon_id", "appointments.slot",
-                           "salons.timezone",
-                           "appointments.service_id", "services.name", "appointments.price_cents")
-                    .map { |id, salon_id, slot, timezone, service_id, service, price_cents|
-                      # Same one writer as my_appointments — {SalonClock.publish}
-                      # — and on the SALON's own clock, so an owner reading a
-                      # book that spans two cities reads each row where its
-                      # chair is.
-                      { id: id, salon_id: salon_id,
-                        slot: SalonClock.publish(slot, Time.find_zone!(timezone)),
-                        timezone: timezone, service_id: service_id,
-                        service: service, price_cents: price_cents,
-                        kind: "booking", currency: "EUR",
-                        price_eur: Service.format_eur(price_cents) }
-                    }
-
-    rows = appt_rows
-
-    # Owner-only FORECAST: summed live from the real per-booking prices, so it is
-    # €0 before any booking and grows with each one — never a fixed number.
-    if role == "owner"
-      booked_cents = appt_rows.sum { |r| r[:price_cents].to_i }
-      rows += [{
-        summary:        "forecast",
-        bookings:       appt_rows.size,
-        currency:       "EUR",
-        forecast_cents: booked_cents,
-        forecast_eur:   Service.format_eur(booked_cents),
-      }]
-    end
-
-    render json: rows
+    forecast_cents = bookings.sum { _1[:price_cents].to_i }
+    render json: bookings + [{ summary: "forecast", bookings: bookings.size, currency: "EUR",
+                               forecast_cents: forecast_cents,
+                               forecast_eur: Service.format_eur(forecast_cents) }]
   end
 end

@@ -329,14 +329,8 @@ end
 # executor.rb turns into ActionFailed — a 500 on this demo's headline action,
 # the one the onboarding page is modelled on.
 #
-# The FIRST of these refusals comes from the schema layer rather than
-# from the handler: `input_schema` is validated on every call and `items`
-# declares `{type: "array", minItems: 1, items: {…}}`, so a String, an Integer
-# or an array of Strings is refused before {WireArguments.items} runs. The
-# assertion is unchanged and still worth making — what it pins is that a
-# mis-shaped cart is a TYPED 400 an assistant can act on, not which layer
-# produced it, and the handler guard stays as the floor for shapes the schema
-# admits.
+# The schema refuses a mis-shaped cart before the handler runs; what this pins
+# is that the refusal is a typed 400.
 #
 # Asserts HTTP 400 AND a top-level `code == "bad_request"` AND no Ruby internals
 # in the body: "not 200" would accept exactly the 500s at issue.
@@ -376,12 +370,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
       resp = client.run(a, name: "create_order", **args)
       statuses << resp.status
       code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
-      # THE SCAN IS TOLD WHAT THIS PROBE SENT. {WireArguments.items}
-      # names the element it rejected — `each item must be a {sku, qty} object
-      # — got String ("sourdough-bread")` — so the bytes scanned for
-      # RUBY_INTERNALS are partly the probe's own, and a cart whose sku spelled
-      # `TypeError` would be reported as a BREACH on its own echo, under a
-      # runner whose prose says a BREACH means "fix the app, not the scenario".
+      # The refusal may echo the probe's own bytes, so the scan is told what was sent.
       scan = Kiosk::Redteam::LeakScan.scan(resp.body, RUBY_INTERNALS, supplied: args)
       next if resp.status == 400 && code == "bad_request" && !scan.leak?
 
@@ -480,16 +469,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     # ── schema-declared integers and uuids ──────────────────────────────────
     #
-    # `delivery_slot_id`: BOTH LAYERS REFUSE ALL EIGHT SHAPES BELOW, and the
-    # second layer is what makes that worth asserting — the same trap as
-    # `qty`'s below, one argument over. A guard reading `raw.to_s.to_i` turns
-    # `"1.5"` into 1, which lands INSIDE the declared 1..6, so `1.5` is the one
-    # shape the schema alone refuses and, with nothing in front of it, the
-    # handler would book a fractional slot as slot 1. It goes through the same
-    # {WireArguments.whole_number} `qty` uses, so `2.0` is still slot 2
-    # (json_schemer accepts it) and `1.5` is a 400 from either layer. The
-    # non-vacuity proof: drop `delivery_slot_id`'s declared type from both
-    # verbs' `input_schema` and these stay 400.
+    # `delivery_slot_id`: the schema refuses every shape below; `2.0` is slot 2.
     SHAPES.each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
@@ -553,7 +533,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #     total guard in front, `qty: 30_000_000` of the 89-cent `milk-0.5l` →
     #     `ActiveModel::RangeError: 2670000000 is out of range …` out of
     #     `Order.insert!`, served as **HTTP 500 `action_failed`**. The refusal
-    #     it must be instead comes from {WireArguments.priceable_total}, which
+    #     it must be instead comes from {WireArguments.priceable_total!}, which
     #     is reached only once the prices are resolved — no schema can express
     #     a bound on a SUM of other rows' values.
     #   · UNSTORABLE QUANTITY — `qty` itself past int4, which IS expressible
@@ -886,9 +866,8 @@ end
 # and its proxy siblings are the closest a request can come and are what is sent
 # here), and the TOKEN, because nothing in this engine's claim set carries a
 # zone, so there is no value for an operator to read off one. Both are asserted
-# where they ARE reachable: `spec/caller_clock_spec.rb` builds the Rack env
-# itself, with a clock stubbed, and requires the declared zone to be read from
-# neither.
+# where they ARE reachable: `test/wire_arguments_test.rb` builds the Rack env
+# itself and requires the declared zone to be read from neither.
 class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
   ADDRESS = "1 Redteam St, Dublin 1"
 

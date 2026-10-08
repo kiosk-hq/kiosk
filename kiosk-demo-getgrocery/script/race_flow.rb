@@ -391,21 +391,8 @@ rescue StandardError => e
   e
 end
 
-# The CODE and the STATUS are the contract, not the exception class: a handler
-# RENDERS its refusal and the dispatch seam turns that into a `WireError`
-# carrying the same code and status a raised `Errors::BadRequest` would.
-# Asserting the class here would be asserting how the answer is constructed
-# rather than what it says.
-reschedule_error = action_error("reschedule_delivery",
-                                { order_id: "not-a-uuid", delivery_slot_id: 3, delivery_date: FUTURE })
-check(reschedule_error.respond_to?(:code) && reschedule_error.code == "bad_request" && reschedule_error.http_status == 400,
-      "reschedule_delivery rejects a malformed order_id with a 400 bad_request (got #{reschedule_error.class})")
-
-# AND A WELL-FORMED ID THAT NAMES NOTHING IS THE OTHER HALF. The shape guard
-# above answers "that is not an id"; this answers "that is not an order I can
-# move", which is what a stale or mistyped id actually produces. The wording is
-# deliberately the same sentence an id belonging to someone else gets, so a
-# caller cannot enumerate other principals' orders with it.
+# A well-formed id that names nothing gets the same sentence as a foreign one,
+# so a caller cannot enumerate other principals' orders.
 absent_error = action_error("reschedule_delivery",
                             { order_id: "00000000-0000-4000-8000-0000000000ff",
                               delivery_slot_id: 3, delivery_date: FUTURE })

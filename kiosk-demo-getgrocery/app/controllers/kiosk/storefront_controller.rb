@@ -1,36 +1,11 @@
 # frozen_string_literal: true
 
-# getgrocery's READ surface: the three verbs an assistant reaches with
-# `GET /kiosk/<query-name>`, arguments in the query string. Kiosk ships a MIXIN,
-# not a base class — `include Kiosk::Handler` is the whole contract — and each
-# class-level macro records a declaration that the NEXT `def` claims, so a method
-# with no macros above it is a helper the wire cannot see.
-#
-# THE SUPERCLASS IS `ActionController::API` by decision, not omission: the mixin
-# leaves the base class to the operator, and this app's own
-# `ApplicationController` is an `ActionController::Base` — its human pages need
-# cookies, flash and CSRF, and Devise's session controllers inherit from it. A
-# wire verb needs none of that, so the two halves take different superclasses
-# and nothing below ever reaches that class.
-#
-# `kind :query` above each declaration is what puts it on `GET`; the kind belongs
-# to the DECLARATION, not to the class, so splitting the read and write
-# halves is this demo's shape rather than a rule. The write verbs live next door
-# in Kiosk::OrdersController, and what the two halves share is their argument
-# vocabulary — an address is checked against the served Dublin districts here and
-# by both order verbs there, word for word — through {WireArguments} (which
-# renders nothing, so the Operations use it too).
+# The read verbs.
+
 class Kiosk::StorefrontController < ActionController::API
   include Kiosk::Handler
 
-  # ── catalog — the public shelf. No per-principal scoping: every authenticated
-  # agent browses the same in-stock catalogue.
   kind :query
-  # The unit and the currency are declared on `price_cents` and `currency`
-  # below, so this prose does not restate them: a description carries semantics,
-  # the schema carries shape. What stays is semantics no schema can hold — that
-  # a cart is signed at the price on the shelf, so a cached price is not a
-  # price.
   description "Browse the getgrocery catalogue. Only what is IN STOCK appears — a sold-out product is " \
               "absent rather than listed as unavailable. A cart is signed at exactly the price the " \
               "shelf shows, so re-read it before paying rather than " \
@@ -39,10 +14,6 @@ class Kiosk::StorefrontController < ActionController::API
               "from an account that has already completed an 18+ anonymized-KYC check, and " \
               "`request_kyc` is what starts one. Nothing else on this shelf needs a check."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # `low` and `age_restricted` are OPTIONAL by construction: the handler appends
-  # each only when true, because publishing `false` on every ordinary grocery
-  # would be noise in the largest catalogue in the fleet. An ABSENT flag means
-  # false, which is what the `required` list below says.
   output_schema type: "array",
                 description: "In-stock products, name-ordered.",
                 items: {
@@ -64,34 +35,18 @@ class Kiosk::StorefrontController < ActionController::API
     price_eur: "€4.49", currency: "eur",
   })
   def catalog
-    # `pluck` rather than loading models: naming the columns keeps the wire's
-    # field names AND THEIR ORDER a decision this handler makes rather than a
-    # side effect of the schema. `sku` is the only product handle on the wire —
-    # the numeric primary key is deliberately not selected, because a row id no
-    # verb accepts invites the assistant to guess it is some verb's param.
-    render json: Product.in_stock
-                        .order(:name)
-                        .pluck(:sku, :name, :price_cents, :stock, :age_restricted)
-                        .map { |sku, name, price_cents, stock, age_restricted|
-                          row = { "sku"         => sku,
-                                  "name"        => name,
-                                  "price_cents" => price_cents,
-                                  "price_eur"   => Product.format_eur(price_cents),
-                                  "currency"    => "eur" }
-                          row["low"] = true if Product.low_stock?(stock)
-                          # Advertise the 18+ gate so an assistant completes KYC
-                          # BEFORE ordering. Read through the same fail-closed
-                          # predicate create_order enforces with, so the shelf
-                          # and the gate cannot disagree about one row.
-                          row["age_restricted"] = true if Product.age_restricted?(age_restricted)
-                          row
-                        }
+    render json: Product.in_stock.order(:name).map { |product|
+      row = { "sku"         => product.sku,
+              "name"        => product.name,
+              "price_cents" => product.price_cents,
+              "price_eur"   => Product.format_eur(product.price_cents),
+              "currency"    => "eur" }
+      row["low"] = true if product.low_stock?
+      row["age_restricted"] = true if product.age_restricted?
+      row
+    }
   end
 
-  # ── delivery_slots — the still-bookable windows for a date at an IN-ZONE
-  # Dublin address. Touches no table: the windows are a function of the date and
-  # the operator's locale ({DeliverySlots}), the address of the served districts
-  # ({DublinZones}).
   kind :query
   description "Get the delivery windows still bookable on a chosen day at a chosen Dublin address. " \
               "getgrocery routes by postal district and delivers only inside the Dublin zones it " \
@@ -121,9 +76,6 @@ class Kiosk::StorefrontController < ActionController::API
                  delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
                },
                required: ["delivery_address"]
-  # EMPTY is an honest answer here and ONLY here: every one of today's windows
-  # may already have begun, in which case the earliest bookable slot is on a
-  # later date. A date BEFORE today answers 400 instead.
   output_schema type: "array",
                 description: "The still-bookable delivery windows for the requested date and district.",
                 items: {
@@ -141,12 +93,6 @@ class Kiosk::StorefrontController < ActionController::API
                   },
                   required: %w[delivery_slot_id date slot_at label timezone district],
                 }
-  # THE DATE IS RESOLVED, NOT WRITTEN DOWN: a calendar literal is an
-  # example that ages into a 400, since a date before today is REFUSED. These are
-  # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
-  # {DeliverySlots.example_date} — tomorrow on the ORIGIN's own clock, because a
-  # descriptor is one document for every district this shop delivers to and
-  # addresses none of them.
   example_params({ date:             -> { DeliverySlots.example_date.iso8601 },
                    delivery_address: "42 Camden Street, Dublin 2" })
   example_row({ delivery_slot_id: 1,
@@ -155,83 +101,22 @@ class Kiosk::StorefrontController < ActionController::API
                 label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots
-    # `date` IS OPTIONAL, AND OMITTING IT IS THE CORRECT CALL FOR "the
-    # soonest you can deliver" -- for a reason worth stating, because it is
-    # not that the caller has no way to be specific. With `Kiosk-Timezone` a
-    # caller CAN name a day in its own calendar and the shop maps it, so the
-    # field is optional by choice: OMIT IT WHEN YOUR HUMAN NAMED NO DAY.
-    # "Deliver on Friday" is a different request from "deliver as soon as you
-    # can", and only the caller knows which one it is making.
+    district = WireArguments.served_district(params[:delivery_address])
+    zone     = DeliverySlots.zone_for(district)
+    soonest  = DeliverySlots.soonest_date(zone)
+    date     = params.key?(:date) ? requested_day(zone, soonest) : soonest
 
-    # ADDRESS-UPFRONT: checked BEFORE the date, which is what forces the
-    # assistant to obtain the address from its human before it can see slots.
-    return render_kiosk_result(WireArguments.missing_address) if params[:delivery_address].blank?
-
-    district, district_refusal = WireArguments.served_district(params[:delivery_address])
-    return render_kiosk_result(district_refusal) if district_refusal
-
-    # OMITTED means "the soonest day you can deliver", so an exhausted today is
-    # not an answer -- it is the operator's job to step over it. Returning an
-    # empty list here would hand the caller back the very problem it omitted the
-    # date to avoid: it would have to work out the operator's tomorrow, which it
-    # cannot do without the operator's locale.
-    #
-    # Only one step is needed: every window of a future day is still bookable,
-    # so the day after today always has slots. A loop would suggest otherwise.
-    # ── THE CLOCK, ON BOTH SIDES ─────────────────────────────────────────
-    #
-    # OUT: the window is offered at the DELIVERY ADDRESS, so its zone comes off
-    # the district the address routed to.
-    # IN: a `date` the caller NAMES is a day on the CALLER's calendar, which the
-    # caller states in `Kiosk-Timezone`. Silence means the address's own clock.
-    zone        = DeliverySlots.zone_for(district)
-    caller_zone = Kiosk::Server::CurrentRequest.timezone
-
-    soonest = DeliverySlots.now(zone).to_date
-    soonest += 1 if DeliverySlots.bookable_ids(soonest, zone).empty?
-
-    unless params.key?(:date)
-      return render_slots(soonest, district)
-    end
-
-    # The declared `format: "date"` has already refused every other spelling
-    # before this method was reached. What a JSON Schema cannot say is that the
-    # string names a real calendar DAY — `2026-02-30` has the shape and is not
-    # one — so the semantic half stays {WireArguments.iso_date}'s.
-    date = WireArguments.iso_date(params[:date])
-    if date.nil?
-      return render_kiosk_result(OperationResult.refused(
-        code: "bad_request", message: "invalid date: #{params[:date]} — use YYYY-MM-DD",
-      ))
-    end
-
-    # THE CALLER'S DAY, ON THE SHOP'S CALENDAR. A calendar day is an INTERVAL,
-    # so a day the caller is STILL IN is not past even when the shop has already
-    # rolled over — that is the midnight case this rule exists for, and refusing
-    # it was the defect. A day that has entirely ended for the caller IS past,
-    # and spec §9.1 makes that a named `400` rather than the `200 []` that is
-    # indistinguishable from the honest empty case below.
-    date, refusal = WireArguments.caller_day(date, zone: zone, caller_zone: caller_zone,
-                                                   soonest: soonest)
-    return render_kiosk_result(refusal) if refusal
-
-    # PAST-SLOT FILTER: for TODAY at the address, drop any slot whose start has
-    # already passed there; future dates keep all slots. An assistant should not
-    # see an un-bookable 08:00–10:00 window at 11:00. `date` on each row is what
-    # create_order books — and it is the SHOP's day, which is how a caller
-    # learns that its «tonight» landed on the shop's tomorrow.
-    render_slots(date, district)
+    render json: DeliverySlots.bookable_ids(date, zone).map { |slot_id|
+      slot_at = DeliverySlots.slot_at(date, slot_id, zone)
+      { "delivery_slot_id" => slot_id,
+        "date"             => date.iso8601,
+        "slot_at"          => slot_at.iso8601,
+        "label"            => DeliverySlots.label(slot_at, zone),
+        "timezone"         => zone.name,
+        "district"         => district }
+    }
   end
 
-  # ── my_orders — per-principal: the caller's OWN orders only. The caller
-  # supplies no filter; the scope is provider-controlled and un-bypassable.
-  #
-  # THE RECONCILIATION SURFACE: this is the "per-user query"
-  # protocol.md §11.6 sends an assistant to after a `pay` whose response it never
-  # read, so what it publishes about money is normative. `payment_state` is a
-  # TRI-state and not a boolean, because a boolean conflates "nothing was ever
-  # charged" with "a charge is outstanding" — and the second is where a fresh
-  # mandate chain charges a human twice.
   kind :query
   description "List this principal's orders with their delivery window, address and where their money " \
               "stands (scoped to the authenticated account). This is the query to re-read after a " \
@@ -247,7 +132,7 @@ class Kiosk::StorefrontController < ActionController::API
                   type: "object", additionalProperties: false,
                   properties: {
                     order_id:      { type: "string", description: "Pass to reschedule_delivery as `order_id` once this order is paid." },
-                    status:        { type: "string", enum: Order::STATUSES,
+                    status:        { type: "string", enum: Order.statuses.keys,
                                      description: "Where the BASKET stands: created → paying → paid, rescheduled once its window has been moved, then out_for_delivery and delivered as the shop's courier acts. Read payment_state for where the money stands." },
                     total_cents:   { type: "integer", description: "EUR cents." },
                     slot_at:       { type: "string", description: "The booked delivery window's start instant, ISO 8601 with offset. " \
@@ -264,96 +149,23 @@ class Kiosk::StorefrontController < ActionController::API
                   required: %w[order_id status total_cents slot_at slot_label address payment_state],
                 }
   def my_orders
-    # The paid witness is {Order.paid_flag} over the CALLER's settlements — the
-    # same containment the operator's back office reads over ALL of them, so the
-    # two surfaces are one behaviour with two authorities rather than two copies
-    # of one SQL string (see {Order.settling}).
-    render json: Order.own
-                      .order(created_at: :desc)
-                      .pluck(:id, :status, :total_cents, :slot_at, :address, :timezone,
-                             Order.paid_flag(Kiosk::Settlement.own))
-                      .map { |id, status, total_cents, slot_at, address, timezone, paid|
-                        # The clock this order was quoted on, READ OFF THE ROW
-                        # and never re-parsed out of `address`. The district
-                        # parser answers about an address; this verb is answering
-                        # about an ORDER, which recorded its clock when it was
-                        # placed. An address that no longer resolves would take
-                        # the ORIGIN default with nothing in the published row
-                        # saying so, and the window would go out an hour wrong.
-                        order_zone = Time.find_zone!(timezone)
-                        { "order_id"      => id,
-                          "status"        => status,
-                          "total_cents"   => total_cents,
-                          # ONE FIELD, ONE CLOCK, EVERY VERB. `delivery_slots`
-                          # offers the window, `create_order` books it and
-                          # `reschedule_delivery` moves it, all three on the
-                          # DELIVERY zone's; this is the reconciliation read of
-                          # that same booking, so it answers there too.
-                          # Published as "+00:00" it would be one instant in a
-                          # second spelling, and an assistant formatting that
-                          # without converting reads a human the 07:00 of an
-                          # 08:00 Dublin window.
-                          #
-                          # A String, and THAT is what the byte-stability
-                          # argument here was always for: `pluck` hands back a
-                          # TimeWithZone whose `as_json` follows `Time.zone` and
-                          # the encoder's `time_precision`, so the published
-                          # bytes would be the app's configuration talking.
-                          "slot_at"       => slot_at.in_time_zone(order_zone).iso8601,
-                          # The window said out loud, zone named.
-                          # `slot_at` carries the offset; nobody speaks an
-                          # offset. This is the verb §11.6 sends an assistant to
-                          # after a lost `pay`, so it is the row most likely to
-                          # be read back TO a human.
-                          "slot_label"    => DeliverySlots.label(slot_at, order_zone),
-                          "address"       => address,
-                          "payment_state" => Order.payment_state(status, paid) }
-                      }
+    render json: Order.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc).map { |order|
+      { "order_id"      => order.id,
+        "status"        => order.status,
+        "total_cents"   => order.total_cents,
+        "slot_at"       => order.slot_at.in_time_zone(order.zone).iso8601,
+        "slot_label"    => DeliverySlots.label(order.slot_at, order.zone),
+        "address"       => order.address,
+        "payment_state" => order.payment_state }
+    }
   end
 
   private
 
-  # One place that renders a slot row, because the date-supplied and
-  # date-omitted paths must answer in exactly the same shape -- a caller that
-  # omits the date is not getting a lesser response, it is getting the same one
-  # for the day the operator picked. `date` on each row is what create_order
-  # books, so it is the omitting caller's way of learning which day it got.
-  #
-  # The row says `district`, and so does every name behind it
-  # (`DublinZones::Result#district`, {DublinZones.extract_district},
-  # {WireArguments.served_district}): the published field is a POSTAL DISTRICT —
-  # `D02`, a routing key — while the row's `timezone` is the CLOCK the window is
-  # written in. Two different facts about one address, and one word for both was
-  # unreadable three lines apart.
-  #
-  # THE CLOCK COMES OFF THE DISTRICT, not off this origin: a delivery happens at
-  # the door, so the zone is a property of the address being served
-  # ({DublinZones::ZONES}). Every served district is in Dublin today, so no
-  # response byte moves; what moved is where the answer is read from.
-  def render_slots(date, district)
-    zone = DeliverySlots.zone_for(district)
-    render json: DeliverySlots.bookable_ids(date, zone).map { |slot_id|
-      slot_time = DeliverySlots.slot_at(date, slot_id, zone)
-      { "delivery_slot_id" => slot_id,
-        "date"     => date.iso8601,
-        "slot_at"  => slot_time.iso8601,
-        # The zone is part of the label, because the label is the field a human
-        # is actually read out. A bare "08:00–10:00" is a wall clock with no
-        # clock named, and a customer three hours away reads it as THEIR 08:00.
-        # `slot_at` has carried the resolved offset all along, but nobody says
-        # an offset out loud; the IANA name is what makes the sentence the
-        # assistant speaks a true one.
-        #
-        # Built by {DeliverySlots.label} rather than here, because `my_orders`
-        # publishes the same window for the same booking and two writers of one
-        # string are two answers waiting to disagree.
-        "label"    => DeliverySlots.label(slot_time, zone),
-        # THE ROW SAYS WHOSE CLOCK IT IS ON, read off the DELIVERY ADDRESS —
-        # this district's declared zone, never one constant for the origin. A
-        # shop delivering to a district in another country answers a different
-        # value here on the same call.
-        "timezone" => zone.name,
-        "district" => district }
-    }
+  def requested_day(zone, soonest)
+    date = WireArguments.calendar_day(params[:date]) ||
+           WireArguments.refuse("invalid date: #{params[:date]} — use YYYY-MM-DD")
+    WireArguments.caller_day(date, zone: zone, caller_zone: Kiosk::Server::CurrentRequest.timezone,
+                                   soonest: soonest)
   end
 end

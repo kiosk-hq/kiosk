@@ -10,7 +10,7 @@ require "test_helper"
 class CourierStatesTest < ActiveSupport::TestCase
   setup do
     @shopper = User.create!(email: "courier@example.test", password: "conformance-fixture-password")
-    @order   = Order.create!(user: @shopper, status: Order::PAID, total_cents: 449,
+    @order   = Order.create!(user: @shopper, status: "paid", total_cents: 449,
                              slot_at: Time.current + 3600, address: "1 Dame Street, Dublin 2",
                              timezone: DeliverySlots::DEFAULT_ZONE_NAME)
     # A lead longer than the distance to the window, so the courier is due at once.
@@ -24,11 +24,11 @@ class CourierStatesTest < ActiveSupport::TestCase
 
   test "an order out for delivery, then delivered, answers the declared shape" do
     CourierDispatchJob.arm!(@order.id)
-    assert_equal Order::OUT_FOR_DELIVERY, @order.reload.status
+    assert_equal "out_for_delivery", @order.reload.status
     assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
 
     OrderDeliveredJob.new.perform(@order.id)
-    assert_equal Order::DELIVERED, @order.reload.status
+    assert_equal "delivered", @order.reload.status
     assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
   end
 end

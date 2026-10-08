@@ -18,8 +18,8 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
   # fact, so a page that read only the settlement would show a delivered basket
   # as merely paid.
   test "an order with the courier, and a delivered one, each wear their own badge" do
-    order_in(Order::OUT_FOR_DELIVERY)
-    order_in(Order::DELIVERED)
+    order_in("out_for_delivery")
+    order_in("delivered")
 
     get admin_orders_path
 
@@ -29,7 +29,7 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
   end
 
   test "an order lists its basket alphabetically and masks the address" do
-    order = order_in(Order::CREATED)
+    order = order_in("created")
     { "Pears" => 349, "Apples" => 199 }.each do |name, price_cents|
       product = Product.create!(sku: "admin-#{name}", name: name, price_cents: price_cents)
       order.order_items.create!(product: product, qty: 2)

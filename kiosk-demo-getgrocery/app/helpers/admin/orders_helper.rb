@@ -4,13 +4,9 @@ module Admin
   module OrdersHelper
     CURRENCY_GLYPHS = { "usd" => "$", "gbp" => "£", "eur" => "€" }.freeze
 
-    # The shop's own states outrank the settlement: a delivered basket is
-    # also paid, and «delivered» is what the operator needs to see.
-    STATUS_BADGES = {
-      Order::DELIVERED        => "delivered",
-      Order::OUT_FOR_DELIVERY => "out-for-delivery",
-      Order::RESCHEDULED      => "scheduled",
-    }.freeze
+    # The shop's own states outrank the settlement: a delivered basket is also paid.
+    STATUS_BADGES = { "delivered" => "delivered", "out_for_delivery" => "out-for-delivery",
+                      "rescheduled" => "scheduled" }.freeze
 
     def order_badge(order)
       badge = STATUS_BADGES.fetch(order.status) { order.settled_currency ? "paid" : "created" }

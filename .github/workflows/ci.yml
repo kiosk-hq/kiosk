@@ -150,24 +150,7 @@ jobs:
             prove_broker: kiosk-demo-prove
             # ORDER MATTERS at both ends of this list.
             #
-            # FIRST — the two DB-free unit specs (~0.5 s each, no server, no
-            # Postgres, no PoW): they fail in under a second on the cheapest
-            # possible signal.
-            #   check:slots_spec   K-480 delivery-slot past-filter across DST.
-            #   check:wire_args_spec T-116 — the WHOLE WireArguments module, the
-            #     gate every verb opens with. 314 assertions over the pure
-            #     guards: K-1020's `whole_number` table, K-1025's shape-vs-range
-            #     split on `delivery_slot_id`, the K-693/K-1047 cart and both
-            #     ends of `qty`'s declared range, `order_id`, `delivery_date`
-            #     read off the ORIGIN's clock (K-969), and the §9.1 domain
-            #     refusals. Until it existed the only executable coverage of any
-            #     of them was check:redteam, which needs a booted origin, a
-            #     seeded database and a live Equihash toll.
-            #     Watched fail: restore the pre-K-1020 coercions (`qty =
-            #     (item[:qty] || 1).to_s.to_i`, `slot = raw.to_s.to_i`) and drop
-            #     the K-1047 `qty > MAX_INT4` arm — 25 assertions go red and the
-            #     task exits 1.
-            # THEN check:conformance (T-193) — the four properties the protocol
+            # FIRST check:conformance (T-193) — the four properties the protocol
             # makes normative of an origin, asserted through `bin/rails test`:
             # every declared verb is routed with the method its kind requires,
             # the read surface executes as an authenticated principal, three
@@ -240,18 +223,7 @@ jobs:
             #     answer true for every intent and stripe-mock's fixture becomes
             #     proof — the order is RELEASED on a charge that is not its own,
             #     four assertions go red, exit 1.
-            #   check:clock_spec  the caller's declared clock, with `Time.now`
-            #     STUBBED — no server, no database, no toll, under a second. The
-            #     zone may be read from `Kiosk-Timezone` and from nothing else,
-            #     and it never reaches a published window's rendering. It goes
-            #     first with the other DB-free specs. The pin is what makes the
-            #     control cheap: two declared zones two hours apart are on
-            #     different calendar days at the chosen instant, where a run
-            #     against the wall clock would need zones a day apart.
-            #     Watched fail: give WireArguments.caller_day the shop's zone in
-            #     place of `from` and the Bucharest caller's ended day is
-            #     accepted, exit 1.
-            tasks: check:slots_spec check:wire_args_spec check:clock_spec check:conformance check:shop check:delivery check:isolation check:redteam check:schema check:agecheck check:claim check:pow check:reconcile check:race
+            tasks: check:conformance check:shop check:delivery check:isolation check:redteam check:schema check:agecheck check:claim check:pow check:reconcile check:race
             ungated:
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it

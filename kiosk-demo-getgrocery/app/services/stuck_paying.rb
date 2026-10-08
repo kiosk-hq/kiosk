@@ -1,27 +1,14 @@
 # frozen_string_literal: true
 
 module StuckPaying
-  # A crash between a successful capture and the paid-flip leaves an order
-  # `paying`: charged once, unpayable until reconciled. Each stuck order is
-  # resolved against the best evidence there is:
+  # Resolves orders left `paying` by a crash between capture and the paid flip:
+  # a settlement or a processor charge makes them paid, a processor that charged
+  # nothing releases them, and no answer leaves the claim in place.
   #
-  #   • a settlement row ⇒ `paid`;
-  #   • the processor, asked about every cart mandate that claimed the order:
-  #     charged ⇒ `paid`, not charged ⇒ released to `created`;
-  #   • no answer ⇒ UNRESOLVED, claim kept — releasing it invites the blind
-  #     retry that charges twice.
-  #
-  # Called by `rake demo:reconcile`; `rake check:reconcile` asserts all three.
-  #
-  # @param claim [Kiosk::Server::PaymentClaim] the claim the orders were paid under
-  # @param lookup [#outcome] answers :paid / :not_charged / :unknown about one
-  #   cart mandate. Required: a sweep must never reach a real processor by default.
-  # @param older_than_seconds [Integer] claims younger than this may still be in flight
-  # @return [Hash] { healed: [order_id, …], released: [order_id, …],
-  #   unresolved: [{order_id:, claimed_at:, cart_mandate_ids:}, …] }
+  # @param lookup [#outcome] answers :paid, :not_charged or :unknown for a cart mandate
   def self.reconcile!(lookup:, older_than_seconds: 900, claim: Kiosk.configuration.payment_provider)
     orders = Order.arel_table
-    stuck  = Order.where(status: Order::PAYING)
+    stuck  = Order.paying
                   .where(orders[:updated_at].lt(Time.now.utc - older_than_seconds))
                   .order(:updated_at)
                   .pluck(:id, :updated_at)
@@ -44,8 +31,7 @@ module StuckPaying
     result
   end
 
-  # A late payment found by the sweep: nobody is polling for it, so the owner
-  # is told.
+  # Nobody is polling for a late payment, so the owner is told.
   def self.heal!(claim, order_id)
     claim.mark_paid!(order_id)
     owner_id = Order.where(id: order_id).pick(:user_id)
@@ -57,8 +43,7 @@ module StuckPaying
     )
   end
 
-  # ONE `:paid` settles it; `:not_charged` needs every mandate to say so, and an
-  # order no mandate references stays `:unknown`.
+  # One `:paid` settles it; `:not_charged` needs every mandate to say so.
   def self.processor_says(order_id, lookup)
     answers = Kiosk::CartMandate.referencing(order_id: order_id)
                                 .pluck(:mandate_id, :total_amount_cents, :currency)
@@ -72,8 +57,6 @@ module StuckPaying
     :unknown
   end
 
-  # Persisted before the capture, so they exist when the settlement does not —
-  # the handle for looking the charge up at the processor.
   def self.cart_mandate_ids_for(order_id)
     Kiosk::CartMandate.referencing(order_id: order_id).order(:created_at).pluck(:mandate_id).map(&:to_s)
   end

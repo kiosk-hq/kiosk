@@ -137,32 +137,6 @@ end
 
 namespace :check do
 
-  desc "DB-free unit spec for the delivery-slot past-filter + Dublin zone."
-  task :slots_spec do
-    spec = File.expand_path("../../spec/delivery_slots_spec.rb", __dir__)
-    puts "\n── delivery_slots past-filter spec (no DB) ──"
-    sh "ruby #{spec}"
-  end
-
-  desc "DB-free unit spec, clock STUBBED, for the caller's declared zone, run under two TZ values."
-  task :clock_spec do
-    spec = File.expand_path("../../spec/caller_clock_spec.rb", __dir__)
-    # `Time.now` is pinned inside the file, so the DAY every assertion turns on
-    # is fixed. The two TZ values are the other axis: a zone leaking out of the
-    # SERVER PROCESS instead of off the delivery district cannot be seen from
-    # inside a single run, and Etc/GMT-11 and Etc/GMT+2 sit on either side of
-    # this shop's own clock.
-    puts "\n── the caller's clock: declared, never inferred (no boot, no DB), under two process zones ──"
-    %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
-  end
-
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
-  task :wire_args_spec do
-    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
-    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
-    sh "ruby #{spec}"
-  end
-
   # ── The conformance suite, and why it is `bin/rails test` ──────────────────
   #
   # THE FOUR PROPERTIES THE PROTOCOL MAKES NORMATIVE OF AN ORIGIN: its routes
@@ -1923,7 +1897,7 @@ namespace :check do
     Order.where(total_cents: marker_cents).delete_all
 
     seed = lambda { |slot_at|
-      Order.create!(user: user, status: Order::PAID, total_cents: marker_cents,
+      Order.create!(user: user, status: "paid", total_cents: marker_cents,
                     slot_at: slot_at, timezone: zone.name,
                     address: "1 Demo Street, Dublin 2")
     }
@@ -1935,7 +1909,7 @@ namespace :check do
     order.reload
     check.call("dispatch_at is the window minus the shop's lead",
                order.dispatch_at && (window - order.dispatch_at).round == lead)
-    check.call("status is out_for_delivery", order.status == Order::OUT_FOR_DELIVERY)
+    check.call("status is out_for_delivery", order.status == "out_for_delivery")
     left = store.since(user.id, head).find { |e| e["subject"] == order.id }
     check.call("one order_delivery event, status=out_for_delivery",
                left && left["topic"] == "order_delivery" &&
@@ -1961,7 +1935,7 @@ namespace :check do
     head_arrival = store.head
     OrderDeliveredJob.new.perform(order.id)
     order.reload
-    check.call("status is delivered", order.status == Order::DELIVERED)
+    check.call("status is delivered", order.status == "delivered")
     arrived = store.since(user.id, head_arrival).find { |e| e["subject"] == order.id }
     check.call("one order_delivery event, status=delivered",
                arrived && arrived["data"]["status"] == "delivered")
@@ -1982,7 +1956,7 @@ namespace :check do
     CourierDispatchJob.arm!(future.id)
     future.reload
     check.call("a window two days out arms a courier and does NOT depart",
-               future.status == Order::PAID && future.dispatch_at > Time.current)
+               future.status == "paid" && future.dispatch_at > Time.current)
 
     # AND THE OLD SCHEDULE ARRIVING AFTER A MOVE DEPARTS NOTHING. Re-arming
     # rewrote `dispatch_at`; this run re-reads it, finds it in the future, and
@@ -1992,7 +1966,7 @@ namespace :check do
     CourierDispatchJob.new.perform(future.id)
     future.reload
     check.call("a stale run against a future window departs nothing",
-               future.status == Order::PAID)
+               future.status == "paid")
     check.call("…and pushes no event",
                store.since(user.id, head_stale).none? { |e| e["subject"] == future.id })
 

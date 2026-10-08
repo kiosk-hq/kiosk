@@ -1,183 +1,53 @@
 # frozen_string_literal: true
 
-# One grocery basket, its delivery window and its delivery address.
-#
-# `slot_at` is the INSTANT the window starts and `timezone` is the WALL CLOCK it
-# was quoted on — the delivery district's, chosen by {WireArguments.served_district}
-# when the order was written. Both halves are stored because an instant alone
-# cannot say which clock a human was read it on, and deriving the clock from the
-# stored address would make every later reader a parser of free text.
-# `timezone` is NOT NULL and carries NO column default, so a write that forgets
-# it raises instead of quietly claiming Dublin: an order is only ever placed by
-# a verb that already holds the zone.
-#
-# `status` is a tiny lifecycle rather than a label, and every gate on this
-# origin reads it: `created → paying → paid` is the per-order serialization the
-# pay path claims through (see app/services/validating_payment_provider.rb — that claim
-# is what makes a double capture impossible), `rescheduled` is where a delivery
-# move leaves it, and `out_for_delivery` → `delivered` is the shop's own end
-# of the bargain, written by nobody the caller can reach.
+# One basket, its delivery window and address. `timezone` is the clock of the
+# delivery district the window was quoted on.
 class Order < ApplicationRecord
   include Kiosk::Owned
 
-  # The order states this app names, in one place so a gate, a refusal sentence
-  # and a wire row cannot come to disagree about their spelling.
-  CREATED     = "created"
-  PAYING      = "paying"
-  PAID        = "paid"
-  RESCHEDULED = "rescheduled"
-  # THE SHOP'S OWN TWO. A courier leaves shortly before the window opens and
-  # arrives inside it; neither transition is anything the caller asked for, and
-  # {CourierDispatchJob} and {OrderDeliveredJob} are the only writers.
-  OUT_FOR_DELIVERY = "out_for_delivery"
-  DELIVERED        = "delivered"
-
-  # Every state this app writes, in lifecycle order — what `my_orders` declares.
-  STATUSES = [CREATED, PAYING, PAID, RESCHEDULED, OUT_FOR_DELIVERY, DELIVERED].freeze
-
-  # The states a courier is already acting on. Kept apart from {RESCHEDULED}
-  # because the two refusals mean different things to a caller: «you have
-  # already moved this once» is about a quota, «the courier has left» is about
-  # the physical world, and an assistant reading one for the other would retry
-  # the wrong thing.
-  WITH_THE_COURIER = [OUT_FOR_DELIVERY, DELIVERED].freeze
-
-  # The states a paid order can be in when the shop arms its courier. A
-  # reschedule leaves the row `rescheduled` rather than `paid`, so a list that
-  # named `paid` alone would silently stop delivering every moved order.
-  AWAITING_COURIER = [PAID, RESCHEDULED].freeze
-
-  # ── What `my_orders` publishes about money ─────────────────────────────────
-  # The three answers protocol.md §11.6 allows a reconciliation surface to give.
-  # `PENDING` is the third state the spec REQUIRES: a capture has been started
-  # and its outcome is not known, which is neither paid nor not-paid, and which
-  # an assistant must never read as a licence to sign a fresh mandate chain.
-  STATE_UNPAID  = "unpaid"
-  STATE_PENDING = "pending"
-  STATE_PAID    = "paid"
+  enum :status, {
+    created:          "created",
+    paying:           "paying",
+    paid:             "paid",
+    rescheduled:      "rescheduled",
+    out_for_delivery: "out_for_delivery",
+    delivered:        "delivered",
+  }
 
   belongs_to :user
   has_many :order_items, dependent: :destroy
 
+  # Paid and not yet with the courier.
+  scope :awaiting_courier, -> { where(status: %i[paid rescheduled]) }
+  # One move per order, and none once the courier has the basket.
+  scope :reschedulable,    -> { where.not(status: %i[rescheduled out_for_delivery delivered]) }
 
-  # The rows `reschedule_delivery` may still move. Written here because the
-  # verb and the pay path read the same lifecycle and must not each keep their
-  # own list. A window cannot be moved once the courier holds the basket, which
-  # is a second reason and not the same one: {RESCHEDULED} is the quota,
-  # {WITH_THE_COURIER} is the physical world.
-  scope :reschedulable, -> { where.not(status: [RESCHEDULED, *WITH_THE_COURIER]) }
-
-  # ── THE settled-cart containment, correlated to the row being selected ─────
-  #
-  # WHY THERE ARE TWO SPELLINGS OF ONE PREDICATE, and why this one is a frozen
-  # SQL literal where `Kiosk::CartMandate.referencing` is Arel.
-  #
-  # `Kiosk::CartMandate.referencing` binds a SINGLE, CALLER-SUPPLIED order id, so the
-  # value must be quoted by the adapter and the predicate is built as Arel
-  # nodes. This one binds NO value at all: it correlates the cart's line_items
-  # against `orders.id` — the column of whichever row the enclosing SELECT is
-  # looking at — which is what lets `my_orders` and the back office answer
-  # "paid?" for a whole LIST in one statement instead of one query per row.
-  # There is nothing here for a caller to control, which is the same exemption
-  # `own` above rests on: a frozen literal with no
-  # interpolation is exempt from the no-raw-SQL rule rather than an exception to
-  # it. Expressed as Arel it would be four nested NamedFunction nodes spelling
-  # out CAST/json_build_array/json_build_object, and the one property that has
-  # to survive any rewrite — that "has this order been charged" is answered by
-  # EXACTLY this containment — would be harder to read, not easier.
-  SETTLED_CART_REFERENCES_THIS_ROW = Arel.sql(
-    "kiosk.cart_mandates.line_items @> " \
-    "json_build_array(json_build_object('order_id', orders.id::text))::jsonb",
+  # A settlement whose cart names this order (`line_items @> [{order_id}]`).
+  SETTLEMENT_FOR_ROW = Arel.sql(
+    "kiosk.cart_mandates.line_items @> json_build_array(json_build_object('order_id', orders.id::text))::jsonb",
   ).freeze
 
-  # ── THE seam the wire and the back office share ───────────────────────────
-  # The settlements — OF THE RELATION THE CALLER IS ENTITLED TO SEE — whose cart
-  # references the order row being selected.
-  #
-  # The parameter is the whole point. `my_orders` passes
-  # `Kiosk::Settlement.own`, so an assistant learns the paid state of
-  # its OWN orders and nothing else; `Admin::OrdersController` passes
-  # `Kiosk::Settlement.all`, because an operator's back office that could only see one
-  # principal's settlements would show every order unpaid. The AUTHORITY differs
-  # between the two surfaces and must; the CONTAINMENT must not, and this is the
-  # one place it is written for both.
-  #
-  # @param settlements [ActiveRecord::Relation] settlements this caller may read
-  def self.settling(settlements)
-    settlements.joins(:cart_mandate)
-               .where(SETTLED_CART_REFERENCES_THIS_ROW)
-               .select(Arel.sql("1"))
-  end
-
-  # The `paid` flag `my_orders` publishes, as a SELECT-list expression.
-  #
-  # True when a settlement exists OR the order reached the terminal `paid`
-  # state at capture. The order flips to `paid` the instant the charge
-  # succeeds — a hair before the engine writes the settlement row — so honouring
-  # the status closes the window where a lost pay response would otherwise read
-  # paid=false and tempt a double-charging retry.
-  def self.paid_flag(settlements)
-    arel_table[:status].eq(PAID).or(settling(settlements).arel.exists)
-  end
-
-  # ── The one place "has money moved for this order" is decided ──────────────
-  #
-  # {paid_flag} above closes HALF the window §11.6 cares about — the half after
-  # the capture returns and before the settlement row lands. It does not close
-  # the other half: an order that has been CLAIMED and whose capture has not
-  # come back yet reads `paid_flag = false`, and publishing that as a boolean
-  # said *not paid* about a charge that may already have taken the money. §11.6
-  # forbids exactly that and requires a third state distinct from both, so the
-  # wire's field is a TRI-state and not a flag:
-  #
-  #   paid    — {paid_flag}: the capture returned (`status = 'paid'`) OR a
-  #             settlement row exists. Either witness alone is enough.
-  #   pending — the order is CLAIMED (`paying`) and the capture has not
-  #             resolved. Not paid, not unpaid. An assistant that sees this
-  #             reconciles or stops — it never signs a fresh chain.
-  #   unpaid  — no capture has ever been claimed. This is the ONLY positive,
-  #             unambiguous "not paid" getgrocery publishes, and the only one
-  #             that makes a fresh mandate chain correct.
-  #
-  # @param status [String] the order's own lifecycle column
-  # @param paid [Boolean] {paid_flag} as the SELECT evaluated it for this row
-  def self.payment_state(status, paid)
-    return STATE_PAID    if paid
-    return STATE_PENDING if status == PAYING
-
-    STATE_UNPAID
-  end
-
-  # Each order with the currency its settled cart paid in, read as
-  # `settled_currency`, or nil when no settlement references it.
-  scope :with_settled_currency, lambda { |settlements|
-    currency = settlements.joins(:cart_mandate)
-                          .where(SETTLED_CART_REFERENCES_THIS_ROW)
-                          .select(Kiosk::Settlement.arel_table[:currency])
-                          .limit(1)
-    select(arel_table[Arel.star], Arel::Nodes::Grouping.new(currency.arel).as("settled_currency"))
+  # Adds `settled` and `settled_currency`, read from the given settlements: the
+  # caller's own on the wire, all of them in the back office.
+  scope :with_settlement, lambda { |settlements|
+    settlement = settlements.joins(:cart_mandate).where(SETTLEMENT_FOR_ROW)
+    select(arel_table[Arel.star],
+           Arel::Nodes::Exists.new(settlement.select(Arel.sql("1")).arel).as("settled"),
+           Arel::Nodes::Grouping.new(settlement.select(:currency).limit(1).arel).as("settled_currency"))
   }
 
-  # The clock this order was quoted on.
-  def zone
-    Time.find_zone!(timezone)
+  def self.readable_by?(order_id, user_id) = where(id: order_id, user_id: user_id).exists?
+
+  # What `my_orders` publishes about the money. `pending` means a capture is in
+  # flight: the caller must reconcile, not sign a new mandate.
+  def payment_state
+    return "paid"    if paid? || settled
+    return "pending" if paying?
+
+    "unpaid"
   end
 
-  # The basket, alphabetical by product. Reads preloaded items when there are any.
-  def items_by_product
-    order_items.sort_by { _1.product.name }
-  end
+  def zone = Time.find_zone!(timezone)
 
-  # ── WHAT THE EVENT SURFACE READS ───────────────────────────────────────────
-  # The per-request scopes resolve the principal from a Postgres GUC. A standing
-  # subscription is re-authorised on a timer, with no request and no GUC, so
-  # this twin takes the account as an argument.
-  #
-  # @return [Boolean]
-  def self.readable_by?(order_id, user_id)
-    return false if order_id.to_s.empty? || user_id.to_s.empty?
-
-    where(id: order_id, user_id: user_id).exists?
-  end
-
+  def items_by_product = order_items.sort_by { _1.product.name }
 end

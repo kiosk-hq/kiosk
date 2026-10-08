@@ -364,8 +364,8 @@ if ARGV.include?("--self-test")
       rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
       what: "a declared unit name that the corpus no longer shares reads as coverage",
       ops:  [[:edit, "bin/check-demo-copies",
-              "  \"at_dublin\" => {\n", "  \"at_dublin_renamed\" => {\n"]],
-      expect: /SPEC_UNITS\["at_dublin_renamed"\]: declared, but it is defined in 0 file\(s\)/ },
+              "  \"TOKYO\" => {\n", "  \"TOKYO_RENAMED\" => {\n"]],
+      expect: /SPEC_UNITS\["TOKYO_RENAMED"\]: declared, but it is defined in 0 file\(s\)/ },
     { id: "ledger-id-behind-an-escape", kind: :break,
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
       what: "the id follows a `\\n` inside the string, so a leading `\\b` never matched it (K-1537)",
@@ -638,7 +638,7 @@ if ARGV.include?("--self-test")
       what: "a legitimate divergence inside a `:coincidence` — the OTHER diagnosis, not drift",
       ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
               "\"forbidden\" => :forbidden }", "\"forbidden\" => :forbidden, \"conflict\" => :conflict }"]],
-      expect: /app\/operations\/operation_result\.rb: `agree:` records \[getgrocery,philslist,skooti,tudu\] as a `:coincidence` and the coincidence has ended/ },
+      expect: /app\/operations\/operation_result\.rb: `agree:` records \[philslist,skooti,tudu\] as a `:coincidence` and the coincidence has ended/ },
     # The agreed SIZE is matched as `\d+` rather than restated: it moves whenever one
     # of the three drivers is edited, and what this arm is for is the refusal and the cap.
     { id: "coincidence-over-the-cap", kind: :break,
@@ -1311,7 +1311,7 @@ KYC_SHIPS =
 # The `app/operations/operation_result.rb` copies that AGREE, and why (K-1262).
 # Declared on the file entry and on its `#STATUSES` unit, so written once.
 OPERATION_RESULT_AGREE = {
-  %w[getgrocery philslist skooti tudu] => {
+  %w[philslist skooti tudu] => {
     rule: :coincidence,
     why:  "Each map lists only `bad_request` and `forbidden` because those are the only refusals " \
           "its own writes make: philslist answers a missing listing 403 so ids cannot be " \
@@ -1329,7 +1329,7 @@ COPIES = {
   # ── Outside the scan roots, compared anyway (K-629, T-048, K-643) ──────────
   "spec/wire_arguments_spec.rb" => {
     rule:  :per_demo,
-    ships: %w[atablefor getgrocery hoteling],
+    ships: %w[atablefor hoteling],
     why:   "The DB-free unit spec for each demo's WireArguments (T-116 wrote getgrocery's, T-137 " \
            "copied the harness into the other two). `:per_demo` because the ASSERTIONS cannot be " \
            "shared: they name each demo's own guards, sentences and columns — `party_size` and a " \
@@ -3774,7 +3774,7 @@ FRAGMENT_EXCLUDED = {
 BINDING_DEMOS  = %w[atablefor philslist stylish].freeze
 DEVICE_GRANT   = %w[philslist stylish].freeze
 PAY_WINDOW     = %w[hoteling skooti].freeze
-SPEC_HARNESS   = %w[atablefor getgrocery hoteling].freeze
+SPEC_HARNESS   = %w[atablefor hoteling].freeze
 
 DRIVER_ENV =
   "The driver's half of a contract whose other half is already held: `demo.rake` invokes every " \
@@ -3861,7 +3861,7 @@ FRAGMENTS = {
   },
   "app/operations/wire_arguments.rb#iso_date" => {
     rule:  :code,
-    ships: %w[atablefor getgrocery hoteling],
+    ships: %w[atablefor hoteling],
     why:   "The parse behind {ISO_DATE} (ADR-0029, K-1406). `Date.iso8601` runs BEHIND the pattern "\
            "and not instead of it, because ISO 8601 is a FAMILY -- a basic `20260901`, a datetime, "\
            "an ISO week date and an ordinal date all parse through it -- while what the pattern "\
@@ -3874,7 +3874,7 @@ FRAGMENTS = {
   },
   "app/operations/wire_arguments.rb#missing" => {
     rule:  :code,
-    ships: %w[getgrocery hoteling skooti],
+    ships: %w[hoteling skooti],
     why:   "`missing field: <name>` — the sentence every verb in those three answers an absent " \
            "argument with, and the one an assistant's error handling matches on. atablefor is " \
            "deliberately NOT here: it words the same refusal `missing param: party_size` in " \
@@ -3887,32 +3887,6 @@ FRAGMENTS = {
            "house-sentence section near the bottom of this file now reads this method's literal " \
            "off the three copies and compares it with the engine's builder; the `ships:` list here " \
            "is what that section derives its demo set from, so the two move together.",
-  },
-  "app/operations/wire_arguments.rb#whole_number" => {
-    rule:  :code,
-    ships: %w[atablefor getgrocery],
-    why:   "JSON Schema draft 2020-12's `integer`, in Ruby — NOT `is_a?(Integer)`, because the " \
-           "keyword is defined NUMERICALLY and json_schemer accepts a `2.0` (measured on K-1020 " \
-           "and re-measured against atablefor's own bundle on K-1027). Both demos need it for the " \
-           "same reason: an Operation reachable with no descriptor in front of it must not be " \
-           "LOOSER than the schema that is normally there, and must not be stricter either. That " \
-           "second half is the one a one-sided edit would break silently — a copy that grew an " \
-           "`is_a?(Integer)` test would refuse a call the published schema allows, in one demo, " \
-           "with nothing to say so. hoteling and skooti do not ship it: hoteling's integers arrive " \
-           "as query strings already coerced by the decoder, so its guard is `Integer(str, 10)`, " \
-           "and skooti takes no wire integer at all.",
-  },
-  "app/operations/wire_arguments.rb#priceable_total" => {
-    rule:  :per_demo,
-    ships: %w[getgrocery hoteling],
-    why:   "SAME NAME, DIFFERENT QUESTION, and declared so a reader is told once instead of " \
-           "diffing. Both answer «this total cannot be stored in a 4-byte column» (K-968, " \
-           "K-1047), but getgrocery's takes `(total_cents)` and names a CART the caller can split " \
-           "across orders, while hoteling's takes `(total_cents, nights)` and names the SPAN — " \
-           "because there the total is `nightly_price * nights` and the recoverable advice is " \
-           "«book a shorter stay», which no cart sentence can give. Neither refusal is the " \
-           "other's to word. If these two ever converge byte-for-byte this entry fails as stale, " \
-           "which is the right prompt to ask whether they should be one thing.",
   },
 
   # ── spec/wire_arguments_spec.rb — atablefor, getgrocery, hoteling (T-145) ──
@@ -3977,15 +3951,6 @@ FRAGMENTS = {
            "spec-side twin of the MAX_INT4 entry above. A copy that hard-codes 2_147_483_647 here " \
            "would keep passing after the guard it tests moved, which is the whole reason the bound " \
            "is read from the code in all three.",
-  },
-  "spec/wire_arguments_spec.rb#DAY" => {
-    rule:  :per_demo,
-    ships: %w[getgrocery hoteling],
-    why:   "SAME NAME, EACH DEMO'S OWN FIXTURE DATE — getgrocery's 2026-08-07 is a Friday its " \
-           "delivery-window roster is seeded around, hoteling's 2026-03-15 an arbitrary stay date " \
-           "in a demo whose calendar carries no weekday meaning. Declared so a reader is told once " \
-           "instead of diffing; if they ever converge this entry fails, which is the right prompt " \
-           "to ask whether one date can serve both rosters.",
   },
 
   # ── script/binding_flow.rb — atablefor, philslist, stylish (T-136) ─────────
@@ -4484,7 +4449,7 @@ FRAGMENTS = {
   "app/operations/operation_result.rb#STATUSES" => {
     agree: OPERATION_RESULT_AGREE,
     rule:  :per_demo,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    ships: %w[atablefor hoteling philslist skooti stylish tudu],
     why:   "The status maps the file-level entry above argues for — a code an app never " \
            "produces has no business having a mapping. Declared here for the " \
            "same reason as home_controller's `index`: it puts a file whose shared half was already " \
@@ -4927,14 +4892,6 @@ SPEC_UNITS = {
           "`code`, and the declared `status` read through {guard}. The four together are the wire " \
           "contract a caller meets, so two demos asserting it in the same words is the point " \
           "rather than a coincidence.",
-  },
-  "at_dublin" => {
-    rule: :code,
-    why:  "getgrocery's clock fixture: freeze DeliverySlots.now to one parsed instant for the " \
-          "block and remove the singleton afterwards. Copied between two of that demo's OWN spec " \
-          "files, which is a duplication no path-keyed or demo-keyed rule can see — the copies " \
-          "are in one directory of one app. The `ensure` is the whole reason it is a unit: a copy " \
-          "that forgets it leaves a stubbed clock behind for every later assertion in the file.",
   },
   "TOKYO" => {
     rule: :code,

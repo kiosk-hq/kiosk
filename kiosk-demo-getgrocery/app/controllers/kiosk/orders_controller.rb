@@ -1,37 +1,10 @@
 # frozen_string_literal: true
 
-# getgrocery's WRITE surface: the three verbs an assistant reaches with
-# `POST /kiosk/<action-name>`, arguments as the JSON body. Same shape as
-# Kiosk::StorefrontController — `ActionController::API` plus
-# `include Kiosk::Handler` — with `kind :action` above each declaration, which is
-# what puts it on `POST`.
-#
-# The three writes are a handful of lines each: read the arguments off the
-# request, hand them to an Operation, render what it answers. Keeping the gates
-# in app/operations/ keeps them callable from a console, a rake task, and (for
-# the paid-state read they share) the operator's own back office at
-# GET /admin/orders.
-#
-# The wire's error-code vocabulary is a closed table, not a class hierarchy, so
-# no Kiosk error classes appear below: an Operation answers with an
-# {OperationResult}, and `render_kiosk_result` is the one place that
-# becomes a `render json:, status:` for the wire to re-render as an RFC 9457
-# problem document. That matters here: `kyc_required` and `forbidden` are both
-# 403, so the alcohol age gate is a refusal the STATUS cannot name and only the
-# rendered code carries.
-#
-# Nothing here means a 402. The 402s an assistant meets on this origin come from
-# the registration PoW gate and the query toll — both upstream of dispatch,
-# never from a handler.
+# The write verbs. The work is in app/operations.
+
 class Kiosk::OrdersController < ActionController::API
   include Kiosk::Handler
 
-  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
-
-  # An order reaches `paid` on the OPERATOR's clock, not the caller's: the
-  # reconcile sweep resolves a claimed capture minutes to hours after the call
-  # that made it returned. Nothing the assistant did causes this transition, so
-  # there was never a right moment to re-read `my_orders`.
   topic :order_payment do
     description "An order of yours settled. Its delivery is now scheduled and " \
                 "reschedule_delivery will accept it."
@@ -42,12 +15,6 @@ class Kiosk::OrdersController < ActionController::API
     subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
   end
 
-  # THE DELIVERY ITSELF, which is the shop's end of the bargain and the part no
-  # call of the assistant's produces. A courier leaves ten to fifteen minutes
-  # before the published window and arrives inside it; both instants are the
-  # shop's, both matter to the human waiting at the door, and neither has a
-  # cadence an assistant could have invented — «is it here yet» over a window
-  # hours wide is the poll this topic replaces.
   topic :order_delivery do
     description "Your order is on its way, or has arrived. `out_for_delivery` carries the ETA — " \
                 "the delivery window this order was booked for, with the clock it was quoted " \
@@ -69,11 +36,6 @@ class Kiosk::OrdersController < ActionController::API
     subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
   end
 
-  # create_order — the flagship verb; see {CreateOrderOperation} for the gates it
-  # enumerates. The principal comes from the identity the wire resolved, so
-  # `user_id` is NOT a declared input — and because `input_schema` closes the
-  # object (`additionalProperties: false`) and is validated on every call, a
-  # forged one is refused with a typed 400 naming it rather than silently ignored.
   kind :action
   description "Create a grocery order for the authenticated principal. It does ONE thing — it " \
               "places an order — and it takes no existing order to amend: a human who changes " \
@@ -100,13 +62,6 @@ class Kiosk::OrdersController < ActionController::API
                      type: "object", additionalProperties: false,
                      properties: {
                        sku: { type: "string", description: "Product sku from the catalog query." },
-                       # THE CEILING IS DECLARED, because a refusal the
-                       # published schema does not predict is its own defect.
-                       # `order_items.qty` is a PostgreSQL `integer`, so this is
-                       # the column's own width and not an invented basket size.
-                       # The cart's TOTAL is bounded too and is NOT expressible
-                       # here — it is a sum of the operator's catalogue prices —
-                       # so the verb description above states that half in words.
                        qty: { type: "integer", minimum: 1, maximum: WireArguments::MAX_INT4,
                               description: "Quantity. The order's total — each line's catalogue " \
                                            "price times its qty, summed — is bounded too; a cart " \
@@ -117,10 +72,6 @@ class Kiosk::OrdersController < ActionController::API
                  },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                                      description: "The `delivery_slot_id` from a delivery_slots row (1..6)." },
-                 # `format: "date"` because the handler is exactly that strict:
-                 # a date on this wire is YYYY-MM-DD and nothing else, so the
-                 # DECLARED contract says so too and the wire refuses the rest
-                 # before any Ruby runs.
                  delivery_date:    { type: "string", format: "date",
                                      description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way the day you were offered is the day you get." },
                  delivery_address: { type: "string",
@@ -144,9 +95,6 @@ class Kiosk::OrdersController < ActionController::API
                   pay_hint:    { type: "string", description: "The mandate this order expects, in words." },
                 },
                 required: %w[order_id total_cents total_eur currency slot_at slot_label timezone pay_hint]
-  # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN: a literal here would
-  # publish a `delivery_date` the operation refuses as past. `slot_at` derives
-  # from the SAME day and the slot id beside it, so they cannot drift apart.
   example_params({
     items: [{ sku: "sourdough-bread", qty: 2 }, { sku: "greek-yogurt", qty: 1 }],
     delivery_slot_id: 3,
@@ -162,18 +110,15 @@ class Kiosk::OrdersController < ActionController::API
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
-    render_kiosk_result CreateOrderOperation.call(
+    render json: CreateOrderOperation.call(
       principal_id:     kiosk_identity.user_id,
-      items:            kiosk_plain(params[:items]),
-      delivery_slot_id: params[:delivery_slot_id],
+      items:            params[:items].map { _1.permit(:sku, :qty).to_h.symbolize_keys },
+      delivery_slot_id: params[:delivery_slot_id].to_i,
       delivery_date:    params[:delivery_date],
       delivery_address: params[:delivery_address],
     )
   end
 
-  # reschedule_delivery — move an ALREADY-PAID order's delivery. See
-  # {RescheduleDeliveryOperation}. No call signature in the prose: the
-  # arguments, and which are optional, are declared in `input_schema`.
   kind :action
   description "Move an ALREADY-PAID order's delivery to a different window, and optionally to a " \
               "different address. It REUSES the payment already on that order: there is no new " \
@@ -186,21 +131,17 @@ class Kiosk::OrdersController < ActionController::API
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # Same uuid shape as create_order's order_id — see Kiosk::UuidCheck.
                  order_id:         { type: "string", format: "uuid",
                                      pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN,
                                      description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
                  delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                                      description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },
-                 # Same declaration as create_order's, for the same reason.
                  delivery_date:    { type: "string", format: "date",
                                      description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar." },
                  delivery_address: { type: "string",
                                      description: "New in-zone Dublin delivery address; unchanged if omitted." },
                },
                required: ["order_id", "delivery_slot_id", "delivery_date"]
-  # No price and no pay_hint, and that absence is the contract: a reschedule
-  # REUSES the order's existing payment, so there is no new mandate to sign.
   output_schema type: "object",
                 description: "The rescheduled order.",
                 additionalProperties: false,
@@ -213,7 +154,6 @@ class Kiosk::OrdersController < ActionController::API
                   timezone:       { type: "string", description: "The IANA zone the new window is written in — a property of the DELIVERY ADDRESS the order lands at." },
                 },
                 required: %w[order_id rescheduled_at rescheduled_label timezone]
-  # Resolved for {DeliverySlots.example_date}'s reason.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
@@ -221,31 +161,11 @@ class Kiosk::OrdersController < ActionController::API
                 rescheduled_label: -> { DeliverySlots.label(DeliverySlots.slot_at(DeliverySlots.example_date, 3)) },
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME })
   def reschedule_delivery
-    render_kiosk_result RescheduleDeliveryOperation.call(
+    render json: RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],
-      delivery_slot_id: params[:delivery_slot_id],
+      delivery_slot_id: params[:delivery_slot_id].to_i,
       delivery_date:    params[:delivery_date],
       delivery_address: params[:delivery_address],
     )
-  end
-
-  private
-
-  # The wire's own JSON, back out of Rails' params wrapper.
-  #
-  # `params` wraps every nested object in ActionController::Parameters, which is
-  # NOT a Hash — and `items` is the one argument on this origin whose ELEMENT
-  # TYPE the handler decides on: {WireArguments.items} answers a typed 400 for an
-  # element that is not a {sku, qty} object, and under the wrapper EVERY
-  # element fails that test, the happy path's included. So the wrapper comes off
-  # HERE rather than teaching an Operation a controller type. Control flow, not
-  # cosmetics: the `.inspect` SPELLING of a nested value inside an error message
-  # stays as Rails spells it.
-  def kiosk_plain(value)
-    case value
-    when ActionController::Parameters then value.to_unsafe_h.deep_symbolize_keys
-    when Array                        then value.map { |element| kiosk_plain(element) }
-    else value
-    end
   end
 end

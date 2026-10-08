@@ -16,6 +16,6 @@ module KioskDemoPhilslist
     config.autoload_lib(ignore: %w[assets tasks])
 
     config.api_only = false
-    config.active_record.schema_format = :sql
+    config.active_record.dump_schemas = :all
   end
 end

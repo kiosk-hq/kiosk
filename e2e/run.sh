@@ -127,17 +127,6 @@ pg_isready -q || fail "postgres not accepting connections (run: brew services st
 
 ok "all prerequisites present"
 
-# Pre-create app_role so Kiosk.configure app_role= / system_role= reference
-# a real PG role. NOLOGIN + grant to current user is harmless forward-compat:
-# Path C uses app-layer isolation (named queries), not RLS, and this fixture
-# exercises no role separation at all — see e2e/README.md.
-psql -d postgres -tAc "DO \$\$ BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') THEN
-    CREATE ROLE app_role NOLOGIN;
-  END IF;
-END \$\$;" >/dev/null
-psql -d postgres -tAc "GRANT app_role TO CURRENT_USER" >/dev/null
-ok "PG role 'app_role' present"
 
 # ─── rails new ──────────────────────────────────────────────────────────
 
@@ -189,15 +178,11 @@ ok "$APP_NAME generated"
 cat >> Gemfile <<'RUBY'
 
 # Kiosk OSS gems via path overrides (sibling clone of kiosk-hq/kiosk).
-# kiosk-rls is REQUIRED even though this fixture does not use RLS: it is the
-# only source of Configuration#system_role=, which initializer_kiosk.rb sets.
-# Dropping it makes the initializer raise NoMethodError at boot.
 # kiosk-reputation + kiosk-pow-equihash back the register-time Equihash PoW
 # gate (registration_pow_count=1 in the initializer); neither is a transitive
 # dep of kiosk-all, so both must be path-overridden explicitly (same as demos).
 gem "kiosk-all",           path: "@KIOSK_OSS@/kiosk-all"
 gem "kiosk-core",          path: "@KIOSK_OSS@/kiosk-core"
-gem "kiosk-rls",           path: "@KIOSK_OSS@/kiosk-rls"
 gem "kiosk-server",        path: "@KIOSK_OSS@/kiosk-server"
 gem "kiosk-reputation",    path: "@KIOSK_OSS@/kiosk-reputation"
 gem "kiosk-pow-equihash",  path: "@KIOSK_OSS@/kiosk-pow-equihash"

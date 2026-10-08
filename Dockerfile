@@ -13,7 +13,7 @@
 # nearly all of their work.
 #
 # WHAT THE IMAGE CARRIES vs WHAT COMPOSE PROVIDES. The image carries what the
-# demo CODE shells out to and cannot supply for itself: the `psql` client, pinned to the major the tracked `structure.sql` was dumped by (the
+# demo CODE shells out to and cannot supply for itself: the `psql` client, pinned to the database's major (the
 # demos' `check:*` tasks query Postgres with it directly, not only through ActiveRecord),
 # python3 with numpy (every task that registers an assistant pays an Equihash
 # toll and solves it with the bundled `solve.py`), and `curl` + `jq` (the three
@@ -48,10 +48,7 @@ RUN apt-get update -qq \
 
 # The psql client comes from PGDG rather than from the base image, pinned to the
 # SAME major the compose database runs, for the reason ci.yml gives where it does
-# the same thing: every demo's `db/structure.sql` is tracked in PG17 dump format
-# and `demo:setup` loads it with `psql`. A client from whatever major the base
-# image happens to carry is the one variable that turns a green build into a
-# schema load that fails on a stranger's machine and not on ours.
+# the same thing.
 RUN set -eux; \
     . /etc/os-release; \
     echo "deb https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \

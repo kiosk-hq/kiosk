@@ -20,9 +20,7 @@ end
 # `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, which never consults `$?`.
 # A task's verdict then rests entirely on "did a line starting with `{`
 # appear", and two failures fall out of that. It FAILS OPEN: a driver that
-# prints its JSON line and THEN dies is reported as a PASS — and that is not
-# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
-# line before `exit 1` on a breach. And when a driver dies BEFORE printing one,
+# prints its JSON line and THEN dies is reported as a PASS. And when a driver dies BEFORE printing one,
 # the operator's headline is a JSON parse error naming the driver's FIRST line
 # of output, which sends the reader to the wrong file instead of showing the
 # driver's own message.
@@ -78,8 +76,8 @@ end
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
-    # db:schema:load, not db:migrate: the tracked db/structure.sql is the schema's
-    # source of truth, and under `schema_format = :sql` a migrate would re-dump it.
+    # db:schema:load, not db:migrate: the tracked db/schema.rb is the schema's
+    # source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 end

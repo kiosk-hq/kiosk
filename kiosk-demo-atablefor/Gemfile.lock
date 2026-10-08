@@ -32,12 +32,6 @@ PATH
       base64
 
 PATH
-  remote: ../kiosk-rls
-  specs:
-    kiosk-rls (0.5.12)
-      kiosk-core (~> 0.5.0)
-
-PATH
   remote: ../kiosk-server
   specs:
     kiosk-server (0.5.12)
@@ -328,7 +322,6 @@ DEPENDENCIES
   kiosk-pow-equihash!
   kiosk-redteam!
   kiosk-reputation!
-  kiosk-rls!
   kiosk-server!
   kiosk-user-idp-devise!
   pg (~> 1.1)
@@ -377,7 +370,6 @@ CHECKSUMS
   kiosk-pow-equihash (0.5.12)
   kiosk-redteam (0.5.12)
   kiosk-reputation (0.5.12)
-  kiosk-rls (0.5.12)
   kiosk-server (0.5.12)
   kiosk-user-idp-devise (0.5.12)
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203

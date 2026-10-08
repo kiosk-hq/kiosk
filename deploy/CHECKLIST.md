@@ -11,8 +11,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 
 ## 2. Provision the VPS (one small box, ~2–4 GB)
 - [ ] Install: **Caddy** (stock — there is no rate-limit module to add, see §6), **PostgreSQL**
-      (17 preferred; on 16 strip the one `SET transaction_timeout` line from each `structure.sql`
-      — it is the only PG17-ism), **Ruby 4.0.1** via **mise**, git.
+      (17), **Ruby 4.0.1** via **mise**, git.
 - [ ] For comparison, the box this fleet actually runs on, MEASURED over ssh 2026-09-06: an OVH VPS
       with **2 vCPU** (`nproc`) and **3814 MB** RAM (`free -m` total), carrying every deployed app
       plus Postgres plus Caddy. Every throughput number written down in this repository was taken on a
@@ -221,7 +220,7 @@ What each unit must carry. For EACH of the 7 apps:
       also the only thing that re-seeds the catalog; see `deploy/README.md` step 5.
 - [ ] ⚠ **A SCHEMA THAT HAS DIVERGED IS REBUILT BY `deploy/demo-reset.sh`. `db:migrate` CANNOT DO IT.**
       A long-lived box runs a migration exactly once and never again, so anything that reaches
-      `db/structure.sql` by a route other than a NEW migration file — an edit to a migration the box has
+      `db/schema.rb` by a route other than a NEW migration file — an edit to a migration the box has
       already recorded, a renumbering — lands on every from-zero database and on no running one. The
       renumbering case is worse than silent: `db:migrate` aborts at the first re-created object with
       `PG::DuplicateTable`, so the steps after it never run and the exit is buried in hook output. Symptom
@@ -241,7 +240,7 @@ What each unit must carry. For EACH of the 7 apps:
 ## 7b. Rebuild every database on a collapsed migration set (one-time, after a squash)
 When a tree collapses the demos' `db/migrate/` into a fresh install, no deployed database has any of
 the new versions recorded, so the hook's `db:migrate` would re-create tables that exist and stop. Each
-database is dropped and rebuilt from `db/structure.sql` instead. **All fleet data is lost**: orders,
+database is dropped and rebuilt from `db/schema.rb` instead. **All fleet data is lost**: orders,
 bookings, KYC grants and verifications, bound assistants and every account the seeds do not create —
 getgrocery's real third-party orders included.
 - [ ] Install the current hook (the push below runs it):
@@ -269,7 +268,7 @@ getgrocery's real third-party orders included.
       SH
       ```
 - [ ] Push: `git -C reference push prod-demo main`. On an empty database the hook's `db:migrate` loads
-      `db/structure.sql` (which records every migration), then `db:seed` and `systemctl restart` run as on
+      `db/schema.rb` (which records every migration), then `db:seed` and `systemctl restart` run as on
       any deploy. The push must end `deploy complete.`
 - [ ] By hand instead of the push, per app on the box, as the hook does:
       ```
@@ -278,7 +277,7 @@ getgrocery's real third-party orders included.
       (set -a; . /etc/kiosk-demo/<app>.env; set +a; bundle exec rails db:migrate && bundle exec rails db:seed)
       sudo systemctl start kiosk-demo@<app>
       ```
-- [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/structure.sql` states.
+- [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/schema.rb` states.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).

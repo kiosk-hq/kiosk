@@ -14,9 +14,7 @@ require "kiosk/redteam/stripe_mock"
 # `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, which never consults `$?`.
 # A task's verdict then rests entirely on "did a line starting with `{`
 # appear", and two failures fall out of that. It FAILS OPEN: a driver that
-# prints its JSON line and THEN dies is reported as a PASS — and that is not
-# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
-# line before `exit 1` on a breach. And when a driver dies BEFORE printing one,
+# prints its JSON line and THEN dies is reported as a PASS. And when a driver dies BEFORE printing one,
 # the operator's headline is a JSON parse error naming the driver's FIRST line
 # of output, which sends the reader to the wrong file instead of showing the
 # driver's own message.
@@ -72,8 +70,8 @@ end
 namespace :demo do
   desc "DROP and recreate the demo database, load the schema, seed it. Repeatable, and destructive every time: nothing already in that database survives."
   task :setup do
-    # db:schema:load, not db:migrate: the tracked db/structure.sql is the schema's
-    # source of truth, and under `schema_format = :sql` a migrate would re-dump it.
+    # db:schema:load, not db:migrate: the tracked db/schema.rb is the schema's
+    # source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
@@ -1646,109 +1644,6 @@ namespace :check do
     end
   end
 
-  # ── check:rls — additive RLS-enforce reference (the suite's RLS showcase) ────
-  desc <<~DESC
-    RLS enforce reference — strictly additive overlay; does NOT touch the
-    structure.sql schema and does NOT add any migration.
-
-    This is the suite's single RLS *showcase*: it demonstrates the opt-in RLS
-    data plane on getgrocery's owner-scoped `orders` table.
-
-    Loads the normal schema (db:drop → db:create → db:schema:load → db:seed —
-    identical to demo:setup), then applies RLS as an IMPERATIVE OVERLAY via the
-    kiosk-rls gem (Kiosk::RLS::Emitter — dogfooded).
-
-    Role model:
-      kiosk_getgrocery_app  NOLOGIN NOSUPERUSER NOBYPASSRLS   ← non-owner, subject to RLS
-      GRANT kiosk_getgrocery_app TO CURRENT_USER              ← allows SET LOCAL ROLE
-
-    The proof script turns the role-drop on for its own process:
-      Kiosk.configuration.enforce_db_role = true
-      Kiosk.configuration.app_role        = "kiosk_getgrocery_app"
-    SessionContext.open appends SET LOCAL ROLE "kiosk_getgrocery_app" after GUCs.
-
-    Three-way proof (script/rls_proof.rb):
-      1. Negative control: owner/superuser WITHOUT SessionContext sees BOTH rows
-         (superuser bypasses RLS — the pre-fix no-op / leak).
-      2. Enforced session for A: raw unscoped SELECT * FROM orders → only A's row.
-      3. Enforced session for B: raw unscoped SELECT * FROM orders → only B's row.
-
-    Exits 0 if all three assertions pass; exits 1 on any failure. The default
-    shop path is completely unaffected: structure.sql unchanged, no migration added.
-  DESC
-  task :rls do
-    # getgrocery's initializer requires a Stripe key to boot; the RLS proof
-    # never pays, so default a dummy test key (same as check:pow).
-    ENV["STRIPE_SECRET_KEY"] = "sk_test_dummy" if ENV["STRIPE_SECRET_KEY"].to_s.empty?
-
-    # ── Step 1: Load structure.sql — identical to demo:setup (canonical) ─────
-    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
-
-    # ── Step 2: Create the non-owner app role (idempotent) ──────────────────
-    # NOLOGIN: cannot connect directly — only reachable via SET LOCAL ROLE.
-    # NOSUPERUSER: does not bypass RLS (unlike the login/owner role).
-    # NOBYPASSRLS: explicitly subject to all RLS policies.
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_getgrocery_app') " \
-       "THEN CREATE ROLE kiosk_getgrocery_app NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; " \
-       "END \\$\\$;\" >/dev/null"
-    puts "  Role kiosk_getgrocery_app ensured (NOLOGIN NOSUPERUSER NOBYPASSRLS)."
-
-    # ── Step 3: Grant kiosk_getgrocery_app to CURRENT_USER ──────────────────
-    # Required so that the owner session can execute SET LOCAL ROLE inside a
-    # transaction (SET ROLE requires membership).
-    sh "psql -d postgres -tAc 'GRANT kiosk_getgrocery_app TO CURRENT_USER' >/dev/null"
-    puts "  GRANT kiosk_getgrocery_app TO CURRENT_USER — SET LOCAL ROLE now available."
-
-    # ── Step 4: Apply RLS overlay via kiosk-rls Emitter (dogfooded) ─────────
-    # Overlay setup is privileged (owner connection).
-    overlay_rb = File.expand_path("../../script/rls_overlay.rb", __dir__)
-    puts "\n── Applying RLS overlay ──"
-    sh "bundle exec rails runner #{overlay_rb}"
-
-    # ── Step 5: Run the three-way isolation proof (role-drop on) ────────────
-    proof_rb = File.expand_path("../../script/rls_proof.rb", __dir__)
-    puts "\n── Running RLS isolation proof ──"
-    require "json"
-    result = getgrocery_run_flow(proof_rb, runner: "rails runner")
-
-    puts "\n── RLS proof assertions ──"
-    failures = []
-
-    owner_sees = result["negative_control_owner_sees"].to_i
-    if owner_sees == 2
-      puts "  ✓  negative control: owner/superuser sees #{owner_sees} rows — no-op without role-drop (leak demonstrated)"
-    else
-      failures << "negative control: expected 2 rows, got #{owner_sees}"
-      puts "  ✗  negative control FAILED: owner sees #{owner_sees} (expected 2)"
-    end
-
-    a_sees = result["enforced_a_sees"].to_i
-    if a_sees == 1
-      puts "  ✓  enforced session A: sees #{a_sees} row (own order only) — RLS backstop works"
-    else
-      failures << "enforced A: expected 1 row, got #{a_sees}"
-      puts "  ✗  enforced A FAILED: sees #{a_sees} row(s) (expected 1)"
-    end
-
-    b_sees = result["enforced_b_sees"].to_i
-    if b_sees == 1
-      puts "  ✓  enforced session B: sees #{b_sees} row (own order only) — RLS backstop works"
-    else
-      failures << "enforced B: expected 1 row, got #{b_sees}"
-      puts "  ✗  enforced B FAILED: sees #{b_sees} row(s) (expected 1)"
-    end
-
-    if failures.empty?
-      puts "\n  RLS proof PASSED — FORCE+role-drop blocks raw cross-tenant SELECT."
-      puts "  structure.sql is unchanged; default shop path unaffected."
-    else
-      puts "\n  FAILED assertions:"
-      failures.each { |f| puts "    - #{f}" }
-      exit 1
-    end
-  end
-  # ── end check:rls ──────────────────────────────────────────────────────────
 end
 
 

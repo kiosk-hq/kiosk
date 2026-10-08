@@ -26,7 +26,7 @@
 # recorded in `schema_migrations` never arrives (that is what a live 500 on a
 # page reading the new column means), and a renumbered migration set aborts
 # `db:migrate` outright on a database that already holds those tables
-# (PG::DuplicateTable, one step in). Loading `db/structure.sql`
+# (PG::DuplicateTable, one step in). Loading `db/schema.rb`
 # sidesteps both by construction: it rebuilds the schema the tree states rather
 # than replaying the path that cannot reach it. Run it after deploying head.
 #
@@ -34,7 +34,7 @@
 # `>/dev/null 2>&1` with only its exit code read leaves its failure branch saying
 # WHICH step failed and never WHAT the box said. The
 # failures this script can actually meet are the ones no local run reproduces —
-# a role without CREATE, a `structure.sql` that will not load into the box's
+# a role without CREATE, a `schema.rb` that will not load into the box's
 # Postgres, a seed tripping a constraint only the live data has — and it runs
 # over `ssh`, so "run it manually" costs a box round-trip a session may not get.
 # Both

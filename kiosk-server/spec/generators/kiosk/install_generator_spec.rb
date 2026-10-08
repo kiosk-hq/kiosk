@@ -15,11 +15,19 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
     end
   RUBY
 
+  HOST_APPLICATION = <<~RUBY
+    module Host
+      class Application < Rails::Application
+      end
+    end
+  RUBY
+
   around do |example|
     Dir.mktmpdir do |dir|
       @destination = dir
       FileUtils.mkdir_p(File.join(dir, "config"))
       File.write(File.join(dir, "config/routes.rb"), HOST_ROUTES)
+      File.write(File.join(dir, "config/application.rb"), HOST_APPLICATION)
       example.run
     end
   end
@@ -248,6 +256,13 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
     it "leaves the host's own routes alone" do
       invoke!
       expect(read("config/routes.rb")).to include('root "home#index"')
+    end
+  end
+
+  describe "config/application.rb" do
+    it "dumps every schema, so schema.rb carries the kiosk tables" do
+      invoke!
+      expect(read("config/application.rb")).to include("config.active_record.dump_schemas = :all")
     end
   end
 

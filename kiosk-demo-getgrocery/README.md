@@ -48,10 +48,6 @@ needs. It is not shorter under containers; it is unnecessary.
 > `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
 > is `kiosk_getgrocery_test` — the `test:` database, not `kiosk_getgrocery_development`.
 >
-> **`check:rls` RUNS ITS OWN `db:drop db:create`**, rather than depending on
-> `demo:setup`, so skipping `demo:setup` does not spare `kiosk_getgrocery_development` — this task
-> drops and recreates it too.
->
 > `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
 >
 > **AND ONE TASK DROPS A SECOND DATABASE, IN ANOTHER DEMO.** `check:agecheck`
@@ -98,7 +94,6 @@ guards, run through the `check:slots_spec` /
 | `rake check:race` | pay-path regression (real DB, real threads): an in-flight `/pay` can't have its order's items swapped out from under it — `create_order` names no existing order, so a concurrent expensive cart lands on its own row — and N racing `/pay` capture at most once; a malformed cart `order_id` is a typed 400, not a 500, and a well-formed one `reschedule_delivery` cannot move is a 403; an order stranded in `paying` heals from its settlement row while an unprovable one keeps its claim |
 | `rake check:reconcile` | stuck-`paying` reconciliation against the processor's own answer: charged → the order is `paid`; not charged → the claim is released and the order is `created` and payable again; no answer → UNRESOLVED, the claim kept and the cart-mandate ids reported. A settlement row still heals the order without the processor being asked at all. The first two answers come from a scripted processor — the only way to reach them without moving real money — and then kiosk-pay-stripe's real `ChargeLookup` runs against stripe-mock, whose canned PaymentIntent sits in a status that would release a claim on its own and does not, because it names no cart of ours |
 | `rake demo:reconcile` | **operator utility, not a gate** — it reports rather than asserts, and cannot go red; resolves orders stuck in `paying`, from the settlement row where there is one and from Stripe where there is not — a charge on file flips the order to `paid`, a cancelled or declined one releases the claim, and everything Stripe cannot answer for is listed as UNRESOLVED with the cart-mandate ids to check by hand, never blind-released |
-| `rake check:rls` | the suite's only RLS *enforcement* proof: with RLS applied as an imperative overlay (the `kiosk-rls` emitter, dogfooded), a raw unscoped `SELECT * FROM orders` inside an enforced session returns only that principal's row, with the owner/superuser session that sees BOTH rows as the negative control |
 | `rake check:slots_spec` | DB-free unit check of the delivery-slot past-filter across a DST boundary — the same rule `check:shop` exercises over the wire |
 | `rake check:clock_spec` | DB-free unit check, with `Time.now` **stubbed**, of where the caller's clock may be read from and where it may not reach: a request carrying a locale, three geolocation hints, a zone-bearing token and a foreign TCP peer declares no zone, and the day the shop answers is the one it answers a request carrying none of them; a zone the caller DOES declare moves that day — two declared zones two hours apart are on different calendar days at the pinned instant, one accepted and one a typed **400** naming the calendar it was judged on; and one future day's windows render identically at two pinned instants whose own dates differ, naming the district's zone and neither caller's |
 | `rake check:conformance` | the four properties the protocol makes normative of this origin, through `bin/rails test`: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `catalog`, `my_orders` and `delivery_slots` answer payloads their own `output_schema` accepts; and `my_orders` hands one principal nothing belonging to another — with the positive control that the first principal must actually see something, so a verb that answered everybody with nothing could not pass. It runs the rest of `test/` in the same pass: `create_order` places an order and takes no existing one to amend, so an `order_id` argument is a 400 naming it that writes nothing rather than a silently ignored second billable order, and two ordinary calls are two distinct orders; and the shop's own `out_for_delivery` and `delivered`, written by the courier jobs, reach `my_orders` in the shape it declares; and the seeded account holder's saved card is mapped only against stripe-mock. No server, no PoW, no bearer: it runs in `RAILS_ENV=test` against its own database |
@@ -142,7 +137,6 @@ and pull request; the rest are local-only, for the reason given.
 | `check:race` | yes |  |
 | `check:reconcile` | yes |  |
 | `check:pow` | yes |  |
-| `check:rls` | yes |  |
 | `check:agecheck` | yes |  |
 | `check:delivery` | yes |  |
 

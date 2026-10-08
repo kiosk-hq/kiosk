@@ -50,9 +50,7 @@ end
 # READ THE CHILD'S EXIT STATUS. Capturing with `IO.popen` and never looking
 # at `$?` rests the verdict entirely on "did a line starting with `{`
 # appear", and two failures fall out of that. It FAILS OPEN: a driver that
-# prints its JSON line and THEN dies is reported as a PASS — and that is not
-# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
-# line before `exit 1` on a breach. And when a driver dies BEFORE printing
+# prints its JSON line and THEN dies is reported as a PASS. And when a driver dies BEFORE printing
 # one, the operator's headline is a JSON parse error naming the driver's
 # FIRST line of output, which sends the reader to the wrong file instead of
 # showing the driver's own message.
@@ -129,8 +127,8 @@ namespace :demo do
         env_key: "RAILS_MASTER_KEY", raise_if_missing_key: true,
       ).write("secret_key_base: #{SecureRandom.hex(64)}")
     end
-    # db:schema:load, not db:migrate: the tracked db/structure.sql is the schema's
-    # source of truth, and under `schema_format = :sql` a migrate would re-dump it.
+    # db:schema:load, not db:migrate: the tracked db/schema.rb is the schema's
+    # source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 end

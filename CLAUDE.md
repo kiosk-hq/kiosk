@@ -137,7 +137,7 @@ universal agent skill is `skill.md` on the same site.
   documents means running it.
 - **A migration that has shipped is never edited — a change arrives as a NEW
   file.** `db:migrate` never re-runs a recorded version, so an edit reaches
-  `db/structure.sql` and every from-zero database — every gate, every laptop —
+  `db/schema.rb` and every from-zero database — every gate, every laptop —
   and never a running one. Renumbering counts as editing. Before 1.0 a demo's
   whole set may be collapsed into a fresh install, and only together with
   rebuilding every deployed database (`deploy/CHECKLIST.md` §7b); at 1.0

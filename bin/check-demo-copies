@@ -1626,8 +1626,7 @@ COPIES = {
     },
   },
   "db/migrate/20260101000002_create_kiosk_schema.rb" => {
-    rule: :identical, why: "kiosk:install — the schema, the four current_*() helpers and the " \
-                           "schema_major() marker the engine reads at boot.",
+    rule: :identical, why: "kiosk:install — the schema and the four current_*() helpers.",
   },
   "db/migrate/20260101000003_create_kiosk_identity_tables.rb" => {
     rule: :identical, why: "kiosk:install — agents, agent_tokens, agent_mappings.",
@@ -1762,7 +1761,7 @@ COPIES = {
 #
 # (2) "Not compared" is not "not covered". config/routes.rb and
 #     config/initializers/kiosk.rb ARE asserted by the rules at the bottom of
-#     this file; db/structure.sql is the output of migrations this check compares
+#     this file; db/schema.rb is the output of migrations this check compares
 #     byte-for-byte; and every demo's whole skeleton is exercised by that demo's
 #     CI job, which boots the app.
 #
@@ -1812,7 +1811,7 @@ SKELETON_NOT_COMPARED = {
   "before-after.md" =>
     "Per-demo narrative: that storefront's before/after contrast; nothing here compares it.",
   "db/seeds.rb" => "Per-demo catalog — the whole point of each demo.",
-  "db/structure.sql" =>
+  "db/schema.rb" =>
     "Generated from the migrations, which this check DOES compare byte-for-byte; comparing the " \
     "output as well would only restate that, and each demo's own tables differ anyway.",
   "bin/rails" => "Rails generator output, identical in all eight.",
@@ -6746,13 +6745,11 @@ container_composes.each do |rel|
               "so a narrower context cannot install its dependencies at all."
   end
 
-  # The database image major is derived from what CI actually runs, because the
-  # tracked `db/structure.sql` these demos load is a dump in that major's format.
+  # The database image major is derived from what CI actually runs.
   if container_ci_pg && !body.match?(/^\s+image:\s*#{Regexp.escape(container_ci_pg)}\s*$/)
     errors << "#{rel}: its database service is not `#{container_ci_pg}`, which is the Postgres " \
-              "`.github/workflows/ci.yml` runs (T-192). Every demo's `db/structure.sql` is a dump in " \
-              "that major's format and `demo:setup` loads it with `psql`, so a container path on a " \
-              "different major is a path this repository has never tested."
+              "`.github/workflows/ci.yml` runs (T-192), so a container path on a different major is a " \
+              "path this repository has never tested."
   end
 
   # The port is the demo's OWN default where it declares one. Where it does not

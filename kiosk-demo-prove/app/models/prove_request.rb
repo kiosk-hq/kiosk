@@ -8,7 +8,7 @@ class ProveRequest < ApplicationRecord
   self.primary_key = "request_id"
 
   STATUSES = %w[pending confirmed declined].freeze
-  # The column is a bare varchar with no CHECK constraint (db/structure.sql), so
+  # The column is a bare varchar with no CHECK constraint (db/schema.rb), so
   # until this validation the constant was the ONLY statement of the invariant
   # and nothing read it — a typo'd status wrote fine and `confirmable?` then
   # answered false for a row that was, in every other sense, pending (K-712g).

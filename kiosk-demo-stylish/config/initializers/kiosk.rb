@@ -15,8 +15,6 @@ Kiosk.configure do |c|
   c.user_id_column = :id
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
-  c.app_role       = "app_role"
-  c.system_role    = "app_role"
 
   c.issuer            = ENV.fetch("KIOSK_ISSUER")
   c.signing_key       = Base64.decode64(ENV.fetch("KIOSK_SIGNING_KEY_B64"))

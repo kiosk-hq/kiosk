@@ -53,47 +53,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(out).to include("current_setting('y.current_user_id', true)")
       expect(out).to include("current_user_id() RETURNS text")
     end
-
-    # The genesis is where the marker has to be laid down: it is the one file a
-    # fresh install of any major runs, and the boot check has nothing to read
-    # without it.
-    it "records the schema major, so a fresh install carries the marker" do
-      expect(sql).to include(%(FUNCTION "kiosk".schema_major()))
-      expect(sql).to include("SELECT #{Kiosk::Server::SCHEMA_MAJOR}")
-    end
-  end
-
-  describe ".schema_major_sql" do
-    subject(:sql) { described_class.schema_major_sql }
-
-    it "defines <schema>.schema_major() returning an integer" do
-      expect(sql).to include(%(CREATE OR REPLACE FUNCTION "kiosk".schema_major() RETURNS integer))
-    end
-
-    it "records the major this gem installs by default" do
-      expect(sql).to include("SELECT #{Kiosk::Server::SCHEMA_MAJOR}")
-    end
-
-    # IMMUTABLE, not STABLE: the body is a literal. It also keeps the four
-    # GUC helpers the only STABLE functions the genesis defines.
-    it "marks it IMMUTABLE" do
-      expect(sql).to include("LANGUAGE sql IMMUTABLE")
-    end
-
-    it "records an explicit major, which is what crossing one re-emits" do
-      expect(described_class.schema_major_sql(major: 2)).to include("SELECT 2")
-    end
-
-    it "uses an overridden schema name" do
-      expect(described_class.schema_major_sql(schema: "ksk")).to include(%(FUNCTION "ksk".schema_major()))
-    end
-
-    # The major reaches the database as SQL text, so anything but an integer
-    # has to be refused rather than interpolated.
-    it "refuses a major that is not an integer" do
-      expect { described_class.schema_major_sql(major: "1; DROP SCHEMA kiosk") }
-        .to raise_error(ArgumentError)
-    end
   end
 
   describe ".identity_tables_sql" do

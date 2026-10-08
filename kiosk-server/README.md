@@ -151,13 +151,6 @@ Each MAJOR publishes its own genesis and drops the previous major's chain, so
 db:migrate`, then move on — one major at a time. A fresh install at any major
 gets that major's genesis and replays no history at all.
 
-The database records which major it carries, as `<schema>.schema_major()`. The
-engine reads it at boot and refuses to start when the gem installs a major two
-or more ahead of it, naming both numbers and the major to install next — rather
-than letting the mismatch surface as a missing column on the first request. One
-major ahead is the upgrade itself and boots; a gem behind the recorded major
-boots too, so a deploy rollback stays a rollback.
-
 MINOR and PATCH releases only ever add files to the chain.
 
 ### The configuration

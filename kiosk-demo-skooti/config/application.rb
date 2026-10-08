@@ -18,6 +18,6 @@ module KioskDemoSkooti
     # Initializers build objects from app/services, before the main autoloader is set up.
     config.autoload_once_paths << Rails.root.join("app/services").to_s
 
-    config.active_record.schema_format = :sql
+    config.active_record.dump_schemas = :all
   end
 end

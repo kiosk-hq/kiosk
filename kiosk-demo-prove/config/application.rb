@@ -38,6 +38,6 @@ module KioskDemoProve
 
     # Use SQL structure dump for parity with the sibling demos (pg_dump captures
     # the whole schema deterministically).
-    config.active_record.schema_format = :sql
+    config.active_record.dump_schemas = :all
   end
 end

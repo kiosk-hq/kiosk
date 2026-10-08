@@ -86,7 +86,7 @@ CONFORMANCE = File.join(REPO, "e2e", "schema_conformance.rb")
 # Leak vocabulary for the refusals below: a problem document may name the code
 # and the title, and must never hand a stranger the runtime's internals.
 LEAK_NEEDLES = ["PG::", "ActiveRecord::", "22P02", "invalid input syntax",
-                "/app/", "gems/", "SELECT ", "structure.sql"].freeze
+                "/app/", "gems/", "SELECT ", "schema.rb"].freeze
 
 # ── The hosts, DERIVED from deploy/Caddyfile's own vhost blocks ──────────────
 #

@@ -48,7 +48,7 @@ module Kiosk
     # carries `role` or `scope`, and a `:link` row's value is read off the
     # minting human's own session — so on both kinds the column is written BY
     # THE OPERATOR and never by a client. Read it as `approved_role`. It keeps
-    # the spelling because renaming it crosses seven demo `db/structure.sql`
+    # the spelling because renaming it crosses seven demo `db/schema.rb`
     # files: a migration wave for a word.
     # Every site that reads or writes it says the same thing, so the identifier
     # never has to be trusted on its own.

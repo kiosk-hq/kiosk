@@ -20,7 +20,7 @@ module KioskDemoGetgrocery
     config.autoload_once_paths << Rails.root.join("app/services").to_s
 
     config.active_job.queue_adapter = :async
-    config.active_record.schema_format = :sql
+    config.active_record.dump_schemas = :all
 
     # The courier leaves this long before the delivery window opens.
     config.x.getgrocery.courier_lead_seconds =

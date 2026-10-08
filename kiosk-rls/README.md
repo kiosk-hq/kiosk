@@ -8,6 +8,8 @@ Optional DB-layer defense-in-depth for [Kiosk](https://kiosk.tech) providers.
 
 `kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer — belt-and-suspenders hardening. Calling `enable_rls_on` is opt-in; not calling it is the default and fully correct.
 
+Policies and the `kiosk.current_*()` functions they call are not representable in `db/schema.rb`; an app that uses this gem needs `config.active_record.schema_format = :sql`.
+
 ## What it does
 
 `kiosk-rls` provides the Ruby DSL providers use inside their ActiveRecord migrations to declare RLS policies — and compiles those declarations to standard PostgreSQL DDL.

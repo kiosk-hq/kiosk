@@ -19,7 +19,7 @@ module KioskDemoHoteling
     config.autoload_once_paths << Rails.root.join("app/services").to_s
 
     config.active_job.queue_adapter = :async
-    config.active_record.schema_format = :sql
+    config.active_record.dump_schemas = :all
 
     # The property's own decision: how often it declines, and how long it takes.
     config.x.hoteling.decline_rate           = ENV.fetch("HOTELING_DECLINE_RATE", "0.2").to_f

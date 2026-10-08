@@ -40,7 +40,7 @@ RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }
   config.disable_monkey_patching!
 
-  # `schema_format = :sql`, so the test database is loaded by
+  # the test database is loaded by
   # `rake check:conformance` before this runs rather than by a Rails schema
   # check. Each example rolls back, so the fixtures below never accumulate.
   config.use_transactional_fixtures = true

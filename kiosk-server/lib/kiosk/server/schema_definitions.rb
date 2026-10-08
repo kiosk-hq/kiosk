@@ -51,30 +51,8 @@ module Kiosk
           CREATE OR REPLACE FUNCTION "#{schema}".current_agent_id() RETURNS uuid LANGUAGE sql STABLE AS $$
             SELECT NULLIF(current_setting('#{guc_namespace}.current_agent_id', true), '')::uuid
           $$;
-
-          #{schema_major_sql(schema: schema)}
         SQL
       end
-
-      # `<schema>.schema_major()` — the MAJOR of the Kiosk schema this database
-      # carries. A fresh install records the installing gem's major; crossing a
-      # major re-emits this function with the new one.
-      #
-      # {Engine.schema_major_error} reads it at boot and refuses a gem two or
-      # more majors ahead of it, because an adopter crossing a major stops at
-      # it: the migrations that take an older major forward are not in a later
-      # gem at all.
-      def schema_major_sql(schema: nil, major: nil)
-        schema ||= Kiosk.configuration.schema
-        major  ||= Kiosk::Server::SCHEMA_MAJOR
-
-        <<~SQL.strip
-          CREATE OR REPLACE FUNCTION "#{schema}".schema_major() RETURNS integer LANGUAGE sql IMMUTABLE AS $$
-            SELECT #{Integer(major)}
-          $$;
-        SQL
-      end
-
 
       # ─── 002 create_kiosk_identity_tables ──────────────────────────────
 
@@ -191,7 +169,7 @@ module Kiosk
       #     from the minting human's own — never by a client, which is refused
       #     outright for naming a role. Read it as `approved_role`.
       #     The spelling stays because renaming a shipped column means a new
-      #     migration in each of the seven demo `db/structure.sql` files — a
+      #     migration in each of the seven demo `db/schema.rb` files — a
       #     migration wave for a word.
       def device_authorizations_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema

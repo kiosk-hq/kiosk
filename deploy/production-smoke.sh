@@ -13,7 +13,7 @@
 #   EAGER-LOAD      a lib/ helper whose constant name does not match Zeitwerk's
 #                   expectation makes `config.eager_load = true` (production
 #                   only) raise on boot.
-#   MISSING COLUMN  a page that SELECTs a column this app's structure.sql has
+#   MISSING COLUMN  a page that SELECTs a column this app's schema.rb has
 #                   not got → HTTP 500 in production; check:binding drives the
 #                   WIRE ceremony, never the HTML page render, so CI stays green.
 #   PROXY CSRF      with `config.assume_ssl` off, behind a TLS-terminating proxy
@@ -87,7 +87,7 @@
 # (`kiosk-demo-tudu/app/controllers/lists_controller.rb#housemate_board`: a
 # four-table join over memberships/lists/memberships/users with an aliased
 # `owner_u.display_name`). Not one column of that projection is validated by a
-# model, a scope or a structure.sql-derived attribute set. tudu also carries a
+# model, a scope or a schema.rb-derived attribute set. tudu also carries a
 # genuinely unique surface on the other three classes: it is the ONLY demo in
 # the fleet offering open Devise REGISTRATION, with its own
 # Users::RegistrationsController — a second form POST under the proxy-CSRF
@@ -97,7 +97,7 @@
 # WHAT TUDU DOES NOT BUY, stated here so nobody re-derives it: IT DOES NOT CATCH
 # A COLUMN THAT IS IN THE TREE AND MISSING ON THE BOX. This script builds its
 # throwaway `_smoke` database with `db:schema:load` out of the tracked
-# `structure.sql` (see the prepare step below) — from zero, where every tracked
+# `schema.rb` (see the prepare step below) — from zero, where every tracked
 # column is present — so a box whose schema has drifted from the tree is
 # invisible to it, in tudu exactly as in every other demo. That escape is closed
 # after the deploy by the post-deploy live-page check in `deploy/CHECKLIST.md` §8 — `curl -sI
@@ -292,8 +292,7 @@ smoke_stylish() {
   trap cleanup EXIT
 
   echo "── Preparing the throwaway smoke DB ${KIOSK_STYLISH_DB} (drop/create/schema:load/seed) ──"
-  # db:prepare would migrate; the demos are schema_format=:sql and seed via the
-  # demo path, so mirror demo:setup: load structure.sql then seed. RAILS_ENV is
+  # db:prepare would migrate; mirror demo:setup instead: load schema.rb, then seed. RAILS_ENV is
   # production — the whole point — but the DATABASE is the throwaway `_smoke` one,
   # dropped by drop_smoke_db (which refuses any non-`_smoke` name). Rails' own
   # protected-environments guard is left ARMED: the recreated database has no
@@ -701,7 +700,7 @@ smoke_tudu() {
   trap cleanup EXIT
 
   echo "── Preparing the throwaway smoke DB ${KIOSK_TUDU_DB} (drop/create/schema:load/seed) ──"
-  # From zero out of structure.sql, exactly as the two smokes above — which is
+  # From zero out of schema.rb, exactly as the two smokes above — which is
   # also precisely what this smoke CANNOT see — a box whose schema has drifted
   # from the tree; see the COVERAGE header.
   drop_smoke_db "$KIOSK_TUDU_DB" "$KIOSK_TUDU_DB_USER" "$KIOSK_TUDU_DB_PASSWORD"
@@ -736,7 +735,7 @@ smoke_tudu() {
   # The assertion that matters is not the status: it is that the four-table join
   # in ListsController#housemate_board returned the seeded row WITH the owner's
   # display name. `shared by Alice` can only be printed if `owner_u.display_name`
-  # resolved — a column no model, scope or structure.sql-derived attribute set
+  # resolved — a column no model, scope or schema.rb-derived attribute set
   # covers, in the only page in the fleet whose SQL is written by hand. A 200
   # alone would also pass on the empty-board branch, which is the failure mode
   # this assertion exists to refuse.
